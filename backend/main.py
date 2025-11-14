@@ -7,12 +7,14 @@ Mounts OAuth provider and all SDK app routers.
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+import httpx
 
 from backend.core.config import settings
 from backend.core.logging import init_logging
 from backend.core.middleware import RequestIDMiddleware
 from backend.core.database import test_connection
 from backend.apps.focused.focused_router import router as focused_router
+from backend.apps.focused.auth_router import router as auth_router
 
 # Initialize logging first
 init_logging()
@@ -26,6 +28,13 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(
         f"Starting {settings.APP_NAME} in {settings.ENV} environment",
+        extra={"request_id": "startup"}
+    )
+
+    # Initialize httpx client
+    app.state.http_client = httpx.AsyncClient(timeout=30.0)
+    logger.info(
+        "HTTP client initialized",
         extra={"request_id": "startup"}
     )
 
@@ -48,6 +57,13 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info(
         "Shutting down application",
+        extra={"request_id": "shutdown"}
+    )
+
+    # Close httpx client
+    await app.state.http_client.aclose()
+    logger.info(
+        "HTTP client closed",
         extra={"request_id": "shutdown"}
     )
 
@@ -77,3 +93,6 @@ async def root():
 
 # Include focused router with prefix
 app.include_router(focused_router, prefix="/api/focused")
+
+# Include auth router with prefix
+app.include_router(auth_router, prefix="/auth/focused")

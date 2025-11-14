@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Security settings
     ENCRYPTION_KEY: str
 
+    # Google OAuth settings
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/focused/google/callback"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

@@ -18,6 +18,8 @@ alembic = "^1.13.0"
 asyncpg = "^0.30.0"
 cryptography = "^43.0.0"
 greenlet = "^3.0.0"
+google-auth-oauthlib = "^1.2.1"
+httpx = "^0.28.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.4"
