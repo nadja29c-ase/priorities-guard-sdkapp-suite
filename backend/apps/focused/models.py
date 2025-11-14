@@ -7,7 +7,7 @@ Tables: focused_sessions, focused_patterns, focused_preferences
 from sqlalchemy import String, Integer, DateTime, Boolean, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
-from core.db import Base
+from backend.core.models import Base
 
 
 class FocusedSession(Base):
