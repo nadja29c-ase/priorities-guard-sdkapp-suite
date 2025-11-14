@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from backend.core.config import settings
 from backend.core.logging import init_logging
 from backend.core.middleware import RequestIDMiddleware
+from backend.core.database import test_connection
 from backend.apps.focused.focused_router import router as focused_router
 
 # Initialize logging first
@@ -27,7 +28,23 @@ async def lifespan(app: FastAPI):
         f"Starting {settings.APP_NAME} in {settings.ENV} environment",
         extra={"request_id": "startup"}
     )
+
+    # Test database connection
+    try:
+        await test_connection()
+        logger.info(
+            "Database connection established",
+            extra={"request_id": "startup"}
+        )
+    except Exception as e:
+        logger.error(
+            f"Database connection failed: {e}",
+            extra={"request_id": "startup"}
+        )
+        raise
+
     yield
+
     # Shutdown
     logger.info(
         "Shutting down application",
