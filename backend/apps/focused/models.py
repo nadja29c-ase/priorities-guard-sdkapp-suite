@@ -1,56 +1,51 @@
 """
-Database models for Focused app.
+Database models for the Focused SDK app.
 
-Tables: focused_sessions, focused_patterns, focused_preferences
+System-level entities (users, connections, etc.) live in backend.core.models.
+This module is only for Focused-specific tables.
+
+Currently:
+- FocusedUserKeyword: custom focus keywords added by a user
+
+System default keywords (e.g. "focus", "deep work") are defined in
+backend.apps.focused.config and are NOT stored here.
 """
 
-from sqlalchemy import String, Integer, DateTime, Boolean, JSON
-from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
+
+from sqlalchemy import String, Integer, DateTime, Boolean, JSON, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column
+
 from backend.core.models import Base
 
 
-class FocusedSession(Base):
-    """Track individual focus sessions."""
+class FocusedUserKeyword(Base):
+    """
+    Custom focus keywords added by the user.
 
-    __tablename__ = "focused_sessions"
+    Example:
+        user_id = "abc123"
+        keyword = "writing sprint"
+    """
 
-    # TODO: Add columns:
-    # - id (primary key)
-    # - user_id (foreign key)
-    # - event_id (optional)
-    # - start_time
-    # - duration_minutes
-    # - completed (boolean)
-    # - created_at
-    pass
+    __tablename__ = "focused_user_keywords"
 
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-class FocusedPattern(Base):
-    """Store analyzed focus patterns."""
+    # Foreign key to core_users.user_id
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("core_users.user_id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
-    __tablename__ = "focused_patterns"
+    # The actual keyword text
+    keyword: Mapped[str] = mapped_column(String, nullable=False)
 
-    # TODO: Add columns:
-    # - id (primary key)
-    # - user_id (foreign key)
-    # - pattern_type (e.g., "best_time", "optimal_duration")
-    # - pattern_data (JSON)
-    # - confidence_score
-    # - updated_at
-    pass
+    # Optional: simple audit timestamp
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
 
-
-class FocusedPreference(Base):
-    """User preferences for Focused app."""
-
-    __tablename__ = "focused_preferences"
-
-    # TODO: Add columns:
-    # - id (primary key)
-    # - user_id (foreign key, unique)
-    # - keywords (JSON list)
-    # - default_duration_minutes
-    # - auto_activate (boolean)
-    # - updated_at
-    pass
+    def __repr__(self) -> str:
+        return f"<FocusedUserKeyword user_id={self.user_id!r}, keyword={self.keyword!r}>"

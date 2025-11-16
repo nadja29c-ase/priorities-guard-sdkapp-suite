@@ -84,7 +84,7 @@ class OAuthState(Base):
 
     __tablename__ = "oauth_state"
 
-    state: Mapped[str] = mapped_column(
+    state: Mapped[str] = mapped_column( #primary key, random string
         String(255),
         primary_key=True,
         comment="OAuth state token for CSRF protection"

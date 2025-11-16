@@ -1,7 +1,14 @@
 """
 Google OAuth endpoints for Focused app.
 
-Handles OAuth flow initiation and callback processing.
+This file handles:
+
+/google/start → Begin OAuth flow
+
+/google/callback → Handle Googles redirect
+
+It covers everything outbound to Google.
+
 """
 
 import logging
@@ -45,18 +52,26 @@ def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
 @router.get("/google/start")
 async def start_google_oauth(
     request: Request,
-    user_id: str = Query(..., description="Temporary user identifier"),
+    user_id: str | None = Query(None, description="Temporary user identifier"),
     session: AsyncSession = Depends(get_db),
 ):
     """
     Initiate Google OAuth flow.
 
-    Cleans up expired states, generates authorization URL with user_id encoded in state,
-    stores state, and redirects user to Google consent screen.
+    Cleans up expired states, generates authorization URL, stores state,
+    and redirects user to Google consent screen.
+    
+    This endpoint:
+    - Validates input
+    - Cleans up old OAuth states
+    - Generates Google OAuth URL
+    - Stores the state in DB
+    - Redirects user to Google
+    - Correct behavior per OAuth 2.1 spec.
 
     Args:
         request: FastAPI request object (provides access to app state)
-        user_id: Temporary user identifier (query parameter, encoded in state)
+        user_id: Temporary user identifier (query parameter)
         session: Database session
 
     Returns:
@@ -65,6 +80,17 @@ async def start_google_oauth(
     request_id = getattr(request.state, "request_id", "unknown")
 
     try:
+        if not user_id:
+            logger.warning(
+                "Missing user_id in OAuth start request",
+                extra={"request_id": request_id},
+            )
+            return _error_response(
+                status_code=400,
+                code="MISSING_PARAMETERS",
+                message="Query parameter 'user_id' is required",
+            )
+
         logger.info(
             f"Starting Google OAuth flow for user_id={user_id}",
             extra={"request_id": request_id},
@@ -73,8 +99,8 @@ async def start_google_oauth(
         # Cleanup expired states
         await cleanup_expired_states(session)
 
-        # Generate authorization URL and state (user_id encoded in state)
-        auth_url, state = generate_auth_url(user_id)
+        # Generate authorization URL and state
+        auth_url, state = await generate_auth_url()
 
         # Store state in database
         await store_state(session, state)
@@ -109,18 +135,20 @@ async def google_oauth_callback(
     request: Request,
     code: str | None = Query(None, description="Authorization code from Google"),
     state: str | None = Query(None, description="OAuth state token for CSRF protection"),
+    user_id: str | None = Query(None, description="Temporary user identifier"),
     session: AsyncSession = Depends(get_db),
 ):
     """
     Handle Google OAuth callback.
 
-    Verifies state (extracts user_id), exchanges code for tokens, encrypts tokens,
+    Verifies state, exchanges code for tokens, encrypts tokens,
     and stores them in database.
 
     Args:
         request: FastAPI request object (provides access to app state)
         code: Authorization code from Google
-        state: OAuth state token for CSRF protection (contains encoded user_id)
+        state: OAuth state token for CSRF protection
+        user_id: Temporary user identifier
         session: Database session
 
     Returns:
@@ -129,7 +157,7 @@ async def google_oauth_callback(
     request_id = getattr(request.state, "request_id", "unknown")
 
     try:
-        if not code or not state:
+        if not code or not state or not user_id:
             logger.warning(
                 "Missing required parameters in OAuth callback",
                 extra={"request_id": request_id},
@@ -137,14 +165,19 @@ async def google_oauth_callback(
             return _error_response(
                 status_code=400,
                 code="MISSING_PARAMETERS",
-                message="Query parameters 'code' and 'state' are required",
+                message="Query parameters 'code', 'state', and 'user_id' are required",
             )
 
-        # Verify and consume state (CSRF check) and extract user_id
-        user_id = await verify_and_consume_state(session, state)
-        if not user_id:
+        logger.info(
+            f"Processing OAuth callback for user_id={user_id}",
+            extra={"request_id": request_id},
+        )
+
+        # Verify and consume state (CSRF check)
+        is_valid = await verify_and_consume_state(session, state)
+        if not is_valid:
             logger.warning(
-                "Invalid or expired OAuth state",
+                f"Invalid or expired OAuth state for user_id={user_id}",
                 extra={"request_id": request_id},
             )
             return JSONResponse(
@@ -157,11 +190,6 @@ async def google_oauth_callback(
                     },
                 },
             )
-
-        logger.info(
-            f"Processing OAuth callback for user_id={user_id}",
-            extra={"request_id": request_id},
-        )
 
         # Exchange code for tokens
         http_client = request.app.state.http_client

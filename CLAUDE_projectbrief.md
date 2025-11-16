@@ -76,30 +76,38 @@ Google Calendar (events, webhooks, OAuth) and Apple Shortcuts
 - App-specific tables: `<app>_*` (sessions, patterns, preferences)
 
 ## Project Structure
+# Priority Guardian - Directory Structure
 ```
 priority-guardian/
 ├── backend/
-│   ├── core/                   # "shared" backend infra
+│   ├── core/                  
 │   │   ├── config.py
-│   │   ├── db.py               # later: SQLAlchemy + Alembic
-│   │   ├── oauth_provider.py   # inbound ChatGPT OAuth 2.1 provider
-│   │   ├── google_client.py    # outbound Google OAuth client
+│   │   ├── database.py
+│   │   ├── oauth_provider.py
+│   │   ├── google_client.py
 │   │   ├── redis_client.py
-│   │   └── celery_app.py       # background jobs (token/webhook renewal)
+│   │   └── celery_app.py      
 │   │
 │   ├── apps/
-│   │   ├── focused/
-│   │   │   ├── __init__.py
-│   │   │   ├── server.py       # Focused MCP FastAPI router
-│   │   │   ├── tools.py        # run_focus_mode(), check_calendar(), etc.
-│   │   │   └── models.py       # focused_* tables
-│   │   └── sdk app 2/   # future SDK app
+│   │   └── focused/
+│   │       ├── __init__.py
+│   │       ├── focused_router.py        # REST API endpoints (check_calendar, settings…)
+│   │       ├── logic.py                 # All business logic (DB, Google API)
+│   │       ├── models.py                # focused_* tables
+│   │       └── schemas.py               # Pydantic models (optional but recommended)
 │   │
-│   ├── main.py                 # mounts OAuth + app routers
+│   ├── main.py                           # mounts all backend routers
 │   └── __init__.py
 │
+├── mcp/
+│   └── focused/
+│       ├── server.py                     # standalone MCP server (port 8001)
+│       └── __init__.py
+│
+├── tests/
+│   └── …                                 # unit tests
+│
 ├── pyproject.toml
-├── .env.example
 └── README.md
 ```
 ## Error Handling Strategy:

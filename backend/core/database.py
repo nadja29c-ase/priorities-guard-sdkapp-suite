@@ -16,6 +16,7 @@ from sqlalchemy.sql import text
 from backend.core.config import settings
 
 
+
 # Create async engine that manages ALL your database connections efficiently, safely, and asynchronously
 engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
@@ -54,10 +55,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def test_connection() -> None:
     """
-    Test database connection.
-
-    Raises:
-        Exception: If connection fails
+    Raise an exception if the DB connection fails.
     """
-    async with engine.begin() as conn:
+    async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
