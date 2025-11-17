@@ -116,6 +116,172 @@ async def refresh_access_token(
     raise ValueError("Token refresh failed after retries")
 
 
+async def stop_webhook(
+    http_client: httpx.AsyncClient,
+    access_token: str,
+    channel_id: str,
+    resource_id: str
+) -> bool:
+    """
+    Stop an existing Google Calendar webhook channel.
+
+    Args:
+        http_client: Shared httpx AsyncClient
+        access_token: Decrypted Google access token
+        channel_id: Channel ID to stop
+        resource_id: Resource ID associated with the channel
+
+    Returns:
+        True if stopped successfully or channel not found, False on other errors
+
+    Note:
+        This function never raises exceptions. It logs warnings and returns False
+        on failure to avoid blocking new webhook registration.
+    """
+    url = "https://www.googleapis.com/calendar/v3/channels/stop"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)",
+        "Content-Type": "application/json",
+    }
+
+    body = {
+        "id": channel_id,
+        "resourceId": resource_id,
+    }
+
+    try:
+        response = await http_client.post(url, headers=headers, json=body)
+
+        if response.status_code == 200:
+            logger.info(f"Webhook channel stopped successfully: {channel_id}")
+            return True
+
+        elif response.status_code == 404:
+            # Channel not found (already expired or invalid) - this is OK
+            logger.info(f"Webhook channel not found (already stopped/expired): {channel_id}")
+            return True
+
+        else:
+            logger.warning(
+                f"Failed to stop webhook channel {channel_id}: HTTP {response.status_code}"
+            )
+            return False
+
+    except Exception as e:
+        logger.warning(
+            f"Exception while stopping webhook channel {channel_id}: {type(e).__name__}"
+        )
+        return False
+
+
+async def register_webhook(
+    http_client: httpx.AsyncClient,
+    access_token: str,
+    channel_id: str,
+    user_id: str
+) -> dict:
+    """
+    Register a Google Calendar push notification webhook.
+
+    Args:
+        http_client: Shared httpx AsyncClient
+        access_token: Decrypted Google access token
+        channel_id: Unique channel ID (UUID hex)
+        user_id: User ID for webhook URL
+
+    Returns:
+        Google API response with channel_id, resource_id, and expiration
+
+    Raises:
+        ValueError: Invalid request (400), quota exceeded (403), or after max retries
+        httpx.RequestError: Network error after max retries
+    """
+    url = "https://www.googleapis.com/calendar/v3/calendars/primary/events/watch"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)",
+        "Content-Type": "application/json",
+    }
+
+    body = {
+        "id": channel_id,
+        "type": "web_hook",
+        "address": f"https://www.priority-guard.com/webhook/focused/google_calendar/{user_id}",
+    }
+
+    max_retries = 3
+    base_delay = 1
+
+    for attempt in range(max_retries):
+        try:
+            response = await http_client.post(url, headers=headers, json=body)
+
+            if response.status_code == 200:
+                logger.info("Webhook registered successfully")
+                return response.json()
+
+            elif response.status_code == 400:
+                # Invalid request - no retry
+                logger.error("Webhook registration failed: Invalid request")
+                raise ValueError("Invalid webhook request")
+
+            elif response.status_code == 403:
+                # Quota exceeded - no retry
+                logger.error("Webhook registration failed: API quota exceeded")
+                raise ValueError("API quota exceeded")
+
+            elif response.status_code == 429:
+                # Rate limit - retry with Retry-After
+                retry_after = int(
+                    response.headers.get("Retry-After", base_delay * (2**attempt))
+                )
+                delay = retry_after + random.uniform(0, 1)
+                logger.warning(f"Retry attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error("Webhook registration failed: Rate limit exceeded after retries")
+                    raise ValueError("API quota exceeded")
+
+            elif response.status_code in (500, 503):
+                # Google server error - retry
+                logger.warning(f"Retry attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error("Webhook registration failed: Server error after retries")
+                    raise ValueError("Server error after retries")
+
+            else:
+                # Other HTTP errors - retry
+                logger.warning(f"Retry attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"Webhook registration failed: HTTP {response.status_code}")
+                    raise ValueError(f"HTTP {response.status_code} after retries")
+
+        except httpx.RequestError as e:
+            # Network failure - retry
+            logger.warning(f"Retry attempt {attempt + 1}")
+            if attempt == max_retries - 1:
+                logger.error(f"Webhook registration failed: {type(e).__name__}")
+                raise
+            delay = base_delay * (2**attempt) + random.uniform(0, 1)
+            await asyncio.sleep(delay)
+
+    # Should not reach here, but for safety
+    raise ValueError("Webhook registration failed after retries")
+
+
 async def fetch_events(
     http_client: httpx.AsyncClient,
     access_token: str,

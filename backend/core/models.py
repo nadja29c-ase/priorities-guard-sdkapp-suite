@@ -66,11 +66,31 @@ class CoreConnection(Base):
         onupdate=func.now(),
     )
 
+    # Webhook fields (Google Calendar push notifications)
+    google_channel_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Google Calendar webhook channel ID"
+    )
+
+    google_resource_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Google Calendar webhook resource ID"
+    )
+
+    google_channel_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When the Google Calendar webhook channel expires"
+    )
+
     __table_args__ = ( #Inside a SQLAlchemy model, __table_args__ is a special class attribute that lets you define anything that applies to the whole table f.e. Unique constrainsts, Indexes, Check constraints
         UniqueConstraint("user_id", "provider", name="uq_user_provider"), # Ensures there is only one row per user per provider to prevent duplicates
         CheckConstraint("provider IN ('google', 'apple')", name="ck_provider_valid"),
         Index("ix_user_provider", "user_id", "provider"), #A database index for fast lookups
         Index("ix_token_expires", "token_expires_at"),
+        Index("ix_channel_expires", "google_channel_expires_at"),
     )
 
 
