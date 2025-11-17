@@ -18,8 +18,8 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.encryption import decrypt_token
-from backend.core.google_calendar import fetch_events
+from backend.core.encryption import decrypt_token, encrypt_token
+from backend.core.google_calendar import fetch_events, refresh_access_token
 from backend.core.models import CoreConnection
 from backend.apps.focused.focused_config import get_default_keywords
 from backend.apps.focused.models import FocusedUserKeyword  # <— custom user keywords table (optional MVP2)
@@ -140,6 +140,43 @@ async def check_calendar_impl(
     if connection is None:
         logger.warning(f"[check_calendar] No Google connection for user {user_id}")
         raise ValueError("USER_NOT_CONNECTED")
+
+    # -----------------------------------------------------------
+    # Check token expiration and refresh if needed
+    # -----------------------------------------------------------
+    now = datetime.now(timezone.utc)
+    if not connection.token_expires_at or connection.token_expires_at <= now:
+        logger.info("Access token expired, refreshing")
+
+        # Decrypt refresh token
+        try:
+            refresh_token_decrypted = decrypt_token(connection.encrypted_refresh_token)
+        except Exception as e:
+            logger.error(f"Failed to decrypt refresh token: {e}")
+            return {"error": "TOKEN_REFRESH_FAILED"}
+
+        # Refresh process
+        try:
+            result = await refresh_access_token(http_client, refresh_token_decrypted)
+        except ValueError as e:
+            if str(e) == "Refresh token invalid":
+                return {"error": "REFRESH_TOKEN_INVALID"}
+            if str(e) == "API quota exceeded":
+                return {"error": "API_QUOTA_EXCEEDED"}
+            return {"error": "TOKEN_REFRESH_FAILED"}
+        except Exception:
+            return {"error": "TOKEN_REFRESH_FAILED"}
+
+        # Extract values
+        new_access_token = result["access_token"]
+        expires_in = result["expires_in"]
+
+        # Update DB
+        now = datetime.now(timezone.utc)
+        connection.encrypted_access_token = encrypt_token(new_access_token)
+        connection.token_expires_at = now + timedelta(seconds=expires_in)
+        connection.updated_at = now
+        await session.commit()
 
     # -----------------------------------------------------------
     # Decrypt token

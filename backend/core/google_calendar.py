@@ -10,7 +10,110 @@ from typing import Any
 
 import httpx
 
+from backend.core.config import settings
+
 logger = logging.getLogger(__name__)
+
+
+async def refresh_access_token(
+    http_client: httpx.AsyncClient,
+    refresh_token: str
+) -> dict:
+    """
+    Refresh Google OAuth access token using refresh token.
+
+    Args:
+        http_client: Shared httpx AsyncClient
+        refresh_token: Decrypted Google refresh token
+
+    Returns:
+        Google token response with access_token and expires_in
+
+    Raises:
+        ValueError: Invalid refresh token (400), quota exceeded (403), or after max retries
+        httpx.RequestError: Network error after max retries
+    """
+    url = "https://oauth2.googleapis.com/token"
+
+    data = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+        "refresh_token": refresh_token,
+        "grant_type": "refresh_token",
+    }
+
+    headers = {
+        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)"
+    }
+
+    max_retries = 3
+    base_delay = 1
+
+    for attempt in range(max_retries):
+        try:
+            response = await http_client.post(url, data=data, headers=headers)
+
+            if response.status_code == 200:
+                logger.info("Token refresh successful")
+                return response.json()
+
+            elif response.status_code == 400:
+                # invalid_grant - no retry
+                logger.error("Token refresh failed: Refresh token invalid")
+                raise ValueError("Refresh token invalid")
+
+            elif response.status_code == 403:
+                # quotaExceeded - no retry
+                logger.error("Token refresh failed: API quota exceeded")
+                raise ValueError("API quota exceeded")
+
+            elif response.status_code == 429:
+                # rateLimitExceeded - retry with Retry-After
+                retry_after = int(
+                    response.headers.get("Retry-After", base_delay * (2**attempt))
+                )
+                delay = retry_after + random.uniform(0, 1)
+                logger.warning(f"Retry attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error("Token refresh failed: Rate limit exceeded after retries")
+                    raise ValueError("API quota exceeded")
+
+            elif response.status_code in (500, 503):
+                # Google server error - retry
+                logger.warning(f"Retry attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error("Token refresh failed: Server error after retries")
+                    raise ValueError("Server error after retries")
+
+            else:
+                # Other HTTP errors - retry
+                logger.warning(f"Retry attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"Token refresh failed: HTTP {response.status_code}")
+                    raise ValueError(f"HTTP {response.status_code} after retries")
+
+        except httpx.RequestError as e:
+            # Network failure - retry
+            logger.warning(f"Retry attempt {attempt + 1}")
+            if attempt == max_retries - 1:
+                logger.error(f"Token refresh failed: {type(e).__name__}")
+                raise
+            delay = base_delay * (2**attempt) + random.uniform(0, 1)
+            await asyncio.sleep(delay)
+
+    # Should not reach here, but for safety
+    raise ValueError("Token refresh failed after retries")
 
 
 async def fetch_events(
