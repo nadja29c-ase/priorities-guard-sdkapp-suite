@@ -38,10 +38,10 @@ async def ensure_valid_access_token(
         Error dict: {"error": "ERROR_CODE"}
 
     Error codes:
-        - TOKEN_REFRESH_FAILED: Generic refresh failure
+        - TOKEN_DECRYPTION_FAILED: Failed to decrypt refresh or access token
+        - TOKEN_REFRESH_FAILED: Google token refresh API call failed
         - REFRESH_TOKEN_INVALID: Refresh token is invalid/revoked
         - API_QUOTA_EXCEEDED: Google API quota exceeded
-        - TOKEN_DECRYPTION_FAILED: Failed to decrypt token
     """
     now = datetime.now(timezone.utc)
 
@@ -55,8 +55,8 @@ async def ensure_valid_access_token(
         try:
             refresh_token_decrypted = decrypt_token(connection.encrypted_refresh_token)
         except Exception as e:
-            logger.error(f"Failed to decrypt refresh token: {e}")
-            return {"error": "TOKEN_REFRESH_FAILED"}
+            logger.error(f"Failed to decrypt refresh token for user {connection.user_id}: {e}")
+            return {"error": "TOKEN_DECRYPTION_FAILED"}
 
         # Call Google refresh API
         try:
@@ -73,6 +73,9 @@ async def ensure_valid_access_token(
         # Extract new token and expiration
         new_access_token = result["access_token"]
         expires_in = result["expires_in"]
+
+        # Recompute now AFTER refresh (API call + retries can take several seconds)
+        now = datetime.now(timezone.utc)
 
         # Update database
         connection.encrypted_access_token = encrypt_token(new_access_token)
@@ -92,5 +95,5 @@ async def ensure_valid_access_token(
         access_token = decrypt_token(connection.encrypted_access_token)
         return {"access_token": access_token}
     except Exception as e:
-        logger.error(f"Failed to decrypt access token: {e}")
+        logger.error(f"Failed to decrypt access token for user {connection.user_id}: {e}")
         return {"error": "TOKEN_DECRYPTION_FAILED"}
