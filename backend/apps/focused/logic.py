@@ -26,7 +26,7 @@ from .db_models import FocusedUserKeyword
 from .logic_tokens import ensure_valid_access_token
 
 # Re-export for backward compatibility
-from .logic_watch import register_calendar_webhook
+from .logic_registerwebhook import register_calendar_webhook
 
 logger = logging.getLogger(__name__)
 

@@ -2,6 +2,9 @@
 Google Calendar webhook registration logic for Focused app.
 
 Handles registering push notification channels with Google Calendar API.
+
+logic_watch.py = Outbound Google API calls
+logic_webhook.py = Inbound webhook processing logic
 """
 
 import logging
