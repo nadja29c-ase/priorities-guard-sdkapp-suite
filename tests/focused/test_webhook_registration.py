@@ -3,7 +3,7 @@ Test script for webhook registration functionality (Increment 4).
 
 Tests:
 - Webhook registration (register_webhook, stop_webhook)
-- watch_calendar_logic integration
+- register_calendar_webhook integration
 - Webhook receiver endpoint validation
 - Error handling for various failure scenarios
 """
@@ -16,7 +16,7 @@ import httpx
 import pytest
 
 from backend.core.google_calendar import register_webhook, stop_webhook
-from backend.apps.focused.logic import watch_calendar_logic
+from backend.apps.focused.logic import register_calendar_webhook
 from backend.core.database import AsyncSessionLocal
 from backend.core.models import CoreConnection
 from backend.core.encryption import encrypt_token
@@ -195,7 +195,7 @@ async def test_register_webhook_network_retry():
 
 
 # ---------------------------------------------------------------------
-# Integration Tests - watch_calendar_logic
+# Integration Tests - register_calendar_webhook
 # ---------------------------------------------------------------------
 
 async def test_first_registration():
@@ -241,8 +241,8 @@ async def test_first_registration():
 
             mock_http_client.post.return_value = mock_webhook_response
 
-            # Call watch_calendar_logic
-            result = await watch_calendar_logic(
+            # Call register_calendar_webhook
+            result = await register_calendar_webhook(
                 user_id=test_user_id,
                 session=session,
                 http_client=mock_http_client
@@ -326,8 +326,8 @@ async def test_re_registration():
             # First call is stop, second is register
             mock_http_client.post.side_effect = [mock_stop_response, mock_webhook_response]
 
-            # Call watch_calendar_logic
-            result = await watch_calendar_logic(
+            # Call register_calendar_webhook
+            result = await register_calendar_webhook(
                 user_id=test_user_id,
                 session=session,
                 http_client=mock_http_client
@@ -413,8 +413,8 @@ async def test_token_expired_auto_refresh():
             # First call is refresh (POST to token endpoint), second is register
             mock_http_client.post.side_effect = [mock_refresh_response, mock_webhook_response]
 
-            # Call watch_calendar_logic
-            result = await watch_calendar_logic(
+            # Call register_calendar_webhook
+            result = await register_calendar_webhook(
                 user_id=test_user_id,
                 session=session,
                 http_client=mock_http_client
@@ -498,8 +498,8 @@ async def test_stop_webhook_fails_continues():
             # First call is stop (fails), second is register (succeeds)
             mock_http_client.post.side_effect = [mock_stop_response, mock_webhook_response]
 
-            # Call watch_calendar_logic
-            result = await watch_calendar_logic(
+            # Call register_calendar_webhook
+            result = await register_calendar_webhook(
                 user_id=test_user_id,
                 session=session,
                 http_client=mock_http_client

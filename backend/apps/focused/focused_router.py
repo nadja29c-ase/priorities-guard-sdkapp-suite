@@ -15,7 +15,7 @@ from sqlalchemy import select
 from backend.core.database import get_db
 from backend.core.models import CoreConnection
 
-from .logic import check_calendar_impl, watch_calendar_logic
+from .logic import check_calendar_impl, register_calendar_webhook
 from .models.requests import CheckCalendarRequest, WatchCalendarRequest
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ async def watch_calendar(
     try:
         http_client = request.app.state.http_client
 
-        result = await watch_calendar_logic(
+        result = await register_calendar_webhook(
             user_id=payload.user_id,
             session=session,
             http_client=http_client,
@@ -158,7 +158,7 @@ async def watch_calendar(
         }
 
     except Exception as e:
-        logger.error(f"Unexpected error in watch_calendar: {e}")
+        logger.error(f"Unexpected error in register_calendar_webhook: {e}")
         return {
             "success": False,
             "error": {
