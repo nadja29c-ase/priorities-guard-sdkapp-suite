@@ -103,12 +103,29 @@ async def register_calendar_webhook(
             user_id=user_id,
         )
     except ValueError as e:
-        if str(e) == "API quota exceeded":
+        error_msg = str(e)
+
+        # Map specific errors to granular codes
+        if error_msg == "API quota exceeded":
             return {"error": "API_QUOTA_EXCEEDED"}
-        # All other ValueErrors (invalid request, server errors after retries, etc.)
-        return {"error": "WEBHOOK_REGISTRATION_FAILED"}
+        elif error_msg == "Invalid webhook request":
+            return {"error": "WEBHOOK_INVALID_REQUEST"}
+        elif "Rate limit" in error_msg or "rate limit" in error_msg:
+            return {"error": "WEBHOOK_RATE_LIMITED"}
+        elif "Server error" in error_msg or "server error" in error_msg:
+            return {"error": "WEBHOOK_SERVER_ERROR"}
+        else:
+            # Unknown ValueError
+            logger.error(f"Unexpected ValueError during webhook registration: {error_msg}")
+            return {"error": "WEBHOOK_REGISTRATION_FAILED"}
+
+    except httpx.RequestError as e:
+        # Network errors (timeout, connection failed, etc.)
+        logger.error(f"Network error during webhook registration: {type(e).__name__}")
+        return {"error": "WEBHOOK_NETWORK_ERROR"}
+
     except Exception as e:
-        logger.error(f"Webhook registration failed: {type(e).__name__}")
+        logger.error(f"Unexpected error during webhook registration: {type(e).__name__}")
         return {"error": "WEBHOOK_REGISTRATION_FAILED"}
 
     # -----------------------------------------------------------

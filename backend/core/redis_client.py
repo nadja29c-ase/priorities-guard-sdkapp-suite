@@ -1,24 +1,69 @@
 """
-Redis client for caching and job queues.
+Redis client for caching, idempotency, and throttling.
+“Caching” here means:
+- storing short-lived values
+- making reads/writes extremely fast
+- avoiding hitting the database for trivial checks
 
-Uses RDB persistence for data durability.
+Idempotency:
+Redis stores a key that marks a webhook message as “seen”.This prevents double-processing.
+
+Throttling = limiting how often a certain action can run, to prevent spam.
+
+Uses RDB persistence for data durability.Redis keeps all keys in memory.
+Every X seconds or after Y writes, Redis dumps the entire dataset to disk as a .rdb file.
 """
 
+import logging
 from typing import Optional, Any
+import redis.asyncio as redis
+
+from backend.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class RedisClient:
     """Async Redis client for caching and queues."""
 
+    def __init__(self):
+        """Initialize Redis client (connection created on connect())."""
+        self._client: Optional[redis.Redis] = None
+
     async def connect(self):
         """Initialize Redis connection pool."""
-        # TODO: Create connection pool
-        pass
+        try:
+            self._client = redis.from_url(
+                settings.REDIS_URL,
+                encoding="utf-8",
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5,
+            )
+            # Test connection
+            await self._client.ping()
+            logger.info("Redis connection established")
+        except Exception as e:
+            logger.error(f"Redis connection failed: {e}")
+            # Don't raise - allow app to start without Redis
+            # Webhook handlers will gracefully degrade
+            self._client = None
 
     async def close(self):
         """Close Redis connections."""
-        # TODO: Close pool and connections
-        pass
+        if self._client:
+            await self._client.aclose()
+            self._client = None  # Explicitly set to None after closing
+            logger.info("Redis connection closed")
+
+    def is_connected(self) -> bool:
+        """
+        Check if Redis is connected and usable.
+
+        Returns:
+            True if connected, False otherwise
+        """
+        return self._client is not None
 
     async def get(self, key: str) -> Optional[str]:
         """
@@ -30,10 +75,23 @@ class RedisClient:
         Returns:
             Cached value or None
         """
-        # TODO: Implement get
-        pass
+        if not self.is_connected():
+            logger.warning("Redis not connected, get() returning None")
+            return None
 
-    async def set(self, key: str, value: Any, ex: Optional[int] = None) -> bool:
+        try:
+            return await self._client.get(key)
+        except Exception as e:
+            logger.error(f"Redis get() failed for key {key}: {e}")
+            return None
+
+    async def set(
+        self,
+        key: str,
+        value: Any,
+        ex: Optional[int] = None,
+        nx: bool = False
+    ) -> bool:
         """
         Set key-value pair with optional expiry.
 
@@ -41,12 +99,28 @@ class RedisClient:
             key: Cache key
             value: Value to cache
             ex: Expiry in seconds
+            nx: Only set if key does not exist (for idempotency)
 
         Returns:
-            True if successful
+            True if successful (or if key already exists when nx=True)
+            False if nx=True and key already exists
+            None if Redis error
         """
-        # TODO: Implement set with expiry
-        pass
+        if not self.is_connected():
+            logger.warning("Redis not connected, set() returning None")
+            return None
+
+        try:
+            result = await self._client.set(key, value, ex=ex, nx=nx)
+            # When nx=True:
+            #   - result is True if key was set (new)
+            #   - result is None if key already exists
+            # When nx=False:
+            #   - result is True if key was set
+            return result
+        except Exception as e:
+            logger.error(f"Redis set() failed for key {key}: {e}")
+            return None
 
     async def delete(self, key: str) -> int:
         """
@@ -58,10 +132,17 @@ class RedisClient:
         Returns:
             Number of keys deleted
         """
-        # TODO: Implement delete
-        pass
+        if not self.is_connected():
+            logger.warning("Redis not connected, delete() returning 0")
+            return 0
 
-    async def incr(self, key: str, amount: int = 1) -> int:
+        try:
+            return await self._client.delete(key)
+        except Exception as e:
+            logger.error(f"Redis delete() failed for key {key}: {e}")
+            return 0
+
+    async def incr(self, key: str, amount: int = 1) -> Optional[int]:
         """
         Increment counter (for rate limiting).
 
@@ -70,10 +151,144 @@ class RedisClient:
             amount: Increment amount
 
         Returns:
-            New counter value
+            New counter value or None on error
         """
-        # TODO: Implement increment
-        pass
+        if not self.is_connected():
+            logger.warning("Redis not connected, incr() returning None")
+            return None
+
+        try:
+            return await self._client.incrby(key, amount)
+        except Exception as e:
+            logger.error(f"Redis incr() failed for key {key}: {e}")
+            return None
 
 
+# Global Redis client instance
 redis_client = RedisClient()
+
+
+# -------------------------------------------------------------
+# Webhook Idempotency and Throttling (Increment 5)
+# -------------------------------------------------------------
+
+async def check_webhook_idempotency(
+    user_id: str,
+    message_number: str,
+    ttl_seconds: int = 86400  # 24 hours
+) -> bool:
+    """
+    Check if webhook was already processed.
+
+    Uses Redis SET with NX (only if not exists) for atomic check-and-set.
+
+    Args:
+        user_id: User ID
+        message_number: Google webhook message number
+        ttl_seconds: TTL for idempotency key (default 24 hours)
+
+    Returns:
+        True if this is a new webhook (not processed before)
+        False if this webhook was already processed (duplicate)
+    """
+    # Check Redis connection BEFORE attempting operation
+    if not redis_client.is_connected():
+        logger.warning(f"[idempotency] Redis unavailable, allowing webhook: user={user_id}, msg={message_number}")
+        return True  # Allow webhook if Redis is down
+
+    key = f"focused:webhook:{user_id}:{message_number}"
+
+    # Try to set the key with NX (only if not exists)
+    result = await redis_client.set(key, "1", ex=ttl_seconds, nx=True)
+
+    if result is None:
+        # Redis is connected, so None means key already exists (duplicate)
+        logger.info(f"[idempotency] Duplicate webhook: user={user_id}, msg={message_number}")
+        return False
+    elif result is True:
+        # Key was set successfully (new webhook)
+        return True
+    else:
+        # Unexpected case (Redis error during set)
+        logger.error(f"[idempotency] Unexpected Redis result, allowing webhook: user={user_id}")
+        return True
+
+
+async def check_renewal_throttle(
+    user_id: str,
+    ttl_seconds: int = 86400  # 24 hours
+) -> bool:
+    """
+    Check if renewal is allowed (not throttled).
+
+    Sets a throttle key if renewal is allowed.
+    Prevents multiple renewal attempts within the TTL window.
+
+    Args:
+        user_id: User ID
+        ttl_seconds: TTL for throttle key (default 24 hours)
+
+    Returns:
+        True if renewal is allowed (throttle key was set)
+        False if renewal is throttled (key already exists)
+    """
+    # Check Redis connection BEFORE attempting operation
+    if not redis_client.is_connected():
+        logger.warning(f"[throttle] Redis unavailable, allowing renewal: user={user_id}")
+        return True  # Allow renewal if Redis is down
+
+    key = f"focused:webhook:renew_throttle:{user_id}"
+
+    # Try to set the key with NX (only if not exists)
+    result = await redis_client.set(key, "1", ex=ttl_seconds, nx=True)
+
+    if result is None:
+        # Redis is connected, so None means key already exists (throttled)
+        logger.info(f"[throttle] Renewal throttled: user={user_id}")
+        return False
+    elif result is True:
+        # Key was set successfully (renewal allowed)
+        return True
+    else:
+        # Unexpected case (Redis error during set)
+        logger.error(f"[throttle] Unexpected Redis result, allowing renewal: user={user_id}")
+        return True
+
+
+async def set_needs_sync(
+    user_id: str,
+    ttl_seconds: int = 300  # 5 minutes
+) -> bool:
+    """
+    Set needs_sync flag for a user.
+
+    Indicates that the user's calendar has changed and needs to be synced.
+    Future increments will consume this flag to pull updated events.
+
+    Args:
+        user_id: User ID
+        ttl_seconds: TTL for needs_sync flag (default 5 minutes)
+
+    Returns:
+        True if flag was set successfully
+        False if Redis error occurred
+    """
+    # Check Redis connection BEFORE attempting operation
+    if not redis_client.is_connected():
+        logger.warning(f"[needs_sync] Redis unavailable, flag not stored: user={user_id}")
+        return False
+
+    key = f"focused:needs_sync:{user_id}"
+
+    try:
+        # Set the flag (overwrite if exists, we don't need NX here)
+        result = await redis_client.set(key, "true", ex=ttl_seconds)
+
+        if result is None:
+            logger.error(f"[needs_sync] Failed to set flag (Redis error): user={user_id}")
+            return False
+
+        return True
+    except Exception as e:
+        logger.error(f"[needs_sync] Exception setting flag for user {user_id}: {e}")
+        return False

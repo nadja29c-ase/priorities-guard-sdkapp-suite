@@ -21,9 +21,12 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
         log_record["level"] = record.levelname
         log_record["app_name"] = settings.APP_NAME
 
-        # Add request_id if available
+        # Add request_id if available, otherwise use context-based default
         if hasattr(record, "request_id"):
             log_record["request_id"] = record.request_id
+        else:
+            # Default request_id for non-HTTP logs (startup, shutdown, background tasks)
+            log_record["request_id"] = "system"
 
 
 def init_logging() -> None:

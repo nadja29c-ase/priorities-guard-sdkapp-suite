@@ -17,6 +17,7 @@ from backend.core.database import test_connection
 from backend.apps.focused.focused_router import router as focused_router
 from backend.apps.focused.auth_router import router as auth_router
 from backend.core.database import engine
+from backend.core.redis_client import redis_client
 
 # Initialize logging first
 init_logging()
@@ -27,49 +28,46 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
-    logger.info(
-        f"Starting {settings.APP_NAME} in {settings.ENV} environment",
-        extra={"request_id": "startup"}
-    )
+    logger.info(f"Starting {settings.APP_NAME} in {settings.ENV} environment")
 
     # Initialize httpx client
     app.state.http_client = httpx.AsyncClient(timeout=30.0)
-    logger.info(
-        "HTTP client initialized",
-        extra={"request_id": "startup"}
-    )
+    logger.info("HTTP client initialized")
+
+    # Initialize Redis connection
+    await redis_client.connect()
+
+    # Verify Redis connection health
+    if redis_client.is_connected():
+        logger.info("Redis connection healthy")
+    else:
+        logger.warning("Redis connection failed - webhook idempotency/throttling will be degraded")
+        # Don't raise - app continues with degraded functionality
 
     # Test database connection
     try:
         await test_connection()
-    
+
     except Exception as e:
-        logger.warning(
-            f"Database connection failed: {e}",
-            extra={"request_id": "startup"}
-        )
+        logger.warning(f"Database connection failed: {e}")
         raise
 
     yield
 
     # Shutdown
-    logger.info(
-        "Shutting down application",
-        extra={"request_id": "shutdown"}
-    )
+    logger.info("Shutting down application")
 
     # Close httpx client
     await app.state.http_client.aclose()
-    logger.info(
-        "HTTP client closed",
-        extra={"request_id": "shutdown"}
-    )
+    logger.info("HTTP client closed")
+
+    # Close Redis connection
+    await redis_client.close()
+    logger.info("Redis connection closed")
+
     # Dispose DB engine. should always be the last teardown step for safety
     await engine.dispose()
-    logger.info(
-        "DB engine disposed",
-        extra={"request_id": "shutdown"}
-    )
+    logger.info("DB engine disposed")
 
 
 # Create FastAPI app
@@ -125,7 +123,7 @@ def translate_message(err_type: str, default_msg: str) -> str:
 # -------------------------------------------------------------
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(_: Request, exc: RequestValidationError):
     """
     Turn Pydantic/FastAPI validation errors into:
     {

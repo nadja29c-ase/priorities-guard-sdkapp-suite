@@ -8,7 +8,7 @@ User keywords are NOT passed via API. The backend loads:
 """
 
 import logging
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -16,6 +16,7 @@ from backend.core.database import get_db
 from backend.core.models import CoreConnection
 
 from .logic import check_calendar_impl, register_calendar_webhook
+from .logic_webhook import process_webhook_event
 from .models.requests import CheckCalendarRequest, WatchCalendarRequest
 
 logger = logging.getLogger(__name__)
@@ -106,7 +107,7 @@ async def check_calendar(
 
 
 # ---------------------------------------------------------------------
-# Watch Calendar Endpoint — Register webhook
+# Watch Calendar Endpoint — Register webhook - used by MCP tool
 # ---------------------------------------------------------------------
 @router.post("/watch_calendar")
 async def watch_calendar(
@@ -139,7 +140,11 @@ async def watch_calendar(
                 "TOKEN_REFRESH_FAILED": "Failed to refresh access token",
                 "REFRESH_TOKEN_INVALID": "Refresh token is invalid or revoked",
                 "API_QUOTA_EXCEEDED": "Google API quota exceeded",
-                "WEBHOOK_REGISTRATION_FAILED": "Failed to register webhook with Google",
+                "WEBHOOK_INVALID_REQUEST": "Invalid webhook request (400 - check configuration)",
+                "WEBHOOK_RATE_LIMITED": "Webhook registration rate limited (429 - retry later)",
+                "WEBHOOK_SERVER_ERROR": "Google server error (500/503 - temporary issue)",
+                "WEBHOOK_NETWORK_ERROR": "Network error connecting to Google API",
+                "WEBHOOK_REGISTRATION_FAILED": "Failed to register webhook with Google (unknown error)",
                 "TOKEN_DECRYPTION_FAILED": "Failed to decrypt access token",
             }
 
@@ -169,7 +174,7 @@ async def watch_calendar(
 
 
 # ---------------------------------------------------------------------
-# Webhook Receiver — Google Calendar push notifications
+# Webhook Receiver — Google Calendar push notifications - used for Google Only
 # ---------------------------------------------------------------------
 @router.post("/webhook/focused/google_calendar/{user_id}")
 async def receive_webhook(
@@ -180,58 +185,27 @@ async def receive_webhook(
     """
     Receive Google Calendar push notification webhooks.
 
-    Validates webhook headers and logs event details.
+    Parses headers and delegates all logic to process_webhook_event().
     ALWAYS returns 200 OK to prevent Google from shutting down the channel.
-
-    No event processing in this increment.
     """
     # Extract Google webhook headers
     channel_id = request.headers.get("X-Goog-Channel-ID")
     resource_state = request.headers.get("X-Goog-Resource-State")
     resource_id = request.headers.get("X-Goog-Resource-ID")
+    message_number = request.headers.get("X-Goog-Message-Number")
 
-    # Validate required headers are present
-    if not channel_id or not resource_state or not resource_id:
-        logger.warning(
-            f"[webhook] Missing required headers for user {user_id}: "
-            f"channel_id={channel_id}, resource_state={resource_state}, resource_id={resource_id}"
-        )
-        # Still return 200 OK
-        return {"status": "ok"}
+    http_client = request.app.state.http_client
 
-    # Load user's connection to validate channel_id
-    try:
-        stmt = select(CoreConnection).where(
-            CoreConnection.user_id == user_id,
-            CoreConnection.provider == "google",
-        )
-        result = await session.execute(stmt)
-        connection = result.scalar_one_or_none()
+    # Delegate ALL logic to logic_webhook.py
+    await process_webhook_event(
+        user_id=user_id,
+        channel_id=channel_id,
+        resource_state=resource_state,
+        resource_id=resource_id,
+        message_number=message_number,
+        session=session,
+        http_client=http_client,
+    )
 
-        if connection is None:
-            logger.warning(f"[webhook] No Google connection found for user {user_id}")
-            # Still return 200 OK
-            return {"status": "ok"}
-
-        # Validate channel_id matches
-        if connection.google_channel_id != channel_id:
-            logger.warning(
-                f"[webhook] Channel ID mismatch for user {user_id}: "
-                f"expected={connection.google_channel_id}, received={channel_id}"
-            )
-            # Still return 200 OK
-            return {"status": "ok"}
-
-        # Valid webhook - log it
-        logger.info(
-            f"[webhook] Received valid webhook: user={user_id}, "
-            f"channel_id={channel_id}, resource_state={resource_state}, resource_id={resource_id}"
-        )
-
-        # No event processing in this increment
-        return {"status": "ok"}
-
-    except Exception as e:
-        logger.error(f"[webhook] Error processing webhook for user {user_id}: {e}")
-        # Still return 200 OK
-        return {"status": "ok"}
+    # Always return 200 OK (no body needed - Google only checks status code)
+    return Response(status_code=200)

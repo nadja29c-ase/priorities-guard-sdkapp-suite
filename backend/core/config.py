@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str = "http://localhost:8000/auth/focused/google/callback"
 
+    # Redis settings
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Webhook settings
+    WEBHOOK_RENEWAL_THRESHOLD_HOURS: int = 48
+    WEBHOOK_IDEMPOTENCY_TTL_SECONDS: int = 86400  # 24 hours
+    WEBHOOK_RENEWAL_THROTTLE_SECONDS: int = 86400  # 24 hours
+    WEBHOOK_NEEDS_SYNC_TTL_SECONDS: int = 300  # 5 minutes
+
     class Config:
         env_file = ".env"
         case_sensitive = True
