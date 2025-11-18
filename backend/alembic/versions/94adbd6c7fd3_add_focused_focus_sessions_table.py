@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -23,15 +24,12 @@ def upgrade() -> None:
     Upgrade schema: Create focused_focus_sessions table.
 
     Creates:
-    1. PostgreSQL ENUM type for event status
+    1. PostgreSQL ENUM type for event status (handled by SQLAlchemy)
     2. Table with all columns
     3. All indexes (including composite and partial)
     4. All constraints (FK, unique, check)
     """
-    # 1. Create ENUM type for status
-    op.execute("CREATE TYPE event_status_enum AS ENUM ('active', 'deleted')")
-
-    # 2. Create table
+    # 1. Create table (ENUM type will be created automatically by SQLAlchemy)
     op.create_table(
         'focused_focus_sessions',
         # Primary key
@@ -60,7 +58,7 @@ def upgrade() -> None:
         sa.Column(
             'google_calendar_id',
             sa.String(length=255),
-            server_default='primary',
+            server_default=text("'primary'"),
             nullable=False,
             comment='Calendar source'
         ),
@@ -87,7 +85,7 @@ def upgrade() -> None:
             'event_description',
             sa.Text(),
             nullable=True,
-            comment='Event description (max 8192 chars per Google Calendar limit)'
+            comment='Event description (temporary, max 8192 chars; deleted after 72h)'
         ),
         # Event timing (UTC only)
         sa.Column(
@@ -106,7 +104,7 @@ def upgrade() -> None:
         sa.Column(
             'is_focus_block',
             sa.Boolean(),
-            server_default='false',
+            server_default=text('false'),
             nullable=False,
             comment='Whether event matches focus keywords'
         ),
@@ -123,11 +121,11 @@ def upgrade() -> None:
             nullable=False,
             comment='SHA256 hash of event content for change detection'
         ),
-        # Lifecycle status (references PostgreSQL ENUM)
+        # Lifecycle status (PostgreSQL ENUM - will be auto-created)
         sa.Column(
             'status',
-            sa.Enum('active', 'deleted', name='event_status_enum', create_type=False),
-            server_default='active',
+            sa.Enum('active', 'deleted', name='event_status_enum'),
+            server_default=text("'active'"),
             nullable=False,
             comment='Event lifecycle state'
         ),
@@ -135,16 +133,15 @@ def upgrade() -> None:
         sa.Column(
             'version',
             sa.Integer(),
-            server_default='1',
+            server_default=text('1'),
             nullable=False,
             comment='Event version for history tracking'
         ),
         sa.Column(
             'last_synced_at',
             sa.DateTime(timezone=True),
-            server_default=sa.text('now()'),
-            nullable=False,
-            comment='Last sync from Google (manually updated, no auto-update)'
+            nullable=True,
+            comment='Last sync from Google (manually set after successful sync, no defaults)'
         ),
         # Audit timestamps
         sa.Column(
@@ -186,7 +183,7 @@ def upgrade() -> None:
             name='ck_focus_sessions_version_positive'
         ),
         sa.CheckConstraint(
-            'length(event_description) <= 8192',
+            '(event_description IS NULL) OR (length(event_description) <= 8192)',
             name='ck_focus_sessions_description_length'
         ),
         sa.CheckConstraint(
@@ -215,7 +212,7 @@ def upgrade() -> None:
         'idx_focus_sessions_focus_blocks',
         'focused_focus_sessions',
         ['user_id', 'is_focus_block'],
-        postgresql_where=sa.text("status = 'active'")
+        postgresql_where=text("status = 'active'")
     )
 
     # Index: composite (user_id, sha256_content_hash) for change detection
@@ -231,7 +228,7 @@ def upgrade() -> None:
         'idx_focus_sessions_cleanup',
         'focused_focus_sessions',
         ['created_at'],
-        postgresql_where=sa.text("status = 'active'")
+        postgresql_where=text("status = 'active'")
     )
 
     # Index: google_ical_uid for recurring event queries
@@ -248,8 +245,7 @@ def downgrade() -> None:
 
     Drops in reverse order:
     1. All indexes
-    2. Table
-    3. ENUM type
+    2. Table (ENUM type will be auto-dropped by SQLAlchemy)
     """
     # 1. Drop indexes (not strictly necessary as table drop cascades, but explicit is better)
     op.drop_index('idx_focus_sessions_ical_uid', table_name='focused_focus_sessions')
@@ -259,8 +255,5 @@ def downgrade() -> None:
     op.drop_index('idx_focus_sessions_end_time', table_name='focused_focus_sessions')
     op.drop_index('idx_focus_sessions_start_time', table_name='focused_focus_sessions')
 
-    # 2. Drop table
+    # 2. Drop table (ENUM type will be dropped automatically by SQLAlchemy)
     op.drop_table('focused_focus_sessions')
-
-    # 3. Drop ENUM type
-    op.execute('DROP TYPE event_status_enum')

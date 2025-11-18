@@ -5,6 +5,7 @@ Core tables for OAuth token storage.
 """
 
 from datetime import datetime
+from uuid import UUID
 from sqlalchemy import (
     String,
     Text,
@@ -13,8 +14,10 @@ from sqlalchemy import (
     UniqueConstraint,
     ARRAY,
     DateTime,
+    JSON,
+    ForeignKey,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func, text
 
@@ -22,6 +25,31 @@ from sqlalchemy.sql import func, text
 class Base(DeclarativeBase):
     """Base class for all database models."""
     pass
+
+
+class CoreUser(Base):
+    """
+    Minimal user table for storing user references.
+
+    This is a placeholder table for user management.
+    Currently only tracks user existence with minimal fields.
+    """
+
+    __tablename__ = "core_users"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        comment="User identifier"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When the user was created"
+    )
 
 
 class CoreConnection(Base):
@@ -34,12 +62,17 @@ class CoreConnection(Base):
     __tablename__ = "core_connections"
 
     id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), # unique identifier for database row
-        primary_key=True, 
+        PostgreSQLUUID(as_uuid=True), # unique identifier for database row
+        primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
 
-    user_id: Mapped[str] = mapped_column(String(255), nullable=False) #The ChatGPT user ID (or my internal user ID later)
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("core_users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Reference to core_users.id (UUID)"
+    )
 
     provider: Mapped[str] = mapped_column(String(50), nullable=False) #OAuth provider.
 
@@ -52,6 +85,12 @@ class CoreConnection(Base):
     )
 
     scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False) #All scopes authorized by the user (f.e. calendar.readyonly)
+
+    provider_metadata: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Provider-specific metadata (flexible storage for future fields)"
+    )
 
     created_at: Mapped[datetime] = mapped_column( #The timestamp when this connection row was first created.
         DateTime(timezone=True),
@@ -68,26 +107,28 @@ class CoreConnection(Base):
 
     # Webhook fields (Google Calendar push notifications)
     google_channel_id: Mapped[str | None] = mapped_column(
-        String(255),
+        String(1024),
         nullable=True,
-        comment="Google Calendar webhook channel ID"
+        comment="Google Calendar webhook channel ID (Google-generated; expires ~7 days)"
     )
 
     google_resource_id: Mapped[str | None] = mapped_column(
-        String(255),
+        String(1024),
         nullable=True,
-        comment="Google Calendar webhook resource ID"
+        comment="Google Calendar webhook resource ID (Google-generated; may change on renewal)"
     )
 
     google_channel_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        comment="When the Google Calendar webhook channel expires"
+        comment="When the Google Calendar webhook channel expires (~7 days from registration)"
     )
 
     __table_args__ = ( #Inside a SQLAlchemy model, __table_args__ is a special class attribute that lets you define anything that applies to the whole table f.e. Unique constrainsts, Indexes, Check constraints
         UniqueConstraint("user_id", "provider", name="uq_user_provider"), # Ensures there is only one row per user per provider to prevent duplicates
-        CheckConstraint("provider IN ('google', 'apple')", name="ck_provider_valid"),
+        CheckConstraint("length(encrypted_access_token) > 0", name="ck_encrypted_access_token_not_empty"),
+        CheckConstraint("(encrypted_refresh_token IS NULL) OR (length(encrypted_refresh_token) > 0)", name="ck_encrypted_refresh_token_not_empty"),
+        CheckConstraint("cardinality(scopes) > 0", name="ck_scopes_not_empty"),
         Index("ix_user_provider", "user_id", "provider"), #A database index for fast lookups
         Index("ix_token_expires", "token_expires_at"),
         Index("ix_channel_expires", "google_channel_expires_at"),
@@ -105,9 +146,9 @@ class OAuthState(Base):
     __tablename__ = "oauth_state"
 
     state: Mapped[str] = mapped_column( #primary key, random string
-        String(255),
+        Text,
         primary_key=True,
-        comment="OAuth state token for CSRF protection"
+        comment="OAuth state token for CSRF protection (cryptographically random, variable length)"
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -120,9 +161,10 @@ class OAuthState(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        server_default=text("(now() + interval '10 minutes')"),
         comment="When the state expires (10 minutes from creation)",
     )
 
     __table_args__ = (
-        Index("ix_oauth_state_expires", "expires_at"), # Index for efficient cleanup queries
+        Index("idx_oauth_state_expires_at", "expires_at"), # Index for efficient cleanup queries
     )

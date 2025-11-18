@@ -13,6 +13,9 @@ from alembic import context #main Alembic API (gives you migration context, conf
 from backend.core.models import Base #your SQLAlchemy ORM base. Alembic uses Base.metadata to know which tables/columns exist → for --autogenerate
 from backend.core.config import settings #your Pydantic config, so Alembic can read DATABASE_URL from the same source as your app. This keeps migrations and app pointed at the same DB.
 
+# Import all models so Alembic can see them for autogenerate
+from backend.apps.focused import db_models  # noqa: F401
+
 # Alembic Config object.This is how you access config options like sqlalchemy.url.
 config = context.config
 
