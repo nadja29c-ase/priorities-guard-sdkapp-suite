@@ -5,12 +5,16 @@ Tests all edge cases from the specification:
 1. Idempotency — New Event (sets needs_sync)
 2. Idempotency — Duplicate Event (skips needs_sync)
 3. Missing message_number header
-4. Renewal Needed (<48h)
-5. Renewal Not Needed (>48h)
-6. Renewal Throttled
-7. Renewal Failure
-8. Redis Errors
-9. Token Refresh Integration
+4. Missing channel_id header
+5. Missing DB connection (connection is None)
+6. Channel ID mismatch
+7. Renewal Needed (<48h)
+8. Renewal Not Needed (>48h)
+9. Channel already expired
+10. Renewal Throttled
+11. Renewal Failure
+12. Redis Errors
+13. Token Refresh Integration
 """
 
 import pytest
@@ -154,12 +158,158 @@ async def test_missing_message_number(mock_session, mock_http_client, mock_conne
 
 
 # =============================================================================
-# Test 4: Webhook expires in 40 hours (renewal triggered)
+# Test 4: Missing channel_id header (GAP #1)
+# =============================================================================
+@pytest.mark.asyncio
+async def test_missing_channel_id_continues_processing(mock_session, mock_http_client, mock_connection):
+    """
+    Test 4: Missing channel_id header
+    - Logs warning about missing channel_id
+    - CONTINUES processing (does NOT return early)
+    - Idempotency still runs (if message_number present)
+    - Sets needs_sync flag
+    - Loads connection from DB
+    - Checks renewal (if connection exists and expires soon)
+    - Returns 200
+    """
+    # Setup: Connection exists, expires in 40 hours (renewal needed)
+    mock_connection.google_channel_expires_at = datetime.now(timezone.utc) + timedelta(hours=40)
+    mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
+
+    mock_renewal_result = {
+        "channel_id": "new-channel-789",
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    }
+
+    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True) as mock_idempotency:
+        with patch('backend.apps.focused.logic_webhook.set_needs_sync', return_value=True) as mock_needs_sync:
+            with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
+                with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
+                    # Execute with missing channel_id
+                    await process_webhook_event(
+                        user_id="test_user",
+                        channel_id=None,  # Missing!
+                        resource_state="exists",
+                        resource_id="test-resource-456",
+                        message_number="1",
+                        session=mock_session,
+                        http_client=mock_http_client,
+                    )
+
+    # Verify: Idempotency check ran
+    mock_idempotency.assert_called_once_with("test_user", "1", ttl_seconds=86400)
+    # Verify: needs_sync was set
+    mock_needs_sync.assert_called_once_with("test_user", ttl_seconds=300)
+    # Verify: Database was queried (processing continued)
+    assert mock_session.execute.called
+    # Verify: Renewal was attempted (connection exists and expires soon)
+    assert mock_renewal.called
+
+
+# =============================================================================
+# Test 5: Missing DB connection (GAP #2)
+# =============================================================================
+@pytest.mark.asyncio
+async def test_missing_connection_continues_safely(mock_session, mock_http_client):
+    """
+    Test 5: DB returns no connection for user
+    - Logs warning about missing connection
+    - CONTINUES processing (does NOT return early)
+    - Idempotency still runs
+    - Sets needs_sync flag
+    - DB was queried
+    - Renewal NOT attempted (no connection to renew)
+    - Handler completes normally (no crash)
+    - Returns 200
+    """
+    # Setup: No connection found in DB
+    mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
+
+    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True) as mock_idempotency:
+        with patch('backend.apps.focused.logic_webhook.set_needs_sync', return_value=True) as mock_needs_sync:
+            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook') as mock_renewal:
+                # Execute
+                await process_webhook_event(
+                    user_id="test_user",
+                    channel_id="test-channel-123",
+                    resource_state="exists",
+                    resource_id="test-resource-456",
+                    message_number="1",
+                    session=mock_session,
+                    http_client=mock_http_client,
+                )
+
+    # Verify: Idempotency check ran
+    mock_idempotency.assert_called_once_with("test_user", "1", ttl_seconds=86400)
+    # Verify: needs_sync was set
+    mock_needs_sync.assert_called_once_with("test_user", ttl_seconds=300)
+    # Verify: Database was queried
+    assert mock_session.execute.called
+    # Verify: Renewal NOT attempted (no connection)
+    assert not mock_renewal.called
+
+
+# =============================================================================
+# Test 6: Channel ID mismatch (GAP #3)
+# =============================================================================
+@pytest.mark.asyncio
+async def test_channel_id_mismatch_continues_with_renewal(mock_session, mock_http_client, mock_connection):
+    """
+    Test 6: Channel ID mismatch (received channel_id != connection.google_channel_id)
+    - Idempotency runs
+    - Sets needs_sync flag
+    - DB loaded successfully
+    - Renewal STILL triggered (if expires soon) - happens BEFORE validation
+    - Mismatch logged as warning
+    - Does NOT return early
+    - Does NOT prevent renewal
+    - Returns 200
+
+    CRITICAL: This tests the race condition fix where Google sends webhook
+    with new channel_id before DB commit finishes from previous renewal.
+    """
+    # Setup: Connection has OLD channel_id, webhook has NEW channel_id
+    mock_connection.google_channel_id = "old-channel-123"
+    mock_connection.google_channel_expires_at = datetime.now(timezone.utc) + timedelta(hours=40)
+    mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
+
+    mock_renewal_result = {
+        "channel_id": "new-channel-999",
+        "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    }
+
+    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True) as mock_idempotency:
+        with patch('backend.apps.focused.logic_webhook.set_needs_sync', return_value=True) as mock_needs_sync:
+            with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
+                with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
+                    # Execute with MISMATCHED channel_id
+                    await process_webhook_event(
+                        user_id="test_user",
+                        channel_id="different-channel-789",  # Does NOT match connection.google_channel_id
+                        resource_state="exists",
+                        resource_id="test-resource-456",
+                        message_number="1",
+                        session=mock_session,
+                        http_client=mock_http_client,
+                    )
+
+    # Verify: Idempotency check ran
+    mock_idempotency.assert_called_once_with("test_user", "1", ttl_seconds=86400)
+    # Verify: needs_sync was set
+    mock_needs_sync.assert_called_once_with("test_user", ttl_seconds=300)
+    # Verify: Database was queried
+    assert mock_session.execute.called
+    # Verify: Renewal STILL attempted despite mismatch (renewal happens BEFORE validation)
+    assert mock_renewal.called
+
+
+# =============================================================================
+# Test 7: Webhook expires in 40 hours (renewal triggered)
 # =============================================================================
 @pytest.mark.asyncio
 async def test_webhook_expires_soon_triggers_renewal(mock_session, mock_http_client, mock_connection):
     """
-    Test 4: Webhook expires in 40 hours
+    Test 7: Webhook expires in 40 hours
     - Idempotency passes
     - Renewal triggered inline
     - Existing register_calendar_webhook() called
@@ -196,12 +346,12 @@ async def test_webhook_expires_soon_triggers_renewal(mock_session, mock_http_cli
 
 
 # =============================================================================
-# Test 5: Webhook expires in 72 hours (no renewal)
+# Test 8: Webhook expires in 72 hours (no renewal)
 # =============================================================================
 @pytest.mark.asyncio
 async def test_webhook_expires_later_no_renewal(mock_session, mock_http_client, mock_connection):
     """
-    Test 5: Webhook expires in 72 hours
+    Test 8: Webhook expires in 72 hours
     - Idempotency passes
     - No renewal needed
     - Returns 200
@@ -229,82 +379,12 @@ async def test_webhook_expires_later_no_renewal(mock_session, mock_http_client, 
 
 
 # =============================================================================
-# Test 6: Inline renewal fails
-# =============================================================================
-@pytest.mark.asyncio
-async def test_inline_renewal_fails_gracefully(mock_session, mock_http_client, mock_connection):
-    """
-    Test 6: Inline renewal fails
-    - Logs error
-    - Does NOT return error
-    - Still returns 200
-    - Webhook processing continues
-    """
-    # Setup: Channel expires in 40 hours
-    mock_connection.google_channel_expires_at = datetime.now(timezone.utc) + timedelta(hours=40)
-
-    mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
-
-    # Mock renewal failure
-    mock_renewal_error = {"error": "WEBHOOK_REGISTRATION_FAILED"}
-
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_error):
-                # Execute - should not raise exception
-                await process_webhook_event(
-                    user_id="test_user",
-                    channel_id="test-channel-123",
-                    resource_state="exists",
-                    resource_id="test-resource-456",
-                    message_number="1",
-                    session=mock_session,
-                    http_client=mock_http_client,
-                )
-
-    # Verify: Webhook still processed (no exception raised)
-    assert mock_session.execute.called
-
-
-# =============================================================================
-# Test 7: Redis unavailable
-# =============================================================================
-@pytest.mark.asyncio
-async def test_redis_unavailable_allows_webhook(mock_session, mock_http_client, mock_connection):
-    """
-    Test 7: Redis unavailable
-    - Log error
-    - Skip idempotency check (allow webhook through)
-    - Process webhook anyway
-    - Return 200
-    """
-    mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
-
-    # Mock Redis unavailable (returns True to allow webhook)
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-            # Execute
-            await process_webhook_event(
-                user_id="test_user",
-                channel_id="test-channel-123",
-                resource_state="exists",
-                resource_id="test-resource-456",
-                message_number="1",
-                session=mock_session,
-                http_client=mock_http_client,
-            )
-
-    # Verify: Webhook processed despite Redis issue
-    assert mock_session.execute.called
-
-
-# =============================================================================
-# Test 8: Channel already expired
+# Test 9: Channel already expired
 # =============================================================================
 @pytest.mark.asyncio
 async def test_channel_already_expired_triggers_renewal(mock_session, mock_http_client, mock_connection):
     """
-    Test 8: Channel already expired
+    Test 9: Channel already expired
     - Still triggers renewal
     - Works same as "expires in 40 hours"
     """
@@ -337,14 +417,13 @@ async def test_channel_already_expired_triggers_renewal(mock_session, mock_http_
 
 
 # =============================================================================
-# Test 9: Renewal throttled (multiple webhooks)
+# Test 10: Renewal throttled (multiple webhooks)
 # =============================================================================
 @pytest.mark.asyncio
 async def test_renewal_throttled_multiple_webhooks(mock_session, mock_http_client, mock_connection):
     """
-    Test 9: Renewal throttled (multiple webhooks)
-    - First webhook: Renewal triggered and throttle key set
-    - Second webhook (same user): Renewal skipped (throttled)
+    Test 10: Renewal throttled (multiple webhooks)
+    - Throttle key exists (False returned) - renewal blocked
     - Logs "renewal throttled"
     - Returns 200
     """
@@ -354,10 +433,10 @@ async def test_renewal_throttled_multiple_webhooks(mock_session, mock_http_clien
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
 
     with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        # First webhook: throttle allowed (True)
+        # Throttle key exists (False) - renewal blocked
         with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=False):
             with patch('backend.apps.focused.logic_webhook.register_calendar_webhook') as mock_renewal:
-                # Execute second webhook
+                # Execute
                 await process_webhook_event(
                     user_id="test_user",
                     channel_id="test-channel-123",
@@ -373,12 +452,82 @@ async def test_renewal_throttled_multiple_webhooks(mock_session, mock_http_clien
 
 
 # =============================================================================
-# Test 9: Token Refresh Integration
+# Test 11: Inline renewal fails
+# =============================================================================
+@pytest.mark.asyncio
+async def test_inline_renewal_fails_gracefully(mock_session, mock_http_client, mock_connection):
+    """
+    Test 11: Inline renewal fails
+    - Logs error
+    - Does NOT return error
+    - Still returns 200
+    - Webhook processing continues
+    """
+    # Setup: Channel expires in 40 hours
+    mock_connection.google_channel_expires_at = datetime.now(timezone.utc) + timedelta(hours=40)
+
+    mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
+
+    # Mock renewal failure
+    mock_renewal_error = {"error": "WEBHOOK_REGISTRATION_FAILED"}
+
+    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
+        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
+            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_error):
+                # Execute - should not raise exception
+                await process_webhook_event(
+                    user_id="test_user",
+                    channel_id="test-channel-123",
+                    resource_state="exists",
+                    resource_id="test-resource-456",
+                    message_number="1",
+                    session=mock_session,
+                    http_client=mock_http_client,
+                )
+
+    # Verify: Webhook still processed (no exception raised)
+    assert mock_session.execute.called
+
+
+# =============================================================================
+# Test 12: Redis unavailable
+# =============================================================================
+@pytest.mark.asyncio
+async def test_redis_unavailable_allows_webhook(mock_session, mock_http_client, mock_connection):
+    """
+    Test 12: Redis unavailable
+    - Log error
+    - Skip idempotency check (allow webhook through)
+    - Process webhook anyway
+    - Return 200
+    """
+    mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
+
+    # Mock Redis unavailable (returns True to allow webhook)
+    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
+        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
+            # Execute
+            await process_webhook_event(
+                user_id="test_user",
+                channel_id="test-channel-123",
+                resource_state="exists",
+                resource_id="test-resource-456",
+                message_number="1",
+                session=mock_session,
+                http_client=mock_http_client,
+            )
+
+    # Verify: Webhook processed despite Redis issue
+    assert mock_session.execute.called
+
+
+# =============================================================================
+# Test 13: Token Refresh Integration
 # =============================================================================
 @pytest.mark.asyncio
 async def test_token_refresh_during_renewal(mock_session, mock_http_client, mock_connection):
     """
-    Test 9: Token Refresh Integration
+    Test 13: Token Refresh Integration
     - Token expired → ensure token is refreshed during renewal
     - register_calendar_webhook() internally calls ensure_valid_access_token()
     """
