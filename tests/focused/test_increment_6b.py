@@ -31,12 +31,9 @@ from uuid import uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.apps.focused.logic_sync import (
-    sync_calendar_events,
-    process_single_event,
-    detect_deleted_events,
-    update_last_synced_timestamp
-)
+from backend.apps.focused.logic_sync import sync_calendar_events
+from backend.apps.focused.logic_sync.single_event import process_single_event
+from backend.apps.focused.logic_sync.cleanup import detect_deleted_events, update_last_synced_timestamp
 from backend.apps.focused.db_models import FocusedFocusSession
 
 
@@ -44,8 +41,8 @@ from backend.apps.focused.db_models import FocusedFocusSession
 @pytest.fixture(autouse=True)
 def mock_redis():
     """Mock Redis functions for all tests in this module."""
-    with patch('backend.apps.focused.logic_sync.get_needs_sync', return_value=True):
-        with patch('backend.apps.focused.logic_sync.delete_needs_sync', return_value=True):
+    with patch('backend.apps.focused.logic_sync.orchestrator.get_needs_sync', return_value=True):
+        with patch('backend.apps.focused.logic_sync.orchestrator.delete_needs_sync', return_value=True):
             yield
 
 
@@ -100,8 +97,8 @@ async def test_empty_calendar_no_changes(async_session: AsyncSession):
     # Mock Google API to return empty events
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=([], 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=([], 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -143,8 +140,8 @@ async def test_new_events_inserted(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -210,8 +207,8 @@ async def test_updated_events_hash_change(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -282,10 +279,10 @@ async def test_updated_events_timestamp_only(async_session: AsyncSession):
     mock_http_client = AsyncMock()
 
     # Mock calculate_content_hash to return same hash
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
-            with patch('backend.apps.focused.logic_sync.calculate_content_hash',
+            with patch('backend.apps.focused.logic_sync.single_event.calculate_content_hash',
                        return_value="a" * 64):  # Same hash
                 result = await sync_calendar_events(
                     user_id=user_id,
@@ -355,10 +352,10 @@ async def test_unchanged_events_skipped(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
-            with patch('backend.apps.focused.logic_sync.calculate_content_hash',
+            with patch('backend.apps.focused.logic_sync.single_event.calculate_content_hash',
                        return_value="x" * 64):  # Same hash
                 result = await sync_calendar_events(
                     user_id=user_id,
@@ -415,10 +412,10 @@ async def test_deleted_events_soft_deleted(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
-            with patch('backend.apps.focused.logic_sync.calculate_content_hash',
+            with patch('backend.apps.focused.logic_sync.single_event.calculate_content_hash',
                        return_value="y" * 64):
                 result = await sync_calendar_events(
                     user_id=user_id,
@@ -452,10 +449,13 @@ async def test_deleted_events_soft_deleted(async_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_restored_events_reactivated(async_session: AsyncSession):
     """
-    Test 7: Restored events
+    Test 7: Restored events (valid resurrection)
     - 1 deleted event in DB
-    - Event reappears in API
+    - Event reappears in API with NEWER timestamp (6D rule)
     - Status changed to 'active', deleted_at cleared
+
+    CRITICAL: Resurrection requires Google timestamp >= local timestamp.
+    This prevents stale resurrection from old "confirmed" webhooks.
     """
     user_id = await create_test_user_and_connection(async_session)
 
@@ -477,23 +477,23 @@ async def test_restored_events_reactivated(async_session: AsyncSession):
     await async_session.flush()
 
 
-    # Mock event reappears
+    # Mock event reappears with NEWER timestamp (valid resurrection)
     mock_events = [{
         "id": "event1",
         "iCalUID": "ical1@google.com",
         "summary": "Restored Event",
         "description": "",
-        "updated": "2025-01-15T10:00:00Z",
+        "updated": "2025-01-15T12:00:00Z",  # NEWER timestamp (10:00 -> 12:00)
         "start": {"dateTime": "2025-01-15T10:00:00Z"},
         "end": {"dateTime": "2025-01-15T11:00:00Z"}
     }]
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
-            with patch('backend.apps.focused.logic_sync.calculate_content_hash',
+            with patch('backend.apps.focused.logic_sync.single_event.calculate_content_hash',
                        return_value="z" * 64):
                 result = await sync_calendar_events(
                     user_id=user_id,
@@ -540,8 +540,8 @@ async def test_focus_block_detection(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -589,8 +589,8 @@ async def test_empty_summary_no_focus_block(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -646,8 +646,8 @@ async def test_all_day_event_skipped(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -703,8 +703,8 @@ async def test_missing_updated_field_skipped(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -789,10 +789,10 @@ async def test_last_synced_at_batch_update(async_session: AsyncSession):
 
     mock_http_client = AsyncMock()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
-            with patch('backend.apps.focused.logic_sync.calculate_content_hash',
+            with patch('backend.apps.focused.logic_sync.single_event.calculate_content_hash',
                        return_value="w" * 64):
                 result = await sync_calendar_events(
                     user_id=user_id,
@@ -841,9 +841,9 @@ async def test_sync_flag_persists_on_failure(async_session: AsyncSession):
     mock_http_client = AsyncMock()
 
     # Mock Google API failure
-    with patch('backend.apps.focused.logic_sync.list_events',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events',
                side_effect=ValueError("API error")):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             result = await sync_calendar_events(
                 user_id=user_id,
@@ -872,7 +872,7 @@ async def test_no_sync_needed_when_flag_missing(async_session: AsyncSession):
     mock_http_client = AsyncMock()
 
     # Mock get_needs_sync to return False (flag doesn't exist)
-    with patch('backend.apps.focused.logic_sync.get_needs_sync', return_value=False):
+    with patch('backend.apps.focused.logic_sync.orchestrator.get_needs_sync', return_value=False):
         result = await sync_calendar_events(
             user_id=user_id,
             session=async_session,
@@ -914,10 +914,10 @@ async def test_pagination_with_page_failures(async_session: AsyncSession):
     mock_http_client = AsyncMock()
 
     # Mock list_events to return events with pages_failed=2
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 2)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 2)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
-            with patch('backend.apps.focused.logic_sync.delete_needs_sync') as mock_delete_sync:
+            with patch('backend.apps.focused.logic_sync.orchestrator.delete_needs_sync') as mock_delete_sync:
                 result = await sync_calendar_events(
                     user_id=user_id,
                     session=async_session,
@@ -1000,11 +1000,11 @@ async def test_batch_transaction_rollback(async_session: AsyncSession):
             raise RuntimeError("Simulated DB commit failure (constraint violation)")
         return await original_flush()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             with patch.object(async_session, 'flush', side_effect=failing_flush):
-                with patch('backend.apps.focused.logic_sync.delete_needs_sync') as mock_delete_sync:
+                with patch('backend.apps.focused.logic_sync.orchestrator.delete_needs_sync') as mock_delete_sync:
                     result = await sync_calendar_events(
                         user_id=user_id,
                         session=async_session,
@@ -1064,9 +1064,9 @@ async def test_token_refresh_failure(async_session: AsyncSession):
     mock_http_client = AsyncMock()
 
     # Mock token refresh failure
-    with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                side_effect=ValueError("Token refresh failed")):
-        with patch('backend.apps.focused.logic_sync.list_events') as mock_list:
+        with patch('backend.apps.focused.logic_sync.orchestrator.list_events') as mock_list:
             result = await sync_calendar_events(
                 user_id=user_id,
                 session=async_session,
@@ -1143,11 +1143,11 @@ async def test_db_constraint_error_inside_batch(async_session: AsyncSession):
         # Other batches succeed
         return await original_flush()
 
-    with patch('backend.apps.focused.logic_sync.list_events', return_value=(mock_events, 0)):
-        with patch('backend.apps.focused.logic_sync.ensure_valid_access_token',
+    with patch('backend.apps.focused.logic_sync.orchestrator.list_events', return_value=(mock_events, 0)):
+        with patch('backend.apps.focused.logic_sync.orchestrator.ensure_valid_access_token',
                    return_value={"access_token": "test_token"}):
             with patch.object(async_session, 'flush', side_effect=failing_flush):
-                with patch('backend.apps.focused.logic_sync.delete_needs_sync') as mock_delete_sync:
+                with patch('backend.apps.focused.logic_sync.orchestrator.delete_needs_sync') as mock_delete_sync:
                     result = await sync_calendar_events(
                         user_id=user_id,
                         session=async_session,

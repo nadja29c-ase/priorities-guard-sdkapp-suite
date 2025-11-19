@@ -22,7 +22,7 @@ from backend.apps.focused.db_models import FocusedFocusSession
 logger = logging.getLogger(__name__)
 
 
-ConflictReason = Literal["new_event", "google_newer", "hash_changed", "stale_google", "no_change"]
+ConflictReason = Literal["new_event", "google_newer", "hash_changed", "stale_google", "no_change", "resurrection"]
 
 
 def should_accept_update(
@@ -49,6 +49,7 @@ def should_accept_update(
 
     Reasons:
         - "new_event": No local event exists (INSERT)
+        - "resurrection": Local event is deleted (RESURRECT)
         - "google_newer": Google timestamp is newer (ACCEPT UPDATE)
         - "hash_changed": Timestamps equal but content differs (ACCEPT UPDATE)
         - "stale_google": Google timestamp is older (REJECT UPDATE)
@@ -57,17 +58,22 @@ def should_accept_update(
     Rules:
         1. If local_event is None → Accept (new event)
         2. If google_updated_at > local.google_updated_at → Accept (Google newer)
+           - If local status is 'deleted' → Mark as "resurrection"
         3. If google_updated_at < local.google_updated_at → Reject (stale Google)
+           - This includes stale resurrection attempts
         4. If timestamps equal:
            - If hashes differ → Accept (content changed)
+             * If local status is 'deleted' → Mark as "resurrection"
            - If hashes same → Reject (no change)
 
     Critical Design Notes:
         - Always compare timestamps FIRST (not hashes, not local fields)
+        - Resurrection requires Google timestamp >= local timestamp (no stale resurrection)
         - Google Calendar is the single source of truth
         - This handles:
           * Out-of-order webhooks (webhook A v102, then webhook B v101)
           * Stale API responses during sync
+          * Stale resurrection attempts (deleted event with old confirmed webhook)
           * Description cleanup (NULL descriptions, handled separately in sync logic)
           * Clock drift (equal timestamps fall back to hash)
 
@@ -82,11 +88,16 @@ def should_accept_update(
     if local_event is None:
         return (True, "new_event")
 
-    # Rule 2: Google timestamp is newer → accept update
+    # Rule 2: Google timestamp is newer → accept update (including resurrection)
     if google_updated_at > local_event.google_updated_at:
+        # Check if this is a resurrection (deleted → active with newer timestamp)
+        if local_event.status == "deleted":
+            return (True, "resurrection")
         return (True, "google_newer")
 
     # Rule 3: Google timestamp is older → reject (stale)
+    # CRITICAL: This rejects stale resurrection attempts
+    # Example: Event deleted at 10:50, old "confirmed" webhook arrives with 10:40 timestamp
     if google_updated_at < local_event.google_updated_at:
         return (False, "stale_google")
 
@@ -95,7 +106,11 @@ def should_accept_update(
     # - Google clock drift
     # - Rapid updates within same second
     # - Description cleanup (NULL local description, recalculated hash differs)
+    # - Resurrection with equal timestamp (rare but possible)
     if google_hash != local_event.sha256_content_hash:
+        # Check if this is a resurrection with equal timestamp but hash change
+        if local_event.status == "deleted":
+            return (True, "resurrection")
         return (True, "hash_changed")
 
     # No change needed
@@ -104,33 +119,38 @@ def should_accept_update(
 
 def should_accept_deletion(
     local_event: FocusedFocusSession | None,
-    google_updated_at: datetime
+    google_updated_at: datetime | None = None,
+    missing_in_sync: bool = False
 ) -> tuple[bool, str]:
     """
     Determine if a deletion should be accepted.
 
-    Used when:
-    - Google event has status='cancelled'
-    - Event is missing from sync response (orphaned)
+    Used in two scenarios:
+    1. Explicit Google cancellation: status='cancelled' with deletion timestamp
+    2. Event missing from sync: Event disappeared from Google list (no timestamp)
 
     Args:
         local_event: Existing event from DB (None if already deleted)
-        google_updated_at: Timestamp of deletion signal
+        google_updated_at: Timestamp of deletion signal (None for missing_in_sync)
+        missing_in_sync: True if event is missing from Google sync results
 
     Returns:
         Tuple of (should_delete: bool, reason: str)
 
     Reasons:
         - "no_local_event": Event doesn't exist locally
+        - "missing_in_sync": Event absent from Google list (unconditional accept)
         - "google_deletion_newer": Google deletion timestamp ≥ local timestamp
         - "stale_deletion": Google deletion timestamp < local timestamp
 
     Rules:
         - If no local event → Don't delete (already gone or never existed)
+        - If missing_in_sync → Accept (Google list is source of truth)
         - If google_updated_at >= local.google_updated_at → Accept deletion
         - If google_updated_at < local.google_updated_at → Reject (stale deletion signal)
 
     Critical:
+        - missing_in_sync bypasses timestamp checks (fresh list always wins)
         - Protects against out-of-order deletion + update events
         - Example: Update event (v102) arrives, then delete event (v101) arrives late
           → Deletion rejected because local is already at v102
@@ -138,6 +158,20 @@ def should_accept_deletion(
     if local_event is None:
         return (False, "no_local_event")
 
+    # Rule 1: Event missing from sync → unconditionally accept
+    # Google list is the source of truth, no timestamp comparison needed
+    if missing_in_sync:
+        return (True, "missing_in_sync")
+
+    # Defensive check: Ensure google_updated_at is provided for explicit deletions
+    if google_updated_at is None and not missing_in_sync:
+        logger.warning(
+            "[conflict] Deletion called without google_updated_at and not marked missing_in_sync. "
+            "This indicates a bug in the caller."
+        )
+        return (False, "invalid_deletion_call")
+
+    # Rule 2: Explicit deletion with timestamp comparison
     # Accept deletion if Google timestamp is same or newer
     if google_updated_at >= local_event.google_updated_at:
         return (True, "google_deletion_newer")
