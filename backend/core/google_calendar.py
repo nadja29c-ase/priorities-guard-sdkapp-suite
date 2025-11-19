@@ -388,3 +388,224 @@ async def fetch_events(
 
     # Should not reach here, but for safety
     raise ValueError("Failed to fetch events after maximum retries")
+
+
+async def list_events(
+    http_client: httpx.AsyncClient,
+    access_token: str,
+    time_min: str,
+    time_max: str,
+    max_results_per_page: int = 250,
+    max_pages: int = 10
+) -> tuple[list[dict[str, Any]], int]:
+    """
+    Fetch events from Google Calendar API with pagination support.
+
+    Used by Increment 6B sync pipeline to fetch all events in a time window.
+    Handles pagination automatically via nextPageToken.
+
+    Args:
+        http_client: Shared httpx AsyncClient
+        access_token: Decrypted Google access token
+        time_min: Start time in ISO8601 format (e.g., "2024-01-15T00:00:00Z")
+        time_max: End time in ISO8601 format
+        max_results_per_page: Maximum events per page (default 250, max allowed by Google)
+        max_pages: Maximum number of pages to fetch (default 10 = 2500 events max)
+
+    Returns:
+        Tuple of (events, pages_failed):
+        - events: List of all events fetched from successful pages
+        - pages_failed: Number of pages that failed after retries
+
+    Raises:
+        ValueError: Invalid token (401), quota exceeded (403), or validation error
+        httpx.HTTPStatusError: Other HTTP errors after retries (only if ALL pages fail)
+
+    Note:
+        - Continues fetching remaining pages even if some pages fail
+        - Stops after max_pages even if more pages exist (protection against infinite loops)
+        - Adds 100ms delay between pages if fetching more than 3 pages (rate limiting)
+        - Returns all successfully fetched events even if some pages failed
+        - Only raises if NO pages succeeded (complete failure)
+    """
+    # Validate max_results_per_page
+    if not (1 <= max_results_per_page <= 250):
+        raise ValueError(f"max_results_per_page must be between 1 and 250, got {max_results_per_page}")
+
+    url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)",
+    }
+
+    base_params = {
+        "timeMin": time_min,
+        "timeMax": time_max,
+        "maxResults": max_results_per_page,
+        "singleEvents": "true",
+        "orderBy": "startTime",
+    }
+
+    all_events = []
+    pages_failed = 0
+    page_count = 0
+    next_page_token = None
+
+    max_retries = 3
+    base_delay = 1.0
+
+    while page_count < max_pages:
+        page_count += 1
+        page_succeeded = False
+
+        # Add pagination token if present
+        params = base_params.copy()
+        if next_page_token:
+            params["pageToken"] = next_page_token
+
+        # Retry logic for this page
+        for attempt in range(max_retries):
+            try:
+                logger.info(
+                    f"Fetching events page {page_count}/{max_pages} "
+                    f"(attempt {attempt + 1}/{max_retries})"
+                )
+
+                response = await http_client.get(url, headers=headers, params=params)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    items = data.get("items", [])
+                    all_events.extend(items)
+
+                    logger.info(
+                        f"Page {page_count}: fetched {len(items)} events "
+                        f"(total so far: {len(all_events)})"
+                    )
+
+                    # Check for next page
+                    next_page_token = data.get("nextPageToken")
+
+                    # Mark this page as succeeded
+                    page_succeeded = True
+
+                    if not next_page_token:
+                        # No more pages
+                        logger.info(
+                            f"No more pages. Total events fetched: {len(all_events)}, "
+                            f"pages failed: {pages_failed}"
+                        )
+                        return all_events, pages_failed
+
+                    # Add delay between pages if fetching many pages (rate limiting)
+                    if page_count >= 3:
+                        await asyncio.sleep(0.1)  # 100ms delay
+
+                    # Break retry loop, move to next page
+                    break
+
+                elif response.status_code == 429:
+                    # Rate limit - respect Retry-After header
+                    retry_after = int(
+                        response.headers.get("Retry-After", base_delay * (2**attempt))
+                    )
+                    delay = retry_after + random.uniform(0, 1)
+                    logger.warning(
+                        f"Rate limited (429), retrying after {delay:.2f}s "
+                        f"(page {page_count}, attempt {attempt + 1}/{max_retries})"
+                    )
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        # Rate limit exhausted - treat as page failure
+                        logger.error(
+                            f"Page {page_count} failed: API rate limit exceeded after retries"
+                        )
+                        break  # Exit retry loop, mark page as failed
+
+                elif response.status_code == 401:
+                    # Invalid token - fatal error, don't continue
+                    logger.error("Invalid access token (401)")
+                    if len(all_events) == 0:
+                        # No events fetched yet, raise
+                        raise ValueError("Invalid access token")
+                    else:
+                        # Some events fetched, return what we have
+                        logger.warning("Returning partial results due to auth error")
+                        return all_events, pages_failed + 1
+
+                elif response.status_code == 403:
+                    # Quota exceeded - fatal error, don't continue
+                    logger.error("API daily quota exceeded (403)")
+                    if len(all_events) == 0:
+                        # No events fetched yet, raise
+                        raise ValueError("API daily quota exceeded")
+                    else:
+                        # Some events fetched, return what we have
+                        logger.warning("Returning partial results due to quota error")
+                        return all_events, pages_failed + 1
+
+                else:
+                    # Other HTTP errors
+                    logger.warning(
+                        f"HTTP {response.status_code} from Google Calendar "
+                        f"(page {page_count}, attempt {attempt + 1}/{max_retries})"
+                    )
+                    if attempt < max_retries - 1:
+                        delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                        await asyncio.sleep(delay)
+                        continue
+                    else:
+                        # Other HTTP error exhausted - treat as page failure
+                        logger.error(
+                            f"Page {page_count} failed: HTTP {response.status_code} after retries"
+                        )
+                        break  # Exit retry loop, mark page as failed
+
+            except (httpx.TimeoutException, httpx.NetworkError) as e:
+                logger.warning(
+                    f"Network/timeout error (page {page_count}, attempt {attempt + 1}/{max_retries}): "
+                    f"{type(e).__name__}"
+                )
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt) + random.uniform(0, 1)
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    # Network error exhausted - treat as page failure
+                    logger.error(
+                        f"Page {page_count} failed: {type(e).__name__} after retries"
+                    )
+                    break  # Exit retry loop, mark page as failed
+
+        # After retry loop: check if page succeeded
+        if not page_succeeded:
+            pages_failed += 1
+            logger.warning(
+                f"Page {page_count} failed after {max_retries} attempts. "
+                f"Continuing with remaining pages."
+            )
+            # Continue to next page (if pagination allowed continuation)
+            # For now, we can't continue without next_page_token, so we break
+            if not next_page_token:
+                break
+
+    # Reached max_pages limit or ran out of pages
+    if page_count >= max_pages:
+        logger.warning(
+            f"Reached max_pages limit ({max_pages}). "
+            f"Total events fetched: {len(all_events)}, pages failed: {pages_failed}. "
+            f"More pages may exist but were not fetched."
+        )
+    else:
+        logger.info(
+            f"Completed pagination. Total events fetched: {len(all_events)}, "
+            f"pages failed: {pages_failed}"
+        )
+
+    # If NO events fetched and pages failed, raise error
+    if len(all_events) == 0 and pages_failed > 0:
+        raise ValueError(f"All {pages_failed} page(s) failed")
+
+    return all_events, pages_failed

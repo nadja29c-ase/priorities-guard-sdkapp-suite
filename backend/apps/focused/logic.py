@@ -50,11 +50,18 @@ def normalize(text: str) -> str:
 # ---------------------------------------------------------------------
 # Keyword matching — TITLE ONLY
 # ---------------------------------------------------------------------
-def matches_focus_keywords(event: dict, keywords: list[str]) -> str | None:
+def matches_focus_keywords(summary: str, keywords: list[str]) -> str | None:
     """
     Match keywords ONLY against the event title (summary).
+
+    Args:
+        summary: Event summary/title string
+        keywords: List of keywords to match against
+
+    Returns:
+        Matched keyword if found, None otherwise
     """
-    summary_norm = normalize(event.get("summary", ""))
+    summary_norm = normalize(summary or "")
 
     for keyword in keywords:
         keyword_norm = normalize(keyword)
@@ -211,7 +218,7 @@ async def check_calendar_impl(
     focus_blocks = []
 
     for event in events:
-        matched_keyword = matches_focus_keywords(event, effective_keywords)
+        matched_keyword = matches_focus_keywords(event.get("summary", ""), effective_keywords)
 
         if matched_keyword:
             start_obj = event.get("start", {})

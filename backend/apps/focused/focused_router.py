@@ -17,7 +17,9 @@ from backend.core.models import CoreConnection
 
 from .logic import check_calendar_impl, register_calendar_webhook
 from .logic_webhook import process_webhook_event
-from .models.requests import CheckCalendarRequest, WatchCalendarRequest
+from .logic_sync import sync_calendar_events
+from .logic_cleanup import cleanup_old_descriptions
+from .models.requests import CheckCalendarRequest, WatchCalendarRequest, SyncCalendarRequest
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +176,95 @@ async def watch_calendar(
 
 
 # ---------------------------------------------------------------------
+# Sync Calendar Endpoint — Manual sync trigger 
+# ---------------------------------------------------------------------
+@router.post("/sync_calendar")
+async def sync_calendar(
+    payload: SyncCalendarRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Manually trigger calendar sync for a user.
+
+    Used for testing and manual sync operations.
+    Syncs Google Calendar events into focused_focus_sessions table.
+
+    Process:
+        1. Check needs_sync flag in Redis
+        2. Fetch events from Google Calendar (timeMin=-1d, timeMax=+30d)
+        3. Upsert events in batches of 100
+        4. Detect and soft-delete orphaned events
+        5. Update last_synced_at timestamp
+        6. Clear needs_sync flag
+
+    Returns:
+        {
+            "success": True,
+            "data": {
+                "events_fetched": int,
+                "events_inserted": int,
+                "events_updated": int,
+                "events_deleted": int
+            }
+        }
+    """
+    try:
+        http_client = request.app.state.http_client
+
+        result = await sync_calendar_events(
+            user_id=payload.user_id,
+            session=session,
+            http_client=http_client,
+        )
+
+        # Check if logic returned an error
+        if not result.get("success"):
+            error_code = result.get("error", "SYNC_FAILED")
+
+            # Map error codes to HTTP-friendly messages
+            error_messages = {
+                "USER_NOT_CONNECTED": "User has not connected their Google Calendar",
+                "TOKEN_REFRESH_FAILED": "Failed to refresh access token",
+                "REFRESH_TOKEN_INVALID": "Refresh token is invalid or revoked",
+                "API_QUOTA_EXCEEDED": "Google API quota exceeded",
+                "DATABASE_ERROR": "Database error occurred during sync",
+                "GOOGLE_API_ERROR": "Error fetching events from Google Calendar",
+                "EVENT_PROCESSING_ERROR": "Error processing calendar events",
+            }
+
+            return {
+                "success": False,
+                "error": {
+                    "code": error_code,
+                    "message": error_messages.get(error_code, result.get("error", "Sync failed")),
+                },
+            }
+
+        # Success - return sync results
+        return {
+            "success": True,
+            "data": {
+                "events_fetched": result.get("events_fetched", 0),
+                "events_inserted": result.get("events_inserted", 0),
+                "events_updated": result.get("events_updated", 0),
+                "events_deleted": result.get("events_deleted", 0),
+                "message": result.get("message", "Sync completed successfully")
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Unexpected error in sync_calendar: {e}")
+        return {
+            "success": False,
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred during sync",
+            },
+        }
+
+
+# ---------------------------------------------------------------------
 # Webhook Receiver — Google Calendar push notifications - used for Google Only
 # ---------------------------------------------------------------------
 @router.post("/webhook/focused/google_calendar/{user_id}")
@@ -209,3 +300,52 @@ async def receive_webhook(
 
     # Always return 200 OK (no body needed - Google only checks status code)
     return Response(status_code=200)
+
+
+# ---------------------------------------------------------------------
+# Admin Endpoint — Cleanup Descriptions (Increment 6C)
+# ---------------------------------------------------------------------
+@router.post("/admin/cleanup_descriptions")
+async def admin_cleanup_descriptions(
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Manually trigger description cleanup (dev/testing endpoint).
+
+    Deletes event_description fields older than 72 hours to comply
+    with GDPR data minimization principles.
+
+    NOTE: This endpoint is for development and testing only.
+    In production, cleanup runs automatically via Celery every 6 hours.
+
+    Protection will be added later.
+
+    Returns:
+        {
+            "success": True,
+            "data": {
+                "descriptions_deleted": int,
+                "message": str
+            }
+        }
+    """
+    try:
+        deleted_count = await cleanup_old_descriptions(session)
+
+        return {
+            "success": True,
+            "data": {
+                "descriptions_deleted": deleted_count,
+                "message": f"Cleaned up {deleted_count} event descriptions older than 72 hours"
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Admin cleanup failed: {e}")
+        return {
+            "success": False,
+            "error": {
+                "code": "CLEANUP_FAILED",
+                "message": "Failed to cleanup descriptions"
+            }
+        }

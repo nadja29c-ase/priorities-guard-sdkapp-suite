@@ -9,6 +9,8 @@ Users may add custom keywords, but default system keywords
 cannot be removed or overridden.
 """
 
+from datetime import timedelta
+
 # -----------------------------------------------------------
 # DEFAULT SYSTEM KEYWORDS (NOT user-editable)
 # -----------------------------------------------------------
@@ -26,6 +28,17 @@ DEFAULT_FOCUS_KEYWORDS = [
 
 DEFAULT_SCAN_WINDOW_DAYS = 7
 MAX_SCAN_WINDOW_DAYS = 30   # safety cap
+
+# -----------------------------------------------------------
+# GDPR-COMPLIANT DATA RETENTION (Increment 6C)
+# -----------------------------------------------------------
+
+# Event descriptions are deleted after 72 hours
+# This is GDPR-compliant because:
+# - Descriptions are only needed for short-term sync correctness
+# - SHA256 hash still includes description for change detection
+# - If event is re-synced, description is restored with fresh 72h window
+FOCUSED_EVENTDESCR_TTL = timedelta(hours=72)
 
 # -----------------------------------------------------------
 # Helper function (not required, but clean)

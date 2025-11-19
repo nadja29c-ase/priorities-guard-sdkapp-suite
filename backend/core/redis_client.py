@@ -1,16 +1,22 @@
 """
 Redis client for caching, idempotency, and throttling.
-“Caching” here means:
+
+"Caching" here means:
 - storing short-lived values
 - making reads/writes extremely fast
 - avoiding hitting the database for trivial checks
 
 Idempotency:
-Redis stores a key that marks a webhook message as “seen”.This prevents double-processing.
+Redis stores a key that marks a webhook message as "seen". This prevents double-processing.
 
 Throttling = limiting how often a certain action can run, to prevent spam.
 
-Uses RDB persistence for data durability.Redis keeps all keys in memory.
+Environment Namespacing:
+All Redis keys are automatically prefixed with the environment (dev/staging/prod).
+This prevents key collisions when multiple environments share the same Redis instance.
+Example: "focused:webhook:user123" becomes "dev:focused:webhook:user123"
+
+Uses RDB persistence for data durability. Redis keeps all keys in memory.
 Every X seconds or after Y writes, Redis dumps the entire dataset to disk as a .rdb file.
 """
 
@@ -29,6 +35,22 @@ class RedisClient:
     def __init__(self):
         """Initialize Redis client (connection created on connect())."""
         self._client: Optional[redis.Redis] = None
+        # Environment prefix for key namespacing (dev/staging/prod isolation)
+        self._env_prefix = f"{settings.ENV}:"
+
+    def _prefix_key(self, key: str) -> str:
+        """
+        Add environment prefix to key for namespace isolation.
+
+        Args:
+            key: Original key (e.g., "focused:webhook:user123")
+
+        Returns:
+            Prefixed key (e.g., "dev:focused:webhook:user123")
+
+        This prevents key collisions when dev/staging/prod share the same Redis instance.
+        """
+        return f"{self._env_prefix}{key}"
 
     async def connect(self):
         """Initialize Redis connection pool."""
@@ -70,7 +92,7 @@ class RedisClient:
         Get value by key.
 
         Args:
-            key: Cache key
+            key: Cache key (will be automatically prefixed with environment)
 
         Returns:
             Cached value or None
@@ -80,7 +102,8 @@ class RedisClient:
             return None
 
         try:
-            return await self._client.get(key)
+            prefixed_key = self._prefix_key(key)
+            return await self._client.get(prefixed_key)
         except Exception as e:
             logger.error(f"Redis get() failed for key {key}: {e}")
             return None
@@ -96,7 +119,7 @@ class RedisClient:
         Set key-value pair with optional expiry.
 
         Args:
-            key: Cache key
+            key: Cache key (will be automatically prefixed with environment)
             value: Value to cache
             ex: Expiry in seconds
             nx: Only set if key does not exist (for idempotency)
@@ -111,7 +134,8 @@ class RedisClient:
             return None
 
         try:
-            result = await self._client.set(key, value, ex=ex, nx=nx)
+            prefixed_key = self._prefix_key(key)
+            result = await self._client.set(prefixed_key, value, ex=ex, nx=nx)
             # When nx=True:
             #   - result is True if key was set (new)
             #   - result is None if key already exists
@@ -127,7 +151,7 @@ class RedisClient:
         Delete key from cache.
 
         Args:
-            key: Cache key
+            key: Cache key (will be automatically prefixed with environment)
 
         Returns:
             Number of keys deleted
@@ -137,7 +161,8 @@ class RedisClient:
             return 0
 
         try:
-            return await self._client.delete(key)
+            prefixed_key = self._prefix_key(key)
+            return await self._client.delete(prefixed_key)
         except Exception as e:
             logger.error(f"Redis delete() failed for key {key}: {e}")
             return 0
@@ -147,7 +172,7 @@ class RedisClient:
         Increment counter (for rate limiting).
 
         Args:
-            key: Counter key
+            key: Counter key (will be automatically prefixed with environment)
             amount: Increment amount
 
         Returns:
@@ -158,7 +183,8 @@ class RedisClient:
             return None
 
         try:
-            return await self._client.incrby(key, amount)
+            prefixed_key = self._prefix_key(key)
+            return await self._client.incrby(prefixed_key, amount)
         except Exception as e:
             logger.error(f"Redis incr() failed for key {key}: {e}")
             return None
@@ -291,4 +317,74 @@ async def set_needs_sync(
         return True
     except Exception as e:
         logger.error(f"[needs_sync] Exception setting flag for user {user_id}: {e}")
+        return False
+
+
+async def get_needs_sync(user_id: str) -> bool:
+    """
+    Check if needs_sync flag exists for a user.
+
+    Used by Increment 6B to determine if calendar sync is required.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        True if sync is needed (flag exists)
+        False if sync not needed or Redis unavailable
+    """
+    # Check Redis connection BEFORE attempting operation
+    if not redis_client.is_connected():
+        logger.warning(f"[needs_sync] Redis unavailable, assuming no sync needed: user={user_id}")
+        return False
+
+    key = f"focused:needs_sync:{user_id}"
+
+    try:
+        value = await redis_client.get(key)
+        exists = value is not None
+
+        if exists:
+            logger.info(f"[needs_sync] Flag exists for user {user_id}, sync required")
+        else:
+            logger.debug(f"[needs_sync] No flag for user {user_id}, no sync needed")
+
+        return exists
+    except Exception as e:
+        logger.error(f"[needs_sync] Exception checking flag for user {user_id}: {e}")
+        return False
+
+
+async def delete_needs_sync(user_id: str) -> bool:
+    """
+    Delete needs_sync flag for a user.
+
+    Called after successful calendar sync to clear the flag.
+    CRITICAL: Only call this if sync was 100% successful.
+
+    Args:
+        user_id: User ID
+
+    Returns:
+        True if flag was deleted successfully (or didn't exist)
+        False if Redis error occurred
+    """
+    # Check Redis connection BEFORE attempting operation
+    if not redis_client.is_connected():
+        logger.warning(f"[needs_sync] Redis unavailable, cannot delete flag: user={user_id}")
+        return False
+
+    key = f"focused:needs_sync:{user_id}"
+
+    try:
+        deleted_count = await redis_client.delete(key)
+
+        if deleted_count > 0:
+            logger.info(f"[needs_sync] Flag deleted for user {user_id}")
+        else:
+            logger.debug(f"[needs_sync] No flag to delete for user {user_id}")
+
+        return True
+    except Exception as e:
+        logger.error(f"[needs_sync] Exception deleting flag for user {user_id}: {e}")
         return False

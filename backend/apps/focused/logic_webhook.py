@@ -5,9 +5,16 @@ Handles Google Calendar push notification webhooks with:
 - Idempotency checks (Redis)
 - Validation
 - Inline webhook renewal (with throttling)
+- Automatic calendar sync trigger (Increment 6B)
 - Event logging
 
-No event processing yet - that comes in a future increment.
+When a webhook is received:
+1. Check idempotency (skip duplicates)
+2. Set needs_sync flag in Redis
+3. Trigger immediate calendar sync (fetch and upsert events)
+4. Check if webhook renewal needed (expires <48h)
+5. Validate channel ID
+6. Log webhook receipt
 """
 
 import logging
@@ -20,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.models import CoreConnection
 from backend.core.redis_client import check_webhook_idempotency, check_renewal_throttle, set_needs_sync
 from backend.apps.focused.logic_registerwebhook import register_calendar_webhook
+from backend.apps.focused.logic_sync import sync_calendar_events
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +96,38 @@ async def process_webhook_event(
                 logger.info(f"[webhook] Duplicate detected, already processed: user={user_id}, msg={message_number}")
                 return  # Duplicate - stop here
 
-        # 2. Set needs_sync flag (ALWAYS, even with missing headers). Something in the user’s calendar changed. We haven’t processed the changes yet.
+        # 2. Set needs_sync flag (ALWAYS, even with missing headers). Something in the user's calendar changed. We haven't processed the changes yet.
         await set_needs_sync(user_id, ttl_seconds=300)
         logger.debug(f"[webhook] needs_sync flag set for user={user_id}")
+
+        # 2b. Trigger calendar sync automatically (Increment 6B)
+        # This syncs events immediately when webhook is received
+        # Wrapped in try-except to ensure webhook handler always succeeds
+        try:
+            logger.info(f"[webhook] Triggering automatic sync for user={user_id}")
+            sync_result = await sync_calendar_events(
+                user_id=user_id,
+                session=session,
+                http_client=http_client
+            )
+
+            if sync_result.get("success"):
+                logger.info(
+                    f"[webhook] Automatic sync completed: user={user_id}, "
+                    f"fetched={sync_result.get('events_fetched', 0)}, "
+                    f"inserted={sync_result.get('events_inserted', 0)}, "
+                    f"updated={sync_result.get('events_updated', 0)}, "
+                    f"deleted={sync_result.get('events_deleted', 0)}"
+                )
+            else:
+                logger.warning(
+                    f"[webhook] Automatic sync failed: user={user_id}, "
+                    f"error={sync_result.get('error', 'unknown')}"
+                )
+        except Exception as sync_error:
+            # Don't let sync errors break the webhook handler
+            logger.error(f"[webhook] Automatic sync raised exception: user={user_id}, error={sync_error}")
+            # Continue processing - webhook handler must always succeed
 
         # 3. Log if headers are missing (but continue processing)
         # resource_state and resource_id are optional (SYNC/TEST messages may omit them)

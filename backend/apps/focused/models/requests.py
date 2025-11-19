@@ -23,3 +23,9 @@ class WatchCalendarRequest(BaseModel):
     """Request model for watch_calendar endpoint."""
 
     user_id: str = Field(..., description="User ID for webhook registration")
+
+
+class SyncCalendarRequest(BaseModel):
+    """Request model for sync_calendar endpoint (Increment 6B)."""
+
+    user_id: str = Field(..., description="User ID to sync calendar for")

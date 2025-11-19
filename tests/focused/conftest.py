@@ -69,6 +69,8 @@ async def async_session(async_engine):
     Create a new database session for each test.
 
     Complete isolation: Each test gets its own engine and session.
+    Transaction handling: Test fixture starts outer transaction,
+    production code uses nested transactions (savepoints).
     """
     async_session_maker = async_sessionmaker(
         async_engine,
@@ -77,7 +79,10 @@ async def async_session(async_engine):
     )
 
     async with async_session_maker() as session:
-        yield session
+        # Start outer transaction - production code will use savepoints
+        async with session.begin():
+            yield session
+            # Rollback happens automatically on exit
 
     # Clean up: Truncate all tables after test
     async with async_engine.begin() as conn:
