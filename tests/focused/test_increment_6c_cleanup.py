@@ -19,8 +19,8 @@ from uuid import uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.apps.focused.logic_cleanup import cleanup_old_descriptions
-from backend.apps.focused.logic_sync.single_event import process_single_event
+from backend.apps.focused.logic.sync.clean_eventdescr import cleanup_old_descriptions
+from backend.apps.focused.logic.sync.single_event import process_single_event
 from backend.apps.focused.db_models import FocusedFocusSession
 from backend.apps.focused.focused_config import FOCUSED_EVENTDESCR_TTL
 

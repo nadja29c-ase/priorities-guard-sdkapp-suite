@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.apps.focused.db_models import FocusedFocusSession
 from backend.apps.focused.utils.hash import calculate_content_hash
 from backend.apps.focused.logic import matches_focus_keywords
-from backend.apps.focused.logic_sync.conflicts import should_accept_update, should_accept_deletion
+from backend.apps.focused.logic.sync.sync_conflicts import should_accept_update, should_accept_deletion
 
 logger = logging.getLogger(__name__)
 

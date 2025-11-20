@@ -14,10 +14,18 @@ from backend.core.config import settings
 from backend.core.logging import init_logging
 from backend.core.middleware import RequestIDMiddleware
 from backend.core.database import test_connection
-from backend.apps.focused.focused_router import router as focused_router
-from backend.apps.focused.auth_router import router as auth_router
 from backend.core.database import engine
 from backend.core.redis_client import redis_client
+
+# Import new modular routers
+from backend.apps.focused.routers.tools_router import router as tools_router
+from backend.apps.focused.routers.webhook_router import router as webhook_router
+from backend.apps.focused.routers.oauth_google_router import router as oauth_google_router
+from backend.apps.focused.routers.health_router import router as health_router
+from backend.apps.focused.routers.admin_router import router as admin_router
+from backend.apps.focused.routers.oauth_provider_router import router as oauth_provider_router
+from backend.apps.focused.routers.onboarding_router import router as onboarding_router
+from backend.apps.focused.routers.shortcut_router import router as shortcut_router
 
 # Initialize logging first
 init_logging()
@@ -29,6 +37,20 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
     logger.info(f"Starting {settings.APP_NAME} in {settings.ENV} environment")
+
+    # CRITICAL: Validate OAuth keys exist (Increment 7A)
+    if not settings.OAUTH_RSA_PRIVATE_KEY or not settings.OAUTH_RSA_PUBLIC_KEY:
+        raise RuntimeError(
+            "OAuth RSA keys not configured. "
+            "Run: python scripts/generate_oauth_keys.py"
+        )
+
+    # CRITICAL: Validate keys can be loaded (Increment 7A)
+    try:
+        from backend.core.crypto import _private_key, _public_key
+        logger.info(f"OAuth keys loaded successfully (kid={settings.OAUTH_JWT_KID})")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load OAuth RSA keys: {e}")
 
     # Initialize httpx client
     app.state.http_client = httpx.AsyncClient(timeout=30.0)
@@ -181,8 +203,15 @@ async def root():
     }
 
 
-# Include focused router with prefix
-app.include_router(focused_router, prefix="/api/focused")
+# Include new modular routers
+app.include_router(tools_router, prefix="/api/focused/tools")
+app.include_router(webhook_router, prefix="/webhook/focused")
+app.include_router(oauth_google_router, prefix="/auth/focused/google")
+app.include_router(health_router, prefix="/api/focused")
+app.include_router(admin_router, prefix="/api/focused")
 
-# Include auth router with prefix
-app.include_router(auth_router, prefix="/auth/focused")
+# Include OAuth provider router (Increment 7A - OAuth Provider Skeleton)
+# NOTE: No prefix - endpoints include full paths (/.well-known/*, /oauth/focused/*)
+app.include_router(oauth_provider_router)
+app.include_router(onboarding_router, prefix="/api/focused/onboarding")
+app.include_router(shortcut_router, prefix="/shortcut/focused")

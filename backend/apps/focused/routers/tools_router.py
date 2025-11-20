@@ -1,57 +1,33 @@
 """
-Focused Backend Router — HTTP endpoints for the Focused app.
-MCP server calls these endpoints directly.
+Focused MCP Tool Endpoints Router.
 
-User keywords are NOT passed via API. The backend loads:
-- system default keywords (config.py)
-- user custom keywords (DB table)
+HTTP endpoints for MCP tools:
+- check_calendar: Scan calendar for focus blocks
+- watch_calendar: Register webhook for calendar changes
+- sync_calendar: Manual sync trigger
 """
 
 import logging
-from fastapi import APIRouter, Request, Depends, Response
+from fastapi import APIRouter, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from backend.core.database import get_db
-from backend.core.models import CoreConnection
-
-from .logic import check_calendar_impl, register_calendar_webhook
-from .logic_webhook import process_webhook_event
-from .logic_sync import sync_calendar_events
-from .logic_cleanup import cleanup_old_descriptions
-from .models.requests import CheckCalendarRequest, WatchCalendarRequest, SyncCalendarRequest
+from backend.apps.focused.models.requests import (
+    CheckCalendarRequest,
+    WatchCalendarRequest,
+    SyncCalendarRequest,
+)
+from backend.apps.focused.tools.check_calendar_impl import check_calendar_impl
+from backend.apps.focused.tools.watch_calendar_impl import register_calendar_webhook
+from backend.apps.focused.logic.sync.orchestrator import sync_calendar_events
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["focused"])
+router = APIRouter(tags=["focused-tools"])
 
 
 # ---------------------------------------------------------------------
-# Health Check
-# ---------------------------------------------------------------------
-@router.get("/health")
-async def health_check(request: Request):
-    try:
-        return {
-            "success": True,
-            "data": {
-                "status": "ok",
-                "service": "focused-backend",
-                "version": "0.1.0",
-            },
-        }
-    except Exception:
-        return {
-            "success": False,
-            "error": {
-                "code": "HEALTH_CHECK_FAILED",
-                "message": "Health check endpoint encountered an error",
-            },
-        }
-
-
-# ---------------------------------------------------------------------
-# Main Endpoint — used by MCP tool
+# Check Calendar — Main MCP tool endpoint
 # ---------------------------------------------------------------------
 @router.post("/check_calendar")
 async def check_calendar(
@@ -109,7 +85,7 @@ async def check_calendar(
 
 
 # ---------------------------------------------------------------------
-# Watch Calendar Endpoint — Register webhook - used by MCP tool
+# Watch Calendar — Register webhook (used by MCP tool)
 # ---------------------------------------------------------------------
 @router.post("/watch_calendar")
 async def watch_calendar(
@@ -176,7 +152,7 @@ async def watch_calendar(
 
 
 # ---------------------------------------------------------------------
-# Sync Calendar Endpoint — Manual sync trigger 
+# Sync Calendar — Manual sync trigger
 # ---------------------------------------------------------------------
 @router.post("/sync_calendar")
 async def sync_calendar(
@@ -261,91 +237,4 @@ async def sync_calendar(
                 "code": "INTERNAL_ERROR",
                 "message": "An unexpected error occurred during sync",
             },
-        }
-
-
-# ---------------------------------------------------------------------
-# Webhook Receiver — Google Calendar push notifications - used for Google Only
-# ---------------------------------------------------------------------
-@router.post("/webhook/focused/google_calendar/{user_id}")
-async def receive_webhook(
-    user_id: str,
-    request: Request,
-    session: AsyncSession = Depends(get_db),
-):
-    """
-    Receive Google Calendar push notification webhooks.
-
-    Parses headers and delegates all logic to process_webhook_event().
-    ALWAYS returns 200 OK to prevent Google from shutting down the channel.
-    """
-    # Extract Google webhook headers
-    channel_id = request.headers.get("X-Goog-Channel-ID")
-    resource_state = request.headers.get("X-Goog-Resource-State")
-    resource_id = request.headers.get("X-Goog-Resource-ID")
-    message_number = request.headers.get("X-Goog-Message-Number")
-
-    http_client = request.app.state.http_client
-
-    # Delegate ALL logic to logic_webhook.py
-    await process_webhook_event(
-        user_id=user_id,
-        channel_id=channel_id,
-        resource_state=resource_state,
-        resource_id=resource_id,
-        message_number=message_number,
-        session=session,
-        http_client=http_client,
-    )
-
-    # Always return 200 OK (no body needed - Google only checks status code)
-    return Response(status_code=200)
-
-
-# ---------------------------------------------------------------------
-# Admin Endpoint — Cleanup Descriptions (Increment 6C)
-# ---------------------------------------------------------------------
-@router.post("/admin/cleanup_descriptions")
-async def admin_cleanup_descriptions(
-    session: AsyncSession = Depends(get_db),
-):
-    """
-    Manually trigger description cleanup (dev/testing endpoint).
-
-    Deletes event_description fields older than 72 hours to comply
-    with GDPR data minimization principles.
-
-    NOTE: This endpoint is for development and testing only.
-    In production, cleanup runs automatically via Celery every 6 hours.
-
-    Protection will be added later.
-
-    Returns:
-        {
-            "success": True,
-            "data": {
-                "descriptions_deleted": int,
-                "message": str
-            }
-        }
-    """
-    try:
-        deleted_count = await cleanup_old_descriptions(session)
-
-        return {
-            "success": True,
-            "data": {
-                "descriptions_deleted": deleted_count,
-                "message": f"Cleaned up {deleted_count} event descriptions older than 72 hours"
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"Admin cleanup failed: {e}")
-        return {
-            "success": False,
-            "error": {
-                "code": "CLEANUP_FAILED",
-                "message": "Failed to cleanup descriptions"
-            }
         }

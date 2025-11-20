@@ -76,7 +76,14 @@ class CoreConnection(Base):
 
     provider: Mapped[str] = mapped_column(String(50), nullable=False) #OAuth provider.
 
-    encrypted_access_token: Mapped[str] = mapped_column(Text, nullable=False) #The user’s Google access token, but encrypted with AES-256
+    connection_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        server_default="unknown",
+        comment="Connection type: 'google', 'apple', 'oauth_provider', or 'unknown'"
+    )
+
+    encrypted_access_token: Mapped[str] = mapped_column(Text, nullable=False) #The user's Google access token, but encrypted with AES-256
 
     encrypted_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True) #Google’s refresh token, encrypted.
     

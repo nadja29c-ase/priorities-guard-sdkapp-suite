@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.apps.focused.logic_webhook import process_webhook_event, should_renew_webhook
+from backend.apps.focused.logic.webhook.webhook_processor import process_webhook_event, should_renew_webhook
 from backend.core.models import CoreConnection
 
 

@@ -14,9 +14,9 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.apps.focused.logic_sync.tx import transaction_scope
-from backend.apps.focused.logic_sync.utils import is_valid_event
-from backend.apps.focused.logic_sync.single_event import process_single_event
+from backend.apps.focused.logic.sync.tx import transaction_scope
+from backend.apps.focused.logic.sync.utils import is_valid_event
+from backend.apps.focused.logic.sync.single_event import process_single_event
 
 logger = logging.getLogger(__name__)
 

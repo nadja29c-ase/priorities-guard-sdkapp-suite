@@ -26,8 +26,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.models import CoreConnection
 from backend.core.redis_client import check_webhook_idempotency, check_renewal_throttle, set_needs_sync
-from backend.apps.focused.logic_registerwebhook import register_calendar_webhook
-from backend.apps.focused.logic_sync import sync_calendar_events
+from backend.apps.focused.tools.watch_calendar_impl import register_calendar_webhook
+from backend.apps.focused.logic.sync.orchestrator import sync_calendar_events
 
 logger = logging.getLogger(__name__)
 

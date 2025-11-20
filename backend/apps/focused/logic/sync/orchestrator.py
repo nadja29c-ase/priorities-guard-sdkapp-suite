@@ -33,12 +33,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.google_calendar import list_events
 from backend.core.models import CoreConnection
 from backend.core.redis_client import get_needs_sync, delete_needs_sync
-from backend.apps.focused.logic_tokens import ensure_valid_access_token
+from backend.apps.focused.logic_googletokens import ensure_valid_access_token
 from backend.apps.focused.focused_config import get_default_keywords
 from backend.apps.focused.logic import load_user_custom_keywords
-from backend.apps.focused.logic_sync.tx import transaction_scope
-from backend.apps.focused.logic_sync.batches import process_event_batches
-from backend.apps.focused.logic_sync.cleanup import detect_deleted_events, update_last_synced_timestamp
+from backend.apps.focused.logic.sync.tx import transaction_scope
+from backend.apps.focused.logic.sync.batches import process_event_batches
+from backend.apps.focused.logic.sync.cleanup import detect_deleted_events, update_last_synced_timestamp
 
 logger = logging.getLogger(__name__)
 

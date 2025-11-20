@@ -127,7 +127,7 @@ def cleanup_event_descriptions(self):
     try:
         # Import inside task to avoid early DB initialization on Celery boot
         # This prevents circular imports and defers heavy imports until task execution
-        from backend.apps.focused.logic_cleanup import cleanup_old_descriptions
+        from backend.apps.focused.logic.sync.clean_eventdescr import cleanup_old_descriptions
         from backend.core.database import AsyncSessionLocal
 
         async def run_cleanup():

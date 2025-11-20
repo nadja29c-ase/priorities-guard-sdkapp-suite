@@ -32,7 +32,11 @@ def should_accept_update(
 ) -> tuple[bool, ConflictReason]:
     """
     Determine if a Google Calendar event update should be accepted.
-
+    
+    “Accept the event” simply means:
+    Apply the Google update to your database.
+    Insert it if its new, or update the existing row if it already exists.
+    
     This is the core conflict detection logic for Increment 6D.
     Prevents data corruption from:
     - Out-of-order webhook delivery

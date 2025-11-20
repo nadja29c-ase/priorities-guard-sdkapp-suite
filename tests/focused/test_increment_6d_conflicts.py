@@ -25,9 +25,9 @@ from uuid import uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.apps.focused.logic_sync.single_event import process_single_event
-from backend.apps.focused.logic_sync.cleanup import detect_deleted_events
-from backend.apps.focused.logic_sync.conflicts import should_accept_update, should_accept_deletion
+from backend.apps.focused.logic.sync.single_event import process_single_event
+from backend.apps.focused.logic.sync.cleanup import detect_deleted_events
+from backend.apps.focused.logic.sync.sync_conflicts import should_accept_update, should_accept_deletion
 from backend.apps.focused.db_models import FocusedFocusSession
 
 

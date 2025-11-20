@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.google_calendar import register_webhook, stop_webhook
 from backend.core.models import CoreConnection
 
-from .logic_tokens import ensure_valid_access_token
+from .logic_googletokens import ensure_valid_access_token
 
 logger = logging.getLogger(__name__)
 
