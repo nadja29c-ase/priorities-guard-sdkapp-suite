@@ -69,9 +69,9 @@ async def test_new_webhook_sets_needs_sync(mock_session, mock_http_client, mock_
     # Setup
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True) as mock_idempotency:
-        with patch('backend.apps.focused.logic_webhook.set_needs_sync') as mock_needs_sync:
-            with patch('backend.apps.focused.logic_webhook.check_renewal_throttle'):
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True) as mock_idempotency:
+        with patch('backend.core.redis_client.set_needs_sync') as mock_needs_sync:
+            with patch('backend.core.redis_client.check_renewal_throttle'):
                 # Execute
                 await process_webhook_event(
                     user_id="test_user",
@@ -102,8 +102,8 @@ async def test_duplicate_webhook_skips_needs_sync(mock_session, mock_http_client
     - Returns early
     - No DB queries or API calls
     """
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=False):
-        with patch('backend.apps.focused.logic_webhook.set_needs_sync') as mock_needs_sync:
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=False):
+        with patch('backend.core.redis_client.set_needs_sync') as mock_needs_sync:
             # Execute
             await process_webhook_event(
                 user_id="test_user",
@@ -141,7 +141,7 @@ async def test_missing_message_number(mock_session, mock_http_client, mock_conne
     mock_connection.google_channel_expires_at = datetime.now(timezone.utc) + timedelta(hours=72)
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
 
-    with patch('backend.apps.focused.logic_webhook.set_needs_sync', return_value=True):
+    with patch('backend.core.redis_client.set_needs_sync', return_value=True):
         # Execute with missing message_number
         await process_webhook_event(
             user_id="test_user",
@@ -181,10 +181,10 @@ async def test_missing_channel_id_continues_processing(mock_session, mock_http_c
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     }
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True) as mock_idempotency:
-        with patch('backend.apps.focused.logic_webhook.set_needs_sync', return_value=True) as mock_needs_sync:
-            with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-                with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True) as mock_idempotency:
+        with patch('backend.core.redis_client.set_needs_sync', return_value=True) as mock_needs_sync:
+            with patch('backend.core.redis_client.check_renewal_throttle', return_value=True):
+                with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
                     # Execute with missing channel_id
                     await process_webhook_event(
                         user_id="test_user",
@@ -225,9 +225,9 @@ async def test_missing_connection_continues_safely(mock_session, mock_http_clien
     # Setup: No connection found in DB
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: None))
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True) as mock_idempotency:
-        with patch('backend.apps.focused.logic_webhook.set_needs_sync', return_value=True) as mock_needs_sync:
-            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook') as mock_renewal:
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True) as mock_idempotency:
+        with patch('backend.core.redis_client.set_needs_sync', return_value=True) as mock_needs_sync:
+            with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook') as mock_renewal:
                 # Execute
                 await process_webhook_event(
                     user_id="test_user",
@@ -278,10 +278,10 @@ async def test_channel_id_mismatch_continues_with_renewal(mock_session, mock_htt
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     }
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True) as mock_idempotency:
-        with patch('backend.apps.focused.logic_webhook.set_needs_sync', return_value=True) as mock_needs_sync:
-            with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-                with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True) as mock_idempotency:
+        with patch('backend.core.redis_client.set_needs_sync', return_value=True) as mock_needs_sync:
+            with patch('backend.core.redis_client.check_renewal_throttle', return_value=True):
+                with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
                     # Execute with MISMATCHED channel_id
                     await process_webhook_event(
                         user_id="test_user",
@@ -327,9 +327,9 @@ async def test_webhook_expires_soon_triggers_renewal(mock_session, mock_http_cli
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     }
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_result):
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True):
+        with patch('backend.core.redis_client.check_renewal_throttle', return_value=True):
+            with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook', return_value=mock_renewal_result):
                 # Execute
                 await process_webhook_event(
                     user_id="test_user",
@@ -361,8 +361,8 @@ async def test_webhook_expires_later_no_renewal(mock_session, mock_http_client, 
 
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.register_calendar_webhook') as mock_renewal:
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True):
+        with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook') as mock_renewal:
             # Execute
             await process_webhook_event(
                 user_id="test_user",
@@ -398,9 +398,9 @@ async def test_channel_already_expired_triggers_renewal(mock_session, mock_http_
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     }
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True):
+        with patch('backend.core.redis_client.check_renewal_throttle', return_value=True):
+            with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
                 # Execute
                 await process_webhook_event(
                     user_id="test_user",
@@ -432,10 +432,10 @@ async def test_renewal_throttled_multiple_webhooks(mock_session, mock_http_clien
 
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True):
         # Throttle key exists (False) - renewal blocked
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=False):
-            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook') as mock_renewal:
+        with patch('backend.core.redis_client.check_renewal_throttle', return_value=False):
+            with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook') as mock_renewal:
                 # Execute
                 await process_webhook_event(
                     user_id="test_user",
@@ -471,9 +471,9 @@ async def test_inline_renewal_fails_gracefully(mock_session, mock_http_client, m
     # Mock renewal failure
     mock_renewal_error = {"error": "WEBHOOK_REGISTRATION_FAILED"}
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-            with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_error):
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True):
+        with patch('backend.core.redis_client.check_renewal_throttle', return_value=True):
+            with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook', return_value=mock_renewal_error):
                 # Execute - should not raise exception
                 await process_webhook_event(
                     user_id="test_user",
@@ -504,8 +504,8 @@ async def test_redis_unavailable_allows_webhook(mock_session, mock_http_client, 
     mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=lambda: mock_connection))
 
     # Mock Redis unavailable (returns True to allow webhook)
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True):
+        with patch('backend.core.redis_client.check_renewal_throttle', return_value=True):
             # Execute
             await process_webhook_event(
                 user_id="test_user",
@@ -541,10 +541,10 @@ async def test_token_refresh_during_renewal(mock_session, mock_http_client, mock
         "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
     }
 
-    with patch('backend.apps.focused.logic_webhook.check_webhook_idempotency', return_value=True):
-        with patch('backend.apps.focused.logic_webhook.check_renewal_throttle', return_value=True):
-            with patch('backend.apps.focused.logic_webhook.set_needs_sync'):
-                with patch('backend.apps.focused.logic_webhook.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
+    with patch('backend.core.redis_client.check_webhook_idempotency', return_value=True):
+        with patch('backend.core.redis_client.check_renewal_throttle', return_value=True):
+            with patch('backend.core.redis_client.set_needs_sync'):
+                with patch('backend.apps.focused.tools.watch_calendar_impl.register_calendar_webhook', return_value=mock_renewal_result) as mock_renewal:
                     # Execute
                     await process_webhook_event(
                         user_id="test_user",
