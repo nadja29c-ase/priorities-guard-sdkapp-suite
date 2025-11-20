@@ -1,8 +1,12 @@
 """
-OAuth Provider Models (Increment 7A).
+OAuth Provider Models.
 
-Tables for authorization codes and access tokens.
-Separate from core/models.py to maintain clean architecture boundaries.
+Contains all tables related to the OAuth 2.1 provider:
+- OAuthAuthorizationCode
+- OAuthAccessToken
+- OAuthState
+
+This is an isolated subsystem separate from core shared models.
 """
 
 from datetime import datetime
@@ -18,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 
 from backend.core.models import Base
 
@@ -225,4 +229,40 @@ class OAuthAccessToken(Base):
         Index("idx_oauth_access_tokens_jti", "jti"),
         Index("idx_oauth_access_tokens_expires_at", "expires_at"),  # O(1) cleanup
         {"comment": "OAuth 2.1 access tokens with refresh token support"}
+    )
+
+
+class OAuthState(Base):
+    """
+    Store OAuth state tokens for CSRF protection.
+
+    State tokens are single-use and expire after 10 minutes.
+    Deleted after successful verification.
+    """
+
+    __tablename__ = "oauth_state"
+
+    state: Mapped[str] = mapped_column(
+        Text,
+        primary_key=True,
+        comment="OAuth state token for CSRF protection (cryptographically random, variable length)"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When the state was created",
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("(now() + interval '10 minutes')"),
+        comment="When the state expires (10 minutes from creation)",
+    )
+
+    __table_args__ = (
+        Index("idx_oauth_state_expires_at", "expires_at"),
+        {"comment": "OAuth state tokens for CSRF protection"}
     )

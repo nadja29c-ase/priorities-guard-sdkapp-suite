@@ -1,4 +1,5 @@
 """
+DB ENGINE + Session Management
 Async database connection and session management.
 
 Uses SQLAlchemy 2.0 async engine with PostgreSQL.
@@ -23,6 +24,7 @@ engine: AsyncEngine = create_async_engine(
     pool_size=10, #Max simultaneous DB connections your backend keeps open
     max_overflow=20, #Allows the pool to create temporary extra connections above pool_size
     echo=False, #keeps logs clean
+    pool_pre_ping=True,  # Test connections before using them (prevents stale connection errors)
 )
 
 # Create async session factory when FastAPI needs a DB session for a request

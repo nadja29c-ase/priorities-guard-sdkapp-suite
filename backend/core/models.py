@@ -1,7 +1,12 @@
 """
-SQLAlchemy models for Priority Guardian.
+Core Shared Application Models.
 
-Core tables for OAuth token storage.
+This file contains application-wide models that apply to all SDK apps:
+- CoreUser
+- CoreConnection
+
+OAuth provider models live in:
+backend/core/oauth_models.py
 """
 
 from datetime import datetime
@@ -139,39 +144,4 @@ class CoreConnection(Base):
         Index("ix_user_provider", "user_id", "provider"), #A database index for fast lookups
         Index("ix_token_expires", "token_expires_at"),
         Index("ix_channel_expires", "google_channel_expires_at"),
-    )
-
-
-class OAuthState(Base):
-    """
-    Store OAuth state tokens for CSRF protection.
-
-    State tokens are single-use and expire after 10 minutes.
-    Deleted after successful verification.
-    """
-
-    __tablename__ = "oauth_state"
-
-    state: Mapped[str] = mapped_column( #primary key, random string
-        Text,
-        primary_key=True,
-        comment="OAuth state token for CSRF protection (cryptographically random, variable length)"
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When the state was created",
-    )
-
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=text("(now() + interval '10 minutes')"),
-        comment="When the state expires (10 minutes from creation)",
-    )
-
-    __table_args__ = (
-        Index("idx_oauth_state_expires_at", "expires_at"), # Index for efficient cleanup queries
     )
