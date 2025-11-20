@@ -120,6 +120,7 @@ class OAuthAuthorizationCode(Base):
     __table_args__ = (
         Index("idx_oauth_authorization_codes_user_id", "user_id"),
         Index("idx_oauth_authorization_codes_expires_at", "expires_at"),  # O(1) cleanup
+        {"comment": "OAuth 2.1 PKCE authorization codes"}
     )
 
 
@@ -223,4 +224,5 @@ class OAuthAccessToken(Base):
         Index("idx_oauth_access_tokens_user_id", "user_id"),
         Index("idx_oauth_access_tokens_jti", "jti"),
         Index("idx_oauth_access_tokens_expires_at", "expires_at"),  # O(1) cleanup
+        {"comment": "OAuth 2.1 access tokens with refresh token support"}
     )

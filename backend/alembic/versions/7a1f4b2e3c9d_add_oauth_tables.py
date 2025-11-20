@@ -69,7 +69,8 @@ def upgrade() -> None:
         sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False, comment="Code expiration (10 minutes from creation)"),
         sa.Column('used', sa.Boolean(), nullable=False, server_default='false', comment="Whether code has been exchanged for token"),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), comment="Code creation timestamp"),
-        sa.PrimaryKeyConstraint('code')
+        sa.PrimaryKeyConstraint('code'),
+        comment="OAuth 2.1 PKCE authorization codes"
     )
 
     # Indices for oauth_authorization_codes
@@ -93,7 +94,8 @@ def upgrade() -> None:
         sa.Column('revoked_at', sa.DateTime(timezone=True), nullable=True, comment="When token was revoked"),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), comment="Token creation timestamp"),
         sa.Column('last_used_at', sa.DateTime(timezone=True), nullable=True, comment="Last time token was used"),
-        sa.PrimaryKeyConstraint('jti')
+        sa.PrimaryKeyConstraint('jti'),
+        comment="OAuth 2.1 access tokens with refresh token support"
     )
 
     # Indices for oauth_access_tokens

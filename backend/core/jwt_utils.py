@@ -86,10 +86,7 @@ def create_refresh_token() -> str:
         Must be stored encrypted in database.
         Used for token rotation (7B).
     """
-    # Generate 32 random bytes (256 bits)
-    random_bytes = secrets.token_bytes(32)
-
-    # Encode as URL-safe base64 (no padding)
+    # Generate 32 random bytes as URL-safe base64 (no padding)
     refresh_token = secrets.token_urlsafe(32)
 
     return refresh_token
