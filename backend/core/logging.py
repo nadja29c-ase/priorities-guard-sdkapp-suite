@@ -1,51 +1,173 @@
 """
-Structured JSON logging for Priority Guardian.
+Structured logging with correlation ID and sensitive data scrubbing (Increment 7C).
 
-Configures JSON formatter with required fields and suppresses uvicorn access logs.
+Uses structlog for JSON-formatted logs with automatic scrubbing of tokens, secrets, and credentials.
 """
 
 import logging
 import sys
-from pythonjsonlogger import jsonlogger
+from typing import Any
+
+import structlog
 
 from backend.core.config import settings
 
 
-class CustomJsonFormatter(jsonlogger.JsonFormatter):
-    """Custom JSON formatter with required fields."""
+def scrub_sensitive_data(logger: Any, method_name: str, event_dict: dict) -> dict:
+    """
+    Scrub sensitive data from log events.
 
-    def add_fields(self, log_record, record, message_dict):
-        """Add custom fields to log record."""
-        super().add_fields(log_record, record, message_dict)
-        log_record["timestamp"] = self.formatTime(record, self.datefmt)
-        log_record["level"] = record.levelname
-        log_record["app_name"] = settings.APP_NAME
+    Redacts tokens, secrets, credentials, and other sensitive fields
+    to prevent leakage in logs.
 
-        # Add request_id if available, otherwise use context-based default
-        if hasattr(record, "request_id"):
-            log_record["request_id"] = record.request_id
-        else:
-            # Default request_id for non-HTTP logs (startup, shutdown, background tasks)
-            log_record["request_id"] = "system"
+    Args:
+        logger: Logger instance (unused, required by structlog)
+        method_name: Method name (unused, required by structlog)
+        event_dict: Log event dictionary
+
+    Returns:
+        Event dictionary with sensitive fields redacted
+    """
+    REDACT_KEYS = [
+        # OAuth tokens
+        "access_token",
+        "refresh_token",
+        "authorization_code",
+        "authorization",
+        "token",
+
+        # PKCE
+        "code_verifier",
+        "code_challenge",
+
+        # Secrets
+        "client_secret",
+        "password",
+        "secret",
+
+        # Google tokens
+        "encrypted_access_token",
+        "encrypted_refresh_token",
+    ]
+
+    for key in REDACT_KEYS:
+        if key in event_dict:
+            event_dict[key] = "[REDACTED]"
+
+    return event_dict
 
 
-def init_logging() -> None:
-    """Initialize structured JSON logging."""
-    # Create handler
-    handler = logging.StreamHandler(sys.stdout)
+def add_correlation_id(logger: Any, method_name: str, event_dict: dict) -> dict:
+    """
+    Add correlation_id to log events from context.
 
-    # Set JSON formatter
-    formatter = CustomJsonFormatter(
-        "%(timestamp)s %(level)s %(app_name)s %(name)s %(message)s"
+    Extracts correlation_id from structlog context and adds to event.
+    Falls back to "system" for non-HTTP logs (startup, Celery jobs).
+
+    Args:
+        logger: Logger instance (unused, required by structlog)
+        method_name: Method name (unused, required by structlog)
+        event_dict: Log event dictionary
+
+    Returns:
+        Event dictionary with correlation_id field
+    """
+    # correlation_id should be bound to logger via bind() in middleware
+    # If not present, use "system" for background jobs
+    if "correlation_id" not in event_dict:
+        event_dict["correlation_id"] = "system"
+
+    return event_dict
+
+
+def configure_logging(environment: str = None) -> None:
+    """
+    Configure structlog for JSON-formatted logging.
+
+    Sets up processors for:
+    - Timestamp (ISO format)
+    - Log level
+    - Correlation ID injection
+    - Sensitive data scrubbing
+    - Exception formatting
+    - JSON rendering
+
+    Args:
+        environment: Environment name (default: from settings.ENV)
+    """
+    if environment is None:
+        environment = settings.ENV
+
+    # Determine log level by environment
+    if environment == "production":
+        log_level = logging.INFO
+    elif environment == "staging":
+        log_level = logging.INFO
+    else:  # dev
+        log_level = logging.DEBUG
+
+    # Configure structlog processors
+    structlog.configure(
+        processors=[
+            # Add log level
+            structlog.stdlib.add_log_level,
+
+            # Add timestamp (ISO 8601)
+            structlog.processors.TimeStamper(fmt="iso"),
+
+            # Add correlation ID from context
+            add_correlation_id,
+
+            # Scrub sensitive data
+            scrub_sensitive_data,
+
+            # Add stack info on exceptions
+            structlog.processors.StackInfoRenderer(),
+
+            # Format exceptions
+            structlog.processors.format_exc_info,
+
+            # Render as JSON
+            structlog.processors.JSONRenderer()
+        ],
+        # Wrapper class for logger
+        wrapper_class=structlog.stdlib.BoundLogger,
+
+        # Logger factory
+        logger_factory=structlog.stdlib.LoggerFactory(),
+
+        # Cache logger instances
+        cache_logger_on_first_use=True,
     )
-    handler.setFormatter(formatter)
 
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(settings.LOG_LEVEL)
-    root_logger.handlers.clear()
-    root_logger.addHandler(handler)
+    # Configure standard library logging
+    logging.basicConfig(
+        format="%(message)s",
+        level=log_level,
+        stream=sys.stdout,
+    )
 
-    # Suppress uvicorn access logs
+    # Suppress uvicorn access logs (too noisy)
     logging.getLogger("uvicorn.access").disabled = True
     logging.getLogger("uvicorn.access").propagate = False
+
+    # Log configuration complete
+    logger = structlog.get_logger()
+    logger.info(
+        "logging.configured",
+        environment=environment,
+        log_level=logging.getLevelName(log_level)
+    )
+
+
+def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
+    """
+    Get a structlog logger instance.
+
+    Args:
+        name: Logger name (typically __name__)
+
+    Returns:
+        Configured structlog logger
+    """
+    return structlog.get_logger(name)

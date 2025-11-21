@@ -1,7 +1,9 @@
 """
-Middleware for Priority Guardian.
+Middleware for Priority Guardian (Increment 7C).
 
-RequestIDMiddleware generates a unique ID for each request.
+Provides:
+- Correlation ID propagation across requests
+- Global security headers for all endpoints
 """
 
 import uuid
@@ -9,21 +11,76 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 
-class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Middleware to generate and attach a unique request ID to each request."""
+class CorrelationIDMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to handle correlation ID for request tracing.
+
+    Accepts X-Correlation-ID from upstream (e.g., MCP server) or generates new UUID.
+    Adds correlation_id to request.state and response headers.
+    """
 
     async def dispatch(self, request: Request, call_next):
-        """Generate UUID4 and store in request.state."""
-        # Generate unique request ID
-        request_id = str(uuid.uuid4())
+        """
+        Extract or generate correlation ID and attach to request.
 
-        # Store in request state
-        request.state.request_id = request_id
+        Args:
+            request: Incoming HTTP request
+            call_next: Next middleware/handler in chain
+
+        Returns:
+            Response with X-Correlation-ID header
+        """
+        # Accept from upstream (MCP server) or generate new
+        correlation_id = request.headers.get("X-Correlation-ID")
+        if not correlation_id:
+            correlation_id = str(uuid.uuid4())
+
+        # Store in request state for access in handlers
+        request.state.correlation_id = correlation_id
 
         # Process request
         response = await call_next(request)
 
-        # Optionally add to response headers for tracing
-        response.headers["X-Request-ID"] = request_id
+        # Add to response headers for client tracing
+        response.headers["X-Correlation-ID"] = correlation_id
+
+        return response
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to add global security headers to all responses.
+
+    Applies OWASP-recommended security headers:
+    - X-Content-Type-Options: Prevent MIME sniffing
+    - X-Frame-Options: Prevent clickjacking
+    - X-XSS-Protection: Enable XSS filtering
+    - Strict-Transport-Security: Enforce HTTPS
+    - Cache-Control: Prevent caching of sensitive data
+    - Pragma: Legacy cache control
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        """
+        Add security headers to response.
+
+        Args:
+            request: Incoming HTTP request
+            call_next: Next middleware/handler in chain
+
+        Returns:
+            Response with security headers
+        """
+        response = await call_next(request)
+
+        # Apply security headers to ALL endpoints
+        response.headers.update({
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "X-XSS-Protection": "1; mode=block",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache"
+        })
 
         return response

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'">
+    <title>Focused autorisieren - Priority Guardian</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 480px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 24px;
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .app-name {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #6e6e73;
+        }
+
+        .permissions-section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 16px;
+        }
+
+        .permission-list {
+            list-style: none;
+        }
+
+        .permission-item {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            background-color: #f5f5f7;
+            border-radius: 8px;
+            border-left: 3px solid #007aff;
+        }
+
+        .permission-name {
+            font-weight: 600;
+            color: #007aff;
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .permission-description {
+            font-size: 13px;
+            color: #6e6e73;
+        }
+
+        .privacy-notice {
+            font-size: 13px;
+            color: #6e6e73;
+            text-align: center;
+            margin-bottom: 24px;
+            padding: 16px;
+            background-color: #f5f5f7;
+            border-radius: 8px;
+        }
+
+        .privacy-notice a {
+            color: #007aff;
+            text-decoration: none;
+        }
+
+        .privacy-notice a:hover,
+        .privacy-notice a:focus {
+            text-decoration: underline;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-direction: column;
+        }
+
+        @media (min-width: 480px) {
+            .button-group {
+                flex-direction: row;
+            }
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .btn:focus {
+            outline: 3px solid #007aff;
+            outline-offset: 2px;
+        }
+
+        .btn-allow {
+            background-color: #007aff;
+            color: #ffffff;
+        }
+
+        .btn-allow:hover {
+            background-color: #0051d5;
+        }
+
+        .btn-allow:active {
+            background-color: #004bb8;
+        }
+
+        .btn-deny {
+            background-color: #e8e8ed;
+            color: #1d1d1f;
+        }
+
+        .btn-deny:hover {
+            background-color: #d2d2d7;
+        }
+
+        .btn-deny:active {
+            background-color: #c7c7cc;
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            .btn-allow {
+                border: 2px solid #ffffff;
+            }
+            .btn-deny {
+                border: 2px solid #1d1d1f;
+            }
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            .btn {
+                transition: none;
+            }
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+    </style>
+</head>
+<body>
+    <main class="container" role="main">
+        <header class="header">
+            <h1 class="app-name">Focused</h1>
+            <p class="subtitle">Priority Guardian</p>
+        </header>
+
+        <section class="permissions-section" aria-labelledby="permissions-title">
+            <h2 id="permissions-title" class="section-title">Angeforderte Berechtigungen</h2>
+            <ul class="permission-list" role="list">
+                <li class="permission-item">
+                    <div class="permission-name" aria-label="Berechtigung: Lesezugriff">focused.read</div>
+                    <div class="permission-description">Fokusmuster und Kalender-Synchronisationsstatus anzeigen</div>
+                </li>
+                <li class="permission-item">
+                    <div class="permission-name" aria-label="Berechtigung: Schreibzugriff">focused.write</div>
+                    <div class="permission-description">Fokusmodus aktivieren und Einstellungen verwalten</div>
+                </li>
+                <li class="permission-item">
+                    <div class="permission-name" aria-label="Berechtigung: Benachrichtigungszugriff">focused.notify</div>
+                    <div class="permission-description">Benachrichtigungen senden</div>
+                </li>
+            </ul>
+        </section>
+
+        <div class="privacy-notice" role="complementary">
+            Durch die Autorisierung dieser Anwendung stimmen Sie unserer
+            <a href="https://www.priority-guard.com/privacy" target="_blank" rel="noopener noreferrer">Datenschutzerklärung</a> zu.
+        </div>
+
+        <form method="POST" action="/oauth/focused/consent" aria-label="Autorisierungsformular">
+            <input type="hidden" name="auth_context_id" value="{{ auth_context_id }}">
+
+            <div class="button-group">
+                <button
+                    type="submit"
+                    name="action"
+                    value="allow"
+                    class="btn btn-allow"
+                    aria-label="Zugriff auf angeforderte Berechtigungen zulassen">
+                    Zulassen
+                </button>
+                <button
+                    type="submit"
+                    name="action"
+                    value="deny"
+                    class="btn btn-deny"
+                    aria-label="Zugriff ablehnen und zur Anwendung zurückkehren">
+                    Ablehnen
+                </button>
+            </div>
+        </form>
+    </main>
+</body>
+</html>

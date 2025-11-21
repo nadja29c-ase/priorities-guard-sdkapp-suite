@@ -3,7 +3,6 @@ Priority Guardian - Main FastAPI application.
 Mounts OAuth provider and all SDK app routers.
 """
 
-import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -11,11 +10,12 @@ from fastapi.responses import JSONResponse
 import httpx
 
 from backend.core.config import settings
-from backend.core.logging import init_logging
-from backend.core.middleware import RequestIDMiddleware
+from backend.core.logging import configure_logging, get_logger
+from backend.core.middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware
 from backend.core.database import test_connection
 from backend.core.database import engine
 from backend.core.redis_client import redis_client
+from backend.core.oauth_exceptions import OAuthError
 
 # Import new modular routers
 from backend.apps.focused.routers.tools_router import router as tools_router
@@ -28,9 +28,9 @@ from backend.apps.focused.routers.onboarding_router import router as onboarding_
 from backend.apps.focused.routers.shortcut_router import router as shortcut_router
 
 # Initialize logging first
-init_logging()
+configure_logging()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -181,15 +181,45 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
         }
     )
 
-# Add RequestIDMiddleware
-"""When a request hits your backend:
-- The middleware generates a random request_id.
-- Stores it in request.state.request_id.
-- Calls your endpoint.
-- After your endpoint finishes, it might log something.
-- Returns the response.
-- This happens for every single request, automatically, without changing your endpoint code."""
-app.add_middleware(RequestIDMiddleware)
+
+# -------------------------------------------------------------
+# OAuth Error Handler (Increment 7C)
+# -------------------------------------------------------------
+
+@app.exception_handler(OAuthError)
+async def oauth_exception_handler(request: Request, exc: OAuthError):
+    """
+    Handle OAuth errors with RFC 6749-compliant responses.
+
+    Returns JSON error responses per OAuth 2.1 specification.
+    """
+    # Extract correlation_id for logging
+    correlation_id = getattr(request.state, 'correlation_id', 'system')
+    request_logger = logger.bind(correlation_id=correlation_id)
+
+    request_logger.warning(
+        "oauth.error",
+        error=exc.error,
+        description=exc.description,
+        status_code=exc.status_code
+    )
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.error,
+            "error_description": exc.description
+        }
+    )
+
+
+# Add Correlation ID and Security Headers Middleware (Increment 7C)
+"""
+CorrelationIDMiddleware: Generates or accepts correlation_id for request tracing
+SecurityHeadersMiddleware: Applies OWASP-recommended security headers globally
+"""
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CorrelationIDMiddleware)
 
 
 @app.get("/")

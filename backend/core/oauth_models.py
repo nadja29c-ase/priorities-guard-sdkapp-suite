@@ -2,6 +2,7 @@
 OAuth Provider Models.
 
 Contains all tables related to the OAuth 2.1 provider:
+- OAuthClient
 - OAuthAuthorizationCode
 - OAuthAccessToken
 - OAuthState
@@ -19,12 +20,77 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    ARRAY,
 )
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func, text
 
 from backend.core.models import Base
+
+
+class OAuthClient(Base):
+    """
+    OAuth 2.1 client registrations (ChatGPT SDK apps).
+
+    Stores registered OAuth clients that can request authorization.
+    Each client has unique credentials and allowed redirect URIs.
+
+    Security:
+    - client_secret encrypted with Fernet
+    - redirect_uris validated before authorization
+    - allowed_scopes enforced during token issuance
+    """
+
+    __tablename__ = "oauth_clients"
+
+    client_id: Mapped[str] = mapped_column(
+        String(255),
+        primary_key=True,
+        comment="Client identifier (e.g., 'focused-client-{uuid}')"
+    )
+
+    client_secret_enc: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Encrypted client secret (Fernet)"
+    )
+
+    client_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        comment="Human-readable client name (e.g., 'ChatGPT')"
+    )
+
+    redirect_uris: Mapped[list[str]] = mapped_column(
+        ARRAY(String),
+        nullable=False,
+        comment="Allowed redirect URIs for authorization code flow"
+    )
+
+    allowed_scopes: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+        comment="Space-separated allowed scopes (e.g., 'focused.read focused.write')"
+    )
+
+    grant_types: Mapped[list[str]] = mapped_column(
+        ARRAY(String),
+        nullable=False,
+        comment="Allowed grant types (e.g., ['authorization_code', 'refresh_token'])"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When the client was registered"
+    )
+
+    __table_args__ = (
+        Index("idx_oauth_clients_client_id", "client_id"),
+        {"comment": "OAuth 2.1 client registrations"}
+    )
 
 
 class OAuthAuthorizationCode(Base):

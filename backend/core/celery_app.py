@@ -70,7 +70,7 @@ celery_app.conf.update(
 )
 
 # ---------------------------------------------------------------------
-# Periodic task schedule (Increment 6C)
+# Periodic task schedule (Increment 6C + 7B)
 # ---------------------------------------------------------------------
 # IMPORTANT: In production, run Beat as a separate process from workers
 # See deployment architecture in module docstring above
@@ -88,6 +88,31 @@ celery_app.conf.beat_schedule = {
             "expires": 28800,  # 8 hours - safe buffer above 6h schedule
             "max_retries": 3,  # Limit retry attempts to prevent infinite loops
             "retry_backoff": True,  # Exponential backoff on retries
+            "retry_backoff_max": 600,  # Max 10 minutes between retries
+        }
+    },
+    # OAuth cleanup tasks (Increment 7B)
+    "cleanup-oauth-codes-every-15-minutes": {
+        "task": "backend.jobs.oauth_cleanup.cleanup_expired_oauth_codes",
+        "schedule": crontab(minute="*/15"),  # Every 15 minutes
+        "options": {
+            "queue": "focused",
+            "priority": 7,
+            "expires": 900,  # 15 minutes
+            "max_retries": 3,
+            "retry_backoff": True,
+            "retry_backoff_max": 300,  # Max 5 minutes between retries
+        }
+    },
+    "cleanup-oauth-tokens-every-hour": {
+        "task": "backend.jobs.oauth_cleanup.cleanup_expired_oauth_tokens",
+        "schedule": crontab(minute=0),  # Every hour at :00
+        "options": {
+            "queue": "focused",
+            "priority": 6,
+            "expires": 3600,  # 1 hour
+            "max_retries": 3,
+            "retry_backoff": True,
             "retry_backoff_max": 600,  # Max 10 minutes between retries
         }
     },
