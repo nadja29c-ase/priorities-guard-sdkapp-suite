@@ -41,11 +41,24 @@ async def check_calendar(
         - system default keywords
         - user custom keywords
     Identifies focus blocks from Google Calendar.
+
+    Identity Source (Increment 7D):
+        - Primary: X-User-ID header (from MCP after JWT validation)
+        - Fallback: hardcoded test_user (for backward compatibility)
+        - Logs warning if fallback is used
     """
     try:
-        # TEMP until OpenAI OAuth integration:
-        # In Increment 3/4, replace with request.state.openai_user_id
-        user_id = "test_user"
+        # Increment 7D: Read user_id from X-User-ID header (primary source)
+        user_id = request.headers.get("x-user-id")
+
+        if not user_id:
+            # Fallback to test user for backward compatibility
+            user_id = "test_user"
+            logger.warning(
+                "check_calendar.user_id_fallback",
+                source="hardcoded",
+                endpoint="/check_calendar"
+            )
 
         http_client = request.app.state.http_client
 
@@ -98,12 +111,41 @@ async def watch_calendar(
 
     Registers a webhook channel with Google to receive real-time
     calendar event updates instead of polling.
+
+    Identity Source (Increment 7D):
+        - Primary: X-User-ID header (from MCP after JWT validation)
+        - Fallback: payload.user_id (for backward compatibility)
+        - Logs warning if fallback is used or mismatch detected
     """
     try:
         http_client = request.app.state.http_client
 
+        # Increment 7D: Read user_id from X-User-ID header (primary source)
+        user_id_header = request.headers.get("x-user-id")
+        user_id_payload = payload.user_id
+
+        if user_id_header:
+            user_id = user_id_header
+
+            # Check for mismatch
+            if user_id_payload and user_id_payload != user_id_header:
+                logger.warning(
+                    "watch_calendar.user_id_mismatch",
+                    header_value=user_id_header,
+                    payload_value=user_id_payload,
+                    endpoint="/watch_calendar"
+                )
+        else:
+            # Fallback to payload for backward compatibility
+            user_id = user_id_payload
+            logger.warning(
+                "watch_calendar.user_id_fallback",
+                source="payload",
+                endpoint="/watch_calendar"
+            )
+
         result = await register_calendar_webhook(
-            user_id=payload.user_id,
+            user_id=user_id,
             session=session,
             http_client=http_client,
         )
@@ -174,6 +216,11 @@ async def sync_calendar(
         5. Update last_synced_at timestamp
         6. Clear needs_sync flag
 
+    Identity Source (Increment 7D):
+        - Primary: X-User-ID header (from MCP after JWT validation)
+        - Fallback: payload.user_id (for backward compatibility)
+        - Logs warning if fallback is used or mismatch detected
+
     Returns:
         {
             "success": True,
@@ -188,8 +235,32 @@ async def sync_calendar(
     try:
         http_client = request.app.state.http_client
 
+        # Increment 7D: Read user_id from X-User-ID header (primary source)
+        user_id_header = request.headers.get("x-user-id")
+        user_id_payload = payload.user_id
+
+        if user_id_header:
+            user_id = user_id_header
+
+            # Check for mismatch
+            if user_id_payload and user_id_payload != user_id_header:
+                logger.warning(
+                    "sync_calendar.user_id_mismatch",
+                    header_value=user_id_header,
+                    payload_value=user_id_payload,
+                    endpoint="/sync_calendar"
+                )
+        else:
+            # Fallback to payload for backward compatibility
+            user_id = user_id_payload
+            logger.warning(
+                "sync_calendar.user_id_fallback",
+                source="payload",
+                endpoint="/sync_calendar"
+            )
+
         result = await sync_calendar_events(
-            user_id=payload.user_id,
+            user_id=user_id,
             session=session,
             http_client=http_client,
         )
