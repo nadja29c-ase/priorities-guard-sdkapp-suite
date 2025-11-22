@@ -21,7 +21,8 @@ import json
 import logging
 import uvicorn
 import httpx
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable
+from functools import wraps
 from mcp.server.fastmcp import FastMCP
 
 from mcp.focused.config import BACKEND_URL
@@ -40,6 +41,74 @@ mcp = FastMCP("focused-mcp")
 
 # Shared HTTP client for calling backend API
 http_client: httpx.AsyncClient | None = None
+
+
+def handle_mcp_errors(tool_name: str) -> Callable:
+    """
+    Decorator to handle common MCP tool errors (DRY).
+
+    Handles:
+    - UnauthorizedError (401)
+    - InsufficientScopeError (403)
+    - HTTPStatusError (backend errors)
+    - Generic exceptions
+
+    Args:
+        tool_name: Name of the tool for logging
+
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(*args, **kwargs) -> str:
+            try:
+                return await func(*args, **kwargs)
+
+            except UnauthorizedError as e:
+                # Token validation failed (401)
+                error_response = build_unauthorized_error(e.error, e.description)
+                return json.dumps(error_response)
+
+            except InsufficientScopeError as e:
+                # Missing required scopes (403)
+                error_response = build_forbidden_error(e.required_scopes, e.actual_scopes)
+                return json.dumps(error_response)
+
+            except httpx.HTTPStatusError as e:
+                # Backend returned an error status
+                logger.error(
+                    f"tool.{tool_name}.backend_error",
+                    status_code=e.response.status_code,
+                    error=e.response.text
+                )
+
+                try:
+                    error_data = e.response.json()
+                    return json.dumps(error_data)
+                except Exception:
+                    return json.dumps({
+                        "success": False,
+                        "error": {
+                            "code": "BACKEND_ERROR",
+                            "message": f"Backend API returned {e.response.status_code}"
+                        }
+                    })
+
+            except Exception as e:
+                # Unexpected error (network, etc.)
+                logger.error(f"tool.{tool_name}.error", error=str(e))
+
+                return json.dumps({
+                    "success": False,
+                    "error": {
+                        "code": "MCP_ERROR",
+                        "message": "Failed to communicate with backend API"
+                    }
+                })
+
+        return wrapper
+    return decorator
 
 
 async def backend_post(
@@ -84,6 +153,7 @@ async def backend_post(
 
 
 @mcp.tool()
+@handle_mcp_errors("check_calendar")
 async def check_calendar(
     time_start: str | None = None,
     time_end: str | None = None,
@@ -112,79 +182,37 @@ async def check_calendar(
     """
     tool_name = "check_calendar"
 
-    try:
-        # Authenticate request and extract user identity
-        auth_context = await authenticate_request(tool_name, _meta)
+    # Authenticate request and extract user identity
+    auth_context = await authenticate_request(tool_name, _meta)
 
-        user_id = auth_context["user_id"]
-        correlation_id = auth_context["correlation_id"]
+    user_id = auth_context["user_id"]
+    correlation_id = auth_context["correlation_id"]
 
-        logger.info(
-            "tool.check_calendar.start",
-            correlation_id=correlation_id,
-            user_id=user_id,
-            max_results=max_results
-        )
+    logger.info(
+        "tool.check_calendar.start",
+        correlation_id=correlation_id,
+        user_id=user_id,
+        max_results=max_results
+    )
 
-        # Forward request to backend API with identity headers
-        response = await backend_post(
-            "/api/focused/check_calendar",
-            {
-                "time_start": time_start,
-                "time_end": time_end,
-                "max_results": max_results
-            },
-            user_id=user_id,
-            correlation_id=correlation_id
-        )
+    # Forward request to backend API with identity headers
+    response = await backend_post(
+        "/api/focused/check_calendar",
+        {
+            "time_start": time_start,
+            "time_end": time_end,
+            "max_results": max_results
+        },
+        user_id=user_id,
+        correlation_id=correlation_id
+    )
 
-        # Backend already returns {success: bool, data/error: ...}
-        return json.dumps(response)
-
-    except UnauthorizedError as e:
-        # Token validation failed (401)
-        error_response = build_unauthorized_error(e.error, e.description)
-        return json.dumps(error_response)
-
-    except InsufficientScopeError as e:
-        # Missing required scopes (403)
-        error_response = build_forbidden_error(e.required_scopes, e.actual_scopes)
-        return json.dumps(error_response)
-
-    except httpx.HTTPStatusError as e:
-        # Backend returned an error status
-        logger.error(
-            "tool.check_calendar.backend_error",
-            status_code=e.response.status_code,
-            error=e.response.text
-        )
-
-        try:
-            error_data = e.response.json()
-            return json.dumps(error_data)
-        except Exception:
-            return json.dumps({
-                "success": False,
-                "error": {
-                    "code": "BACKEND_ERROR",
-                    "message": f"Backend API returned {e.response.status_code}"
-                }
-            })
-
-    except Exception as e:
-        # Unexpected error (network, etc.)
-        logger.error("tool.check_calendar.error", error=str(e))
-
-        return json.dumps({
-            "success": False,
-            "error": {
-                "code": "MCP_ERROR",
-                "message": "Failed to communicate with backend API"
-            }
-        })
+    # Backend already returns {success: bool, data/error: ...}
+    return json.dumps(response)
 
 
 @mcp.tool()
+@handle_mcp_errors("watch_calendar")
 async def watch_calendar(
     _meta: Optional[Dict[str, Any]] = None
 ) -> str:
@@ -204,69 +232,31 @@ async def watch_calendar(
     """
     tool_name = "watch_calendar"
 
-    try:
-        # Authenticate request and extract user identity
-        auth_context = await authenticate_request(tool_name, _meta)
+    # Authenticate request and extract user identity
+    auth_context = await authenticate_request(tool_name, _meta)
 
-        user_id = auth_context["user_id"]
-        correlation_id = auth_context["correlation_id"]
+    user_id = auth_context["user_id"]
+    correlation_id = auth_context["correlation_id"]
 
-        logger.info(
-            "tool.watch_calendar.start",
-            correlation_id=correlation_id,
-            user_id=user_id
-        )
+    logger.info(
+        "tool.watch_calendar.start",
+        correlation_id=correlation_id,
+        user_id=user_id
+    )
 
-        # Forward request to backend API with identity headers
-        response = await backend_post(
-            "/api/focused/watch_calendar",
-            {"user_id": user_id},  # Keep in payload for backward compat
-            user_id=user_id,
-            correlation_id=correlation_id
-        )
+    # Forward request to backend API with identity headers
+    response = await backend_post(
+        "/api/focused/watch_calendar",
+        {"user_id": user_id},  # Keep in payload for backward compat
+        user_id=user_id,
+        correlation_id=correlation_id
+    )
 
-        return json.dumps(response)
-
-    except UnauthorizedError as e:
-        error_response = build_unauthorized_error(e.error, e.description)
-        return json.dumps(error_response)
-
-    except InsufficientScopeError as e:
-        error_response = build_forbidden_error(e.required_scopes, e.actual_scopes)
-        return json.dumps(error_response)
-
-    except httpx.HTTPStatusError as e:
-        logger.error(
-            "tool.watch_calendar.backend_error",
-            status_code=e.response.status_code,
-            error=e.response.text
-        )
-
-        try:
-            error_data = e.response.json()
-            return json.dumps(error_data)
-        except Exception:
-            return json.dumps({
-                "success": False,
-                "error": {
-                    "code": "BACKEND_ERROR",
-                    "message": f"Backend API returned {e.response.status_code}"
-                }
-            })
-
-    except Exception as e:
-        logger.error("tool.watch_calendar.error", error=str(e))
-
-        return json.dumps({
-            "success": False,
-            "error": {
-                "code": "MCP_ERROR",
-                "message": "Failed to communicate with backend API"
-            }
-        })
+    return json.dumps(response)
 
 
 @mcp.tool()
+@handle_mcp_errors("run_focus_mode")
 async def run_focus_mode(
     _meta: Optional[Dict[str, Any]] = None
 ) -> str:
@@ -283,35 +273,27 @@ async def run_focus_mode(
     """
     tool_name = "run_focus_mode"
 
-    try:
-        # Authenticate request (enforces focused.write scope)
-        auth_context = await authenticate_request(tool_name, _meta)
+    # Authenticate request (enforces focused.write scope)
+    auth_context = await authenticate_request(tool_name, _meta)
 
-        correlation_id = auth_context["correlation_id"]
+    correlation_id = auth_context["correlation_id"]
 
-        logger.info(
-            "tool.run_focus_mode.not_implemented",
-            correlation_id=correlation_id
-        )
+    logger.info(
+        "tool.run_focus_mode.not_implemented",
+        correlation_id=correlation_id
+    )
 
-        return json.dumps({
-            "success": False,
-            "error": {
-                "code": "NOT_IMPLEMENTED",
-                "message": "run_focus_mode is not yet implemented"
-            }
-        })
-
-    except UnauthorizedError as e:
-        error_response = build_unauthorized_error(e.error, e.description)
-        return json.dumps(error_response)
-
-    except InsufficientScopeError as e:
-        error_response = build_forbidden_error(e.required_scopes, e.actual_scopes)
-        return json.dumps(error_response)
+    return json.dumps({
+        "success": False,
+        "error": {
+            "code": "NOT_IMPLEMENTED",
+            "message": "run_focus_mode is not yet implemented"
+        }
+    })
 
 
 @mcp.tool()
+@handle_mcp_errors("notify_user")
 async def notify_user(
     _meta: Optional[Dict[str, Any]] = None
 ) -> str:
@@ -328,32 +310,23 @@ async def notify_user(
     """
     tool_name = "notify_user"
 
-    try:
-        # Authenticate request (enforces focused.notify scope)
-        auth_context = await authenticate_request(tool_name, _meta)
+    # Authenticate request (enforces focused.notify scope)
+    auth_context = await authenticate_request(tool_name, _meta)
 
-        correlation_id = auth_context["correlation_id"]
+    correlation_id = auth_context["correlation_id"]
 
-        logger.info(
-            "tool.notify_user.not_implemented",
-            correlation_id=correlation_id
-        )
+    logger.info(
+        "tool.notify_user.not_implemented",
+        correlation_id=correlation_id
+    )
 
-        return json.dumps({
-            "success": False,
-            "error": {
-                "code": "NOT_IMPLEMENTED",
-                "message": "notify_user is not yet implemented"
-            }
-        })
-
-    except UnauthorizedError as e:
-        error_response = build_unauthorized_error(e.error, e.description)
-        return json.dumps(error_response)
-
-    except InsufficientScopeError as e:
-        error_response = build_forbidden_error(e.required_scopes, e.actual_scopes)
-        return json.dumps(error_response)
+    return json.dumps({
+        "success": False,
+        "error": {
+            "code": "NOT_IMPLEMENTED",
+            "message": "notify_user is not yet implemented"
+        }
+    })
 
 
 if __name__ == "__main__":
