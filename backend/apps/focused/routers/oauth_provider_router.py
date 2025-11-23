@@ -21,15 +21,19 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
-from backend.core.crypto import get_current_jwks
 from backend.core.database import get_db
 from backend.core.jwt_utils import create_access_token
 from backend.core.logging import get_logger
-from backend.core.redis_client import redis_client
+
+# Import extracted OAuth modules
+from backend.apps.focused.oauth.jwks import router as jwks_router
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["oauth-provider"])
+
+# Include extracted routers
+router.include_router(jwks_router)
 
 
 # =============================================================================
@@ -73,46 +77,6 @@ async def oauth_protected_resource():
             "focused.notify": "Send push notifications"
         }
     })
-
-
-# =============================================================================
-# JWKS Endpoint
-# =============================================================================
-
-@router.get("/oauth/focused/jwks")
-async def jwks_endpoint():
-    """
-    JSON Web Key Set (JWKS) endpoint.
-
-    Returns public keys for JWT signature verification.
-    Cached in Redis with 24h TTL.
-    """
-    # Check Redis cache
-    try:
-        if redis_client.is_connected():
-            cached_jwks = await redis_client.get("oauth:jwks:current")
-            if cached_jwks:
-                logger.debug("Returning cached JWKS")
-                return JSONResponse(json.loads(cached_jwks))
-    except Exception as e:
-        logger.warning(f"Redis cache miss for JWKS: {e}")
-
-    # Generate JWKS from public key
-    jwks = get_current_jwks()
-
-    # Cache in Redis (24h TTL)
-    try:
-        if redis_client.is_connected():
-            await redis_client.set(
-                "oauth:jwks:current",
-                json.dumps(jwks),
-                ex=86400  # 24 hours
-            )
-            logger.debug("Cached JWKS in Redis")
-    except Exception as e:
-        logger.warning(f"Failed to cache JWKS: {e}")
-
-    return JSONResponse(jwks)
 
 
 # =============================================================================
