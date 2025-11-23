@@ -20,6 +20,7 @@ from backend.apps.focused.models.requests import (
 from backend.apps.focused.tools.check_calendar_impl import check_calendar_impl
 from backend.apps.focused.tools.watch_calendar_impl import register_calendar_webhook
 from backend.apps.focused.logic.sync.orchestrator import sync_calendar_events
+from backend.apps.focused.utils.user_id_extraction import extract_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -48,17 +49,8 @@ async def check_calendar(
         - Logs warning if fallback is used
     """
     try:
-        # Increment 7D: Read user_id from X-User-ID header (primary source)
-        user_id = request.headers.get("x-user-id")
-
-        if not user_id:
-            # Fallback to test user for backward compatibility
-            user_id = "test_user"
-            logger.warning(
-                "check_calendar.user_id_fallback",
-                source="hardcoded",
-                endpoint="/check_calendar"
-            )
+        # Increment 7D: Extract user_id from X-User-ID header (with fallback)
+        user_id = extract_user_id(request, None, "check_calendar")
 
         http_client = request.app.state.http_client
 
@@ -120,29 +112,8 @@ async def watch_calendar(
     try:
         http_client = request.app.state.http_client
 
-        # Increment 7D: Read user_id from X-User-ID header (primary source)
-        user_id_header = request.headers.get("x-user-id")
-        user_id_payload = payload.user_id
-
-        if user_id_header:
-            user_id = user_id_header
-
-            # Check for mismatch
-            if user_id_payload and user_id_payload != user_id_header:
-                logger.warning(
-                    "watch_calendar.user_id_mismatch",
-                    header_value=user_id_header,
-                    payload_value=user_id_payload,
-                    endpoint="/watch_calendar"
-                )
-        else:
-            # Fallback to payload for backward compatibility
-            user_id = user_id_payload
-            logger.warning(
-                "watch_calendar.user_id_fallback",
-                source="payload",
-                endpoint="/watch_calendar"
-            )
+        # Increment 7D: Extract user_id from X-User-ID header (with fallback)
+        user_id = extract_user_id(request, payload.user_id, "watch_calendar")
 
         result = await register_calendar_webhook(
             user_id=user_id,
@@ -235,29 +206,8 @@ async def sync_calendar(
     try:
         http_client = request.app.state.http_client
 
-        # Increment 7D: Read user_id from X-User-ID header (primary source)
-        user_id_header = request.headers.get("x-user-id")
-        user_id_payload = payload.user_id
-
-        if user_id_header:
-            user_id = user_id_header
-
-            # Check for mismatch
-            if user_id_payload and user_id_payload != user_id_header:
-                logger.warning(
-                    "sync_calendar.user_id_mismatch",
-                    header_value=user_id_header,
-                    payload_value=user_id_payload,
-                    endpoint="/sync_calendar"
-                )
-        else:
-            # Fallback to payload for backward compatibility
-            user_id = user_id_payload
-            logger.warning(
-                "sync_calendar.user_id_fallback",
-                source="payload",
-                endpoint="/sync_calendar"
-            )
+        # Increment 7D: Extract user_id from X-User-ID header (with fallback)
+        user_id = extract_user_id(request, payload.user_id, "sync_calendar")
 
         result = await sync_calendar_events(
             user_id=user_id,
