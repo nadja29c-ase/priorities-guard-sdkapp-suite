@@ -220,6 +220,45 @@ class TestValidateJWT:
             assert mock_cache.fetch_jwks.call_args_list[1][1].get('force') == True
 
     @pytest.mark.asyncio
+    async def test_validate_jwt_unknown_kid_retry_success(self, rsa_keypair, mock_jwks):
+        """
+        Test CRITICAL 7D retry flow: unknown kid → refetch JWKS → success.
+
+        Scenario:
+        1. First attempt: kid not in cached JWKS
+        2. Trigger JWKS refetch (force=True)
+        3. Second attempt: kid found in fresh JWKS
+        4. Token validation succeeds
+        """
+        token = create_test_token(rsa_keypair)
+
+        with patch('mcp.focused.mcp_auth._jwks_cache') as mock_cache:
+            mock_cache.fetch_jwks = AsyncMock()
+
+            # Setup signing key
+            signing_key = PyJWK(mock_jwks["keys"][0])
+
+            # First call: kid not found
+            # Second call: kid found (after refetch)
+            mock_cache.get_signing_key = Mock(side_effect=[
+                None,  # First attempt: unknown kid
+                signing_key  # After refetch: kid found
+            ])
+
+            # Should succeed after retry
+            result = await validate_jwt(token, "test-correlation-id")
+
+            # Verify successful validation
+            assert result["user_id"] == "test-user-123"
+            assert result["jti"] == "test-jti-456"
+            assert "focused.read" in result["scopes"]
+
+            # Verify refetch was triggered
+            assert mock_cache.fetch_jwks.call_count == 2
+            # Second call should have force=True
+            assert mock_cache.fetch_jwks.call_args_list[1][1].get('force') == True
+
+    @pytest.mark.asyncio
     async def test_validate_jwt_expired_token(self, rsa_keypair):
         """Test expired token raises ExpiredSignatureError."""
         now = int(time.time())
