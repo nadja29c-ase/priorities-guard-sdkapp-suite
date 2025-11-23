@@ -28,6 +28,7 @@ from backend.core.logging import get_logger
 # Import extracted OAuth modules
 from backend.apps.focused.oauth.discovery import router as discovery_router
 from backend.apps.focused.oauth.jwks import router as jwks_router
+from backend.apps.focused.oauth.register_client import router as register_router
 from backend.apps.focused.oauth.validators.pkce import verify_pkce, validate_code_challenge_method
 
 logger = get_logger(__name__)
@@ -37,6 +38,7 @@ router = APIRouter(tags=["oauth-provider"])
 # Include extracted routers
 router.include_router(discovery_router)
 router.include_router(jwks_router)
+router.include_router(register_router)
 
 
 # =============================================================================
@@ -891,104 +893,3 @@ async def revoke_endpoint(
     return JSONResponse({"success": True}, status_code=200)
 
 
-# =============================================================================
-# Client Registration Endpoint (Increment 7B)
-# =============================================================================
-
-class RegisterRequest(BaseModel):
-    """OAuth client registration request."""
-    client_name: str
-    redirect_uris: list[str]
-    grant_types: list[str] | None = None
-
-
-@router.post("/oauth/focused/register")
-async def register_endpoint(
-    request: Request,
-    register_request: RegisterRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    """
-    OAuth 2.1 dynamic client registration endpoint.
-
-    Registers a new OAuth client and returns credentials.
-
-    Request Body:
-        client_name: Human-readable client name
-        redirect_uris: Array of allowed redirect URIs
-        grant_types: Optional array of allowed grant types (default: authorization_code, refresh_token)
-
-    Returns:
-        client_id: Generated client identifier
-        client_secret: Generated client secret
-        redirect_uris: Registered redirect URIs
-        scope: Allowed scopes
-    """
-    from backend.core.oauth_models import OAuthClient
-    from backend.core.encryption import encrypt_token
-    from backend.core.rate_limit import rate_limit_register
-
-    # Get correlation_id for logging
-    correlation_id = request.state.correlation_id
-    request_logger = logger.bind(correlation_id=correlation_id)
-
-    # Rate limit check
-    await rate_limit_register(request)
-
-    # Validate inputs
-    if not register_request.client_name:
-        raise HTTPException(status_code=400, detail="client_name is required")
-
-    if not register_request.redirect_uris or len(register_request.redirect_uris) == 0:
-        raise HTTPException(status_code=400, detail="At least one redirect_uri is required")
-
-    # Validate redirect URIs (must be HTTPS)
-    for uri in register_request.redirect_uris:
-        if not uri.startswith("https://"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"redirect_uri must use HTTPS: {uri}"
-            )
-
-    # Set default grant types
-    grant_types = register_request.grant_types or ["authorization_code", "refresh_token"]
-
-    # Validate grant types
-    allowed_grant_types = {"authorization_code", "refresh_token"}
-    if not set(grant_types).issubset(allowed_grant_types):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid grant types. Allowed: {', '.join(allowed_grant_types)}"
-        )
-
-    # Generate client credentials
-    client_id = f"focused-client-{uuid4()}"
-    client_secret = secrets.token_urlsafe(32)
-    client_secret_encrypted = encrypt_token(client_secret)
-
-    # Create client record
-    client = OAuthClient(
-        client_id=client_id,
-        client_secret_enc=client_secret_encrypted,
-        client_name=register_request.client_name,
-        redirect_uris=register_request.redirect_uris,
-        allowed_scopes="focused.read focused.write focused.notify",
-        grant_types=grant_types
-    )
-
-    db.add(client)
-    await db.commit()
-
-    request_logger.info(
-        "oauth.register.success",
-        client_id=client_id,
-        client_name=register_request.client_name,
-        redirect_uris_count=len(register_request.redirect_uris)
-    )
-
-    return JSONResponse({
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "redirect_uris": register_request.redirect_uris,
-        "scope": "focused.read focused.write focused.notify"
-    })
