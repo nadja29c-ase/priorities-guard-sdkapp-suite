@@ -26,6 +26,7 @@ from backend.core.jwt_utils import create_access_token
 from backend.core.logging import get_logger
 
 # Import extracted OAuth modules
+from backend.apps.focused.oauth.discovery import router as discovery_router
 from backend.apps.focused.oauth.jwks import router as jwks_router
 
 logger = get_logger(__name__)
@@ -33,50 +34,8 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["oauth-provider"])
 
 # Include extracted routers
+router.include_router(discovery_router)
 router.include_router(jwks_router)
-
-
-# =============================================================================
-# Discovery Endpoints
-# =============================================================================
-
-@router.get("/.well-known/openid-configuration")
-async def openid_configuration():
-    """
-    OpenID Connect Discovery endpoint.
-
-    Returns OAuth provider configuration for ChatGPT discovery.
-    """
-    return JSONResponse({
-        "issuer": settings.OAUTH_ISSUER,
-        "authorization_endpoint": f"{settings.OAUTH_ISSUER}/oauth/focused/authorize",
-        "token_endpoint": f"{settings.OAUTH_ISSUER}/oauth/focused/token",
-        "jwks_uri": f"{settings.OAUTH_ISSUER}/oauth/focused/jwks",
-        "registration_endpoint": f"{settings.OAUTH_ISSUER}/oauth/focused/register",
-        "scopes_supported": ["focused.read", "focused.write", "focused.notify"],
-        "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code", "refresh_token"],
-        "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["none"]
-    })
-
-
-@router.get("/.well-known/oauth-protected-resource")
-async def oauth_protected_resource():
-    """
-    OAuth Protected Resource Metadata endpoint.
-
-    Describes the MCP server resource and scopes.
-    """
-    return JSONResponse({
-        "resource": f"{settings.OAUTH_ISSUER}/mcp/focused",
-        "authorization_servers": [settings.OAUTH_ISSUER],
-        "scopes": {
-            "focused.read": "Read calendar sync status and focus analytics",
-            "focused.write": "Activate Focus Mode and modify settings",
-            "focused.notify": "Send push notifications"
-        }
-    })
 
 
 # =============================================================================
