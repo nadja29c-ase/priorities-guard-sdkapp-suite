@@ -28,6 +28,7 @@ from backend.core.logging import get_logger
 # Import extracted OAuth modules
 from backend.apps.focused.oauth.discovery import router as discovery_router
 from backend.apps.focused.oauth.jwks import router as jwks_router
+from backend.apps.focused.oauth.validators.pkce import verify_pkce, validate_code_challenge_method
 
 logger = get_logger(__name__)
 
@@ -122,7 +123,7 @@ async def authorize_endpoint(
         )
 
     # Validate code_challenge_method (must be S256)
-    if code_challenge_method != "S256":
+    if not validate_code_challenge_method(code_challenge_method):
         return _error_redirect(
             redirect_uri,
             state,
@@ -405,8 +406,6 @@ async def token_endpoint(
         scope: Space-separated scopes
     """
     from datetime import datetime, timezone
-    from hashlib import sha256
-    import base64
     from sqlalchemy import select
     from backend.core.oauth_models import OAuthAuthorizationCode, OAuthAccessToken
     from backend.core.encryption import encrypt_token, decrypt_token
@@ -458,8 +457,6 @@ async def _handle_authorization_code_grant(
     Validates code, PKCE, and issues new tokens.
     """
     from datetime import datetime, timezone
-    from hashlib import sha256
-    import base64
     from sqlalchemy import select
     from backend.core.oauth_models import OAuthAuthorizationCode, OAuthAccessToken
     from backend.core.encryption import encrypt_token
@@ -540,10 +537,7 @@ async def _handle_authorization_code_grant(
         )
 
     # Verify PKCE: SHA256(code_verifier) == code_challenge
-    code_verifier_hash = sha256(token_request.code_verifier.encode()).digest()
-    code_challenge_computed = base64.urlsafe_b64encode(code_verifier_hash).rstrip(b'=').decode('ascii')
-
-    if code_challenge_computed != auth_code.code_challenge:
+    if not verify_pkce(token_request.code_verifier, auth_code.code_challenge):
         return JSONResponse(
             status_code=401,
             content={
