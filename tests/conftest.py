@@ -1,7 +1,8 @@
 """
-Test configuration for Focused app tests.
+Test configuration for all test suites.
 
-Provides async database fixtures for testing.
+Provides async database fixtures and test client for testing.
+Merged from oauth_provider/conftest.py and focused/conftest.py.
 """
 
 import pytest
@@ -9,6 +10,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy import text, create_engine
 from sqlalchemy.pool import NullPool
+from httpx import AsyncClient, ASGITransport
 
 from backend.core.models import Base
 from backend.apps.focused import db_models  # noqa: F401 - Import models so they're registered with Base
@@ -18,9 +20,17 @@ TEST_DATABASE_URL = "postgresql+asyncpg://localhost/priority_guardian_test"
 TEST_DATABASE_URL_SYNC = "postgresql+psycopg://localhost/priority_guardian_test"
 
 
+# =============================================================================
+# SESSION-SCOPED FIXTURES (run once per test session)
+# =============================================================================
+
 @pytest.fixture(scope="session")
 def setup_test_database():
-    """Set up test database schema from SQLAlchemy models."""
+    """
+    Set up test database schema from SQLAlchemy models.
+
+    Runs once per test session. Creates all tables from Base.metadata.
+    """
     # Create sync engine
     sync_engine = create_engine(TEST_DATABASE_URL_SYNC, poolclass=NullPool)
 
@@ -48,9 +58,17 @@ def setup_test_database():
     sync_engine.dispose()
 
 
+# =============================================================================
+# FUNCTION-SCOPED FIXTURES (run for each test)
+# =============================================================================
+
 @pytest_asyncio.fixture
 async def async_engine(setup_test_database):
-    """Create async engine for test database (one per test for complete isolation)."""
+    """
+    Create async engine for test database (one per test for complete isolation).
+
+    Uses NullPool to avoid connection pooling in tests.
+    """
     engine = create_async_engine(
         TEST_DATABASE_URL,
         echo=False,
@@ -86,4 +104,38 @@ async def async_session(async_engine):
 
     # Clean up: Truncate all tables after test
     async with async_engine.begin() as conn:
-        await conn.execute(text("TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, core_connections, core_users RESTART IDENTITY CASCADE"))
+        await conn.execute(
+            text(
+                "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
+                "core_connections, core_users, oauth_authorization_codes, "
+                "oauth_access_tokens RESTART IDENTITY CASCADE"
+            )
+        )
+
+
+@pytest_asyncio.fixture
+async def client(async_engine, async_session):
+    """
+    Create async test client with database dependency override.
+
+    This ensures the FastAPI app uses the test database instead of production.
+    Used primarily by integration tests that need to make HTTP requests.
+    """
+    from backend.main import app
+    from backend.core.database import get_db
+
+    # Override get_db to return test session
+    async def override_get_db():
+        yield async_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # Create async test client
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as test_client:
+        yield test_client
+
+    # Clean up override
+    app.dependency_overrides.clear()

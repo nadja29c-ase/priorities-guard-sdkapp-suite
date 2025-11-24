@@ -1,7 +1,7 @@
 """
-Comprehensive tests for Increment 7D - MCP Token Validation.
+MCP Token Validation Integration Tests.
 
-Tests JWT validation, JWKS caching, scope enforcement, and backend migration.
+Tests JWT validation, JWKS caching, scope enforcement, and authentication flow.
 """
 
 import pytest
@@ -12,10 +12,6 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
-
-# Import modules to test
-import sys
-sys.path.insert(0, '/Users/nadja/Desktop/Priority Guard Suite/priority-guardian')
 
 from mcp.focused import mcp_auth
 from mcp.focused.mcp_auth import (

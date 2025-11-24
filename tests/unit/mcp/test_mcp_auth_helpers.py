@@ -1,15 +1,16 @@
 """
-Simplified comprehensive tests for Increment 7D - Focus on testable components.
+MCP authentication helper function tests.
 
-Tests that don't require complex JWT/JWKS mocking.
+Tests MCP auth helper functions without complex JWT/JWKS mocking:
+- Header extraction
+- Token parsing
+- Scope checking
+- Error building
 """
 
 import pytest
 import time
 from unittest.mock import Mock, AsyncMock, patch
-
-import sys
-sys.path.insert(0, '/Users/nadja/Desktop/Priority Guard Suite/priority-guardian')
 
 from mcp.focused.mcp_auth import (
     extract_authorization_header,

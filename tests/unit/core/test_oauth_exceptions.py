@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
 """
-Simplified test script for Increment 7C - tests functionality without complex output capture.
-"""
+OAuth exception classes tests.
 
-import sys
-sys.path.insert(0, '/Users/nadja/Desktop/Priority Guard Suite/priority-guardian')
+Tests that OAuth exception classes are properly defined and structured.
+"""
 
 
 def test_oauth_exceptions():
