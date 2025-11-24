@@ -178,7 +178,7 @@ async def authorize_endpoint(
     # Create authorization context in Redis (10 minute TTL)
     auth_context_id = await create_authorization_context(
         client_id=client_id,
-        client_name=client.client_name,
+        client_name=client.provider,  # provider field stores client_name
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
         scope=scope,
@@ -199,7 +199,7 @@ async def authorize_endpoint(
         {
             "request": request,
             "auth_context_id": auth_context_id,
-            "client_name": client.client_name,
+            "client_name": client.provider,  # provider field stores client_name
             "scopes": requested_scopes
         }
     )

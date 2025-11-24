@@ -80,7 +80,7 @@ async def create_authorization_code(
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
         redirect_uri=redirect_uri,
-        scope=scope,
+        scope=scope.split(),  # Convert space-separated string to array
         state=state,
         nonce=nonce,
         expires_at=expires_at,

@@ -1,25 +1,29 @@
 """
 OAuth Provider Router — Thin orchestrator for OAuth 2.1 provider endpoints.
 
-This module is a THIN orchestrator that delegates all OAuth functionality
-to specialized modules.
+This router is a THIN orchestrator that delegates all OAuth functionality
+to specialized modules in backend/core/oauth_provider/.
 
-Architecture:
-- All business logic extracted to backend/core/oauth_provider/
-- Each endpoint has its own module + service layer
-- Validators separated for reusability
-- Zero inline logic in this router
+Architecture (Post Phase 1 Refactoring):
+- All OAuth provider code relocated from backend/apps/focused/oauth/ to backend/core/oauth_provider/
+- Each endpoint has its own router module in backend/core/oauth_provider/
+- Service layer separated in backend/core/oauth_provider/services/
+- Validators in backend/core/oauth_provider/validators/
+- JWT utilities in backend/core/oauth_provider/jwt/
+- Shared models in backend/core/oauth_provider/models.py
+- Shared exceptions in backend/core/oauth_provider/exceptions.py
+- Zero inline logic in this orchestrator
 
 Included Endpoints:
 - Discovery: /.well-known/openid-configuration, oauth-protected-resource
 - JWKS: /oauth/focused/jwks
-- Authorization: /oauth/focused/authorize
+- Authorization: /oauth/focused/authorize (OAuth 2.1 + PKCE)
 - Consent UI: /oauth/focused/consent
 - Token: /oauth/focused/token (authorization_code, refresh_token grants)
-- Registration: /oauth/focused/register (dynamic client registration)
-- Revocation: /oauth/focused/revoke (RFC 7009)
+- Registration: /oauth/focused/register (RFC 7591 dynamic client registration)
+- Revocation: /oauth/focused/revoke (RFC 7009 token revocation)
 
-Status: Refactored for maintainability and security audits
+Status: Consolidated OAuth 2.1 provider for all SDK apps
 """
 
 from fastapi import APIRouter

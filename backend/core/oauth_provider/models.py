@@ -101,10 +101,10 @@ class OAuthAuthorizationCode(Base):
         comment="Redirect URI for this authorization"
     )
 
-    scope: Mapped[str] = mapped_column(
-        String(512),
+    scope: Mapped[list[str]] = mapped_column(
+        ARRAY(String),
         nullable=False,
-        comment="Space-separated scopes (e.g., 'focused.read focused.write')"
+        comment="Array of scopes (e.g., ['focused.read', 'focused.write'])"
     )
 
     state: Mapped[str | None] = mapped_column(
@@ -186,10 +186,10 @@ class OAuthAccessToken(Base):
         comment="Client identifier"
     )
 
-    scope: Mapped[str] = mapped_column(
-        String(512),
+    scope: Mapped[list[str]] = mapped_column(
+        ARRAY(String),
         nullable=False,
-        comment="Space-separated scopes"
+        comment="Array of scopes (e.g., ['focused.read', 'focused.write'])"
     )
 
     token_type: Mapped[str] = mapped_column(
