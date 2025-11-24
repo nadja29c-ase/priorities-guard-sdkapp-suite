@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.rate_limit import rate_limit_revoke
-from backend.apps.focused.oauth.services.revoke_service import revoke_token
+from backend.core.oauth_provider.services.revoke_service import revoke_token
 
 logger = get_logger(__name__)
 

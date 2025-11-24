@@ -11,7 +11,7 @@ def test_oauth_exceptions():
     """Test OAuth exception classes are properly defined."""
     print("\n=== Test 1: OAuth Exception Classes ===")
 
-    from backend.core.oauth_exceptions import (
+    from backend.core.oauth_provider.exceptions import (
         OAuthError,
         InvalidRequestError,
         InvalidClientError,
@@ -232,7 +232,7 @@ def test_main_imports():
         required_imports = [
             'from backend.core.logging import configure_logging, get_logger',
             'from backend.core.middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware',
-            'from backend.core.oauth_exceptions import OAuthError',
+            'from backend.core.oauth_provider.exceptions import OAuthError',
         ]
 
         missing = []

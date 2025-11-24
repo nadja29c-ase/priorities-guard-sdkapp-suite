@@ -19,7 +19,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from backend.core.middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware
-from backend.core.oauth_exceptions import (
+from backend.core.oauth_provider.exceptions import (
     OAuthError,
     InvalidRequestError,
     InvalidClientError,

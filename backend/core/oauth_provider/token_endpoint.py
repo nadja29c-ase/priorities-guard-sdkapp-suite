@@ -12,11 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.rate_limit import rate_limit_token
-from backend.apps.focused.oauth.services.token_service import (
+from backend.core.oauth_provider.services.token_service import (
     exchange_authorization_code,
     exchange_refresh_token
 )
-from backend.apps.focused.oauth.validators.token_validators import (
+from backend.core.oauth_provider.validators.token_validators import (
     validate_grant_type,
     validate_authorization_code_request,
     validate_refresh_token_request

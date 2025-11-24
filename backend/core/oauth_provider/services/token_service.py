@@ -15,12 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.core.encryption import encrypt_token, decrypt_token, hash_refresh_token
-from backend.core.jwt_utils import create_refresh_token, calculate_refresh_token_expiry
 from backend.core.logging import get_logger
-from backend.core.oauth_models import OAuthAuthorizationCode, OAuthAccessToken
-from backend.apps.focused.oauth.jwt.jwt_signer import create_access_token
-from backend.apps.focused.oauth.validators.pkce import verify_pkce
-from backend.apps.focused.oauth.validators.token_validators import (
+from backend.core.oauth_provider.jwt.utils import create_refresh_token, calculate_refresh_token_expiry
+from backend.core.oauth_provider.models import OAuthAuthorizationCode, OAuthAccessToken
+from backend.core.oauth_provider.jwt.jwt_signer import create_access_token
+from backend.core.oauth_provider.validators.pkce import verify_pkce
+from backend.core.oauth_provider.validators.token_validators import (
     validate_token_not_expired,
     validate_client_id_match,
     validate_redirect_uri_match

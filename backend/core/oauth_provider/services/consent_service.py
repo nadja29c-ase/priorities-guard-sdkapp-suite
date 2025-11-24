@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.logging import get_logger
-from backend.core.oauth_models import OAuthAuthorizationCode
+from backend.core.oauth_provider.models import OAuthAuthorizationCode
 
 logger = get_logger(__name__)
 

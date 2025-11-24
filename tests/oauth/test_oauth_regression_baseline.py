@@ -31,7 +31,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.oauth_models import (
+from backend.core.oauth_provider.models import (
     OAuthAuthorizationCode,
     OAuthAccessToken,
 )

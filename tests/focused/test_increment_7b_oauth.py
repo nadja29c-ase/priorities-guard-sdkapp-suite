@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives import serialization
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
-from backend.core.oauth_models import OAuthAuthorizationCode, OAuthAccessToken
+from backend.core.oauth_provider.models import OAuthAuthorizationCode, OAuthAccessToken
 from backend.core.models import CoreConnection, Base
 from backend.core.encryption import encrypt_token
 from sqlalchemy import select, delete

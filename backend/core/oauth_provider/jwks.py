@@ -7,7 +7,7 @@ Provides public keys for validating JWTs issued by this OAuth provider.
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from backend.apps.focused.oauth.services.jwks_service import get_jwks
+from backend.core.oauth_provider.services.jwks_service import get_jwks
 
 router = APIRouter(tags=["oauth-provider"])
 

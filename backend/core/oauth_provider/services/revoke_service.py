@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt, JWTError
 
-from backend.core.oauth_models import OAuthAccessToken
+from backend.core.oauth_provider.models import OAuthAccessToken
 from backend.core.encryption import decrypt_token, hash_refresh_token
 from backend.core.logging import get_logger
 

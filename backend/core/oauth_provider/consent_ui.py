@@ -11,8 +11,8 @@ from urllib.parse import urlencode
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger
-from backend.apps.focused.oauth.services.authorization_service import get_authorization_context
-from backend.apps.focused.oauth.services.consent_service import create_authorization_code
+from backend.core.oauth_provider.services.authorization_service import get_authorization_context
+from backend.core.oauth_provider.services.consent_service import create_authorization_code
 
 logger = get_logger(__name__)
 

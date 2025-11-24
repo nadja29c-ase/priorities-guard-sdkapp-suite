@@ -46,7 +46,7 @@ def cleanup_expired_oauth_codes(self):
     try:
         # Import inside task to avoid early DB initialization
         from backend.core.database import AsyncSessionLocal
-        from backend.core.oauth_models import OAuthAuthorizationCode
+        from backend.core.oauth_provider.models import OAuthAuthorizationCode
         from sqlalchemy import select, delete
 
         async def run_cleanup():
@@ -121,7 +121,7 @@ def cleanup_expired_oauth_tokens(self):
     try:
         # Import inside task to avoid early DB initialization
         from backend.core.database import AsyncSessionLocal
-        from backend.core.oauth_models import OAuthAccessToken
+        from backend.core.oauth_provider.models import OAuthAccessToken
         from sqlalchemy import select, delete, or_
 
         async def run_cleanup():

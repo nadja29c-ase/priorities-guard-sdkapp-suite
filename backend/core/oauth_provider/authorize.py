@@ -14,8 +14,8 @@ from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.models import CoreConnection
 from backend.core.rate_limit import rate_limit_authorize
-from backend.apps.focused.oauth.services.authorization_service import create_authorization_context
-from backend.apps.focused.oauth.validators.pkce import validate_code_challenge_method
+from backend.core.oauth_provider.services.authorization_service import create_authorization_context
+from backend.core.oauth_provider.validators.pkce import validate_code_challenge_method
 
 logger = get_logger(__name__)
 

@@ -7,7 +7,7 @@ Handles JWT creation and signing with RS256.
 from datetime import timedelta
 from uuid import UUID
 
-from backend.core.jwt_utils import create_access_token as core_create_access_token
+from backend.core.oauth_provider.jwt.utils import create_access_token as core_create_access_token
 
 
 def create_access_token(

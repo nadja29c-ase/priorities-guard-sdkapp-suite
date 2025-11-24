@@ -15,7 +15,7 @@ from backend.core.middleware import CorrelationIDMiddleware, SecurityHeadersMidd
 from backend.core.database import test_connection
 from backend.core.database import engine
 from backend.core.redis_client import redis_client
-from backend.core.oauth_exceptions import OAuthError
+from backend.core.oauth_provider.exceptions import OAuthError
 
 # Import new modular routers
 from backend.apps.focused.routers.tools_router import router as tools_router
@@ -23,7 +23,7 @@ from backend.apps.focused.routers.webhook_router import router as webhook_router
 from backend.apps.focused.routers.oauth_google_router import router as oauth_google_router
 from backend.apps.focused.routers.health_router import router as health_router
 from backend.apps.focused.routers.admin_router import router as admin_router
-from backend.apps.focused.routers.oauth_provider_router import router as oauth_provider_router
+from backend.core.routers.oauth_provider_router import router as oauth_provider_router
 from backend.apps.focused.routers.onboarding_router import router as onboarding_router
 from backend.apps.focused.routers.shortcut_router import router as shortcut_router
 

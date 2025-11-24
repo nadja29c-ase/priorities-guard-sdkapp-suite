@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.rate_limit import rate_limit_register
-from backend.apps.focused.oauth.services.client_service import create_oauth_client
-from backend.apps.focused.oauth.validators.client_metadata import (
+from backend.core.oauth_provider.services.client_service import create_oauth_client
+from backend.core.oauth_provider.validators.client_metadata import (
     validate_client_name,
     validate_redirect_uris,
     validate_grant_types

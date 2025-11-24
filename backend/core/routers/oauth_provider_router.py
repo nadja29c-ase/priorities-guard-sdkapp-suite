@@ -5,7 +5,7 @@ This module is a THIN orchestrator that delegates all OAuth functionality
 to specialized modules.
 
 Architecture:
-- All business logic extracted to backend/apps/focused/oauth/
+- All business logic extracted to backend/core/oauth_provider/
 - Each endpoint has its own module + service layer
 - Validators separated for reusability
 - Zero inline logic in this router
@@ -25,13 +25,13 @@ Status: Refactored for maintainability and security audits
 from fastapi import APIRouter
 
 # Import extracted OAuth modules
-from backend.apps.focused.oauth.authorize import router as authorize_router
-from backend.apps.focused.oauth.consent_ui import router as consent_router
-from backend.apps.focused.oauth.discovery import router as discovery_router
-from backend.apps.focused.oauth.jwks import router as jwks_router
-from backend.apps.focused.oauth.register_client import router as register_router
-from backend.apps.focused.oauth.token_endpoint import router as token_router
-from backend.apps.focused.oauth.revoke import router as revoke_router
+from backend.core.oauth_provider.authorize import router as authorize_router
+from backend.core.oauth_provider.consent_ui import router as consent_router
+from backend.core.oauth_provider.discovery import router as discovery_router
+from backend.core.oauth_provider.jwks import router as jwks_router
+from backend.core.oauth_provider.register_client import router as register_router
+from backend.core.oauth_provider.token_endpoint import router as token_router
+from backend.core.oauth_provider.revoke import router as revoke_router
 
 router = APIRouter(tags=["oauth-provider"])
 

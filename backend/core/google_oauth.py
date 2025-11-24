@@ -22,7 +22,7 @@ from sqlalchemy import delete, select #SQLAlchemy query builders
 from sqlalchemy.ext.asyncio import AsyncSession #DB session type
 
 from backend.core.config import settings #my config, holds Google keys
-from backend.core.oauth_models import OAuthState  # OAuth provider subsystem
+from backend.core.oauth_provider.models import OAuthState  # OAuth provider subsystem
 
 logger = logging.getLogger(__name__)
 
