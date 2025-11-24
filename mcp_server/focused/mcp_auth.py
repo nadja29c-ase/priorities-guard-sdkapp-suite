@@ -24,7 +24,7 @@ import httpx
 import jwt
 from jwt import PyJWKClient, PyJWK
 
-from mcp.focused.config import (
+from mcp_server.focused.config import (
     FOCUSED_JWKS_URL,
     FOCUSED_ISSUER,
     FOCUSED_AUDIENCE,

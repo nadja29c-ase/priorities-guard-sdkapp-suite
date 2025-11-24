@@ -25,8 +25,8 @@ from typing import Optional, Dict, Any, Callable
 from functools import wraps
 from mcp.server.fastmcp import FastMCP
 
-from mcp.focused.config import BACKEND_URL
-from mcp.focused.mcp_auth import (
+from mcp_server.focused.config import BACKEND_URL
+from mcp_server.focused.mcp_auth import (
     authenticate_request,
     UnauthorizedError,
     InsufficientScopeError,
@@ -158,7 +158,7 @@ async def check_calendar(
     time_start: str | None = None,
     time_end: str | None = None,
     max_results: int = 20,
-    _meta: Optional[Dict[str, Any]] = None
+    meta: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Identify focus blocks in Google Calendar.
@@ -175,7 +175,7 @@ async def check_calendar(
         time_start: Start time (ISO8601), defaults to now
         time_end: End time (ISO8601), defaults to now + 7 days
         max_results: Max events to scan (1-50), defaults to 20
-        _meta: Request metadata (headers, correlation_id)
+        meta: Request metadata (headers, correlation_id)
 
     Returns:
         JSON string with success status and data/error
@@ -183,7 +183,7 @@ async def check_calendar(
     tool_name = "check_calendar"
 
     # Authenticate request and extract user identity
-    auth_context = await authenticate_request(tool_name, _meta)
+    auth_context = await authenticate_request(tool_name, meta)
 
     user_id = auth_context["user_id"]
     correlation_id = auth_context["correlation_id"]
@@ -214,7 +214,7 @@ async def check_calendar(
 @mcp.tool()
 @handle_mcp_errors("watch_calendar")
 async def watch_calendar(
-    _meta: Optional[Dict[str, Any]] = None
+    meta: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Register webhook for Google Calendar push notifications.
@@ -225,7 +225,7 @@ async def watch_calendar(
     calendar event updates instead of polling.
 
     Args:
-        _meta: Request metadata (headers, correlation_id)
+        meta: Request metadata (headers, correlation_id)
 
     Returns:
         JSON string with success status and data/error
@@ -233,7 +233,7 @@ async def watch_calendar(
     tool_name = "watch_calendar"
 
     # Authenticate request and extract user identity
-    auth_context = await authenticate_request(tool_name, _meta)
+    auth_context = await authenticate_request(tool_name, meta)
 
     user_id = auth_context["user_id"]
     correlation_id = auth_context["correlation_id"]
@@ -258,7 +258,7 @@ async def watch_calendar(
 @mcp.tool()
 @handle_mcp_errors("run_focus_mode")
 async def run_focus_mode(
-    _meta: Optional[Dict[str, Any]] = None
+    meta: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Activate Apple Focus Mode (stub for future implementation).
@@ -266,7 +266,7 @@ async def run_focus_mode(
     Requires OAuth scope: focused.write
 
     Args:
-        _meta: Request metadata (headers, correlation_id)
+        meta: Request metadata (headers, correlation_id)
 
     Returns:
         JSON string with error indicating not implemented
@@ -274,7 +274,7 @@ async def run_focus_mode(
     tool_name = "run_focus_mode"
 
     # Authenticate request (enforces focused.write scope)
-    auth_context = await authenticate_request(tool_name, _meta)
+    auth_context = await authenticate_request(tool_name, meta)
 
     correlation_id = auth_context["correlation_id"]
 
@@ -295,7 +295,7 @@ async def run_focus_mode(
 @mcp.tool()
 @handle_mcp_errors("notify_user")
 async def notify_user(
-    _meta: Optional[Dict[str, Any]] = None
+    meta: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Send notification to user (stub for future implementation).
@@ -303,7 +303,7 @@ async def notify_user(
     Requires OAuth scope: focused.notify
 
     Args:
-        _meta: Request metadata (headers, correlation_id)
+        meta: Request metadata (headers, correlation_id)
 
     Returns:
         JSON string with error indicating not implemented
@@ -311,7 +311,7 @@ async def notify_user(
     tool_name = "notify_user"
 
     # Authenticate request (enforces focused.notify scope)
-    auth_context = await authenticate_request(tool_name, _meta)
+    auth_context = await authenticate_request(tool_name, meta)
 
     correlation_id = auth_context["correlation_id"]
 

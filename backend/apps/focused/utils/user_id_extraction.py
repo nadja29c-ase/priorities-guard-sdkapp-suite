@@ -4,10 +4,10 @@ User ID extraction helper for MCP tool endpoints.
 Handles Increment 7D user identity extraction with fallback logic.
 """
 
-import logging
 from fastapi import Request
+from backend.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def extract_user_id(
@@ -35,13 +35,17 @@ def extract_user_id(
         - Warning if header and payload mismatch
         - Warning when using fallback (not header)
     """
+    # Get correlation_id from request state (set by middleware)
+    correlation_id = getattr(request.state, "correlation_id", "unknown")
+    request_logger = logger.bind(correlation_id=correlation_id)
+
     # Primary source: X-User-ID header (Increment 7D)
     user_id_header = request.headers.get("x-user-id")
 
     if user_id_header:
         # Check for mismatch between header and payload
         if payload_user_id and payload_user_id != user_id_header:
-            logger.warning(
+            request_logger.warning(
                 f"{endpoint}.user_id_mismatch",
                 header_value=user_id_header,
                 payload_value=payload_user_id,
@@ -51,7 +55,7 @@ def extract_user_id(
 
     # Fallback 1: payload.user_id (backward compatibility)
     if payload_user_id:
-        logger.warning(
+        request_logger.warning(
             f"{endpoint}.user_id_fallback",
             source="payload",
             endpoint=endpoint
@@ -59,7 +63,7 @@ def extract_user_id(
         return payload_user_id
 
     # Fallback 2: Ultra-legacy hardcoded test_user
-    logger.warning(
+    request_logger.warning(
         f"{endpoint}.user_id_fallback",
         source="hardcoded",
         endpoint=endpoint
