@@ -29,68 +29,20 @@ from sqlalchemy.sql import func, text
 from backend.core.models import Base
 
 
-class OAuthClient(Base):
-    """
-    OAuth 2.1 client registrations (ChatGPT SDK apps).
-
-    Stores registered OAuth clients that can request authorization.
-    Each client has unique credentials and allowed redirect URIs.
-
-    Security:
-    - client_secret encrypted with Fernet
-    - redirect_uris validated before authorization
-    - allowed_scopes enforced during token issuance
-    """
-
-    __tablename__ = "oauth_clients"
-
-    client_id: Mapped[str] = mapped_column(
-        String(255),
-        primary_key=True,
-        comment="Client identifier (e.g., 'focused-client-{uuid}')"
-    )
-
-    client_secret_enc: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
-        comment="Encrypted client secret (Fernet)"
-    )
-
-    client_name: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        comment="Human-readable client name (e.g., 'ChatGPT')"
-    )
-
-    redirect_uris: Mapped[list[str]] = mapped_column(
-        ARRAY(String),
-        nullable=False,
-        comment="Allowed redirect URIs for authorization code flow"
-    )
-
-    allowed_scopes: Mapped[str] = mapped_column(
-        String(512),
-        nullable=False,
-        comment="Space-separated allowed scopes (e.g., 'focused.read focused.write')"
-    )
-
-    grant_types: Mapped[list[str]] = mapped_column(
-        ARRAY(String),
-        nullable=False,
-        comment="Allowed grant types (e.g., ['authorization_code', 'refresh_token'])"
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When the client was registered"
-    )
-
-    __table_args__ = (
-        Index("idx_oauth_clients_client_id", "client_id"),
-        {"comment": "OAuth 2.1 client registrations"}
-    )
+# ==============================================================================
+# DEPRECATED: OAuthClient class removed (replaced by CoreConnection)
+# ==============================================================================
+#
+# The oauth_clients table was dropped in migration d0aca8881c7e (Nov 22, 2024).
+# OAuth provider client registration now uses core_connections table with:
+#   - connection_type = 'oauth_provider'
+#   - client_id, client_secret_enc, redirect_uris, grant_types fields
+#   - user_id = NULL (clients are not user-specific)
+#
+# Use: from backend.core.models import CoreConnection
+#
+# If you see this class referenced in code, it's a bug that must be fixed.
+# ==============================================================================
 
 
 class OAuthAuthorizationCode(Base):

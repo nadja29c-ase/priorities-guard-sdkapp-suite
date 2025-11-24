@@ -61,7 +61,14 @@ class CoreConnection(Base):
     """
     Store encrypted OAuth tokens for external service connections.
 
-    Supports Google and Apple OAuth providers.
+    Supports:
+    - Outbound: Google and Apple OAuth (user connects TO external services)
+    - Inbound: OAuth Provider (ChatGPT connects TO our app)
+
+    For inbound OAuth provider connections (connection_type='oauth_provider'):
+    - user_id is NULL (clients are not user-specific)
+    - client_id, client_secret_enc, redirect_uris, grant_types are populated
+    - This replaces the old oauth_clients table
     """
 
     __tablename__ = "core_connections"
@@ -72,11 +79,11 @@ class CoreConnection(Base):
         server_default=text("gen_random_uuid()"),
     )
 
-    user_id: Mapped[UUID] = mapped_column(
+    user_id: Mapped[UUID | None] = mapped_column(
         PostgreSQLUUID(as_uuid=True),
         ForeignKey("core_users.id", ondelete="CASCADE"),
-        nullable=False,
-        comment="Reference to core_users.id (UUID)"
+        nullable=True,
+        comment="Reference to core_users.id (UUID). NULL for oauth_provider connections."
     )
 
     provider: Mapped[str] = mapped_column(String(50), nullable=False) #OAuth provider.
@@ -136,12 +143,43 @@ class CoreConnection(Base):
         comment="When the Google Calendar webhook channel expires (~7 days from registration)"
     )
 
+    # OAuth Provider fields (for inbound connections where ChatGPT connects to us)
+    client_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="OAuth client ID (for oauth_provider connections)"
+    )
+
+    client_secret_enc: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Encrypted OAuth client secret (for oauth_provider connections)"
+    )
+
+    redirect_uris: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String),
+        nullable=True,
+        comment="Allowed redirect URIs for OAuth authorization (for oauth_provider connections)"
+    )
+
+    grant_types: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String),
+        nullable=True,
+        comment="Allowed grant types (e.g., ['authorization_code', 'refresh_token'])"
+    )
+
     __table_args__ = ( #Inside a SQLAlchemy model, __table_args__ is a special class attribute that lets you define anything that applies to the whole table f.e. Unique constrainsts, Indexes, Check constraints
         UniqueConstraint("user_id", "provider", name="uq_user_provider"), # Ensures there is only one row per user per provider to prevent duplicates
-        CheckConstraint("length(encrypted_access_token) > 0", name="ck_encrypted_access_token_not_empty"),
+        UniqueConstraint("client_id", name="uq_client_id"),  # Unique constraint for OAuth provider client_id
+        # Conditional constraint: oauth_provider connections can have empty encrypted_access_token
+        CheckConstraint(
+            "(connection_type = 'oauth_provider') OR (length(encrypted_access_token) > 0)",
+            name="ck_encrypted_access_token_conditional"
+        ),
         CheckConstraint("(encrypted_refresh_token IS NULL) OR (length(encrypted_refresh_token) > 0)", name="ck_encrypted_refresh_token_not_empty"),
         CheckConstraint("cardinality(scopes) > 0", name="ck_scopes_not_empty"),
         Index("ix_user_provider", "user_id", "provider"), #A database index for fast lookups
         Index("ix_token_expires", "token_expires_at"),
         Index("ix_channel_expires", "google_channel_expires_at"),
+        Index("ix_client_id", "client_id"),  # Index for OAuth provider client_id lookups
     )

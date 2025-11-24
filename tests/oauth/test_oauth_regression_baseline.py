@@ -32,10 +32,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.oauth_models import (
-    OAuthClient,
     OAuthAuthorizationCode,
     OAuthAccessToken,
 )
+from backend.core.models import CoreConnection
 
 
 # ============================================================================
@@ -54,20 +54,29 @@ async def test_client_connection(async_session: AsyncSession):
     client_secret = "test-secret-baseline-12345"
 
     # Check if already exists
-    stmt = select(OAuthClient).where(
-        OAuthClient.client_id == client_id
+    stmt = select(CoreConnection).where(
+        CoreConnection.client_id == client_id,
+        CoreConnection.connection_type == "oauth_provider"
     )
     result = await async_session.execute(stmt)
     existing = result.scalar_one_or_none()
 
     if not existing:
-        client = OAuthClient(
+        from datetime import datetime, timezone, timedelta
+        from backend.core.encryption import encrypt_token
+
+        client = CoreConnection(
+            user_id=None,  # OAuth provider clients have NULL user_id
+            provider="Test OAuth Client",
+            connection_type="oauth_provider",
             client_id=client_id,
-            client_secret_enc=client_secret,  # In real system, would be Fernet encrypted
-            client_name="Test OAuth Client",
+            client_secret_enc=encrypt_token(client_secret),
             redirect_uris=["https://chat.openai.com/aip/callback"],
-            allowed_scopes="focused.read focused.write focused.notify",
             grant_types=["authorization_code", "refresh_token"],
+            # Required fields for CoreConnection
+            encrypted_access_token="",
+            scopes=["focused.read", "focused.write", "focused.notify"],
+            token_expires_at=datetime.now(timezone.utc) + timedelta(days=365)
         )
         async_session.add(client)
         await async_session.commit()

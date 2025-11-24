@@ -5,13 +5,14 @@ Handles client creation with secure credential generation and encryption.
 """
 
 import secrets
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.encryption import encrypt_token
 from backend.core.logging import get_logger
-from backend.core.oauth_models import OAuthClient
+from backend.core.models import CoreConnection
 
 logger = get_logger(__name__)
 
@@ -70,14 +71,20 @@ async def create_oauth_client(
     # CRITICAL: Never store plain-text client_secret
     client_secret_encrypted = encrypt_token(client_secret)
 
-    # Create client record
-    client = OAuthClient(
+    # Create client record as OAuth provider connection
+    # Note: user_id is NULL for OAuth provider connections
+    client = CoreConnection(
+        user_id=None,  # OAuth provider clients are not user-specific
+        provider=client_name,
+        connection_type="oauth_provider",
         client_id=client_id,
         client_secret_enc=client_secret_encrypted,
-        client_name=client_name,
         redirect_uris=redirect_uris,
-        allowed_scopes="focused.read focused.write focused.notify",
-        grant_types=grant_types
+        grant_types=grant_types,
+        # Required fields (set to defaults for oauth_provider connections)
+        encrypted_access_token="",  # Not applicable for inbound OAuth
+        scopes=["focused.read", "focused.write", "focused.notify"],  # OAuth scopes
+        token_expires_at=datetime.now(timezone.utc) + timedelta(days=365)  # Placeholder
     )
 
     db.add(client)

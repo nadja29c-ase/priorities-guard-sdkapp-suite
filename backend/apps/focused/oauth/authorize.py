@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger
-from backend.core.oauth_models import OAuthClient
+from backend.core.models import CoreConnection
 from backend.core.rate_limit import rate_limit_authorize
 from backend.apps.focused.oauth.services.authorization_service import create_authorization_context
 from backend.apps.focused.oauth.validators.pkce import validate_code_challenge_method
@@ -147,9 +147,12 @@ async def authorize_endpoint(
             description="code_challenge_method must be S256"
         )
 
-    # Validate client exists
+    # Validate client exists (OAuth provider connection)
     result = await db.execute(
-        select(OAuthClient).where(OAuthClient.client_id == client_id)
+        select(CoreConnection).where(
+            CoreConnection.client_id == client_id,
+            CoreConnection.connection_type == "oauth_provider"
+        )
     )
     client = result.scalar_one_or_none()
 
