@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt, JWTError
 
 from backend.core.oauth_models import OAuthAccessToken
-from backend.core.encryption import decrypt_token
+from backend.core.encryption import decrypt_token, hash_refresh_token
 from backend.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -137,40 +137,35 @@ async def _try_revoke_refresh_token(
         "refresh_token" if revoked, None otherwise
     """
     try:
-        # Find all tokens with refresh tokens
+        # Find token by refresh_token hash (O(1) indexed lookup!)
+        refresh_token_hashed = hash_refresh_token(token)
         result = await db.execute(
             select(OAuthAccessToken).where(
-                OAuthAccessToken.refresh_token_enc.isnot(None)
+                OAuthAccessToken.refresh_token_hash == refresh_token_hashed
             )
         )
-        all_tokens = result.scalars().all()
+        token_record = result.scalar_one_or_none()
 
-        # Find matching refresh token
-        for token_record in all_tokens:
-            try:
-                decrypted = decrypt_token(token_record.refresh_token_enc)
-                if decrypted == token:
-                    # Verify client_id matches
-                    if token_record.client_id != client_id:
-                        continue
+        if not token_record:
+            return None
 
-                    # Revoke this token
-                    token_record.revoked = True
-                    token_record.revoked_at = datetime.now(timezone.utc)
-                    await db.commit()
+        # Verify client_id matches
+        if token_record.client_id != client_id:
+            return None
 
-                    request_logger.info(
-                        "oauth.revoke.success",
-                        token_type="refresh_token",
-                        jti=token_record.jti,
-                        client_id=client_id
-                    )
+        # Revoke this token
+        token_record.revoked = True
+        token_record.revoked_at = datetime.now(timezone.utc)
+        await db.commit()
 
-                    return "refresh_token"
-            except Exception:
-                continue
+        request_logger.info(
+            "oauth.revoke.success",
+            token_type="refresh_token",
+            jti=token_record.jti,
+            client_id=client_id
+        )
 
-        return None
+        return "refresh_token"
 
     except Exception as e:
         request_logger.error(

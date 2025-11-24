@@ -4,6 +4,7 @@ Token encryption using Fernet (AES-256).
 Never logs or prints token values.
 """
 
+import hashlib
 from cryptography.fernet import Fernet, InvalidToken
 
 from backend.core.config import settings
@@ -79,3 +80,33 @@ def decrypt_token(encrypted_token: str) -> str:
         raise ValueError("Invalid or corrupted encrypted token")
     except Exception as e:
         raise ValueError(f"Token decryption failed: {e}")
+
+
+def hash_refresh_token(token: str) -> str:
+    """
+    Hash a refresh token using SHA-256 for database indexing.
+
+    This allows O(1) indexed lookups instead of O(n) full table scans.
+    The encrypted token is still stored for security, but the hash
+    enables fast lookups.
+
+    Args:
+        token: Plain text refresh token
+
+    Returns:
+        64-character hex string (SHA-256 hash)
+
+    Security Notes:
+        - Uses SHA-256 (not for passwords, for indexing)
+        - No salt needed (tokens are cryptographically random)
+        - Enables indexed database lookup
+        - Original encrypted token still stored for security
+
+    Example:
+        >>> hash_refresh_token("abc123...")
+        "2c26b46b68ffc68ff99b453c1d30413413422d706..."
+    """
+    if not token:
+        raise ValueError("Token cannot be empty")
+
+    return hashlib.sha256(token.encode()).hexdigest()

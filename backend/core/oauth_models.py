@@ -258,6 +258,12 @@ class OAuthAccessToken(Base):
         comment="Encrypted refresh token (Fernet)"
     )
 
+    refresh_token_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="SHA-256 hash of refresh token for O(1) indexed lookup"
+    )
+
     refresh_token_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -294,6 +300,7 @@ class OAuthAccessToken(Base):
         Index("idx_oauth_access_tokens_user_id", "user_id"),
         Index("idx_oauth_access_tokens_jti", "jti"),
         Index("idx_oauth_access_tokens_expires_at", "expires_at"),  # O(1) cleanup
+        Index("idx_oauth_access_tokens_refresh_token_hash", "refresh_token_hash"),  # CRITICAL: O(1) refresh token lookup
         {"comment": "OAuth 2.1 access tokens with refresh token support"}
     )
 

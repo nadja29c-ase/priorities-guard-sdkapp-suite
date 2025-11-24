@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
-from backend.core.encryption import encrypt_token, decrypt_token
+from backend.core.encryption import encrypt_token, decrypt_token, hash_refresh_token
 from backend.core.jwt_utils import create_refresh_token, calculate_refresh_token_expiry
 from backend.core.logging import get_logger
 from backend.core.oauth_models import OAuthAuthorizationCode, OAuthAccessToken
@@ -123,6 +123,7 @@ async def exchange_authorization_code(
     # Create refresh token
     refresh_token_plain = create_refresh_token()
     refresh_token_encrypted = encrypt_token(refresh_token_plain)
+    refresh_token_hashed = hash_refresh_token(refresh_token_plain)
     refresh_token_expires_at = calculate_refresh_token_expiry()
 
     # Calculate access token expiration
@@ -139,6 +140,7 @@ async def exchange_authorization_code(
         token_type="Bearer",
         expires_at=access_token_expires_at,
         refresh_token_enc=refresh_token_encrypted,
+        refresh_token_hash=refresh_token_hashed,
         refresh_token_expires_at=refresh_token_expires_at,
         revoked=False,
         last_used_at=datetime.now(timezone.utc)
@@ -210,24 +212,14 @@ async def exchange_refresh_token(
     """
     request_logger = logger.bind(correlation_id=correlation_id) if correlation_id else logger
 
-    # Find token by refresh_token (need to decrypt and match)
+    # Find token by refresh_token hash (O(1) indexed lookup!)
+    refresh_token_hashed = hash_refresh_token(refresh_token)
     result = await db.execute(
         select(OAuthAccessToken).where(
-            OAuthAccessToken.refresh_token_enc.isnot(None)
+            OAuthAccessToken.refresh_token_hash == refresh_token_hashed
         )
     )
-    all_tokens = result.scalars().all()
-
-    # Find matching refresh token
-    matching_token = None
-    for token in all_tokens:
-        try:
-            decrypted = decrypt_token(token.refresh_token_enc)
-            if decrypted == refresh_token:
-                matching_token = token
-                break
-        except Exception:
-            continue
+    matching_token = result.scalar_one_or_none()
 
     if not matching_token:
         return ("invalid_grant", "Invalid refresh token")
@@ -258,6 +250,7 @@ async def exchange_refresh_token(
     # Create new refresh token
     new_refresh_token_plain = create_refresh_token()
     new_refresh_token_encrypted = encrypt_token(new_refresh_token_plain)
+    new_refresh_token_hashed = hash_refresh_token(new_refresh_token_plain)
     new_refresh_token_expires_at = calculate_refresh_token_expiry()
 
     # Calculate access token expiration
@@ -274,6 +267,7 @@ async def exchange_refresh_token(
         token_type="Bearer",
         expires_at=new_access_token_expires_at,
         refresh_token_enc=new_refresh_token_encrypted,
+        refresh_token_hash=new_refresh_token_hashed,
         refresh_token_expires_at=new_refresh_token_expires_at,
         revoked=False,
         last_used_at=datetime.now(timezone.utc)
