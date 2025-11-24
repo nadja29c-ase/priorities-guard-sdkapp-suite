@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# Test token revocation
+# Replace ACCESS_TOKEN with the token you want to revoke
+ACCESS_TOKEN="eyJhbGciOiJSUzI1NiIsImtpZCI6ImZvY3VzZWQtMjAyNS0xMSIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJhdWQiOiJodHRwOi8vbG9jYWxob3N0OjgwMDAiLCJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjgwMDAiLCJleHAiOjE3NjQwMDMzMjgsImlhdCI6MTc2Mzk5OTcyOCwianRpIjoiODRiNTJlYWUtMzY4My00NmI2LWFhMGItNzJiYWVmMDM3YTE0Iiwic2NvcGUiOlsiZm9jdXNlZC5yZWFkIiwiZm9jdXNlZC53cml0ZSJdLCJjbGllbnRfaWQiOiJmb2N1c2VkLWNsaWVudC1mZjE0MmZiOC0xOWE2LTRkNDgtYjZiNy1mNDAzMjk3NDQ0M2QifQ.BHXFBvsTyBDugDNwLkqRlh6Nd1L4Z25k2rU_mTZhzhj1dWZtPoOB52uGmiYAeYpTCRbp5PpGLHShegtJDT2LAOlGAImNWvwYqCzQoOT5UjWMFYfsN4e5LZQa0VxzXJcnzrgMyobEiMKXol4VVA8dP5IuFf42LxMM3TdQ-0oznMxuuketMxbu8GcYHz35uu-mnwAs30vBqumQj6dRjs57IS3Oq3dL9A1mIW7sYHSFAoFG6sXqx_DnEPGLtqTS5xbM7GrtRkbmzivZU3u20N_1UFP2-GqCkZo2KvM2F3hGMm6LKDAdbgHIk0htlQXvJG1HLrkWDn60oGQiCJtF-qIjMg"
+
+curl -X POST http://localhost:8000/oauth/focused/revoke \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"token\": \"$ACCESS_TOKEN\",
+    \"client_id\": \"focused-client-ff142fb8-19a6-4d48-b6b7-f4032974443d\"
+  }"

@@ -1,5 +1,5 @@
 """
-OAuth cleanup tasks (Increment 7B + 7C).
+OAuth Provider cleanup tasks (Increment 7B + 7C).
 
 Periodic tasks for cleaning up expired OAuth data with structured logging:
 - Authorization codes (expired after 10 minutes)

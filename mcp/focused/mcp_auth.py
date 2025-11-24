@@ -1,5 +1,5 @@
 """
-JWT Authentication and Authorization for Focused MCP Server (Increment 7D).
+JWT Authentication and Authorization for Focused MCP Server (Increment 7D). The MCP server validates Bearer tokens exactly according to RFC 6750
 
 Implements OAuth 2.0 Bearer Token Usage (RFC 6750) with:
 - JWT validation using JWKS
