@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 
 from backend.core.oauth_models import OAuthAuthorizationCode, OAuthAccessToken
 from backend.core.models import CoreConnection, Base
-from backend.core.encryption import encrypt_token, hash_refresh_token
+from backend.core.encryption import encrypt_token
 from sqlalchemy import select, delete
 
 
@@ -462,7 +462,7 @@ async def test_token_refresh_success(client, oauth_client, test_db_session, test
         user_id=test_user.id,
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        refresh_token_hash=hash_refresh_token(refresh_token),
+        refresh_token_enc=encrypt_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
@@ -498,7 +498,7 @@ async def test_token_refresh_revokes_old_token(client, oauth_client, test_db_ses
         user_id=test_user.id,
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        refresh_token_hash=hash_refresh_token(refresh_token),
+        refresh_token_enc=encrypt_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
@@ -543,7 +543,7 @@ async def test_token_revocation_success(client, oauth_client, test_db_session, t
         user_id=test_user.id,
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        refresh_token_hash=hash_refresh_token(refresh_token),
+        refresh_token_enc=encrypt_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
@@ -576,7 +576,7 @@ async def test_revoked_token_cannot_be_used(client, oauth_client, test_db_sessio
         user_id=test_user.id,
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        refresh_token_hash=hash_refresh_token(refresh_token),
+        refresh_token_enc=encrypt_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
