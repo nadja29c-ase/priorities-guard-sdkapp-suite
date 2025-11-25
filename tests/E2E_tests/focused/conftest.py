@@ -32,7 +32,7 @@ from httpx import AsyncClient, ASGITransport
 
 from backend.main import app
 from backend.core.database import get_db
-from backend.core.redis_client import redis_client, get_redis
+from backend.core.redis_client import redis_client
 from backend.core.encryption import encrypt_token
 
 
@@ -56,21 +56,9 @@ def override_db_dependency(async_session: AsyncSession):
     app.dependency_overrides.pop(get_db, None)
 
 
-# ============================================================================
-# CRITICAL: FastAPI Dependency Override for Redis
-# ============================================================================
-
-@pytest.fixture(autouse=True)
-def override_redis_dependency():
-    """
-    Override get_redis to use the test Redis client.
-
-    CRITICAL: Without this, endpoints using Depends(get_redis) may use
-    production Redis or wrong prefix.
-    """
-    app.dependency_overrides[get_redis] = lambda: redis_client
-    yield
-    app.dependency_overrides.pop(get_redis, None)
+# NOTE: Redis uses a singleton pattern (redis_client) with REDIS_ENV_PREFIX
+# environment variable for isolation. No FastAPI dependency override needed.
+# Tests MUST run with REDIS_ENV_PREFIX="test:" to use isolated keys.
 
 
 # ============================================================================
@@ -432,10 +420,8 @@ def mock_http_client():
     return http_client
 
 
-@pytest.fixture
-def override_http_client(mock_http_client):
-    with patch("backend.core.http_client.get_http_client", return_value=mock_http_client):
-        yield
+# NOTE: override_http_client fixture removed - backend.core.http_client module
+# does not exist. HTTP client is accessed via app.state.http_client instead.
 
 
 # ============================================================================
