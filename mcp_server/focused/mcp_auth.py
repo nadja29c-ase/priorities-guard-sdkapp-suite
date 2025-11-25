@@ -15,13 +15,13 @@ Security:
 """
 
 import time
-import logging
 from typing import Optional, Dict, List, Any, Set
 from uuid import uuid4
 from datetime import datetime, timezone
 
 import httpx
 import jwt
+import structlog
 from jwt import PyJWKClient, PyJWK
 
 from mcp_server.focused.config import (
@@ -36,7 +36,7 @@ from mcp_server.focused.config import (
     TOOL_SCOPES,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # ============================================================================
@@ -286,16 +286,26 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 f"Token expires in less than {TOKEN_EXPIRY_GRACE_SECONDS} seconds"
             )
 
-        # Step 6: Validate azp claim
+        # Step 6: Validate azp claim (skip in dev/test if not configured)
         azp = payload.get("azp")
-        if azp != CHATGPT_CLIENT_ID_FOCUSED:
-            logger.warning(
-                "jwt.validation.invalid_azp",
+        if CHATGPT_CLIENT_ID_FOCUSED:
+            # Production: strict azp validation
+            if azp != CHATGPT_CLIENT_ID_FOCUSED:
+                logger.warning(
+                    "jwt.validation.invalid_azp",
+                    correlation_id=correlation_id,
+                    expected=CHATGPT_CLIENT_ID_FOCUSED,
+                    actual=azp
+                )
+                raise jwt.InvalidTokenError(f"Invalid azp claim: expected {CHATGPT_CLIENT_ID_FOCUSED}, got {azp}")
+        else:
+            # Dev/test: bypass azp validation, just log
+            logger.debug(
+                "jwt.validation.azp_bypass",
                 correlation_id=correlation_id,
-                expected=CHATGPT_CLIENT_ID_FOCUSED,
-                actual=azp
+                azp=azp,
+                reason="CHATGPT_CLIENT_ID_FOCUSED not configured"
             )
-            raise jwt.InvalidTokenError(f"Invalid azp claim: expected {CHATGPT_CLIENT_ID_FOCUSED}, got {azp}")
 
         # Extract claims
         user_id = payload.get("sub")

@@ -65,7 +65,8 @@ def create_access_token(
         "iat": int(now.timestamp()),
         "jti": jti,
         "scope": scope,
-        "client_id": client_id,
+        "azp": client_id,  # Authorized party (OAuth 2.0 standard)
+        "client_id": client_id,  # Keep for backwards compat
     }
 
     # Sign JWT with RS256

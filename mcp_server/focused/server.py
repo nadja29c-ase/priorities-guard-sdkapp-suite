@@ -18,9 +18,9 @@ Or:
 """
 
 import json
-import logging
 import uvicorn
 import httpx
+import structlog
 from typing import Optional, Dict, Any, Callable
 from functools import wraps
 from mcp.server.fastmcp import FastMCP
@@ -34,10 +34,12 @@ from mcp_server.focused.mcp_auth import (
     build_forbidden_error,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
-# Create FastMCP instance
-mcp = FastMCP("focused-mcp")
+# Create FastMCP instance with stateless HTTP mode
+# Stateless mode returns JSON directly instead of SSE streams,
+# which is simpler for single-request patterns (ChatGPT, tests)
+mcp = FastMCP("focused-mcp", stateless_http=True)
 
 # Shared HTTP client for calling backend API
 http_client: httpx.AsyncClient | None = None

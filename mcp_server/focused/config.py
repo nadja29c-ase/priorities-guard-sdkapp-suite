@@ -50,15 +50,17 @@ FOCUSED_JWKS_URL = get_env(
 )
 
 # Expected JWT issuer (iss claim)
+# Must match backend's settings.OAUTH_ISSUER
 FOCUSED_ISSUER = get_env(
     "FOCUSED_ISSUER",
-    default="https://www.priority-guard.com/oauth/focused"
+    default="https://www.priority-guard.com"
 )
 
 # Expected JWT audience (aud claim)
+# Must match backend's settings.OAUTH_ISSUER (provider uses aud=iss)
 FOCUSED_AUDIENCE = get_env(
     "FOCUSED_AUDIENCE",
-    default="https://www.priority-guard.com/mcp/focused"
+    default="https://www.priority-guard.com"
 )
 
 # Expected ChatGPT client ID for azp claim validation

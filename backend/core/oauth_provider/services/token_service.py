@@ -114,10 +114,12 @@ async def exchange_authorization_code(
     await db.commit()
 
     # Create access token (JWT)
+    # Convert scope list to space-separated string (OAuth 2.0 standard)
+    scope_str = " ".join(auth_code.scope) if isinstance(auth_code.scope, list) else auth_code.scope
     access_token, jti = create_access_token(
         user_id=auth_code.user_id,
         client_id=auth_code.client_id,
-        scope=auth_code.scope
+        scope=scope_str
     )
 
     # Create refresh token
@@ -164,7 +166,7 @@ async def exchange_authorization_code(
         "refresh_token": refresh_token_plain,
         "token_type": "Bearer",
         "expires_in": settings.OAUTH_TOKEN_EXPIRY_SECONDS,
-        "scope": auth_code.scope
+        "scope": scope_str  # Return as space-separated string (OAuth 2.0 standard)
     }
 
 
@@ -241,10 +243,12 @@ async def exchange_refresh_token(
     matching_token.revoked_at = datetime.now(timezone.utc)
 
     # Create new access token (same scope as old token)
+    # Convert scope list to space-separated string (OAuth 2.0 standard)
+    scope_str = " ".join(matching_token.scope) if isinstance(matching_token.scope, list) else matching_token.scope
     new_access_token, new_jti = create_access_token(
         user_id=matching_token.user_id,
         client_id=matching_token.client_id,
-        scope=matching_token.scope
+        scope=scope_str
     )
 
     # Create new refresh token
@@ -292,5 +296,5 @@ async def exchange_refresh_token(
         "refresh_token": new_refresh_token_plain,
         "token_type": "Bearer",
         "expires_in": settings.OAUTH_TOKEN_EXPIRY_SECONDS,
-        "scope": matching_token.scope
+        "scope": scope_str  # Return as space-separated string (OAuth 2.0 standard)
     }

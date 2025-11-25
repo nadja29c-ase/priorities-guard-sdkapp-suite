@@ -1715,22 +1715,15 @@ class TestOAuthProvider:
         )
 
         assert status == 200
-        # Verify token contains only requested scope
-        # Note: scope can be returned as array or space-separated string
+        # Verify token contains only requested scope (OAuth 2.0: space-separated string)
         response_scope = token_response["scope"]
-        if isinstance(response_scope, list):
-            assert response_scope == ["focused.read"]
-        else:
-            assert response_scope == "focused.read"
+        assert response_scope == "focused.read", f"Expected 'focused.read', got {response_scope}"
 
-        # Decode JWT to verify scope claim
+        # Decode JWT to verify scope claim (must be string per OAuth 2.0 standard)
         access_token = token_response["access_token"]
         decoded = jwt.get_unverified_claims(access_token)
         jwt_scope = decoded["scope"]
-        if isinstance(jwt_scope, list):
-            assert jwt_scope == ["focused.read"]
-        else:
-            assert jwt_scope == "focused.read"
+        assert jwt_scope == "focused.read", f"JWT scope must be string, got {jwt_scope}"
 
         # Test 2: Request two scopes - should succeed
         code_verifier2 = generate_code_verifier()
@@ -1757,14 +1750,11 @@ class TestOAuthProvider:
         )
 
         assert status == 200
-        # Verify both scopes are in token response
+        # Verify both scopes are in token response (OAuth 2.0: space-separated string)
         response_scope = token_response["scope"]
-        if isinstance(response_scope, list):
-            assert "focused.read" in response_scope
-            assert "focused.notify" in response_scope
-        else:
-            assert "focused.read" in response_scope
-            assert "focused.notify" in response_scope
+        assert isinstance(response_scope, str), f"scope must be string, got {type(response_scope)}"
+        assert "focused.read" in response_scope
+        assert "focused.notify" in response_scope
 
         # Test 3: Request unauthorized scope - should fail
         code_verifier3 = generate_code_verifier()

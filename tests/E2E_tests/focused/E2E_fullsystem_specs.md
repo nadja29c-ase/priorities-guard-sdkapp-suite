@@ -2,10 +2,10 @@ Complete E2E System Test Specification (Final)
 Overview
 Total tests: 63 across 4 files
 Runtime target: ≤3 minutes
-Coverage target: ≥90% sync, ≥85% OAuth, ≥80% MCP
+121
 
 Phase 1A: Sync Engine (33 tests)
-File: test_increment_7_sync_e2e.py
+File: test_increment_8_sync_e2e.py
 Core Scenarios (10 tests)
 Test 1: Fresh user bootstrapping
 python# First sync with N events from Google
