@@ -27,13 +27,69 @@ from typing import Any
 from unittest.mock import patch, AsyncMock
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 from httpx import AsyncClient, ASGITransport
 
 from backend.main import app
 from backend.core.database import get_db
 from backend.core.redis_client import redis_client
 from backend.core.encryption import encrypt_token
+from backend.core.models import Base
+from backend.apps.focused import db_models  # noqa: F401 - Import models
+
+# Test database URL
+TEST_DATABASE_URL = "postgresql+asyncpg://localhost/priority_guardian_test"
+
+
+# ============================================================================
+# E2E Database Fixtures (override parent conftest)
+# ============================================================================
+
+@pytest_asyncio.fixture
+async def async_engine(setup_test_database):
+    """
+    Create async engine for E2E test database.
+
+    Overrides parent conftest's async_engine fixture.
+    """
+    engine = create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        future=True,
+        poolclass=NullPool,
+    )
+    yield engine
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def async_session(async_engine):
+    """
+    Create E2E database session WITHOUT automatic transaction wrapper.
+
+    Unlike the parent conftest which uses `async with session.begin()`,
+    this E2E version allows the HTTP handler to manage its own transactions.
+    Tests can query the DB after HTTP requests without transaction issues.
+    """
+    session_maker = async_sessionmaker(
+        async_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    async with session_maker() as session:
+        yield session
+
+    # Clean up: Truncate all tables after test
+    async with async_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
+                "core_connections, core_users, oauth_authorization_codes, "
+                "oauth_access_tokens RESTART IDENTITY CASCADE"
+            )
+        )
 
 
 # ============================================================================
@@ -185,6 +241,133 @@ def mock_google():
 
 
 # ============================================================================
+# MockGoogleWebhook — Google Calendar webhook API simulation
+# ============================================================================
+
+class MockGoogleWebhook:
+    """
+    Simulates Google Calendar webhook API for Phase 1B tests.
+
+    Separate from MockGoogleCalendar to avoid God-object anti-pattern.
+    Handles:
+    - register_webhook (events.watch)
+    - stop_webhook (channels.stop)
+    - simulate_webhook (send test webhook to real endpoint)
+    """
+
+    def __init__(self):
+        self.watch_calls: list[dict[str, Any]] = []
+        self.stop_calls: list[dict[str, Any]] = []
+        self.active_channels: dict[str, dict[str, Any]] = {}
+        self._next_expiration_ms: int | None = None
+
+    def set_next_expiration(self, expires_at: datetime) -> None:
+        """Set the expiration for the next register_webhook call."""
+        self._next_expiration_ms = int(expires_at.timestamp() * 1000)
+
+    async def register_webhook(
+        self,
+        http_client,
+        access_token: str,
+        channel_id: str,
+        user_id: str,
+    ) -> dict[str, Any]:
+        """
+        Mock for backend.core.google_calendar.register_webhook.
+
+        Returns Google-like response with channel_id, resourceId, expiration.
+        """
+        # Default: 7 days from now
+        if self._next_expiration_ms:
+            expiration_ms = self._next_expiration_ms
+            self._next_expiration_ms = None  # Reset after use
+        else:
+            expiration_ms = int((datetime.now(timezone.utc) + timedelta(days=7)).timestamp() * 1000)
+
+        resource_id = f"resource_{channel_id[:8]}"
+
+        self.watch_calls.append({
+            "channel_id": channel_id,
+            "user_id": user_id,
+            "access_token": access_token[:10] + "...",  # Truncated for safety
+        })
+
+        self.active_channels[channel_id] = {
+            "resource_id": resource_id,
+            "expiration_ms": expiration_ms,
+            "user_id": user_id,
+        }
+
+        return {
+            "id": channel_id,
+            "resourceId": resource_id,
+            "expiration": str(expiration_ms),
+        }
+
+    async def stop_webhook(
+        self,
+        http_client,
+        access_token: str,
+        channel_id: str,
+        resource_id: str,
+    ) -> bool:
+        """
+        Mock for backend.core.google_calendar.stop_webhook.
+
+        Returns True if channel existed and was stopped, False otherwise.
+        """
+        self.stop_calls.append({
+            "channel_id": channel_id,
+            "resource_id": resource_id,
+        })
+
+        if channel_id in self.active_channels:
+            del self.active_channels[channel_id]
+            return True
+
+        return True  # Google returns success even if channel not found
+
+    def reset(self) -> None:
+        """Reset all state for test isolation."""
+        self.watch_calls.clear()
+        self.stop_calls.clear()
+        self.active_channels.clear()
+        self._next_expiration_ms = None
+
+
+@pytest.fixture
+def mock_webhook():
+    """Fresh Google webhook mock per test."""
+    return MockGoogleWebhook()
+
+
+@pytest.fixture
+def patch_google_webhook(mock_webhook):
+    """
+    Patch register_webhook and stop_webhook at BOTH import locations.
+
+    The watch_calendar_impl does:
+        from backend.core.google_calendar import register_webhook, stop_webhook
+
+    So we must patch at both the definition and import locations.
+    """
+    with patch(
+        "backend.apps.focused.tools.watch_calendar_impl.register_webhook",
+        side_effect=mock_webhook.register_webhook
+    ), patch(
+        "backend.apps.focused.tools.watch_calendar_impl.stop_webhook",
+        side_effect=mock_webhook.stop_webhook
+    ), patch(
+        "backend.core.google_calendar.register_webhook",
+        side_effect=mock_webhook.register_webhook
+    ), patch(
+        "backend.core.google_calendar.stop_webhook",
+        side_effect=mock_webhook.stop_webhook
+    ):
+        yield mock_webhook
+
+
+# ============================================================================
 # Mock event generator
 # ============================================================================
 
@@ -287,28 +470,41 @@ async def redis_cleanup():
     assert redis_client._env_prefix.startswith("test:"), \
         "E2E tests MUST run with REDIS_ENV_PREFIX='test:'"
 
-    # Ensure Redis is connected before test
-    if redis_client._client is None:
-        await redis_client.connect()
+    # Reconnect Redis for each test to avoid event loop issues
+    # Close existing connection if any (might be from different event loop)
+    if redis_client._client is not None:
+        try:
+            await redis_client.close()
+        except Exception:
+            # Ignore errors when closing stale connections
+            redis_client._client = None
+
+    # Connect fresh for this test's event loop
+    await redis_client.connect()
 
     yield
 
     # Clean up ALL keys with env prefix after test
-    if redis_client._client is not None:
-        env_prefix = redis_client._env_prefix  # "test:" or "dev:"
-        cursor = 0
-        keys = []
+    try:
+        if redis_client._client is not None:
+            env_prefix = redis_client._env_prefix  # "test:" or "dev:"
+            cursor = 0
+            keys = []
 
-        while True:
-            cursor, batch = await redis_client._client.scan(
-                cursor, match=f"{env_prefix}*", count=100
-            )
-            keys.extend(batch)
-            if cursor == 0:
-                break
+            while True:
+                cursor, batch = await redis_client._client.scan(
+                    cursor, match=f"{env_prefix}*", count=100
+                )
+                keys.extend(batch)
+                if cursor == 0:
+                    break
 
-        if keys:
-            await redis_client._client.delete(*keys)
+            if keys:
+                await redis_client._client.delete(*keys)
+    except Exception as e:
+        # Log but don't fail test on cleanup errors
+        import logging
+        logging.getLogger(__name__).warning(f"Redis cleanup warning: {e}")
 
 
 # ============================================================================
@@ -321,9 +517,9 @@ def redis_helpers():
     Helper class to access Redis sync functions with correct naming.
 
     Uses exact function signatures from backend.core.redis_client:
-    - get_needs_sync
-    - set_needs_sync
-    - delete_needs_sync
+    - get_needs_sync / set_needs_sync / delete_needs_sync
+    - check_webhook_idempotency / clear_webhook_idempotency
+    - check_renewal_throttle / clear_renewal_throttle
     """
     class RH:
         async def get_needs_sync(self, user_id: str) -> bool:
@@ -342,6 +538,51 @@ def redis_helpers():
         get_needs = get_needs_sync
         set_needs = set_needs_sync
         del_needs = delete_needs_sync
+
+        # Idempotency helpers (Phase 1B)
+        async def check_idempotency(self, user_id: str, message_number: str) -> bool:
+            """Check if webhook is new (True) or duplicate (False)."""
+            from backend.core.redis_client import check_webhook_idempotency
+            return await check_webhook_idempotency(user_id, message_number)
+
+        async def clear_idempotency(self, user_id: str, message_number: str) -> bool:
+            """Clear idempotency key (for test setup)."""
+            from backend.core.redis_client import redis_client
+            key = f"focused:webhook:{user_id}:{message_number}"
+            result = await redis_client.delete(key)
+            return result > 0
+
+        async def has_idempotency_key(self, user_id: str, message_number: str) -> bool:
+            """Check if idempotency key exists (without consuming it)."""
+            from backend.core.redis_client import redis_client
+            key = f"focused:webhook:{user_id}:{message_number}"
+            return await redis_client.exists(key) > 0
+
+        # Renewal throttle helpers (Phase 1B)
+        # Key format: focused:webhook:renew_throttle:{user_id}
+        async def check_throttle(self, user_id: str) -> bool:
+            """Check if renewal is allowed (True) or throttled (False)."""
+            from backend.core.redis_client import check_renewal_throttle
+            return await check_renewal_throttle(user_id)
+
+        async def clear_throttle(self, user_id: str) -> bool:
+            """Clear renewal throttle (for test setup)."""
+            from backend.core.redis_client import redis_client
+            key = f"focused:webhook:renew_throttle:{user_id}"
+            result = await redis_client.delete(key)
+            return result > 0
+
+        async def has_throttle_key(self, user_id: str) -> bool:
+            """Check if throttle key exists."""
+            from backend.core.redis_client import redis_client
+            key = f"focused:webhook:renew_throttle:{user_id}"
+            return await redis_client.exists(key) > 0
+
+        async def get_throttle_ttl(self, user_id: str) -> int:
+            """Get TTL of throttle key in seconds (-2 if not exists, -1 if no expiry)."""
+            from backend.core.redis_client import redis_client
+            key = f"focused:webhook:renew_throttle:{user_id}"
+            return await redis_client.ttl(key)
 
     return RH()
 
@@ -482,6 +723,61 @@ async def test_user_with_connection(async_session: AsyncSession):
         "channel_id": channel_id,
         "resource_id": resource_id,
         "channel_expires_at": channel_expires,
+    }
+
+
+# ============================================================================
+# Test user WITHOUT channel (for fresh registration tests)
+# ============================================================================
+
+@pytest_asyncio.fixture
+async def test_user_without_channel(async_session: AsyncSession):
+    """
+    Creates a user with OAuth connection but NO webhook channel.
+
+    Use this for testing fresh webhook registration (Test 01).
+    """
+    user_id = str(uuid4())
+
+    access = f"ya29.access_{user_id[:6]}"
+    refresh = f"1//refresh_{user_id[:6]}"
+
+    encrypted_access = encrypt_token(access)
+    encrypted_refresh = encrypt_token(refresh)
+
+    expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+    await async_session.execute(
+        text("INSERT INTO core_users (id) VALUES (:id)"),
+        {"id": user_id},
+    )
+    await async_session.execute(
+        text("""
+            INSERT INTO core_connections (
+                user_id, provider,
+                encrypted_access_token, encrypted_refresh_token,
+                token_expires_at, scopes
+            )
+            VALUES (
+                :user_id, 'google',
+                :access, :refresh,
+                :expires, ARRAY['https://www.googleapis.com/auth/calendar.readonly']
+            )
+        """),
+        {
+            "user_id": user_id,
+            "access": encrypted_access,
+            "refresh": encrypted_refresh,
+            "expires": expires,
+        },
+    )
+    await async_session.flush()
+
+    return {
+        "user_id": user_id,
+        "access_token": access,
+        "refresh_token": refresh,
+        "expires_at": expires,
     }
 
 

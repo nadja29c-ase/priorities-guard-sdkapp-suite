@@ -189,6 +189,48 @@ class RedisClient:
             logger.error(f"Redis incr() failed for key {key}: {e}")
             return None
 
+    async def exists(self, key: str) -> int:
+        """
+        Check if key exists in Redis.
+
+        Args:
+            key: Cache key (will be automatically prefixed with environment)
+
+        Returns:
+            1 if key exists, 0 if not, 0 on error
+        """
+        if not self.is_connected():
+            logger.warning("Redis not connected, exists() returning 0")
+            return 0
+
+        try:
+            prefixed_key = self._prefix_key(key)
+            return await self._client.exists(prefixed_key)
+        except Exception as e:
+            logger.error(f"Redis exists() failed for key {key}: {e}")
+            return 0
+
+    async def ttl(self, key: str) -> int:
+        """
+        Get TTL (time-to-live) of a key in seconds.
+
+        Args:
+            key: Cache key (will be automatically prefixed with environment)
+
+        Returns:
+            TTL in seconds, -2 if key doesn't exist, -1 if no expiry, -3 on error
+        """
+        if not self.is_connected():
+            logger.warning("Redis not connected, ttl() returning -3")
+            return -3
+
+        try:
+            prefixed_key = self._prefix_key(key)
+            return await self._client.ttl(prefixed_key)
+        except Exception as e:
+            logger.error(f"Redis ttl() failed for key {key}: {e}")
+            return -3
+
 
 # Global Redis client instance
 redis_client = RedisClient()
