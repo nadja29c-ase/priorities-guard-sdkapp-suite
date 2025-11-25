@@ -14,6 +14,12 @@ from backend.core.redis_client import redis_client
 logger = get_logger(__name__)
 
 AUTH_CONTEXT_TTL = 600  # 10 minutes
+AUTH_CONTEXT_KEY_PREFIX = "oauth:auth:"
+
+
+def build_auth_context_key(auth_context_id: str) -> str:
+    """Build Redis key for authorization context."""
+    return f"{AUTH_CONTEXT_KEY_PREFIX}{auth_context_id}"
 
 
 async def create_authorization_context(
@@ -76,7 +82,7 @@ async def create_authorization_context(
     }
 
     # Store in Redis with 10-minute TTL
-    redis_key = f"oauth:auth:{auth_context_id}"
+    redis_key = build_auth_context_key(auth_context_id)
     await redis_client.set(
         redis_key,
         json.dumps(auth_context),
@@ -115,7 +121,7 @@ async def get_authorization_context(
         >>> print(context["client_id"])
         focused-client-123
     """
-    redis_key = f"oauth:auth:{auth_context_id}"
+    redis_key = build_auth_context_key(auth_context_id)
     auth_context_json = await redis_client.get(redis_key)
 
     if not auth_context_json:
