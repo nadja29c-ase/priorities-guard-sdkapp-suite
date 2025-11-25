@@ -3,6 +3,22 @@ Test configuration for all test suites.
 
 Provides async database fixtures and test client for testing.
 Merged from oauth_provider/conftest.py and focused/conftest.py.
+conftest.py provides unit-test-level DB fixtures:
+- local ephemeral async engine
+- auto-rollback per test
+- table truncation
+- no real Redis
+- no HTTP client state
+- no external service mocking
+
+This is your standard test harness for:
+- Unit tests
+- Integration tests that dont involve Google, Redis, OAuth, MCP
+- Pure DB logic tests
+- Token encryption tests
+- OAuth validator unit tests
+- Business logic tests that dont require real HTTP
+
 """
 
 import pytest
