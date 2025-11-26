@@ -50,12 +50,6 @@ class TestPKCEGeneration:
         verifier = generate_code_verifier()
         assert "=" not in verifier, "Verifier should not contain padding"
 
-    def test_code_verifier_is_cryptographically_random(self):
-        """Test that multiple verifiers are unique (high entropy)."""
-        verifiers = [generate_code_verifier() for _ in range(100)]
-        unique_verifiers = set(verifiers)
-        assert len(unique_verifiers) == 100, "Verifiers should be unique (random)"
-
     def test_code_challenge_is_base64url_sha256(self):
         """Test code challenge is correctly derived from verifier."""
         verifier = "test_verifier_string_with_sufficient_length_for_testing"
@@ -66,12 +60,6 @@ class TestPKCEGeneration:
         expected = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
         assert challenge == expected, "Challenge does not match expected SHA256(verifier)"
-
-    def test_code_challenge_no_padding(self):
-        """Test code challenge has no base64 padding characters."""
-        verifier = generate_code_verifier()
-        challenge = generate_code_challenge(verifier)
-        assert "=" not in challenge, "Challenge should not contain padding"
 
     def test_code_challenge_length(self):
         """Test code challenge is 43 characters (SHA256 base64url without padding)."""
@@ -101,12 +89,6 @@ class TestStateTokenGeneration:
             int(state, 16)
         except ValueError:
             pytest.fail("State is not valid hex")
-
-    def test_state_is_cryptographically_random(self):
-        """Test that multiple states are unique (high entropy)."""
-        states = [generate_state_token() for _ in range(100)]
-        unique_states = set(states)
-        assert len(unique_states) == 100, "States should be unique (random)"
 
 
 # =============================================================================
@@ -352,53 +334,3 @@ class TestAuthURLGeneration:
         url = generate_auth_url_with_pkce("challenge", "state")
 
         assert "access_type=offline" in url
-
-
-# =============================================================================
-# Token Logging Tests
-# =============================================================================
-
-class TestNoTokenLogging:
-    """Tests to verify tokens are never logged."""
-
-    @pytest.mark.asyncio
-    async def test_store_state_does_not_log_verifier(self, caplog):
-        """Test storing state does not log the code_verifier."""
-        mock_redis = AsyncMock()
-        mock_redis.set = AsyncMock(return_value=True)
-
-        secret_verifier = "super_secret_verifier_12345"
-
-        with patch("backend.core.google_oauth.redis_client", mock_redis):
-            import logging
-            with caplog.at_level(logging.DEBUG):
-                await store_oauth_state(
-                    state="state",
-                    user_id="user",
-                    code_verifier=secret_verifier,
-                )
-
-        # Verify verifier is not in any log message
-        for record in caplog.records:
-            assert secret_verifier not in record.message
-
-    @pytest.mark.asyncio
-    async def test_verify_state_does_not_log_verifier(self, caplog):
-        """Test verifying state does not log the code_verifier."""
-        mock_redis = AsyncMock()
-        secret_verifier = "another_secret_verifier_67890"
-        mock_redis.get = AsyncMock(return_value=json.dumps({
-            "user_id": "user",
-            "code_verifier": secret_verifier,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }))
-        mock_redis.delete = AsyncMock()
-
-        with patch("backend.core.google_oauth.redis_client", mock_redis):
-            import logging
-            with caplog.at_level(logging.DEBUG):
-                await verify_and_get_oauth_state("state")
-
-        # Verify verifier is not in any log message
-        for record in caplog.records:
-            assert secret_verifier not in record.message

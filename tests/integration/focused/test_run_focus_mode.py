@@ -271,3 +271,196 @@ class TestResponseFormat:
         assert "error" in data
         assert "code" in data["error"]
         assert "message" in data["error"]
+
+
+# =============================================================================
+# Duration Validation Edge Cases
+# =============================================================================
+
+class TestDurationValidation:
+    """Tests for duration_minutes edge cases."""
+
+    def test_duration_negative_invalid(self, client, valid_user_id):
+        """Test that negative duration is rejected."""
+        response = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "on",
+                "trigger_source": "user",
+                "duration_minutes": -10,
+                "user_confirmation": True,
+            },
+            headers={"X-User-ID": valid_user_id},
+        )
+
+        assert response.status_code == 422
+
+    def test_duration_valid_boundary_1(self, client, valid_user_id):
+        """Test that duration=1 is valid (minimum)."""
+        response = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "on",
+                "trigger_source": "user",
+                "duration_minutes": 1,  # Minimum valid
+                "user_confirmation": True,
+            },
+            headers={"X-User-ID": valid_user_id},
+        )
+
+        # Should not be a validation error
+        assert response.status_code != 422
+
+    def test_duration_valid_boundary_480(self, client, valid_user_id):
+        """Test that duration=480 is valid (maximum)."""
+        response = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "on",
+                "trigger_source": "user",
+                "duration_minutes": 480,  # Maximum valid (8 hours)
+                "user_confirmation": True,
+            },
+            headers={"X-User-ID": valid_user_id},
+        )
+
+        # Should not be a validation error
+        assert response.status_code != 422
+
+    def test_duration_481_invalid(self, client, valid_user_id):
+        """Test that duration=481 is rejected (above max)."""
+        response = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "on",
+                "trigger_source": "user",
+                "duration_minutes": 481,
+                "user_confirmation": True,
+            },
+            headers={"X-User-ID": valid_user_id},
+        )
+
+        assert response.status_code == 422
+
+
+# =============================================================================
+# Session Conflict Tests
+# =============================================================================
+
+class TestSessionConflicts:
+    """Tests for session conflict handling."""
+
+    def test_second_activation_blocked_by_active_session(self, client, valid_user_id):
+        """Test that second activation is blocked when session is active."""
+        # Create mock for an active session
+        active_session = MagicMock()
+        active_session.id = uuid4()
+        active_session.actual_start = datetime.now(timezone.utc) - timedelta(hours=1)
+        active_session.actual_end = None
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=active_session)
+
+        with patch("backend.apps.focused.tools.run_focus_mode_impl._get_active_session") as mock_get:
+            mock_get.return_value = active_session
+
+            response = client.post(
+                "/api/focused/tools/run_focus_mode",
+                json={
+                    "action": "on",
+                    "trigger_source": "user",
+                    "user_confirmation": True,
+                },
+                headers={"X-User-ID": valid_user_id},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should succeed but indicate already_active
+        if data.get("success"):
+            assert data["data"]["shortcut_status"] == "already_active"
+
+
+# =============================================================================
+# X-User-ID Header Tests
+# =============================================================================
+
+class TestUserIDHeader:
+    """Tests for X-User-ID header handling."""
+
+    def test_missing_user_id_header_uses_fallback(self, client):
+        """Test behavior when X-User-ID header is missing."""
+        response = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "on",
+                "trigger_source": "user",
+                "user_confirmation": True,
+            },
+            # No X-User-ID header
+        )
+
+        # Should either fail with auth error or use fallback
+        # (depends on implementation)
+        assert response.status_code in [200, 401, 422]
+
+    def test_invalid_user_id_format_rejected(self, client):
+        """Test that invalid UUID format in X-User-ID is handled."""
+        response = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "on",
+                "trigger_source": "user",
+                "user_confirmation": True,
+            },
+            headers={"X-User-ID": "not-a-valid-uuid"},
+        )
+
+        # Should fail gracefully
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+
+
+# =============================================================================
+# Idempotency Tests
+# =============================================================================
+
+class TestIdempotency:
+    """Tests for idempotent behavior."""
+
+    def test_multiple_deactivation_requests_are_idempotent(self, client, valid_user_id):
+        """Test that multiple deactivation requests don't cause errors."""
+        # First deactivation
+        response1 = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "off",
+                "trigger_source": "user",
+            },
+            headers={"X-User-ID": valid_user_id},
+        )
+
+        # Second deactivation (should be idempotent)
+        response2 = client.post(
+            "/api/focused/tools/run_focus_mode",
+            json={
+                "action": "off",
+                "trigger_source": "user",
+            },
+            headers={"X-User-ID": valid_user_id},
+        )
+
+        # Both should succeed (200)
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+
+        data1 = response1.json()
+        data2 = response2.json()
+
+        # Both should indicate success or already_inactive
+        if data1.get("success"):
+            assert data1["data"]["shortcut_status"] in ["success", "already_inactive"]
+        if data2.get("success"):
+            assert data2["data"]["shortcut_status"] in ["success", "already_inactive"]
