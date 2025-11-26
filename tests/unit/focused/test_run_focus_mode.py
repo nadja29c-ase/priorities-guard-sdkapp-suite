@@ -761,14 +761,44 @@ class TestOwnershipValidation:
 # =============================================================================
 
 class TestRaceConditions:
-    """Tests for race condition handling in parallel activation."""
+    """Tests for race condition handling in parallel activation.
+
+    NOTE: True race condition testing requires either:
+    1. Integration tests with a real database using SELECT FOR UPDATE
+    2. A shared mock state that both concurrent calls can see
+
+    The current unit test architecture uses isolated mocks per call,
+    which cannot properly simulate the race condition where:
+    - Call 1 sees no active session
+    - Call 1 creates a session
+    - Call 2 sees the session created by Call 1
+    - Call 2 returns "already_active"
+
+    TODO: Add database-level locking (SELECT FOR UPDATE) in a future increment
+    and create proper integration tests for race conditions.
+    """
 
     @pytest.mark.asyncio
+    @pytest.mark.xfail(
+        reason="Race condition testing requires shared state or real DB with FOR UPDATE locking. "
+               "Current unit test mocks are isolated per call and cannot enforce the invariant. "
+               "See TODO in class docstring.",
+        strict=False,
+    )
     async def test_two_parallel_activation_calls_only_create_one_session(self, valid_user_id):
         """Test that two simultaneous activation calls only create one session.
 
-        This is critical because even with SQL, two simultaneous calls may both
-        see "no active session" unless proper locking (FOR UPDATE) is used.
+        LIMITATION: This test currently cannot enforce the invariant that only
+        one session is created. Each mock_session is isolated, so both calls
+        see "no active session" and both succeed.
+
+        In production with proper FOR UPDATE locking:
+        - First call acquires lock, sees no session, creates one
+        - Second call waits for lock, then sees the new session
+        - Second call returns "already_active"
+
+        This test is marked xfail to document the expected behavior that
+        the implementation must handle via database-level locking.
         """
         import asyncio
 
@@ -781,24 +811,14 @@ class TestRaceConditions:
             mock_session.commit = AsyncMock()
             mock_session.flush = AsyncMock()
 
-            # Track sessions added
             def capture_add(obj):
                 sessions_created.append((call_id, obj))
 
             mock_session.add = capture_add
 
-            # First call sees no active session, second should see the first
-            call_count = 0
-
             def mock_execute(_):
-                nonlocal call_count
-                call_count += 1
                 mock_result = MagicMock()
-                # Simulate race: both see no active session initially
-                if call_count == 1:
-                    mock_result.scalar_one_or_none = MagicMock(return_value=None)
-                else:
-                    mock_result.scalar_one_or_none = MagicMock(return_value=None)
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
                 return mock_result
 
             mock_session.execute = AsyncMock(side_effect=mock_execute)
@@ -813,20 +833,19 @@ class TestRaceConditions:
                 )
                 activation_results.append((call_id, result))
 
-        # Run two activations concurrently
         await asyncio.gather(
             mock_activation(1),
             mock_activation(2),
         )
 
-        # Both calls attempted to create sessions (in mocked environment)
-        # In production with proper FOR UPDATE locking, only one should succeed
-        # This test documents the expected behavior that implementation must handle
-        assert len(activation_results) == 2
-
-        # At least one should succeed
+        # With proper locking, exactly one should succeed and one should get "already_active"
         success_count = sum(1 for _, r in activation_results if r["shortcut_status"] == "success")
-        assert success_count >= 1, "At least one activation should succeed"
+        already_active_count = sum(1 for _, r in activation_results if r["shortcut_status"] == "already_active")
+
+        # This assertion will fail with current isolated mocks (both succeed)
+        # but documents the expected behavior with proper DB locking
+        assert success_count == 1, f"Expected exactly 1 success, got {success_count}"
+        assert already_active_count == 1, f"Expected exactly 1 already_active, got {already_active_count}"
 
 
 # =============================================================================
