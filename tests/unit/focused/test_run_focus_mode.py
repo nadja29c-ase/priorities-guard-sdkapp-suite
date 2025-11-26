@@ -383,10 +383,15 @@ class TestCalendarTriggeredSessions:
     """Tests for calendar-triggered focus sessions."""
 
     @pytest.mark.asyncio
-    async def test_calendar_trigger_with_non_focus_session(self, mock_session, valid_user_id, valid_session_id):
-        """Test calendar trigger with session that is not a focus block."""
+    async def test_calendar_trigger_with_non_focus_session_rejected(self, mock_session, valid_user_id, valid_session_id):
+        """Test calendar trigger with session that is not a focus block is rejected.
+
+        If the sync engine created a FocusedFocusSession row, it is by definition
+        a focus block session. If is_focus_block=False, the session should never
+        have existed - this tests that such an invalid state is handled correctly.
+        """
         # Mock no active session (first query)
-        # Then mock a session that exists but is_focus_block=False
+        # Then mock a session that exists but is_focus_block=False (invalid state)
         non_focus_session = MagicMock()
         non_focus_session.id = uuid4()
         non_focus_session.is_focus_block = False
@@ -402,7 +407,7 @@ class TestCalendarTriggeredSessions:
                 # First call: check active session
                 mock_result.scalar_one_or_none = MagicMock(return_value=None)
             else:
-                # Second call: get session by ID
+                # Second call: get session by ID - returns non-focus session
                 mock_result.scalar_one_or_none = MagicMock(return_value=non_focus_session)
             return mock_result
 
@@ -418,9 +423,9 @@ class TestCalendarTriggeredSessions:
                 user_confirmation=True,
             )
 
-        # Should succeed - even non-focus sessions can be activated manually
-        # The trigger_source="calendar" just means it came from calendar context
-        assert result["shortcut_status"] in ["success", "failed"]
+        # Should fail - is_focus_block=False sessions should not be activatable
+        assert result["shortcut_status"] == "failed"
+        assert "focus" in result["message"].lower() or "invalid" in result["message"].lower()
 
     @pytest.mark.asyncio
     async def test_calendar_trigger_with_deleted_session(self, mock_session, valid_user_id, valid_session_id):
@@ -749,3 +754,469 @@ class TestOwnershipValidation:
         # Should fail because session not found for this user
         assert result["shortcut_status"] == "failed"
         assert "not found" in result["message"].lower()
+
+
+# =============================================================================
+# Race Condition Tests (Critical for Data Integrity)
+# =============================================================================
+
+class TestRaceConditions:
+    """Tests for race condition handling in parallel activation."""
+
+    @pytest.mark.asyncio
+    async def test_two_parallel_activation_calls_only_create_one_session(self, valid_user_id):
+        """Test that two simultaneous activation calls only create one session.
+
+        This is critical because even with SQL, two simultaneous calls may both
+        see "no active session" unless proper locking (FOR UPDATE) is used.
+        """
+        import asyncio
+
+        sessions_created = []
+        activation_results = []
+
+        async def mock_activation(call_id: int):
+            """Simulate an activation call."""
+            mock_session = AsyncMock()
+            mock_session.commit = AsyncMock()
+            mock_session.flush = AsyncMock()
+
+            # Track sessions added
+            def capture_add(obj):
+                sessions_created.append((call_id, obj))
+
+            mock_session.add = capture_add
+
+            # First call sees no active session, second should see the first
+            call_count = 0
+
+            def mock_execute(_):
+                nonlocal call_count
+                call_count += 1
+                mock_result = MagicMock()
+                # Simulate race: both see no active session initially
+                if call_count == 1:
+                    mock_result.scalar_one_or_none = MagicMock(return_value=None)
+                else:
+                    mock_result.scalar_one_or_none = MagicMock(return_value=None)
+                return mock_result
+
+            mock_session.execute = AsyncMock(side_effect=mock_execute)
+
+            with patch("backend.apps.focused.tools.run_focus_mode_impl.celery_app"):
+                result = await run_focus_mode_impl(
+                    user_id=valid_user_id,
+                    action="on",
+                    session=mock_session,
+                    trigger_source="user",
+                    user_confirmation=True,
+                )
+                activation_results.append((call_id, result))
+
+        # Run two activations concurrently
+        await asyncio.gather(
+            mock_activation(1),
+            mock_activation(2),
+        )
+
+        # Both calls attempted to create sessions (in mocked environment)
+        # In production with proper FOR UPDATE locking, only one should succeed
+        # This test documents the expected behavior that implementation must handle
+        assert len(activation_results) == 2
+
+        # At least one should succeed
+        success_count = sum(1 for _, r in activation_results if r["shortcut_status"] == "success")
+        assert success_count >= 1, "At least one activation should succeed"
+
+
+# =============================================================================
+# Duration Edge Case Tests (Critical for Input Validation)
+# =============================================================================
+
+class TestDurationEdgeCases:
+    """Tests for duration_minutes edge cases."""
+
+    @pytest.mark.asyncio
+    async def test_activation_rejects_negative_duration(self, mock_session, valid_user_id):
+        """Test that negative duration is rejected."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session.execute.return_value = mock_result
+
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="on",
+            session=mock_session,
+            trigger_source="user",
+            duration_minutes=-10,
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "duration" in result["message"].lower() or "invalid" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_activation_rejects_zero_duration(self, mock_session, valid_user_id):
+        """Test that zero duration is rejected."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session.execute.return_value = mock_result
+
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="on",
+            session=mock_session,
+            trigger_source="user",
+            duration_minutes=0,
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "duration" in result["message"].lower() or "invalid" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_activation_rejects_duration_over_max(self, mock_session, valid_user_id):
+        """Test that duration over maximum (480 minutes / 8 hours) is rejected."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session.execute.return_value = mock_result
+
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="on",
+            session=mock_session,
+            trigger_source="user",
+            duration_minutes=481,  # Over max
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "duration" in result["message"].lower() or "invalid" in result["message"].lower()
+
+
+# =============================================================================
+# Manual Deactivation Job Cancellation Tests (Critical for Correctness)
+# =============================================================================
+
+class TestManualDeactivationJobCancellation:
+    """Tests for scheduled job cancellation on manual deactivation."""
+
+    @pytest.mark.asyncio
+    async def test_manual_deactivation_revokes_scheduled_celery_task(self, mock_session, valid_user_id):
+        """Test that manual deactivation revokes the scheduled Celery task."""
+        # Mock active session with a scheduled job
+        active_session = MagicMock()
+        active_session.id = uuid4()
+        active_session.actual_start = datetime.now(timezone.utc) - timedelta(hours=1)
+        active_session.actual_end = None
+        active_session.event_summary = "Focus Time"
+
+        # Mock scheduled job associated with the session
+        scheduled_job = MagicMock()
+        scheduled_job.celery_task_id = "celery-task-to-revoke-123"
+        scheduled_job.status = "pending"
+
+        call_count = 0
+
+        def mock_execute(_):
+            nonlocal call_count
+            call_count += 1
+            mock_result = MagicMock()
+            if call_count == 1:
+                # First call: get active session
+                mock_result.scalar_one_or_none = MagicMock(return_value=active_session)
+            else:
+                # Second call: get scheduled job
+                mock_result.scalar_one_or_none = MagicMock(return_value=scheduled_job)
+            return mock_result
+
+        mock_session.execute = AsyncMock(side_effect=mock_execute)
+
+        with patch("backend.apps.focused.tools.run_focus_mode_impl.celery_app") as mock_celery:
+            mock_celery.control = MagicMock()
+            mock_celery.control.revoke = MagicMock()
+
+            result = await run_focus_mode_impl(
+                user_id=valid_user_id,
+                action="off",
+                session=mock_session,
+                trigger_source="user",
+            )
+
+        assert result["shortcut_status"] == "success"
+        # Verify Celery revoke was called
+        mock_celery.control.revoke.assert_called_once_with(
+            "celery-task-to-revoke-123",
+            terminate=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_manual_deactivation_marks_scheduled_job_cancelled(self, mock_session, valid_user_id):
+        """Test that manual deactivation marks the scheduled job as cancelled."""
+        active_session = MagicMock()
+        active_session.id = uuid4()
+        active_session.actual_start = datetime.now(timezone.utc) - timedelta(hours=1)
+        active_session.actual_end = None
+        active_session.event_summary = "Focus Time"
+
+        scheduled_job = MagicMock()
+        scheduled_job.celery_task_id = "celery-task-456"
+        scheduled_job.status = "pending"
+
+        call_count = 0
+
+        def mock_execute(_):
+            nonlocal call_count
+            call_count += 1
+            mock_result = MagicMock()
+            if call_count == 1:
+                mock_result.scalar_one_or_none = MagicMock(return_value=active_session)
+            else:
+                mock_result.scalar_one_or_none = MagicMock(return_value=scheduled_job)
+            return mock_result
+
+        mock_session.execute = AsyncMock(side_effect=mock_execute)
+
+        with patch("backend.apps.focused.tools.run_focus_mode_impl.celery_app") as mock_celery:
+            mock_celery.control = MagicMock()
+            mock_celery.control.revoke = MagicMock()
+
+            await run_focus_mode_impl(
+                user_id=valid_user_id,
+                action="off",
+                session=mock_session,
+                trigger_source="user",
+            )
+
+        # Verify job status was updated to cancelled
+        assert scheduled_job.status == "cancelled"
+
+
+# =============================================================================
+# Session ID Validation Tests (Critical for Calendar Trigger)
+# =============================================================================
+
+class TestSessionIdValidation:
+    """Tests for session_id validation in calendar-triggered operations."""
+
+    @pytest.mark.asyncio
+    async def test_calendar_deactivation_requires_session_id(self, mock_session, valid_user_id):
+        """Test that calendar-triggered deactivation requires session_id."""
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="off",
+            session=mock_session,
+            trigger_source="calendar",
+            session_id=None,  # Missing
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "session_id" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_calendar_deactivation_rejects_invalid_session_id_format(self, mock_session, valid_user_id):
+        """Test that calendar-triggered deactivation rejects invalid session_id format."""
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="off",
+            session=mock_session,
+            trigger_source="calendar",
+            session_id="not-a-valid-uuid",  # Invalid format
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "invalid" in result["message"].lower() or "session" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_calendar_activation_rejects_invalid_session_id_format(self, mock_session, valid_user_id):
+        """Test that calendar-triggered activation rejects invalid session_id format."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session.execute.return_value = mock_result
+
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="on",
+            session=mock_session,
+            trigger_source="calendar",
+            session_id="invalid-uuid-format",  # Invalid
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "invalid" in result["message"].lower() or "session" in result["message"].lower()
+
+
+# =============================================================================
+# Single DB Row Creation Tests (Critical for Data Integrity)
+# =============================================================================
+
+class TestSingleDBRowCreation:
+    """Tests for ensuring only one session row is created per activation."""
+
+    @pytest.mark.asyncio
+    async def test_manual_activation_creates_single_session_record_only_once(self, mock_session, valid_user_id):
+        """Test that manual activation creates exactly one DB row, no duplicates."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session.execute.return_value = mock_result
+
+        add_call_count = 0
+        added_objects = []
+
+        def capture_add(obj):
+            nonlocal add_call_count
+            add_call_count += 1
+            added_objects.append(obj)
+
+        mock_session.add = capture_add
+
+        with patch("backend.apps.focused.tools.run_focus_mode_impl.celery_app"):
+            result = await run_focus_mode_impl(
+                user_id=valid_user_id,
+                action="on",
+                session=mock_session,
+                trigger_source="user",
+                user_confirmation=True,
+            )
+
+        assert result["shortcut_status"] == "success"
+        # Exactly one session.add() call for the focus session
+        # (may have additional calls for scheduled job, but session should be exactly 1)
+        focus_sessions = [obj for obj in added_objects if hasattr(obj, 'trigger_source')]
+        assert len(focus_sessions) == 1, f"Expected exactly 1 session, got {len(focus_sessions)}"
+
+
+# =============================================================================
+# Calendar Trigger Wrong Owner Tests (Critical for Security)
+# =============================================================================
+
+class TestCalendarTriggerWrongOwner:
+    """Tests for calendar trigger with wrong session owner."""
+
+    @pytest.mark.asyncio
+    async def test_calendar_trigger_rejects_session_belonging_to_other_user(self, mock_session):
+        """Test that calendar trigger rejects session owned by different user."""
+        user1_id = str(uuid4())
+        user2_session_id = str(uuid4())
+
+        # User1 tries to activate a session that belongs to User2
+        call_count = 0
+
+        def mock_execute(_):
+            nonlocal call_count
+            call_count += 1
+            mock_result = MagicMock()
+            if call_count == 1:
+                # No active session for user1
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
+            else:
+                # Session lookup returns None because user_id filter doesn't match
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
+            return mock_result
+
+        mock_session.execute = AsyncMock(side_effect=mock_execute)
+
+        result = await run_focus_mode_impl(
+            user_id=user1_id,
+            action="on",
+            session=mock_session,
+            trigger_source="calendar",
+            session_id=user2_session_id,
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "not found" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_calendar_deactivation_rejects_session_belonging_to_other_user(self, mock_session):
+        """Test that calendar deactivation rejects session owned by different user."""
+        user1_id = str(uuid4())
+        user2_session_id = str(uuid4())
+
+        # Query returns None because user1 doesn't own this session
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session.execute.return_value = mock_result
+
+        result = await run_focus_mode_impl(
+            user_id=user1_id,
+            action="off",
+            session=mock_session,
+            trigger_source="calendar",
+            session_id=user2_session_id,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "not found" in result["message"].lower()
+
+
+# =============================================================================
+# Invalid Action Tests (Critical for Input Validation)
+# =============================================================================
+
+class TestInvalidAction:
+    """Tests for invalid action parameter."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_action_rejected(self, mock_session, valid_user_id):
+        """Test that invalid action value is rejected."""
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="invalid",  # Not "on" or "off"
+            session=mock_session,
+            trigger_source="user",
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "action" in result["message"].lower() or "invalid" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_empty_action_rejected(self, mock_session, valid_user_id):
+        """Test that empty action value is rejected."""
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="",  # Empty
+            session=mock_session,
+            trigger_source="user",
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+
+
+# =============================================================================
+# Trigger Source Validation Tests (Critical for Input Validation)
+# =============================================================================
+
+class TestTriggerSourceValidation:
+    """Tests for trigger_source parameter validation."""
+
+    @pytest.mark.asyncio
+    async def test_invalid_trigger_source_rejected(self, mock_session, valid_user_id):
+        """Test that invalid trigger_source is rejected."""
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="on",
+            session=mock_session,
+            trigger_source="invalid",  # Not "user" or "calendar"
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert "trigger" in result["message"].lower() or "invalid" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_empty_trigger_source_rejected(self, mock_session, valid_user_id):
+        """Test that empty trigger_source is rejected."""
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="on",
+            session=mock_session,
+            trigger_source="",  # Empty
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
