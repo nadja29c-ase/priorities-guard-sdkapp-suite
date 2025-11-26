@@ -14,6 +14,10 @@ from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Canonical User-Agent for all Google API calls
+# Google recommends including UA string for API requests
+GOOGLE_USER_AGENT = "Focused/1.0 (+https://www.priority-guard.com)"
+
 
 async def refresh_access_token(
     http_client: httpx.AsyncClient,
@@ -43,7 +47,7 @@ async def refresh_access_token(
     }
 
     headers = {
-        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)"
+        "User-Agent": GOOGLE_USER_AGENT
     }
 
     max_retries = 3
@@ -116,66 +120,6 @@ async def refresh_access_token(
     raise ValueError("Token refresh failed after retries")
 
 
-async def stop_webhook(
-    http_client: httpx.AsyncClient,
-    access_token: str,
-    channel_id: str,
-    resource_id: str
-) -> bool:
-    """
-    Stop an existing Google Calendar webhook channel.
-
-    Args:
-        http_client: Shared httpx AsyncClient
-        access_token: Decrypted Google access token
-        channel_id: Channel ID to stop
-        resource_id: Resource ID associated with the channel
-
-    Returns:
-        True if stopped successfully or channel not found, False on other errors
-
-    Note:
-        This function never raises exceptions. It logs warnings and returns False
-        on failure to avoid blocking new webhook registration.
-    """
-    url = "https://www.googleapis.com/calendar/v3/channels/stop"
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)",
-        "Content-Type": "application/json",
-    }
-
-    body = {
-        "id": channel_id,
-        "resourceId": resource_id,
-    }
-
-    try:
-        response = await http_client.post(url, headers=headers, json=body)
-
-        if response.status_code == 200:
-            logger.info(f"Webhook channel stopped successfully: {channel_id}")
-            return True
-
-        elif response.status_code == 404:
-            # Channel not found (already expired or invalid) - this is OK
-            logger.info(f"Webhook channel not found (already stopped/expired): {channel_id}")
-            return True
-
-        else:
-            logger.warning(
-                f"Failed to stop webhook channel {channel_id}: HTTP {response.status_code}"
-            )
-            return False
-
-    except Exception as e:
-        logger.warning(
-            f"Exception while stopping webhook channel {channel_id}: {type(e).__name__}"
-        )
-        return False
-
-
 async def register_webhook(
     http_client: httpx.AsyncClient,
     access_token: str,
@@ -202,7 +146,7 @@ async def register_webhook(
 
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)",
+        "User-Agent": GOOGLE_USER_AGENT,
         "Content-Type": "application/json",
     }
 
@@ -315,7 +259,7 @@ async def fetch_events(
     url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)",
+        "User-Agent": GOOGLE_USER_AGENT,
     }
     params = {
         "timeMin": time_min,
@@ -435,7 +379,7 @@ async def list_events(
     url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "User-Agent": "FocusedApp/1.0 (+https://www.priority-guard.com)",
+        "User-Agent": GOOGLE_USER_AGENT,
     }
 
     base_params = {
@@ -651,6 +595,7 @@ async def stop_webhook_channel(
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
+        "User-Agent": GOOGLE_USER_AGENT,
     }
 
     body = {
@@ -661,8 +606,8 @@ async def stop_webhook_channel(
     try:
         response = await http_client.post(stop_url, headers=headers, json=body)
 
-        # 204 No Content = success
-        if response.status_code == 204:
+        # 200 OK or 204 No Content = success
+        if response.status_code in (200, 204):
             logger.info(f"Webhook channel stopped: channel_id={channel_id}")
             return {"success": True, "error": None}
 

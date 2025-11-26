@@ -251,7 +251,7 @@ class MockGoogleWebhook:
     Separate from MockGoogleCalendar to avoid God-object anti-pattern.
     Handles:
     - register_webhook (events.watch)
-    - stop_webhook (channels.stop)
+    - stop_webhook_channel (channels.stop)
     - simulate_webhook (send test webhook to real endpoint)
     """
 
@@ -304,17 +304,17 @@ class MockGoogleWebhook:
             "expiration": str(expiration_ms),
         }
 
-    async def stop_webhook(
+    async def stop_webhook_channel(
         self,
         http_client,
         access_token: str,
         channel_id: str,
         resource_id: str,
-    ) -> bool:
+    ) -> dict:
         """
-        Mock for backend.core.google_calendar.stop_webhook.
+        Mock for backend.core.google_calendar.stop_webhook_channel.
 
-        Returns True if channel existed and was stopped, False otherwise.
+        Returns dict with success=True if channel existed and was stopped.
         """
         self.stop_calls.append({
             "channel_id": channel_id,
@@ -323,9 +323,9 @@ class MockGoogleWebhook:
 
         if channel_id in self.active_channels:
             del self.active_channels[channel_id]
-            return True
 
-        return True  # Google returns success even if channel not found
+        # Google returns success even if channel not found
+        return {"success": True, "error": None}
 
     def reset(self) -> None:
         """Reset all state for test isolation."""
@@ -344,10 +344,10 @@ def mock_webhook():
 @pytest.fixture
 def patch_google_webhook(mock_webhook):
     """
-    Patch register_webhook and stop_webhook at BOTH import locations.
+    Patch register_webhook and stop_webhook_channel at BOTH import locations.
 
     The watch_calendar_impl does:
-        from backend.core.google_calendar import register_webhook, stop_webhook
+        from backend.core.google_calendar import register_webhook, stop_webhook_channel
 
     So we must patch at both the definition and import locations.
     """
@@ -355,14 +355,14 @@ def patch_google_webhook(mock_webhook):
         "backend.apps.focused.tools.watch_calendar_impl.register_webhook",
         side_effect=mock_webhook.register_webhook
     ), patch(
-        "backend.apps.focused.tools.watch_calendar_impl.stop_webhook",
-        side_effect=mock_webhook.stop_webhook
+        "backend.apps.focused.tools.watch_calendar_impl.stop_webhook_channel",
+        side_effect=mock_webhook.stop_webhook_channel
     ), patch(
         "backend.core.google_calendar.register_webhook",
         side_effect=mock_webhook.register_webhook
     ), patch(
-        "backend.core.google_calendar.stop_webhook",
-        side_effect=mock_webhook.stop_webhook
+        "backend.core.google_calendar.stop_webhook_channel",
+        side_effect=mock_webhook.stop_webhook_channel
     ):
         yield mock_webhook
 

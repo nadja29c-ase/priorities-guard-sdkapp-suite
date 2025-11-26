@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
 from backend.core.redis_client import redis_client
+from backend.core.models import CoreUser
 from backend.apps.focused.logic.offboarding import disconnect_user, delete_user_data
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,11 @@ async def disconnect(
             )
         user_id = UUID(user_id_header)
 
+        # Validate user exists in database
+        user = await session.get(CoreUser, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
         http_client = request.app.state.http_client
 
         result = await disconnect_user(
@@ -68,6 +74,7 @@ async def disconnect(
                 "status": "disconnected",
                 "revoked_at": result["revoked_at"],
                 "already_disconnected": result.get("already_disconnected", False),
+                "details": result.get("details", {}),
             }
         else:
             raise HTTPException(status_code=500, detail="Disconnect failed")
@@ -120,6 +127,11 @@ async def delete_data(
             )
         user_id = UUID(user_id_header)
 
+        # Validate user exists in database
+        user = await session.get(CoreUser, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
         http_client = request.app.state.http_client
 
         result = await delete_user_data(
@@ -134,6 +146,7 @@ async def delete_data(
                 "status": "deleted",
                 "tables_affected": result["tables_affected"],
                 "rows_deleted": result["rows_deleted"],
+                "audit_log_id": result["audit_log_id"],
             }
         else:
             raise HTTPException(status_code=500, detail="Delete failed")

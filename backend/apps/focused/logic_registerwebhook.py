@@ -16,7 +16,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.google_calendar import register_webhook, stop_webhook
+from backend.core.google_calendar import register_webhook, stop_webhook_channel
 from backend.core.models import CoreConnection
 
 from .logic_googletokens import ensure_valid_access_token
@@ -78,15 +78,16 @@ async def register_calendar_webhook(
     # -----------------------------------------------------------
     if connection.google_channel_id and connection.google_resource_id:
         logger.info(f"Stopping existing webhook channel: {connection.google_channel_id}")
-        stop_success = await stop_webhook(
+        stop_result = await stop_webhook_channel(
             http_client=http_client,
             access_token=access_token,
             channel_id=connection.google_channel_id,
             resource_id=connection.google_resource_id,
         )
-        if not stop_success:
+        if not stop_result["success"]:
             logger.warning(
-                f"Failed to stop existing channel {connection.google_channel_id}, continuing with new registration"
+                f"Failed to stop existing channel {connection.google_channel_id}: "
+                f"{stop_result.get('error')}, continuing with new registration"
             )
         # Continue regardless of stop result
 

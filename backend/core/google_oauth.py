@@ -192,6 +192,19 @@ async def exchange_code(code: str, http_client: httpx.AsyncClient) -> dict[str, 
             scope_string = token_data.get("scope", "")
             scopes = scope_string.split() if scope_string else []
 
+            # Validate required scope was granted
+            # Google can return fewer scopes than requested - this breaks the app silently
+            required_scope = "https://www.googleapis.com/auth/calendar.readonly"
+            if required_scope not in scopes:
+                logger.error(
+                    f"Missing required Google scope: {required_scope}. "
+                    f"Granted scopes: {scopes}"
+                )
+                raise ValueError(
+                    f"Missing required Google scope: calendar.readonly. "
+                    f"User must grant calendar access to use this app."
+                )
+
             return {
                 "access_token": token_data["access_token"],
                 "refresh_token": token_data.get("refresh_token"),

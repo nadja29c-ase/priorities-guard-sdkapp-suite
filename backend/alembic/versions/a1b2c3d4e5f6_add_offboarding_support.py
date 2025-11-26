@@ -103,6 +103,14 @@ def upgrade() -> None:
         'core_tool_audit_log',
         ['created_at']
     )
+    # Future optimization: Add composite index for user audit history queries
+    # SELECT * FROM core_tool_audit_log WHERE user_id = X ORDER BY created_at DESC
+    # op.create_index(
+    #     'idx_audit_log_user_created',
+    #     'core_tool_audit_log',
+    #     ['user_id', 'created_at']
+    # )
+    # Deferred until audit log volume justifies the write overhead.
 
 
 def downgrade() -> None:

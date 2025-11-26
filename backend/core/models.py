@@ -104,11 +104,12 @@ class CoreConnection(Base):
         DateTime(timezone=True), nullable=False
     )
 
-    scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False) #All scopes authorized by the user (f.e. calendar.readyonly)
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False)  # All scopes authorized by the user (e.g. calendar.readonly)
 
-    provider_metadata: Mapped[dict | None] = mapped_column(
+    provider_metadata: Mapped[dict] = mapped_column(
         JSON,
-        nullable=True,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
         comment="Provider-specific metadata (flexible storage for future fields)"
     )
 
@@ -177,17 +178,29 @@ class CoreConnection(Base):
     )
 
     __table_args__ = (  # Table-level constraints and indexes
+        # For outbound OAuth (user connects to Google/Apple)
         UniqueConstraint("user_id", "provider", name="uq_user_provider"),
+        # For inbound OAuth provider (ChatGPT connects to us) - supports multi-app suite
+        UniqueConstraint("provider", "client_id", name="uq_provider_client"),
         UniqueConstraint("client_id", name="uq_client_id"),
+        # Restrict connection_type to valid values only
+        CheckConstraint(
+            "connection_type IN ('google', 'apple', 'oauth_provider', 'unknown')",
+            name="ck_connection_type_enum"
+        ),
         # Conditional constraint: oauth_provider connections can have empty encrypted_access_token
         CheckConstraint(
             "(connection_type = 'oauth_provider') OR (length(encrypted_access_token) > 0)",
             name="ck_encrypted_access_token_conditional"
         ),
+        # Note: No constraint on client_secret_enc for oauth_provider - enforced in application logic
+        # (client_service.py sets client_secret_enc atomically during registration)
         CheckConstraint("(encrypted_refresh_token IS NULL) OR (length(encrypted_refresh_token) > 0)", name="ck_encrypted_refresh_token_not_empty"),
         CheckConstraint("cardinality(scopes) > 0", name="ck_scopes_not_empty"),
         Index("ix_user_provider", "user_id", "provider"),
         Index("ix_token_expires", "token_expires_at"),
+        # TODO: Used by webhook renewal query (Celery task, future increment):
+        # SELECT * FROM core_connections WHERE google_channel_expires_at < NOW() + interval '48 hours'
         Index("ix_channel_expires", "google_channel_expires_at"),
         Index("ix_client_id", "client_id"),
     )
@@ -222,7 +235,8 @@ class CoreToolAuditLog(Base):
     user_id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True),
         nullable=False,
-        comment="User who performed or was affected by the action"
+        comment="User who performed or was affected by the action. "
+                "Intentionally NOT a FK - audit logs must persist after user deletion for GDPR compliance."
     )
 
     app_name: Mapped[str] = mapped_column(

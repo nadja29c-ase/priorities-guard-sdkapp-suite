@@ -5,7 +5,7 @@ Tests the complete webhook lifecycle using:
 - REAL DB + REAL Redis (isolated via env prefix "test:")
 - REAL webhook processing logic (NO internal mocking)
 - REAL token encryption/decryption
-- ONLY mock: Google Calendar webhook API (register_webhook, stop_webhook)
+- ONLY mock: Google Calendar webhook API (register_webhook, stop_webhook_channel)
 
 Test Categories:
 - Test 1: Fresh webhook registration

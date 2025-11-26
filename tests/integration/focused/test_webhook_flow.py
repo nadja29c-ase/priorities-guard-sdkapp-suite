@@ -2,7 +2,7 @@
 Test script for webhook registration functionality (Increment 4).
 
 Tests:
-- Webhook registration (register_webhook, stop_webhook)
+- Webhook registration (register_webhook, stop_webhook_channel)
 - register_calendar_webhook integration
 - Webhook receiver endpoint validation
 - Error handling for various failure scenarios
@@ -15,7 +15,7 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from backend.core.google_calendar import register_webhook, stop_webhook
+from backend.core.google_calendar import register_webhook, stop_webhook_channel
 from backend.apps.focused.logic import register_calendar_webhook
 from backend.core.database import AsyncSessionLocal
 from backend.core.models import CoreConnection
@@ -23,31 +23,32 @@ from backend.core.encryption import encrypt_token
 
 
 # ---------------------------------------------------------------------
-# Test stop_webhook() function
+# Test stop_webhook_channel() function
 # ---------------------------------------------------------------------
 
-async def test_stop_webhook_success():
-    """Test successful channel stop (200 OK)."""
+async def test_stop_webhook_channel_success():
+    """Test successful channel stop (204 No Content)."""
     print("\n0. Testing successful channel stop...")
 
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_response = Mock()
-    mock_response.status_code = 200
+    mock_response.status_code = 204
     mock_client.post.return_value = mock_response
 
-    result = await stop_webhook(
+    result = await stop_webhook_channel(
         http_client=mock_client,
         access_token="test_access_token",
         channel_id="test_channel_123",
         resource_id="test_resource_456"
     )
 
-    assert result is True
-    print("✓ Successful channel stop returns True")
+    assert result["success"] is True
+    assert result["error"] is None
+    print("✓ Successful channel stop returns success=True")
 
 
-async def test_stop_webhook_404():
-    """Test channel not found (404) - should return True."""
+async def test_stop_webhook_channel_404():
+    """Test channel not found (404) - should return success=True."""
     print("\n0b. Testing channel not found (404)...")
 
     mock_client = AsyncMock(spec=httpx.AsyncClient)
@@ -55,33 +56,35 @@ async def test_stop_webhook_404():
     mock_response.status_code = 404
     mock_client.post.return_value = mock_response
 
-    result = await stop_webhook(
+    result = await stop_webhook_channel(
         http_client=mock_client,
         access_token="test_access_token",
         channel_id="nonexistent_channel",
         resource_id="test_resource"
     )
 
-    assert result is True
-    print("✓ Channel not found returns True (already stopped/expired)")
+    assert result["success"] is True
+    assert result["error"] is None
+    print("✓ Channel not found returns success=True (already stopped/expired)")
 
 
-async def test_stop_webhook_network_error():
-    """Test network error - should return False but not raise."""
-    print("\n0c. Testing stop_webhook network error handling...")
+async def test_stop_webhook_channel_network_error():
+    """Test network error - should return success=False but not raise."""
+    print("\n0c. Testing stop_webhook_channel network error handling...")
 
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_client.post.side_effect = httpx.RequestError("Network error")
 
-    result = await stop_webhook(
+    result = await stop_webhook_channel(
         http_client=mock_client,
         access_token="test_access_token",
         channel_id="test_channel",
         resource_id="test_resource"
     )
 
-    assert result is False
-    print("✓ Network error returns False without raising exception")
+    assert result["success"] is False
+    assert result["error"] is not None
+    print("✓ Network error returns success=False without raising exception")
 
 
 # ---------------------------------------------------------------------
@@ -559,10 +562,10 @@ async def run_all_tests():
     print("=" * 70)
 
     try:
-        # Unit tests for stop_webhook()
-        await test_stop_webhook_success()
-        await test_stop_webhook_404()
-        await test_stop_webhook_network_error()
+        # Unit tests for stop_webhook_channel()
+        await test_stop_webhook_channel_success()
+        await test_stop_webhook_channel_404()
+        await test_stop_webhook_channel_network_error()
 
         # Unit tests for register_webhook()
         await test_register_webhook_success()
@@ -583,7 +586,7 @@ async def run_all_tests():
         print("✅ ALL TESTS PASSED!")
         print("=" * 70)
         print("\nWebhook registration functionality is working correctly:")
-        print("  ✓ stop_webhook() handles all scenarios correctly")
+        print("  ✓ stop_webhook_channel() handles all scenarios correctly")
         print("  ✓ register_webhook() handles all status codes correctly")
         print("  ✓ Retry logic works with exponential backoff")
         print("  ✓ First registration works")

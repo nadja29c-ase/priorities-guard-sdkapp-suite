@@ -137,6 +137,11 @@ async def disconnect_user(
         except Exception as e:
             logger.warning(f"[offboarding] Google token revoke error for user {user_id}: {e}")
             # Continue - non-blocking
+    else:
+        logger.info(
+            f"[offboarding] No refresh token to revoke for user {user_id}, "
+            f"access token will expire naturally (max 1 hour)"
+        )
 
     # 4. Mark ChatGPT OAuth tokens as revoked (Focused-scoped only)
     now = datetime.now(timezone.utc)
