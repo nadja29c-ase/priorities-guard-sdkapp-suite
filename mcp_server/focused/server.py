@@ -260,38 +260,77 @@ async def watch_calendar(
 @mcp.tool()
 @handle_mcp_errors("run_focus_mode")
 async def run_focus_mode(
+    action: str,
+    trigger_source: str,
+    session_id: str | None = None,
+    focus_name: str | None = None,
+    duration_minutes: int | None = None,
+    user_confirmation: bool | None = None,
     meta: Optional[Dict[str, Any]] = None
 ) -> str:
     """
-    Activate Apple Focus Mode (stub for future implementation).
+    Activate or deactivate Apple Focus Mode via iOS Shortcuts.
 
     Requires OAuth scope: focused.write
 
+    This tool generates a shortcut:// URL that the ChatGPT client
+    should open to trigger Apple Focus Mode on the user's device.
+
+    One active session per user rule:
+    - Must deactivate before re-activating
+    - Returns "already_active" if trying to activate when already active
+
     Args:
+        action: "on" to activate, "off" to deactivate
+        trigger_source: "calendar" (from detected event) or "user" (manual)
+        session_id: Focus session UUID (required for calendar-triggered)
+        focus_name: Focus mode name (e.g., "Work", "Do Not Disturb")
+        duration_minutes: Auto-deactivate after this many minutes (1-480)
+        user_confirmation: User confirmed activation (required for action="on")
         meta: Request metadata (headers, correlation_id)
 
     Returns:
-        JSON string with error indicating not implemented
+        JSON string with:
+        - shortcut_status: "success" | "failed" | "already_active" | "already_inactive"
+        - shortcut_url: URL for ChatGPT client to open
+        - focus_name: The focus mode name used
+        - start_time: ISO 8601 timestamp
+        - end_time: ISO 8601 timestamp | None
+        - message: Human-readable status message
     """
     tool_name = "run_focus_mode"
 
-    # Authenticate request (enforces focused.write scope)
+    # Authenticate request and extract user identity
     auth_context = await authenticate_request(tool_name, meta)
 
+    user_id = auth_context["user_id"]
     correlation_id = auth_context["correlation_id"]
 
     logger.info(
-        "tool.run_focus_mode.not_implemented",
+        "tool.run_focus_mode.start",
+        correlation_id=correlation_id,
+        user_id=user_id,
+        action=action,
+        trigger_source=trigger_source,
+    )
+
+    # Forward request to backend API with identity headers
+    response = await backend_post(
+        "/api/focused/tools/run_focus_mode",
+        {
+            "action": action,
+            "trigger_source": trigger_source,
+            "session_id": session_id,
+            "focus_name": focus_name,
+            "duration_minutes": duration_minutes,
+            "user_confirmation": user_confirmation,
+        },
+        user_id=user_id,
         correlation_id=correlation_id
     )
 
-    return json.dumps({
-        "success": False,
-        "error": {
-            "code": "NOT_IMPLEMENTED",
-            "message": "run_focus_mode is not yet implemented"
-        }
-    })
+    # Backend already returns {success: bool, data/error: ...}
+    return json.dumps(response)
 
 
 @mcp.tool()

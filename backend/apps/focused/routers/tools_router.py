@@ -16,9 +16,11 @@ from backend.apps.focused.models.requests import (
     CheckCalendarRequest,
     WatchCalendarRequest,
     SyncCalendarRequest,
+    RunFocusModeRequest,
 )
 from backend.apps.focused.tools.check_calendar_impl import check_calendar_impl
 from backend.apps.focused.tools.watch_calendar_impl import register_calendar_webhook
+from backend.apps.focused.tools.run_focus_mode_impl import run_focus_mode_impl
 from backend.apps.focused.logic.sync.orchestrator import sync_calendar_events
 from backend.apps.focused.utils.user_id_extraction import extract_user_id
 
@@ -257,5 +259,103 @@ async def sync_calendar(
             "error": {
                 "code": "INTERNAL_ERROR",
                 "message": "An unexpected error occurred during sync",
+            },
+        }
+
+
+# ---------------------------------------------------------------------
+# Run Focus Mode — Activate/deactivate Apple Focus Mode (Increment 11)
+# ---------------------------------------------------------------------
+@router.post("/run_focus_mode")
+async def run_focus_mode(
+    payload: RunFocusModeRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Activate or deactivate Apple Focus Mode via iOS Shortcuts URL scheme.
+
+    This endpoint:
+    - Generates a shortcut:// URL for the ChatGPT client to open
+    - Updates database state (actual_start, actual_end)
+    - Optionally schedules auto-deactivation via Celery
+
+    The backend generates shortcut_url but does NOT invoke it.
+    ChatGPT client opens the URL on user's device.
+
+    Identity Source (Increment 7D):
+        - Primary: X-User-ID header (from MCP after JWT validation)
+        - No fallback (user_id is required for focus mode)
+
+    Request Body:
+        - action: "on" or "off"
+        - trigger_source: "calendar" or "user"
+        - session_id: UUID (required for calendar-triggered)
+        - focus_name: Focus mode name (optional, default "Work")
+        - duration_minutes: Auto-deactivate after N minutes (optional)
+        - user_confirmation: Required for action="on"
+
+    Returns:
+        {
+            "success": True,
+            "data": {
+                "shortcut_status": "success" | "failed" | "already_active" | "already_inactive",
+                "shortcut_url": "shortcuts://...",
+                "focus_name": "Work",
+                "start_time": "2025-11-26T10:00:00Z",
+                "end_time": "2025-11-26T12:00:00Z" | null,
+                "message": "Focus Mode activated successfully.",
+                "error_details": null
+            }
+        }
+    """
+    try:
+        # Extract user_id from X-User-ID header (no fallback)
+        user_id = extract_user_id(request, None, "run_focus_mode")
+
+        result = await run_focus_mode_impl(
+            user_id=user_id,
+            action=payload.action,
+            session=session,
+            trigger_source=payload.trigger_source,
+            session_id=payload.session_id,
+            focus_name=payload.focus_name,
+            duration_minutes=payload.duration_minutes,
+            user_confirmation=payload.user_confirmation,
+        )
+
+        # Check shortcut_status for success/failure
+        if result.get("shortcut_status") == "failed":
+            return {
+                "success": False,
+                "error": {
+                    "code": "FOCUS_MODE_FAILED",
+                    "message": result.get("message", "Failed to run focus mode"),
+                    "details": result.get("error_details"),
+                },
+            }
+
+        return {
+            "success": True,
+            "data": result,
+        }
+
+    except ValueError as e:
+        logger.error(f"Validation error in run_focus_mode: {e}")
+        return {
+            "success": False,
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": str(e),
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Unexpected error in run_focus_mode: {e}")
+        return {
+            "success": False,
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
             },
         }

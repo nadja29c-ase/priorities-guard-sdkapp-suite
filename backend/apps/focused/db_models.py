@@ -6,7 +6,8 @@ This module is only for Focused-specific tables.
 
 Currently:
 - FocusedUserKeyword: custom focus keywords added by a user
-- FocusedFocusSession: calendar events with focus block detection
+- FocusedFocusSession: calendar events with focus block detection + focus mode tracking
+- FocusedScheduledJob: scheduled Celery tasks (auto-deactivation, etc.)
 
 System default keywords (e.g. "focus", "deep work") are defined in
 backend.apps.focused.config and are NOT stored here.
@@ -29,7 +30,7 @@ from sqlalchemy import (
     Text,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
+from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -112,13 +113,18 @@ class FocusedFocusSession(Base):
     This table supports both immediate Focus Mode triggering
     and medium-term analysis of user focus behavior.
 
-    Example:
+    Increment 11 additions:
+    - actual_start: When user activated focus mode
+    - actual_end: When user deactivated focus mode
+    - trigger_source: 'calendar' (from detected event) or 'user' (manual)
+    - google_event_id/google_ical_uid now nullable (for manual sessions)
+
+    Example (calendar-triggered):
         session = FocusedFocusSession(
             user_id=UUID("..."),
             google_event_id="abc123",
             google_calendar_id="primary",
             event_summary="Deep Work Session",
-            event_description="Focus on project",
             google_updated_at=datetime.now(timezone.utc),
             start_time=datetime.now(timezone.utc),
             end_time=datetime.now(timezone.utc) + timedelta(hours=2),
@@ -126,6 +132,21 @@ class FocusedFocusSession(Base):
             matched_keyword="deep work",
             sha256_content_hash="...",
             google_ical_uid="abc123@google.com",
+            trigger_source="calendar",
+        )
+
+    Example (manual):
+        session = FocusedFocusSession(
+            user_id=UUID("..."),
+            google_event_id=None,  # Manual session
+            google_calendar_id="primary",
+            start_time=datetime.now(timezone.utc),
+            end_time=datetime.now(timezone.utc) + timedelta(hours=2),
+            is_focus_block=True,
+            sha256_content_hash="...",
+            google_ical_uid=None,  # Manual session
+            trigger_source="user",
+            actual_start=datetime.now(timezone.utc),
         )
     """
 
@@ -148,10 +169,11 @@ class FocusedFocusSession(Base):
     )
 
     # Google Calendar metadata
-    google_event_id: Mapped[str] = mapped_column(
+    # NOTE: Nullable for manual sessions (trigger_source='user')
+    google_event_id: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
-        comment="Google's event.id",
+        nullable=True,
+        comment="Google's event.id (NULL for manual sessions)",
     )
 
     google_calendar_id: Mapped[str] = mapped_column(
@@ -161,16 +183,17 @@ class FocusedFocusSession(Base):
         comment="Calendar source",
     )
 
-    google_ical_uid: Mapped[str] = mapped_column(
+    # NOTE: Nullable for manual sessions (trigger_source='user')
+    google_ical_uid: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
-        comment="iCalendar UID (stable across updates, groups recurring instances)",
+        nullable=True,
+        comment="iCalendar UID (NULL for manual sessions)",
     )
 
-    google_updated_at: Mapped[datetime] = mapped_column(
+    google_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
-        comment="Google's last modified timestamp (for conflict detection)",
+        nullable=True,
+        comment="Google's last modified timestamp (NULL for manual sessions)",
     )
 
     # Event content
@@ -243,7 +266,35 @@ class FocusedFocusSession(Base):
         comment="Last sync from Google (manually set after successful sync, no defaults)",
     )
 
+    # =========================================================================
+    # Increment 11: Focus Mode Activation Tracking
+    # =========================================================================
+
+    # When user actually activated focus mode
+    actual_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When user actually activated focus mode (UTC)",
+    )
+
+    # When user deactivated focus mode
+    actual_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When user deactivated focus mode (UTC)",
+    )
+
+    # How the focus session was triggered
+    trigger_source: Mapped[str | None] = mapped_column(
+        Enum("calendar", "user", name="trigger_source_enum", create_type=False),
+        nullable=True,
+        comment="How the focus session was triggered ('calendar' or 'user')",
+    )
+
+    # =========================================================================
     # Audit timestamps
+    # =========================================================================
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -268,6 +319,7 @@ class FocusedFocusSession(Base):
     # Table-level constraints and indexes
     __table_args__ = (
         # Unique constraint: one row per (user, event, calendar)
+        # NOTE: Only applies when google_event_id is NOT NULL
         UniqueConstraint(
             "user_id",
             "google_event_id",
@@ -315,12 +367,19 @@ class FocusedFocusSession(Base):
         ),
         # Index: google_ical_uid for recurring event queries
         Index("idx_focus_sessions_ical_uid", "google_ical_uid"),
+        # Index: active focus sessions (Increment 11)
+        Index(
+            "idx_focus_sessions_active",
+            "user_id",
+            postgresql_where=text("actual_start IS NOT NULL AND actual_end IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:
         return (
             f"<FocusedFocusSession id={self.id}, user_id={self.user_id}, "
-            f"google_event_id={self.google_event_id!r}, is_focus_block={self.is_focus_block}>"
+            f"google_event_id={self.google_event_id!r}, is_focus_block={self.is_focus_block}, "
+            f"trigger_source={self.trigger_source}>"
         )
 
     def validate(self) -> None:
@@ -330,25 +389,39 @@ class FocusedFocusSession(Base):
         Raises:
             ValueError: If validation fails
         """
-        # Validate google_event_id
-        if not self.google_event_id or len(self.google_event_id) > 255:
-            raise ValueError("google_event_id must be 1-255 characters")
+        from datetime import timedelta
 
-        # Validate google_ical_uid
-        if not self.google_ical_uid or len(self.google_ical_uid) > 255:
-            raise ValueError("google_ical_uid is required and must be 1-255 characters")
+        # For calendar-triggered sessions, Google fields are required
+        if self.trigger_source == "calendar":
+            if not self.google_event_id or len(self.google_event_id) > 255:
+                raise ValueError(
+                    "google_event_id must be 1-255 characters for calendar-triggered sessions"
+                )
+            if not self.google_ical_uid or len(self.google_ical_uid) > 255:
+                raise ValueError(
+                    "google_ical_uid is required for calendar-triggered sessions"
+                )
+            if not self.google_updated_at:
+                raise ValueError(
+                    "google_updated_at is required for calendar-triggered sessions"
+                )
 
-        # Validate google_updated_at
-        if not self.google_updated_at:
-            raise ValueError("google_updated_at is required")
+        # For manual sessions, Google fields should be NULL
+        if self.trigger_source == "user":
+            if self.google_event_id is not None:
+                raise ValueError(
+                    "google_event_id must be NULL for manual sessions"
+                )
+            if self.google_ical_uid is not None:
+                raise ValueError(
+                    "google_ical_uid must be NULL for manual sessions"
+                )
 
         # Validate event_description length (Google Calendar limit)
         if self.event_description and len(self.event_description) > 8192:
             raise ValueError("event_description must be <= 8192 characters")
 
         # Validate timezone awareness (CRITICAL: UTC only, no naive datetimes)
-        from datetime import timedelta
-
         if self.start_time.tzinfo is None or self.start_time.utcoffset() is None:
             raise ValueError("start_time must be timezone-aware (UTC)")
         if self.start_time.utcoffset() != timedelta(0):
@@ -359,10 +432,23 @@ class FocusedFocusSession(Base):
         if self.end_time.utcoffset() != timedelta(0):
             raise ValueError("end_time must be UTC (offset must be 0)")
 
-        if self.google_updated_at.tzinfo is None or self.google_updated_at.utcoffset() is None:
-            raise ValueError("google_updated_at must be timezone-aware (UTC)")
-        if self.google_updated_at.utcoffset() != timedelta(0):
-            raise ValueError("google_updated_at must be UTC (offset must be 0)")
+        if self.google_updated_at:
+            if self.google_updated_at.tzinfo is None or self.google_updated_at.utcoffset() is None:
+                raise ValueError("google_updated_at must be timezone-aware (UTC)")
+            if self.google_updated_at.utcoffset() != timedelta(0):
+                raise ValueError("google_updated_at must be UTC (offset must be 0)")
+
+        if self.actual_start:
+            if self.actual_start.tzinfo is None or self.actual_start.utcoffset() is None:
+                raise ValueError("actual_start must be timezone-aware (UTC)")
+            if self.actual_start.utcoffset() != timedelta(0):
+                raise ValueError("actual_start must be UTC (offset must be 0)")
+
+        if self.actual_end:
+            if self.actual_end.tzinfo is None or self.actual_end.utcoffset() is None:
+                raise ValueError("actual_end must be timezone-aware (UTC)")
+            if self.actual_end.utcoffset() != timedelta(0):
+                raise ValueError("actual_end must be UTC (offset must be 0)")
 
         # Validate timing order
         if self.start_time >= self.end_time:
@@ -383,3 +469,173 @@ class FocusedFocusSession(Base):
         # Validate version
         if self.version is not None and self.version < 1:
             raise ValueError("version must be >= 1")
+
+        # Validate trigger_source
+        if self.trigger_source and self.trigger_source not in ("calendar", "user"):
+            raise ValueError("trigger_source must be 'calendar' or 'user'")
+
+    def is_active(self) -> bool:
+        """Check if focus mode is currently active for this session."""
+        return self.actual_start is not None and self.actual_end is None
+
+
+class FocusedScheduledJob(Base):
+    """
+    Scheduled Celery tasks for the Focused app.
+
+    Used for:
+    - Auto-deactivation of focus mode after duration expires
+    - Webhook renewal tasks
+    - Other time-based background jobs
+
+    Retention: Jobs with status 'completed', 'failed', or 'cancelled' are
+    deleted after 7 days by a cleanup task.
+
+    Example:
+        job = FocusedScheduledJob(
+            user_id=UUID("..."),
+            job_type="focus_deactivate",
+            scheduled_at=datetime.now(timezone.utc) + timedelta(hours=2),
+            payload={"session_id": str(session.id)},
+        )
+    """
+
+    __tablename__ = "focused_scheduled_jobs"
+
+    # Primary key
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+        comment="Internal identifier",
+    )
+
+    # Foreign key to core_users
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("core_users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="User who owns this job",
+    )
+
+    # Job type
+    job_type: Mapped[str] = mapped_column(
+        Enum("focus_deactivate", "webhook_renewal", name="job_type_enum", create_type=False),
+        nullable=False,
+        comment="Type of scheduled job",
+    )
+
+    # When the job should execute
+    scheduled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="When the job should execute (UTC)",
+    )
+
+    # Job status
+    status: Mapped[str] = mapped_column(
+        Enum("pending", "completed", "failed", "cancelled", name="job_status_enum", create_type=False),
+        nullable=False,
+        server_default=text("'pending'"),
+        default="pending",
+        comment="Current job status",
+    )
+
+    # Celery task ID for tracking
+    celery_task_id: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        comment="Celery task ID for this job",
+    )
+
+    # Retry tracking
+    retry_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+        default=0,
+        comment="Number of retry attempts",
+    )
+
+    # Job-specific payload (e.g., session_id for deactivation)
+    payload: Mapped[dict] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default=text("'{}'::jsonb"),
+        default=dict,
+        comment="Job-specific parameters (session_id, etc.)",
+    )
+
+    # Audit timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When job was created",
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="When job was last updated",
+    )
+
+    # Table-level indexes
+    __table_args__ = (
+        # Index for finding pending jobs by scheduled time
+        Index(
+            "idx_scheduled_jobs_pending",
+            "scheduled_at",
+            postgresql_where=text("status = 'pending'"),
+        ),
+        # Index for cleanup (find old completed/failed/cancelled jobs)
+        Index(
+            "idx_scheduled_jobs_cleanup",
+            "updated_at",
+            postgresql_where=text("status IN ('completed', 'failed', 'cancelled')"),
+        ),
+        # Index for user's jobs
+        Index("idx_scheduled_jobs_user", "user_id", "status"),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<FocusedScheduledJob id={self.id}, user_id={self.user_id}, "
+            f"job_type={self.job_type}, status={self.status}, "
+            f"scheduled_at={self.scheduled_at}>"
+        )
+
+    def validate(self) -> None:
+        """
+        Validate model constraints.
+
+        Raises:
+            ValueError: If validation fails
+        """
+        from datetime import timedelta
+
+        # Validate job_type
+        valid_job_types = ("focus_deactivate", "webhook_renewal")
+        if self.job_type not in valid_job_types:
+            raise ValueError(f"job_type must be one of {valid_job_types}")
+
+        # Validate status
+        valid_statuses = ("pending", "completed", "failed", "cancelled")
+        if self.status not in valid_statuses:
+            raise ValueError(f"status must be one of {valid_statuses}")
+
+        # Validate scheduled_at is timezone-aware UTC
+        if self.scheduled_at.tzinfo is None or self.scheduled_at.utcoffset() is None:
+            raise ValueError("scheduled_at must be timezone-aware (UTC)")
+        if self.scheduled_at.utcoffset() != timedelta(0):
+            raise ValueError("scheduled_at must be UTC (offset must be 0)")
+
+        # Validate retry_count is non-negative
+        if self.retry_count < 0:
+            raise ValueError("retry_count must be >= 0")
+
+        # Validate payload is a dict
+        if not isinstance(self.payload, dict):
+            raise ValueError("payload must be a dictionary")

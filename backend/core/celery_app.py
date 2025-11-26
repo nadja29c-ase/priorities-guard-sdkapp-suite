@@ -116,6 +116,19 @@ celery_app.conf.beat_schedule = {
             "retry_backoff_max": 600,  # Max 10 minutes between retries
         }
     },
+    # Scheduled jobs cleanup (Increment 11)
+    "cleanup-scheduled-jobs-daily": {
+        "task": "backend.core.celery_app.cleanup_scheduled_jobs",
+        "schedule": crontab(minute=0, hour=3),  # Daily at 3:00 AM UTC
+        "options": {
+            "queue": "focused",
+            "priority": 8,  # Lower priority than critical tasks
+            "expires": 86400,  # 24 hours
+            "max_retries": 3,
+            "retry_backoff": True,
+            "retry_backoff_max": 600,
+        }
+    },
 }
 
 
@@ -184,6 +197,230 @@ def cleanup_event_descriptions(self):
     except Exception as e:
         logger.error(f"[celery] Description cleanup failed: {e}")
         # Retry with exponential backoff (max 3 attempts)
+        raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+
+
+# ---------------------------------------------------------------------
+# Auto-Deactivate Focus Mode Task (Increment 11)
+# ---------------------------------------------------------------------
+@celery_app.task(
+    name="backend.core.celery_app.auto_deactivate_focus",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+)
+def auto_deactivate_focus(self, user_id: str, session_id: str, job_id: str):
+    """
+    Celery task: Auto-deactivate focus mode after duration expires.
+
+    Called when a user activates focus mode with duration_minutes.
+    The task:
+    1. Loads the focus session by (user_id, session_id)
+    2. If actual_end IS NULL: sets actual_end = now (closes the session)
+    3. If actual_end already set: no-op (idempotent)
+    4. Updates the scheduled job status to 'completed'
+
+    NOTE: This task only updates DB state. It does NOT generate or deliver
+    shortcut_url - that requires notify_user() which is Increment 12+.
+
+    Args:
+        user_id: User UUID string
+        session_id: Focus session UUID string
+        job_id: Scheduled job UUID string
+
+    Returns:
+        Dictionary with result status
+    """
+    logger.info(
+        f"[celery] Auto-deactivate focus task started: "
+        f"user_id={user_id}, session_id={session_id}, job_id={job_id}"
+    )
+
+    try:
+        from datetime import datetime, timezone
+        from uuid import UUID
+
+        from sqlalchemy import select, update
+
+        from backend.apps.focused.db_models import FocusedFocusSession, FocusedScheduledJob
+        from backend.core.database import AsyncSessionLocal
+
+        async def run_deactivation():
+            async with AsyncSessionLocal() as session:
+                # Parse UUIDs
+                try:
+                    user_uuid = UUID(user_id)
+                    session_uuid = UUID(session_id)
+                    job_uuid = UUID(job_id)
+                except ValueError as e:
+                    logger.error(f"[celery] Invalid UUID format: {e}")
+                    return {"success": False, "error": "invalid_uuid"}
+
+                # Load focus session
+                stmt = select(FocusedFocusSession).where(
+                    FocusedFocusSession.id == session_uuid,
+                    FocusedFocusSession.user_id == user_uuid,
+                )
+                result = await session.execute(stmt)
+                focus_session = result.scalar_one_or_none()
+
+                if not focus_session:
+                    logger.warning(
+                        f"[celery] Focus session not found: session_id={session_id}"
+                    )
+                    # Still mark job as completed (session may have been deleted)
+                    await _mark_job_status(session, job_uuid, "completed")
+                    await session.commit()
+                    return {"success": True, "status": "session_not_found"}
+
+                # Check if already deactivated (idempotent)
+                if focus_session.actual_end is not None:
+                    logger.info(
+                        f"[celery] Focus session already deactivated: session_id={session_id}"
+                    )
+                    await _mark_job_status(session, job_uuid, "completed")
+                    await session.commit()
+                    return {"success": True, "status": "already_deactivated"}
+
+                # Deactivate the session
+                now = datetime.now(timezone.utc)
+                focus_session.actual_end = now
+
+                # Mark job as completed
+                await _mark_job_status(session, job_uuid, "completed")
+
+                await session.commit()
+
+                logger.info(
+                    f"[celery] Focus session deactivated: session_id={session_id}"
+                )
+                return {"success": True, "status": "deactivated"}
+
+        async def _mark_job_status(session, job_uuid, status):
+            """Update scheduled job status."""
+            stmt = (
+                update(FocusedScheduledJob)
+                .where(FocusedScheduledJob.id == job_uuid)
+                .values(status=status)
+            )
+            await session.execute(stmt)
+
+        # Run async function in sync context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_deactivation())
+
+        logger.info(f"[celery] Auto-deactivate task completed: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"[celery] Auto-deactivate focus failed: {e}")
+
+        # Try to mark job as failed
+        try:
+            from uuid import UUID
+            from sqlalchemy import update
+            from backend.apps.focused.db_models import FocusedScheduledJob
+            from backend.core.database import AsyncSessionLocal
+
+            async def mark_failed():
+                async with AsyncSessionLocal() as session:
+                    stmt = (
+                        update(FocusedScheduledJob)
+                        .where(FocusedScheduledJob.id == UUID(job_id))
+                        .values(
+                            status="failed",
+                            retry_count=FocusedScheduledJob.retry_count + 1,
+                        )
+                    )
+                    await session.execute(stmt)
+                    await session.commit()
+
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            loop.run_until_complete(mark_failed())
+        except Exception as inner_e:
+            logger.error(f"[celery] Failed to mark job as failed: {inner_e}")
+
+        # Retry with exponential backoff
+        raise self.retry(exc=e, countdown=30 * (2 ** self.request.retries))
+
+
+# ---------------------------------------------------------------------
+# Cleanup Scheduled Jobs Task (Increment 11)
+# ---------------------------------------------------------------------
+@celery_app.task(
+    name="backend.core.celery_app.cleanup_scheduled_jobs",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+)
+def cleanup_scheduled_jobs(self):
+    """
+    Celery periodic task: Delete old scheduled jobs.
+
+    Retention policy (per Increment 11 spec):
+    - Jobs with status IN ('completed', 'failed', 'cancelled')
+    - Where updated_at < NOW() - INTERVAL '7 days'
+
+    Runs daily at 3:00 AM UTC.
+    """
+    logger.info("[celery] Starting scheduled jobs cleanup task")
+
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import delete
+
+        from backend.apps.focused.db_models import FocusedScheduledJob
+        from backend.core.database import AsyncSessionLocal
+
+        async def run_cleanup():
+            async with AsyncSessionLocal() as session:
+                cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+
+                stmt = delete(FocusedScheduledJob).where(
+                    FocusedScheduledJob.status.in_(["completed", "failed", "cancelled"]),
+                    FocusedScheduledJob.updated_at < cutoff,
+                )
+
+                result = await session.execute(stmt)
+                deleted_count = result.rowcount
+                await session.commit()
+
+                return deleted_count
+
+        # Run async function in sync context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        deleted_count = loop.run_until_complete(run_cleanup())
+
+        logger.info(f"[celery] Scheduled jobs cleanup completed: {deleted_count} deleted")
+        return deleted_count
+
+    except Exception as e:
+        logger.error(f"[celery] Scheduled jobs cleanup failed: {e}")
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 
 
