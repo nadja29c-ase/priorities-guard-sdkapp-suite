@@ -609,3 +609,87 @@ async def list_events(
         raise ValueError(f"All {pages_failed} page(s) failed")
 
     return all_events, pages_failed
+
+
+# ============================================================================
+# Webhook Channel Management (Increment 10)
+# ============================================================================
+
+
+async def stop_webhook_channel(
+    http_client: httpx.AsyncClient,
+    access_token: str,
+    channel_id: str,
+    resource_id: str,
+) -> dict[str, Any]:
+    """
+    Stop a Google Calendar webhook channel.
+
+    Sends a request to Google to stop receiving push notifications
+    for this channel. Should be called during user disconnect/offboarding.
+
+    Per Google docs:
+    https://developers.google.com/calendar/api/guides/push#stopping-notifications
+
+    Args:
+        http_client: Shared httpx AsyncClient
+        access_token: Valid Google access token
+        channel_id: The webhook channel ID to stop
+        resource_id: The resource ID associated with the channel
+
+    Returns:
+        Dictionary with:
+        - success: bool
+        - error: str | None (if failed)
+
+    Note:
+        - Returns success=True even if channel was already stopped or expired
+        - Logs warning on failure but does not raise (non-blocking)
+    """
+    stop_url = "https://www.googleapis.com/calendar/v3/channels/stop"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    body = {
+        "id": channel_id,
+        "resourceId": resource_id,
+    }
+
+    try:
+        response = await http_client.post(stop_url, headers=headers, json=body)
+
+        # 204 No Content = success
+        if response.status_code == 204:
+            logger.info(f"Webhook channel stopped: channel_id={channel_id}")
+            return {"success": True, "error": None}
+
+        # 404 = channel not found (already stopped or expired) - still success
+        if response.status_code == 404:
+            logger.info(
+                f"Webhook channel not found (already stopped/expired): "
+                f"channel_id={channel_id}"
+            )
+            return {"success": True, "error": None}
+
+        # 401 = invalid token - log warning, non-blocking
+        if response.status_code == 401:
+            logger.warning(
+                f"Cannot stop webhook channel (invalid token): "
+                f"channel_id={channel_id}"
+            )
+            return {"success": False, "error": "invalid_token"}
+
+        # Other errors
+        error_text = response.text if response.content else f"HTTP {response.status_code}"
+        logger.warning(
+            f"Failed to stop webhook channel: channel_id={channel_id}, "
+            f"status={response.status_code}, error={error_text}"
+        )
+        return {"success": False, "error": error_text}
+
+    except Exception as e:
+        logger.error(f"Error stopping webhook channel: channel_id={channel_id}, error={e}")
+        return {"success": False, "error": str(e)}

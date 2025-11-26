@@ -4,9 +4,10 @@ Core Shared Application Models.
 This file contains application-wide models that apply to all SDK apps:
 - CoreUser
 - CoreConnection
+- CoreToolAuditLog
 
 OAuth provider models live in:
-backend/core/oauth_models.py
+backend/core/oauth_provider/models.py
 """
 
 from datetime import datetime
@@ -168,9 +169,16 @@ class CoreConnection(Base):
         comment="Allowed grant types (e.g., ['authorization_code', 'refresh_token'])"
     )
 
-    __table_args__ = ( #Inside a SQLAlchemy model, __table_args__ is a special class attribute that lets you define anything that applies to the whole table f.e. Unique constrainsts, Indexes, Check constraints
-        UniqueConstraint("user_id", "provider", name="uq_user_provider"), # Ensures there is only one row per user per provider to prevent duplicates
-        UniqueConstraint("client_id", name="uq_client_id"),  # Unique constraint for OAuth provider client_id
+    # Offboarding fields (Increment 10)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When the connection was revoked/disconnected"
+    )
+
+    __table_args__ = (  # Table-level constraints and indexes
+        UniqueConstraint("user_id", "provider", name="uq_user_provider"),
+        UniqueConstraint("client_id", name="uq_client_id"),
         # Conditional constraint: oauth_provider connections can have empty encrypted_access_token
         CheckConstraint(
             "(connection_type = 'oauth_provider') OR (length(encrypted_access_token) > 0)",
@@ -178,8 +186,78 @@ class CoreConnection(Base):
         ),
         CheckConstraint("(encrypted_refresh_token IS NULL) OR (length(encrypted_refresh_token) > 0)", name="ck_encrypted_refresh_token_not_empty"),
         CheckConstraint("cardinality(scopes) > 0", name="ck_scopes_not_empty"),
-        Index("ix_user_provider", "user_id", "provider"), #A database index for fast lookups
+        Index("ix_user_provider", "user_id", "provider"),
         Index("ix_token_expires", "token_expires_at"),
         Index("ix_channel_expires", "google_channel_expires_at"),
-        Index("ix_client_id", "client_id"),  # Index for OAuth provider client_id lookups
+        Index("ix_client_id", "client_id"),
+    )
+
+
+class CoreToolAuditLog(Base):
+    """
+    Audit log for user actions (GDPR compliance).
+
+    Tracks sensitive operations like disconnect and delete-data
+    for compliance and debugging purposes.
+
+    Example:
+        log = CoreToolAuditLog(
+            user_id=uuid,
+            app_name="focused",
+            action="delete_data",
+            result_status="success",
+            details={"tables_affected": 2}
+        )
+    """
+
+    __tablename__ = "core_tool_audit_log"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        comment="Unique audit log entry ID"
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        nullable=False,
+        comment="User who performed or was affected by the action"
+    )
+
+    app_name: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="SDK app name (e.g., focused, decliner)"
+    )
+
+    action: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="Action performed (e.g., disconnect, delete_data)"
+    )
+
+    result_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="Result: success, failed, partial"
+    )
+
+    details: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="Additional details (tables affected, error messages)"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When the action occurred"
+    )
+
+    __table_args__ = (
+        Index("idx_audit_log_user_id", "user_id"),
+        Index("idx_audit_log_app_name", "app_name"),
+        Index("idx_audit_log_created_at", "created_at"),
     )

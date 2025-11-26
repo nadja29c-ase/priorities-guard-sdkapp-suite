@@ -124,7 +124,7 @@ async def async_session(async_engine):
             text(
                 "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
                 "core_connections, core_users, oauth_authorization_codes, "
-                "oauth_access_tokens RESTART IDENTITY CASCADE"
+                "oauth_access_tokens, core_tool_audit_log RESTART IDENTITY CASCADE"
             )
         )
 

@@ -217,3 +217,70 @@ async def exchange_code(code: str, http_client: httpx.AsyncClient) -> dict[str, 
             raise ValueError(f"Token exchange failed: {str(e)}")
 
     raise ValueError("Token exchange failed after maximum retries")
+
+
+# ============================================================================
+# Token Revocation (Increment 10)
+# ============================================================================
+
+
+async def revoke_google_token(
+    refresh_token: str,
+    http_client: httpx.AsyncClient,
+) -> dict[str, Any]:
+    """
+    Revoke a Google OAuth refresh token.
+
+    MUST use refresh_token (not access_token) to invalidate both tokens.
+    Google's revocation endpoint accepts either, but revoking the refresh token
+    ensures both access and refresh tokens are invalidated.
+
+    Per Google docs: https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke
+
+    Args:
+        refresh_token: The user's refresh token to revoke
+        http_client: Shared httpx AsyncClient
+
+    Returns:
+        Dictionary with:
+        - success: bool
+        - error: str | None (if failed)
+
+    Note:
+        - Returns success=True even if token was already revoked
+        - Logs warning on failure but does not raise (non-blocking)
+    """
+    revoke_url = "https://oauth2.googleapis.com/revoke"
+
+    try:
+        response = await http_client.post(
+            revoke_url,
+            params={"token": refresh_token},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        if response.status_code == 200:
+            logger.info("Google OAuth token revoked successfully")
+            return {"success": True, "error": None}
+
+        # Token may already be revoked or invalid - still considered success
+        if response.status_code == 400:
+            error_data = response.json() if response.content else {}
+            error_type = error_data.get("error", "unknown")
+
+            # "invalid_token" means token was already revoked or expired
+            if error_type == "invalid_token":
+                logger.info("Google OAuth token already revoked or expired")
+                return {"success": True, "error": None}
+
+            logger.warning(f"Google token revocation failed: {error_type}")
+            return {"success": False, "error": error_type}
+
+        logger.warning(
+            f"Google token revocation unexpected status: {response.status_code}"
+        )
+        return {"success": False, "error": f"HTTP {response.status_code}"}
+
+    except Exception as e:
+        logger.error(f"Google token revocation error: {e}")
+        return {"success": False, "error": str(e)}

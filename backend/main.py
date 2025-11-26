@@ -26,6 +26,7 @@ from backend.apps.focused.routers.admin_router import router as admin_router
 from backend.core.routers.oauth_provider_router import router as oauth_provider_router
 from backend.apps.focused.routers.onboarding_router import router as onboarding_router
 from backend.apps.focused.routers.shortcut_router import router as shortcut_router
+from backend.apps.focused.routers.offboarding_router import router as offboarding_router
 
 # Initialize logging first
 configure_logging()
@@ -245,3 +246,4 @@ app.include_router(admin_router, prefix="/api/focused")
 app.include_router(oauth_provider_router)
 app.include_router(onboarding_router, prefix="/api/focused/onboarding")
 app.include_router(shortcut_router, prefix="/shortcut/focused")
+app.include_router(offboarding_router, prefix="/api/focused")
