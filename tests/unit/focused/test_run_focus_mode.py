@@ -1085,12 +1085,9 @@ class TestSingleDBRowCreation:
         mock_result.scalar_one_or_none = MagicMock(return_value=None)
         mock_session.execute.return_value = mock_result
 
-        add_call_count = 0
         added_objects = []
 
         def capture_add(obj):
-            nonlocal add_call_count
-            add_call_count += 1
             added_objects.append(obj)
 
         mock_session.add = capture_add
@@ -1105,10 +1102,16 @@ class TestSingleDBRowCreation:
             )
 
         assert result["shortcut_status"] == "success"
-        # Exactly one session.add() call for the focus session
-        # (may have additional calls for scheduled job, but session should be exactly 1)
-        focus_sessions = [obj for obj in added_objects if hasattr(obj, 'trigger_source')]
-        assert len(focus_sessions) == 1, f"Expected exactly 1 session, got {len(focus_sessions)}"
+
+        # Count FocusedFocusSession objects by checking for actual_start attribute
+        # (FocusedScheduledJob has scheduled_at instead, so this is unambiguous)
+        # Using actual_start because it's specific to FocusedFocusSession and won't
+        # be added to FocusedScheduledJob in future iterations
+        focus_sessions = [
+            obj for obj in added_objects
+            if hasattr(obj, 'actual_start') and hasattr(obj, 'actual_end')
+        ]
+        assert len(focus_sessions) == 1, f"Expected exactly 1 FocusedFocusSession, got {len(focus_sessions)}"
 
 
 # =============================================================================
