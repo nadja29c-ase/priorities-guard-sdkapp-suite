@@ -6,6 +6,9 @@ Tests:
 - Cleanup keeps pending jobs
 - Cleanup keeps jobs younger than 7 days
 - Task handles DB errors with retry
+
+NOTE: The Celery tasks are synchronous functions that internally run async code
+via asyncio.run_until_complete(). Tests call them directly as sync functions.
 """
 
 import pytest
@@ -27,10 +30,11 @@ class TestCleanupScheduledJobs:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             result = cleanup_scheduled_jobs()
 
         assert result == 5
@@ -55,10 +59,11 @@ class TestCleanupScheduledJobs:
         mock_db_session.execute = capture_execute
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             cleanup_scheduled_jobs()
 
         # Verify the statement was captured (contains the DELETE)
@@ -80,10 +85,11 @@ class TestCleanupScheduledJobs:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             result = cleanup_scheduled_jobs()
 
         assert result == 0  # No jobs to delete
@@ -98,10 +104,11 @@ class TestCleanupScheduledJobs:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             result = cleanup_scheduled_jobs()
 
         assert result == 42
@@ -116,26 +123,28 @@ class TestCleanupScheduledJobs:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             cleanup_scheduled_jobs()
 
         mock_db_session.commit.assert_called_once()
 
     def test_cleanup_retries_on_db_error(self):
-        """Test that cleanup retries on database error."""
+        """Test that cleanup raises exception on DB error (triggering Celery retry)."""
         from backend.core.celery_app import cleanup_scheduled_jobs
 
         mock_db_session = AsyncMock()
         mock_db_session.execute = AsyncMock(side_effect=Exception("DB connection lost"))
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
-            # Should raise (which triggers Celery retry)
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
+            # Should raise (which triggers Celery retry mechanism)
             with pytest.raises(Exception, match="DB connection lost"):
                 cleanup_scheduled_jobs()
 
@@ -149,10 +158,11 @@ class TestCleanupScheduledJobs:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             result = cleanup_scheduled_jobs()
 
         assert result == 0
@@ -185,10 +195,11 @@ class TestCleanupRetentionPolicy:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             result = cleanup_scheduled_jobs()
 
         # Pending jobs are excluded by the status IN clause
@@ -208,10 +219,11 @@ class TestCleanupRetentionPolicy:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
         mock_db_session.commit = AsyncMock()
 
-        with patch("backend.core.celery_app.AsyncSessionLocal") as mock_session_local:
-            mock_session_local.return_value.__aenter__ = AsyncMock(return_value=mock_db_session)
-            mock_session_local.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_context = MagicMock()
+        mock_context.__aenter__ = AsyncMock(return_value=mock_db_session)
+        mock_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("backend.core.database.AsyncSessionLocal", return_value=mock_context):
             result = cleanup_scheduled_jobs()
 
         # Fresh jobs are excluded by the updated_at < cutoff clause
