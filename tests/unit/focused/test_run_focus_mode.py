@@ -383,18 +383,20 @@ class TestCalendarTriggeredSessions:
     """Tests for calendar-triggered focus sessions."""
 
     @pytest.mark.asyncio
-    async def test_calendar_trigger_with_non_focus_session_rejected(self, mock_session, valid_user_id, valid_session_id):
-        """Test calendar trigger with session that is not a focus block is rejected.
+    async def test_calendar_activation_requires_is_focus_block_true(self, mock_session, valid_user_id, valid_session_id):
+        """Test that calendar activation REQUIRES is_focus_block=True.
 
-        If the sync engine created a FocusedFocusSession row, it is by definition
-        a focus block session. If is_focus_block=False, the session should never
-        have existed - this tests that such an invalid state is handled correctly.
+        This is a critical invariant: only focus block sessions can be activated
+        via calendar trigger. The sync engine should never create sessions with
+        is_focus_block=False, but if such a session exists (data corruption,
+        manual DB edit, etc.), it must NOT be activatable.
+
+        Requirement: trigger_source="calendar" + is_focus_block=False => FAIL
         """
-        # Mock no active session (first query)
-        # Then mock a session that exists but is_focus_block=False (invalid state)
+        # Mock session with is_focus_block=False
         non_focus_session = MagicMock()
         non_focus_session.id = uuid4()
-        non_focus_session.is_focus_block = False
+        non_focus_session.is_focus_block = False  # CRITICAL: must be True for activation
         non_focus_session.actual_start = None
 
         call_count = 0
@@ -404,7 +406,7 @@ class TestCalendarTriggeredSessions:
             call_count += 1
             mock_result = MagicMock()
             if call_count == 1:
-                # First call: check active session
+                # First call: check active session - none active
                 mock_result.scalar_one_or_none = MagicMock(return_value=None)
             else:
                 # Second call: get session by ID - returns non-focus session
@@ -423,9 +425,55 @@ class TestCalendarTriggeredSessions:
                 user_confirmation=True,
             )
 
-        # Should fail - is_focus_block=False sessions should not be activatable
+        # MUST fail - is_focus_block=False sessions cannot be activated
         assert result["shortcut_status"] == "failed"
         assert "focus" in result["message"].lower() or "invalid" in result["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_calendar_activation_succeeds_with_is_focus_block_true(self, mock_session, valid_user_id, valid_session_id):
+        """Test that calendar activation succeeds when is_focus_block=True.
+
+        This is the happy path: a valid focus block session from the sync engine.
+        """
+        # Mock session with is_focus_block=True (valid focus block)
+        focus_session = MagicMock()
+        focus_session.id = uuid4()
+        focus_session.is_focus_block = True  # Valid focus block
+        focus_session.actual_start = None
+        focus_session.actual_end = None
+        focus_session.event_summary = "Deep Work"
+
+        call_count = 0
+
+        def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            mock_result = MagicMock()
+            if call_count == 1:
+                # First call: check active session - none active
+                mock_result.scalar_one_or_none = MagicMock(return_value=None)
+            else:
+                # Second call: get session by ID - returns valid focus session
+                mock_result.scalar_one_or_none = MagicMock(return_value=focus_session)
+            return mock_result
+
+        mock_session.execute = AsyncMock(side_effect=mock_execute)
+
+        with patch("backend.apps.focused.tools.run_focus_mode_impl.celery_app"):
+            result = await run_focus_mode_impl(
+                user_id=valid_user_id,
+                action="on",
+                session=mock_session,
+                trigger_source="calendar",
+                session_id=valid_session_id,
+                user_confirmation=True,
+            )
+
+        # Should succeed - is_focus_block=True allows activation
+        assert result["shortcut_status"] == "success"
+        assert result["shortcut_url"] is not None
+        # Session should have actual_start set
+        assert focus_session.actual_start is not None
 
     @pytest.mark.asyncio
     async def test_calendar_trigger_with_deleted_session(self, mock_session, valid_user_id, valid_session_id):
