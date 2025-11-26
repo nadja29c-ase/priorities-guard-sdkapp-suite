@@ -617,15 +617,21 @@ class TestSessionCreationCorrectness:
 
 
 # =============================================================================
-# DB Transaction Rollback Tests (Critical for Data Integrity)
+# DB Transaction Error Handling Tests
 # =============================================================================
 
-class TestDBTransactionRollback:
-    """Tests for database transaction integrity."""
+class TestDBTransactionErrorHandling:
+    """Tests for database transaction error handling.
+
+    NOTE: SQLAlchemy's AsyncSession automatically rolls back uncommitted changes
+    when an exception occurs and the session context exits. These tests verify
+    that our code properly propagates database errors rather than silently
+    swallowing them, which allows the caller to handle the failure appropriately.
+    """
 
     @pytest.mark.asyncio
-    async def test_activation_fails_then_session_not_created(self, mock_session, valid_user_id):
-        """Test that if activation fails after session add, no session is persisted."""
+    async def test_activation_propagates_db_commit_error(self, mock_session, valid_user_id):
+        """Test that database commit errors are propagated to caller."""
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=None)
         mock_session.execute.return_value = mock_result
@@ -633,16 +639,9 @@ class TestDBTransactionRollback:
         # Simulate commit failure
         mock_session.commit = AsyncMock(side_effect=Exception("DB connection lost"))
 
-        add_called = False
-
-        def capture_add(obj):
-            nonlocal add_called
-            add_called = True
-
-        mock_session.add = capture_add
-
         with patch("backend.apps.focused.tools.run_focus_mode_impl.celery_app"):
-            try:
+            # Error should propagate - caller can then handle/retry
+            with pytest.raises(Exception, match="DB connection lost"):
                 await run_focus_mode_impl(
                     user_id=valid_user_id,
                     action="on",
@@ -650,23 +649,15 @@ class TestDBTransactionRollback:
                     trigger_source="user",
                     user_confirmation=True,
                 )
-            except Exception:
-                pass  # Expected to fail
-
-        # Session.add was called, but commit failed
-        # In a real scenario with proper transaction handling,
-        # the session would be rolled back automatically
 
     @pytest.mark.asyncio
-    async def test_deactivation_fails_then_session_not_modified(self, mock_session, valid_user_id):
-        """Test that if deactivation fails after setting actual_end, changes not persisted."""
+    async def test_deactivation_propagates_db_commit_error(self, mock_session, valid_user_id):
+        """Test that database commit errors during deactivation are propagated."""
         active_session = MagicMock()
         active_session.id = uuid4()
         active_session.actual_start = datetime.now(timezone.utc) - timedelta(hours=1)
         active_session.actual_end = None
         active_session.event_summary = "Focus Time"
-
-        original_actual_end = active_session.actual_end
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=active_session)
@@ -675,7 +666,8 @@ class TestDBTransactionRollback:
         # Simulate commit failure
         mock_session.commit = AsyncMock(side_effect=Exception("DB connection lost"))
 
-        with pytest.raises(Exception):
+        # Error should propagate
+        with pytest.raises(Exception, match="DB connection lost"):
             await run_focus_mode_impl(
                 user_id=valid_user_id,
                 action="off",
@@ -683,8 +675,21 @@ class TestDBTransactionRollback:
                 trigger_source="user",
             )
 
-        # In a real scenario with proper transaction handling,
-        # the actual_end change would be rolled back
+    @pytest.mark.asyncio
+    async def test_activation_propagates_db_query_error(self, mock_session, valid_user_id):
+        """Test that database query errors are propagated."""
+        # Simulate execute failure (e.g., connection lost during query)
+        mock_session.execute = AsyncMock(side_effect=Exception("Connection reset"))
+
+        with patch("backend.apps.focused.tools.run_focus_mode_impl.celery_app"):
+            with pytest.raises(Exception, match="Connection reset"):
+                await run_focus_mode_impl(
+                    user_id=valid_user_id,
+                    action="on",
+                    session=mock_session,
+                    trigger_source="user",
+                    user_confirmation=True,
+                )
 
 
 # =============================================================================
