@@ -11,6 +11,7 @@ Tests:
 
 import hashlib
 import pytest
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
@@ -151,7 +152,7 @@ class TestFocusModeActivation:
         assert result["shortcut_status"] == "success"
         assert result["shortcut_url"] is not None
         assert "shortcuts://" in result["shortcut_url"]
-        assert "Work" in result["shortcut_url"]
+        assert urllib.parse.quote("Work") in result["shortcut_url"]
         assert result["focus_name"] == "Work"
 
     @pytest.mark.asyncio
