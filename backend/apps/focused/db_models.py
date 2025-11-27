@@ -270,14 +270,14 @@ class FocusedFocusSession(Base):
     # Increment 11: Focus Mode Activation Tracking
     # =========================================================================
 
-    # When focus mode got activated
+    # the real timestamp when Focus Mode entered ACTIVE state on the device
     actual_start: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When user actually activated focus mode (UTC)",
     )
 
-    # When focus mode got deactivated
+    # the real timestamp when Focus Mode exited ACTIVE state on the device
     actual_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
