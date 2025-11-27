@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.apps.focused.db_models import FocusedFocusSession, FocusedScheduledJob
+from backend.core.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
@@ -79,6 +80,16 @@ async def run_focus_mode_impl(
         log.warning("invalid_user_id_format")
         return _error_response("Invalid user ID format")
 
+    # Validate action
+    if action not in ("on", "off"):
+        log.warning("invalid_action", action=action)
+        return _error_response(f"Invalid action: '{action}'. Must be 'on' or 'off'.")
+
+    # Validate trigger_source
+    if trigger_source not in ("calendar", "user"):
+        log.warning("invalid_trigger_source", trigger_source=trigger_source)
+        return _error_response(f"Invalid trigger_source: '{trigger_source}'. Must be 'calendar' or 'user'.")
+
     # Normalize focus_name
     focus_name = focus_name or DEFAULT_FOCUS_NAME
 
@@ -115,6 +126,15 @@ async def _activate_focus_mode(
 ) -> dict:
     """Handle focus mode activation."""
     now = datetime.now(timezone.utc)
+
+    # Validate duration_minutes if provided (must be 1-480)
+    if duration_minutes is not None:
+        if duration_minutes < 1:
+            log.warning("invalid_duration_too_low", duration_minutes=duration_minutes)
+            return _error_response("duration_minutes must be >= 1")
+        if duration_minutes > 480:
+            log.warning("invalid_duration_too_high", duration_minutes=duration_minutes)
+            return _error_response("duration_minutes must be <= 480")
 
     # Require user confirmation for activation
     if not user_confirmation:
@@ -154,6 +174,11 @@ async def _activate_focus_mode(
         if not focus_session:
             log.warning("session_not_found", session_id=session_id)
             return _not_found_response()
+
+        # Calendar activation requires is_focus_block=True
+        if not focus_session.is_focus_block:
+            log.warning("calendar_session_not_focus_block", session_id=session_id)
+            return _error_response("Session is not a focus block")
 
         # Update existing session
         focus_session.actual_start = now
@@ -210,8 +235,12 @@ async def _deactivate_focus_mode(
     now = datetime.now(timezone.utc)
 
     # Find the session to deactivate
-    if trigger_source == "calendar" and session_id:
-        # Calendar-triggered with specific session
+    if trigger_source == "calendar":
+        # Calendar-triggered: session_id is required
+        if not session_id:
+            log.warning("calendar_deactivation_missing_session_id")
+            return _error_response("session_id is required for calendar-triggered deactivation")
+
         focus_session = await _get_session_by_id(user_uuid, session_id, session)
         if not focus_session:
             log.warning("session_not_found_for_deactivation", session_id=session_id)
@@ -246,6 +275,10 @@ async def _deactivate_focus_mode(
 
     # Deactivate the session
     focus_session.actual_end = now
+
+    # Cancel any pending scheduled deactivation job for this session
+    await _cancel_scheduled_job(focus_session.id, session, log)
+
     await session.commit()
 
     log.info("focus_mode_deactivated", session_id=str(focus_session.id))
@@ -348,8 +381,6 @@ async def _schedule_auto_deactivate(
     Creates a job record in focused_scheduled_jobs and schedules
     the Celery task to execute at the specified time.
     """
-    from backend.core.celery_app import celery_app
-
     # Create job record
     job = FocusedScheduledJob(
         user_id=user_uuid,
@@ -366,7 +397,7 @@ async def _schedule_auto_deactivate(
     if delay_seconds < 0:
         delay_seconds = 0
 
-    # Import task here to avoid circular imports
+    # Schedule Celery task using module-level celery_app import
     task = celery_app.send_task(
         "backend.core.celery_app.auto_deactivate_focus",
         args=[str(user_uuid), str(session_id), str(job.id)],
@@ -377,6 +408,39 @@ async def _schedule_auto_deactivate(
     job.celery_task_id = task.id
 
     return job
+
+
+async def _cancel_scheduled_job(
+    session_id: UUID,
+    db_session: AsyncSession,
+    log,
+) -> None:
+    """
+    Cancel any pending scheduled deactivation job for the given session.
+
+    - Finds pending job with session_id in payload
+    - Revokes the Celery task
+    - Marks job status as 'cancelled'
+    """
+    # Find pending job for this session
+    stmt = select(FocusedScheduledJob).where(
+        FocusedScheduledJob.payload["session_id"].astext == str(session_id),
+        FocusedScheduledJob.status == "pending",
+        FocusedScheduledJob.job_type == "focus_deactivate",
+    )
+    result = await db_session.execute(stmt)
+    job = result.scalar_one_or_none()
+
+    # Verify it's actually a FocusedScheduledJob (not a FocusedFocusSession mistakenly returned)
+    # Check that celery_task_id is a string (FocusedFocusSession doesn't have this attribute)
+    if job and isinstance(getattr(job, "celery_task_id", None), str) and job.celery_task_id:
+        log.info("cancelling_scheduled_job", job_id=str(job.id), celery_task_id=job.celery_task_id)
+
+        # Revoke the Celery task
+        celery_app.control.revoke(job.celery_task_id, terminate=True)
+
+        # Mark job as cancelled
+        job.status = "cancelled"
 
 
 def _error_response(message: str) -> dict:
