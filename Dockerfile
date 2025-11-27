@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y \
 
 # Copy dependency metadata first (for caching)
 COPY pyproject.toml /app/pyproject.toml
-COPY poetry.lock /app/poetry.lock
 
 # Install Poetry
 RUN pip install --no-cache-dir poetry
