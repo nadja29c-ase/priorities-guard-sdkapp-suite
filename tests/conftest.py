@@ -102,9 +102,9 @@ async def async_session(async_engine):
     """
     Create a new database session for each test.
 
-    Complete isolation: Each test gets its own engine and session.
-    Transaction handling: Test fixture starts outer transaction,
-    production code uses nested transactions (savepoints).
+    For integration tests: No outer transaction wrapper. The endpoint
+    commits its own transactions normally. Isolation is achieved via
+    TRUNCATE in the cleanup_db fixture.
     """
     async_session_maker = async_sessionmaker(
         async_engine,
@@ -113,38 +113,59 @@ async def async_session(async_engine):
     )
 
     async with async_session_maker() as session:
-        # Start outer transaction - production code will use savepoints
-        async with session.begin():
-            yield session
-            # Rollback happens automatically on exit
+        yield session
+        # Session closes normally - no rollback needed
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_db(async_engine):
+    """
+    Truncate all tables after each test for isolation.
+
+    This runs automatically after every test (autouse=True).
+    """
+    yield  # Let the test run first
 
     # Clean up: Truncate all tables after test
     async with async_engine.begin() as conn:
         await conn.execute(
             text(
                 "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
-                "core_connections, core_users, oauth_authorization_codes, "
-                "oauth_access_tokens, core_tool_audit_log RESTART IDENTITY CASCADE"
+                "focused_scheduled_jobs, core_connections, core_users, "
+                "core_tool_audit_log RESTART IDENTITY CASCADE"
             )
         )
 
 
 @pytest_asyncio.fixture
-async def client(async_engine, async_session):
+async def client(async_engine):
     """
     Create async test client with database dependency override.
 
     This ensures the FastAPI app uses the test database instead of production.
-    Used primarily by integration tests that need to make HTTP requests.
+    The endpoint gets its own session that can commit independently.
+    Test fixtures use a separate async_session for setup/verification.
     """
+    import httpx
     from backend.main import app
     from backend.core.database import get_db
 
-    # Override get_db to return test session
+    # Create session maker for endpoint's sessions
+    endpoint_session_maker = async_sessionmaker(
+        async_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    # Override get_db to give endpoint its own session (can commit normally)
     async def override_get_db():
-        yield async_session
+        async with endpoint_session_maker() as session:
+            yield session
 
     app.dependency_overrides[get_db] = override_get_db
+
+    # Set up app.state.http_client (normally done in lifespan)
+    app.state.http_client = httpx.AsyncClient(timeout=30.0)
 
     # Create async test client
     async with AsyncClient(
@@ -153,5 +174,6 @@ async def client(async_engine, async_session):
     ) as test_client:
         yield test_client
 
-    # Clean up override
+    # Clean up
+    await app.state.http_client.aclose()
     app.dependency_overrides.clear()

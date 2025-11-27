@@ -6,31 +6,42 @@ Tests the full OAuth flow including:
 - /google/callback endpoint with state validation
 - HTML error responses
 - Redis state management
+
+Uses async test infrastructure with real test database.
 """
 
 import json
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
-from httpx import Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.main import app
+from backend.core.models import CoreUser
+
+# Mark all tests as async
+pytestmark = pytest.mark.asyncio
 
 
-@pytest.fixture
-def client():
-    """Create test client with proper lifespan handling."""
-    with TestClient(app) as test_client:
-        yield test_client
-
+# =============================================================================
+# Fixtures
+# =============================================================================
 
 @pytest.fixture
 def valid_user_id():
     """Generate a valid UUID for testing."""
     return str(uuid4())
+
+
+@pytest_asyncio.fixture
+async def oauth_user(async_session: AsyncSession):
+    """Create a test user in the database for OAuth tests."""
+    user = CoreUser(id=uuid4())
+    async_session.add(user)
+    await async_session.commit()
+    return user
 
 
 @pytest.fixture
@@ -50,12 +61,12 @@ def mock_redis():
 class TestGoogleOAuthStart:
     """Tests for /google/start endpoint."""
 
-    def test_start_redirects_to_google(self, client, valid_user_id):
+    async def test_start_redirects_to_google(self, client, valid_user_id):
         """Test /start endpoint redirects to Google authorization URL."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=True)
 
-            response = client.get(
+            response = await client.get(
                 f"/auth/focused/google/start?user_id={valid_user_id}",
                 follow_redirects=False,
             )
@@ -65,15 +76,12 @@ class TestGoogleOAuthStart:
         assert location is not None
         assert location.startswith("https://accounts.google.com/o/oauth2/v2/auth")
 
-    # Note: Full paths are /auth/focused/google/start and /auth/focused/google/callback
-    # because main.py mounts oauth_google_router with prefix="/auth/focused/google"
-
-    def test_start_includes_pkce_in_redirect(self, client, valid_user_id):
+    async def test_start_includes_pkce_in_redirect(self, client, valid_user_id):
         """Test redirect URL includes PKCE code_challenge."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=True)
 
-            response = client.get(
+            response = await client.get(
                 f"/auth/focused/google/start?user_id={valid_user_id}",
                 follow_redirects=False,
             )
@@ -82,12 +90,12 @@ class TestGoogleOAuthStart:
         assert "code_challenge=" in location
         assert "code_challenge_method=S256" in location
 
-    def test_start_includes_state_in_redirect(self, client, valid_user_id):
+    async def test_start_includes_state_in_redirect(self, client, valid_user_id):
         """Test redirect URL includes state parameter."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=True)
 
-            response = client.get(
+            response = await client.get(
                 f"/auth/focused/google/start?user_id={valid_user_id}",
                 follow_redirects=False,
             )
@@ -95,7 +103,7 @@ class TestGoogleOAuthStart:
         location = response.headers.get("location")
         assert "state=" in location
 
-    def test_start_stores_state_in_redis(self, client, valid_user_id):
+    async def test_start_stores_state_in_redis(self, client, valid_user_id):
         """Test state is stored in Redis with user_id and code_verifier."""
         stored_data = {}
 
@@ -108,7 +116,7 @@ class TestGoogleOAuthStart:
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.set = capture_store
 
-            client.get(
+            await client.get(
                 f"/auth/focused/google/start?user_id={valid_user_id}",
                 follow_redirects=False,
             )
@@ -118,19 +126,19 @@ class TestGoogleOAuthStart:
         assert "code_verifier" in stored_data["value"]
         assert stored_data["ttl"] == 600  # 10 minutes
 
-    def test_start_requires_user_id(self, client):
+    async def test_start_requires_user_id(self, client):
         """Test /start returns error when user_id is missing."""
-        response = client.get("/auth/focused/google/start")
+        response = await client.get("/auth/focused/google/start")
 
         # FastAPI returns 422 for missing required query params
         assert response.status_code == 422
 
-    def test_start_rejects_invalid_user_id_format(self, client):
+    async def test_start_rejects_invalid_user_id_format(self, client):
         """Test /start returns HTML error for invalid UUID format."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=True)
 
-            response = client.get(
+            response = await client.get(
                 "/auth/focused/google/start?user_id=not-a-valid-uuid",
                 follow_redirects=False,
             )
@@ -139,12 +147,12 @@ class TestGoogleOAuthStart:
         assert "text/html" in response.headers.get("content-type", "")
         assert "Invalid" in response.text
 
-    def test_start_returns_503_when_redis_fails(self, client, valid_user_id):
+    async def test_start_returns_503_when_redis_fails(self, client, valid_user_id):
         """Test /start returns 503 when Redis storage fails."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=False)
 
-            response = client.get(
+            response = await client.get(
                 f"/auth/focused/google/start?user_id={valid_user_id}",
                 follow_redirects=False,
             )
@@ -160,13 +168,13 @@ class TestGoogleOAuthStart:
 class TestGoogleOAuthCallback:
     """Tests for /google/callback endpoint."""
 
-    def test_callback_validates_state(self, client, valid_user_id):
+    async def test_callback_validates_state(self, client, valid_user_id):
         """Test callback validates state exists in Redis."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             # State not found
             mock_redis.get = AsyncMock(return_value=None)
 
-            response = client.get(
+            response = await client.get(
                 "/auth/focused/google/callback?code=auth_code&state=invalid_state"
             )
 
@@ -174,12 +182,12 @@ class TestGoogleOAuthCallback:
         assert "text/html" in response.headers.get("content-type", "")
         assert "expired" in response.text.lower() or "invalid" in response.text.lower()
 
-    def test_callback_returns_html_error_on_invalid_state(self, client):
+    async def test_callback_returns_html_error_on_invalid_state(self, client):
         """Test callback returns HTML error page (not JSON) for invalid state."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.get = AsyncMock(return_value=None)
 
-            response = client.get(
+            response = await client.get(
                 "/auth/focused/google/callback?code=auth_code&state=bad_state"
             )
 
@@ -188,27 +196,27 @@ class TestGoogleOAuthCallback:
         # Should NOT be JSON
         assert not response.headers.get("content-type", "").startswith("application/json")
 
-    def test_callback_returns_html_error_on_missing_code(self, client):
+    async def test_callback_returns_html_error_on_missing_code(self, client):
         """Test callback returns HTML error when code is missing."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?state=some_state"
         )
 
         assert response.status_code == 400
         assert "text/html" in response.headers.get("content-type", "")
 
-    def test_callback_returns_html_error_on_missing_state(self, client):
+    async def test_callback_returns_html_error_on_missing_state(self, client):
         """Test callback returns HTML error when state is missing."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?code=auth_code"
         )
 
         assert response.status_code == 400
         assert "text/html" in response.headers.get("content-type", "")
 
-    def test_callback_handles_google_error_response(self, client):
+    async def test_callback_handles_google_error_response(self, client):
         """Test callback handles error parameter from Google (user denied)."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=access_denied&error_description=User%20denied%20access"
         )
 
@@ -216,7 +224,7 @@ class TestGoogleOAuthCallback:
         assert "text/html" in response.headers.get("content-type", "")
         assert "denied" in response.text.lower()
 
-    def test_callback_uses_code_verifier_in_exchange(self, client, valid_user_id):
+    async def test_callback_uses_code_verifier_in_exchange(self, client, valid_user_id):
         """Test callback passes code_verifier from Redis to token exchange."""
         code_verifier_used = None
 
@@ -242,15 +250,15 @@ class TestGoogleOAuthCallback:
                 "backend.apps.focused.routers.oauth_google_router.exchange_code",
                 mock_exchange,
             ):
-                client.get(
+                await client.get(
                     "/auth/focused/google/callback?code=auth_code&state=valid_state"
                 )
 
         assert code_verifier_used == "my_secret_verifier"
 
-    def test_callback_retrieves_user_id_from_redis(self, client, valid_user_id):
+    async def test_callback_retrieves_user_id_from_redis(self, client, async_session, oauth_user):
         """Test callback gets user_id from Redis state, not from query params."""
-        stored_user_id = None
+        user_id = str(oauth_user.id)
 
         async def mock_exchange(code, http_client, code_verifier=None):
             return {
@@ -261,9 +269,8 @@ class TestGoogleOAuthCallback:
             }
 
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
-            # user_id is "redis_user" in Redis, not "query_user"
             mock_redis.get = AsyncMock(return_value=json.dumps({
-                "user_id": valid_user_id,
+                "user_id": user_id,
                 "code_verifier": "verifier",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }))
@@ -277,15 +284,13 @@ class TestGoogleOAuthCallback:
                     "backend.apps.focused.routers.oauth_google_router.encrypt_token",
                     return_value="encrypted",
                 ):
-                    # Note: No user_id in query params - it comes from Redis
-                    response = client.get(
+                    response = await client.get(
                         "/auth/focused/google/callback?code=auth_code&state=valid_state"
                     )
 
-        # Should succeed because user_id comes from Redis
         assert response.status_code == 200
 
-    def test_callback_deletes_state_after_use(self, client, valid_user_id):
+    async def test_callback_deletes_state_after_use(self, client, valid_user_id):
         """Test state is deleted from Redis after successful verification."""
         delete_called_with = None
 
@@ -317,14 +322,16 @@ class TestGoogleOAuthCallback:
                     "backend.apps.focused.routers.oauth_google_router.encrypt_token",
                     return_value="encrypted",
                 ):
-                    client.get(
+                    await client.get(
                         "/auth/focused/google/callback?code=auth_code&state=the_state"
                     )
 
         assert delete_called_with == "oauth:google:state:the_state"
 
-    def test_callback_returns_html_success_on_completion(self, client, valid_user_id):
+    async def test_callback_returns_html_success_on_completion(self, client, async_session, oauth_user):
         """Test callback returns HTML success page after tokens stored."""
+        user_id = str(oauth_user.id)
+
         async def mock_exchange(code, http_client, code_verifier=None):
             return {
                 "access_token": "test_access_token",
@@ -335,7 +342,7 @@ class TestGoogleOAuthCallback:
 
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.get = AsyncMock(return_value=json.dumps({
-                "user_id": valid_user_id,
+                "user_id": user_id,
                 "code_verifier": "verifier",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }))
@@ -349,7 +356,7 @@ class TestGoogleOAuthCallback:
                     "backend.apps.focused.routers.oauth_google_router.encrypt_token",
                     return_value="encrypted",
                 ):
-                    response = client.get(
+                    response = await client.get(
                         "/auth/focused/google/callback?code=auth_code&state=valid_state"
                     )
 
@@ -365,7 +372,7 @@ class TestGoogleOAuthCallback:
 class TestConcurrentOAuthFlows:
     """Tests for concurrent OAuth flows."""
 
-    def test_concurrent_oauth_flows_isolated(self, client):
+    async def test_concurrent_oauth_flows_isolated(self, client):
         """Test two users' OAuth flows don't interfere with each other."""
         user1_id = str(uuid4())
         user2_id = str(uuid4())
@@ -379,13 +386,13 @@ class TestConcurrentOAuthFlows:
             mock_redis.set = capture_store
 
             # User 1 starts OAuth
-            response1 = client.get(
+            response1 = await client.get(
                 f"/auth/focused/google/start?user_id={user1_id}",
                 follow_redirects=False,
             )
 
             # User 2 starts OAuth
-            response2 = client.get(
+            response2 = await client.get(
                 f"/auth/focused/google/start?user_id={user2_id}",
                 follow_redirects=False,
             )
@@ -410,9 +417,9 @@ class TestConcurrentOAuthFlows:
 class TestGoogleRedirectErrors:
     """Tests for handling Google's error redirect parameters."""
 
-    def test_callback_handles_access_denied_error(self, client):
+    async def test_callback_handles_access_denied_error(self, client):
         """Test callback handles error=access_denied (user denied consent)."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=access_denied&error_description=The%20user%20denied%20access"
         )
 
@@ -420,36 +427,36 @@ class TestGoogleRedirectErrors:
         assert "text/html" in response.headers.get("content-type", "")
         assert "denied" in response.text.lower()
 
-    def test_callback_handles_invalid_request_error(self, client):
+    async def test_callback_handles_invalid_request_error(self, client):
         """Test callback handles error=invalid_request from Google."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=invalid_request&error_description=Invalid%20redirect_uri"
         )
 
         assert response.status_code == 400
         assert "text/html" in response.headers.get("content-type", "")
 
-    def test_callback_handles_server_error(self, client):
+    async def test_callback_handles_server_error(self, client):
         """Test callback handles error=server_error from Google."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=server_error&error_description=Google%20server%20error"
         )
 
         assert response.status_code == 400
         assert "text/html" in response.headers.get("content-type", "")
 
-    def test_callback_handles_temporarily_unavailable_error(self, client):
+    async def test_callback_handles_temporarily_unavailable_error(self, client):
         """Test callback handles error=temporarily_unavailable from Google."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=temporarily_unavailable"
         )
 
         assert response.status_code == 400
         assert "text/html" in response.headers.get("content-type", "")
 
-    def test_callback_error_shows_description_when_provided(self, client):
+    async def test_callback_error_shows_description_when_provided(self, client):
         """Test error page shows Google's error_description when provided."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=access_denied&error_description=Custom%20error%20message"
         )
 
@@ -464,8 +471,9 @@ class TestGoogleRedirectErrors:
 class TestStateReplayAttack:
     """Tests for state replay attack prevention."""
 
-    def test_state_reuse_rejected_after_successful_callback(self, client, valid_user_id):
+    async def test_state_reuse_rejected_after_successful_callback(self, client, async_session, oauth_user):
         """Test that state cannot be reused after successful callback (replay attack)."""
+        user_id = str(oauth_user.id)
         state_value = "test_state_for_replay"
         get_call_count = 0
 
@@ -475,7 +483,7 @@ class TestStateReplayAttack:
             if get_call_count == 1:
                 # First call returns valid state
                 return json.dumps({
-                    "user_id": valid_user_id,
+                    "user_id": user_id,
                     "code_verifier": "verifier",
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 })
@@ -504,12 +512,12 @@ class TestStateReplayAttack:
                     return_value="encrypted",
                 ):
                     # First callback should succeed
-                    response1 = client.get(
+                    response1 = await client.get(
                         f"/auth/focused/google/callback?code=auth_code&state={state_value}"
                     )
 
                     # Second callback with SAME state should fail (state was deleted)
-                    response2 = client.get(
+                    response2 = await client.get(
                         f"/auth/focused/google/callback?code=auth_code&state={state_value}"
                     )
 
@@ -524,7 +532,7 @@ class TestStateReplayAttack:
 class TestTokenExchangeErrors:
     """Tests for token exchange error handling."""
 
-    def test_callback_handles_token_exchange_failure(self, client, valid_user_id):
+    async def test_callback_handles_token_exchange_failure(self, client, valid_user_id):
         """Test callback returns HTML error when token exchange fails."""
         async def mock_exchange_fail(code, http_client, code_verifier=None):
             raise ValueError("Token exchange failed: invalid_grant")
@@ -541,7 +549,7 @@ class TestTokenExchangeErrors:
                 "backend.apps.focused.routers.oauth_google_router.exchange_code",
                 mock_exchange_fail,
             ):
-                response = client.get(
+                response = await client.get(
                     "/auth/focused/google/callback?code=bad_code&state=valid_state"
                 )
 
@@ -549,7 +557,7 @@ class TestTokenExchangeErrors:
         assert "text/html" in response.headers.get("content-type", "")
         assert "failed" in response.text.lower()
 
-    def test_callback_handles_network_error(self, client, valid_user_id):
+    async def test_callback_handles_network_error(self, client, valid_user_id):
         """Test callback handles network error during token exchange."""
         import httpx
 
@@ -568,14 +576,14 @@ class TestTokenExchangeErrors:
                 "backend.apps.focused.routers.oauth_google_router.exchange_code",
                 mock_exchange_network_error,
             ):
-                response = client.get(
+                response = await client.get(
                     "/auth/focused/google/callback?code=auth_code&state=valid_state"
                 )
 
         assert response.status_code == 500
         assert "text/html" in response.headers.get("content-type", "")
 
-    def test_callback_handles_invalid_grant_error(self, client, valid_user_id):
+    async def test_callback_handles_invalid_grant_error(self, client, valid_user_id):
         """Test callback handles invalid_grant error (expired code)."""
         async def mock_exchange_invalid_grant(code, http_client, code_verifier=None):
             raise ValueError("invalid_grant: Code has expired")
@@ -592,7 +600,7 @@ class TestTokenExchangeErrors:
                 "backend.apps.focused.routers.oauth_google_router.exchange_code",
                 mock_exchange_invalid_grant,
             ):
-                response = client.get(
+                response = await client.get(
                     "/auth/focused/google/callback?code=expired_code&state=valid_state"
                 )
 
@@ -607,18 +615,17 @@ class TestTokenExchangeErrors:
 class TestHTMLResponseSecurity:
     """Tests for HTML response security and correctness."""
 
-    def test_error_page_is_html_not_json(self, client):
+    async def test_error_page_is_html_not_json(self, client):
         """Test that error pages return HTML, not JSON."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=access_denied"
         )
 
         assert "text/html" in response.headers.get("content-type", "")
         assert "application/json" not in response.headers.get("content-type", "")
 
-    def test_error_page_has_no_sensitive_data(self, client, valid_user_id):
+    async def test_error_page_has_no_sensitive_data(self, client, valid_user_id):
         """Test that error pages do not contain sensitive data."""
-        # Create a state with sensitive data
         async def mock_exchange_fail(code, http_client, code_verifier=None):
             raise ValueError("Token exchange failed")
 
@@ -634,7 +641,7 @@ class TestHTMLResponseSecurity:
                 "backend.apps.focused.routers.oauth_google_router.exchange_code",
                 mock_exchange_fail,
             ):
-                response = client.get(
+                response = await client.get(
                     "/auth/focused/google/callback?code=test_auth_code_xyz&state=valid_state"
                 )
 
@@ -647,7 +654,7 @@ class TestHTMLResponseSecurity:
         assert "access_token" not in html_content
         assert "refresh_token" not in html_content
 
-    def test_success_page_has_no_tokens(self, client, valid_user_id):
+    async def test_success_page_has_no_tokens(self, client, valid_user_id):
         """Test that success page does not expose tokens."""
         async def mock_exchange(code, http_client, code_verifier=None):
             return {
@@ -673,7 +680,7 @@ class TestHTMLResponseSecurity:
                     "backend.apps.focused.routers.oauth_google_router.encrypt_token",
                     return_value="encrypted",
                 ):
-                    response = client.get(
+                    response = await client.get(
                         "/auth/focused/google/callback?code=auth_code&state=valid_state"
                     )
 
@@ -683,9 +690,9 @@ class TestHTMLResponseSecurity:
         assert "ya29.secret_access_token_value" not in html_content
         assert "1//secret_refresh_token_value" not in html_content
 
-    def test_error_page_contains_user_friendly_message(self, client):
+    async def test_error_page_contains_user_friendly_message(self, client):
         """Test that error pages contain user-friendly messages."""
-        response = client.get(
+        response = await client.get(
             "/auth/focused/google/callback?error=access_denied"
         )
 
@@ -702,7 +709,7 @@ class TestHTMLResponseSecurity:
 class TestPKCEVerification:
     """Tests for PKCE code_verifier validation."""
 
-    def test_callback_rejects_missing_verifier_in_state(self, client, valid_user_id):
+    async def test_callback_rejects_missing_verifier_in_state(self, client, valid_user_id):
         """Test callback rejects state data missing code_verifier."""
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             # State without code_verifier
@@ -713,7 +720,7 @@ class TestPKCEVerification:
             }))
             mock_redis.delete = AsyncMock()
 
-            response = client.get(
+            response = await client.get(
                 "/auth/focused/google/callback?code=auth_code&state=valid_state"
             )
 
@@ -728,7 +735,7 @@ class TestPKCEVerification:
 class TestParallelOAuthFlows:
     """Tests for parallel OAuth flows from different users."""
 
-    def test_parallel_flows_have_different_states(self, client):
+    async def test_parallel_flows_have_different_states(self, client):
         """Test that parallel OAuth flows generate unique states."""
         user1_id = str(uuid4())
         user2_id = str(uuid4())
@@ -743,11 +750,11 @@ class TestParallelOAuthFlows:
             mock_redis.set = capture_store
 
             # Start two OAuth flows in parallel
-            response1 = client.get(
+            response1 = await client.get(
                 f"/auth/focused/google/start?user_id={user1_id}",
                 follow_redirects=False,
             )
-            response2 = client.get(
+            response2 = await client.get(
                 f"/auth/focused/google/start?user_id={user2_id}",
                 follow_redirects=False,
             )
@@ -760,12 +767,10 @@ class TestParallelOAuthFlows:
         assert len(states_captured) == 2
         assert states_captured[0] != states_captured[1]
 
-    def test_user1_state_cannot_be_used_by_user2(self, client):
+    async def test_user1_state_cannot_be_used_by_user2(self, client, async_session, oauth_user):
         """Test that user1's state cannot complete user2's OAuth flow."""
-        user1_id = str(uuid4())
-        user2_id = str(uuid4())
+        user1_id = str(oauth_user.id)
 
-        # User1's state data (but user2 tries to use it)
         async def mock_exchange(code, http_client, code_verifier=None):
             return {
                 "access_token": "test_access_token",
@@ -775,9 +780,9 @@ class TestParallelOAuthFlows:
             }
 
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
-            # State belongs to user1
+            # State belongs to user1 (oauth_user in DB)
             mock_redis.get = AsyncMock(return_value=json.dumps({
-                "user_id": user1_id,  # This is user1's ID
+                "user_id": user1_id,
                 "code_verifier": "verifier",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }))
@@ -793,7 +798,7 @@ class TestParallelOAuthFlows:
                 ):
                     # User2 tries to use user1's state
                     # (In practice, the tokens would be stored for user1, not user2)
-                    response = client.get(
+                    response = await client.get(
                         "/auth/focused/google/callback?code=auth_code&state=user1_state"
                     )
 

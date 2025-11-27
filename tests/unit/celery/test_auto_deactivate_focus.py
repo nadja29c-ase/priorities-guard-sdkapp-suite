@@ -166,6 +166,7 @@ class TestAutoDeactivateFocus:
     def test_task_marks_job_completed_on_success(self, valid_user_id, valid_session_id, valid_job_id, mock_focus_session):
         """Test that scheduled job status is set to 'completed' on success."""
         from backend.core.celery_app import auto_deactivate_focus
+        from sqlalchemy.dialects import postgresql
 
         execute_calls = []
 
@@ -192,8 +193,13 @@ class TestAutoDeactivateFocus:
         assert result["success"] is True
         # Should have called execute twice: once for SELECT, once for UPDATE job status
         assert len(execute_calls) == 2
-        # Verify the UPDATE sets status to 'completed'
-        assert "completed" in str(execute_calls[1]).lower()
+        # Verify the UPDATE sets status to 'completed' by compiling with literal binds
+        update_stmt = execute_calls[1]
+        compiled = update_stmt.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True}
+        )
+        assert "completed" in str(compiled).lower()
 
     def test_task_rejects_invalid_user_id_format(self, valid_session_id, valid_job_id):
         """Test that task handles invalid user_id UUID format."""
