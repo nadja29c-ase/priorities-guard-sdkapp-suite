@@ -266,6 +266,10 @@ async def sync_calendar(
 # ---------------------------------------------------------------------
 # Run Focus Mode — Activate/deactivate Apple Focus Mode (Increment 11)
 # ---------------------------------------------------------------------
+# NOTE: Manual future scheduling (e.g., "activate at 9am tomorrow") is intentionally
+# unsupported. The SDK layer must intercept such intents and suggest creating a
+# calendar block instead. This backend only supports immediate activation.
+# ---------------------------------------------------------------------
 @router.post("/run_focus_mode")
 async def run_focus_mode(
     payload: RunFocusModeRequest,
@@ -278,10 +282,15 @@ async def run_focus_mode(
     This endpoint:
     - Generates a shortcut:// URL for the ChatGPT client to open
     - Updates database state (actual_start, actual_end)
-    - Optionally schedules auto-deactivation via Celery
+    - Schedules auto-deactivation via Celery (when duration_minutes provided)
 
     The backend generates shortcut_url but does NOT invoke it.
     ChatGPT client opens the URL on user's device.
+
+    MVP1 Constraint:
+        - Manual activation only supports "start now", not "start later"
+        - Future-scheduled activations must be handled via calendar blocks
+        - SDK layer is responsible for intercepting future-time intents
 
     Identity Source (Increment 7D):
         - Primary: X-User-ID header (from MCP after JWT validation)
@@ -290,9 +299,11 @@ async def run_focus_mode(
     Request Body:
         - action: "on" or "off"
         - trigger_source: "calendar" or "user"
-        - session_id: UUID (required for calendar-triggered)
-        - session_title: Session title (optional, default "Work")
-        - duration_minutes: Auto-deactivate after N minutes (optional)
+        - session_id: UUID (required for calendar-triggered activation)
+        - session_title: Session title (optional, default "Focus Session")
+        - duration_minutes: Session duration in minutes (1-480)
+            * For manual activation (trigger_source="user"): REQUIRED
+            * For calendar-triggered activation: optional (uses event end time)
         - user_confirmation: Required for action="on"
 
     Returns:
@@ -301,11 +312,11 @@ async def run_focus_mode(
             "data": {
                 "shortcut_status": "success" | "failed" | "already_active" | "already_inactive",
                 "shortcut_url": "shortcuts://...",
-                "session_title": "Work",
+                "session_title": "Focus Session",
                 "start_time": "2025-11-26T10:00:00Z",
                 "end_time": "2025-11-26T12:00:00Z" | null,
                 "message": "Focus Mode activated successfully.",
-                "error_details": null
+                "error_details": null | "missing_duration"
             }
         }
     """

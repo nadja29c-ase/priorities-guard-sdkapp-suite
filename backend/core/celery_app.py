@@ -301,7 +301,7 @@ def auto_deactivate_focus(self, user_id: str, session_id: str, job_id: str):
             stmt = (
                 update(FocusedScheduledJob)
                 .where(FocusedScheduledJob.id == job_uuid)
-                .values(status=status)
+                .values(status=status, updated_at=datetime.now(timezone.utc))
             )
             await session.execute(stmt)
 
@@ -338,6 +338,7 @@ def auto_deactivate_focus(self, user_id: str, session_id: str, job_id: str):
                         .values(
                             status="failed",
                             retry_count=FocusedScheduledJob.retry_count + 1,
+                            updated_at=datetime.now(timezone.utc),
                         )
                     )
                     await session.execute(stmt)
@@ -384,7 +385,7 @@ def cleanup_scheduled_jobs(self):
     try:
         from datetime import datetime, timedelta, timezone
 
-        from sqlalchemy import delete
+        from sqlalchemy import delete, select
 
         from backend.apps.focused.db_models import FocusedScheduledJob
         from backend.core.database import AsyncSessionLocal
@@ -393,16 +394,39 @@ def cleanup_scheduled_jobs(self):
             async with AsyncSessionLocal() as session:
                 cutoff = datetime.now(timezone.utc) - timedelta(days=7)
 
-                stmt = delete(FocusedScheduledJob).where(
+                # First, query jobs to be deleted for logging
+                select_stmt = select(
+                    FocusedScheduledJob.id,
+                    FocusedScheduledJob.status,
+                    FocusedScheduledJob.payload,
+                ).where(
                     FocusedScheduledJob.status.in_(["completed", "failed", "cancelled"]),
                     FocusedScheduledJob.updated_at < cutoff,
                 )
+                result = await session.execute(select_stmt)
+                jobs_to_delete = result.fetchall()
 
-                result = await session.execute(stmt)
-                deleted_count = result.rowcount
+                # Log each job being deleted (for debugging/audit)
+                for job_id, status, payload in jobs_to_delete:
+                    session_id = payload.get("session_id") if payload else None
+                    logger.debug(
+                        "[celery] Deleting scheduled job",
+                        extra={
+                            "job_id": str(job_id),
+                            "status": status,
+                            "session_id": session_id,
+                        },
+                    )
+
+                # Now delete the jobs
+                delete_stmt = delete(FocusedScheduledJob).where(
+                    FocusedScheduledJob.status.in_(["completed", "failed", "cancelled"]),
+                    FocusedScheduledJob.updated_at < cutoff,
+                )
+                await session.execute(delete_stmt)
                 await session.commit()
 
-                return deleted_count
+                return len(jobs_to_delete)
 
         # Run async function in sync context
         try:
@@ -416,11 +440,21 @@ def cleanup_scheduled_jobs(self):
 
         deleted_count = loop.run_until_complete(run_cleanup())
 
-        logger.info(f"[celery] Scheduled jobs cleanup completed: {deleted_count} deleted")
+        logger.info(
+            "[celery] Scheduled jobs cleanup completed",
+            extra={
+                "deleted_count": deleted_count,
+                "retention_days": 7,
+                "statuses_cleaned": ["completed", "failed", "cancelled"],
+            },
+        )
         return deleted_count
 
     except Exception as e:
-        logger.error(f"[celery] Scheduled jobs cleanup failed: {e}")
+        logger.error(
+            "[celery] Scheduled jobs cleanup failed",
+            extra={"error": str(e), "retry_count": self.request.retries},
+        )
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 
 
