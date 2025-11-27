@@ -263,7 +263,7 @@ async def run_focus_mode(
     action: str,
     trigger_source: str,
     session_id: str | None = None,
-    focus_name: str | None = None,
+    session_title: str | None = None,
     duration_minutes: int | None = None,
     user_confirmation: bool | None = None,
     meta: Optional[Dict[str, Any]] = None
@@ -284,7 +284,7 @@ async def run_focus_mode(
         action: "on" to activate, "off" to deactivate
         trigger_source: "calendar" (from detected event) or "user" (manual)
         session_id: Focus session UUID (required for calendar-triggered)
-        focus_name: Focus mode name (e.g., "Work", "Do Not Disturb")
+        session_title: Session title (e.g., "Work", "Do Not Disturb")
         duration_minutes: Auto-deactivate after this many minutes (1-480)
         user_confirmation: User confirmed activation (required for action="on")
         meta: Request metadata (headers, correlation_id)
@@ -293,7 +293,7 @@ async def run_focus_mode(
         JSON string with:
         - shortcut_status: "success" | "failed" | "already_active" | "already_inactive"
         - shortcut_url: URL for ChatGPT client to open
-        - focus_name: The focus mode name used
+        - session_title: The session title used
         - start_time: ISO 8601 timestamp
         - end_time: ISO 8601 timestamp | None
         - message: Human-readable status message
@@ -321,7 +321,7 @@ async def run_focus_mode(
             "action": action,
             "trigger_source": trigger_source,
             "session_id": session_id,
-            "focus_name": focus_name,
+            "session_title": session_title,
             "duration_minutes": duration_minutes,
             "user_confirmation": user_confirmation,
         },

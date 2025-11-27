@@ -291,7 +291,7 @@ async def run_focus_mode(
         - action: "on" or "off"
         - trigger_source: "calendar" or "user"
         - session_id: UUID (required for calendar-triggered)
-        - focus_name: Focus mode name (optional, default "Work")
+        - session_title: Session title (optional, default "Work")
         - duration_minutes: Auto-deactivate after N minutes (optional)
         - user_confirmation: Required for action="on"
 
@@ -301,7 +301,7 @@ async def run_focus_mode(
             "data": {
                 "shortcut_status": "success" | "failed" | "already_active" | "already_inactive",
                 "shortcut_url": "shortcuts://...",
-                "focus_name": "Work",
+                "session_title": "Work",
                 "start_time": "2025-11-26T10:00:00Z",
                 "end_time": "2025-11-26T12:00:00Z" | null,
                 "message": "Focus Mode activated successfully.",
@@ -319,7 +319,7 @@ async def run_focus_mode(
             session=session,
             trigger_source=payload.trigger_source,
             session_id=payload.session_id,
-            focus_name=payload.focus_name,
+            session_title=payload.session_title,
             duration_minutes=payload.duration_minutes,
             user_confirmation=payload.user_confirmation,
         )

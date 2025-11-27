@@ -145,7 +145,7 @@ class TestFocusModeActivation:
                 action="on",
                 session=mock_session,
                 trigger_source="user",
-                focus_name="Work",
+                session_title="Work",
                 user_confirmation=True,
             )
 
@@ -153,7 +153,7 @@ class TestFocusModeActivation:
         assert result["shortcut_url"] is not None
         assert "shortcuts://" in result["shortcut_url"]
         assert urllib.parse.quote("Work") in result["shortcut_url"]
-        assert result["focus_name"] == "Work"
+        assert result["session_title"] == "Work"
 
     @pytest.mark.asyncio
     async def test_activation_with_duration_schedules_deactivation(self, mock_session, valid_user_id):
@@ -349,7 +349,7 @@ class TestResponseFormat:
         # All required fields must be present
         assert "shortcut_status" in result
         assert "shortcut_url" in result
-        assert "focus_name" in result
+        assert "session_title" in result
         assert "start_time" in result
         assert "end_time" in result
         assert "message" in result
@@ -560,7 +560,7 @@ class TestShortcutURLSafety:
 
     @pytest.mark.asyncio
     async def test_shortcut_url_escaped_properly_for_special_chars(self, mock_session, valid_user_id):
-        """Test that focus_name with special chars is URL-encoded."""
+        """Test that session_title with special chars is URL-encoded."""
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=None)
         mock_session.execute.return_value = mock_result
@@ -571,7 +571,7 @@ class TestShortcutURLSafety:
                 action="on",
                 session=mock_session,
                 trigger_source="user",
-                focus_name="Work & Study",  # Contains special char
+                session_title="Work & Study",  # Contains special char
                 user_confirmation=True,
             )
 

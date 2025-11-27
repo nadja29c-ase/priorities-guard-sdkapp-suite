@@ -52,9 +52,9 @@ class RunFocusModeRequest(BaseModel):
         None,
         description="Focus session UUID (required for calendar-triggered activation)",
     )
-    focus_name: str | None = Field(
+    session_title: str | None = Field(
         None,
-        description="Focus mode name (e.g., 'Work', 'Do Not Disturb'). Default: 'Work'",
+        description="Session title (e.g., 'Work', 'Do Not Disturb'). Default: 'Work'",
         max_length=100,
     )
     duration_minutes: int | None = Field(

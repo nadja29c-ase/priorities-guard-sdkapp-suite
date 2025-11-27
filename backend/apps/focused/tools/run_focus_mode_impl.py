@@ -31,11 +31,11 @@ from backend.core.celery_app import celery_app
 logger = structlog.get_logger(__name__)
 
 # Shortcut URL templates
-ACTIVATE_SHORTCUT_URL = "shortcuts://run-shortcut?name=Activate%20Focus%20Mode&input=text&text={focus_name}"
+ACTIVATE_SHORTCUT_URL = "shortcuts://run-shortcut?name=Activate%20Focus%20Mode&input=text&text={session_title}"
 DEACTIVATE_SHORTCUT_URL = "shortcuts://run-shortcut?name=Deactivate%20Focus%20Mode"
 
-# Default focus mode name
-DEFAULT_FOCUS_NAME = "Work"
+# Default session title
+DEFAULT_SESSION_TITLE = "Work"
 
 
 async def run_focus_mode_impl(
@@ -44,7 +44,7 @@ async def run_focus_mode_impl(
     session: AsyncSession,
     trigger_source: Literal["calendar", "user"],
     session_id: str | None = None,
-    focus_name: str | None = None,
+    session_title: str | None = None,
     duration_minutes: int | None = None,
     user_confirmation: bool | None = None,
 ) -> dict:
@@ -57,7 +57,7 @@ async def run_focus_mode_impl(
         session: Database session
         trigger_source: "calendar" (from detected event) or "user" (manual)
         session_id: Session UUID (required for calendar-triggered, ignored for user-triggered)
-        focus_name: Focus mode name (default "Work")
+        session_title: Session title (default "Work")
         duration_minutes: Auto-deactivate after this many minutes (optional)
         user_confirmation: User confirmed activation (required for action="on")
 
@@ -65,7 +65,7 @@ async def run_focus_mode_impl(
         Dictionary with:
         - shortcut_status: "success" | "failed" | "not_installed" | "already_active" | "already_inactive"
         - shortcut_url: URL for ChatGPT client to open on device
-        - focus_name: The focus mode name used
+        - session_title: The session title used
         - start_time: ISO 8601 timestamp
         - end_time: ISO 8601 timestamp | None
         - message: Human-readable status message
@@ -90,8 +90,8 @@ async def run_focus_mode_impl(
         log.warning("invalid_trigger_source", trigger_source=trigger_source)
         return _error_response(f"Invalid trigger_source: '{trigger_source}'. Must be 'calendar' or 'user'.")
 
-    # Normalize focus_name
-    focus_name = focus_name or DEFAULT_FOCUS_NAME
+    # Normalize session_title
+    session_title = session_title or DEFAULT_SESSION_TITLE
 
     if action == "on":
         return await _activate_focus_mode(
@@ -99,7 +99,7 @@ async def run_focus_mode_impl(
             session=session,
             trigger_source=trigger_source,
             session_id=session_id,
-            focus_name=focus_name,
+            session_title=session_title,
             duration_minutes=duration_minutes,
             user_confirmation=user_confirmation,
             log=log,
@@ -119,7 +119,7 @@ async def _activate_focus_mode(
     session: AsyncSession,
     trigger_source: Literal["calendar", "user"],
     session_id: str | None,
-    focus_name: str,
+    session_title: str,
     duration_minutes: int | None,
     user_confirmation: bool | None,
     log,
@@ -142,7 +142,7 @@ async def _activate_focus_mode(
         return {
             "shortcut_status": "failed",
             "shortcut_url": None,
-            "focus_name": focus_name,
+            "session_title": session_title,
             "start_time": now.isoformat(),
             "end_time": None,
             "message": "User confirmation required to activate Focus Mode.",
@@ -156,7 +156,7 @@ async def _activate_focus_mode(
         return {
             "shortcut_status": "already_active",
             "shortcut_url": None,
-            "focus_name": focus_name,
+            "session_title": session_title,
             "start_time": existing_active.actual_start.isoformat() if existing_active.actual_start else now.isoformat(),
             "end_time": None,
             "message": "Focus Mode is already active. Please deactivate first.",
@@ -186,7 +186,7 @@ async def _activate_focus_mode(
 
     else:
         # Manual trigger: create new session row
-        focus_session = await _create_manual_session(user_uuid, focus_name, now, session)
+        focus_session = await _create_manual_session(user_uuid, session_title, now, session)
 
     # Calculate end time if duration provided
     end_time = None
@@ -211,15 +211,15 @@ async def _activate_focus_mode(
     )
 
     # Generate shortcut URL
-    shortcut_url = ACTIVATE_SHORTCUT_URL.format(focus_name=quote(focus_name))
+    shortcut_url = ACTIVATE_SHORTCUT_URL.format(session_title=quote(session_title))
 
     return {
         "shortcut_status": "success",
         "shortcut_url": shortcut_url,
-        "focus_name": focus_name,
+        "session_title": session_title,
         "start_time": now.isoformat(),
         "end_time": end_time.isoformat() if end_time else None,
-        "message": f"Focus Mode '{focus_name}' activated successfully.",
+        "message": f"Focus Mode '{session_title}' activated successfully.",
         "error_details": None,
     }
 
@@ -253,7 +253,7 @@ async def _deactivate_focus_mode(
             return {
                 "shortcut_status": "already_inactive",
                 "shortcut_url": DEACTIVATE_SHORTCUT_URL,
-                "focus_name": DEFAULT_FOCUS_NAME,
+                "session_title": DEFAULT_SESSION_TITLE,
                 "start_time": now.isoformat(),
                 "end_time": now.isoformat(),
                 "message": "No active Focus Mode session to deactivate.",
@@ -266,7 +266,7 @@ async def _deactivate_focus_mode(
         return {
             "shortcut_status": "already_inactive",
             "shortcut_url": DEACTIVATE_SHORTCUT_URL,
-            "focus_name": focus_session.event_summary or DEFAULT_FOCUS_NAME,
+            "session_title": focus_session.event_summary or DEFAULT_SESSION_TITLE,
             "start_time": focus_session.actual_start.isoformat() if focus_session.actual_start else now.isoformat(),
             "end_time": focus_session.actual_end.isoformat(),
             "message": "Focus Mode session was already deactivated.",
@@ -286,7 +286,7 @@ async def _deactivate_focus_mode(
     return {
         "shortcut_status": "success",
         "shortcut_url": DEACTIVATE_SHORTCUT_URL,
-        "focus_name": focus_session.event_summary or DEFAULT_FOCUS_NAME,
+        "session_title": focus_session.event_summary or DEFAULT_SESSION_TITLE,
         "start_time": focus_session.actual_start.isoformat() if focus_session.actual_start else now.isoformat(),
         "end_time": now.isoformat(),
         "message": "Focus Mode deactivated successfully.",
@@ -336,7 +336,7 @@ async def _get_session_by_id(
 
 async def _create_manual_session(
     user_uuid: UUID,
-    focus_name: str,
+    session_title: str,
     now: datetime,
     session: AsyncSession,
 ) -> FocusedFocusSession:
@@ -354,7 +354,7 @@ async def _create_manual_session(
         google_calendar_id="primary",
         google_ical_uid=None,  # Manual session
         google_updated_at=None,  # Manual session
-        event_summary=focus_name,
+        event_summary=session_title,
         start_time=now,
         end_time=end_time,
         is_focus_block=True,
@@ -448,7 +448,7 @@ def _error_response(message: str) -> dict:
     return {
         "shortcut_status": "failed",
         "shortcut_url": None,
-        "focus_name": DEFAULT_FOCUS_NAME,
+        "session_title": DEFAULT_SESSION_TITLE,
         "start_time": datetime.now(timezone.utc).isoformat(),
         "end_time": None,
         "message": message,
@@ -461,7 +461,7 @@ def _not_found_response() -> dict:
     return {
         "shortcut_status": "failed",
         "shortcut_url": None,
-        "focus_name": DEFAULT_FOCUS_NAME,
+        "session_title": DEFAULT_SESSION_TITLE,
         "start_time": datetime.now(timezone.utc).isoformat(),
         "end_time": None,
         "message": "Session not found.",

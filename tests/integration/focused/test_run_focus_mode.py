@@ -168,7 +168,7 @@ class TestActivationFlow:
                 json={
                     "action": "on",
                     "trigger_source": "user",
-                    "focus_name": "Deep Work",
+                    "session_title": "Deep Work",
                     "user_confirmation": True,
                 },
                 headers={"X-User-ID": str(test_user.id)},
@@ -1222,7 +1222,7 @@ class TestAPIResponseFormat:
         # Verify data fields
         assert "shortcut_status" in data["data"]
         assert "shortcut_url" in data["data"]
-        assert "focus_name" in data["data"]
+        assert "session_title" in data["data"]
         assert "message" in data["data"]
 
     @pytest.mark.asyncio
