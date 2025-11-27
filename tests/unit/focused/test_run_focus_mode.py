@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
+from backend.apps.focused.tools import run_focus_mode_impl as impl_module
 from backend.apps.focused.tools.run_focus_mode_impl import (
     run_focus_mode_impl,
     _get_active_session,
@@ -146,6 +147,7 @@ class TestFocusModeActivation:
                 session=mock_session,
                 trigger_source="user",
                 session_title="Work",
+                duration_minutes=60,  # Required for manual activation
                 user_confirmation=True,
             )
 
@@ -154,6 +156,29 @@ class TestFocusModeActivation:
         assert "shortcuts://" in result["shortcut_url"]
         assert urllib.parse.quote("Work") in result["shortcut_url"]
         assert result["session_title"] == "Work"
+
+    @pytest.mark.asyncio
+    async def test_manual_activation_requires_duration(self, mock_session, valid_user_id):
+        """Test that manual activation without duration_minutes returns missing_duration error."""
+        # Mock no active session
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_session.execute.return_value = mock_result
+
+        result = await run_focus_mode_impl(
+            user_id=valid_user_id,
+            action="on",
+            session=mock_session,
+            trigger_source="user",
+            session_title="Work",
+            duration_minutes=None,  # Missing duration
+            user_confirmation=True,
+        )
+
+        assert result["shortcut_status"] == "failed"
+        assert result["shortcut_url"] is None
+        assert result["error_details"] == "missing_duration"
+        assert "duration_minutes" in result["message"].lower()
 
     @pytest.mark.asyncio
     async def test_activation_with_duration_schedules_deactivation(self, mock_session, valid_user_id):
@@ -293,6 +318,8 @@ class TestManualSessionCreation:
     @pytest.mark.asyncio
     async def test_manual_session_has_null_google_fields(self, mock_session, valid_user_id):
         """Test that manual sessions have null Google Calendar fields."""
+        from backend.apps.focused.db_models import FocusedFocusSession
+
         # Mock no active session
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=None)
@@ -302,7 +329,9 @@ class TestManualSessionCreation:
 
         def capture_add(obj):
             nonlocal captured_session
-            captured_session = obj
+            # Capture only the FocusedFocusSession, not the FocusedScheduledJob
+            if isinstance(obj, FocusedFocusSession):
+                captured_session = obj
 
         mock_session.add = capture_add
 
@@ -312,6 +341,7 @@ class TestManualSessionCreation:
                 action="on",
                 session=mock_session,
                 trigger_source="user",
+                duration_minutes=60,  # Required for manual activation
                 user_confirmation=True,
             )
 
@@ -552,6 +582,7 @@ class TestShortcutURLSafety:
                 action="on",
                 session=mock_session,
                 trigger_source="user",
+                duration_minutes=60,  # Required for manual activation
                 user_confirmation=True,
             )
 
@@ -572,6 +603,7 @@ class TestShortcutURLSafety:
                 session=mock_session,
                 trigger_source="user",
                 session_title="Work & Study",  # Contains special char
+                duration_minutes=60,  # Required for manual activation
                 user_confirmation=True,
             )
 
@@ -591,6 +623,8 @@ class TestSessionCreationCorrectness:
     @pytest.mark.asyncio
     async def test_manual_session_has_actual_start_set_immediately(self, mock_session, valid_user_id):
         """Test that manual session has actual_start set at creation time."""
+        from backend.apps.focused.db_models import FocusedFocusSession
+
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=None)
         mock_session.execute.return_value = mock_result
@@ -599,7 +633,9 @@ class TestSessionCreationCorrectness:
 
         def capture_add(obj):
             nonlocal captured_session
-            captured_session = obj
+            # Capture only the FocusedFocusSession, not the FocusedScheduledJob
+            if isinstance(obj, FocusedFocusSession):
+                captured_session = obj
 
         mock_session.add = capture_add
 
@@ -611,6 +647,7 @@ class TestSessionCreationCorrectness:
                 action="on",
                 session=mock_session,
                 trigger_source="user",
+                duration_minutes=60,  # Required for manual activation
                 user_confirmation=True,
             )
 
@@ -696,6 +733,7 @@ class TestDBTransactionErrorHandling:
                     action="on",
                     session=mock_session,
                     trigger_source="user",
+                    duration_minutes=60,  # Required for manual activation
                     user_confirmation=True,
                 )
 
@@ -974,6 +1012,13 @@ class TestDurationEdgeCases:
 class TestManualDeactivationJobCancellation:
     """Tests for scheduled job cancellation on manual deactivation."""
 
+    @pytest.fixture(autouse=True)
+    def enable_testing_bypass(self):
+        """Enable isinstance bypass for MagicMock scheduled jobs in these tests."""
+        impl_module._TESTING_BYPASS_ISINSTANCE = True
+        yield
+        impl_module._TESTING_BYPASS_ISINSTANCE = False
+
     @pytest.mark.asyncio
     async def test_manual_deactivation_revokes_scheduled_celery_task(self, mock_session, valid_user_id):
         """Test that manual deactivation revokes the scheduled Celery task."""
@@ -986,8 +1031,10 @@ class TestManualDeactivationJobCancellation:
 
         # Mock scheduled job associated with the session
         scheduled_job = MagicMock()
+        scheduled_job.id = uuid4()
         scheduled_job.celery_task_id = "celery-task-to-revoke-123"
         scheduled_job.status = "pending"
+        scheduled_job.job_type = "focus_deactivate"
 
         call_count = 0
 
@@ -1033,8 +1080,10 @@ class TestManualDeactivationJobCancellation:
         active_session.event_summary = "Focus Time"
 
         scheduled_job = MagicMock()
+        scheduled_job.id = uuid4()
         scheduled_job.celery_task_id = "celery-task-456"
         scheduled_job.status = "pending"
+        scheduled_job.job_type = "focus_deactivate"
 
         call_count = 0
 
@@ -1130,6 +1179,8 @@ class TestSingleDBRowCreation:
     @pytest.mark.asyncio
     async def test_manual_activation_creates_single_session_record_only_once(self, mock_session, valid_user_id):
         """Test that manual activation creates exactly one DB row, no duplicates."""
+        from backend.apps.focused.db_models import FocusedFocusSession
+
         mock_result = MagicMock()
         mock_result.scalar_one_or_none = MagicMock(return_value=None)
         mock_session.execute.return_value = mock_result
@@ -1147,18 +1198,17 @@ class TestSingleDBRowCreation:
                 action="on",
                 session=mock_session,
                 trigger_source="user",
+                duration_minutes=60,  # Required for manual activation
                 user_confirmation=True,
             )
 
         assert result["shortcut_status"] == "success"
 
-        # Count FocusedFocusSession objects by checking for actual_start attribute
-        # (FocusedScheduledJob has scheduled_at instead, so this is unambiguous)
-        # Using actual_start because it's specific to FocusedFocusSession and won't
-        # be added to FocusedScheduledJob in future iterations
+        # Count FocusedFocusSession objects using isinstance check
+        # (FocusedScheduledJob is also added for auto-deactivation scheduling)
         focus_sessions = [
             obj for obj in added_objects
-            if hasattr(obj, 'actual_start') and hasattr(obj, 'actual_end')
+            if isinstance(obj, FocusedFocusSession)
         ]
         assert len(focus_sessions) == 1, f"Expected exactly 1 FocusedFocusSession, got {len(focus_sessions)}"
 

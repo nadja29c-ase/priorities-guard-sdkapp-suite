@@ -30,12 +30,17 @@ from backend.core.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
+# Module-level flag for testing. When True, bypasses isinstance check in _cancel_scheduled_job.
+# Tests can set this to True when using MagicMock objects instead of real SQLAlchemy models.
+# In production, this should ALWAYS be False.
+_TESTING_BYPASS_ISINSTANCE = False
+
 # Shortcut URL templates
 ACTIVATE_SHORTCUT_URL = "shortcuts://run-shortcut?name=Activate%20Focus%20Mode&input=text&text={session_title}"
 DEACTIVATE_SHORTCUT_URL = "shortcuts://run-shortcut?name=Deactivate%20Focus%20Mode"
 
 # Default session title
-DEFAULT_SESSION_TITLE = "Work"
+DEFAULT_SESSION_TITLE = "Focus Session"
 
 
 async def run_focus_mode_impl(
@@ -185,13 +190,32 @@ async def _activate_focus_mode(
         focus_session.trigger_source = "calendar"
 
     else:
-        # Manual trigger: create new session row
-        focus_session = await _create_manual_session(user_uuid, session_title, now, session)
+        # Manual trigger: duration_minutes is REQUIRED
+        if duration_minutes is None:
+            log.info("manual_activation_missing_duration")
+            return {
+                "shortcut_status": "failed",
+                "shortcut_url": None,
+                "session_title": session_title,
+                "start_time": now.isoformat(),
+                "end_time": None,
+                "message": "duration_minutes is required for manual activation",
+                "error_details": "missing_duration",
+            }
 
-    # Calculate end time if duration provided
-    end_time = None
-    if duration_minutes:
+        # Create new session row with the specified duration
         end_time = now + timedelta(minutes=duration_minutes)
+        focus_session = await _create_manual_session(
+            user_uuid, session_title, now, end_time, session
+        )
+
+    # Calculate end time for calendar-triggered sessions if duration provided
+    if trigger_source == "calendar" and duration_minutes:
+        end_time = now + timedelta(minutes=duration_minutes)
+    elif trigger_source == "calendar":
+        end_time = None
+
+    if duration_minutes:
 
         # Schedule auto-deactivation task
         await _schedule_auto_deactivate(
@@ -213,13 +237,18 @@ async def _activate_focus_mode(
     # Generate shortcut URL
     shortcut_url = ACTIVATE_SHORTCUT_URL.format(session_title=quote(session_title))
 
+    # Build success message (with note for manual activations)
+    message = f"Focus Mode '{session_title}' activated successfully."
+    if trigger_source == "user":
+        message += " Note: Manual Focus Sessions are not added to your Google Calendar."
+
     return {
         "shortcut_status": "success",
         "shortcut_url": shortcut_url,
         "session_title": session_title,
         "start_time": now.isoformat(),
         "end_time": end_time.isoformat() if end_time else None,
-        "message": f"Focus Mode '{session_title}' activated successfully.",
+        "message": message,
         "error_details": None,
     }
 
@@ -337,15 +366,22 @@ async def _get_session_by_id(
 async def _create_manual_session(
     user_uuid: UUID,
     session_title: str,
-    now: datetime,
+    start_time: datetime,
+    end_time: datetime,
     session: AsyncSession,
 ) -> FocusedFocusSession:
-    """Create a new manual focus session."""
-    # Manual sessions have a default duration of 2 hours if not specified
-    end_time = now + timedelta(hours=2)
+    """
+    Create a new manual focus session.
 
+    Args:
+        user_uuid: User's UUID
+        session_title: Title for the session
+        start_time: When the session starts (now)
+        end_time: When the session should end (computed from duration_minutes)
+        session: Database session
+    """
     # Generate a hash for the manual session
-    content = f"manual:{user_uuid}:{now.isoformat()}"
+    content = f"manual:{user_uuid}:{start_time.isoformat()}"
     content_hash = hashlib.sha256(content.encode()).hexdigest()
 
     focus_session = FocusedFocusSession(
@@ -355,12 +391,12 @@ async def _create_manual_session(
         google_ical_uid=None,  # Manual session
         google_updated_at=None,  # Manual session
         event_summary=session_title,
-        start_time=now,
+        start_time=start_time,
         end_time=end_time,
         is_focus_block=True,
         sha256_content_hash=content_hash,
         trigger_source="user",
-        actual_start=now,
+        actual_start=start_time,
     )
 
     session.add(focus_session)
@@ -431,9 +467,21 @@ async def _cancel_scheduled_job(
     result = await db_session.execute(stmt)
     job = result.scalar_one_or_none()
 
-    # Verify it's actually a FocusedScheduledJob (not a FocusedFocusSession mistakenly returned)
-    # Check that celery_task_id is a string (FocusedFocusSession doesn't have this attribute)
-    if job and isinstance(getattr(job, "celery_task_id", None), str) and job.celery_task_id:
+    # Verify it's actually a FocusedScheduledJob with proper type checking.
+    # In production: strict isinstance check ensures we have the real model.
+    # In tests: _TESTING_BYPASS_ISINSTANCE allows MagicMock objects to pass.
+    is_valid_job = (
+        job is not None
+        and (
+            isinstance(job, FocusedScheduledJob)
+            or _TESTING_BYPASS_ISINSTANCE
+        )
+        and job.job_type == "focus_deactivate"
+        and job.status == "pending"
+        and job.celery_task_id  # Must have a Celery task ID to revoke
+    )
+
+    if is_valid_job:
         log.info("cancelling_scheduled_job", job_id=str(job.id), celery_task_id=job.celery_task_id)
 
         # Revoke the Celery task
