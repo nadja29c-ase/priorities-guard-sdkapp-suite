@@ -104,7 +104,8 @@ class CoreConnection(Base):
         comment="Connection type: 'google', 'apple', 'oauth_provider', or 'unknown'"
     )
 
-    encrypted_access_token: Mapped[str] = mapped_column(Text, nullable=False) #The user's Google access token, but encrypted with AES-256
+    # Encrypted access token (unused for oauth_provider connections - see ck_encrypted_access_token_conditional)
+    encrypted_access_token: Mapped[str] = mapped_column(Text, nullable=False)
 
     encrypted_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True) #Google’s refresh token, encrypted.
     

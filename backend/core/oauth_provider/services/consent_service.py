@@ -57,6 +57,10 @@ async def create_authorization_code(
         - PKCE challenge stored for verification during token exchange
         - Code replay attacks prevented by 'used' flag
 
+    Important:
+        Caller MUST delete the Redis authorization context after calling this function.
+        The context is single-use and must not be replayable.
+
     Example:
         >>> code = await create_authorization_code(
         ...     db, "user-123", "focused-client-456", "abc...", "S256",
@@ -87,8 +91,12 @@ async def create_authorization_code(
         used=False
     )
 
-    db.add(auth_code_record)
-    await db.commit()
+    try:
+        db.add(auth_code_record)
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     # Log code creation (no secrets logged)
     request_logger = logger.bind(correlation_id=correlation_id) if correlation_id else logger

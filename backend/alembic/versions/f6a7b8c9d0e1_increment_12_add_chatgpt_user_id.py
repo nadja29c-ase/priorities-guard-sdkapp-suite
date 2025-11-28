@@ -32,8 +32,14 @@ down_revision: Union[str, Sequence[str], None] = ('d4e5f6a7b8c9', 'e5f6a7b8c9d0'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# This migration merges two heads: d4e5f6a7b8c9 and e5f6a7b8c9d0
+# It does not modify either branch besides adding new schema changes.
+
 
 def upgrade() -> None:
+    # NOTE: This migration assumes core_users is empty at this point.
+    # If running on a database with existing rows, this will fail unless backfilled.
+    #
     # Add chatgpt_user_id column to core_users (NOT NULL - all users created via OAuth login_hint)
     op.add_column(
         'core_users',
@@ -45,18 +51,27 @@ def upgrade() -> None:
         )
     )
 
-    # Create unique index for chatgpt_user_id lookups
+    # Create unique constraint (explicit name for clarity, matches model's unique=True)
+    op.create_unique_constraint(
+        'uq_core_users_chatgpt_user_id',
+        'core_users',
+        ['chatgpt_user_id']
+    )
+
+    # Create index for chatgpt_user_id lookups (separate from unique constraint)
     op.create_index(
         'ix_core_users_chatgpt_user_id',
         'core_users',
-        ['chatgpt_user_id'],
-        unique=True
+        ['chatgpt_user_id']
     )
 
 
 def downgrade() -> None:
     # Drop the index first
     op.drop_index('ix_core_users_chatgpt_user_id', table_name='core_users')
+
+    # Drop the unique constraint
+    op.drop_constraint('uq_core_users_chatgpt_user_id', 'core_users', type_='unique')
 
     # Drop the column
     op.drop_column('core_users', 'chatgpt_user_id')

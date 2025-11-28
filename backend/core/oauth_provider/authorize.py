@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse, urlunparse
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger
@@ -88,6 +88,44 @@ def _normalize(s: str | None) -> str | None:
         return None
     s = s.strip()
     return s if s else None
+
+
+def _normalize_redirect_uri(uri: str) -> str | None:
+    """
+    Normalize redirect_uri per RFC 3986 rules:
+    - scheme: lowercased
+    - host: lowercased
+    - path: preserved case-sensitive
+    - query: must be empty
+    - fragment: must be empty
+
+    Returns:
+        Normalized URI string, or None if invalid.
+    """
+    if not uri:
+        return None
+
+    try:
+        parsed = urlparse(uri)
+    except Exception:
+        return None
+
+    # Reject relative URIs (must have scheme and host)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+
+    # Reject any query or fragment (OAuth 2.1 strict)
+    if parsed.query or parsed.fragment:
+        return None
+
+    # Normalize scheme and host to lowercase
+    normalized = parsed._replace(
+        scheme=parsed.scheme.lower(),
+        netloc=parsed.netloc.lower(),
+        # Keep path exact
+    )
+
+    return urlunparse(normalized)
 
 
 async def _get_or_create_user(
@@ -376,8 +414,29 @@ async def authorize_endpoint(
             description="Unknown client_id"
         )
 
-    # Validate redirect_uri is in client's registered URIs
-    if redirect_uri not in client.redirect_uris:
+    # Validate redirect_uri per RFC 3986 (case-insensitive scheme/host, case-sensitive path)
+    # Normalize the incoming redirect URI
+    normalized_redirect = _normalize_redirect_uri(redirect_uri)
+    if not normalized_redirect:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_redirect_uri",
+            client_id=client_id,
+            message="Invalid redirect_uri format (query/fragment not allowed)"
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_request",
+            description="Invalid redirect_uri"
+        )
+
+    # Normalize all registered URIs and compare
+    normalized_registered = {
+        _normalize_redirect_uri(uri) for uri in client.redirect_uris
+    }
+
+    if normalized_redirect not in normalized_registered:
         request_logger.warning(
             "oauth.authorize.error",
             error="invalid_redirect_uri",
@@ -390,27 +449,39 @@ async def authorize_endpoint(
             description="redirect_uri not registered for this client"
         )
 
-    # Validate scopes
-    allowed_scopes = {"focused.read", "focused.write", "focused.notify"}
+    # Validate scopes against client's registered scopes (NOT hardcoded)
+    # Security: Each client can only request scopes it was registered with
+    allowed_scopes = set(client.scopes)
     requested_scopes = set(scope.split())
 
     if not requested_scopes.issubset(allowed_scopes):
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_scope",
+            client_id=client_id,
+            requested=list(requested_scopes),
+            allowed=list(allowed_scopes)
+        )
         return _error_redirect(
             redirect_uri,
             state,
             error="invalid_scope",
-            description=f"Invalid scopes. Allowed: {', '.join(allowed_scopes)}"
+            description="Requested scopes exceed client's registered scopes"
         )
 
     # Resolve user identity via login_hint
     # This looks up or creates a user in core_users by chatgpt_user_id
     user = await _get_or_create_user(db, login_hint, correlation_id)
 
+    # Extract client_name from provider_metadata (human-readable app name for consent UI)
+    # NOTE: client.provider is the connection_type ("oauth_provider"), NOT the app name
+    client_name = client.provider_metadata.get("client_name", client_id)
+
     # Create authorization context in Redis (10 minute TTL)
     # IMPORTANT: Store internal user_id (UUID), NOT chatgpt_user_id
     auth_context_id = await create_authorization_context(
         client_id=client_id,
-        client_name=client.provider,  # provider field stores client_name
+        client_name=client_name,
         code_challenge=code_challenge,
         code_challenge_method=code_challenge_method,
         scope=scope,
@@ -425,10 +496,25 @@ async def authorize_endpoint(
     language = _detect_language(request)
     template_name = f"oauth_consent_{language}.html"
 
+    # Scope descriptions for consent UI (localized)
+    # TODO: Move to i18n system for proper localization
+    scope_descriptions_en = {
+        "focused.read": "View focus patterns and calendar sync status",
+        "focused.write": "Activate Focus Mode and manage settings",
+        "focused.notify": "Send notifications",
+    }
+    scope_descriptions_de = {
+        "focused.read": "Fokusmuster und Kalender-Synchronisationsstatus anzeigen",
+        "focused.write": "Fokusmodus aktivieren und Einstellungen verwalten",
+        "focused.notify": "Benachrichtigungen senden",
+    }
+    scope_descriptions = scope_descriptions_de if language == "de" else scope_descriptions_en
+
     request_logger.info(
         "oauth.authorize.consent_rendered",
         user_id=str(user.id),
         client_id=client_id,
+        client_name=client_name,
         language=language
     )
 
@@ -437,7 +523,8 @@ async def authorize_endpoint(
         {
             "request": request,
             "auth_context_id": auth_context_id,
-            "client_name": client.provider,  # provider field stores client_name
-            "scopes": requested_scopes
+            "client_name": client_name,
+            "scopes": requested_scopes,
+            "scope_descriptions": scope_descriptions,
         }
     )

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'none'; form-action 'self'; base-uri 'none'">
     <title>Authorize Focused - Priority Guardian</title>
     <style>
         * {
@@ -206,8 +206,8 @@
 </head>
 <body>
     <main class="container" role="main">
-        <header class="header">
-            <h1 class="app-name">Focused</h1>
+        <header class="header" aria-labelledby="app-title">
+            <h1 id="app-title" class="app-name">{{ client_name }}</h1>
             <p class="subtitle">Priority Guardian</p>
         </header>
 
@@ -218,18 +218,12 @@
         <section class="permissions-section" aria-labelledby="permissions-title">
             <h2 id="permissions-title" class="section-title">Permissions Requested</h2>
             <ul class="permission-list" role="list">
+                {% for scope in scopes %}
                 <li class="permission-item">
-                    <div class="permission-name" aria-label="Permission: Read access">focused.read</div>
-                    <div class="permission-description">View focus patterns and calendar sync status</div>
+                    <div class="permission-name" aria-label="Permission: {{ scope }}">{{ scope }}</div>
+                    <div class="permission-description">{{ scope_descriptions.get(scope, scope) }}</div>
                 </li>
-                <li class="permission-item">
-                    <div class="permission-name" aria-label="Permission: Write access">focused.write</div>
-                    <div class="permission-description">Activate Focus Mode and manage settings</div>
-                </li>
-                <li class="permission-item">
-                    <div class="permission-name" aria-label="Permission: Notification access">focused.notify</div>
-                    <div class="permission-description">Send notifications</div>
-                </li>
+                {% endfor %}
             </ul>
         </section>
 

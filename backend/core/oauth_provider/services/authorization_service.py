@@ -15,6 +15,7 @@ logger = get_logger(__name__)
 
 AUTH_CONTEXT_TTL = 600  # 10 minutes
 AUTH_CONTEXT_KEY_PREFIX = "oauth:auth:"
+AUTH_CONTEXT_SCHEMA_VERSION = 1  # Increment when context structure changes
 
 
 def build_auth_context_key(auth_context_id: str) -> str:
@@ -69,6 +70,7 @@ async def create_authorization_context(
 
     # Build authorization context
     auth_context = {
+        "v": AUTH_CONTEXT_SCHEMA_VERSION,  # Schema version for future migrations
         "client_id": client_id,
         "client_name": client_name,
         "code_challenge": code_challenge,
