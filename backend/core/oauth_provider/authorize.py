@@ -314,6 +314,20 @@ async def authorize_endpoint(
             description="login_hint parameter required"
         )
 
+    # Validate login_hint length (chatgpt_user_id is VARCHAR(64))
+    if len(login_hint) > 64:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_request",
+            message="login_hint exceeds maximum length"
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_request",
+            description="login_hint exceeds maximum length"
+        )
+
     # Phase 2: Rate limit by login_hint (after validation)
     await check_rate_limit(
         key=f"ratelimit:oauth:authorize:login_hint:{login_hint}",

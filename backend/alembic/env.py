@@ -52,7 +52,7 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations() #executes upgrade/downgrade steps.
 
 
-async def run_async_migrations() -> None: 
+async def run_async_migrations() -> None:
     """Run migrations in async mode."""
     connectable = async_engine_from_config( #builds an async engine from alembic.ini settings (which now include your settings.DATABASE_URL).
         config.get_section(config.config_ini_section, {}),
@@ -61,14 +61,22 @@ async def run_async_migrations() -> None:
     )
 #This is how you marry async SQLAlchemy with Alembic, which is still largely sync-first.
     async with connectable.connect() as connection: #opens an async connection.
-        await connection.run_sync(do_run_migrations) #Alembic’s do_run_migrations expects a sync Connection.run_sync lets you run sync code safely with an async connection.
+        await connection.run_sync(do_run_migrations) #Alembic's do_run_migrations expects a sync Connection.run_sync lets you run sync code safely with an async connection.
 
     await connectable.dispose() #clean up the engine (close connections)
 
 #lets the sync Alembic CLI run async DB logic. → this function is triggered → runs async engine → applies migrations.
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    # Check if a connection was passed in (for testing)
+    connectable = config.attributes.get("connection", None)
+
+    if connectable is not None:
+        # Use the provided connection (for integration tests)
+        do_run_migrations(connectable)
+    else:
+        # Normal async mode - create engine from config
+        asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():
