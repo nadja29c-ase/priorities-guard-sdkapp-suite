@@ -50,9 +50,9 @@ class CoreUser(Base):
         comment="Internal user identifier (UUID)"
     )
 
-    chatgpt_user_id: Mapped[str | None] = mapped_column(
+    chatgpt_user_id: Mapped[str] = mapped_column(
         String(64),
-        nullable=True,
+        nullable=False,
         unique=True,
         index=True,
         comment="ChatGPT user ID from login_hint parameter (pseudonymous, for OAuth user lookup)"

@@ -15,7 +15,10 @@ This column stores the ChatGPT user ID from the login_hint OAuth parameter,
 enabling user lookup/creation during OAuth authorization flow.
 
 Changes to core_users:
-- Add chatgpt_user_id: String(64), nullable, unique, indexed
+- Add chatgpt_user_id: String(64), NOT NULL, unique, indexed
+
+Invariant: Every CoreUser is created through OAuth login_hint, so chatgpt_user_id
+is always required. This constraint prevents orphan users with NULL identifiers.
 """
 from typing import Sequence, Union
 
@@ -31,13 +34,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Add chatgpt_user_id column to core_users
+    # Add chatgpt_user_id column to core_users (NOT NULL - all users created via OAuth login_hint)
     op.add_column(
         'core_users',
         sa.Column(
             'chatgpt_user_id',
             sa.String(64),
-            nullable=True,
+            nullable=False,
             comment='ChatGPT user ID from login_hint parameter (pseudonymous, for OAuth user lookup)'
         )
     )
