@@ -89,6 +89,15 @@ async def consent_endpoint(
             detail="Authorization context expired or invalid"
         )
 
+    # Validate required fields in context
+    required_fields = ["client_id", "code_challenge", "code_challenge_method", "scope", "redirect_uri", "user_id"]
+    missing_fields = [f for f in required_fields if f not in auth_context or not auth_context[f]]
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Authorization context missing required fields: {', '.join(missing_fields)}"
+        )
+
     # Extract context data
     client_id = auth_context["client_id"]
     code_challenge = auth_context["code_challenge"]

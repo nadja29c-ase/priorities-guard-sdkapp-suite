@@ -40,13 +40,8 @@ def upgrade() -> None:
     2. Alter focused_focus_sessions table
     3. Create focused_scheduled_jobs table
     """
-    # 1. Create ENUM types
-    # trigger_source_enum: 'calendar' or 'user'
-    trigger_source_enum = postgresql.ENUM(
-        'calendar', 'user',
-        name='trigger_source_enum',
-        create_type=False
-    )
+    # 1. Create ENUM types via raw SQL (postgresql.ENUM with create_type=False
+    # is used in column definitions to reference these pre-created types)
     op.execute("CREATE TYPE trigger_source_enum AS ENUM ('calendar', 'user')")
 
     # job_type_enum: types of scheduled jobs
@@ -87,7 +82,7 @@ def upgrade() -> None:
         'focused_focus_sessions',
         sa.Column(
             'trigger_source',
-            sa.Enum('calendar', 'user', name='trigger_source_enum', create_type=False),
+            postgresql.ENUM('calendar', 'user', name='trigger_source_enum', create_type=False),
             nullable=True,
             comment='How the focus session was triggered'
         )
@@ -139,7 +134,7 @@ def upgrade() -> None:
         # Job type
         sa.Column(
             'job_type',
-            sa.Enum('focus_deactivate', 'webhook_renewal', name='job_type_enum', create_type=False),
+            postgresql.ENUM('focus_deactivate', 'webhook_renewal', name='job_type_enum', create_type=False),
             nullable=False,
             comment='Type of scheduled job'
         ),
@@ -153,7 +148,7 @@ def upgrade() -> None:
         # Job status
         sa.Column(
             'status',
-            sa.Enum('pending', 'completed', 'failed', 'cancelled', name='job_status_enum', create_type=False),
+            postgresql.ENUM('pending', 'completed', 'failed', 'cancelled', name='job_status_enum', create_type=False),
             server_default=text("'pending'"),
             nullable=False,
             comment='Current job status'

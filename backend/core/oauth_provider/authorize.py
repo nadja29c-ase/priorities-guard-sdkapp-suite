@@ -1,25 +1,32 @@
 """
 Authorization Endpoint - OAuth 2.1 authorization request handling.
 
-Handles authorization requests, validates parameters, and renders consent screen.
+Handles authorization requests, validates parameters, resolves user identity
+via login_hint, and renders consent screen with language detection.
+
+Increment 12: OAuth Consent UI Implementation.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlencode
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger
-from backend.core.models import CoreConnection
-from backend.core.rate_limit import rate_limit_authorize
+from backend.core.models import CoreConnection, CoreUser
+from backend.core.rate_limit import check_rate_limit, get_client_ip
 from backend.core.oauth_provider.services.authorization_service import create_authorization_context
 from backend.core.oauth_provider.validators.pkce import validate_code_challenge_method
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["oauth-provider"])
+
+# Initialize Jinja2 templates
+templates = Jinja2Templates(directory="backend/templates")
 
 
 def _error_redirect(redirect_uri: str, state: str | None, error: str, description: str):
@@ -47,6 +54,88 @@ def _error_redirect(redirect_uri: str, state: str | None, error: str, descriptio
     return RedirectResponse(url=error_url, status_code=302)
 
 
+def _detect_language(request: Request) -> str:
+    """
+    Detect user language from Accept-Language header.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        Language code: "de" for German, "en" for everything else
+    """
+    accept_language = request.headers.get("Accept-Language", "")
+    # Simple detection: if starts with "de", use German
+    if accept_language.lower().startswith("de"):
+        return "de"
+    return "en"
+
+
+def _normalize(s: str | None) -> str | None:
+    """
+    Normalize string parameter: strip whitespace, convert empty to None.
+
+    This is critical for OAuth 2.1 security - empty/whitespace strings
+    must be treated as missing parameters.
+
+    Args:
+        s: Input string (may be None)
+
+    Returns:
+        Stripped string if non-empty, None otherwise
+    """
+    if s is None:
+        return None
+    s = s.strip()
+    return s if s else None
+
+
+async def _get_or_create_user(
+    db: AsyncSession,
+    chatgpt_user_id: str,
+    correlation_id: str
+) -> CoreUser:
+    """
+    Look up user by chatgpt_user_id or create new user if not found.
+
+    Args:
+        db: Database session
+        chatgpt_user_id: ChatGPT user ID from login_hint parameter
+        correlation_id: Request correlation ID for logging
+
+    Returns:
+        CoreUser: Existing or newly created user
+    """
+    request_logger = logger.bind(correlation_id=correlation_id)
+
+    # Look up existing user
+    result = await db.execute(
+        select(CoreUser).where(CoreUser.chatgpt_user_id == chatgpt_user_id)
+    )
+    user = result.scalar_one_or_none()
+
+    if user:
+        request_logger.info(
+            "oauth.authorize.user_found",
+            user_id=str(user.id),
+            chatgpt_user_id=chatgpt_user_id
+        )
+        return user
+
+    # Create new user
+    user = CoreUser(chatgpt_user_id=chatgpt_user_id)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+
+    request_logger.info(
+        "oauth.authorize.user_created",
+        user_id=str(user.id),
+        chatgpt_user_id=chatgpt_user_id
+    )
+    return user
+
+
 @router.get("/oauth/focused/authorize", response_class=HTMLResponse)
 async def authorize_endpoint(
     request: Request,
@@ -58,13 +147,14 @@ async def authorize_endpoint(
     scope: str,
     state: str | None = None,
     nonce: str | None = None,
-    user_id: str | None = None,  # TODO (7C): Replace with real authentication
+    login_hint: str | None = None,
     db: AsyncSession = Depends(get_db)
 ):
     """
     OAuth 2.1 authorization endpoint with PKCE.
 
-    Validates client, redirect URI, and scopes, then renders consent screen.
+    Validates client, redirect URI, and scopes. Resolves user identity via
+    login_hint parameter, then renders consent screen in user's language.
 
     Query Parameters:
         response_type: Must be "code"
@@ -75,18 +165,20 @@ async def authorize_endpoint(
         scope: Space-separated scopes (focused.read, focused.write, focused.notify)
         state: Optional CSRF token
         nonce: Optional OpenID Connect nonce
-        user_id: TODO - temporary auth placeholder (will be replaced with session auth)
+        login_hint: REQUIRED - ChatGPT user ID for user identification
 
     Returns:
         HTML consent screen on success
         Error redirect on validation failure
 
     Security Notes:
+        - login_hint is REQUIRED (returns login_required error if missing)
+        - User identity resolved via login_hint → core_users.chatgpt_user_id
+        - Never accept raw user_id from query params (prevents impersonation)
         - PKCE required (S256 challenge method)
         - redirect_uri must be pre-registered
-        - Scopes validated against allowed list
-        - Rate limited to prevent abuse
-        - Authorization context stored in Redis (10 min TTL)
+        - Rate limited: by IP before login_hint validation, by login_hint after
+        - Authorization context stores internal user_id (UUID), NOT chatgpt_user_id
 
     Example:
         GET /oauth/focused/authorize?
@@ -97,37 +189,138 @@ async def authorize_endpoint(
             code_challenge_method=S256&
             scope=focused.read+focused.write&
             state=xyz&
-            user_id=user-456
+            login_hint=chatgpt_user_123
     """
     # Get correlation_id for logging
     correlation_id = request.state.correlation_id
     request_logger = logger.bind(correlation_id=correlation_id)
 
-    # Rate limit check
-    await rate_limit_authorize(request)
+    # =========================================================================
+    # NORMALIZE ALL PARAMETERS (OAuth 2.1 security requirement)
+    # Empty strings and whitespace-only must be treated as missing
+    # =========================================================================
+    client_id = _normalize(client_id)
+    redirect_uri = _normalize(redirect_uri)
+    scope = _normalize(scope)
+    login_hint = _normalize(login_hint)
+    code_challenge = _normalize(code_challenge)
+    code_challenge_method = _normalize(code_challenge_method)
+    state = _normalize(state)
+    nonce = _normalize(nonce)
 
-    # Log authorization request
+    # =========================================================================
+    # VALIDATE REQUIRED PARAMETERS BEFORE ANY REDIRECTS
+    # These are checked before we can safely redirect to client
+    # =========================================================================
+
+    # client_id is required
+    if not client_id:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_request",
+            message="client_id is required"
+        )
+        # Cannot redirect - no valid redirect_uri without client validation
+        raise HTTPException(status_code=400, detail="client_id is required")
+
+    # redirect_uri is required
+    if not redirect_uri:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_request",
+            message="redirect_uri is required"
+        )
+        # Cannot redirect - no valid redirect_uri
+        raise HTTPException(status_code=400, detail="redirect_uri is required")
+
+    # Phase 1: Rate limit by IP (before login_hint validation)
+    ip = get_client_ip(request)
+    await check_rate_limit(
+        key=f"ratelimit:oauth:authorize:ip:{ip}",
+        limit=20,
+        window=60,
+        request=request
+    )
+
+    # Log authorization request (don't log login_hint for privacy)
     request_logger.info(
         "oauth.authorize.request",
         client_id=client_id,
         response_type=response_type,
         scope=scope,
         redirect_uri=redirect_uri,
-        code_challenge_method=code_challenge_method
+        code_challenge_method=code_challenge_method,
+        has_login_hint=login_hint is not None
     )
 
-    # TODO (7C): Replace with real authentication middleware
-    # For now, require user_id query param as temporary auth mechanism
-    if not user_id:
+    # =========================================================================
+    # VALIDATE PKCE PARAMETERS (OAuth 2.1 REQUIRED)
+    # =========================================================================
+    if not code_challenge:
         request_logger.warning(
             "oauth.authorize.error",
-            error="missing_user_id",
-            message="Authentication required"
+            error="invalid_request",
+            message="code_challenge is required"
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required. TODO: Implement session-based auth."
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_request",
+            description="code_challenge is required"
         )
+
+    if not code_challenge_method:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_request",
+            message="code_challenge_method is required"
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_request",
+            description="code_challenge_method is required"
+        )
+
+    # =========================================================================
+    # VALIDATE SCOPE (OAuth 2.1 REQUIRED)
+    # =========================================================================
+    if not scope:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_scope",
+            message="scope is required"
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_scope",
+            description="scope is required"
+        )
+
+    # =========================================================================
+    # VALIDATE LOGIN_HINT (Required per Increment 12)
+    # =========================================================================
+    if not login_hint:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="login_required",
+            message="login_hint parameter required"
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="login_required",
+            description="login_hint parameter required"
+        )
+
+    # Phase 2: Rate limit by login_hint (after validation)
+    await check_rate_limit(
+        key=f"ratelimit:oauth:authorize:login_hint:{login_hint}",
+        limit=20,
+        window=60,
+        request=request
+    )
 
     # Validate response_type
     if response_type != "code":
@@ -157,11 +350,31 @@ async def authorize_endpoint(
     client = result.scalar_one_or_none()
 
     if not client:
-        raise HTTPException(status_code=401, detail="Invalid client_id")
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_client",
+            client_id=client_id
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_client",
+            description="Unknown client_id"
+        )
 
     # Validate redirect_uri is in client's registered URIs
     if redirect_uri not in client.redirect_uris:
-        raise HTTPException(status_code=400, detail="Invalid redirect_uri")
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_redirect_uri",
+            client_id=client_id
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_request",
+            description="redirect_uri not registered for this client"
+        )
 
     # Validate scopes
     allowed_scopes = {"focused.read", "focused.write", "focused.notify"}
@@ -175,7 +388,12 @@ async def authorize_endpoint(
             description=f"Invalid scopes. Allowed: {', '.join(allowed_scopes)}"
         )
 
+    # Resolve user identity via login_hint
+    # This looks up or creates a user in core_users by chatgpt_user_id
+    user = await _get_or_create_user(db, login_hint, correlation_id)
+
     # Create authorization context in Redis (10 minute TTL)
+    # IMPORTANT: Store internal user_id (UUID), NOT chatgpt_user_id
     auth_context_id = await create_authorization_context(
         client_id=client_id,
         client_name=client.provider,  # provider field stores client_name
@@ -183,19 +401,25 @@ async def authorize_endpoint(
         code_challenge_method=code_challenge_method,
         scope=scope,
         redirect_uri=redirect_uri,
-        user_id=user_id,
+        user_id=str(user.id),  # Internal UUID, not chatgpt_user_id
         state=state,
         nonce=nonce,
         correlation_id=correlation_id
     )
 
-    # Render consent screen
-    # TODO (7C): Detect user language preference for EN/DE template selection
-    from fastapi.templating import Jinja2Templates
-    templates = Jinja2Templates(directory="backend/templates")
+    # Detect user language preference
+    language = _detect_language(request)
+    template_name = f"oauth_consent_{language}.html"
+
+    request_logger.info(
+        "oauth.authorize.consent_rendered",
+        user_id=str(user.id),
+        client_id=client_id,
+        language=language
+    )
 
     return templates.TemplateResponse(
-        "oauth_consent_en.html",
+        template_name,
         {
             "request": request,
             "auth_context_id": auth_context_id,

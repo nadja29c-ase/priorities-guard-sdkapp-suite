@@ -37,8 +37,8 @@ class CoreUser(Base):
     """
     Minimal user table for storing user references.
 
-    This is a placeholder table for user management.
-    Currently only tracks user existence with minimal fields.
+    Maps external ChatGPT user IDs (from login_hint) to internal UUIDs.
+    The chatgpt_user_id is a pseudonymous identifier used for OAuth flows.
     """
 
     __tablename__ = "core_users"
@@ -47,7 +47,15 @@ class CoreUser(Base):
         PostgreSQLUUID(as_uuid=True),
         primary_key=True,
         server_default=text("gen_random_uuid()"),
-        comment="User identifier"
+        comment="Internal user identifier (UUID)"
+    )
+
+    chatgpt_user_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="ChatGPT user ID from login_hint parameter (pseudonymous, for OAuth user lookup)"
     )
 
     created_at: Mapped[datetime] = mapped_column(
