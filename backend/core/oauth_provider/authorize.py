@@ -499,14 +499,14 @@ async def authorize_endpoint(
     # Scope descriptions for consent UI (localized)
     # TODO: Move to i18n system for proper localization
     scope_descriptions_en = {
-        "focused.read": "View focus patterns and calendar sync status",
-        "focused.write": "Activate Focus Mode and manage settings",
-        "focused.notify": "Send notifications",
+        "focused.read": "Read your calendar events to detect focus sessions and provide insights.",
+        "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
+        "focused.notify": "Send notifications related to your focus schedule.",
     }
     scope_descriptions_de = {
-        "focused.read": "Fokusmuster und Kalender-Synchronisationsstatus anzeigen",
-        "focused.write": "Fokusmodus aktivieren und Einstellungen verwalten",
-        "focused.notify": "Benachrichtigungen senden",
+        "focused.read": "Deine Kalendertermine lesen, um Fokus-Zeiten zu erkennen und dir hilfreiche Einblicke zu geben.",
+        "focused.write": "Apple Fokus (den integrierten „Nicht stören“-Modus) auf deinem iPhone während deiner Fokus-Zeiten ein- und ausschalten.",
+        "focused.notify": "Relevante Benachrichtigungen senden",
     }
     scope_descriptions = scope_descriptions_de if language == "de" else scope_descriptions_en
 
