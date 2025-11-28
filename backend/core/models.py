@@ -204,6 +204,31 @@ class CoreConnection(Base):
         # Note: No constraint on client_secret_enc for oauth_provider - enforced in application logic
         # (client_service.py sets client_secret_enc atomically during registration)
         CheckConstraint("(encrypted_refresh_token IS NULL) OR (length(encrypted_refresh_token) > 0)", name="ck_encrypted_refresh_token_not_empty"),
+        # NOTE (Architectural Decision – Increment 12):
+        # The "ck_scopes_not_empty" constraint enforces that ALL connections must have at
+        # least one scope in the scopes[] array.
+        #
+        # This constraint was originally designed for OUTBOUND OAuth connections
+        # (Google/Apple), where having at least one scope is mandatory.
+        #
+        # For INBOUND OAuth Provider clients (connection_type='oauth_provider'):
+        # - OAuth 2.1 allows clients to have an empty default scope list.
+        # - Our implementation *could* support scopes=[], and validate only against
+        #   explicitly requested scopes during /authorize.
+        #
+        # However, for MVP:
+        # - Focused always registers clients with explicit scopes.
+        # - This constraint prevents misconfigured clients with empty or null scopes.
+        # - We skip relaxing this constraint to avoid schema drift and complexity now.
+        #
+        # Post-MVP possible change:
+        #     CHECK (
+        #         connection_type = 'oauth_provider'
+        #         OR cardinality(scopes) > 0
+        #     )
+        #
+        # This will allow oauth_provider clients to have empty scopes while preserving
+        # the constraint for Google/Apple connections.
         CheckConstraint("cardinality(scopes) > 0", name="ck_scopes_not_empty"),
         Index("ix_user_provider", "user_id", "provider"),
         Index("ix_token_expires", "token_expires_at"),
