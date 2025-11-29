@@ -64,6 +64,14 @@ class Settings(BaseSettings):
 
         return self
 
+    @model_validator(mode='after')
+    def fix_database_url(self) -> 'Settings':
+        """Convert postgresql:// to postgresql+asyncpg:// for SQLAlchemy async."""
+        if self.DATABASE_URL and self.DATABASE_URL.startswith("postgresql://"):
+            object.__setattr__(self, 'DATABASE_URL',
+                self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1))
+        return self
+
     class Config:
         env_file = ".env"
         case_sensitive = True
