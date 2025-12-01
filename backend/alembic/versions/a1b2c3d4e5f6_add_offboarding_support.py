@@ -1,7 +1,7 @@
 """add_offboarding_support
 
 Revision ID: a1b2c3d4e5f6
-Revises: 5d6707474200
+Revises: 50fec2d2ce0e
 Create Date: 2025-11-26
 
 Increment 10: User offboarding support
@@ -17,7 +17,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'a1b2c3d4e5f6'
-down_revision: Union[str, Sequence[str], None] = '5d6707474200'
+down_revision: Union[str, Sequence[str], None] = '50fec2d2ce0e'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
