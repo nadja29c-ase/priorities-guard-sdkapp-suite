@@ -2,11 +2,12 @@
 Token Endpoint - OAuth 2.1 token issuance.
 
 HTTP layer only. Delegates all logic to service layer.
+
+Note: OAuth 2.1 requires form-urlencoded POST data (RFC 6749 Section 4.1.3).
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
@@ -27,20 +28,15 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["oauth-provider"])
 
 
-class TokenRequest(BaseModel):
-    """OAuth token request (standard fields)."""
-    grant_type: str
-    code: str | None = None
-    redirect_uri: str | None = None
-    code_verifier: str | None = None
-    refresh_token: str | None = None
-    client_id: str | None = None
-
-
 @router.post("/oauth/focused/token")
 async def token_endpoint(
     request: Request,
-    token_request: TokenRequest,
+    grant_type: str = Form(...),
+    code: str | None = Form(None),
+    redirect_uri: str | None = Form(None),
+    code_verifier: str | None = Form(None),
+    refresh_token: str | None = Form(None),
+    client_id: str | None = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -98,21 +94,21 @@ async def token_endpoint(
     # Log token request
     request_logger.info(
         "oauth.token.request",
-        grant_type=token_request.grant_type,
-        client_id=token_request.client_id
+        grant_type=grant_type,
+        client_id=client_id
     )
 
     # Rate limit check (requires client_id)
-    if token_request.client_id:
-        await rate_limit_token(request, token_request.client_id)
+    if client_id:
+        await rate_limit_token(request, client_id)
 
     # Validate grant_type
-    valid, error = validate_grant_type(token_request.grant_type)
+    valid, error = validate_grant_type(grant_type)
     if not valid:
         request_logger.error(
             "oauth.token.error",
             error=error,
-            grant_type=token_request.grant_type
+            grant_type=grant_type
         )
         return JSONResponse(
             status_code=400,
@@ -123,13 +119,13 @@ async def token_endpoint(
         )
 
     # Handle authorization_code grant
-    if token_request.grant_type == "authorization_code":
+    if grant_type == "authorization_code":
         # Validate required fields
         valid, missing_field = validate_authorization_code_request(
-            token_request.code,
-            token_request.code_verifier,
-            token_request.client_id,
-            token_request.redirect_uri
+            code,
+            code_verifier,
+            client_id,
+            redirect_uri
         )
         if not valid:
             return JSONResponse(
@@ -143,10 +139,10 @@ async def token_endpoint(
         # Exchange code for tokens
         result = await exchange_authorization_code(
             db=db,
-            code=token_request.code,
-            code_verifier=token_request.code_verifier,
-            client_id=token_request.client_id,
-            redirect_uri=token_request.redirect_uri,
+            code=code,
+            code_verifier=code_verifier,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
             correlation_id=correlation_id
         )
 
@@ -164,11 +160,11 @@ async def token_endpoint(
         return JSONResponse(result)
 
     # Handle refresh_token grant
-    elif token_request.grant_type == "refresh_token":
+    elif grant_type == "refresh_token":
         # Validate required fields
         valid, missing_field = validate_refresh_token_request(
-            token_request.refresh_token,
-            token_request.client_id
+            refresh_token,
+            client_id
         )
         if not valid:
             return JSONResponse(
@@ -182,8 +178,8 @@ async def token_endpoint(
         # Exchange refresh token for new tokens
         result = await exchange_refresh_token(
             db=db,
-            refresh_token=token_request.refresh_token,
-            client_id=token_request.client_id,
+            refresh_token=refresh_token,
+            client_id=client_id,
             correlation_id=correlation_id
         )
 

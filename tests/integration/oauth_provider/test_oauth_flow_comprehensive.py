@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 
 from backend.core.oauth_provider.models import OAuthAuthorizationCode, OAuthAccessToken
 from backend.core.models import CoreConnection, Base
-from backend.core.encryption import encrypt_token
+from backend.core.encryption import encrypt_token, hash_refresh_token
 from sqlalchemy import select, delete
 
 
@@ -94,7 +94,15 @@ async def client(test_db_engine, test_db_session):
 
 @pytest_asyncio.fixture
 async def oauth_client(test_db_session):
-    """Create a test OAuth client."""
+    """
+    Create a test OAuth client (CoreConnection with oauth_provider type).
+
+    NOTE: This fixture is a synthetic OAuth client for testing the SDK provider.
+    Only fields needed for token issuance are populated. The token endpoint does
+    NOT use encrypted_access_token for oauth_provider clients - that field is
+    only used for Google OAuth connections.
+    """
+    from datetime import timedelta
     client_id = f"test-client-{secrets.token_urlsafe(8)}"
     client_secret = secrets.token_urlsafe(32)
 
@@ -106,7 +114,9 @@ async def oauth_client(test_db_session):
         client_secret_enc=encrypt_token(client_secret),
         scopes=["focused.read", "focused.write"],
         redirect_uris=["https://app.com/callback"],
-        grant_types=["authorization_code", "refresh_token"]
+        grant_types=["authorization_code", "refresh_token"],
+        encrypted_access_token="",  # Required field (unused for oauth_provider type)
+        token_expires_at=datetime.now(timezone.utc) + timedelta(days=365)
     )
     test_db_session.add(client)
     await test_db_session.commit()
@@ -133,7 +143,10 @@ async def test_user(test_db_session):
     from uuid import uuid4
     from backend.core.models import CoreUser
 
-    user = CoreUser(id=uuid4())
+    user = CoreUser(
+        id=uuid4(),
+        chatgpt_user_id=f"test-chatgpt-user-{secrets.token_urlsafe(8)}"
+    )
     test_db_session.add(user)
     await test_db_session.commit()
     await test_db_session.refresh(user)
@@ -463,6 +476,7 @@ async def test_token_refresh_success(client, oauth_client, test_db_session, test
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         refresh_token_enc=encrypt_token(refresh_token),
+        refresh_token_hash=hash_refresh_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
@@ -499,6 +513,7 @@ async def test_token_refresh_revokes_old_token(client, oauth_client, test_db_ses
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         refresh_token_enc=encrypt_token(refresh_token),
+        refresh_token_hash=hash_refresh_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
@@ -544,6 +559,7 @@ async def test_token_revocation_success(client, oauth_client, test_db_session, t
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         refresh_token_enc=encrypt_token(refresh_token),
+        refresh_token_hash=hash_refresh_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
@@ -577,6 +593,7 @@ async def test_revoked_token_cannot_be_used(client, oauth_client, test_db_sessio
         scope=["focused.read"],
         expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         refresh_token_enc=encrypt_token(refresh_token),
+        refresh_token_hash=hash_refresh_token(refresh_token),
         refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         revoked=False
     )
@@ -800,34 +817,5 @@ async def test_invalid_client_credentials(client, oauth_client):
 # ============================================================================
 # Cleanup
 # ============================================================================
-
-@pytest.fixture(autouse=True)
-async def cleanup_oauth_data():
-    """Clean up OAuth test data after each test."""
-    yield
-
-    # Clean up after test
-    async with AsyncSessionLocal() as session:
-        # Delete test authorization codes
-        await session.execute(
-            delete(OAuthAuthorizationCode).where(
-                OAuthAuthorizationCode.user_id.like("test-%")
-            )
-        )
-
-        # Delete test access tokens
-        await session.execute(
-            delete(OAuthAccessToken).where(
-                OAuthAccessToken.user_id.like("test-%")
-            )
-        )
-
-        # Delete test clients (CoreConnection with oauth_provider type)
-        await session.execute(
-            delete(CoreConnection).where(
-                CoreConnection.client_id.like("test-client-%"),
-                CoreConnection.connection_type == "oauth_provider"
-            )
-        )
-
-        await session.commit()
+# NOTE: Table cleanup is handled automatically by the cleanup_db fixture in
+# conftest.py (autouse=True) which truncates all tables after each test.

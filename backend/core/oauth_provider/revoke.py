@@ -2,11 +2,12 @@
 Revoke Endpoint - OAuth 2.1 token revocation (RFC 7009).
 
 HTTP layer only. Delegates all logic to service layer.
+
+Note: OAuth 2.1 requires form-urlencoded POST data (RFC 7009 Section 2.1).
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
@@ -19,16 +20,11 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["oauth-provider"])
 
 
-class RevokeRequest(BaseModel):
-    """OAuth token revocation request."""
-    token: str
-    client_id: str
-
-
 @router.post("/oauth/focused/revoke")
 async def revoke_endpoint(
     request: Request,
-    revoke_request: RevokeRequest,
+    token: str = Form(...),
+    client_id: str = Form(...),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -67,17 +63,17 @@ async def revoke_endpoint(
 
     request_logger.info(
         "oauth.revoke.request",
-        client_id=revoke_request.client_id
+        client_id=client_id
     )
 
     # Rate limit check
-    await rate_limit_revoke(request, revoke_request.client_id)
+    await rate_limit_revoke(request, client_id)
 
     # Revoke token (service layer handles all logic)
     success, token_type = await revoke_token(
         db=db,
-        token=revoke_request.token,
-        client_id=revoke_request.client_id,
+        token=token,
+        client_id=client_id,
         correlation_id=correlation_id
     )
 
