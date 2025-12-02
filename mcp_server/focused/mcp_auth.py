@@ -141,9 +141,13 @@ class JWKSCache:
 
         for key_data in self._jwks.get("keys", []):
             if key_data.get("kid") == kid:
-                return PyJWK(key_data)
+                return PyJWK.from_dict(key_data)
 
         return None
+
+    async def aclose(self):
+        """Close the HTTP client to prevent connection leaks."""
+        await self._http_client.aclose()
 
 
 # Global JWKS cache instance
@@ -264,6 +268,7 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
             algorithms=["RS256"],
             issuer=FOCUSED_ISSUER,
             audience=FOCUSED_AUDIENCE,
+            leeway=TOKEN_EXPIRY_GRACE_SECONDS,  # Allow clock skew/network jitter
             options={
                 "verify_signature": True,
                 "verify_exp": True,
@@ -468,7 +473,10 @@ class InsufficientScopeError(OAuthError):
         super().__init__(self.description)
 
 
-def build_unauthorized_error(error: str = None, description: str = None) -> Dict[str, Any]:
+def build_unauthorized_error(
+    error: str = None,  # noqa: ARG001 - kept for backward compatibility
+    description: str = None,  # noqa: ARG001 - kept for backward compatibility
+) -> Dict[str, Any]:
     """
     Build JSON-RPC error response for 401 Unauthorized (Increment 14 format).
 
@@ -476,12 +484,13 @@ def build_unauthorized_error(error: str = None, description: str = None) -> Dict
     OAuth discovery. Error code -32001 indicates authentication required.
 
     Args:
-        error: OAuth error code (e.g., "invalid_token") - unused in new format
-        description: Human-readable error description - unused in new format
+        error: OAuth error code - kept for backward compatibility, not used
+        description: Error description - kept for backward compatibility, not used
 
     Returns:
         JSON-RPC error response dictionary with _meta for OAuth discovery
     """
+    del error, description  # Explicitly mark as unused
     return {
         "error": {
             "code": -32001,
@@ -498,7 +507,10 @@ def build_unauthorized_error(error: str = None, description: str = None) -> Dict
     }
 
 
-def build_forbidden_error(required_scopes: List[str] = None, actual_scopes: List[str] = None) -> Dict[str, Any]:
+def build_forbidden_error(
+    required_scopes: List[str] = None,  # noqa: ARG001 - kept for backward compatibility
+    actual_scopes: List[str] = None,  # noqa: ARG001 - kept for backward compatibility
+) -> Dict[str, Any]:
     """
     Build JSON-RPC error response for 403 Forbidden (Increment 14 format).
 
@@ -506,12 +518,13 @@ def build_forbidden_error(required_scopes: List[str] = None, actual_scopes: List
     OAuth discovery. Error code -32003 indicates valid token but insufficient scope.
 
     Args:
-        required_scopes: List of required scopes - unused in new format
-        actual_scopes: List of actual scopes in token - unused in new format
+        required_scopes: Required scopes - kept for backward compatibility, not used
+        actual_scopes: Actual scopes - kept for backward compatibility, not used
 
     Returns:
         JSON-RPC error response dictionary with _meta for OAuth discovery
     """
+    del required_scopes, actual_scopes  # Explicitly mark as unused
     return {
         "error": {
             "code": -32003,

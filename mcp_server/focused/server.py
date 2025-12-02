@@ -42,6 +42,7 @@ from mcp_server.focused.mcp_auth import (
     InsufficientScopeError,
     build_unauthorized_error,
     build_forbidden_error,
+    _jwks_cache,
 )
 
 logger = structlog.get_logger(__name__)
@@ -86,7 +87,8 @@ def handle_mcp_errors(tool_name: str) -> Callable:
     Handles:
     - UnauthorizedError (401)
     - InsufficientScopeError (403)
-    - HTTPStatusError (backend errors)
+    - HTTPStatusError (backend HTTP errors)
+    - RequestError (connection failures, DNS, timeouts)
     - Generic exceptions
 
     Args:
@@ -98,6 +100,10 @@ def handle_mcp_errors(tool_name: str) -> Callable:
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> str:
+            # Extract correlation_id from meta for error logging
+            meta = kwargs.get("meta") or {}
+            correlation_id = meta.get("correlation_id", "unknown")
+
             try:
                 return await func(*args, **kwargs)
 
@@ -112,9 +118,10 @@ def handle_mcp_errors(tool_name: str) -> Callable:
                 return json.dumps(error_response)
 
             except httpx.HTTPStatusError as e:
-                # Backend returned an error status
+                # Backend returned an error status (4xx, 5xx)
                 logger.error(
                     f"tool.{tool_name}.backend_error",
+                    correlation_id=correlation_id,
                     status_code=e.response.status_code,
                     error=e.response.text
                 )
@@ -131,15 +138,38 @@ def handle_mcp_errors(tool_name: str) -> Callable:
                         }
                     })
 
+            except httpx.RequestError as e:
+                # Connection failure (DNS, timeout, refused, etc.)
+                logger.error(
+                    f"tool.{tool_name}.connection_error",
+                    correlation_id=correlation_id,
+                    error_type=type(e).__name__,
+                    url=str(e.request.url) if e.request else None,
+                    error=str(e)
+                )
+
+                return json.dumps({
+                    "success": False,
+                    "error": {
+                        "code": "BACKEND_UNAVAILABLE",
+                        "message": "Backend API is unavailable"
+                    }
+                })
+
             except Exception as e:
-                # Unexpected error (network, etc.)
-                logger.error(f"tool.{tool_name}.error", error=str(e))
+                # Unexpected error
+                logger.error(
+                    f"tool.{tool_name}.unexpected_error",
+                    correlation_id=correlation_id,
+                    error_type=type(e).__name__,
+                    error=str(e)
+                )
 
                 return json.dumps({
                     "success": False,
                     "error": {
                         "code": "MCP_ERROR",
-                        "message": "Failed to communicate with backend API"
+                        "message": "An unexpected error occurred"
                     }
                 })
 
@@ -441,16 +471,35 @@ def create_app() -> Starlette:
     fastmcp_lifespan = fastmcp_asgi.router.lifespan_context
 
     @asynccontextmanager
-    async def combined_lifespan(app):
+    async def combined_lifespan(_app):  # noqa: ARG001 - required by Starlette lifespan protocol
         """
         Combined lifespan that triggers FastMCP's lifespan events.
 
         Starlette's Mount() does not propagate lifespan to child ASGI apps,
         so we must manually trigger FastMCP's lifespan from the parent.
+
+        On startup, initializes the HTTP client for backend API calls.
+        On shutdown, closes HTTP clients to prevent connection leaks.
         """
+        global http_client
+
+        # Initialize HTTP client for backend API calls
+        # This is critical: __main__ block doesn't run when uvicorn imports the app
+        if http_client is None:
+            http_client = httpx.AsyncClient(timeout=30.0)
+            logger.info("http_client.initialized")
+
         # Trigger FastMCP's lifespan (initializes TaskGroups, session manager, etc.)
         async with fastmcp_lifespan(fastmcp_asgi):
             yield
+
+        # Cleanup: close HTTP clients to prevent connection leaks
+        if http_client is not None:
+            await http_client.aclose()
+            http_client = None
+            logger.info("http_client.closed")
+
+        await _jwks_cache.aclose()
 
     return Starlette(
         routes=[
