@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: NO_LIFESPAN_V9")
+print("FOCUSED MCP SERVER VERSION: HTTP_CLIENT_FIX_V10")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -79,9 +79,9 @@ class MCPContentTypeAndAcceptFixMiddleware:
                         value = b"application/json"
                         modified = True
 
-                    # Fix Accept: must allow both SSE and JSON
+                    # Fix Accept: must allow SSE for handshake
                     if name == b"accept":
-                        value = b"text/event-stream, application/json"
+                        value = b"text/event-stream"
                         modified = True
 
                     new_headers.append((name, value))
@@ -112,7 +112,7 @@ logger = structlog.get_logger(__name__)
 # ChatGPT expects Server-Sent Events for MCP handshake
 mcp = FastMCP("focused-mcp", streamable_http_path="/mcp")
 
-# Shared HTTP client for calling backend API
+# Shared HTTP client for calling backend API (lazily initialized)
 http_client: httpx.AsyncClient | None = None
 
 
@@ -283,6 +283,10 @@ async def backend_post(
     Raises:
         httpx.HTTPStatusError: If backend returns error status
     """
+    global http_client
+    if http_client is None:
+        http_client = httpx.AsyncClient(timeout=30.0)
+
     url = f"{BACKEND_URL}{path}"
 
     # Add user identity headers (Increment 7D)
@@ -586,11 +590,6 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    import os
-
-    # Initialize HTTP client
-    http_client = httpx.AsyncClient(timeout=30.0)
-
     # Use PORT env var (Railway sets this) or default to 8001 for local dev
     port = int(os.getenv("PORT", "8001"))
 
