@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V5")
+print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V6_SSE")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -110,10 +110,9 @@ from mcp_server.focused.mcp_auth import (
 
 logger = structlog.get_logger(__name__)
 
-# Create FastMCP instance with stateless HTTP mode
-# Stateless mode returns JSON directly instead of SSE streams,
-# which is simpler for single-request patterns (ChatGPT, tests)
-mcp = FastMCP("focused-mcp", stateless_http=True, streamable_http_path="/mcp")
+# Create FastMCP instance with SSE streaming (required for ChatGPT)
+# ChatGPT expects Server-Sent Events for MCP handshake
+mcp = FastMCP("focused-mcp", streamable_http_path="/mcp")
 
 # Shared HTTP client for calling backend API
 http_client: httpx.AsyncClient | None = None
