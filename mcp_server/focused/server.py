@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: COMMIT 868593d")
+print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V3")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -56,32 +56,39 @@ from mcp_server.focused.discovery import (
 
 class MCPContentTypeFixMiddleware:
     """
-    Fix ChatGPT's Content-Type header for MCP requests.
+    Normalize ChatGPT's POST /mcp Content-Type so FastMCP accepts it.
 
-    ChatGPT sends application/octet-stream but FastMCP expects application/json.
-    This middleware rewrites the header before FastMCP sees the request.
+    ChatGPT currently sends:
+        Content-Type: application/octet-stream
+
+    FastMCP's transport_security checks reject that and require application/json.
+    We don't touch the body, we only rewrite the header for /mcp POST requests.
     """
 
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if (
-            scope["type"] == "http" and
-            scope["path"] == "/mcp" and
-            scope["method"] == "POST"
-        ):
-            # Replace application/octet-stream → application/json
-            new_headers = []
-            for k, v in scope["headers"]:
-                if k == b"content-type" and v == b"application/octet-stream":
-                    new_headers.append((b"content-type", b"application/json"))
-                else:
-                    new_headers.append((k, v))
-            scope = dict(scope)
-            scope["headers"] = new_headers
+        # Only care about HTTP POST /mcp
+        if scope.get("type") == "http" and scope.get("method") == "POST":
+            path = scope.get("path") or ""
+            if path == "/mcp":
+                headers = scope.get("headers") or []
+                new_headers = []
+                changed = False
 
-        return await self.app(scope, receive, send)
+                for name, value in headers:
+                    if name == b"content-type" and b"application/octet-stream" in value:
+                        # Rewrite to JSON so FastMCP accepts it
+                        value = b"application/json"
+                        changed = True
+                    new_headers.append((name, value))
+
+                if changed:
+                    scope = dict(scope)
+                    scope["headers"] = new_headers
+
+        await self.app(scope, receive, send)
 
 from mcp_server.focused.config import (
     BACKEND_URL,
@@ -532,7 +539,9 @@ def create_app() -> Starlette:
     Clean ASGI app mounting for MCP compatibility with ChatGPT.
     No redirect, no slash normalization, no middleware that consumes the body.
     """
+    # Get raw FastMCP ASGI app and wrap with header-fix middleware
     fastmcp_asgi = mcp.streamable_http_app()
+    fastmcp_asgi = MCPContentTypeFixMiddleware(fastmcp_asgi)
 
     @asynccontextmanager
     async def combined_lifespan(_app):  # noqa: ARG001
@@ -542,7 +551,9 @@ def create_app() -> Starlette:
             http_client = httpx.AsyncClient(timeout=30.0)
             logger.info("http_client.initialized")
 
-        async with fastmcp_asgi.router.lifespan_context(fastmcp_asgi):
+        # Access the wrapped app's lifespan
+        wrapped_app = fastmcp_asgi.app
+        async with wrapped_app.router.lifespan_context(wrapped_app):
             yield
 
         if http_client is not None:
@@ -568,7 +579,7 @@ def create_app() -> Starlette:
         Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
         Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
 
-        # MCP ENDPOINT
+        # MCP ENDPOINT (wrapped with header-fix middleware)
         Route("/mcp", fastmcp_asgi, methods=["POST"]),
     ]
 
@@ -583,8 +594,7 @@ def create_app() -> Starlette:
         print("ROUTE:", r.path, "| METHODS:", getattr(r, "methods", None))
     print("===========================================\n")
 
-    # Wrap with Content-Type fix middleware for ChatGPT compatibility
-    return MCPContentTypeFixMiddleware(starlette_app)
+    return starlette_app
 
 
 # --------------------------------------------------------------------
