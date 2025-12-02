@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: HTTP_CLIENT_FIX_V10")
+print("FOCUSED MCP SERVER VERSION: OPTIONS_FIX_V11")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -79,9 +79,9 @@ class MCPContentTypeAndAcceptFixMiddleware:
                         value = b"application/json"
                         modified = True
 
-                    # Fix Accept: must allow SSE for handshake
+                    # Fix Accept: allow SSE for handshake + JSON for tool results
                     if name == b"accept":
-                        value = b"text/event-stream"
+                        value = b"text/event-stream, application/json"
                         modified = True
 
                     new_headers.append((name, value))
@@ -548,23 +548,23 @@ def create_app():
     fastmcp_app = mcp.streamable_http_app()
 
     routes = [
-        # ROOT DISCOVERY
-        Route("/.well-known/openid-configuration", wellknown_openid_configuration),
-        Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
-        Route("/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
+        # ROOT DISCOVERY (with OPTIONS for CORS preflight)
+        Route("/.well-known/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
 
         # TRAILING /mcp DISCOVERY (ChatGPT requirement)
-        Route("/.well-known/openid-configuration/mcp", wellknown_openid_configuration),
-        Route("/.well-known/oauth-authorization-server/mcp", wellknown_oauth_authorization_server),
-        Route("/.well-known/oauth-protected-resource/mcp", wellknown_oauth_protected_resource),
+        Route("/.well-known/openid-configuration/mcp", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/.well-known/oauth-authorization-server/mcp", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/.well-known/oauth-protected-resource/mcp", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
 
         # PREFIXED /mcp DISCOVERY
-        Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
-        Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
-        Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
+        Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
 
-        # MCP ENDPOINT
-        Route("/mcp", fastmcp_app, methods=["POST"]),
+        # MCP ENDPOINT (with OPTIONS for CORS preflight)
+        Route("/mcp", fastmcp_app, methods=["POST", "OPTIONS"]),
     ]
 
     # Debug: dump FastMCP config
