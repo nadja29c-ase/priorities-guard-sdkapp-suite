@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V4")
+print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V5")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -81,8 +81,8 @@ class MCPContentTypeAndAcceptFixMiddleware:
                         value = b"application/json"
                         modified = True
 
-                    # Fix Accept header
-                    if name == b"accept" and (value == b"*/*" or value == b"application/octet-stream"):
+                    # Fix Accept header (rewrite if it doesn't include application/json)
+                    if name == b"accept" and b"application/json" not in value:
                         value = b"application/json"
                         modified = True
 
