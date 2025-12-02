@@ -34,6 +34,7 @@ from mcp_server.focused.config import (
     JWKS_MAX_STALE_SECONDS,
     JWKS_FETCH_TIMEOUT_SECONDS,
     TOOL_SCOPES,
+    MCP_SERVER_URL,
 )
 
 logger = structlog.get_logger(__name__)
@@ -467,66 +468,61 @@ class InsufficientScopeError(OAuthError):
         super().__init__(self.description)
 
 
-def build_unauthorized_error(error: str, description: str) -> Dict[str, Any]:
+def build_unauthorized_error(error: str = None, description: str = None) -> Dict[str, Any]:
     """
-    Build JSON-RPC error response for 401 Unauthorized.
+    Build JSON-RPC error response for 401 Unauthorized (Increment 14 format).
+
+    Returns MCP-compliant error with _meta["mcp/www_authenticate"] for ChatGPT
+    OAuth discovery. Error code -32001 indicates authentication required.
 
     Args:
-        error: OAuth error code (e.g., "invalid_token")
-        description: Human-readable error description
+        error: OAuth error code (e.g., "invalid_token") - unused in new format
+        description: Human-readable error description - unused in new format
 
     Returns:
-        JSON-RPC error response dictionary
+        JSON-RPC error response dictionary with _meta for OAuth discovery
     """
-    www_authenticate = (
-        f'Bearer realm="{FOCUSED_ISSUER}", '
-        f'error="{error}", '
-        f'error_description="{description}"'
-    )
-
     return {
         "error": {
             "code": -32001,
             "message": "Unauthorized",
             "data": {
-                "error": error,
-                "error_description": description,
-                "www_authenticate": www_authenticate
+                "_meta": {
+                    "mcp/www_authenticate": [{
+                        "type": "oauth2",
+                        "resource_metadata": f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource"
+                    }]
+                }
             }
         }
     }
 
 
-def build_forbidden_error(required_scopes: List[str], actual_scopes: List[str]) -> Dict[str, Any]:
+def build_forbidden_error(required_scopes: List[str] = None, actual_scopes: List[str] = None) -> Dict[str, Any]:
     """
-    Build JSON-RPC error response for 403 Forbidden (insufficient scope).
+    Build JSON-RPC error response for 403 Forbidden (Increment 14 format).
+
+    Returns MCP-compliant error with _meta["mcp/www_authenticate"] for ChatGPT
+    OAuth discovery. Error code -32003 indicates valid token but insufficient scope.
 
     Args:
-        required_scopes: List of required scopes
-        actual_scopes: List of actual scopes in token
+        required_scopes: List of required scopes - unused in new format
+        actual_scopes: List of actual scopes in token - unused in new format
 
     Returns:
-        JSON-RPC error response dictionary
+        JSON-RPC error response dictionary with _meta for OAuth discovery
     """
-    scope_str = " ".join(required_scopes)
-    description = f"Required {required_scopes}, got {actual_scopes}"
-
-    www_authenticate = (
-        f'Bearer realm="{FOCUSED_ISSUER}", '
-        f'error="insufficient_scope", '
-        f'scope="{scope_str}"'
-    )
-
     return {
         "error": {
-            "code": -32002,
+            "code": -32003,
             "message": "Forbidden",
             "data": {
-                "error": "insufficient_scope",
-                "error_description": description,
-                "required_scopes": required_scopes,
-                "actual_scopes": actual_scopes,
-                "www_authenticate": www_authenticate
+                "_meta": {
+                    "mcp/www_authenticate": [{
+                        "type": "oauth2",
+                        "resource_metadata": f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource"
+                    }]
+                }
             }
         }
     }

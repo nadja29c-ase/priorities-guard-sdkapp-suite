@@ -112,6 +112,28 @@ BACKEND_URL = get_env(
 
 
 # ============================================================================
+# OAuth Discovery Configuration (Increment 14)
+# ============================================================================
+
+# MCP Server public URL (used in discovery endpoint)
+# Must match the actual public entrypoint for the MCP server
+MCP_SERVER_URL = get_env(
+    "MCP_SERVER_URL",
+    default="http://localhost:8001"
+)
+
+# OAuth Authorization Server URL (must include /oauth/focused path)
+# ChatGPT appends /.well-known/openid-configuration to this URL
+OAUTH_ISSUER_URL = get_env(
+    "OAUTH_ISSUER_URL",
+    default="http://localhost:8000/oauth/focused"
+)
+
+# Supported OAuth scopes for discovery endpoint
+SCOPES_SUPPORTED = ["focused.read", "focused.write", "focused.notify"]
+
+
+# ============================================================================
 # Scope Definitions
 # ============================================================================
 

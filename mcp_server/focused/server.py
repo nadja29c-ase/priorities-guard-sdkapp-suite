@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Focused MCP Server - Thin wrapper around backend REST API (Increment 7D).
+Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 This MCP server forwards tool calls to the backend HTTP API with:
 - JWT authentication (OAuth 2.1 Bearer tokens)
-- Per-tool scope enforcement
+- Per-tool scope enforcement with security metadata (Increment 14)
+- OAuth Protected Resource discovery endpoint (Increment 14)
 - Correlation ID propagation
 - User identity extraction from tokens
 
@@ -23,9 +24,18 @@ import httpx
 import structlog
 from typing import Optional, Dict, Any, Callable
 from functools import wraps
+from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route, Mount
 
-from mcp_server.focused.config import BACKEND_URL
+from mcp_server.focused.config import (
+    BACKEND_URL,
+    MCP_SERVER_URL,
+    OAUTH_ISSUER_URL,
+    SCOPES_SUPPORTED,
+)
 from mcp_server.focused.mcp_auth import (
     authenticate_request,
     UnauthorizedError,
@@ -39,10 +49,34 @@ logger = structlog.get_logger(__name__)
 # Create FastMCP instance with stateless HTTP mode
 # Stateless mode returns JSON directly instead of SSE streams,
 # which is simpler for single-request patterns (ChatGPT, tests)
-mcp = FastMCP("focused-mcp", stateless_http=True)
+# streamable_http_path="/" ensures FastMCP serves at root (ChatGPT requirement)
+mcp = FastMCP("focused-mcp", stateless_http=True, streamable_http_path="/")
 
 # Shared HTTP client for calling backend API
 http_client: httpx.AsyncClient | None = None
+
+
+# ============================================================================
+# OAuth Protected Resource Discovery Endpoint (Increment 14)
+# ============================================================================
+
+async def oauth_protected_resource(request):
+    """
+    OAuth 2.0 Protected Resource Metadata endpoint (RFC 9728).
+
+    Returns discovery metadata for ChatGPT to find the authorization server
+    and supported scopes. This endpoint enables ChatGPT's OAuth discovery flow.
+
+    Returns:
+        JSON with resource, authorization_servers, and scopes_supported
+    """
+    logger.info("oauth.discovery.request")
+
+    return JSONResponse({
+        "resource": MCP_SERVER_URL,
+        "authorization_servers": [OAUTH_ISSUER_URL],
+        "scopes_supported": SCOPES_SUPPORTED
+    })
 
 
 def handle_mcp_errors(tool_name: str) -> Callable:
@@ -154,7 +188,10 @@ async def backend_post(
     return resp.json()
 
 
-@mcp.tool()
+@mcp.tool(
+    name="check_calendar",
+    description="Identify focus blocks in Google Calendar. Scans events for focus-related keywords and returns matching events."
+)
 @handle_mcp_errors("check_calendar")
 async def check_calendar(
     time_start: str | None = None,
@@ -213,7 +250,10 @@ async def check_calendar(
     return json.dumps(response)
 
 
-@mcp.tool()
+@mcp.tool(
+    name="watch_calendar",
+    description="Register webhook for Google Calendar push notifications. Enables real-time calendar event updates."
+)
 @handle_mcp_errors("watch_calendar")
 async def watch_calendar(
     meta: Optional[Dict[str, Any]] = None
@@ -257,7 +297,10 @@ async def watch_calendar(
     return json.dumps(response)
 
 
-@mcp.tool()
+@mcp.tool(
+    name="run_focus_mode",
+    description="Activate or deactivate Apple Focus Mode via iOS Shortcuts. Generates a shortcut:// URL for the ChatGPT client."
+)
 @handle_mcp_errors("run_focus_mode")
 async def run_focus_mode(
     action: str,
@@ -333,7 +376,10 @@ async def run_focus_mode(
     return json.dumps(response)
 
 
-@mcp.tool()
+@mcp.tool(
+    name="notify_user",
+    description="Send notification to user. Currently a stub for future implementation."
+)
 @handle_mcp_errors("notify_user")
 async def notify_user(
     meta: Optional[Dict[str, Any]] = None
@@ -370,14 +416,65 @@ async def notify_user(
     })
 
 
+# ============================================================================
+# Application Factory (Increment 14)
+# ============================================================================
+
+def create_app() -> Starlette:
+    """
+    Create the Starlette application with OAuth discovery and FastMCP mounted.
+
+    FastMCP requires its lifespan events to be triggered for proper initialization
+    (TaskGroups, event loops, etc.). Since Starlette does NOT automatically propagate
+    lifespan events to mounted child ASGI apps, we create a combined lifespan that
+    triggers FastMCP's lifespan from the parent app.
+
+    Returns:
+        Starlette application with:
+        - /.well-known/oauth-protected-resource (OAuth discovery)
+        - / (FastMCP app mounted at root)
+    """
+    # Get the FastMCP ASGI app
+    fastmcp_asgi = mcp.streamable_http_app()
+
+    # Extract FastMCP's lifespan context function
+    fastmcp_lifespan = fastmcp_asgi.router.lifespan_context
+
+    @asynccontextmanager
+    async def combined_lifespan(app):
+        """
+        Combined lifespan that triggers FastMCP's lifespan events.
+
+        Starlette's Mount() does not propagate lifespan to child ASGI apps,
+        so we must manually trigger FastMCP's lifespan from the parent.
+        """
+        # Trigger FastMCP's lifespan (initializes TaskGroups, session manager, etc.)
+        async with fastmcp_lifespan(fastmcp_asgi):
+            yield
+
+    return Starlette(
+        routes=[
+            Route("/.well-known/oauth-protected-resource", oauth_protected_resource),
+            Mount("/", app=fastmcp_asgi)
+        ],
+        lifespan=combined_lifespan
+    )
+
+
 if __name__ == "__main__":
     # Initialize HTTP client
     http_client = httpx.AsyncClient(timeout=30.0)
 
-    logger.info("Starting Focused MCP server on http://0.0.0.0:8001/mcp")
+    logger.info(
+        "Starting Focused MCP server",
+        host="0.0.0.0",
+        port=8001,
+        mcp_server_url=MCP_SERVER_URL,
+        oauth_issuer_url=OAUTH_ISSUER_URL
+    )
 
-    # Get FastMCP streamable HTTP app
-    app = mcp.streamable_http_app()
+    # Create Starlette app with OAuth discovery + FastMCP
+    app = create_app()
 
     # Run with uvicorn on port 8001
     uvicorn.run(app, host="0.0.0.0", port=8001)
