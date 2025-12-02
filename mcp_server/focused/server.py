@@ -55,7 +55,7 @@ logger = structlog.get_logger(__name__)
 # Create FastMCP instance with stateless HTTP mode
 # Stateless mode returns JSON directly instead of SSE streams,
 # which is simpler for single-request patterns (ChatGPT, tests)
-# streamable_http_path="/" ensures FastMCP serves at root (ChatGPT requirement)
+# streamable_http_path="/" is relative to mount point (/mcp), so serves at /mcp
 mcp = FastMCP("focused-mcp", stateless_http=True, streamable_http_path="/")
 
 # Shared HTTP client for calling backend API
@@ -500,7 +500,7 @@ def create_app() -> Starlette:
         - /.well-known/* (OAuth discovery at root)
         - /.well-known/*/mcp (OAuth discovery with trailing /mcp)
         - /mcp/.well-known/* (OAuth discovery at /mcp prefix)
-        - / (FastMCP app mounted at root)
+        - /mcp (FastMCP app - ChatGPT expects POST /mcp)
     """
     # Get the FastMCP ASGI app
     fastmcp_asgi = mcp.streamable_http_app()
@@ -553,8 +553,8 @@ def create_app() -> Starlette:
             Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
             Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
             Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
-            # FastMCP app at root
-            Mount("/", app=fastmcp_asgi)
+            # FastMCP app at /mcp (ChatGPT expects POST /mcp)
+            Mount("/mcp", app=fastmcp_asgi)
         ],
         lifespan=combined_lifespan
     )
