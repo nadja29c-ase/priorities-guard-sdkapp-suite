@@ -538,9 +538,9 @@ def create_app() -> Starlette:
         Route("/mcp", fastmcp_asgi, methods=["POST"]),
     ]
 
-    # Debug: dump FastMCP config
-    print("FASTMCP PATH:", mcp.streamable_http_path)
+    # Debug: dump FastMCP config (use dir() to see available attrs)
     print("FASTMCP NAME:", mcp.name)
+    print("FASTMCP ATTRS:", [a for a in dir(mcp) if not a.startswith("_")])
 
     tmp_app = Starlette(routes=routes, lifespan=combined_lifespan)
 
