@@ -462,13 +462,15 @@ def create_app() -> Starlette:
     lifespan events to mounted child ASGI apps, we create a combined lifespan that
     triggers FastMCP's lifespan from the parent app.
 
-    ChatGPT requires all 6 discovery paths to resolve (404 = OAuth flow aborts):
+    ChatGPT requires all 9 discovery paths to resolve (404 = OAuth flow aborts):
     - Root: /.well-known/{openid-configuration, oauth-authorization-server, oauth-protected-resource}
-    - Prefixed: /mcp/.well-known/{openid-configuration, oauth-authorization-server, oauth-protected-resource}
+    - Trailing: /.well-known/{...}/mcp (ChatGPT fallback pattern)
+    - Prefixed: /mcp/.well-known/{...}
 
     Returns:
         Starlette application with:
         - /.well-known/* (OAuth discovery at root)
+        - /.well-known/*/mcp (OAuth discovery with trailing /mcp)
         - /mcp/.well-known/* (OAuth discovery at /mcp prefix)
         - / (FastMCP app mounted at root)
     """
@@ -515,6 +517,10 @@ def create_app() -> Starlette:
             Route("/.well-known/openid-configuration", wellknown_openid_configuration),
             Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
             Route("/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
+            # OAuth discovery endpoints with trailing /mcp (ChatGPT fallback pattern)
+            Route("/.well-known/openid-configuration/mcp", wellknown_openid_configuration),
+            Route("/.well-known/oauth-authorization-server/mcp", wellknown_oauth_authorization_server),
+            Route("/.well-known/oauth-protected-resource/mcp", wellknown_oauth_protected_resource),
             # OAuth discovery endpoints at /mcp prefix (ChatGPT requirement)
             Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
             Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
