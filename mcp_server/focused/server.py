@@ -565,7 +565,8 @@ def create_app() -> Starlette:
             Mount("/mcp", app=fastmcp_asgi)
         ],
         middleware=middleware,
-        lifespan=combined_lifespan
+        lifespan=combined_lifespan,
+        redirect_slashes=False  # Prevent 307 redirect from /mcp to /mcp/
     )
 
 
