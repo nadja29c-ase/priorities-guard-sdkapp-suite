@@ -480,6 +480,33 @@ async def notify_user(
 
 
 # ============================================================================
+# NoRedirectMount - Intercept /mcp to prevent 307 redirect
+# ============================================================================
+
+class NoRedirectMount:
+    """
+    ASGI wrapper to prevent Starlette's automatic slash redirect.
+
+    Starlette redirects POST /mcp → 307 → GET /mcp/ which breaks ChatGPT's
+    MCP handshake. This wrapper intercepts /mcp and rewrites it to /mcp/
+    internally without issuing a redirect response.
+    """
+
+    def __init__(self, app, path_prefix="/mcp"):
+        self.app = app
+        self.path_prefix = path_prefix
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            path = scope["path"]
+            # Intercept EXACT "/mcp" and rewrite to "/mcp/" internally
+            if path == self.path_prefix:
+                scope = dict(scope)
+                scope["path"] = self.path_prefix + "/"
+        return await self.app(scope, receive, send)
+
+
+# ============================================================================
 # Application Factory (Increment 14)
 # ============================================================================
 
@@ -561,12 +588,11 @@ def create_app() -> Starlette:
             Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
             Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
             Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
-            # FastMCP app at /mcp (ChatGPT expects POST /mcp)
-            Mount("/mcp", app=fastmcp_asgi)
+            # FastMCP app at /mcp with NoRedirectMount wrapper to prevent 307 redirect
+            Mount("/mcp", app=NoRedirectMount(fastmcp_asgi))
         ],
         middleware=middleware,
-        lifespan=combined_lifespan,
-        redirect_slashes=False  # Prevent 307 redirect from /mcp to /mcp/
+        lifespan=combined_lifespan
     )
 
 
