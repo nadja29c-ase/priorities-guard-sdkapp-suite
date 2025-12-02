@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V6_SSE")
+print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V7_SSE")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -61,7 +61,7 @@ class MCPContentTypeAndAcceptFixMiddleware:
     - ChatGPT sends Accept: */*
     FastMCP requires:
     - Content-Type: application/json
-    - Accept: application/json or text/event-stream
+    - Accept: text/event-stream (for SSE handshake)
     """
 
     def __init__(self, app):
@@ -71,19 +71,18 @@ class MCPContentTypeAndAcceptFixMiddleware:
         if scope["type"] == "http" and scope.get("method") == "POST":
             if scope.get("path") == "/mcp":  # exact match
 
-                # Normalize headers
-                modified = False
                 new_headers = []
+                modified = False
 
                 for name, value in scope["headers"]:
-                    # Fix Content-Type
+                    # Fix Content-Type (ChatGPT sends octet-stream)
                     if name == b"content-type" and b"application/octet-stream" in value:
                         value = b"application/json"
                         modified = True
 
-                    # Fix Accept header (rewrite if it doesn't include application/json)
-                    if name == b"accept" and b"application/json" not in value:
-                        value = b"application/json"
+                    # Fix Accept: must allow SSE
+                    if name == b"accept":
+                        value = b"text/event-stream"
                         modified = True
 
                     new_headers.append((name, value))
