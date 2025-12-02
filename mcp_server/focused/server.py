@@ -55,8 +55,7 @@ logger = structlog.get_logger(__name__)
 # Create FastMCP instance with stateless HTTP mode
 # Stateless mode returns JSON directly instead of SSE streams,
 # which is simpler for single-request patterns (ChatGPT, tests)
-# streamable_http_path="/" is relative to mount point (/mcp), so serves at /mcp
-mcp = FastMCP("focused-mcp", stateless_http=True, streamable_http_path="/")
+mcp = FastMCP("focused-mcp", stateless_http=True, streamable_http_path="/mcp")
 
 # Shared HTTP client for calling backend API
 http_client: httpx.AsyncClient | None = None
@@ -518,7 +517,7 @@ def create_app() -> Starlette:
         Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
 
         # *** MCP ENDPOINT - Route directly, no Mount ***
-        Route("/mcp", fastmcp_asgi),
+        Route("/mcp", fastmcp_asgi, methods=["POST"]),
     ]
 
     return Starlette(routes=routes, lifespan=combined_lifespan)
