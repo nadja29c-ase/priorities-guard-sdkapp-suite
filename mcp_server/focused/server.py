@@ -29,8 +29,6 @@ from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route, Mount
-from starlette.middleware import Middleware
-from starlette.middleware.exceptions import ExceptionMiddleware
 
 from mcp_server.focused.discovery import (
     openid_configuration,
@@ -480,87 +478,27 @@ async def notify_user(
 
 
 # ============================================================================
-# NoRedirectMount - Intercept /mcp to prevent 307 redirect
-# ============================================================================
-
-class NoRedirectMount:
-    """
-    ASGI wrapper to prevent Starlette's automatic slash redirect.
-
-    Starlette redirects POST /mcp → 307 → GET /mcp/ which breaks ChatGPT's
-    MCP handshake. This wrapper intercepts /mcp and rewrites it to /mcp/
-    internally without issuing a redirect response.
-    """
-
-    def __init__(self, app, path_prefix="/mcp"):
-        self.app = app
-        self.path_prefix = path_prefix
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            path = scope["path"]
-            # Intercept EXACT "/mcp" and rewrite to "/mcp/" internally
-            if path == self.path_prefix:
-                scope = dict(scope)
-                scope["path"] = self.path_prefix + "/"
-        return await self.app(scope, receive, send)
-
-
-# ============================================================================
 # Application Factory (Increment 14)
 # ============================================================================
 
 def create_app() -> Starlette:
     """
-    Create the Starlette application with OAuth discovery and FastMCP mounted.
-
-    FastMCP requires its lifespan events to be triggered for proper initialization
-    (TaskGroups, event loops, etc.). Since Starlette does NOT automatically propagate
-    lifespan events to mounted child ASGI apps, we create a combined lifespan that
-    triggers FastMCP's lifespan from the parent app.
-
-    ChatGPT requires all 9 discovery paths to resolve (404 = OAuth flow aborts):
-    - Root: /.well-known/{openid-configuration, oauth-authorization-server, oauth-protected-resource}
-    - Trailing: /.well-known/{...}/mcp (ChatGPT fallback pattern)
-    - Prefixed: /mcp/.well-known/{...}
-
-    Returns:
-        Starlette application with:
-        - /.well-known/* (OAuth discovery at root)
-        - /.well-known/*/mcp (OAuth discovery with trailing /mcp)
-        - /mcp/.well-known/* (OAuth discovery at /mcp prefix)
-        - /mcp (FastMCP app - ChatGPT expects POST /mcp)
+    Clean ASGI app mounting for MCP compatibility with ChatGPT.
+    No redirect, no slash normalization, no middleware that consumes the body.
     """
-    # Get the FastMCP ASGI app
     fastmcp_asgi = mcp.streamable_http_app()
 
-    # Extract FastMCP's lifespan context function
-    fastmcp_lifespan = fastmcp_asgi.router.lifespan_context
-
     @asynccontextmanager
-    async def combined_lifespan(_app):  # noqa: ARG001 - required by Starlette lifespan protocol
-        """
-        Combined lifespan that triggers FastMCP's lifespan events.
-
-        Starlette's Mount() does not propagate lifespan to child ASGI apps,
-        so we must manually trigger FastMCP's lifespan from the parent.
-
-        On startup, initializes the HTTP client for backend API calls.
-        On shutdown, closes HTTP clients to prevent connection leaks.
-        """
+    async def combined_lifespan(_app):  # noqa: ARG001
         global http_client
 
-        # Initialize HTTP client for backend API calls
-        # This is critical: __main__ block doesn't run when uvicorn imports the app
         if http_client is None:
             http_client = httpx.AsyncClient(timeout=30.0)
             logger.info("http_client.initialized")
 
-        # Trigger FastMCP's lifespan (initializes TaskGroups, session manager, etc.)
-        async with fastmcp_lifespan(fastmcp_asgi):
+        async with fastmcp_asgi.router.lifespan_context(fastmcp_asgi):
             yield
 
-        # Cleanup: close HTTP clients to prevent connection leaks
         if http_client is not None:
             await http_client.aclose()
             http_client = None
@@ -568,39 +506,28 @@ def create_app() -> Starlette:
 
         await _jwks_cache.aclose()
 
-    # Disable Starlette's default redirect middleware to prevent POST /mcp → 307 → GET /mcp/
-    # ChatGPT requires POST /mcp to return 200, not redirect
-    middleware = [
-        Middleware(ExceptionMiddleware, debug=False)
+    routes = [
+        # ROOT DISCOVERY
+        Route("/.well-known/openid-configuration", wellknown_openid_configuration),
+        Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
+        Route("/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
+
+        # PREFIXED DISCOVERY
+        Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
+        Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
+        Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
+
+        # *** MCP ENDPOINT (NO SLASH VARIANTS, NO REDIRECTS) ***
+        Mount("/mcp", app=fastmcp_asgi),
     ]
 
-    return Starlette(
-        routes=[
-            # OAuth discovery endpoints at root (ChatGPT requirement)
-            Route("/.well-known/openid-configuration", wellknown_openid_configuration),
-            Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
-            Route("/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
-            # OAuth discovery endpoints with trailing /mcp (ChatGPT fallback pattern)
-            Route("/.well-known/openid-configuration/mcp", wellknown_openid_configuration),
-            Route("/.well-known/oauth-authorization-server/mcp", wellknown_oauth_authorization_server),
-            Route("/.well-known/oauth-protected-resource/mcp", wellknown_oauth_protected_resource),
-            # OAuth discovery endpoints at /mcp prefix (ChatGPT requirement)
-            Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
-            Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
-            Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
-            # FastMCP app at /mcp (ChatGPT expects POST /mcp)
-            Mount("/mcp", app=fastmcp_asgi)
-        ],
-        middleware=middleware,
-        lifespan=combined_lifespan
-    )
+    return Starlette(routes=routes, lifespan=combined_lifespan)
 
 
 # --------------------------------------------------------------------
 # ASGI entrypoint for uvicorn (Railway imports this)
-# Wrapped with NoRedirectMount to intercept /mcp before Starlette's router
 # --------------------------------------------------------------------
-app = NoRedirectMount(create_app())
+app = create_app()
 
 
 if __name__ == "__main__":
