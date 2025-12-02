@@ -478,29 +478,6 @@ async def notify_user(
 
 
 # ============================================================================
-# NoRedirectMount - Prevent 307 redirect on /mcp
-# ============================================================================
-
-class NoRedirectMount:
-    """
-    Prevent Starlette's automatic 307 redirect from /mcp → /mcp/.
-    This wrapper rewrites /mcp internally without redirecting.
-    """
-
-    def __init__(self, app, path_prefix="/mcp"):
-        self.app = app
-        self.path_prefix = path_prefix
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            if scope["path"] == self.path_prefix:
-                # Rewrite "/mcp" to "/mcp/" internally
-                scope = dict(scope)
-                scope["path"] = self.path_prefix + "/"
-        return await self.app(scope, receive, send)
-
-
-# ============================================================================
 # Application Factory (Increment 14)
 # ============================================================================
 
@@ -540,8 +517,8 @@ def create_app() -> Starlette:
         Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
         Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
 
-        # *** MCP ENDPOINT - wrapped to prevent 307 redirect ***
-        Mount("/mcp", app=NoRedirectMount(fastmcp_asgi)),
+        # *** MCP ENDPOINT - Route directly, no Mount ***
+        Route("/mcp", fastmcp_asgi),
     ]
 
     return Starlette(routes=routes, lifespan=combined_lifespan)
