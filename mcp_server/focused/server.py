@@ -569,6 +569,12 @@ def create_app() -> Starlette:
     )
 
 
+# --------------------------------------------------------------------
+# ASGI entrypoint for uvicorn (Railway imports this)
+# --------------------------------------------------------------------
+app = create_app()
+
+
 if __name__ == "__main__":
     import os
 
@@ -585,9 +591,6 @@ if __name__ == "__main__":
         mcp_server_url=MCP_SERVER_URL,
         oauth_issuer_url=OAUTH_ISSUER_URL
     )
-
-    # Create Starlette app with OAuth discovery + FastMCP
-    app = create_app()
 
     # Run with uvicorn
     uvicorn.run(app, host="0.0.0.0", port=port)
