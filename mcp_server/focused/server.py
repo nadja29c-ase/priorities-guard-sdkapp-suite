@@ -511,12 +511,17 @@ def create_app() -> Starlette:
         Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
         Route("/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
 
-        # PREFIXED DISCOVERY
+        # TRAILING /mcp DISCOVERY (ChatGPT requirement)
+        Route("/.well-known/openid-configuration/mcp", wellknown_openid_configuration),
+        Route("/.well-known/oauth-authorization-server/mcp", wellknown_oauth_authorization_server),
+        Route("/.well-known/oauth-protected-resource/mcp", wellknown_oauth_protected_resource),
+
+        # PREFIXED /mcp DISCOVERY
         Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
         Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
         Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
 
-        # *** MCP ENDPOINT - Route directly, no Mount ***
+        # MCP ENDPOINT
         Route("/mcp", fastmcp_asgi, methods=["POST"]),
     ]
 
