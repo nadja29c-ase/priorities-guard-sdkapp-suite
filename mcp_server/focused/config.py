@@ -10,7 +10,14 @@ from typing import Optional
 
 
 # ============================================================================
-# JWT Validation Settings
+# Environment Detection (evaluated once at module load)
+# ============================================================================
+
+ENV = os.getenv("ENV", "dev")
+
+
+# ============================================================================
+# Helper Functions
 # ============================================================================
 
 def get_env(key: str, default: Optional[str] = None, required: bool = False) -> str:
@@ -32,14 +39,18 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 
     if required and value is None:
         # In production, critical configs must be set
-        env = os.getenv("ENV", "dev")
-        if env in ("production", "staging"):
+        if ENV in ("production", "staging"):
             raise RuntimeError(
                 f"Required environment variable {key} not set. "
-                f"This is required in {env} environment."
+                f"This is required in {ENV} environment."
             )
 
     return value
+
+
+# ============================================================================
+# JWT Validation Settings
+# ============================================================================
 
 
 # JWKS URL for fetching public keys
@@ -104,11 +115,11 @@ JWKS_FETCH_TIMEOUT_SECONDS = int(get_env(
 # Backend Configuration
 # ============================================================================
 
-# Backend API base URL
+# Backend API base URL (trailing slash stripped to prevent URL-join bugs)
 BACKEND_URL = get_env(
     "BACKEND_URL",
     default="http://localhost:8000"
-)
+).rstrip("/")
 
 
 # ============================================================================
@@ -117,10 +128,11 @@ BACKEND_URL = get_env(
 
 # MCP Server public URL (used in discovery endpoint)
 # Must match the actual public entrypoint for the MCP server
+# Trailing slash stripped to prevent double-slash in discovery URLs
 MCP_SERVER_URL = get_env(
     "MCP_SERVER_URL",
     default="http://localhost:8001"
-)
+).rstrip("/")
 
 # OAuth Authorization Server URL (must include /oauth/focused path)
 # ChatGPT appends /.well-known/openid-configuration to this URL
@@ -152,6 +164,3 @@ TOOL_SCOPES = {
 
 # Log level
 LOG_LEVEL = get_env("LOG_LEVEL", default="INFO")
-
-# Environment name (for conditional behavior)
-ENV = get_env("ENV", default="dev")
