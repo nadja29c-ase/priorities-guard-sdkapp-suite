@@ -49,6 +49,40 @@ from mcp_server.focused.discovery import (
     oauth_protected_resource,
 )
 
+
+# ============================================================================
+# MCPContentTypeFixMiddleware - Fix ChatGPT octet-stream Content-Type
+# ============================================================================
+
+class MCPContentTypeFixMiddleware:
+    """
+    Fix ChatGPT's Content-Type header for MCP requests.
+
+    ChatGPT sends application/octet-stream but FastMCP expects application/json.
+    This middleware rewrites the header before FastMCP sees the request.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope["type"] == "http" and
+            scope["path"] == "/mcp" and
+            scope["method"] == "POST"
+        ):
+            # Replace application/octet-stream → application/json
+            new_headers = []
+            for k, v in scope["headers"]:
+                if k == b"content-type" and v == b"application/octet-stream":
+                    new_headers.append((b"content-type", b"application/json"))
+                else:
+                    new_headers.append((k, v))
+            scope = dict(scope)
+            scope["headers"] = new_headers
+
+        return await self.app(scope, receive, send)
+
 from mcp_server.focused.config import (
     BACKEND_URL,
     MCP_SERVER_URL,
@@ -538,19 +572,19 @@ def create_app() -> Starlette:
         Route("/mcp", fastmcp_asgi, methods=["POST"]),
     ]
 
-    # Debug: dump FastMCP config (use dir() to see available attrs)
+    # Debug: dump FastMCP config
     print("FASTMCP NAME:", mcp.name)
-    print("FASTMCP ATTRS:", [a for a in dir(mcp) if not a.startswith("_")])
 
-    tmp_app = Starlette(routes=routes, lifespan=combined_lifespan)
+    starlette_app = Starlette(routes=routes, lifespan=combined_lifespan)
 
     # Debug: dump route table
     print("\n================ MCP ROUTES ================")
-    for r in tmp_app.routes:
+    for r in starlette_app.routes:
         print("ROUTE:", r.path, "| METHODS:", getattr(r, "methods", None))
     print("===========================================\n")
 
-    return tmp_app
+    # Wrap with Content-Type fix middleware for ChatGPT compatibility
+    return MCPContentTypeFixMiddleware(starlette_app)
 
 
 # --------------------------------------------------------------------
