@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: OPTIONS_FIX_V11")
+print("FOCUSED MCP SERVER VERSION: OPTIONS_FIX_V12")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -163,6 +163,11 @@ async def wellknown_oauth_protected_resource(request):  # noqa: ARG001
     """Starlette wrapper for discovery.oauth_protected_resource."""
     logger.info("oauth.discovery.request")
     return JSONResponse(await oauth_protected_resource())
+
+
+async def mcp_options(request):  # noqa: ARG001
+    """Handle OPTIONS preflight for /mcp endpoint."""
+    return JSONResponse({}, status_code=200)
 
 
 def handle_mcp_errors(tool_name: str) -> Callable:
@@ -563,8 +568,9 @@ def create_app():
         Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
         Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
 
-        # MCP ENDPOINT (with OPTIONS for CORS preflight)
-        Route("/mcp", fastmcp_app, methods=["POST", "OPTIONS"]),
+        # MCP ENDPOINT - OPTIONS handled separately, POST goes to FastMCP
+        Route("/mcp", mcp_options, methods=["OPTIONS"]),
+        Route("/mcp", fastmcp_app, methods=["POST"]),
     ]
 
     # Debug: dump FastMCP config
