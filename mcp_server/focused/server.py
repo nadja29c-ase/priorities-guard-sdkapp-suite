@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V7_SSE")
+print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V8_SSE_JSON")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -80,9 +80,9 @@ class MCPContentTypeAndAcceptFixMiddleware:
                         value = b"application/json"
                         modified = True
 
-                    # Fix Accept: must allow SSE
+                    # Fix Accept: must allow both SSE and JSON
                     if name == b"accept":
-                        value = b"text/event-stream"
+                        value = b"text/event-stream, application/json"
                         modified = True
 
                     new_headers.append((name, value))
