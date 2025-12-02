@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 """
 Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
+"""
+
+import os
+print("=" * 50)
+print("FOCUSED MCP SERVER VERSION: COMMIT 868593d")
+print("SERVER FILE:", os.path.abspath(__file__))
+print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
+print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
+print("ENV MCP_SERVER_URL:", os.getenv("MCP_SERVER_URL"))
+print("ENV PORT:", os.getenv("PORT"))
+print("=" * 50)
+
+"""
 
 This MCP server forwards tool calls to the backend HTTP API with:
 - JWT authentication (OAuth 2.1 Bearer tokens)
@@ -525,7 +538,19 @@ def create_app() -> Starlette:
         Route("/mcp", fastmcp_asgi, methods=["POST"]),
     ]
 
-    return Starlette(routes=routes, lifespan=combined_lifespan)
+    # Debug: dump FastMCP config
+    print("FASTMCP PATH:", mcp.streamable_http_path)
+    print("FASTMCP NAME:", mcp.name)
+
+    tmp_app = Starlette(routes=routes, lifespan=combined_lifespan)
+
+    # Debug: dump route table
+    print("\n================ MCP ROUTES ================")
+    for r in tmp_app.routes:
+        print("ROUTE:", r.path, "| METHODS:", getattr(r, "methods", None))
+    print("===========================================\n")
+
+    return tmp_app
 
 
 # --------------------------------------------------------------------
