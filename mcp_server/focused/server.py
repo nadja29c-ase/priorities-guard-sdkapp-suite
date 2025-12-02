@@ -5,7 +5,7 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: MIDDLEWARE_FIX_V8_SSE_JSON")
+print("FOCUSED MCP SERVER VERSION: NO_LIFESPAN_V9")
 print("SERVER FILE:", os.path.abspath(__file__))
 print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
 print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
@@ -37,11 +37,10 @@ import httpx
 import structlog
 from typing import Optional, Dict, Any, Callable
 from functools import wraps
-from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
-from starlette.routing import Route, Mount
+from starlette.routing import Route
 
 from mcp_server.focused.discovery import (
     openid_configuration,
@@ -536,33 +535,13 @@ async def notify_user(
 # Application Factory (Increment 14)
 # ============================================================================
 
-def create_app() -> Starlette:
+def create_app():
     """
     Clean ASGI app mounting for MCP compatibility with ChatGPT.
-    No redirect, no slash normalization, no middleware that consumes the body.
+    No lifespan manipulation - FastMCP manages its own lifecycle.
     """
-    # Get raw FastMCP ASGI app (no wrapping here - middleware wraps entire Starlette app)
-    fastmcp_asgi = mcp.streamable_http_app()
-
-    @asynccontextmanager
-    async def combined_lifespan(_app):  # noqa: ARG001
-        global http_client
-
-        if http_client is None:
-            http_client = httpx.AsyncClient(timeout=30.0)
-            logger.info("http_client.initialized")
-
-        # Correct FastMCP lifespan handling
-        fastmcp_lifespan = fastmcp_asgi.lifespan_context
-        async with fastmcp_lifespan(fastmcp_asgi):
-            yield
-
-        if http_client is not None:
-            await http_client.aclose()
-            http_client = None
-            logger.info("http_client.closed")
-
-        await _jwks_cache.aclose()
+    # FastMCP returns a Starlette app - do NOT touch its lifespan
+    fastmcp_app = mcp.streamable_http_app()
 
     routes = [
         # ROOT DISCOVERY
@@ -581,13 +560,13 @@ def create_app() -> Starlette:
         Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
 
         # MCP ENDPOINT
-        Route("/mcp", fastmcp_asgi, methods=["POST"]),
+        Route("/mcp", fastmcp_app, methods=["POST"]),
     ]
 
     # Debug: dump FastMCP config
     print("FASTMCP NAME:", mcp.name)
 
-    starlette_app = Starlette(routes=routes, lifespan=combined_lifespan)
+    starlette_app = Starlette(routes=routes)
 
     # Debug: dump route table
     print("\n================ MCP ROUTES ================")
