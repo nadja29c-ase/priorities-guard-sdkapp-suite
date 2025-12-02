@@ -29,6 +29,8 @@ from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route, Mount
+from starlette.middleware import Middleware
+from starlette.middleware.exceptions import ExceptionMiddleware
 
 from mcp_server.focused.discovery import (
     openid_configuration,
@@ -539,6 +541,12 @@ def create_app() -> Starlette:
 
         await _jwks_cache.aclose()
 
+    # Disable Starlette's default redirect middleware to prevent POST /mcp → 307 → GET /mcp/
+    # ChatGPT requires POST /mcp to return 200, not redirect
+    middleware = [
+        Middleware(ExceptionMiddleware, debug=False)
+    ]
+
     return Starlette(
         routes=[
             # OAuth discovery endpoints at root (ChatGPT requirement)
@@ -556,6 +564,7 @@ def create_app() -> Starlette:
             # FastMCP app at /mcp (ChatGPT expects POST /mcp)
             Mount("/mcp", app=fastmcp_asgi)
         ],
+        middleware=middleware,
         lifespan=combined_lifespan
     )
 
