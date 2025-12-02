@@ -63,6 +63,34 @@ http_client: httpx.AsyncClient | None = None
 
 
 # ============================================================================
+# Startup Configuration Validation
+# ============================================================================
+
+# Log resolved OAuth config (helps debug Railway env var issues)
+logger.info(
+    "oauth.config.resolved",
+    BACKEND_URL=BACKEND_URL,
+    OAUTH_ISSUER_URL=OAUTH_ISSUER_URL,
+    MCP_SERVER_URL=MCP_SERVER_URL,
+)
+
+# Warn if localhost URLs are used (will break ChatGPT OAuth in production)
+if "localhost" in OAUTH_ISSUER_URL:
+    logger.error(
+        "oauth.config.localhost_detected",
+        message="OAUTH_ISSUER_URL contains localhost - ChatGPT OAuth will fail!",
+        OAUTH_ISSUER_URL=OAUTH_ISSUER_URL,
+    )
+
+if "localhost" in MCP_SERVER_URL:
+    logger.error(
+        "oauth.config.localhost_detected",
+        message="MCP_SERVER_URL contains localhost - ChatGPT OAuth will fail!",
+        MCP_SERVER_URL=MCP_SERVER_URL,
+    )
+
+
+# ============================================================================
 # OAuth Discovery Endpoints (Increment 15)
 # Starlette wrappers for discovery.py functions
 # ============================================================================
