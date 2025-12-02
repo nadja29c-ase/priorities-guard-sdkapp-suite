@@ -570,13 +570,18 @@ def create_app() -> Starlette:
 
 
 if __name__ == "__main__":
+    import os
+
     # Initialize HTTP client
     http_client = httpx.AsyncClient(timeout=30.0)
+
+    # Use PORT env var (Railway sets this) or default to 8001 for local dev
+    port = int(os.getenv("PORT", "8001"))
 
     logger.info(
         "Starting Focused MCP server",
         host="0.0.0.0",
-        port=8001,
+        port=port,
         mcp_server_url=MCP_SERVER_URL,
         oauth_issuer_url=OAUTH_ISSUER_URL
     )
@@ -584,5 +589,5 @@ if __name__ == "__main__":
     # Create Starlette app with OAuth discovery + FastMCP
     app = create_app()
 
-    # Run with uvicorn on port 8001
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    # Run with uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port)
