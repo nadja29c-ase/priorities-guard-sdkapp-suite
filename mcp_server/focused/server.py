@@ -588,8 +588,8 @@ def create_app() -> Starlette:
             Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration),
             Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
             Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource),
-            # FastMCP app at /mcp with NoRedirectMount wrapper to prevent 307 redirect
-            Mount("/mcp", app=NoRedirectMount(fastmcp_asgi))
+            # FastMCP app at /mcp (ChatGPT expects POST /mcp)
+            Mount("/mcp", app=fastmcp_asgi)
         ],
         middleware=middleware,
         lifespan=combined_lifespan
@@ -598,8 +598,9 @@ def create_app() -> Starlette:
 
 # --------------------------------------------------------------------
 # ASGI entrypoint for uvicorn (Railway imports this)
+# Wrapped with NoRedirectMount to intercept /mcp before Starlette's router
 # --------------------------------------------------------------------
-app = create_app()
+app = NoRedirectMount(create_app())
 
 
 if __name__ == "__main__":
