@@ -30,6 +30,8 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route, Mount
 
+from mcp_server.focused.discovery import openid_configuration, oauth_authorization_server
+
 from mcp_server.focused.config import (
     BACKEND_URL,
     MCP_SERVER_URL,
@@ -58,8 +60,30 @@ http_client: httpx.AsyncClient | None = None
 
 
 # ============================================================================
-# OAuth Protected Resource Discovery Endpoint (Increment 14)
+# OAuth Discovery Endpoints (Increment 14)
 # ============================================================================
+
+async def wellknown_openid_configuration(request):
+    """
+    OpenID Connect Discovery endpoint.
+
+    Returns OpenID configuration for ChatGPT OAuth discovery.
+    Wraps the FastAPI endpoint from discovery.py for Starlette compatibility.
+    """
+    data = await openid_configuration()
+    return JSONResponse(data)
+
+
+async def wellknown_oauth_authorization_server(request):
+    """
+    OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414).
+
+    Returns authorization server metadata for ChatGPT OAuth discovery.
+    Wraps the FastAPI endpoint from discovery.py for Starlette compatibility.
+    """
+    data = await oauth_authorization_server()
+    return JSONResponse(data)
+
 
 async def oauth_protected_resource(request):
     """
@@ -461,7 +485,9 @@ def create_app() -> Starlette:
 
     Returns:
         Starlette application with:
-        - /.well-known/oauth-protected-resource (OAuth discovery)
+        - /.well-known/openid-configuration (OpenID Connect discovery)
+        - /.well-known/oauth-authorization-server (OAuth 2.0 AS metadata)
+        - /.well-known/oauth-protected-resource (OAuth 2.0 protected resource)
         - / (FastMCP app mounted at root)
     """
     # Get the FastMCP ASGI app
@@ -503,7 +529,11 @@ def create_app() -> Starlette:
 
     return Starlette(
         routes=[
+            # OAuth discovery endpoints (must be at root for ChatGPT)
+            Route("/.well-known/openid-configuration", wellknown_openid_configuration),
+            Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server),
             Route("/.well-known/oauth-protected-resource", oauth_protected_resource),
+            # FastMCP app at root
             Mount("/", app=fastmcp_asgi)
         ],
         lifespan=combined_lifespan
