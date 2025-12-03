@@ -65,6 +65,12 @@ def _detect_language(request: Request) -> str:
         Language code: "de" for German, "en" for everything else
     """
     accept_language = request.headers.get("Accept-Language", "")
+    # DEBUG: Log the actual header value
+    logger.info(
+        "oauth.authorize.language_detection",
+        accept_language_header=accept_language,
+        starts_with_de=accept_language.lower().startswith("de")
+    )
     # Simple detection: if starts with "de", use German
     if accept_language.lower().startswith("de"):
         return "de"
