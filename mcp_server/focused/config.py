@@ -117,7 +117,7 @@ JWKS_FETCH_TIMEOUT_SECONDS = int(get_env(
 
 # Backend API base URL (trailing slash stripped to prevent URL-join bugs)
 BACKEND_URL = get_env(
-    "BACKEND_URL",
+    "FOCUSED_BACKEND_URL",
     default="http://localhost:8000"
 ).rstrip("/")
 
@@ -130,14 +130,14 @@ BACKEND_URL = get_env(
 # Must match the actual public entrypoint for the MCP server
 # Trailing slash stripped to prevent double-slash in discovery URLs
 MCP_SERVER_URL = get_env(
-    "MCP_SERVER_URL",
+    "FOCUSED_MCP_SERVER_URL",
     default="http://localhost:8001"
 ).rstrip("/")
 
 # OAuth Authorization Server URL (must include /oauth/focused path)
 # ChatGPT appends /.well-known/openid-configuration to this URL
 OAUTH_ISSUER_URL = get_env(
-    "OAUTH_ISSUER_URL",
+    "FOCUSED_OAUTH_ISSUER_URL",
     default="http://localhost:8000/oauth/focused"
 )
 

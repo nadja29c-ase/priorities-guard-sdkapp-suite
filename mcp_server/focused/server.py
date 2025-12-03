@@ -5,11 +5,11 @@ Focused MCP Server - Thin wrapper around backend REST API (Increment 7D + 14).
 
 import os
 print("=" * 50)
-print("FOCUSED MCP SERVER VERSION: OPTIONS_FIX_V12")
+print("FOCUSED MCP SERVER VERSION: ENV_VAR_RENAME_V13")
 print("SERVER FILE:", os.path.abspath(__file__))
-print("ENV BACKEND_URL:", os.getenv("BACKEND_URL"))
-print("ENV OAUTH_ISSUER_URL:", os.getenv("OAUTH_ISSUER_URL"))
-print("ENV MCP_SERVER_URL:", os.getenv("MCP_SERVER_URL"))
+print("ENV FOCUSED_BACKEND_URL:", os.getenv("FOCUSED_BACKEND_URL"))
+print("ENV FOCUSED_OAUTH_ISSUER_URL:", os.getenv("FOCUSED_OAUTH_ISSUER_URL"))
+print("ENV FOCUSED_MCP_SERVER_URL:", os.getenv("FOCUSED_MCP_SERVER_URL"))
 print("ENV PORT:", os.getenv("PORT"))
 print("=" * 50)
 
