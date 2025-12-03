@@ -130,15 +130,18 @@ def _normalize_redirect_uri(uri: str) -> str | None:
 
 async def _get_or_create_user(
     db: AsyncSession,
-    chatgpt_user_id: str,
+    chatgpt_user_id: str | None,
     correlation_id: str
 ) -> CoreUser:
     """
     Look up user by chatgpt_user_id or create new user if not found.
 
+    If chatgpt_user_id is None (no login_hint provided), creates an anonymous user.
+    This supports OAuth flows where the client doesn't provide login_hint.
+
     Args:
         db: Database session
-        chatgpt_user_id: ChatGPT user ID from login_hint parameter
+        chatgpt_user_id: ChatGPT user ID from login_hint parameter (may be None)
         correlation_id: Request correlation ID for logging
 
     Returns:
@@ -146,30 +149,44 @@ async def _get_or_create_user(
     """
     request_logger = logger.bind(correlation_id=correlation_id)
 
-    # Look up existing user
-    result = await db.execute(
-        select(CoreUser).where(CoreUser.chatgpt_user_id == chatgpt_user_id)
-    )
-    user = result.scalar_one_or_none()
+    # If login_hint provided, look up existing user
+    if chatgpt_user_id:
+        result = await db.execute(
+            select(CoreUser).where(CoreUser.chatgpt_user_id == chatgpt_user_id)
+        )
+        user = result.scalar_one_or_none()
 
-    if user:
+        if user:
+            request_logger.info(
+                "oauth.authorize.user_found",
+                user_id=str(user.id),
+                chatgpt_user_id=chatgpt_user_id
+            )
+            return user
+
+        # Create new user with chatgpt_user_id
+        user = CoreUser(chatgpt_user_id=chatgpt_user_id)
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
         request_logger.info(
-            "oauth.authorize.user_found",
+            "oauth.authorize.user_created",
             user_id=str(user.id),
             chatgpt_user_id=chatgpt_user_id
         )
         return user
 
-    # Create new user
-    user = CoreUser(chatgpt_user_id=chatgpt_user_id)
+    # No login_hint - create anonymous user
+    # ChatGPT will associate tokens with this user for the session
+    user = CoreUser(chatgpt_user_id=None)
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
     request_logger.info(
-        "oauth.authorize.user_created",
-        user_id=str(user.id),
-        chatgpt_user_id=chatgpt_user_id
+        "oauth.authorize.anonymous_user_created",
+        user_id=str(user.id)
     )
     return user
 
@@ -203,19 +220,19 @@ async def authorize_endpoint(
         scope: Space-separated scopes (focused.read, focused.write, focused.notify)
         state: Optional CSRF token
         nonce: Optional OpenID Connect nonce
-        login_hint: REQUIRED - ChatGPT user ID for user identification
+        login_hint: Optional - ChatGPT user ID for user identification
 
     Returns:
         HTML consent screen on success
         Error redirect on validation failure
 
     Security Notes:
-        - login_hint is REQUIRED (returns login_required error if missing)
+        - login_hint is optional; if missing, an anonymous user is created
         - User identity resolved via login_hint → core_users.chatgpt_user_id
         - Never accept raw user_id from query params (prevents impersonation)
         - PKCE required (S256 challenge method)
         - redirect_uri must be pre-registered
-        - Rate limited: by IP before login_hint validation, by login_hint after
+        - Rate limited: by IP always, by login_hint if provided
         - Authorization context stores internal user_id (UUID), NOT chatgpt_user_id
 
     Example:
@@ -337,23 +354,11 @@ async def authorize_endpoint(
         )
 
     # =========================================================================
-    # VALIDATE LOGIN_HINT (Required per Increment 12)
+    # VALIDATE LOGIN_HINT (Optional - if provided, validate length)
+    # When missing, an anonymous user will be created
     # =========================================================================
-    if not login_hint:
-        request_logger.warning(
-            "oauth.authorize.error",
-            error="login_required",
-            message="login_hint parameter required"
-        )
-        return _error_redirect(
-            redirect_uri,
-            state,
-            error="login_required",
-            description="login_hint parameter required"
-        )
-
-    # Validate login_hint length (chatgpt_user_id is VARCHAR(64))
-    if len(login_hint) > 64:
+    # Validate login_hint length if provided (chatgpt_user_id is VARCHAR(64))
+    if login_hint and len(login_hint) > 64:
         request_logger.warning(
             "oauth.authorize.error",
             error="invalid_request",
@@ -366,13 +371,14 @@ async def authorize_endpoint(
             description="login_hint exceeds maximum length"
         )
 
-    # Phase 2: Rate limit by login_hint (after validation)
-    await check_rate_limit(
-        key=f"ratelimit:oauth:authorize:login_hint:{login_hint}",
-        limit=20,
-        window=60,
-        request=request
-    )
+    # Phase 2: Rate limit by login_hint (only if provided)
+    if login_hint:
+        await check_rate_limit(
+            key=f"ratelimit:oauth:authorize:login_hint:{login_hint}",
+            limit=20,
+            window=60,
+            request=request
+        )
 
     # Validate response_type
     if response_type != "code":
