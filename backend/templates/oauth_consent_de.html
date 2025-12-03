@@ -254,22 +254,33 @@
             </div>
         </form>
         <script>
-            // Handle form submission with action capture
-            var form = document.getElementById('consent-form');
-            var actionInput = document.getElementById('action-input');
-            var buttons = form.querySelectorAll('button[type="submit"]');
+            (function() {
+                var form = document.getElementById('consent-form');
+                var actionInput = document.getElementById('action-input');
+                var submitted = false;
 
-            buttons.forEach(function(btn) {
-                btn.addEventListener('click', function(e) {
-                    // Set the action value before form submits
-                    actionInput.value = this.getAttribute('data-action');
-                    // Disable all buttons to prevent double-click
+                form.addEventListener('submit', function(e) {
+                    if (submitted) {
+                        e.preventDefault();
+                        return false;
+                    }
+                    submitted = true;
+                    // Grey out buttons after submit starts
+                    var buttons = form.querySelectorAll('button[type="submit"]');
                     buttons.forEach(function(b) {
-                        b.disabled = true;
                         b.style.opacity = '0.6';
+                        b.style.pointerEvents = 'none';
                     });
                 });
-            });
+
+                // Capture which button was clicked
+                var buttons = form.querySelectorAll('button[type="submit"]');
+                buttons.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        actionInput.value = this.getAttribute('data-action');
+                    });
+                });
+            })();
         </script>
     </main>
 </body>
