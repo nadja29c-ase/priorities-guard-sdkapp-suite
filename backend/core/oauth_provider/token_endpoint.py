@@ -4,8 +4,10 @@ Token Endpoint - OAuth 2.1 token issuance.
 HTTP layer only. Delegates all logic to service layer.
 
 Note: OAuth 2.1 requires form-urlencoded POST data (RFC 6749 Section 4.1.3).
+Supports client credentials via both form body and HTTP Basic Auth header.
 """
 
+import base64
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,30 @@ from backend.core.oauth_provider.validators.token_validators import (
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["oauth-provider"])
+
+
+def _extract_basic_auth(request: Request) -> tuple[str | None, str | None]:
+    """
+    Extract client_id and client_secret from HTTP Basic Auth header.
+
+    Per RFC 6749 Section 2.3.1, clients may authenticate via Basic Auth.
+
+    Returns:
+        Tuple of (client_id, client_secret) or (None, None) if not present
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.lower().startswith("basic "):
+        return None, None
+
+    try:
+        encoded = auth_header[6:]  # Remove "Basic " prefix
+        decoded = base64.b64decode(encoded).decode("utf-8")
+        if ":" not in decoded:
+            return None, None
+        client_id, client_secret = decoded.split(":", 1)
+        return client_id, client_secret
+    except Exception:
+        return None, None
 
 
 @router.post("/oauth/focused/token")
@@ -90,6 +116,17 @@ async def token_endpoint(
     # Get correlation_id for logging
     correlation_id = request.state.correlation_id
     request_logger = logger.bind(correlation_id=correlation_id)
+
+    # Extract client credentials from Basic Auth header if not in form body
+    # Per RFC 6749 Section 2.3.1, clients may use HTTP Basic Auth
+    if not client_id:
+        header_client_id, _header_client_secret = _extract_basic_auth(request)
+        if header_client_id:
+            client_id = header_client_id
+            request_logger.debug(
+                "oauth.token.client_from_header",
+                client_id=client_id
+            )
 
     # Log token request
     request_logger.info(
