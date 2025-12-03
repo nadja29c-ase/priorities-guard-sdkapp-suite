@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'none'; form-action 'self'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; script-src 'unsafe-inline'; form-action 'self'; base-uri 'none'">
     <title>Focused autorisieren - Priority Guardian</title>
     <style>
         * {
@@ -232,7 +232,7 @@
             <a href="https://www.priority-guard.com/privacy" target="_blank" rel="noopener noreferrer">Datenschutzerklärung</a> zu.
         </div>
 
-        <form method="POST" action="/oauth/focused/consent" aria-label="Autorisierungsformular">
+        <form method="POST" action="/oauth/focused/consent" aria-label="Autorisierungsformular" id="consent-form">
             <input type="hidden" name="auth_context_id" value="{{ auth_context_id }}">
 
             <div class="button-group">
@@ -254,6 +254,16 @@
                 </button>
             </div>
         </form>
+        <script>
+            // Prevent double form submission
+            document.getElementById('consent-form').addEventListener('submit', function(e) {
+                var buttons = this.querySelectorAll('button[type="submit"]');
+                buttons.forEach(function(btn) {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                });
+            });
+        </script>
     </main>
 </body>
 </html>
