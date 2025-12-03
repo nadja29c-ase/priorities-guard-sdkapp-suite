@@ -234,20 +234,19 @@
 
         <form method="POST" action="/oauth/focused/consent" aria-label="Autorisierungsformular" id="consent-form">
             <input type="hidden" name="auth_context_id" value="{{ auth_context_id }}">
+            <input type="hidden" name="action" id="action-input" value="">
 
             <div class="button-group">
                 <button
                     type="submit"
-                    name="action"
-                    value="allow"
+                    data-action="allow"
                     class="btn btn-allow"
                     aria-label="Zugriff auf angeforderte Berechtigungen zulassen">
                     Zulassen
                 </button>
                 <button
                     type="submit"
-                    name="action"
-                    value="deny"
+                    data-action="deny"
                     class="btn btn-deny"
                     aria-label="Zugriff ablehnen und zur Anwendung zurückkehren">
                     Ablehnen
@@ -255,12 +254,20 @@
             </div>
         </form>
         <script>
-            // Prevent double form submission
-            document.getElementById('consent-form').addEventListener('submit', function(e) {
-                var buttons = this.querySelectorAll('button[type="submit"]');
-                buttons.forEach(function(btn) {
-                    btn.disabled = true;
-                    btn.style.opacity = '0.6';
+            // Handle form submission with action capture
+            var form = document.getElementById('consent-form');
+            var actionInput = document.getElementById('action-input');
+            var buttons = form.querySelectorAll('button[type="submit"]');
+
+            buttons.forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    // Set the action value before form submits
+                    actionInput.value = this.getAttribute('data-action');
+                    // Disable all buttons to prevent double-click
+                    buttons.forEach(function(b) {
+                        b.disabled = true;
+                        b.style.opacity = '0.6';
+                    });
                 });
             });
         </script>
