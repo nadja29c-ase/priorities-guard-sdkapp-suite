@@ -553,10 +553,16 @@ def create_app():
     fastmcp_app = mcp.streamable_http_app()
 
     # Discovery routes as a separate Starlette app
+    # Include both root and /mcp suffixed versions (ChatGPT checks both)
     discovery_routes = [
+        # Root discovery endpoints
         Route("/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
         Route("/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
         Route("/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
+        # ChatGPT also checks /mcp suffixed versions
+        Route("/openid-configuration/mcp", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/oauth-authorization-server/mcp", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/oauth-protected-resource/mcp", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
     ]
     discovery_app = Starlette(routes=discovery_routes)
 
