@@ -39,6 +39,7 @@ class CoreUser(Base):
 
     Maps external ChatGPT user IDs (from login_hint) to internal UUIDs.
     The chatgpt_user_id is a pseudonymous identifier used for OAuth flows.
+    When login_hint is not provided, chatgpt_user_id will be NULL (anonymous user).
     """
 
     __tablename__ = "core_users"
@@ -50,12 +51,12 @@ class CoreUser(Base):
         comment="Internal user identifier (UUID)"
     )
 
-    chatgpt_user_id: Mapped[str] = mapped_column(
+    chatgpt_user_id: Mapped[str | None] = mapped_column(
         String(64),
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
-        comment="ChatGPT user ID from login_hint parameter (pseudonymous, for OAuth user lookup)"
+        comment="ChatGPT user ID from login_hint parameter (NULL for anonymous users)"
     )
 
     created_at: Mapped[datetime] = mapped_column(
