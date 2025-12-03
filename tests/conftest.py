@@ -7,7 +7,7 @@ conftest.py provides unit-test-level DB fixtures:
 - local ephemeral async engine
 - auto-rollback per test
 - table truncation
-- no real Redis
+- fakeredis for Redis tests
 - no HTTP client state
 - no external service mocking
 
@@ -18,6 +18,7 @@ This is your standard test harness for:
 - Token encryption tests
 - OAuth validator unit tests
 - Business logic tests that dont require real HTTP
+- OAuth rate limiting tests (with fakeredis)
 
 """
 
@@ -27,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy import text, create_engine
 from sqlalchemy.pool import NullPool
 from httpx import AsyncClient, ASGITransport
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.core.models import Base
 from backend.apps.focused import db_models  # noqa: F401 - Import models so they're registered with Base
@@ -177,3 +179,118 @@ async def client(async_engine):
     # Clean up
     await app.state.http_client.aclose()
     app.dependency_overrides.clear()
+
+
+# =============================================================================
+# FAKEREDIS FIXTURE (for rate limiting and Redis-dependent tests)
+# =============================================================================
+
+class FakeRedisClient:
+    """
+    Fake Redis client for testing rate limiting and caching.
+
+    Mimics the RedisClient interface from backend/core/redis_client.py
+    with in-memory storage for isolation between tests.
+    """
+
+    def __init__(self, env_prefix: str = "test:"):
+        self._storage: dict = {}
+        self._ttls: dict = {}
+        self._env_prefix = env_prefix
+        self._client = self  # For compatibility with rate_limit.py accessing _client.expire
+
+    def _prefix_key(self, key: str) -> str:
+        return f"{self._env_prefix}{key}"
+
+    def is_connected(self) -> bool:
+        return True
+
+    async def get(self, key: str):
+        prefixed = self._prefix_key(key)
+        return self._storage.get(prefixed)
+
+    async def set(self, key: str, value, ex: int = None, nx: bool = False):
+        prefixed = self._prefix_key(key)
+
+        if nx and prefixed in self._storage:
+            return None  # Key exists, NX prevents set
+
+        self._storage[prefixed] = value
+        if ex:
+            self._ttls[prefixed] = ex
+        return True
+
+    async def delete(self, key: str) -> int:
+        prefixed = self._prefix_key(key)
+        if prefixed in self._storage:
+            del self._storage[prefixed]
+            self._ttls.pop(prefixed, None)
+            return 1
+        return 0
+
+    async def incr(self, key: str, amount: int = 1):
+        prefixed = self._prefix_key(key)
+        current = self._storage.get(prefixed, 0)
+        if isinstance(current, str):
+            current = int(current)
+        new_value = current + amount
+        self._storage[prefixed] = new_value
+        return new_value
+
+    async def incrby(self, key: str, amount: int = 1):
+        """Alias for incr (compatibility with redis.asyncio)."""
+        return await self.incr(key, amount)
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        """Set TTL on key (for rate limiting compatibility)."""
+        prefixed = self._prefix_key(key)
+        if prefixed in self._storage:
+            self._ttls[prefixed] = seconds
+            return True
+        return False
+
+    async def exists(self, key: str) -> int:
+        prefixed = self._prefix_key(key)
+        return 1 if prefixed in self._storage else 0
+
+    async def ttl(self, key: str) -> int:
+        prefixed = self._prefix_key(key)
+        if prefixed not in self._storage:
+            return -2
+        return self._ttls.get(prefixed, -1)
+
+    def clear(self):
+        """Clear all stored data (call between tests)."""
+        self._storage.clear()
+        self._ttls.clear()
+
+
+@pytest.fixture
+def fake_redis():
+    """
+    Provide a FakeRedisClient for testing.
+
+    Use this fixture for unit tests that need Redis mocking.
+    For integration tests that need Redis injected into the app,
+    use fake_redis_client instead.
+    """
+    return FakeRedisClient()
+
+
+@pytest_asyncio.fixture
+async def fake_redis_client():
+    """
+    Patch the global redis_client with FakeRedisClient for integration tests.
+
+    This patches backend.core.redis_client.redis_client so that
+    rate limiting, authorization context, and other Redis-dependent code uses the fake.
+    Automatically clears storage between tests.
+    """
+    fake = FakeRedisClient()
+
+    with patch("backend.core.redis_client.redis_client", fake):
+        with patch("backend.core.rate_limit.redis_client", fake):
+            with patch("backend.core.oauth_provider.services.authorization_service.redis_client", fake):
+                yield fake
+
+    fake.clear()
