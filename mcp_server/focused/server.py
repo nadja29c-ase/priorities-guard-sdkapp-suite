@@ -546,47 +546,32 @@ async def notify_user(
 
 def create_app():
     """
-    Clean ASGI app mounting for MCP compatibility with ChatGPT.
-    No lifespan manipulation - FastMCP manages its own lifecycle.
+    FastMCP is the root app - Starlette discovery routes mounted into it.
+    This ensures FastMCP's lifespan runs and task group initializes properly.
     """
-    # FastMCP returns a Starlette app - do NOT touch its lifespan
+    # FastMCP is the root app - its lifespan will run properly
     fastmcp_app = mcp.streamable_http_app()
 
-    routes = [
-        # ROOT DISCOVERY (with OPTIONS for CORS preflight)
-        Route("/.well-known/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
-        Route("/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
-        Route("/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
-
-        # TRAILING /mcp DISCOVERY (ChatGPT requirement)
-        Route("/.well-known/openid-configuration/mcp", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
-        Route("/.well-known/oauth-authorization-server/mcp", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
-        Route("/.well-known/oauth-protected-resource/mcp", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
-
-        # PREFIXED /mcp DISCOVERY
-        Route("/mcp/.well-known/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
-        Route("/mcp/.well-known/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
-        Route("/mcp/.well-known/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
-
-        # MCP ENDPOINT - OPTIONS handled separately, POST goes to FastMCP
-        Route("/mcp", mcp_options, methods=["OPTIONS"]),
-        Route("/mcp", fastmcp_app, methods=["POST"]),
+    # Discovery routes as a separate Starlette app
+    discovery_routes = [
+        Route("/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
     ]
+    discovery_app = Starlette(routes=discovery_routes)
+
+    # Mount discovery routes onto FastMCP app
+    fastmcp_app.mount("/.well-known", discovery_app)
 
     # Debug: dump FastMCP config
     print("FASTMCP NAME:", mcp.name)
-
-    starlette_app = Starlette(routes=routes)
-
-    # Debug: dump route table
     print("\n================ MCP ROUTES ================")
-    for r in starlette_app.routes:
-        print("ROUTE:", r.path, "| METHODS:", getattr(r, "methods", None))
+    print("FastMCP root app with /.well-known mounted")
+    print("MCP endpoint at /mcp (handled by FastMCP)")
     print("===========================================\n")
 
-    # Wrap entire Starlette app with header-fix middleware
-    starlette_app = MCPContentTypeAndAcceptFixMiddleware(starlette_app)
-    return starlette_app
+    # Wrap with header-fix middleware
+    return MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
 
 
 # --------------------------------------------------------------------
