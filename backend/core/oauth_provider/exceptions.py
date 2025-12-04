@@ -60,10 +60,12 @@ class InvalidGrantError(OAuthError):
     The provided authorization grant (e.g., authorization code, refresh token)
     is invalid, expired, revoked, does not match the redirection URI used in
     the authorization request, or was issued to another client.
+
+    Per OAuth 2.1 spec (RFC 6749 Section 5.2), invalid_grant returns 400 Bad Request.
     """
 
     def __init__(self, description: str = "Invalid grant"):
-        super().__init__("invalid_grant", description, status_code=401)
+        super().__init__("invalid_grant", description, status_code=400)
 
 
 class UnauthorizedClientError(OAuthError):

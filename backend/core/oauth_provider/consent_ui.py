@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.oauth_provider.services.authorization_service import get_authorization_context
-from backend.core.oauth_provider.services.consent_service import create_authorization_code
+from backend.core.oauth_provider.services.consent_service import create_authorization_code, record_consent
 
 logger = get_logger(__name__)
 
@@ -134,6 +134,15 @@ async def consent_endpoint(
         scope=scope,
         state=state,
         nonce=nonce,
+        correlation_id=correlation_id
+    )
+
+    # Record consent for GDPR compliance (Increment 17)
+    await record_consent(
+        db=db,
+        user_id=user_id,
+        app_name="focused",  # Hardcoded for MVP
+        scopes=scope.split(),
         correlation_id=correlation_id
     )
 

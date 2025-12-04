@@ -65,12 +65,6 @@ def _detect_language(request: Request) -> str:
         Language code: "de" for German, "en" for everything else
     """
     accept_language = request.headers.get("Accept-Language", "")
-    # DEBUG: Log the actual header value
-    logger.info(
-        "oauth.authorize.language_detection",
-        accept_language_header=accept_language,
-        starts_with_de=accept_language.lower().startswith("de")
-    )
     # Simple detection: if starts with "de", use German
     if accept_language.lower().startswith("de"):
         return "de"
@@ -152,6 +146,17 @@ async def _get_or_create_user(
 
     Returns:
         CoreUser: Existing or newly created user
+
+    TODO (Future Increment - Orphan User Cleanup):
+        Users who start OAuth but abandon before completion, or let tokens expire
+        and re-authorize (creating new user), leave orphan core_users rows.
+        Per architecture: "Accounts with no active OAuth connections or consents
+        for >= 6 months are automatically anonymized or deleted."
+
+        Implementation:
+        - Celery task that runs weekly
+        - Finds core_users with no oauth_access_tokens AND no core_consents for 6+ months
+        - Either deletes or anonymizes these rows
     """
     request_logger = logger.bind(correlation_id=correlation_id)
 

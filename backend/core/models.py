@@ -241,6 +241,75 @@ class CoreConnection(Base):
     )
 
 
+class CoreConsent(Base):
+    """
+    Records user consent per app and scope (GDPR compliance).
+
+    Each row represents consent for a specific scope granted by a user
+    to a specific app. Consent can be revoked (revoked_at set).
+
+    Used for:
+    - GDPR audit trail ("prove what user consented to")
+    - Right to access ("show me my consent history")
+    - Revocation tracking
+
+    Example:
+        consent = CoreConsent(
+            user_id=uuid,
+            app_name="focused",
+            scope="focused.read",
+        )
+    """
+
+    __tablename__ = "core_consents"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        comment="Unique consent record ID"
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("core_users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="User who granted consent"
+    )
+
+    app_name: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="SDK app name (e.g., 'focused')"
+    )
+
+    scope: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="Individual scope consented to (e.g., 'focused.read')"
+    )
+
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When consent was granted (updated on re-consent)"
+    )
+
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When consent was revoked (NULL if still active)"
+    )
+
+    __table_args__ = (
+        # One active consent per user+app+scope combination
+        UniqueConstraint("user_id", "app_name", "scope", name="uq_user_app_scope"),
+        Index("ix_consent_user_id", "user_id"),
+        Index("ix_consent_app_name", "app_name"),
+    )
+
+
 class CoreToolAuditLog(Base):
     """
     Audit log for user actions (GDPR compliance).

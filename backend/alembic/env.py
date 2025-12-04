@@ -15,6 +15,7 @@ from backend.core.config import settings #your Pydantic config, so Alembic can r
 
 # Import all models so Alembic can see them for autogenerate
 from backend.apps.focused import db_models  # noqa: F401
+from backend.core.oauth_provider import models as oauth_models  # noqa: F401
 
 # Alembic Config object.This is how you access config options like sqlalchemy.url.
 config = context.config

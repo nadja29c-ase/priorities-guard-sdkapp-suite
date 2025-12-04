@@ -186,8 +186,10 @@ async def token_endpoint(
         # Check if error
         if isinstance(result, tuple):
             error_code, error_description = result
+            # OAuth 2.1: invalid_client → 401, invalid_grant → 400
+            status_code = 401 if error_code == "invalid_client" else 400
             return JSONResponse(
-                status_code=401,
+                status_code=status_code,
                 content={
                     "error": error_code,
                     "error_description": error_description
@@ -223,8 +225,10 @@ async def token_endpoint(
         # Check if error
         if isinstance(result, tuple):
             error_code, error_description = result
+            # OAuth 2.1: invalid_client → 401, invalid_grant → 400
+            status_code = 401 if error_code == "invalid_client" else 400
             return JSONResponse(
-                status_code=401,
+                status_code=status_code,
                 content={
                     "error": error_code,
                     "error_description": error_description

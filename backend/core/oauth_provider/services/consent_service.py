@@ -1,16 +1,19 @@
 """
 Consent Service - OAuth 2.1 user consent handling.
 
-Handles authorization code generation and storage after user consent.
+Handles authorization code generation, consent persistence, and storage.
 """
 
 import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert
 
 from backend.core.logging import get_logger
+from backend.core.models import CoreConsent
 from backend.core.oauth_provider.models import OAuthAuthorizationCode
 
 logger = get_logger(__name__)
@@ -108,3 +111,66 @@ async def create_authorization_code(
     )
 
     return authorization_code
+
+
+async def record_consent(
+    db: AsyncSession,
+    user_id: str,
+    app_name: str,
+    scopes: list[str],
+    correlation_id: str | None = None
+) -> None:
+    """
+    Record user consent for scopes (GDPR compliance).
+
+    Creates or updates consent records for each scope.
+    Uses upsert to handle re-consent after revocation:
+    - If consent exists and is active: no-op (idempotent)
+    - If consent exists but was revoked: clears revoked_at, updates granted_at
+    - If consent doesn't exist: creates new record
+
+    Args:
+        db: Database session
+        user_id: User UUID as string
+        app_name: SDK app name (e.g., "focused")
+        scopes: List of scopes consented to
+        correlation_id: For logging
+
+    Example:
+        >>> await record_consent(
+        ...     db=db,
+        ...     user_id="550e8400-e29b-41d4-a716-446655440000",
+        ...     app_name="focused",
+        ...     scopes=["focused.read", "focused.write"]
+        ... )
+    """
+    request_logger = logger.bind(correlation_id=correlation_id) if correlation_id else logger
+    user_uuid = UUID(user_id)
+    now = datetime.now(timezone.utc)
+
+    for scope in scopes:
+        # PostgreSQL upsert: INSERT ... ON CONFLICT DO UPDATE
+        stmt = insert(CoreConsent).values(
+            user_id=user_uuid,
+            app_name=app_name,
+            scope=scope,
+            granted_at=now,
+            revoked_at=None
+        ).on_conflict_do_update(
+            constraint="uq_user_app_scope",
+            set_={
+                "granted_at": now,
+                "revoked_at": None
+            }
+        )
+
+        await db.execute(stmt)
+
+    await db.commit()
+
+    request_logger.info(
+        "oauth.consent.recorded",
+        user_id=user_id,
+        app_name=app_name,
+        scopes=scopes
+    )
