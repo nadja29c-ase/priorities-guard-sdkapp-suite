@@ -37,6 +37,9 @@ logger = logging.getLogger(__name__)
 # OAuth state TTL in seconds (10 minutes)
 OAUTH_STATE_TTL = 600
 
+# Connection token TTL in seconds (10 minutes) - Increment 18
+CONNECTION_TOKEN_TTL = 600
+
 
 # ============================================================================
 # PKCE Functions (Increment 11)
@@ -301,6 +304,119 @@ async def exchange_code(
             raise ValueError(f"Token exchange failed: {str(e)}")
 
     raise ValueError("Token exchange failed after maximum retries")
+
+
+# ============================================================================
+# Connection Token Functions (Increment 18)
+# ============================================================================
+
+
+async def store_connection_token(user_id: str) -> str:
+    """
+    Generate and store an opaque token for Google OAuth initiation.
+
+    The token maps to user_id in Redis and expires after 10 minutes.
+    Used to securely initiate Google OAuth without exposing user_id in URL.
+
+    Security:
+        - Token is cryptographically random (secrets.token_urlsafe)
+        - Token stored in Redis with 10-minute TTL
+        - Token deleted after first use (single-use)
+        - user_id never exposed in browser URL
+
+    Args:
+        user_id: The user's internal ID (UUID string)
+
+    Returns:
+        Opaque token string (43 characters, URL-safe)
+    """
+    import secrets
+
+    # Type validation
+    if not isinstance(user_id, str):
+        raise TypeError(f"user_id must be a string, got {type(user_id).__name__}")
+
+    if not user_id.strip():
+        raise ValueError("user_id cannot be empty")
+
+    token = secrets.token_urlsafe(32)
+    redis_key = f"google_connect:{token}"
+
+    result = await redis_client.set(redis_key, user_id, ex=CONNECTION_TOKEN_TTL)
+
+    if not result:
+        logger.error("[oauth] Failed to store connection token in Redis")
+        raise RuntimeError("Failed to store connection token in Redis")
+
+    logger.info(f"[oauth] Stored connection token for user_id={user_id}")
+
+    return token
+
+
+async def verify_connection_token(token: str) -> str | None:
+    """
+    Verify and consume a connection token.
+
+    Retrieves the user_id associated with the token and deletes the token
+    (single-use). Returns None if token is invalid or expired.
+
+    Security:
+        - Single-use: token is deleted after retrieval
+        - Never logs the full token (only prefix for debugging)
+        - Rejects malformed tokens before Redis lookup
+
+    Args:
+        token: The opaque token from the URL
+
+    Returns:
+        user_id if valid, None if invalid/expired
+    """
+    # Validate token format before Redis lookup
+    # Reject: None, non-string, empty, whitespace, or tokens with leading/trailing whitespace
+    if not token or not isinstance(token, str) or token.strip() != token:
+        logger.warning(
+            "[oauth] Connection token verification failed: malformed token"
+        )
+        return None
+
+    # Reject tokens with embedded whitespace, null bytes, or control characters
+    # Valid tokens from secrets.token_urlsafe only contain: A-Za-z0-9-_
+    if any(c.isspace() or ord(c) < 32 for c in token):
+        logger.warning(
+            "[oauth] Connection token verification failed: invalid characters"
+        )
+        return None
+
+    redis_key = f"google_connect:{token}"
+
+    # Get token data
+    user_id = await redis_client.get(redis_key)
+
+    if user_id is None:
+        logger.warning(
+            f"[oauth] Connection token verification failed: "
+            f"invalid or expired (prefix={token[:8] if token else 'none'})"
+        )
+        return None
+
+    # Delete token (single-use) - best effort, don't fail verification if delete fails
+    try:
+        await redis_client.delete(redis_key)
+    except Exception as e:
+        # Log but don't fail - verification succeeded, cleanup is secondary
+        # Token will expire via TTL anyway
+        logger.error(
+            f"[oauth] Failed to delete connection token after verification: {e} "
+            f"(prefix={token[:8]})"
+        )
+
+    # Redis returns bytes, decode if necessary
+    if isinstance(user_id, bytes):
+        user_id = user_id.decode("utf-8")
+
+    logger.info(f"[oauth] Connection token verified for user_id={user_id}")
+
+    return user_id
 
 
 # ============================================================================

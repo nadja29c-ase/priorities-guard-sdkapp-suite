@@ -105,6 +105,12 @@ from mcp_server.focused.mcp_auth import (
     build_forbidden_error,
     _jwks_cache,
 )
+from mcp_server.shared.google_tools import (
+    connect_google_calendar_logic,
+    disconnect_google_calendar_logic,
+    CONNECT_GOOGLE_CALENDAR_DESCRIPTION,
+    DISCONNECT_GOOGLE_CALENDAR_DESCRIPTION,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -267,6 +273,48 @@ def handle_mcp_errors(tool_name: str) -> Callable:
     return decorator
 
 
+async def backend_get(
+    path: str,
+    user_id: str,
+    correlation_id: str
+) -> dict:
+    """
+    Send a GET request to the backend API with user identity headers.
+
+    Args:
+        path: API path (e.g., "/api/focused/google/connection-status")
+        user_id: Validated user ID from JWT token
+        correlation_id: Request correlation ID for tracing
+
+    Returns:
+        Response JSON from backend
+
+    Raises:
+        httpx.HTTPStatusError: If backend returns error status
+    """
+    global http_client
+    if http_client is None:
+        http_client = httpx.AsyncClient(timeout=30.0)
+
+    url = f"{BACKEND_URL}{path}"
+
+    headers = {
+        "X-User-ID": user_id,
+        "X-Correlation-ID": correlation_id,
+    }
+
+    logger.info(
+        "backend.api.get",
+        correlation_id=correlation_id,
+        url=path,
+        user_id=user_id
+    )
+
+    resp = await http_client.get(url, headers=headers)
+    resp.raise_for_status()
+    return resp.json()
+
+
 async def backend_post(
     path: str,
     json_data: dict,
@@ -301,7 +349,7 @@ async def backend_post(
     }
 
     logger.info(
-        "backend.api.call",
+        "backend.api.post",
         correlation_id=correlation_id,
         url=path,
         user_id=user_id
@@ -498,6 +546,56 @@ async def run_focus_mode(
 
     # Backend already returns {success: bool, data/error: ...}
     return json.dumps(response)
+
+
+@mcp.tool(
+    name="connect_google_calendar",
+    description=CONNECT_GOOGLE_CALENDAR_DESCRIPTION
+)
+@handle_mcp_errors("connect_google_calendar")
+async def connect_google_calendar(
+    meta: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Check Google Calendar connection status and provide connect URL if needed.
+
+    Requires OAuth scope: focused.write
+
+    Uses shared logic from mcp_server/shared/google_tools.py.
+    """
+    return await connect_google_calendar_logic(
+        meta=meta,
+        authenticate_fn=authenticate_request,
+        backend_get_fn=backend_get,
+        backend_post_fn=backend_post,
+        logger=logger,
+    )
+
+
+@mcp.tool(
+    name="disconnect_google_calendar",
+    description=DISCONNECT_GOOGLE_CALENDAR_DESCRIPTION
+)
+@handle_mcp_errors("disconnect_google_calendar")
+async def disconnect_google_calendar(
+    confirm: bool = False,
+    meta: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Disconnect Google Calendar and revoke tokens.
+
+    Requires OAuth scope: focused.write
+
+    Uses shared logic from mcp_server/shared/google_tools.py.
+    """
+    return await disconnect_google_calendar_logic(
+        confirm=confirm,
+        meta=meta,
+        authenticate_fn=authenticate_request,
+        backend_get_fn=backend_get,
+        backend_post_fn=backend_post,
+        logger=logger,
+    )
 
 
 @mcp.tool(

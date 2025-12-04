@@ -155,6 +155,9 @@ TOOL_SCOPES = {
     "watch_calendar": ["focused.write"],
     "run_focus_mode": ["focused.write"],
     "notify_user": ["focused.notify"],
+    # Increment 18: Google connection management
+    "connect_google_calendar": ["focused.write"],
+    "disconnect_google_calendar": ["focused.write"],
 }
 
 

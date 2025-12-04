@@ -20,7 +20,6 @@ Security (Increment 11):
 
 import logging
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, Query, Request
@@ -38,6 +37,7 @@ from backend.core.google_oauth import (
     generate_state_token,
     store_oauth_state,
     verify_and_get_oauth_state,
+    verify_connection_token,
 )
 from backend.core.models import CoreConnection
 
@@ -108,41 +108,47 @@ def _html_success() -> HTMLResponse:
 @router.get("/start")
 async def start_google_oauth(
     request: Request,
-    user_id: str = Query(..., description="User identifier initiating OAuth"),
+    token: str = Query(..., description="Opaque connection token from /api/focused/google/initiate-connection"),
 ):
     """
     Initiate Google OAuth flow with PKCE.
 
-    Security (Increment 11):
-        - Generates cryptographically secure state token
+    Security (Increment 11 + 18):
+        - Accepts opaque token instead of user_id (user_id never in URL)
+        - Token is single-use (deleted after validation)
+        - Token expires after 10 minutes
         - Generates PKCE code_verifier and code_challenge (S256)
         - Stores state + user_id + code_verifier in Redis (10-min TTL)
         - Redirects user to Google consent screen
 
     Args:
         request: FastAPI request object
-        user_id: User identifier (required query parameter)
+        token: Opaque connection token (required query parameter)
 
     Returns:
-        307 redirect to Google authorization URL
+        307 redirect to Google authorization URL, or HTML error page
     """
     request_id = getattr(request.state, "request_id", "unknown")
-    log = logger.bind(request_id=request_id, user_id=user_id)
-
-    # Validate user_id format (should be valid UUID)
-    try:
-        UUID(user_id)
-    except ValueError:
-        log.warning("oauth_start_invalid_user_id", user_id=user_id)
-        return _html_error(
-            title="Invalid Request",
-            message="Invalid user identifier format.",
-            status_code=400,
-        )
-
-    log.info("oauth_start_initiated")
+    log = logger.bind(request_id=request_id)
 
     try:
+        # Validate and consume connection token (Increment 18)
+        user_id = await verify_connection_token(token)
+
+        if user_id is None:
+            log.warning(
+                "oauth_start_invalid_token",
+                token_prefix=token[:8] if token else "none"
+            )
+            return _html_error(
+                title="Link Expired",
+                message="This connection link has expired or has already been used. Please return to ChatGPT and request a new link.",
+                status_code=400,
+            )
+
+        log = log.bind(user_id=user_id)
+        log.info("oauth_start_initiated")
+
         # Generate PKCE values
         code_verifier = generate_code_verifier()
         code_challenge = generate_code_challenge(code_verifier)
@@ -176,7 +182,7 @@ async def start_google_oauth(
         # Redirect to Google
         return RedirectResponse(url=auth_url, status_code=307)
 
-    except Exception as e:
+    except Exception:
         log.exception("oauth_start_unexpected_error")
         return _html_error(
             title="Error",
