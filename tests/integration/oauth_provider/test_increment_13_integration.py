@@ -235,8 +235,8 @@ async def test_token_exchange_invalid_code_verifier(
         headers=FORM_HEADERS
     )
 
-    # Implementation returns 401 for invalid_grant
-    assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
     data = response.json()
     assert data["error"] == "invalid_grant"
     assert "PKCE" in data.get("error_description", "")
@@ -285,7 +285,8 @@ async def test_token_exchange_expired_code(
         headers=FORM_HEADERS
     )
 
-    assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
     data = response.json()
     assert data["error"] == "invalid_grant"
     assert "expired" in data.get("error_description", "").lower()
@@ -316,8 +317,9 @@ async def test_token_exchange_reused_code(
     assert response1.status_code == 200, f"First exchange should succeed: {response1.text}"
 
     # Second exchange - should fail (code already used)
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
     response2 = await client.post("/oauth/focused/token", data=token_data, headers=FORM_HEADERS)
-    assert response2.status_code == 401, f"Expected 401, got {response2.status_code}"
+    assert response2.status_code == 400, f"Expected 400, got {response2.status_code}"
     data = response2.json()
     assert data["error"] == "invalid_grant"
     assert "used" in data.get("error_description", "").lower()
@@ -333,7 +335,7 @@ async def test_token_exchange_wrong_client_id(
     valid_auth_code
 ):
     """
-    Test 5: Token exchange with wrong client_id returns 401 invalid_grant.
+    Test 5: Token exchange with wrong client_id returns 400 invalid_grant.
     """
     response = await client.post(
         "/oauth/focused/token",
@@ -347,7 +349,8 @@ async def test_token_exchange_wrong_client_id(
         headers=FORM_HEADERS
     )
 
-    assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
     data = response.json()
     assert data["error"] == "invalid_grant"
     assert "client" in data.get("error_description", "").lower()
@@ -363,7 +366,7 @@ async def test_token_exchange_wrong_redirect_uri(
     valid_auth_code
 ):
     """
-    Test 6: Token exchange with wrong redirect_uri returns 401 invalid_grant.
+    Test 6: Token exchange with wrong redirect_uri returns 400 invalid_grant.
 
     Per spec: redirect_uri must EXACTLY match stored value (no normalization).
     """
@@ -379,7 +382,8 @@ async def test_token_exchange_wrong_redirect_uri(
         headers=FORM_HEADERS
     )
 
-    assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
     data = response.json()
     assert data["error"] == "invalid_grant"
     assert "redirect" in data.get("error_description", "").lower()
@@ -462,7 +466,8 @@ async def test_refresh_with_revoked_token(
         headers=FORM_HEADERS
     )
 
-    assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
     data = response.json()
     assert data["error"] == "invalid_grant"
     assert "revoked" in data.get("error_description", "").lower()
@@ -480,7 +485,7 @@ async def test_refresh_with_expired_token(
     oauth_client
 ):
     """
-    Test 8b: Refresh with expired refresh token returns 401 invalid_grant.
+    Test 8b: Refresh with expired refresh token returns 400 invalid_grant.
 
     Refresh tokens expire after 30 days per spec.
     """
@@ -512,7 +517,8 @@ async def test_refresh_with_expired_token(
         headers=FORM_HEADERS
     )
 
-    assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
+    assert response.status_code == 400, f"Expected 400, got {response.status_code}"
     data = response.json()
     assert data["error"] == "invalid_grant"
     assert "expired" in data.get("error_description", "").lower()
@@ -554,7 +560,8 @@ async def test_refresh_token_rotation_invalidates_old(
         },
         headers=FORM_HEADERS
     )
-    assert response2.status_code == 401, f"Expected 401, got {response2.status_code}"
+    # OAuth 2.1: invalid_grant returns 400 Bad Request
+    assert response2.status_code == 400, f"Expected 400, got {response2.status_code}"
     data = response2.json()
     assert data["error"] == "invalid_grant"
 
@@ -800,14 +807,14 @@ async def test_rate_limit_on_token_endpoint(
         responses.append(response.status_code)
 
     # With Redis: At least one should be 429 (rate limited)
-    # Without Redis: All should be 401 (invalid code)
+    # Without Redis: All should be 400 (invalid_grant per OAuth 2.1)
     if 429 in responses:
         # Rate limiting is active
         pass
     else:
         # Rate limiting not triggered (Redis not available or limit not reached)
-        # All responses should be 401 (invalid code)
-        assert all(r == 401 for r in responses), f"Expected all 401, got {responses}"
+        # All responses should be 400 (invalid_grant per OAuth 2.1)
+        assert all(r == 400 for r in responses), f"Expected all 400, got {responses}"
 
 
 # =============================================================================

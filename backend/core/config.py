@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     OAUTH_TOKEN_EXPIRY_SECONDS: int = 3600  # 1 hour
     OAUTH_REFRESH_TOKEN_EXPIRY_DAYS: int = 30
 
+    # Public URL for browser-facing endpoints (Increment 18)
+    # Used for constructing OAuth initiation URLs shown to users
+    BACKEND_PUBLIC_URL: str = "https://www.priority-guard.com"
+
     @model_validator(mode='after')
     def validate_oauth_keys(self) -> 'Settings':
         """Validate OAuth keys are base64-encoded strings."""
