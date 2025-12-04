@@ -135,9 +135,18 @@ async def token_endpoint(
         client_id="[from_header]" if client_from_header else mask_client_id(client_id)
     )
 
-    # Rate limit check (requires client_id)
-    if client_id:
-        await rate_limit_token(request, client_id)
+    # Require client_id (from form body or Basic Auth)
+    if client_id is None:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_client",
+                "error_description": "client_id is required"
+            }
+        )
+
+    # Rate limit check
+    await rate_limit_token(request, client_id)
 
     # Validate grant_type
     valid, error = validate_grant_type(grant_type)
