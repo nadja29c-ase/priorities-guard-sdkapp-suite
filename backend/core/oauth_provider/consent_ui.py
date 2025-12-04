@@ -138,11 +138,14 @@ async def consent_endpoint(
     )
 
     # Record consent for GDPR compliance (Increment 17)
+    # Handle both string ("focused.read focused.write") and list formats
+    scopes_list = scope.split() if isinstance(scope, str) else scope
+    app_name = auth_context.get("app_name", "focused")  # Default to "focused" for backwards compatibility
     await record_consent(
         db=db,
         user_id=user_id,
-        app_name="focused",  # Hardcoded for MVP
-        scopes=scope.split(),
+        app_name=app_name,
+        scopes=scopes_list,
         correlation_id=correlation_id
     )
 
