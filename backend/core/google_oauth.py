@@ -104,6 +104,7 @@ async def store_oauth_state(
     state: str,
     user_id: str,
     code_verifier: str,
+    correlation_id: str | None = None,
 ) -> bool:
     """
     Store OAuth state in Redis with user_id and code_verifier.
@@ -115,6 +116,7 @@ async def store_oauth_state(
         state: The state token (used as key)
         user_id: User ID initiating the OAuth flow
         code_verifier: PKCE code verifier for this flow
+        correlation_id: Optional request correlation ID for tracing
 
     Returns:
         True if stored successfully, False otherwise
@@ -128,15 +130,22 @@ async def store_oauth_state(
 
     result = await redis_client.set(key, value, ex=OAUTH_STATE_TTL)
 
+    log_extra = {"user_id": user_id}
+    if correlation_id:
+        log_extra["correlation_id"] = correlation_id
+
     if result:
-        logger.info(f"[oauth] Stored state for user_id={user_id}")
+        logger.info("[oauth] Stored state", extra=log_extra)
         return True
     else:
-        logger.error(f"[oauth] Failed to store state for user_id={user_id}")
+        logger.error("[oauth] Failed to store state", extra=log_extra)
         return False
 
 
-async def verify_and_get_oauth_state(state: str) -> dict[str, Any] | None:
+async def verify_and_get_oauth_state(
+    state: str,
+    correlation_id: str | None = None,
+) -> dict[str, Any] | None:
     """
     Verify OAuth state exists in Redis and retrieve associated data.
 
@@ -144,6 +153,7 @@ async def verify_and_get_oauth_state(state: str) -> dict[str, Any] | None:
 
     Args:
         state: The state token to verify
+        correlation_id: Optional request correlation ID for tracing
 
     Returns:
         Dictionary with user_id and code_verifier if valid, None otherwise
@@ -153,8 +163,12 @@ async def verify_and_get_oauth_state(state: str) -> dict[str, Any] | None:
     # Get state data
     value = await redis_client.get(key)
 
+    log_extra = {}
+    if correlation_id:
+        log_extra["correlation_id"] = correlation_id
+
     if value is None:
-        logger.warning("[oauth] State verification failed: invalid or expired state")
+        logger.warning("[oauth] State verification failed: invalid or expired state", extra=log_extra)
         return None
 
     # Delete state (single-use)
@@ -162,13 +176,14 @@ async def verify_and_get_oauth_state(state: str) -> dict[str, Any] | None:
 
     try:
         data = json.loads(value)
-        logger.info(f"[oauth] State verified for user_id={data.get('user_id')}")
+        log_extra["user_id"] = data.get("user_id")
+        logger.info("[oauth] State verified", extra=log_extra)
         return {
             "user_id": data["user_id"],
             "code_verifier": data["code_verifier"],
         }
     except (json.JSONDecodeError, KeyError) as e:
-        logger.error(f"[oauth] Failed to parse state data: {e}")
+        logger.error(f"[oauth] Failed to parse state data: {e}", extra=log_extra)
         return None
 
 
@@ -213,6 +228,7 @@ async def exchange_code(
     code: str,
     http_client: httpx.AsyncClient,
     code_verifier: str | None = None,
+    correlation_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Exchange authorization code for access and refresh tokens.
@@ -228,6 +244,7 @@ async def exchange_code(
         code: Authorization code from OAuth callback
         http_client: Shared httpx AsyncClient from app state
         code_verifier: PKCE code verifier (required for PKCE flows)
+        correlation_id: Optional request correlation ID for tracing
 
     Returns:
         Dictionary containing:
@@ -252,6 +269,10 @@ async def exchange_code(
     if code_verifier:
         payload["code_verifier"] = code_verifier
 
+    log_extra = {}
+    if correlation_id:
+        log_extra["correlation_id"] = correlation_id
+
     max_retries = 3
     base_delay = 1.0
 
@@ -272,7 +293,8 @@ async def exchange_code(
             if required_scope not in scopes:
                 logger.error(
                     f"Missing required Google scope: {required_scope}. "
-                    f"Granted scopes: {scopes}"
+                    f"Granted scopes: {scopes}",
+                    extra=log_extra
                 )
                 raise ValueError(
                     f"Missing required Google scope: calendar.readonly. "
@@ -289,18 +311,19 @@ async def exchange_code(
         except httpx.HTTPStatusError as e:
             logger.warning(
                 f"Token exchange failed (attempt {attempt + 1}/{max_retries}): "
-                f"HTTP {e.response.status_code}"
+                f"HTTP {e.response.status_code}",
+                extra=log_extra
             )
             if attempt == max_retries - 1:
                 raise ValueError(f"Token exchange failed: {e.response.text}")
 
             # Exponential backoff with jitter
             delay = base_delay * (2**attempt) + random.uniform(0, 1)
-            logger.info(f"Retrying in {delay:.2f} seconds...")
+            logger.info(f"Retrying in {delay:.2f} seconds...", extra=log_extra)
             await asyncio.sleep(delay)
 
         except Exception as e:
-            logger.error(f"Token exchange failed unexpectedly: {e}")
+            logger.error(f"Token exchange failed unexpectedly: {e}", extra=log_extra)
             raise ValueError(f"Token exchange failed: {str(e)}")
 
     raise ValueError("Token exchange failed after maximum retries")
@@ -311,7 +334,10 @@ async def exchange_code(
 # ============================================================================
 
 
-async def store_connection_token(user_id: str) -> str:
+async def store_connection_token(
+    user_id: str,
+    correlation_id: str | None = None,
+) -> str:
     """
     Generate and store an opaque token for Google OAuth initiation.
 
@@ -326,6 +352,7 @@ async def store_connection_token(user_id: str) -> str:
 
     Args:
         user_id: The user's internal ID (UUID string)
+        correlation_id: Optional request correlation ID for tracing
 
     Returns:
         Opaque token string (43 characters, URL-safe)
@@ -344,16 +371,23 @@ async def store_connection_token(user_id: str) -> str:
 
     result = await redis_client.set(redis_key, user_id, ex=CONNECTION_TOKEN_TTL)
 
+    log_extra = {"user_id": user_id}
+    if correlation_id:
+        log_extra["correlation_id"] = correlation_id
+
     if not result:
-        logger.error("[oauth] Failed to store connection token in Redis")
+        logger.error("[oauth] Failed to store connection token in Redis", extra=log_extra)
         raise RuntimeError("Failed to store connection token in Redis")
 
-    logger.info(f"[oauth] Stored connection token for user_id={user_id}")
+    logger.info("[oauth] Stored connection token", extra=log_extra)
 
     return token
 
 
-async def verify_connection_token(token: str) -> str | None:
+async def verify_connection_token(
+    token: str,
+    correlation_id: str | None = None,
+) -> str | None:
     """
     Verify and consume a connection token.
 
@@ -367,15 +401,21 @@ async def verify_connection_token(token: str) -> str | None:
 
     Args:
         token: The opaque token from the URL
+        correlation_id: Optional request correlation ID for tracing
 
     Returns:
         user_id if valid, None if invalid/expired
     """
+    log_extra = {}
+    if correlation_id:
+        log_extra["correlation_id"] = correlation_id
+
     # Validate token format before Redis lookup
     # Reject: None, non-string, empty, whitespace, or tokens with leading/trailing whitespace
     if not token or not isinstance(token, str) or token.strip() != token:
         logger.warning(
-            "[oauth] Connection token verification failed: malformed token"
+            "[oauth] Connection token verification failed: malformed token",
+            extra=log_extra
         )
         return None
 
@@ -383,7 +423,8 @@ async def verify_connection_token(token: str) -> str | None:
     # Valid tokens from secrets.token_urlsafe only contain: A-Za-z0-9-_
     if any(c.isspace() or ord(c) < 32 for c in token):
         logger.warning(
-            "[oauth] Connection token verification failed: invalid characters"
+            "[oauth] Connection token verification failed: invalid characters",
+            extra=log_extra
         )
         return None
 
@@ -393,9 +434,10 @@ async def verify_connection_token(token: str) -> str | None:
     user_id = await redis_client.get(redis_key)
 
     if user_id is None:
+        log_extra["token_prefix"] = token[:8] if token else "none"
         logger.warning(
-            f"[oauth] Connection token verification failed: "
-            f"invalid or expired (prefix={token[:8] if token else 'none'})"
+            "[oauth] Connection token verification failed: invalid or expired",
+            extra=log_extra
         )
         return None
 
@@ -405,16 +447,18 @@ async def verify_connection_token(token: str) -> str | None:
     except Exception as e:
         # Log but don't fail - verification succeeded, cleanup is secondary
         # Token will expire via TTL anyway
+        log_extra["token_prefix"] = token[:8]
         logger.error(
-            f"[oauth] Failed to delete connection token after verification: {e} "
-            f"(prefix={token[:8]})"
+            f"[oauth] Failed to delete connection token after verification: {e}",
+            extra=log_extra
         )
 
     # Redis returns bytes, decode if necessary
     if isinstance(user_id, bytes):
         user_id = user_id.decode("utf-8")
 
-    logger.info(f"[oauth] Connection token verified for user_id={user_id}")
+    log_extra["user_id"] = user_id
+    logger.info("[oauth] Connection token verified", extra=log_extra)
 
     return user_id
 
@@ -427,6 +471,7 @@ async def verify_connection_token(token: str) -> str | None:
 async def revoke_google_token(
     refresh_token: str,
     http_client: httpx.AsyncClient,
+    correlation_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Revoke a Google OAuth refresh token.
@@ -440,6 +485,7 @@ async def revoke_google_token(
     Args:
         refresh_token: The user's refresh token to revoke
         http_client: Shared httpx AsyncClient
+        correlation_id: Optional request correlation ID for tracing
 
     Returns:
         Dictionary with:
@@ -452,6 +498,10 @@ async def revoke_google_token(
     """
     revoke_url = "https://oauth2.googleapis.com/revoke"
 
+    log_extra = {}
+    if correlation_id:
+        log_extra["correlation_id"] = correlation_id
+
     try:
         response = await http_client.post(
             revoke_url,
@@ -460,7 +510,7 @@ async def revoke_google_token(
         )
 
         if response.status_code == 200:
-            logger.info("Google OAuth token revoked successfully")
+            logger.info("Google OAuth token revoked successfully", extra=log_extra)
             return {"success": True, "error": None}
 
         # Token may already be revoked or invalid - still considered success
@@ -470,17 +520,18 @@ async def revoke_google_token(
 
             # "invalid_token" means token was already revoked or expired
             if error_type == "invalid_token":
-                logger.info("Google OAuth token already revoked or expired")
+                logger.info("Google OAuth token already revoked or expired", extra=log_extra)
                 return {"success": True, "error": None}
 
-            logger.warning(f"Google token revocation failed: {error_type}")
+            logger.warning(f"Google token revocation failed: {error_type}", extra=log_extra)
             return {"success": False, "error": error_type}
 
         logger.warning(
-            f"Google token revocation unexpected status: {response.status_code}"
+            f"Google token revocation unexpected status: {response.status_code}",
+            extra=log_extra
         )
         return {"success": False, "error": f"HTTP {response.status_code}"}
 
     except Exception as e:
-        logger.error(f"Google token revocation error: {e}")
+        logger.error(f"Google token revocation error: {e}", extra=log_extra)
         return {"success": False, "error": str(e)}

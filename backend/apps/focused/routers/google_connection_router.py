@@ -11,7 +11,8 @@ These endpoints are called by the MCP server (not browsers).
 They return JSON responses for MCP tool consumption.
 """
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+import structlog
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,8 @@ from backend.core.database import get_db
 from backend.core.models import CoreConnection
 from backend.core.google_oauth import store_connection_token
 from backend.core.config import settings
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["Google Connection"])
 
@@ -49,12 +52,13 @@ async def get_connection_status(
     Note:
         Returns 200 even when not connected (not an error condition).
     """
-    # Query for active Google connection
+    # Query for active Google connection (not revoked)
     result = await session.execute(
         select(CoreConnection).where(
             CoreConnection.user_id == x_user_id,
             CoreConnection.provider == "google",
             CoreConnection.connection_type == "google",
+            CoreConnection.revoked_at.is_(None),  # Must not be revoked
         )
     )
     connection = result.scalar_one_or_none()
@@ -71,6 +75,7 @@ async def get_connection_status(
 
 @router.post("/initiate-connection")
 async def initiate_connection(
+    request: Request,
     x_user_id: str = Header(..., alias="X-User-ID"),
 ):
     """
@@ -86,6 +91,7 @@ async def initiate_connection(
         - user_id never exposed in URL
 
     Args:
+        request: FastAPI request object
         x_user_id: User ID from JWT (set by MCP after token validation)
 
     Returns:
@@ -96,9 +102,12 @@ async def initiate_connection(
         }
         500: If Redis is unavailable
     """
+    # Get correlation_id from request state (set by middleware)
+    correlation_id = getattr(request.state, "correlation_id", None)
+
     try:
         # Generate and store opaque connection token
-        token = await store_connection_token(x_user_id)
+        token = await store_connection_token(x_user_id, correlation_id=correlation_id)
 
         # Construct the connect URL using the public backend URL
         connect_url = f"{settings.BACKEND_PUBLIC_URL}/auth/focused/google/start?token={token}"
@@ -108,7 +117,13 @@ async def initiate_connection(
             "connect_url": connect_url,
             "expires_in": 600,
         }
-    except Exception:
+    except Exception as e:
+        logger.error(
+            "connection_token_generation_failed",
+            error=str(e),
+            user_id=x_user_id,
+            correlation_id=correlation_id,
+        )
         raise HTTPException(
             status_code=500,
             detail="Failed to generate connection token. Please try again.",

@@ -18,6 +18,7 @@ Security (Increment 11):
 
 """
 
+import html
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -61,10 +62,14 @@ def _html_error(title: str, message: str, status_code: int = 400) -> HTMLRespons
     Returns:
         HTMLResponse with error page
     """
+    # Escape to prevent XSS if any future code passes user input
+    safe_title = html.escape(title)
+    safe_message = html.escape(message)
+
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>{title}</title>
+    <title>{safe_title}</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 40px; text-align: center; }}
         h1 {{ color: #dc3545; }}
@@ -72,8 +77,8 @@ def _html_error(title: str, message: str, status_code: int = 400) -> HTMLRespons
     </style>
 </head>
 <body>
-    <h1>{title}</h1>
-    <p>{message}</p>
+    <h1>{safe_title}</h1>
+    <p>{safe_message}</p>
     <p><small>You can close this window and try again.</small></p>
 </body>
 </html>"""
@@ -128,12 +133,12 @@ async def start_google_oauth(
     Returns:
         307 redirect to Google authorization URL, or HTML error page
     """
-    request_id = getattr(request.state, "request_id", "unknown")
-    log = logger.bind(request_id=request_id)
+    correlation_id = getattr(request.state, "correlation_id", "unknown")
+    log = logger.bind(correlation_id=correlation_id)
 
     try:
         # Validate and consume connection token (Increment 18)
-        user_id = await verify_connection_token(token)
+        user_id = await verify_connection_token(token, correlation_id=correlation_id)
 
         if user_id is None:
             log.warning(
@@ -161,6 +166,7 @@ async def start_google_oauth(
             state=state,
             user_id=user_id,
             code_verifier=code_verifier,
+            correlation_id=correlation_id,
         )
 
         if not stored:
@@ -222,8 +228,8 @@ async def google_oauth_callback(
     Returns:
         HTML success page or HTML error page
     """
-    request_id = getattr(request.state, "request_id", "unknown")
-    log = logger.bind(request_id=request_id)
+    correlation_id = getattr(request.state, "correlation_id", "unknown")
+    log = logger.bind(correlation_id=correlation_id)
 
     # Handle Google-side errors (user denied, etc.)
     if error:
@@ -258,7 +264,7 @@ async def google_oauth_callback(
         )
 
     # Verify state and retrieve user_id + code_verifier from Redis
-    state_data = await verify_and_get_oauth_state(state)
+    state_data = await verify_and_get_oauth_state(state, correlation_id=correlation_id)
 
     if state_data is None:
         log.warning("oauth_callback_invalid_state", state_prefix=state[:8] if state else "none")
@@ -280,6 +286,7 @@ async def google_oauth_callback(
             code=code,
             http_client=http_client,
             code_verifier=code_verifier,
+            correlation_id=correlation_id,
         )
 
         # Calculate token expiration
@@ -296,13 +303,17 @@ async def google_oauth_callback(
         )
 
         # Upsert to core_connections (PostgreSQL upsert pattern)
+        # NOTE: revoked_at=None is required to clear revocation on reconnect
+        # NOTE: connection_type="google" required by ck_connection_type_enum constraint
         stmt = insert(CoreConnection).values(
             user_id=user_id,
             provider="google",
+            connection_type="google",  # Required by CHECK constraint
             encrypted_access_token=encrypted_access,
             encrypted_refresh_token=encrypted_refresh,
             token_expires_at=token_expires_at,
             scopes=token_data["scopes"],
+            revoked_at=None,  # Explicitly not revoked on new connection
         )
 
         stmt = stmt.on_conflict_do_update(
@@ -313,6 +324,8 @@ async def google_oauth_callback(
                 "token_expires_at": token_expires_at,
                 "scopes": token_data["scopes"],
                 "updated_at": datetime.now(timezone.utc),
+                "revoked_at": None,  # Clear revocation on reconnect
+                "connection_type": "google",  # Ensure correct type on update
             },
         )
 

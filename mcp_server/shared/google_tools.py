@@ -124,10 +124,15 @@ async def connect_google_calendar_logic(
         correlation_id
     )
 
+    # Extract token prefix for logging (handle missing or non-string tokens safely)
+    token = initiate_response.get("token")
+    token_prefix = token[:8] if isinstance(token, str) and token else None
+
     logger.info(
         "tool.connect_google_calendar.url_generated",
         correlation_id=correlation_id,
-        user_id=user_id
+        user_id=user_id,
+        token_prefix=token_prefix,
     )
 
     return json.dumps({

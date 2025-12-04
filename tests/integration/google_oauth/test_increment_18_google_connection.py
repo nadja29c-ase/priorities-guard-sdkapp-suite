@@ -109,6 +109,43 @@ class TestConnectionStatusEndpoint:
         assert "scopes" in data
         assert "https://www.googleapis.com/auth/calendar.readonly" in data["scopes"]
 
+    async def test_returns_false_when_connection_revoked(
+        self, client, async_session: AsyncSession
+    ):
+        """Test endpoint returns connected=false when revoked_at is set.
+
+        Per Increment 10: revoked_at indicates disconnection.
+        A connection with revoked_at set should not appear as "connected".
+        """
+        from datetime import datetime, timezone
+
+        # Create user with revoked connection
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        connection = CoreConnection(
+            user_id=str(user.id),
+            provider="google",
+            connection_type="google",
+            encrypted_access_token="encrypted_access",
+            encrypted_refresh_token="encrypted_refresh",
+            token_expires_at=datetime.now(timezone.utc),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+            revoked_at=datetime.now(timezone.utc),  # Connection was revoked
+        )
+        async_session.add(connection)
+        await async_session.commit()
+
+        response = await client.get(
+            "/api/focused/google/connection-status",
+            headers={"X-User-ID": str(user.id)},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connected"] is False, "Revoked connection should not appear as connected"
+
 
 # =============================================================================
 # /api/focused/google/initiate-connection Tests
@@ -1003,11 +1040,11 @@ class TestLoggingObservability:
     """
 
     async def test_token_creation_logs_success(self, client, test_user):
-        """Test successful token creation logs with user_id."""
-        log_messages = []
+        """Test successful token creation logs with user_id in extra."""
+        log_calls = []
 
         def capture_log(msg, *args, **kwargs):
-            log_messages.append(msg)
+            log_calls.append({"msg": msg, "extra": kwargs.get("extra", {})})
 
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.set = AsyncMock(return_value=True)
@@ -1022,10 +1059,10 @@ class TestLoggingObservability:
                     headers={"X-User-ID": str(test_user.id)},
                 )
 
-        # Must log successful token creation with user_id
-        success_logs = [m for m in log_messages if "Stored connection token" in m]
+        # Must log successful token creation with user_id in extra
+        success_logs = [c for c in log_calls if "Stored connection token" in c["msg"]]
         assert len(success_logs) == 1, f"Expected 1 success log, got {len(success_logs)}"
-        assert str(test_user.id) in success_logs[0], "user_id not in log message"
+        assert success_logs[0]["extra"].get("user_id") == str(test_user.id), "user_id not in log extra"
 
     async def test_token_creation_logs_redis_failure(self, client, test_user):
         """Test Redis failure during token creation is logged."""
@@ -1073,11 +1110,11 @@ class TestLoggingObservability:
         assert len(warning_logs) == 1, f"Expected 1 warning log, got: {log_messages}"
 
     async def test_token_verification_logs_success(self, client, test_user):
-        """Test successful token verification is logged with user_id."""
-        log_messages = []
+        """Test successful token verification is logged with user_id in extra."""
+        log_calls = []
 
         def capture_log(msg, *args, **kwargs):
-            log_messages.append(msg)
+            log_calls.append({"msg": msg, "extra": kwargs.get("extra", {})})
 
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.get = AsyncMock(return_value=str(test_user.id))
@@ -1094,17 +1131,17 @@ class TestLoggingObservability:
                     follow_redirects=False,
                 )
 
-        # Must log successful verification with user_id
-        success_logs = [m for m in log_messages if "Connection token verified" in m]
-        assert len(success_logs) == 1, f"Expected 1 success log, got: {log_messages}"
-        assert str(test_user.id) in success_logs[0], "user_id not in log message"
+        # Must log successful verification with user_id in extra
+        success_logs = [c for c in log_calls if "Connection token verified" in c["msg"]]
+        assert len(success_logs) == 1, f"Expected 1 success log, got: {[c['msg'] for c in log_calls]}"
+        assert success_logs[0]["extra"].get("user_id") == str(test_user.id), "user_id not in log extra"
 
     async def test_oauth_state_storage_logs_success(self, client, test_user):
-        """Test OAuth state storage is logged with user_id."""
-        log_messages = []
+        """Test OAuth state storage is logged with user_id in extra."""
+        log_calls = []
 
         def capture_log(msg, *args, **kwargs):
-            log_messages.append(msg)
+            log_calls.append({"msg": msg, "extra": kwargs.get("extra", {})})
 
         with patch("backend.core.google_oauth.redis_client") as mock_redis:
             mock_redis.get = AsyncMock(return_value=str(test_user.id))
@@ -1121,10 +1158,10 @@ class TestLoggingObservability:
                     follow_redirects=False,
                 )
 
-        # Must log OAuth state storage
-        state_logs = [m for m in log_messages if "Stored state for user_id" in m]
-        assert len(state_logs) == 1, f"Expected 1 state log, got: {log_messages}"
-        assert str(test_user.id) in state_logs[0], "user_id not in state log"
+        # Must log OAuth state storage with user_id in extra
+        state_logs = [c for c in log_calls if "Stored state" in c["msg"]]
+        assert len(state_logs) == 1, f"Expected 1 state log, got: {[c['msg'] for c in log_calls]}"
+        assert state_logs[0]["extra"].get("user_id") == str(test_user.id), "user_id not in state log extra"
 
     async def test_malformed_token_logs_warning(self, client):
         """Test malformed token (whitespace) is logged as warning."""
