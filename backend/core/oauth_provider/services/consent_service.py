@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
 
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.models import CoreConsent
 from backend.core.oauth_provider.models import OAuthAuthorizationCode
 
@@ -106,7 +106,7 @@ async def create_authorization_code(
     request_logger.info(
         "oauth.consent.allowed",
         user_id=user_id,
-        client_id=client_id,
+        client_id=mask_client_id(client_id),
         scope=scope
     )
 

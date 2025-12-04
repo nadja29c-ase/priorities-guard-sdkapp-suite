@@ -11,7 +11,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.encryption import encrypt_token
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.models import CoreConnection
 
 logger = get_logger(__name__)
@@ -94,7 +94,7 @@ async def create_oauth_client(
     request_logger = logger.bind(correlation_id=correlation_id) if correlation_id else logger
     request_logger.info(
         "oauth.register.success",
-        client_id=client_id,
+        client_id=mask_client_id(client_id),
         client_name=client_name,
         redirect_uris_count=len(redirect_uris)
     )

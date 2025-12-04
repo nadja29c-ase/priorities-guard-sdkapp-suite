@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlencode
 
 from backend.core.database import get_db
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.oauth_provider.services.authorization_service import get_authorization_context
 from backend.core.oauth_provider.services.consent_service import create_authorization_code, record_consent
 
@@ -113,7 +113,7 @@ async def consent_endpoint(
         request_logger.info(
             "oauth.consent.denied",
             user_id=user_id,
-            client_id=client_id
+            client_id=mask_client_id(client_id)
         )
 
         params = {"error": "access_denied"}

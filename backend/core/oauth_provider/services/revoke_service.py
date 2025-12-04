@@ -15,7 +15,7 @@ from jose import jwt, JWTError
 
 from backend.core.oauth_provider.models import OAuthAccessToken
 from backend.core.encryption import decrypt_token, hash_refresh_token
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 
 logger = get_logger(__name__)
 
@@ -107,7 +107,7 @@ async def _try_revoke_access_token(
             "oauth.revoke.success",
             token_type="access_token",
             jti=jti,
-            client_id=client_id
+            client_id=mask_client_id(client_id)
         )
 
         return "access_token"
@@ -162,7 +162,7 @@ async def _try_revoke_refresh_token(
             "oauth.revoke.success",
             token_type="refresh_token",
             jti=token_record.jti,
-            client_id=client_id
+            client_id=mask_client_id(client_id)
         )
 
         return "refresh_token"

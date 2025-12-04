@@ -171,3 +171,36 @@ def get_logger(name: str = None) -> structlog.stdlib.BoundLogger:
         Configured structlog logger
     """
     return structlog.get_logger(name)
+
+
+def mask_client_id(client_id: str | None) -> str:
+    """
+    Mask client_id for safe logging (GDPR/privacy compliance).
+
+    Shows first 4 and last 4 characters with **** in between.
+    For short client_ids (< 10 chars), shows first 2 and last 2.
+
+    Args:
+        client_id: The OAuth client identifier
+
+    Returns:
+        Masked string like "focu****ent1" or "[none]" if None
+
+    Example:
+        >>> mask_client_id("focused-client-abc123")
+        'focu****c123'
+        >>> mask_client_id("short")
+        'sh****rt'
+        >>> mask_client_id(None)
+        '[none]'
+    """
+    if not client_id:
+        return "[none]"
+
+    if len(client_id) < 5:
+        return "****"
+
+    if len(client_id) < 10:
+        return f"{client_id[:2]}****{client_id[-2:]}"
+
+    return f"{client_id[:4]}****{client_id[-4:]}"

@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.rate_limit import rate_limit_revoke
 from backend.core.oauth_provider.services.revoke_service import revoke_token
 
@@ -63,7 +63,7 @@ async def revoke_endpoint(
 
     request_logger.info(
         "oauth.revoke.request",
-        client_id=client_id
+        client_id=mask_client_id(client_id)
     )
 
     # Rate limit check

@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.rate_limit import rate_limit_token
 from backend.core.oauth_provider.services.token_service import (
     exchange_authorization_code,
@@ -125,14 +125,14 @@ async def token_endpoint(
             client_id = header_client_id
             request_logger.debug(
                 "oauth.token.client_from_header",
-                client_id=client_id
+                client_id=mask_client_id(client_id)
             )
 
     # Log token request
     request_logger.info(
         "oauth.token.request",
         grant_type=grant_type,
-        client_id=client_id
+        client_id=mask_client_id(client_id)
     )
 
     # Rate limit check (requires client_id)

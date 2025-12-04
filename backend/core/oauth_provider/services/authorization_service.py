@@ -8,7 +8,7 @@ import json
 import time
 from uuid import uuid4
 
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.redis_client import redis_client
 
 logger = get_logger(__name__)
@@ -96,7 +96,7 @@ async def create_authorization_context(
     request_logger.info(
         "oauth.auth.context_created",
         auth_context_id=auth_context_id,
-        client_id=client_id,
+        client_id=mask_client_id(client_id),
         user_id=user_id,
         scope=scope
     )

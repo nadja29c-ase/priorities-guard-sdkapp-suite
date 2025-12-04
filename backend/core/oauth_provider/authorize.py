@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlencode, urlparse, urlunparse
 
 from backend.core.database import get_db
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.models import CoreConnection, CoreUser
 from backend.core.rate_limit import check_rate_limit, get_client_ip
 from backend.core.oauth_provider.services.authorization_service import create_authorization_context
@@ -311,7 +311,7 @@ async def authorize_endpoint(
     # Log authorization request (don't log login_hint for privacy)
     request_logger.info(
         "oauth.authorize.request",
-        client_id=client_id,
+        client_id=mask_client_id(client_id),
         response_type=response_type,
         scope=scope,
         redirect_uri=redirect_uri,
@@ -422,7 +422,7 @@ async def authorize_endpoint(
         request_logger.warning(
             "oauth.authorize.error",
             error="invalid_client",
-            client_id=client_id
+            client_id=mask_client_id(client_id)
         )
         return _error_redirect(
             redirect_uri,
@@ -438,7 +438,7 @@ async def authorize_endpoint(
         request_logger.warning(
             "oauth.authorize.error",
             error="invalid_redirect_uri",
-            client_id=client_id,
+            client_id=mask_client_id(client_id),
             message="Invalid redirect_uri format (query/fragment not allowed)"
         )
         return _error_redirect(
@@ -457,7 +457,7 @@ async def authorize_endpoint(
         request_logger.warning(
             "oauth.authorize.error",
             error="invalid_redirect_uri",
-            client_id=client_id
+            client_id=mask_client_id(client_id)
         )
         return _error_redirect(
             redirect_uri,
@@ -475,7 +475,7 @@ async def authorize_endpoint(
         request_logger.warning(
             "oauth.authorize.error",
             error="invalid_scope",
-            client_id=client_id,
+            client_id=mask_client_id(client_id),
             requested=list(requested_scopes),
             allowed=list(allowed_scopes)
         )
@@ -530,7 +530,7 @@ async def authorize_endpoint(
     request_logger.info(
         "oauth.authorize.consent_rendered",
         user_id=str(user.id),
-        client_id=client_id,
+        client_id=mask_client_id(client_id),
         client_name=client_name,
         language=language
     )
