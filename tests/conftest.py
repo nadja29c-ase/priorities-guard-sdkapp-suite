@@ -32,6 +32,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.core.models import Base
 from backend.apps.focused import db_models  # noqa: F401 - Import models so they're registered with Base
+from backend.core.oauth_provider import models as oauth_models  # noqa: F401 - Import OAuth models
 
 # Test database URL
 TEST_DATABASE_URL = "postgresql+asyncpg://localhost/priority_guardian_test"
@@ -134,7 +135,8 @@ async def cleanup_db(async_engine):
             text(
                 "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
                 "focused_scheduled_jobs, core_connections, core_users, "
-                "core_tool_audit_log RESTART IDENTITY CASCADE"
+                "core_tool_audit_log, core_consents, oauth_authorization_codes, "
+                "oauth_access_tokens, oauth_state RESTART IDENTITY CASCADE"
             )
         )
 
@@ -258,6 +260,47 @@ class FakeRedisClient:
         if prefixed not in self._storage:
             return -2
         return self._ttls.get(prefixed, -1)
+
+    def keys(self, pattern: str = "*") -> list:
+        """
+        Return all keys matching pattern (simple implementation).
+
+        For testing, returns all keys if pattern is "*" or contains "*".
+        Otherwise returns exact match.
+        """
+        if "*" in pattern:
+            # Simple wildcard: return all keys (strip prefix for external view)
+            prefix_len = len(self._env_prefix)
+            return [k[prefix_len:] for k in self._storage.keys()]
+        else:
+            prefixed = self._prefix_key(pattern)
+            if prefixed in self._storage:
+                return [pattern]
+            return []
+
+    def advance_time(self, seconds: int) -> None:
+        """
+        Simulate passage of time by reducing TTLs and expiring keys.
+
+        Args:
+            seconds: Number of seconds to advance
+
+        Keys with TTL <= 0 after advancement are deleted.
+        This allows testing rate limit TTL expiration.
+        """
+        expired_keys = []
+
+        for prefixed_key, ttl in list(self._ttls.items()):
+            new_ttl = ttl - seconds
+            if new_ttl <= 0:
+                expired_keys.append(prefixed_key)
+            else:
+                self._ttls[prefixed_key] = new_ttl
+
+        # Delete expired keys
+        for key in expired_keys:
+            self._storage.pop(key, None)
+            self._ttls.pop(key, None)
 
     def clear(self):
         """Clear all stored data (call between tests)."""
