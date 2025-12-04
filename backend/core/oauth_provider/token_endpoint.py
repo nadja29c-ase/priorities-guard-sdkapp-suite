@@ -119,20 +119,20 @@ async def token_endpoint(
 
     # Extract client credentials from Basic Auth header if not in form body
     # Per RFC 6749 Section 2.3.1, clients may use HTTP Basic Auth
+    # NOTE: Do not log client_id from Basic Auth - the header contains secrets
+    client_from_header = False
     if not client_id:
         header_client_id, _header_client_secret = _extract_basic_auth(request)
         if header_client_id:
             client_id = header_client_id
-            request_logger.debug(
-                "oauth.token.client_from_header",
-                client_id=mask_client_id(client_id)
-            )
+            client_from_header = True
 
     # Log token request
+    # Don't log client_id if it came from Basic Auth (header contains secrets)
     request_logger.info(
         "oauth.token.request",
         grant_type=grant_type,
-        client_id=mask_client_id(client_id)
+        client_id="[from_header]" if client_from_header else mask_client_id(client_id)
     )
 
     # Rate limit check (requires client_id)
