@@ -20,7 +20,7 @@ from backend.core.oauth_provider.exceptions import OAuthError
 # Import new modular routers
 from backend.apps.focused.routers.tools_router import router as tools_router
 from backend.apps.focused.routers.webhook_router import router as webhook_router
-from backend.apps.focused.routers.oauth_google_router import router as oauth_google_router
+from backend.core.routers.oauth_google_router import router as oauth_google_router
 from backend.apps.focused.routers.health_router import router as health_router
 from backend.apps.focused.routers.admin_router import router as admin_router
 from backend.core.routers.oauth_provider_router import router as oauth_provider_router
@@ -238,7 +238,7 @@ async def root():
 # Include new modular routers
 app.include_router(tools_router, prefix="/api/focused/tools")
 app.include_router(webhook_router, prefix="/webhook/focused")
-app.include_router(oauth_google_router, prefix="/auth/focused/google")
+app.include_router(oauth_google_router, prefix="/auth/google")
 app.include_router(health_router, prefix="/api/focused")
 app.include_router(admin_router, prefix="/api/focused")
 

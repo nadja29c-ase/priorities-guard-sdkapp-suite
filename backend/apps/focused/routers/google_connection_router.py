@@ -97,7 +97,7 @@ async def initiate_connection(
     Returns:
         200: {
             "token": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
-            "connect_url": "https://www.priority-guard.com/auth/focused/google/start?token=...",
+            "connect_url": "https://api.priority-guard.com/auth/google/start?token=...",
             "expires_in": 600
         }
         500: If Redis is unavailable
@@ -110,7 +110,7 @@ async def initiate_connection(
         token = await store_connection_token(x_user_id, correlation_id=correlation_id)
 
         # Construct the connect URL using the public backend URL
-        connect_url = f"{settings.BACKEND_PUBLIC_URL}/auth/focused/google/start?token={token}"
+        connect_url = f"{settings.BACKEND_PUBLIC_URL}/auth/google/start?token={token}"
 
         return {
             "token": token,

@@ -1,5 +1,5 @@
 """
-Google OAuth endpoints for Focused app.
+Google OAuth endpoints (shared across all SDK apps).
 
 This file handles:
 
@@ -21,6 +21,10 @@ Architecture (Increment 18B):
     - Service layer handles OAuth orchestration
     - Repository layer handles database persistence
     - HTML rendering in dedicated module
+
+Location (Increment 18C):
+    - Moved from backend/apps/focused/routers/ to backend/core/routers/
+    - Shared entrypoint for all SDK apps
 """
 
 from fastapi import APIRouter, Depends, Query, Request

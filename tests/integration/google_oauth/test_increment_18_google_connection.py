@@ -4,7 +4,7 @@ Integration tests for Google Connection MCP Tools (Increment 18).
 Tests:
 - /api/focused/google/connection-status endpoint
 - /api/focused/google/initiate-connection endpoint
-- /auth/focused/google/start with token parameter
+- /auth/google/start with token parameter
 - Token expiration and single-use behavior
 """
 
@@ -181,7 +181,7 @@ class TestInitiateConnectionEndpoint:
 
         data = response.json()
         assert "connect_url" in data
-        assert "/auth/focused/google/start?token=" in data["connect_url"]
+        assert "/auth/google/start?token=" in data["connect_url"]
 
     async def test_returns_expires_in(self, client, test_user):
         """Test endpoint returns token expiration time."""
@@ -402,11 +402,11 @@ class TestInitiateConnectionEndpoint:
 
 
 # =============================================================================
-# /auth/focused/google/start with Token Parameter Tests
+# /auth/google/start with Token Parameter Tests
 # =============================================================================
 
 class TestStartWithTokenParameter:
-    """Tests for GET /auth/focused/google/start?token=..."""
+    """Tests for GET /auth/google/start?token=..."""
 
     async def test_valid_token_redirects_to_google(self, client, test_user):
         """Test valid token results in redirect to Google OAuth."""
@@ -418,7 +418,7 @@ class TestStartWithTokenParameter:
             mock_redis.set = AsyncMock(return_value=True)
 
             response = await client.get(
-                "/auth/focused/google/start?token=valid_token_123",
+                "/auth/google/start?token=valid_token_123",
                 follow_redirects=False,
             )
 
@@ -434,7 +434,7 @@ class TestStartWithTokenParameter:
             mock_redis.set = AsyncMock(return_value=True)
 
             response = await client.get(
-                "/auth/focused/google/start?token=valid_token",
+                "/auth/google/start?token=valid_token",
                 follow_redirects=False,
             )
 
@@ -449,7 +449,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(return_value=None)
 
             response = await client.get(
-                "/auth/focused/google/start?token=expired_token",
+                "/auth/google/start?token=expired_token",
             )
 
         assert response.status_code == 400
@@ -462,7 +462,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(return_value=None)
 
             response = await client.get(
-                "/auth/focused/google/start?token=nonexistent_token",
+                "/auth/google/start?token=nonexistent_token",
             )
 
         assert response.status_code == 400
@@ -482,7 +482,7 @@ class TestStartWithTokenParameter:
             mock_redis.set = AsyncMock(return_value=True)
 
             await client.get(
-                "/auth/focused/google/start?token=single_use_token",
+                "/auth/google/start?token=single_use_token",
                 follow_redirects=False,
             )
 
@@ -506,13 +506,13 @@ class TestStartWithTokenParameter:
 
             # First use should succeed
             response1 = await client.get(
-                "/auth/focused/google/start?token=replay_token",
+                "/auth/google/start?token=replay_token",
                 follow_redirects=False,
             )
 
             # Second use should fail
             response2 = await client.get(
-                "/auth/focused/google/start?token=replay_token",
+                "/auth/google/start?token=replay_token",
             )
 
         assert response1.status_code == 307  # Redirect to Google
@@ -520,7 +520,7 @@ class TestStartWithTokenParameter:
 
     async def test_requires_token_parameter(self, client):
         """Test endpoint requires token query parameter."""
-        response = await client.get("/auth/focused/google/start")
+        response = await client.get("/auth/google/start")
 
         assert response.status_code == 422  # Missing required param
 
@@ -532,7 +532,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(return_value=None)
 
             response = await client.get(
-                f"/auth/focused/google/start?token={secret_token}",
+                f"/auth/google/start?token={secret_token}",
             )
 
         # Token should not appear in error page
@@ -543,7 +543,7 @@ class TestStartWithTokenParameter:
 
         SECURITY CRITICAL: Reflected XSS prevention.
         An attacker could craft a malicious URL like:
-        /auth/focused/google/start?token=<script>alert(1)</script>
+        /auth/google/start?token=<script>alert(1)</script>
 
         If the token is reflected in the error page without escaping,
         this becomes a reflected XSS vulnerability.
@@ -554,7 +554,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(return_value=None)
 
             response = await client.get(
-                f"/auth/focused/google/start?token={xss_payload}",
+                f"/auth/google/start?token={xss_payload}",
             )
 
         # Script tag must NOT appear unescaped in response
@@ -572,7 +572,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(return_value=None)
 
             response = await client.get(
-                f"/auth/focused/google/start?token={html_payload}",
+                f"/auth/google/start?token={html_payload}",
             )
 
         # HTML tags must not appear unescaped
@@ -587,7 +587,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(return_value=None)
 
             response = await client.get(
-                f"/auth/focused/google/start?token={js_payload}",
+                f"/auth/google/start?token={js_payload}",
             )
 
         # javascript: protocol must not appear in any href or src
@@ -602,7 +602,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(return_value=None)
 
             response = await client.get(
-                f"/auth/focused/google/start?token={encoded_payload}",
+                f"/auth/google/start?token={encoded_payload}",
             )
 
         # After URL decoding by the server, script tags must still be escaped
@@ -617,7 +617,7 @@ class TestStartWithTokenParameter:
             mock_redis.get = AsyncMock(side_effect=Exception("Redis connection failed"))
 
             response = await client.get(
-                f"/auth/focused/google/start?token={malicious_token}",
+                f"/auth/google/start?token={malicious_token}",
             )
 
         assert response.status_code == 500
@@ -642,7 +642,7 @@ class TestStartWithTokenParameter:
             mock_redis.set = capture_set
 
             await client.get(
-                "/auth/focused/google/start?token=valid_token",
+                "/auth/google/start?token=valid_token",
                 follow_redirects=False,
             )
 
@@ -681,7 +681,7 @@ class TestStartWithTokenParameter:
             mock_redis.set = capture_set
 
             await client.get(
-                "/auth/focused/google/start?token=valid_token",
+                "/auth/google/start?token=valid_token",
                 follow_redirects=False,
             )
 
@@ -758,7 +758,7 @@ class TestFullConnectionFlow:
 
             # Use token to start OAuth
             start_response = await client.get(
-                f"/auth/focused/google/start?token={token}",
+                f"/auth/google/start?token={token}",
                 follow_redirects=False,
             )
 
@@ -908,7 +908,7 @@ class TestScopeVerification:
             mock_redis.set = AsyncMock(return_value=True)
 
             response = await client.get(
-                "/auth/focused/google/start?token=valid_token",
+                "/auth/google/start?token=valid_token",
                 follow_redirects=False,
             )
 
@@ -944,7 +944,7 @@ class TestScopeVerification:
             mock_redis.set = AsyncMock(return_value=True)
 
             response = await client.get(
-                "/auth/focused/google/start?token=valid_token",
+                "/auth/google/start?token=valid_token",
                 follow_redirects=False,
             )
 
@@ -1103,7 +1103,7 @@ class TestLoggingObservability:
                 mock_logger.error = capture_log
                 mock_logger.warning = capture_log
 
-                await client.get("/auth/focused/google/start?token=invalid_token")
+                await client.get("/auth/google/start?token=invalid_token")
 
         # Must log verification failure
         warning_logs = [m for m in log_messages if "invalid or expired" in m]
@@ -1127,7 +1127,7 @@ class TestLoggingObservability:
                 mock_logger.warning = capture_log
 
                 await client.get(
-                    "/auth/focused/google/start?token=valid_token",
+                    "/auth/google/start?token=valid_token",
                     follow_redirects=False,
                 )
 
@@ -1154,7 +1154,7 @@ class TestLoggingObservability:
                 mock_logger.warning = capture_log
 
                 await client.get(
-                    "/auth/focused/google/start?token=valid_token",
+                    "/auth/google/start?token=valid_token",
                     follow_redirects=False,
                 )
 
@@ -1176,7 +1176,7 @@ class TestLoggingObservability:
             mock_logger.warning = capture_log
 
             # Token with leading whitespace
-            await client.get("/auth/focused/google/start?token=%20invalid")
+            await client.get("/auth/google/start?token=%20invalid")
 
         # Must log malformed token warning
         warning_logs = [m for m in log_messages if "malformed token" in m]
@@ -1198,7 +1198,7 @@ class TestLoggingObservability:
                 mock_logger.error = capture_log
                 mock_logger.warning = capture_log
 
-                await client.get(f"/auth/focused/google/start?token={test_token}")
+                await client.get(f"/auth/google/start?token={test_token}")
 
         # Full token should never appear in logs
         for msg in log_messages:
@@ -1214,7 +1214,7 @@ class TestEdgeCases:
 
     async def test_empty_token_rejected(self, client):
         """Test empty token parameter is rejected."""
-        response = await client.get("/auth/focused/google/start?token=")
+        response = await client.get("/auth/google/start?token=")
 
         # Either 422 (validation) or 400 (invalid token)
         assert response.status_code in [400, 422]
@@ -1237,7 +1237,7 @@ class TestEdgeCases:
             mock_redis.get = AsyncMock(side_effect=Exception("Redis connection failed"))
 
             response = await client.get(
-                "/auth/focused/google/start?token=any_token",
+                "/auth/google/start?token=any_token",
             )
 
         assert response.status_code == 500
