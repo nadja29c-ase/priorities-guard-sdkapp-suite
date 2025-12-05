@@ -16,98 +16,32 @@ Security (Increment 11):
     - HTML error pages for user-facing redirect flow
     - Tokens never logged
 
+Architecture (Increment 18B):
+    - Router handles HTTP concerns only (request/response)
+    - Service layer handles OAuth orchestration
+    - Repository layer handles database persistence
+    - HTML rendering in dedicated module
 """
 
-import html
-import logging
-from datetime import datetime, timedelta, timezone
-
-import structlog
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import RedirectResponse, HTMLResponse
-from sqlalchemy.dialects.postgresql import insert
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
-from backend.core.encryption import encrypt_token
-from backend.core.google_oauth import (
-    exchange_code,
-    generate_auth_url_with_pkce,
-    generate_code_challenge,
-    generate_code_verifier,
-    generate_state_token,
-    store_oauth_state,
-    verify_and_get_oauth_state,
-    verify_connection_token,
+from backend.core.html.oauth_pages import render_error, render_success
+from backend.core.oauth.exceptions import (
+    ConnectionTokenExpiredError,
+    GoogleOAuthError,
+    StateInvalidError,
+    StateStorageError,
+    TokenExchangeError,
 )
-from backend.core.models import CoreConnection
-
-logger = structlog.get_logger(__name__)
+from backend.core.oauth.google_oauth_service import (
+    complete_oauth_flow,
+    initiate_oauth_flow,
+)
 
 router = APIRouter(tags=["Google OAuth"])
-
-
-def _html_error(title: str, message: str, status_code: int = 400) -> HTMLResponse:
-    """
-    Return HTML error page for user-facing OAuth errors.
-
-    Simple HTML page that displays the error to the user.
-    Per Increment 11: HTML errors for browser redirect flow.
-
-    Args:
-        title: Error title (e.g., "Authorization Failed")
-        message: User-friendly error message
-        status_code: HTTP status code (default 400)
-
-    Returns:
-        HTMLResponse with error page
-    """
-    # Escape to prevent XSS if any future code passes user input
-    safe_title = html.escape(title)
-    safe_message = html.escape(message)
-
-    html_content = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>{safe_title}</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 40px; text-align: center; }}
-        h1 {{ color: #dc3545; }}
-        p {{ color: #666; max-width: 400px; margin: 20px auto; }}
-    </style>
-</head>
-<body>
-    <h1>{safe_title}</h1>
-    <p>{safe_message}</p>
-    <p><small>You can close this window and try again.</small></p>
-</body>
-</html>"""
-    return HTMLResponse(content=html_content, status_code=status_code)
-
-
-def _html_success() -> HTMLResponse:
-    """
-    Return HTML success page after OAuth completes.
-
-    Returns:
-        HTMLResponse with success page
-    """
-    html_content = """<!DOCTYPE html>
-<html>
-<head>
-    <title>Connected Successfully</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 40px; text-align: center; }
-        h1 { color: #28a745; }
-        p { color: #666; max-width: 400px; margin: 20px auto; }
-    </style>
-</head>
-<body>
-    <h1>Connected Successfully</h1>
-    <p>Your Google Calendar has been connected. You can close this window.</p>
-</body>
-</html>"""
-    return HTMLResponse(content=html_content, status_code=200)
 
 
 @router.get("/start")
@@ -134,63 +68,24 @@ async def start_google_oauth(
         307 redirect to Google authorization URL, or HTML error page
     """
     correlation_id = getattr(request.state, "correlation_id", "unknown")
-    log = logger.bind(correlation_id=correlation_id)
 
     try:
-        # Validate and consume connection token (Increment 18)
-        user_id = await verify_connection_token(token, correlation_id=correlation_id)
-
-        if user_id is None:
-            log.warning(
-                "oauth_start_invalid_token",
-                token_prefix=token[:8] if token else "none"
-            )
-            return _html_error(
-                title="Link Expired",
-                message="This connection link has expired or has already been used. Please return to ChatGPT and request a new link.",
-                status_code=400,
-            )
-
-        log = log.bind(user_id=user_id)
-        log.info("oauth_start_initiated")
-
-        # Generate PKCE values
-        code_verifier = generate_code_verifier()
-        code_challenge = generate_code_challenge(code_verifier)
-
-        # Generate state token
-        state = generate_state_token()
-
-        # Store state in Redis with user_id and code_verifier
-        stored = await store_oauth_state(
-            state=state,
-            user_id=user_id,
-            code_verifier=code_verifier,
-            correlation_id=correlation_id,
+        redirect_url = await initiate_oauth_flow(token, correlation_id)
+        return RedirectResponse(url=redirect_url, status_code=307)
+    except ConnectionTokenExpiredError:
+        return render_error(
+            title="Link Expired",
+            message="This connection link has expired or has already been used. Please return to ChatGPT and request a new link.",
+            status_code=400,
         )
-
-        if not stored:
-            log.error("oauth_start_state_storage_failed")
-            return _html_error(
-                title="Service Unavailable",
-                message="Unable to initiate authorization. Please try again.",
-                status_code=503,
-            )
-
-        # Generate authorization URL with PKCE
-        auth_url = generate_auth_url_with_pkce(
-            code_challenge=code_challenge,
-            state=state,
+    except StateStorageError:
+        return render_error(
+            title="Service Unavailable",
+            message="Unable to initiate authorization. Please try again.",
+            status_code=503,
         )
-
-        log.info("oauth_start_redirecting_to_google")
-
-        # Redirect to Google
-        return RedirectResponse(url=auth_url, status_code=307)
-
-    except Exception:
-        log.exception("oauth_start_unexpected_error")
-        return _html_error(
+    except GoogleOAuthError:
+        return render_error(
             title="Error",
             message="An unexpected error occurred. Please try again.",
             status_code=500,
@@ -229,125 +124,48 @@ async def google_oauth_callback(
         HTML success page or HTML error page
     """
     correlation_id = getattr(request.state, "correlation_id", "unknown")
-    log = logger.bind(correlation_id=correlation_id)
+    http_client = request.app.state.http_client
 
     # Handle Google-side errors (user denied, etc.)
     if error:
-        log.warning(
-            "oauth_callback_google_error",
-            error=error,
-            error_description=error_description,
-        )
         if error == "access_denied":
-            return _html_error(
+            return render_error(
                 title="Access Denied",
                 message="You denied access to your Google Calendar. Please try again if you'd like to connect.",
             )
-        return _html_error(
+        return render_error(
             title="Authorization Failed",
             message=error_description or "Google authorization failed. Please try again.",
         )
 
-    # Validate required parameters
+    # Validate required parameters (router responsibility)
     if not code:
-        log.warning("oauth_callback_missing_code")
-        return _html_error(
+        return render_error(
             title="Invalid Request",
             message="Missing authorization code from Google.",
         )
 
     if not state:
-        log.warning("oauth_callback_missing_state")
-        return _html_error(
+        return render_error(
             title="Invalid Request",
             message="Missing state parameter. Please start the authorization process again.",
         )
 
-    # Verify state and retrieve user_id + code_verifier from Redis
-    state_data = await verify_and_get_oauth_state(state, correlation_id=correlation_id)
-
-    if state_data is None:
-        log.warning("oauth_callback_invalid_state", state_prefix=state[:8] if state else "none")
-        return _html_error(
+    try:
+        await complete_oauth_flow(code, state, session, http_client, correlation_id)
+        return render_success()
+    except StateInvalidError:
+        return render_error(
             title="Session Expired",
             message="Your authorization session has expired or is invalid. Please try again.",
         )
-
-    user_id = state_data["user_id"]
-    code_verifier = state_data["code_verifier"]
-    log = log.bind(user_id=user_id)
-
-    log.info("oauth_callback_state_verified")
-
-    try:
-        # Exchange code for tokens (with PKCE verifier)
-        http_client = request.app.state.http_client
-        token_data = await exchange_code(
-            code=code,
-            http_client=http_client,
-            code_verifier=code_verifier,
-            correlation_id=correlation_id,
-        )
-
-        # Calculate token expiration
-        token_expires_at = datetime.now(timezone.utc) + timedelta(
-            seconds=token_data["expires_in"]
-        )
-
-        # Encrypt tokens before storage
-        encrypted_access = encrypt_token(token_data["access_token"])
-        encrypted_refresh = (
-            encrypt_token(token_data["refresh_token"])
-            if token_data["refresh_token"]
-            else None
-        )
-
-        # Upsert to core_connections (PostgreSQL upsert pattern)
-        # NOTE: revoked_at=None is required to clear revocation on reconnect
-        # NOTE: connection_type="google" required by ck_connection_type_enum constraint
-        stmt = insert(CoreConnection).values(
-            user_id=user_id,
-            provider="google",
-            connection_type="google",  # Required by CHECK constraint
-            encrypted_access_token=encrypted_access,
-            encrypted_refresh_token=encrypted_refresh,
-            token_expires_at=token_expires_at,
-            scopes=token_data["scopes"],
-            revoked_at=None,  # Explicitly not revoked on new connection
-        )
-
-        stmt = stmt.on_conflict_do_update(
-            constraint="uq_user_provider",
-            set_={
-                "encrypted_access_token": encrypted_access,
-                "encrypted_refresh_token": encrypted_refresh,
-                "token_expires_at": token_expires_at,
-                "scopes": token_data["scopes"],
-                "updated_at": datetime.now(timezone.utc),
-                "revoked_at": None,  # Clear revocation on reconnect
-                "connection_type": "google",  # Ensure correct type on update
-            },
-        )
-
-        await session.execute(stmt)
-        await session.commit()
-
-        log.info("oauth_callback_tokens_stored", scopes=token_data["scopes"])
-
-        # Return success HTML page
-        return _html_success()
-
-    except ValueError as e:
-        # Token exchange failed (scope missing, invalid code, etc.)
-        log.error("oauth_callback_token_exchange_failed", error=str(e))
-        return _html_error(
+    except TokenExchangeError:
+        return render_error(
             title="Authorization Failed",
             message="Failed to complete authorization with Google. Please try again.",
         )
-
-    except Exception as e:
-        log.exception("oauth_callback_unexpected_error")
-        return _html_error(
+    except GoogleOAuthError:
+        return render_error(
             title="Error",
             message="An unexpected error occurred. Please try again.",
             status_code=500,
