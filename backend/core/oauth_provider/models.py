@@ -2,10 +2,10 @@
 OAuth Provider Models.
 
 Contains all tables related to the OAuth 2.1 provider:
-- OAuthClient
 - OAuthAuthorizationCode
 - OAuthAccessToken
 - OAuthState
+- OAuthSession (Increment 19)
 
 This is an isolated subsystem separate from core shared models.
 """
@@ -292,4 +292,73 @@ class OAuthState(Base):
     __table_args__ = (
         Index("idx_oauth_state_expires_at", "expires_at"),
         {"comment": "OAuth state tokens for CSRF protection"}
+    )
+
+
+class OAuthSession(Base):
+    """
+    Browser sessions for cross-app user identification (Increment 19).
+
+    When a user authorizes one SDK app (e.g., Focused), a session cookie is set.
+    When they later authorize another app (e.g., Decliner), the cookie identifies
+    them as the same user, allowing shared CoreUser identity across apps.
+
+    Lifecycle:
+    - Created after user clicks "Allow" on consent screen
+    - Session token stored in pg_session cookie (HttpOnly, Secure, SameSite=Lax)
+    - expires_at extended on each use (sliding window). Default = now() + 730 days.
+    - NOT deleted on app revocation (/oauth/revoke) - preserves cross-app identity
+    - Expired sessions cleaned up by Celery task
+    - Deleted only on full user data deletion (DELETE sessions + clear cookie)
+
+    Security:
+    - Token is 32 bytes, cryptographically random (64 hex chars)
+    - Cookie is HttpOnly (no JavaScript access)
+    - Cookie is Secure (HTTPS only in production)
+    - Cookie is SameSite=Lax (sent on OAuth redirects, blocked on cross-site POST)
+    - Cookie scoped to /oauth path only
+    """
+
+    __tablename__ = "oauth_sessions"
+
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        comment="Session identifier (UUID)"
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("core_users.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="User this session belongs to"
+    )
+
+    session_token: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+        comment="Random token stored in cookie (32 bytes hex)"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When session was created"
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("(now() + interval '730 days')"),
+        comment="When session expires (sliding window: extended on each use). Default = now() + 730 days."
+    )
+
+    __table_args__ = (
+        Index("idx_oauth_sessions_session_token", "session_token", unique=True),
+        Index("idx_oauth_sessions_user_id", "user_id"),
+        Index("idx_oauth_sessions_expires_at", "expires_at"),
+        {"comment": "Browser sessions for cross-app user identification"}
     )

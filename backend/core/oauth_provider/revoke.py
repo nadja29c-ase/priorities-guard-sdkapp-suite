@@ -4,6 +4,11 @@ Revoke Endpoint - OAuth 2.1 token revocation (RFC 7009).
 HTTP layer only. Delegates all logic to service layer.
 
 Note: OAuth 2.1 requires form-urlencoded POST data (RFC 7009 Section 2.1).
+
+Session Cookie Behavior (Increment 19):
+    - App revocation does NOT delete browser sessions or clear cookies
+    - This preserves cross-app identity (user can revoke Focused, still be recognized for Decliner)
+    - Sessions are only deleted on full user data deletion (delete_user_sessions)
 """
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -76,6 +81,10 @@ async def revoke_endpoint(
         client_id=client_id,
         correlation_id=correlation_id
     )
+
+    # Note: We do NOT delete browser sessions or clear cookies on app revocation.
+    # This preserves cross-app identity per Increment 19 semantics.
+    # Sessions are only deleted on full user data deletion.
 
     # Always return 200 per RFC 7009 (don't leak token existence)
     return JSONResponse({"success": True}, status_code=200)

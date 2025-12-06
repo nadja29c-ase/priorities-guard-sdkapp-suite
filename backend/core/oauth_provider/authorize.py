@@ -2,10 +2,13 @@
 Authorization Endpoint - OAuth 2.1 authorization request handling.
 
 Handles authorization requests, validates parameters, resolves user identity
-via login_hint, and renders consent screen with language detection.
+via login_hint or session cookie, and renders consent screen with language detection.
 
 Increment 12: OAuth Consent UI Implementation.
+Increment 19: Cross-app user identification via session cookies.
 """
+
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,7 +21,9 @@ from backend.core.database import get_db
 from backend.core.logging import get_logger, mask_client_id
 from backend.core.models import CoreConnection, CoreUser
 from backend.core.rate_limit import check_rate_limit, get_client_ip
+from backend.core.oauth_provider.cookies import get_session_cookie
 from backend.core.oauth_provider.services.authorization_service import create_authorization_context
+from backend.core.oauth_provider.services.session_service import get_session_user
 from backend.core.oauth_provider.validators.pkce import validate_code_challenge_method
 
 logger = get_logger(__name__)
@@ -128,18 +133,27 @@ def _normalize_redirect_uri(uri: str) -> str | None:
     return urlunparse(normalized)
 
 
-async def _get_or_create_user(
+async def _resolve_user_identity(
+    request: Request,
     db: AsyncSession,
     chatgpt_user_id: str | None,
     correlation_id: str
 ) -> CoreUser:
     """
-    Look up user by chatgpt_user_id or create new user if not found.
+    Resolve user identity via identity resolution chain (Increment 19).
 
-    If chatgpt_user_id is None (no login_hint provided), creates an anonymous user.
-    This supports OAuth flows where the client doesn't provide login_hint.
+    Priority order:
+    1. login_hint provided → find or create by chatgpt_user_id
+    2. Valid session cookie → get existing user from session
+    3. Neither → create new anonymous user
+
+    This ensures:
+    - Forward compatibility with OpenAI's potential login_hint support
+    - Cross-app user linking via browser session cookie
+    - Graceful fallback to anonymous users
 
     Args:
+        request: FastAPI request object (for reading session cookie)
         db: Database session
         chatgpt_user_id: ChatGPT user ID from login_hint parameter (may be None)
         correlation_id: Request correlation ID for logging
@@ -160,7 +174,9 @@ async def _get_or_create_user(
     """
     request_logger = logger.bind(correlation_id=correlation_id)
 
-    # If login_hint provided, look up existing user
+    # =========================================================================
+    # Priority 1: login_hint provided → find or create by chatgpt_user_id
+    # =========================================================================
     if chatgpt_user_id:
         result = await db.execute(
             select(CoreUser).where(CoreUser.chatgpt_user_id == chatgpt_user_id)
@@ -171,7 +187,7 @@ async def _get_or_create_user(
             request_logger.info(
                 "oauth.authorize.user_found",
                 user_id=str(user.id),
-                chatgpt_user_id=chatgpt_user_id
+                identity_source="login_hint",
             )
             return user
 
@@ -184,20 +200,50 @@ async def _get_or_create_user(
         request_logger.info(
             "oauth.authorize.user_created",
             user_id=str(user.id),
-            chatgpt_user_id=chatgpt_user_id
+            identity_source="login_hint",
         )
         return user
 
-    # No login_hint - create anonymous user
-    # ChatGPT will associate tokens with this user for the session
+    # =========================================================================
+    # Priority 2: Valid session cookie → get existing user from session
+    # =========================================================================
+    session_token = get_session_cookie(request)
+    # Prevalidate token format (64-char hex from secrets.token_hex(32))
+    if session_token and len(session_token) == 64:
+        session_user_id = await get_session_user(session_token, db, correlation_id)
+        if session_user_id:
+            # Look up the user to return the full CoreUser object
+            result = await db.execute(
+                select(CoreUser).where(CoreUser.id == session_user_id)
+            )
+            user = result.scalar_one_or_none()
+
+            if user:
+                request_logger.info(
+                    "oauth.authorize.user_found",
+                    user_id=str(user.id),
+                    identity_source="session_cookie",
+                )
+                return user
+
+            # Session references non-existent user (shouldn't happen, but handle gracefully)
+            request_logger.warning(
+                "oauth.authorize.session_user_not_found",
+                session_user_id=str(session_user_id),
+            )
+
+    # =========================================================================
+    # Priority 3: Neither → create new anonymous user
+    # =========================================================================
     user = CoreUser(chatgpt_user_id=None)
     db.add(user)
     await db.commit()
     await db.refresh(user)
 
     request_logger.info(
-        "oauth.authorize.anonymous_user_created",
-        user_id=str(user.id)
+        "oauth.authorize.user_created",
+        user_id=str(user.id),
+        identity_source="new_anonymous",
     )
     return user
 
@@ -486,9 +532,9 @@ async def authorize_endpoint(
             description="Requested scopes exceed client's registered scopes"
         )
 
-    # Resolve user identity via login_hint
-    # This looks up or creates a user in core_users by chatgpt_user_id
-    user = await _get_or_create_user(db, login_hint, correlation_id)
+    # Resolve user identity via identity resolution chain (Increment 19)
+    # Priority: 1. login_hint, 2. session cookie, 3. new anonymous user
+    user = await _resolve_user_identity(request, db, login_hint, correlation_id)
 
     # Extract client_name from provider_metadata (human-readable app name for consent UI)
     # NOTE: client.provider is the connection_type ("oauth_provider"), NOT the app name

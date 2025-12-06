@@ -2,6 +2,7 @@
 Consent UI Endpoint - OAuth 2.1 user consent handling.
 
 Processes user consent decisions (Allow/Deny) and generates authorization codes.
+Sets session cookie for cross-app user identification (Increment 19).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -11,8 +12,10 @@ from urllib.parse import urlencode
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger, mask_client_id
+from backend.core.oauth_provider.cookies import get_session_cookie, set_session_cookie
 from backend.core.oauth_provider.services.authorization_service import get_authorization_context
 from backend.core.oauth_provider.services.consent_service import create_authorization_code, record_consent
+from backend.core.oauth_provider.services.session_service import create_session, get_session_user
 
 logger = get_logger(__name__)
 
@@ -149,10 +152,43 @@ async def consent_endpoint(
         correlation_id=correlation_id
     )
 
+    # =========================================================================
+    # Set session cookie for cross-app user identification (Increment 19)
+    # =========================================================================
+    # Read existing session cookie
+    existing_session_token = get_session_cookie(request)
+    session_token = None
+
+    # Prevalidate token format (64-char hex from secrets.token_hex(32))
+    if existing_session_token and len(existing_session_token) == 64:
+        # Validate existing session (this also extends expiry via sliding window)
+        session_user_id = await get_session_user(existing_session_token, db, correlation_id)
+        if session_user_id:
+            # Existing session is valid - use the same token
+            session_token = existing_session_token
+            request_logger.debug(
+                "oauth.consent.session_reused",
+                user_id=user_id,
+                session_user_id=str(session_user_id),
+            )
+
+    if not session_token:
+        # No valid session - create a new one
+        session_token = await create_session(user_id, db, correlation_id)
+        request_logger.info(
+            "oauth.consent.session_created",
+            user_id=user_id,
+        )
+
     # Redirect to client with authorization code
     params = {"code": authorization_code}
     if state:
         params["state"] = state
 
     success_url = f"{redirect_uri}?{urlencode(params)}"
-    return RedirectResponse(url=success_url, status_code=302)
+    response = RedirectResponse(url=success_url, status_code=302)
+
+    # Set session cookie on response
+    set_session_cookie(response, session_token)
+
+    return response
