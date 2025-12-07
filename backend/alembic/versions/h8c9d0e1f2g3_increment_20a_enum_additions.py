@@ -1,6 +1,6 @@
 """increment_20a_enum_additions
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: h8c9d0e1f2g3
 Revises: efcc28230f55
 Create Date: 2025-12-07
 
@@ -22,7 +22,7 @@ from backend.core.config import settings
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'a1b2c3d4e5f6'
+revision: str = 'h8c9d0e1f2g3'
 down_revision: Union[str, Sequence[str], None] = 'efcc28230f55'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
