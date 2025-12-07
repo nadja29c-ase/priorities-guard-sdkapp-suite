@@ -36,6 +36,11 @@ down_revision: Union[str, Sequence[str], None] = 'efcc28230f55'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
+# IMPORTANT: Disable transactional DDL for this migration.
+# PostgreSQL doesn't allow using new enum values in the same transaction
+# they were added. We must run enum additions with AUTOCOMMIT isolation.
+transactional_ddl = False
+
 
 def upgrade() -> None:
     """
@@ -47,32 +52,17 @@ def upgrade() -> None:
     """
     # =========================================================================
     # 1. Expand job_type_enum: add 'activation'
-    # =========================================================================
-    # Must run outside transaction - new enum values can't be used in same transaction
-    op.execute(
-        text("ALTER TYPE job_type_enum ADD VALUE IF NOT EXISTS 'activation'")
-        .execution_options(autocommit=True)
-    )
-
-    # =========================================================================
     # 2. Expand job_status_enum: add new statuses
     # =========================================================================
-    op.execute(
-        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'running'")
-        .execution_options(autocommit=True)
-    )
-    op.execute(
-        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_notification'")
-        .execution_options(autocommit=True)
-    )
-    op.execute(
-        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_confirmation'")
-        .execution_options(autocommit=True)
-    )
-    op.execute(
-        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'skipped'")
-        .execution_options(autocommit=True)
-    )
+    # Must run with AUTOCOMMIT - new enum values can't be used in same transaction
+    conn = op.get_bind()
+    conn = conn.execution_options(isolation_level="AUTOCOMMIT")
+
+    conn.execute(text("ALTER TYPE job_type_enum ADD VALUE IF NOT EXISTS 'activation'"))
+    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'running'"))
+    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_notification'"))
+    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_confirmation'"))
+    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'skipped'"))
 
     # =========================================================================
     # 3. Add columns to focused_scheduled_jobs
