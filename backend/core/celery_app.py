@@ -459,6 +459,238 @@ def cleanup_scheduled_jobs(self):
 
 
 # ---------------------------------------------------------------------
+# Trigger Focus Activation Task (Increment 20)
+# ---------------------------------------------------------------------
+@celery_app.task(
+    name="backend.core.celery_app.trigger_focus_activation",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+)
+def trigger_focus_activation(self, user_id: str, session_id: str, job_id: str):
+    """
+    Celery task: Trigger focus mode activation at scheduled time.
+
+    Called by the sync pipeline when a focus block is detected.
+    Scheduled for (event_start_time - LEAD_TIME_MINUTES).
+
+    Flow:
+    1. Update job status to 'running'
+    2. Re-fetch session from DB (verify still valid)
+    3. Check user has no active focus session
+    4. Generate shortcut URL via run_focus_mode_internal()
+    5. Load consent preference
+    6. Set final status: 'pending_notification' or 'pending_confirmation'
+
+    Note: This task does NOT activate Focus Mode directly (iOS prevents that).
+    It prepares the shortcut URL for notification delivery (Increment 21).
+
+    Args:
+        user_id: User UUID string
+        session_id: Focus session UUID string
+        job_id: Scheduled job UUID string
+
+    Returns:
+        Dictionary with result status and shortcut_url
+    """
+    logger.info(
+        f"[celery] Trigger focus activation task started: "
+        f"user_id={user_id}, session_id={session_id}, job_id={job_id}"
+    )
+
+    try:
+        from uuid import UUID
+
+        from backend.apps.focused.logic.activation_helpers import (
+            fetch_focus_session,
+            fetch_user_active_session,
+            fetch_consent_preferences,
+            update_job_status,
+        )
+        from backend.apps.focused.tools.focus_activation_internal import (
+            run_focus_mode_internal,
+        )
+        from backend.core.database import AsyncSessionLocal
+
+        async def run_activation():
+            async with AsyncSessionLocal() as db:
+                # Parse UUIDs
+                try:
+                    user_uuid = UUID(user_id)
+                    session_uuid = UUID(session_id)
+                    job_uuid = UUID(job_id)
+                except ValueError as e:
+                    logger.error(f"[celery] Invalid UUID format: {e}")
+                    return {"success": False, "error": "invalid_uuid"}
+
+                # 1. Update job status to 'running'
+                await update_job_status(db, job_uuid, "running")
+
+                # 2. Re-fetch focus session from DB
+                focus_session = await fetch_focus_session(db, session_uuid, user_uuid)
+
+                if not focus_session:
+                    logger.warning(
+                        f"[celery] Focus session not found: session_id={session_id}"
+                    )
+                    await update_job_status(
+                        db, job_uuid, "cancelled",
+                        error_reason="session_not_found"
+                    )
+                    await db.commit()
+                    return {"success": False, "status": "session_not_found"}
+
+                # Check if session is still a focus block
+                if not focus_session.is_focus_block:
+                    logger.info(
+                        f"[celery] Session no longer a focus block: session_id={session_id}"
+                    )
+                    await update_job_status(
+                        db, job_uuid, "cancelled",
+                        error_reason="not_focus_block"
+                    )
+                    await db.commit()
+                    return {"success": False, "status": "not_focus_block"}
+
+                # Check if session was soft-deleted
+                if focus_session.status == "deleted":
+                    logger.info(
+                        f"[celery] Focus session was deleted: session_id={session_id}"
+                    )
+                    await update_job_status(
+                        db, job_uuid, "cancelled",
+                        error_reason="session_deleted"
+                    )
+                    await db.commit()
+                    return {"success": False, "status": "session_deleted"}
+
+                # 3. Check user has no active focus session
+                active_session = await fetch_user_active_session(db, user_uuid)
+
+                if active_session:
+                    logger.info(
+                        f"[celery] User already has active focus session: "
+                        f"active_session_id={active_session.id}"
+                    )
+                    await update_job_status(
+                        db, job_uuid, "skipped",
+                        error_reason="active_session_exists"
+                    )
+                    await db.commit()
+                    return {"success": False, "status": "skipped", "reason": "active_session_exists"}
+
+                # 4. Generate shortcut URL
+                # NOTE: run_focus_mode_internal() is pure CPU-bound (string ops only).
+                # No timeout required unless future versions introduce I/O.
+                try:
+                    activation_data = run_focus_mode_internal(focus_session)
+                    shortcut_url = activation_data.get("shortcut_url")
+                    focus_name = activation_data.get("focus_name")
+                    end_time = activation_data.get("end_time")
+
+                    # Validate required fields
+                    if not shortcut_url:
+                        raise ValueError("run_focus_mode_internal returned no shortcut_url")
+                    if not focus_name:
+                        raise ValueError("run_focus_mode_internal returned no focus_name")
+                except Exception as e:
+                    logger.error(f"[celery] Failed to generate shortcut URL: {e}")
+                    await update_job_status(
+                        db, job_uuid, "failed",
+                        error_reason=f"url_generation_failed: {str(e)[:200]}"
+                    )
+                    await db.commit()
+                    return {"success": False, "status": "failed", "error": str(e)}
+
+                # 5. Load consent preferences
+                preferences = await fetch_consent_preferences(db, user_uuid)
+
+                # Default: auto_handle_focus_blocks = False
+                auto_handle = preferences.auto_handle_focus_blocks if preferences else False
+
+                # 6. Set final status based on preference
+                if auto_handle:
+                    # User wants automatic notifications
+                    final_status = "pending_notification"
+                    logger.info(
+                        f"[celery] Activation ready for notification: "
+                        f"session_id={session_id}, focus_name={focus_name}"
+                    )
+                else:
+                    # User must initiate via ChatGPT
+                    final_status = "pending_confirmation"
+                    logger.info(
+                        f"[celery] Activation awaiting user confirmation: "
+                        f"session_id={session_id}, focus_name={focus_name}"
+                    )
+
+                # Update job with shortcut_url and final status
+                await update_job_status(
+                    db, job_uuid, final_status,
+                    shortcut_url=shortcut_url
+                )
+                await db.commit()
+
+                return {
+                    "success": True,
+                    "status": final_status,
+                    "shortcut_url": shortcut_url,
+                    "focus_name": focus_name,
+                    "end_time": end_time,  # May be None if session has no end_time
+                }
+
+        # Run async function in sync context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        result = loop.run_until_complete(run_activation())
+
+        logger.info(f"[celery] Trigger focus activation completed: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"[celery] Trigger focus activation failed: {e}")
+
+        # Try to mark job as failed
+        try:
+            from datetime import datetime, timezone
+            from uuid import UUID
+
+            from backend.apps.focused.logic.activation_helpers import update_job_status
+            from backend.core.database import AsyncSessionLocal
+
+            async def mark_failed():
+                async with AsyncSessionLocal() as db:
+                    await update_job_status(
+                        db, UUID(job_id), "failed",
+                        error_reason=f"task_exception: {str(e)[:200]}"
+                    )
+                    await db.commit()
+
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            loop.run_until_complete(mark_failed())
+        except Exception as inner_e:
+            logger.error(f"[celery] Failed to mark job as failed: {inner_e}")
+
+        # Retry with exponential backoff
+        raise self.retry(exc=e, countdown=30 * (2 ** self.request.retries))
+
+
+# ---------------------------------------------------------------------
 # TODO: Token and Webhook Renewal Tasks
 # ---------------------------------------------------------------------
 def renew_google_token(user_id: str) -> dict:

@@ -318,14 +318,19 @@ class FocusedFocusSession(Base):
 
     # Table-level constraints and indexes
     __table_args__ = (
-        # Unique constraint: one row per (user, event, calendar)
-        # NOTE: Only applies when google_event_id is NOT NULL
+        # Unique constraint: one row per (user, ical_uid, start_time)
+        # This correctly handles recurring events where all instances share
+        # the same google_event_id but have different start times.
+        # Google Calendar API: iCalUID + start_time uniquely identifies an instance.
+        # NOTE: Only applies to calendar-triggered sessions (google_ical_uid NOT NULL)
         UniqueConstraint(
             "user_id",
-            "google_event_id",
-            "google_calendar_id",
-            name="uq_focus_sessions_user_event",
+            "google_ical_uid",
+            "start_time",
+            name="uq_focus_sessions_user_ical_start",
         ),
+        # Keep index on google_event_id for lookup queries (not uniqueness)
+        Index("idx_focus_sessions_event_id", "google_event_id"),
         # Check: start_time < end_time
         CheckConstraint(
             "start_time < end_time",
@@ -484,14 +489,34 @@ class FocusedScheduledJob(Base):
     Scheduled Celery tasks for the Focused app.
 
     Used for:
+    - Focus mode activation (Increment 20)
     - Auto-deactivation of focus mode after duration expires
     - Webhook renewal tasks
     - Other time-based background jobs
 
-    Retention: Jobs with status 'completed', 'failed', or 'cancelled' are
-    deleted after 7 days by a cleanup task.
+    Status meanings:
+    - pending: waiting for Celery to fire
+    - running: task executing
+    - pending_notification: URL generated, awaiting notify_user (Increment 21)
+    - pending_confirmation: user has auto=false, must initiate via ChatGPT
+    - completed: user tapped notification, Focus Mode activated
+    - failed: error during processing
+    - cancelled: event deleted/changed before firing
+    - skipped: user already had active focus session
 
-    Example:
+    Retention: Jobs with status 'completed', 'failed', 'cancelled', or 'skipped'
+    are deleted after 7 days by a cleanup task.
+
+    Example (activation job):
+        job = FocusedScheduledJob(
+            user_id=UUID("..."),
+            job_type="activation",
+            event_id=session.id,
+            event_start_time=session.start_time,
+            scheduled_at=session.start_time - timedelta(minutes=10),
+        )
+
+    Example (deactivation job):
         job = FocusedScheduledJob(
             user_id=UUID("..."),
             job_type="focus_deactivate",
@@ -518,9 +543,12 @@ class FocusedScheduledJob(Base):
         comment="User who owns this job",
     )
 
-    # Job type
+    # Job type (Increment 20: added 'activation')
     job_type: Mapped[str] = mapped_column(
-        Enum("focus_deactivate", "webhook_renewal", name="job_type_enum", create_type=False),
+        Enum(
+            "focus_deactivate", "webhook_renewal", "activation",
+            name="job_type_enum", create_type=False
+        ),
         nullable=False,
         comment="Type of scheduled job",
     )
@@ -532,9 +560,13 @@ class FocusedScheduledJob(Base):
         comment="When the job should execute (UTC)",
     )
 
-    # Job status
+    # Job status (Increment 20: added running, pending_notification, pending_confirmation, skipped)
     status: Mapped[str] = mapped_column(
-        Enum("pending", "completed", "failed", "cancelled", name="job_status_enum", create_type=False),
+        Enum(
+            "pending", "running", "pending_notification", "pending_confirmation",
+            "completed", "failed", "cancelled", "skipped",
+            name="job_status_enum", create_type=False
+        ),
         nullable=False,
         server_default=text("'pending'"),
         default="pending",
@@ -547,6 +579,43 @@ class FocusedScheduledJob(Base):
         nullable=True,
         comment="Celery task ID for this job",
     )
+
+    # =========================================================================
+    # Increment 20: Activation job fields
+    # =========================================================================
+
+    # event_id: FK to focused_focus_sessions (NULL for webhook_renewal jobs)
+    event_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("focused_focus_sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        comment="Focus session this job relates to (NULL for webhook_renewal)",
+    )
+
+    # event_start_time: for idempotency (calendar event start time)
+    event_start_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Calendar event start time (for idempotency constraint)",
+    )
+
+    # shortcut_url: generated URL for notification delivery
+    shortcut_url: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        comment="Generated shortcut URL for notification",
+    )
+
+    # error_reason: failure details
+    error_reason: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        comment="Error details if job failed",
+    )
+
+    # =========================================================================
+    # Legacy fields (kept for backward compatibility)
+    # =========================================================================
 
     # Retry tracking
     retry_count: Mapped[int] = mapped_column(
@@ -598,6 +667,15 @@ class FocusedScheduledJob(Base):
         ),
         # Index for user's jobs
         Index("idx_scheduled_jobs_user", "user_id", "status"),
+        # Index for event lookups (Increment 20)
+        Index(
+            "idx_scheduled_jobs_event",
+            "event_id",
+            postgresql_where=text("event_id IS NOT NULL"),
+        ),
+        # Note: Unique constraint uq_scheduled_jobs_activation is created in migration
+        # as a partial unique index (user_id, event_id, job_type, event_start_time)
+        # WHERE event_id IS NOT NULL
     )
 
     def __repr__(self) -> str:
@@ -617,12 +695,15 @@ class FocusedScheduledJob(Base):
         from datetime import timedelta
 
         # Validate job_type
-        valid_job_types = ("focus_deactivate", "webhook_renewal")
+        valid_job_types = ("focus_deactivate", "webhook_renewal", "activation")
         if self.job_type not in valid_job_types:
             raise ValueError(f"job_type must be one of {valid_job_types}")
 
         # Validate status
-        valid_statuses = ("pending", "completed", "failed", "cancelled")
+        valid_statuses = (
+            "pending", "running", "pending_notification", "pending_confirmation",
+            "completed", "failed", "cancelled", "skipped"
+        )
         if self.status not in valid_statuses:
             raise ValueError(f"status must be one of {valid_statuses}")
 
@@ -632,6 +713,20 @@ class FocusedScheduledJob(Base):
         if self.scheduled_at.utcoffset() != timedelta(0):
             raise ValueError("scheduled_at must be UTC (offset must be 0)")
 
+        # Validate event_start_time if provided
+        if self.event_start_time:
+            if self.event_start_time.tzinfo is None or self.event_start_time.utcoffset() is None:
+                raise ValueError("event_start_time must be timezone-aware (UTC)")
+            if self.event_start_time.utcoffset() != timedelta(0):
+                raise ValueError("event_start_time must be UTC (offset must be 0)")
+
+        # Activation jobs require event_id and event_start_time
+        if self.job_type == "activation":
+            if not self.event_id:
+                raise ValueError("event_id is required for activation jobs")
+            if not self.event_start_time:
+                raise ValueError("event_start_time is required for activation jobs")
+
         # Validate retry_count is non-negative
         if self.retry_count < 0:
             raise ValueError("retry_count must be >= 0")
@@ -639,3 +734,74 @@ class FocusedScheduledJob(Base):
         # Validate payload is a dict
         if not isinstance(self.payload, dict):
             raise ValueError("payload must be a dictionary")
+
+
+class FocusedConsentPreferences(Base):
+    """
+    User preferences for automatic focus mode handling (Increment 20).
+
+    Controls how the system responds to detected focus blocks:
+    - auto_handle_focus_blocks: If true, send push notification automatically
+      when a focus block is about to start. If false, user must initiate via ChatGPT.
+    - always_confirm_duration: If true, always ask user to confirm focus session duration.
+
+    Note: auto_handle_focus_blocks=true means "send notification automatically",
+    NOT "activate Focus Mode without user interaction" (iOS prevents that).
+
+    Example:
+        prefs = FocusedConsentPreferences(
+            user_id=UUID("..."),
+            auto_handle_focus_blocks=True,
+            always_confirm_duration=False,
+        )
+    """
+
+    __tablename__ = "focused_consent_preferences"
+
+    # Primary key (user_id is both PK and FK - one row per user)
+    user_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("core_users.id", ondelete="CASCADE"),
+        primary_key=True,
+        comment="User these preferences belong to",
+    )
+
+    # auto_handle_focus_blocks: if true, send push notification automatically
+    auto_handle_focus_blocks: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+        default=False,
+        comment="If true, send push notification when focus block starts",
+    )
+
+    # always_confirm_duration: if true, always ask user to confirm duration
+    always_confirm_duration: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("true"),
+        default=True,
+        comment="If true, always ask user to confirm focus session duration",
+    )
+
+    # Audit timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When preferences were created",
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="When preferences were last updated",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<FocusedConsentPreferences user_id={self.user_id}, "
+            f"auto_handle_focus_blocks={self.auto_handle_focus_blocks}>"
+        )

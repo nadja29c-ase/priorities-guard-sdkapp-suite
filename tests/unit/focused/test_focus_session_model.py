@@ -216,12 +216,12 @@ def test_calculate_content_hash_rejects_non_utc_timezone():
 # =============================================================================
 def test_model_validation_google_event_id():
     """
-    Test: google_event_id validation (required, max 255 chars).
+    Test: google_event_id validation (required, max 255 chars) for calendar-triggered sessions.
     """
     start = datetime(2025, 1, 15, 10, 0, tzinfo=timezone.utc)
     end = datetime(2025, 1, 15, 12, 0, tzinfo=timezone.utc)
 
-    # Valid
+    # Valid calendar-triggered session
     session = FocusedFocusSession(
         user_id=uuid4(),
         google_event_id="event123",
@@ -232,6 +232,7 @@ def test_model_validation_google_event_id():
         end_time=end,
         sha256_content_hash="a" * 64,
         status="active",
+        trigger_source="calendar",  # Required for google_event_id validation
     )
     session.validate()  # Should not raise
 
@@ -248,9 +249,9 @@ def test_model_validation_google_event_id():
 
 def test_model_validation_google_ical_uid_required():
     """
-    Test: google_ical_uid is REQUIRED (not nullable).
+    Test: google_ical_uid is REQUIRED for calendar-triggered sessions.
 
-    CRITICAL: Claude often forgets this.
+    CRITICAL: google_ical_uid + start_time form the unique identity for recurring events.
     """
     start = datetime(2025, 1, 15, 10, 0, tzinfo=timezone.utc)
     end = datetime(2025, 1, 15, 12, 0, tzinfo=timezone.utc)
@@ -259,11 +260,13 @@ def test_model_validation_google_ical_uid_required():
         user_id=uuid4(),
         google_event_id="event123",
         google_calendar_id="primary",
-        google_ical_uid="",  # Empty
+        google_ical_uid="",  # Empty - should fail
         google_updated_at=datetime.now(timezone.utc),
         start_time=start,
         end_time=end,
         sha256_content_hash="a" * 64,
+        status="active",
+        trigger_source="calendar",  # Required for google_ical_uid validation
     )
 
     with pytest.raises(ValueError, match="google_ical_uid is required"):

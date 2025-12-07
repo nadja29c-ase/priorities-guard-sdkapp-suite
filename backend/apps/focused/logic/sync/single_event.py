@@ -231,13 +231,15 @@ async def process_single_event(
             :start_time, :end_time, :is_focus_block, :matched_keyword,
             :sha256_content_hash, 'active'
         )
-        ON CONFLICT (user_id, google_event_id, google_calendar_id)
+        ON CONFLICT (user_id, google_ical_uid, start_time)
         DO UPDATE SET
+            -- Only update mutable fields. Identity fields (user_id, google_ical_uid, start_time)
+            -- are part of the conflict key and must NOT be updated.
             google_updated_at = EXCLUDED.google_updated_at,
-            google_ical_uid = EXCLUDED.google_ical_uid,
+            google_event_id = EXCLUDED.google_event_id,
+            google_calendar_id = EXCLUDED.google_calendar_id,
             event_summary = EXCLUDED.event_summary,
             event_description = EXCLUDED.event_description,
-            start_time = EXCLUDED.start_time,
             end_time = EXCLUDED.end_time,
             is_focus_block = EXCLUDED.is_focus_block,
             matched_keyword = EXCLUDED.matched_keyword,
@@ -264,7 +266,7 @@ async def process_single_event(
             -- - Resurrection with equal timestamp + same hash: CORRECTLY REJECTED (no change)
             -- This prevents stale "confirmed" webhooks from incorrectly resurrecting deleted events.
 
-        RETURNING version
+        RETURNING id, version, start_time, is_focus_block
     """)
 
     try:
@@ -286,7 +288,7 @@ async def process_single_event(
             }
         )
 
-        # Fetch the version from RETURNING clause
+        # Fetch the result from RETURNING clause
         # CRITICAL: Do NOT rely on result.rowcount with PostgreSQL async - it's unreliable
         # Instead, check if RETURNING gave us a row
         row = result.fetchone()
@@ -307,7 +309,8 @@ async def process_single_event(
             )
             return "skipped"
 
-        version = row[0]
+        # Unpack RETURNING values: id, version, start_time, is_focus_block
+        session_id, version, db_start_time, db_is_focus_block = row
 
         # Determine operation type from version
         if version == 1:
@@ -324,7 +327,7 @@ async def process_single_event(
                     "google_hash": sha256_content_hash
                 }
             )
-            return "inserted"
+            operation = "inserted"
         else:
             # Update (version > 1)
             # Reason already logged in conflict.accepted above
@@ -341,7 +344,38 @@ async def process_single_event(
                     "local_hash": local_event_data["sha256_content_hash"] if local_event_data else None
                 }
             )
-            return "updated"
+            operation = "updated"
+
+        # =========================================================================
+        # Increment 20: Schedule focus activation for new/updated focus blocks
+        # =========================================================================
+        if db_is_focus_block and db_start_time:
+            from backend.apps.focused.logic.sync.activation_scheduler import (
+                schedule_focus_activation,
+                reschedule_activation,
+            )
+
+            user_uuid = UUID(user_id)
+
+            if operation == "inserted":
+                # New focus block: schedule activation
+                await schedule_focus_activation(
+                    user_id=user_uuid,
+                    session_id=session_id,
+                    event_start_time=db_start_time,
+                    db=session,
+                )
+            elif operation == "updated":
+                # Updated focus block: reschedule (handles time changes)
+                # This cancels any existing job and creates a new one
+                await reschedule_activation(
+                    user_id=user_uuid,
+                    session_id=session_id,
+                    new_event_start_time=db_start_time,
+                    db=session,
+                )
+
+        return operation
 
     except Exception as e:
         logger.error(
@@ -388,8 +422,9 @@ async def _process_cancelled_event(
         return "skipped"
 
     # Query local event for conflict detection
+    # Increment 20: Also get id for cancellation of scheduled jobs
     query_stmt = text("""
-        SELECT google_updated_at, version
+        SELECT id, google_updated_at, version
         FROM focused_focus_sessions
         WHERE user_id = :user_id
           AND google_event_id = :google_event_id
@@ -412,13 +447,17 @@ async def _process_cancelled_event(
             logger.debug(f"[sync] Cancelled event {google_event_id} not found or already deleted - skipping")
             return "skipped"
 
+        # Unpack: id, google_updated_at, version
+        session_id = local_row[0]
+        local_updated_at = local_row[1]
+        old_version = local_row[2]
+
         # Mock local event for conflict detection
         class LocalEvent:
             def __init__(self, updated_at):
                 self.google_updated_at = updated_at
 
-        local_event = LocalEvent(local_row[0])
-        old_version = local_row[1]
+        local_event = LocalEvent(local_updated_at)
 
         # Apply deletion conflict logic
         should_delete, reason = should_accept_deletion(
@@ -437,7 +476,7 @@ async def _process_cancelled_event(
                     "event_summary": event_summary,
                     "reason": reason,
                     "google_updated_at": google_updated_at.isoformat(),
-                    "local_updated_at": local_row[0].isoformat()
+                    "local_updated_at": local_updated_at.isoformat()
                 }
             )
             return "skipped"
@@ -452,8 +491,22 @@ async def _process_cancelled_event(
                 "event_summary": event_summary,
                 "reason": reason,
                 "google_updated_at": google_updated_at.isoformat(),
-                "local_updated_at": local_row[0].isoformat()
+                "local_updated_at": local_updated_at.isoformat()
             }
+        )
+
+        # =========================================================================
+        # Increment 20: Cancel any pending activation job for this event
+        # =========================================================================
+        from backend.apps.focused.logic.sync.activation_scheduler import (
+            cancel_scheduled_activation,
+        )
+
+        await cancel_scheduled_activation(
+            user_id=UUID(user_id),
+            session_id=session_id,
+            db=session,
+            reason="event_deleted",
         )
 
         delete_stmt = text("""
