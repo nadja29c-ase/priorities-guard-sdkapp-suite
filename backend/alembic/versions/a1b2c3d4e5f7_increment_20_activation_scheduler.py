@@ -1,23 +1,24 @@
-"""increment_20_activation_scheduler
+"""increment_20b_activation_scheduler
 
 Revision ID: a1b2c3d4e5f7
-Revises: efcc28230f55
+Revises: a1b2c3d4e5f6
 Create Date: 2025-12-07
 
-Increment 20: Focus Block Activation Scheduler
+Increment 20 Part B: Focus Block Activation Scheduler schema changes.
+
+This migration depends on increment_20a which adds the enum values.
+The enum values MUST be committed in a separate transaction before
+this migration can reference them in partial indexes.
 
 Changes:
-1. Expand job_type_enum: add 'activation'
-2. Expand job_status_enum: add 'running', 'pending_notification',
-   'pending_confirmation', 'skipped'
-3. Add columns to focused_scheduled_jobs:
+1. Add columns to focused_scheduled_jobs:
    - event_id (FK to focused_focus_sessions)
    - event_start_time (for idempotency)
    - shortcut_url (generated URL for notification)
    - error_reason (failure details)
-4. Add unique constraint for activation job idempotency
-5. Create focused_consent_preferences table
-6. Fix FocusedFocusSession uniqueness constraint for recurring events:
+2. Add unique constraint for activation job idempotency
+3. Create focused_consent_preferences table
+4. Fix FocusedFocusSession uniqueness constraint for recurring events:
    - Drop old constraint on (user_id, google_event_id, google_calendar_id)
    - Add new constraint on (user_id, google_ical_uid, start_time)
    - Add index on google_event_id for lookups
@@ -32,40 +33,19 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = 'a1b2c3d4e5f7'
-down_revision: Union[str, Sequence[str], None] = 'efcc28230f55'
+down_revision: Union[str, Sequence[str], None] = 'a1b2c3d4e5f6'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
-
-# IMPORTANT: Disable transactional DDL for this migration.
-# PostgreSQL doesn't allow using new enum values in the same transaction
-# they were added. We must run enum additions with AUTOCOMMIT isolation.
-transactional_ddl = False
 
 
 def upgrade() -> None:
     """
-    Add activation scheduler support.
+    Add activation scheduler schema changes.
 
-    IMPORTANT: Enum value additions must run outside the transaction because
-    PostgreSQL doesn't allow using new enum values in the same transaction
-    they were added. We use AUTOCOMMIT isolation for these statements.
+    NOTE: Enum values were added in the previous migration (a1b2c3d4e5f6).
     """
     # =========================================================================
-    # 1. Expand job_type_enum: add 'activation'
-    # 2. Expand job_status_enum: add new statuses
-    # =========================================================================
-    # Must run with AUTOCOMMIT - new enum values can't be used in same transaction
-    conn = op.get_bind()
-    conn = conn.execution_options(isolation_level="AUTOCOMMIT")
-
-    conn.execute(text("ALTER TYPE job_type_enum ADD VALUE IF NOT EXISTS 'activation'"))
-    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'running'"))
-    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_notification'"))
-    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_confirmation'"))
-    conn.execute(text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'skipped'"))
-
-    # =========================================================================
-    # 3. Add columns to focused_scheduled_jobs
+    # 1. Add columns to focused_scheduled_jobs
     # =========================================================================
     # event_id: FK to focused_focus_sessions (nullable for webhook_renewal jobs)
     op.add_column(
