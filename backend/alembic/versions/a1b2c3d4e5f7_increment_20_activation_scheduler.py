@@ -40,19 +40,39 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """
     Add activation scheduler support.
+
+    IMPORTANT: Enum value additions must run outside the transaction because
+    PostgreSQL doesn't allow using new enum values in the same transaction
+    they were added. We use AUTOCOMMIT isolation for these statements.
     """
     # =========================================================================
     # 1. Expand job_type_enum: add 'activation'
     # =========================================================================
-    op.execute("ALTER TYPE job_type_enum ADD VALUE IF NOT EXISTS 'activation'")
+    # Must run outside transaction - new enum values can't be used in same transaction
+    op.execute(
+        text("ALTER TYPE job_type_enum ADD VALUE IF NOT EXISTS 'activation'")
+        .execution_options(autocommit=True)
+    )
 
     # =========================================================================
     # 2. Expand job_status_enum: add new statuses
     # =========================================================================
-    op.execute("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'running'")
-    op.execute("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_notification'")
-    op.execute("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_confirmation'")
-    op.execute("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'skipped'")
+    op.execute(
+        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'running'")
+        .execution_options(autocommit=True)
+    )
+    op.execute(
+        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_notification'")
+        .execution_options(autocommit=True)
+    )
+    op.execute(
+        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'pending_confirmation'")
+        .execution_options(autocommit=True)
+    )
+    op.execute(
+        text("ALTER TYPE job_status_enum ADD VALUE IF NOT EXISTS 'skipped'")
+        .execution_options(autocommit=True)
+    )
 
     # =========================================================================
     # 3. Add columns to focused_scheduled_jobs
