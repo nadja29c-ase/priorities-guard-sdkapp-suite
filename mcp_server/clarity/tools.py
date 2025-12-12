@@ -11,19 +11,40 @@ def cluster_raw_thoughts(clusters: list[dict]) -> dict:
     Format business thought clusters that ChatGPT has already identified.
 
     Args:
-        clusters: List of clusters with 'name' and 'thought_items' fields.
+        clusters: List of clusters with:
+            - 'cluster_name' and 'thought_items' (flat structure), or
+            - 'cluster_name' and 'subclusters' (nested structure), or
+            - both (mixed: ungrouped items + grouped subclusters)
 
     Returns:
         Widget-compatible output with content and structuredContent.
     """
-    enriched = [
-        {
-            "name": c["name"],
-            "thought_items": c["thought_items"],
-            "sum_thought_items": len(c["thought_items"])
-        }
-        for c in clusters
-    ]
+    enriched = []
+
+    for c in clusters:
+        subclusters = c.get("subclusters", [])
+        thought_items = c.get("thought_items", [])
+
+        # Enrich subclusters if present
+        enriched_subclusters = [
+            {
+                "subcluster_name": sc["subcluster_name"],
+                "thought_items": sc["thought_items"],
+                "sum_thought_items": len(sc["thought_items"])
+            }
+            for sc in subclusters
+        ]
+
+        # Total = direct items + all subcluster items
+        subcluster_total = sum(len(sc["thought_items"]) for sc in subclusters)
+        total_items = len(thought_items) + subcluster_total
+
+        enriched.append({
+            "cluster_name": c["cluster_name"],
+            "thought_items": thought_items,
+            "subclusters": enriched_subclusters,
+            "sum_thought_items": total_items
+        })
 
     return {
         "content": [{"type": "text", "text": "I've organized your thoughts into clusters."}],

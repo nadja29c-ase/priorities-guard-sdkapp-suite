@@ -143,11 +143,6 @@
         flex: 1;
         line-height: 1.4;
         word-break: break-word;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
       }
 
       .why-relevant {
@@ -165,6 +160,67 @@
         color: var(--text-secondary);
         background: var(--bg-secondary);
         border-radius: 12px;
+      }
+
+      /* Nested cluster styles */
+      .subclusters-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .subcluster-card {
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+      }
+
+      .subcluster-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+
+      .subcluster-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+
+      .subcluster-count {
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--pill-bg);
+        color: var(--pill-text);
+      }
+
+      .subcluster-items {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .subcluster-items li {
+        font-size: 12px;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+      }
+
+      .subcluster-items .items-bullet {
+        font-size: 12px;
+      }
+
+      .subcluster-items .items-text {
+        font-size: 12px;
       }
     </style>
   </head>
@@ -240,7 +296,7 @@
 
             const nameEl = document.createElement("div");
             nameEl.className = "cluster-name";
-            nameEl.textContent = truncateText(cluster.name, 40) || "Untitled cluster";
+            nameEl.textContent = truncateText(cluster.cluster_name, 40) || "Untitled cluster";
             header.appendChild(nameEl);
 
             const badge = document.createElement("div");
@@ -258,11 +314,14 @@
             }
 
             const items = Array.isArray(cluster.thought_items) ? cluster.thought_items : [];
-            if (items.length) {
+            const subclusters = Array.isArray(cluster.subclusters) ? cluster.subclusters : [];
+
+            // Render ungrouped items first (if any)
+            if (items.length > 0) {
               const list = document.createElement("ul");
               list.className = "items-list";
 
-              items.slice(0, 5).forEach((rawText) => {
+              items.forEach((rawText) => {
                 const li = document.createElement("li");
                 const bullet = document.createElement("span");
                 bullet.className = "items-bullet";
@@ -275,13 +334,58 @@
                 list.appendChild(li);
               });
 
-              if (items.length > 5) {
-                const more = document.createElement("li");
-                more.innerHTML = `<span class="items-bullet"></span><span class="items-text" style="color: var(--text-muted)">+${items.length - 5} more</span>`;
-                list.appendChild(more);
-              }
-
               card.appendChild(list);
+            }
+
+            // Render subclusters below (if any)
+            if (subclusters.length > 0) {
+              const subContainer = document.createElement("div");
+              subContainer.className = "subclusters-container";
+
+              subclusters.forEach((subcluster) => {
+                const subCard = document.createElement("div");
+                subCard.className = "subcluster-card";
+
+                const subHeader = document.createElement("div");
+                subHeader.className = "subcluster-header";
+
+                const subName = document.createElement("div");
+                subName.className = "subcluster-name";
+                subName.textContent = truncateText(subcluster.subcluster_name, 30) || "Untitled";
+                subHeader.appendChild(subName);
+
+                const subBadge = document.createElement("div");
+                subBadge.className = "subcluster-count";
+                subBadge.textContent = subcluster.sum_thought_items || subcluster.thought_items?.length || 0;
+                subHeader.appendChild(subBadge);
+
+                subCard.appendChild(subHeader);
+
+                const subItems = Array.isArray(subcluster.thought_items) ? subcluster.thought_items : [];
+                if (subItems.length) {
+                  const subList = document.createElement("ul");
+                  subList.className = "subcluster-items";
+
+                  subItems.forEach((rawText) => {
+                    const li = document.createElement("li");
+                    const bullet = document.createElement("span");
+                    bullet.className = "items-bullet";
+                    bullet.textContent = "•";
+                    const text = document.createElement("span");
+                    text.className = "items-text";
+                    text.textContent = rawText;
+                    li.appendChild(bullet);
+                    li.appendChild(text);
+                    subList.appendChild(li);
+                  });
+
+                  subCard.appendChild(subList);
+                }
+
+                subContainer.appendChild(subCard);
+              });
+
+              card.appendChild(subContainer);
             }
 
             if (cluster.why_relevant) {
