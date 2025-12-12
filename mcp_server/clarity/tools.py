@@ -15,6 +15,7 @@ def cluster_raw_thoughts(clusters: list[dict]) -> dict:
             - 'cluster_name' and 'thought_items' (flat structure), or
             - 'cluster_name' and 'subclusters' (nested structure), or
             - both (mixed: ungrouped items + grouped subclusters)
+            - optional 'tags' for behavioral hints
 
     Returns:
         Widget-compatible output with content and structuredContent.
@@ -24,13 +25,15 @@ def cluster_raw_thoughts(clusters: list[dict]) -> dict:
     for c in clusters:
         subclusters = c.get("subclusters", [])
         thought_items = c.get("thought_items", [])
+        tags = c.get("tags", [])
 
-        # Enrich subclusters if present
+        # Enrich subclusters if present (include tags)
         enriched_subclusters = [
             {
                 "subcluster_name": sc["subcluster_name"],
                 "thought_items": sc["thought_items"],
-                "sum_thought_items": len(sc["thought_items"])
+                "sum_thought_items": len(sc["thought_items"]),
+                "tags": sc.get("tags", [])
             }
             for sc in subclusters
         ]
@@ -43,7 +46,8 @@ def cluster_raw_thoughts(clusters: list[dict]) -> dict:
             "cluster_name": c["cluster_name"],
             "thought_items": thought_items,
             "subclusters": enriched_subclusters,
-            "sum_thought_items": total_items
+            "sum_thought_items": total_items,
+            "tags": tags
         })
 
     return {

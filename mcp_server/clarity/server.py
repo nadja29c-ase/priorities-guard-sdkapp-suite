@@ -52,28 +52,48 @@ mcp = FastMCP("clarity-mcp", streamable_http_path="/mcp")
 # ============================================================================
 
 CLUSTER_RAW_THOUGHTS_DESCRIPTION = """
-Organize user's business-related thoughts into visual clusters for cognitive ease and clarity what to focus on.
+Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next.
 
 WHEN TO CALL:
-- User has cognitive load from too many thoughts/tasks/ideas
-- Content is PREDOMINANTLY business-related (NOT personal matters like relationships, mental health issues, etc.)
-- User has CONFIRMED ALL thoughts are captured (thoughts_exhausted: true)
+- Call EARLY: After user expresses 5+ thought items, call immediately - don't wait
+- Content is PREDOMINANTLY business-related (NOT personal matters)
+- Call REPEATEDLY as user adds more thoughts to update clusters
 
-CONFIRMATION FLOW:
-1. First, help user exhaust their thoughts. Ask: "Is there anything else on your mind that needs to be organized?"
-2. ONLY call this tool when user confirms they're done (set thoughts_exhausted: true)
-3. On FIRST call: set correctly_clustered: null
-4. After widget renders, ask: "Do these clusters look accurate?"
-5. If user says NO: re-call with correctly_clustered: false and adjusted clusters
-6. If user says YES: conversation continues (no re-call needed)
+PROGRESSIVE CLUSTERING FLOW:
+1. User shares thoughts → after 5+ items, call tool with thoughts_exhausted: false
+2. Widget renders current clusters, evtl. subclusters, evtl. tags
+3. Ask: "What else is on your mind?"
+4. User adds more → re-call tool to update clusters
+5. When user says "that's all" → call with thoughts_exhausted: true
+6. Ask: "Do these clusters look accurate?" (correctly_clustered confirmation)
+
+FIELD USAGE:
+- thoughts_exhausted: false = user may have more, keep asking
+- thoughts_exhausted: true = user confirmed done
+- correctly_clustered: null on calls before final confirmation
+- correctly_clustered: true/false after user reviews final clusters
 
 CLUSTERING STRATEGY:
-- For simple clusters (few thought items): use thought_items directly (flat structure)
-- For complex clusters (many thought items): group into subclusters (nested structure)
+- Flat: thought_items only (simple clusters)
+- Nested: subclusters only (complex groupings)
+- Mixed: both (some ungrouped + some grouped)
 
-CRITICAL: NEVER return plain text lists - ALWAYS use the widget to visualize clusters and their content.
+BEHAVIORAL- HINT TAGS (optional, max 3 per cluster/subcluster):
+Tags signal the cluster requires a different mental mode than normal execute-and-done work.
+ONLY TAG WHEN user intent is clear and dominant in the cluster and ONLY WHEN it matches one of the available tags. N0 forced tags.
+
+Available tags:
+- "decide" → contains choices/tradeoffs needing resolution
+- "research" → contains unknowns needing investigation
+- "validate" → contains assumptions to verify/ ideas to test
+- "unblock" → contains dependencies or blockers
+- "delegate" → contains work for others
+- "automate" → contains repetitive work to systematize
+- "learn" → contains skill gaps requiring knowledge acquisition
+- "align" → contains items needing discussion/agreement with others
+
+CRITICAL: NEVER return plain text lists - ALWAYS use the widget to visualize clusters.
 """
-
 # ============================================================================
 # Configuration MCP Tools:
 # INPUT SCHEMAS: tells ChatGPT what to send back (or that your API/tool expects to receive).
@@ -81,31 +101,54 @@ CRITICAL: NEVER return plain text lists - ALWAYS use the widget to visualize clu
 
 # Pydantic data models/schemas that define the exact JSON structure you expect
 
+# Behavioral tags - signal cluster requires different mental mode than execute-and-done
+ALLOWED_TAGS = [
+    "decide",      # contains choices/tradeoffs needing resolution  
+    "research",    # contains unknowns needing investigation
+    "validate",    # contains assumptions to verify/ ideas to test
+    "unblock",     # contains dependencies or blockers
+    "delegate",    # contains work for others
+    "automate",    # contains repetitive work to systematize
+    "learn",       # contains skill gaps requiring knowledge acquisition
+    "align",       # contains items needing discussion/agreement with others
+]
+
+
 class SubclusterInput(BaseModel):
     """Expected structure for each subcluster within a cluster."""
     subcluster_name: str
     thought_items: List[str]
+    tags: List[str] = []  # Optional behavioral tags, max 3
 
     @model_validator(mode="after")
-    def validate_not_empty(self) -> "SubclusterInput":
-        """Ensure subcluster has at least one thought item."""
+    def validate_subcluster(self) -> "SubclusterInput":
+        """Validate subcluster has items and valid tags."""
         if len(self.thought_items) == 0:
             raise ValueError(
-                f"Subcluster '{self.subcluster_name}' has no thought_items. Subclusters must contain at least two thought item."
+                f"Subcluster '{self.subcluster_name}' has no thought_items. Subclusters must contain at least two thought items."
             )
+        if len(self.tags) > 3:
+            raise ValueError(
+                f"Subcluster '{self.subcluster_name}' has {len(self.tags)} tags. Maximum is 3."
+            )
+        for tag in self.tags:
+            if tag not in ALLOWED_TAGS:
+                raise ValueError(
+                    f"Invalid tag '{tag}'. Allowed: {', '.join(ALLOWED_TAGS)}"
+                )
         return self
 
 
 class ClusterInput(BaseModel):
-    """Expected structure for each cluster from ChatGPT.
-    """
+    """Expected structure for each cluster from ChatGPT."""
     cluster_name: str
     thought_items: List[str] = []  # Flat structure (used when no subclusters)
     subclusters: List[SubclusterInput] = []  # Nested structure (optional groupings)
+    tags: List[str] = []  # Optional behavioral tags, max 3
 
     @model_validator(mode="after")
-    def validate_not_empty(self) -> "ClusterInput":
-        """Ensure cluster has at least some content."""
+    def validate_cluster(self) -> "ClusterInput":
+        """Validate cluster has content and valid tags."""
         has_items = len(self.thought_items) > 0
         has_subclusters = len(self.subclusters) > 0
 
@@ -113,6 +156,15 @@ class ClusterInput(BaseModel):
             raise ValueError(
                 f"Cluster '{self.cluster_name}' is empty. Must have thought_items or subclusters."
             )
+        if len(self.tags) > 3:
+            raise ValueError(
+                f"Cluster '{self.cluster_name}' has {len(self.tags)} tags. Maximum is 3."
+            )
+        for tag in self.tags:
+            if tag not in ALLOWED_TAGS:
+                raise ValueError(
+                    f"Invalid tag '{tag}'. Allowed: {', '.join(ALLOWED_TAGS)}"
+                )
         return self
 
 
@@ -164,10 +216,28 @@ CLUSTER_RAW_THOUGHTS_SCHEMA = {
                                     "type": "array",
                                     "items": {"type": "string"},
                                     "description": "Thought items in this subcluster"
+                                },
+                                "tags": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "enum": ["decide", "experiment", "research", "validate", "unblock", "delegate", "automate", "learn", "align"]
+                                    },
+                                    "maxItems": 3,
+                                    "description": "Optional behavioral tags (max 3). Only use when intent is clear."
                                 }
-                            }, ## IF a subcluster exists, THEN these are required:
+                            },
                             "required": ["subcluster_name", "thought_items"]
                         }
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["decide", "experiment", "research", "validate", "unblock", "delegate", "automate", "learn", "align"]
+                        },
+                        "maxItems": 3,
+                        "description": "Optional behavioral tags (max 3). Only use when intent is clear."
                     }
                 },
                 "required": ["cluster_name"]
@@ -352,10 +422,14 @@ async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallTo
 
             # Count subclusters for logging
             subcluster_count = sum(len(c.subclusters) for c in validated_request.clusters)
+            tag_count = sum(len(c.tags) for c in validated_request.clusters) + sum(
+                len(sc.tags) for c in validated_request.clusters for sc in c.subclusters
+            )
 
             logger.info("clarity.tool.validation_success",
                         cluster_count=len(validated_request.clusters),
                         subcluster_count=subcluster_count,
+                        tag_count=tag_count,
                         thoughts_exhausted=validated_request.thoughts_exhausted,
                         correctly_clustered=validated_request.correctly_clustered)
 

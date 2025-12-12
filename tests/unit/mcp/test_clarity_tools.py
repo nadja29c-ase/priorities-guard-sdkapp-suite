@@ -7,6 +7,7 @@ Tests for cluster_raw_thoughts tool validation and formatting:
 - Mixed clusters (both thought_items and subclusters)
 - Empty validation (both empty = invalid)
 - Confirmation field handling
+- Behavioral tags validation and output
 """
 
 import pytest
@@ -17,6 +18,7 @@ from mcp_server.clarity.server import (
     ClusterRequest,
     ClusterInput,
     SubclusterInput,
+    ALLOWED_TAGS,
 )
 
 
@@ -316,3 +318,174 @@ class TestClusterRawThoughtsOutput:
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
         assert "organized" in result["content"][0]["text"].lower()
+
+
+# =============================================================================
+# Test: Behavioral Tags Validation
+# =============================================================================
+
+class TestTagValidation:
+    """Test behavioral tags validation on clusters and subclusters."""
+
+    def test_no_tags_valid(self):
+        """Test cluster with no tags is valid."""
+        cluster = ClusterInput(
+            cluster_name="NoTags",
+            thought_items=["item"],
+            tags=[]
+        )
+        assert cluster.tags == []
+
+    def test_single_tag_valid(self):
+        """Test cluster with single valid tag is valid."""
+        cluster = ClusterInput(
+            cluster_name="SingleTag",
+            thought_items=["item"],
+            tags=["decide"]
+        )
+        assert cluster.tags == ["decide"]
+
+    def test_max_tags_valid(self):
+        """Test cluster with max 3 tags is valid."""
+        cluster = ClusterInput(
+            cluster_name="MaxTags",
+            thought_items=["item"],
+            tags=["decide", "learn", "align"]
+        )
+        assert len(cluster.tags) == 3
+
+    def test_too_many_tags_raises_validation_error(self):
+        """Test cluster with >3 tags raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            ClusterInput(
+                cluster_name="TooMany",
+                thought_items=["item"],
+                tags=["decide", "learn", "align", "research"]
+            )
+        assert "maximum is 3" in str(exc_info.value).lower()
+
+    def test_invalid_tag_raises_validation_error(self):
+        """Test cluster with invalid tag raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            ClusterInput(
+                cluster_name="Invalid",
+                thought_items=["item"],
+                tags=["urgent"]
+            )
+        assert "invalid tag" in str(exc_info.value).lower()
+
+    def test_subcluster_tags_valid(self):
+        """Test subcluster with valid tags is valid."""
+        subcluster = SubclusterInput(
+            subcluster_name="Tagged",
+            thought_items=["item"],
+            tags=["delegate", "unblock"]
+        )
+        assert subcluster.tags == ["delegate", "unblock"]
+
+    def test_subcluster_too_many_tags_raises_validation_error(self):
+        """Test subcluster with >3 tags raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            SubclusterInput(
+                subcluster_name="TooMany",
+                thought_items=["item"],
+                tags=["decide", "learn", "align", "research"]
+            )
+        assert "maximum is 3" in str(exc_info.value).lower()
+
+    def test_subcluster_invalid_tag_raises_validation_error(self):
+        """Test subcluster with invalid tag raises ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            SubclusterInput(
+                subcluster_name="Invalid",
+                thought_items=["item"],
+                tags=["priority"]
+            )
+        assert "invalid tag" in str(exc_info.value).lower()
+
+    def test_allowed_tags_constant(self):
+        """Test ALLOWED_TAGS contains expected values."""
+        assert "decide" in ALLOWED_TAGS
+        assert "experiment" in ALLOWED_TAGS
+        assert "research" in ALLOWED_TAGS
+        assert "validate" in ALLOWED_TAGS
+        assert "unblock" in ALLOWED_TAGS
+        assert "delegate" in ALLOWED_TAGS
+        assert "automate" in ALLOWED_TAGS
+        assert "learn" in ALLOWED_TAGS
+        assert "align" in ALLOWED_TAGS
+        assert len(ALLOWED_TAGS) == 9
+
+
+# =============================================================================
+# Test: Tags in Tool Output
+# =============================================================================
+
+class TestTagsOutput:
+    """Test tags are passed through in cluster_raw_thoughts output."""
+
+    def test_cluster_tags_in_output(self):
+        """Test cluster tags appear in output."""
+        clusters = [{
+            "cluster_name": "Tagged",
+            "thought_items": ["item"],
+            "subclusters": [],
+            "tags": ["decide", "delegate"]
+        }]
+
+        result = cluster_raw_thoughts(clusters)
+        cluster = result["structuredContent"]["clusters"][0]
+
+        assert "tags" in cluster
+        assert cluster["tags"] == ["decide", "delegate"]
+
+    def test_subcluster_tags_in_output(self):
+        """Test subcluster tags appear in output."""
+        clusters = [{
+            "cluster_name": "Parent",
+            "thought_items": [],
+            "subclusters": [
+                {
+                    "subcluster_name": "Child",
+                    "thought_items": ["item"],
+                    "tags": ["research", "learn"]
+                }
+            ],
+            "tags": []
+        }]
+
+        result = cluster_raw_thoughts(clusters)
+        subcluster = result["structuredContent"]["clusters"][0]["subclusters"][0]
+
+        assert "tags" in subcluster
+        assert subcluster["tags"] == ["research", "learn"]
+
+    def test_empty_tags_in_output(self):
+        """Test empty tags array appears in output."""
+        clusters = [{
+            "cluster_name": "NoTags",
+            "thought_items": ["item"],
+            "subclusters": [],
+            "tags": []
+        }]
+
+        result = cluster_raw_thoughts(clusters)
+        cluster = result["structuredContent"]["clusters"][0]
+
+        assert "tags" in cluster
+        assert cluster["tags"] == []
+
+    def test_missing_tags_defaults_to_empty(self):
+        """Test missing tags field defaults to empty array."""
+        clusters = [{
+            "cluster_name": "NoTagsField",
+            "thought_items": ["item"],
+            "subclusters": []
+            # No tags field
+        }]
+
+        result = cluster_raw_thoughts(clusters)
+        cluster = result["structuredContent"]["clusters"][0]
+
+        assert "tags" in cluster
+        assert cluster["tags"] == []
