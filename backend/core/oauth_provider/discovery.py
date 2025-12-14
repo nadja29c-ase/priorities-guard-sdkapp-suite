@@ -3,7 +3,14 @@ Discovery Endpoints - OAuth 2.1 and OpenID Connect discovery.
 
 Provides metadata endpoints for OAuth client discovery:
 - OpenID Connect Discovery (/.well-known/openid-configuration)
-- OAuth Protected Resource Metadata (/.well-known/oauth-protected-resource)
+
+NOTE: oauth-protected-resource is NOT served here. Each MCP server
+publishes its own /.well-known/oauth-protected-resource with the
+correct resource URL for that specific MCP server.
+
+Supports scopes for all Priority Guardian apps:
+- focused.* (Focused app)
+- clarity.* (Clarity app)
 """
 
 from fastapi import APIRouter
@@ -27,52 +34,26 @@ async def openid_configuration():
     Example Response:
         {
             "issuer": "https://api.example.com",
-            "authorization_endpoint": "https://api.example.com/oauth/focused/authorize",
-            "token_endpoint": "https://api.example.com/oauth/focused/token",
-            "jwks_uri": "https://api.example.com/oauth/focused/jwks",
+            "authorization_endpoint": "https://api.example.com/oauth/pg/authorize",
+            "token_endpoint": "https://api.example.com/oauth/pg/token",
+            "jwks_uri": "https://api.example.com/oauth/pg/jwks",
             ...
         }
     """
     return JSONResponse({
         "issuer": settings.OAUTH_ISSUER,
-        "authorization_endpoint": f"{settings.OAUTH_ISSUER}/oauth/focused/authorize",
-        "token_endpoint": f"{settings.OAUTH_ISSUER}/oauth/focused/token",
-        "jwks_uri": f"{settings.OAUTH_ISSUER}/oauth/focused/jwks",
-        "registration_endpoint": f"{settings.OAUTH_ISSUER}/oauth/focused/register",
-        "scopes_supported": ["focused.read", "focused.write", "focused.notify"],
+        "authorization_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/authorize",
+        "token_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/token",
+        "jwks_uri": f"{settings.OAUTH_ISSUER}/oauth/pg/jwks",
+        "registration_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/register",
+        "scopes_supported": [
+            "focused.read",
+            "focused.write",
+            "focused.notify",
+            "clarity.write"
+        ],
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["none"]
-    })
-
-
-@router.get("/.well-known/oauth-protected-resource")
-async def oauth_protected_resource():
-    """
-    OAuth Protected Resource Metadata endpoint.
-
-    Describes the MCP server resource and scopes.
-
-    Returns:
-        JSONResponse: Protected resource metadata
-
-    Example Response:
-        {
-            "resource": "https://api.example.com/mcp/focused",
-            "authorization_servers": ["https://api.example.com"],
-            "scopes": {
-                "focused.read": "Read calendar sync status and focus analytics",
-                ...
-            }
-        }
-    """
-    return JSONResponse({
-        "resource": f"{settings.OAUTH_ISSUER}/mcp/focused",
-        "authorization_servers": [settings.OAUTH_ISSUER],
-        "scopes": {
-            "focused.read": "Read calendar sync status and focus analytics",
-            "focused.write": "Activate Focus Mode and modify settings",
-            "focused.notify": "Send push notifications"
-        }
     })

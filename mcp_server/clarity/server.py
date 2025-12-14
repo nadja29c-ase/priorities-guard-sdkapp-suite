@@ -27,9 +27,26 @@ import uvicorn
 import structlog
 from mcp.server.fastmcp import FastMCP
 from mcp import types as mcp_types
-from pydantic import AnyUrl, BaseModel, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 from .tools import cluster_raw_thoughts
+from mcp_server.clarity.config import (
+    MCP_SERVER_URL,
+    OAUTH_ISSUER_URL,
+)
+from mcp_server.clarity.mcp_auth import (
+    authenticate_request,
+    UnauthorizedError,
+    InsufficientScopeError,
+    build_unauthorized_error,
+    build_forbidden_error,
+    build_invalid_params_error,
+    cleanup_jwks_cache,
+)
+from mcp_server.clarity.discovery import oauth_protected_resource
 
 # ============================================================================
 # Configuation 
@@ -44,8 +61,50 @@ WIDGET_URI = "ui://widget/clarity-clusters.html"
 WIDGET_HTML = Path(__file__).parent.joinpath("clarity-clusters.html").read_text()
 
 
-# Create FastMCP instance - NO authentication (anonymous mode)
+# Create FastMCP instance
 mcp = FastMCP("clarity-mcp", streamable_http_path="/mcp")
+
+
+# ============================================================================
+# MCPContentTypeFixMiddleware - Fix ChatGPT octet-stream Content-Type
+# ============================================================================
+
+class MCPContentTypeAndAcceptFixMiddleware:
+    """
+    Fix ChatGPT → FastMCP header mismatch:
+    - ChatGPT sends Content-Type: application/octet-stream
+    - ChatGPT sends Accept: */*
+    FastMCP requires:
+    - Content-Type: application/json
+    - Accept: text/event-stream (for SSE handshake)
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("method") == "POST":
+            if scope.get("path") == "/mcp":
+
+                new_headers = []
+                modified = False
+
+                for name, value in scope["headers"]:
+                    if name == b"content-type" and b"application/octet-stream" in value:
+                        value = b"application/json"
+                        modified = True
+
+                    if name == b"accept":
+                        value = b"text/event-stream, application/json"
+                        modified = True
+
+                    new_headers.append((name, value))
+
+                if modified:
+                    scope = dict(scope)
+                    scope["headers"] = new_headers
+
+        await self.app(scope, receive, send)
 
 # ============================================================================
 # Helper: MCP Tool Definitions (for list_tools handler)
@@ -63,7 +122,7 @@ PROGRESSIVE CLUSTERING FLOW:
 1. User shares thoughts → after 5+ items, call tool with thoughts_exhausted: false
 2. Widget renders current clusters, evtl. subclusters, evtl. tags
 3. Ask: "What else is on your mind?"
-4. User adds more → re-call tool to update clusters
+4. User adds more → ALWAYS re-call tool to update clusters with ALL user thoughts so far 
 5. When user says "that's all" → call with thoughts_exhausted: true
 6. Ask: "Do these clusters look accurate?" (correctly_clustered confirmation)
 
@@ -80,17 +139,20 @@ CLUSTERING STRATEGY:
 
 BEHAVIORAL- HINT TAGS (optional, max 3 per cluster/subcluster):
 Tags signal the cluster requires a different mental mode than normal execute-and-done work.
-ONLY TAG WHEN user intent is clear and dominant in the cluster and ONLY WHEN it matches one of the available tags. N0 forced tags.
+ONLY TAG WHEN: 
+- user intent is NOT AMBIGOUS and DOMINANT within the cluster 
+- user intent matches one of the available tags. 
+- user thought items are BUSINESS-RELATED (NOT personal matters or household chores f.e. plan a date night, grocery shopping).
 
 Available tags:
 - "decide" → contains choices/tradeoffs needing resolution
 - "research" → contains unknowns needing investigation
-- "validate" → contains assumptions to verify/ ideas to test
-- "unblock" → contains dependencies or blockers
+- "test" → contains assumptions/hypotheses to test
 - "delegate" → contains work for others
 - "automate" → contains repetitive work to systematize
 - "learn" → contains skill gaps requiring knowledge acquisition
 - "align" → contains items needing discussion/agreement with others
+- "low value admin" → low-value administrative tasks to batch or eliminate
 
 CRITICAL: NEVER return plain text lists - ALWAYS use the widget to visualize clusters.
 """
@@ -103,14 +165,14 @@ CRITICAL: NEVER return plain text lists - ALWAYS use the widget to visualize clu
 
 # Behavioral tags - signal cluster requires different mental mode than execute-and-done
 ALLOWED_TAGS = [
-    "decide",      # contains choices/tradeoffs needing resolution  
-    "research",    # contains unknowns needing investigation
-    "validate",    # contains assumptions to verify/ ideas to test
-    "unblock",     # contains dependencies or blockers
-    "delegate",    # contains work for others
-    "automate",    # contains repetitive work to systematize
-    "learn",       # contains skill gaps requiring knowledge acquisition
-    "align",       # contains items needing discussion/agreement with others
+    "decide",          # contains choices/tradeoffs needing resolution
+    "research",        # contains unknowns needing investigation
+    "test",            # contains assumptions/hypotheses to test
+    "delegate",        # contains work for others
+    "automate",        # contains repetitive work to systematize
+    "learn",           # contains skill gaps requiring knowledge acquisition
+    "align",           # contains items needing discussion/agreement with others
+    "low value admin", # low-value administrative tasks to batch or eliminate
 ]
 
 
@@ -118,7 +180,7 @@ class SubclusterInput(BaseModel):
     """Expected structure for each subcluster within a cluster."""
     subcluster_name: str
     thought_items: List[str]
-    tags: List[str] = []  # Optional behavioral tags, max 3
+    tags: List[str] = Field(default_factory=list)  # Optional behavioral tags, max 3
 
     @model_validator(mode="after")
     def validate_subcluster(self) -> "SubclusterInput":
@@ -142,9 +204,9 @@ class SubclusterInput(BaseModel):
 class ClusterInput(BaseModel):
     """Expected structure for each cluster from ChatGPT."""
     cluster_name: str
-    thought_items: List[str] = []  # Flat structure (used when no subclusters)
-    subclusters: List[SubclusterInput] = []  # Nested structure (optional groupings)
-    tags: List[str] = []  # Optional behavioral tags, max 3
+    thought_items: List[str] = Field(default_factory=list)  # Flat structure (used when no subclusters)
+    subclusters: List[SubclusterInput] = Field(default_factory=list)  # Nested structure (optional groupings)
+    tags: List[str] = Field(default_factory=list)  # Optional behavioral tags, max 3
 
     @model_validator(mode="after")
     def validate_cluster(self) -> "ClusterInput":
@@ -221,7 +283,7 @@ CLUSTER_RAW_THOUGHTS_SCHEMA = {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                        "enum": ["decide", "experiment", "research", "validate", "unblock", "delegate", "automate", "learn", "align"]
+                                        "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align", "low value admin"]
                                     },
                                     "maxItems": 3,
                                     "description": "Optional behavioral tags (max 3). Only use when intent is clear."
@@ -234,7 +296,7 @@ CLUSTER_RAW_THOUGHTS_SCHEMA = {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["decide", "experiment", "research", "validate", "unblock", "delegate", "automate", "learn", "align"]
+                            "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align", "low value admin"]
                         },
                         "maxItems": 3,
                         "description": "Optional behavioral tags (max 3). Only use when intent is clear."
@@ -303,10 +365,10 @@ async def _list_resource_templates() -> List[mcp_types.ResourceTemplate]:
 async def _handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.ReadResourceResult:
     uri_str = str(req.params.uri)
 
-    logger.info("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
+    logger.debug("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
 
     if uri_str == WIDGET_URI:
-        logger.info("resource.read.serving_widget",
+        logger.debug("resource.read.serving_widget",
                     uri=uri_str,
                     html_length=len(WIDGET_HTML),
                     widget_version=WIDGET_VERSION)
@@ -339,7 +401,6 @@ async def _handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types
 # Register the UI handler
 mcp._mcp_server.request_handlers[mcp_types.ReadResourceRequest] = _handle_read_resource
 
-
 # ============================================================================
 # Tool Discovery Handler: Advertize ALL MCP capabilities to ChatGPT. 
 # ============================================================================
@@ -351,7 +412,7 @@ async def _list_tools() -> List[mcp_types.Tool]:
 
     This follows the official OpenAI pattern for widget integration.
     """
-    logger.info("tools.list.called", widget_version=WIDGET_VERSION, widget_uri=WIDGET_URI)
+    logger.debug("tools.list.called", widget_version=WIDGET_VERSION, widget_uri=WIDGET_URI)
 
     # Get tools registered via @mcp.tool() decorator
     other_tools = await mcp.list_tools()
@@ -377,7 +438,7 @@ async def _list_tools() -> List[mcp_types.Tool]:
 
     # Return cluster_raw_thoughts first, then other tools
     all_tools = [cluster_tool] + list(other_tools)
-    logger.info("tools.list.returning", tool_count=len(all_tools))
+    logger.debug("tools.list.returning", tool_count=len(all_tools))
     return all_tools
 
 # ============================================================================
@@ -385,8 +446,7 @@ async def _list_tools() -> List[mcp_types.Tool]:
 # Reference: https://github.com/openai/openai-apps-sdk-examples/blob/main/pizzaz_server_python/main.py
 # ============================================================================
 
-
-# Helper to create  INLINE embedded widget resource (pizzaz pattern)
+# Helper to create INLINE embedded widget resource (pizzaz pattern)
 def _embedded_widget_resource() -> mcp_types.EmbeddedResource:
     return mcp_types.EmbeddedResource(
         type="resource",
@@ -403,17 +463,55 @@ def _embedded_widget_resource() -> mcp_types.EmbeddedResource:
 # (follows pizzaz request_handlers pattern for UI. Not decorator-based tools )
 # ============================================================================
 async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToolResult:
-    """Handle tool calls - follows pizzaz pattern."""
-    name = req.params.name # extract tool name
+    """Handle tool calls with authentication."""
+    name = req.params.name
     arguments = req.params.arguments or {}
+    meta = getattr(req.params, '_meta', None) or {}
 
-    logger.info("clarity.tool.call_received",
+    logger.debug("clarity.tool.call_received",
                 tool_name=name,
                 argument_keys=list(arguments.keys()),
                 widget_version=WIDGET_VERSION)
-    
-# Handle "cluster_raw_thoughts" mcp tool specifically
+
     if name == "cluster_raw_thoughts":
+        # ============================================================
+        # AUTHENTICATION
+        # ============================================================
+        try:
+            auth_context = await authenticate_request(name, meta)
+            user_id = auth_context["user_id"]
+            correlation_id = auth_context["correlation_id"]
+
+            logger.info("clarity.tool.authenticated",
+                        user_id=user_id,
+                        correlation_id=correlation_id,
+                        tool_name=name)
+
+        except UnauthorizedError:
+            logger.warning("clarity.tool.unauthorized", tool_name=name)
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(
+                    type="text",
+                    text=json.dumps(build_unauthorized_error())
+                )],
+                isError=True,
+            )
+        except InsufficientScopeError as e:
+            logger.warning("clarity.tool.forbidden", tool_name=name, required_scopes=e.required_scopes)
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(
+                    type="text",
+                    text=json.dumps(build_forbidden_error(
+                        required_scopes=e.required_scopes,
+                        actual_scopes=e.actual_scopes
+                    ))
+                )],
+                isError=True,
+            )
+
+        # ============================================================
+        # VALIDATION + TOOL LOGIC
+        # ============================================================
         validated_request = None
 
         try:
@@ -426,7 +524,7 @@ async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallTo
                 len(sc.tags) for c in validated_request.clusters for sc in c.subclusters
             )
 
-            logger.info("clarity.tool.validation_success",
+            logger.debug("clarity.tool.validation_success",
                         cluster_count=len(validated_request.clusters),
                         subcluster_count=subcluster_count,
                         tag_count=tag_count,
@@ -434,7 +532,22 @@ async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallTo
                         correctly_clustered=validated_request.correctly_clustered)
 
         except ValidationError as e:
-            logger.info("clarity.tool.validation_failed_attempt_repair", error=str(type(e).__name__))
+            # ---------------------------------------------------------------
+            # DESIGN NOTE: LLM Error Compensation
+            # ---------------------------------------------------------------
+            # This repair logic compensates for common LLM output errors
+            # (e.g., returning `"[\"item\"]"` strings instead of arrays).
+            #
+            # This is a deliberate UX tradeoff that slightly blurs the
+            # "tools only validate" boundary stated in the module docstring.
+            #
+            # FUTURE: When persistence is added, review this carefully to
+            # ensure repaired/synthesized data is flagged or validated before
+            # storage to avoid silently persisting malformed content.
+            # ---------------------------------------------------------------
+            logger.warning("clarity.tool.validation_failed_attempt_repair",
+                          error=str(type(e).__name__),
+                          details=str(e.errors()))
 
             # --- recovery: try to build valid structure from malformed input ---
             clusters_data = None
@@ -463,11 +576,14 @@ async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallTo
                     }]
 
             if clusters_data is None:
-                logger.error("clarity.tool.repair_failed")
+                logger.error("clarity.tool.repair_failed", reason="unrecognized_format")
                 return mcp_types.CallToolResult(
                     content=[mcp_types.TextContent(
                         type="text",
-                        text="The tool could not understand the input."
+                        text=json.dumps(build_invalid_params_error(
+                            message="Invalid input format",
+                            details="Expected 'clusters' array with cluster objects"
+                        ))
                     )],
                     isError=True,
                 )
@@ -479,15 +595,20 @@ async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallTo
                     "correctly_clustered": correctly_clustered,
                     "clusters": clusters_data
                 })
-                logger.info("clarity.tool.repair_success",
+                logger.debug("clarity.tool.repair_success",
                             cluster_count=len(validated_request.clusters))
 
-            except ValidationError:
-                logger.error("clarity.tool.repair_failed")
+            except ValidationError as repair_error:
+                logger.error("clarity.tool.repair_failed",
+                            reason="revalidation_failed",
+                            details=str(repair_error.errors()))
                 return mcp_types.CallToolResult(
                     content=[mcp_types.TextContent(
                         type="text",
-                        text="The tool could not understand the input."
+                        text=json.dumps(build_invalid_params_error(
+                            message="Invalid input format",
+                            details="Could not parse input into valid cluster structure"
+                        ))
                     )],
                     isError=True,
                 )
@@ -533,22 +654,49 @@ async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallTo
 mcp._mcp_server.request_handlers[mcp_types.CallToolRequest] = _call_tool_request
 
 # ============================================================================
+# OAuth Discovery Endpoints
+# ============================================================================
+
+async def wellknown_oauth_protected_resource(_request):
+    """Starlette wrapper for discovery.oauth_protected_resource."""
+    logger.debug("oauth.discovery.request")
+    return JSONResponse(await oauth_protected_resource())
+
+
+# ============================================================================
 # App Startup
 # ============================================================================
+
+async def _cleanup_on_shutdown():
+    """Clean up JWKS cache HTTP client on shutdown."""
+    logger.info("clarity.server.shutdown")
+    await cleanup_jwks_cache()
+
 
 def create_app():
     """
     Create the ASGI application.
 
-    FastMCP is the root app with CORS middleware for widget compatibility.
+    FastMCP is the root app with:
+    - CORS middleware for widget compatibility
+    - Discovery routes for OAuth
+    - Header fix middleware for ChatGPT
+    - Shutdown handler for JWKS cache cleanup
     """
-    app = mcp.streamable_http_app()
+    fastmcp_app = mcp.streamable_http_app()
 
+    # Add CORS
+    # ---------------------------------------------------------------
+    # SECURITY: Wide-open CORS for development only.
+    # BEFORE PRODUCTION: Restrict allow_origins to specific domains
+    # (e.g., ChatGPT plugin domains, your frontend domain).
+    # See: https://owasp.org/www-community/attacks/CORS_OriginHeaderScrutiny
+    # ---------------------------------------------------------------
     try:
         from starlette.middleware.cors import CORSMiddleware
-        app.add_middleware(
+        fastmcp_app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=["*"],  # TODO: Restrict before production
             allow_methods=["*"],
             allow_headers=["*"],
             allow_credentials=False,
@@ -556,7 +704,24 @@ def create_app():
     except Exception:
         pass
 
-    return app
+    # Register shutdown handler for JWKS cache cleanup
+    # Note: Using on_event for compatibility with FastMCP's Starlette wrapper
+    # The deprecation warning is acceptable until FastMCP supports lifespan
+    fastmcp_app.add_event_handler("shutdown", _cleanup_on_shutdown)
+
+    # Discovery routes - only oauth-protected-resource (MCP is resource server, not auth server)
+    # ChatGPT checks both root and /mcp suffixed versions
+    discovery_routes = [
+        Route("/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/oauth-protected-resource/mcp", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
+    ]
+    discovery_app = Starlette(routes=discovery_routes)
+
+    # Mount discovery routes
+    fastmcp_app.mount("/.well-known", discovery_app)
+
+    # Wrap with header-fix middleware
+    return MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
 
 
 # ASGI entrypoint

@@ -1,7 +1,13 @@
 """
-Cookie utilities for OAuth sessions (Increment 19).
+Cookie helper functions for OAuth browser sessions (Increment 19).
 
-Manages the pg_session cookie for cross-app user identification.
+Responsible ONLY for reading and writing the pg_session cookie on HTTP
+requests/responses.
+
+This module does NOT create, validate, or store OAuth sessions.
+Session persistence and lookup is handled in session_service.py.
+
+cookies.py = HTTP cookie mechanics only
 """
 
 from fastapi import Request, Response
@@ -9,7 +15,7 @@ from fastapi import Request, Response
 from backend.core.config import settings
 
 # Cookie configuration
-COOKIE_NAME = "pg_session"
+COOKIE_NAME = "pg_session" #pg=priority guardian
 COOKIE_MAX_AGE = 2 * 365 * 24 * 60 * 60  # 2 years in seconds (63072000)
 COOKIE_PATH = "/oauth"
 

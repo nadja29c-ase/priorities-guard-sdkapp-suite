@@ -8,10 +8,13 @@ Tests for cluster_raw_thoughts tool validation and formatting:
 - Empty validation (both empty = invalid)
 - Confirmation field handling
 - Behavioral tags validation and output
+- Tool boundary validation (raw dicts through _call_tool_request)
 """
 
 import pytest
 from pydantic import ValidationError
+from unittest.mock import MagicMock, patch
+from mcp import types as mcp_types
 
 from mcp_server.clarity.tools import cluster_raw_thoughts
 from mcp_server.clarity.server import (
@@ -19,7 +22,27 @@ from mcp_server.clarity.server import (
     ClusterInput,
     SubclusterInput,
     ALLOWED_TAGS,
+    _call_tool_request,
 )
+
+
+# =============================================================================
+# Test Helpers
+# =============================================================================
+
+def _make_tool_request(arguments: dict, has_auth: bool = True) -> mcp_types.CallToolRequest:
+    """Build a CallToolRequest with optional auth mock."""
+    params = MagicMock()
+    params.name = "cluster_raw_thoughts"
+    params.arguments = arguments
+    if has_auth:
+        params._meta = {"headers": {"authorization": "Bearer mock-token"}}
+    else:
+        params._meta = None
+
+    request = MagicMock(spec=mcp_types.CallToolRequest)
+    request.params = params
+    return request
 
 
 # =============================================================================
@@ -92,7 +115,10 @@ class TestSubclusterInputValidation:
         """Test empty thought_items list raises ValidationError."""
         with pytest.raises(ValidationError) as exc_info:
             SubclusterInput(subcluster_name="Empty", thought_items=[])
-        assert "no thought_items" in str(exc_info.value).lower()
+        # Assert on error structure, not message wording (more robust)
+        errors = exc_info.value.errors()
+        assert len(errors) >= 1
+        assert errors[0]["type"] == "value_error"  # Custom validator error
 
 
 class TestClusterRequestValidation:
@@ -151,6 +177,139 @@ class TestClusterRequestValidation:
 
 
 # =============================================================================
+# Test: Confirmation Field Handling (correctly_clustered)
+# =============================================================================
+
+class TestConfirmationFieldHandling:
+    """Test correctly_clustered field behavior.
+
+    correctly_clustered is flow metadata for ChatGPT conversation:
+    - null: first call, user hasn't reviewed yet
+    - false: user said clusters are wrong, triggers re-cluster
+    - true: user confirmed clusters are accurate
+
+    This field is:
+    - Validated at input (part of ClusterRequest)
+    - Logged for observability
+    - NOT included in output (it's input-only metadata)
+    """
+
+    @pytest.mark.asyncio
+    async def test_correctly_clustered_null_accepted(self):
+        """First call with correctly_clustered=null succeeds."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "correctly_clustered": None,
+            "clusters": [{"cluster_name": "Test", "thought_items": ["item"]}]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        assert result.isError is not True
+        assert result.structuredContent is not None
+
+    @pytest.mark.asyncio
+    async def test_correctly_clustered_false_accepted(self):
+        """Re-cluster call with correctly_clustered=false succeeds."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "correctly_clustered": False,
+            "clusters": [{"cluster_name": "Revised", "thought_items": ["new item"]}]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        assert result.isError is not True
+        assert result.structuredContent is not None
+
+    @pytest.mark.asyncio
+    async def test_correctly_clustered_true_accepted(self):
+        """Confirmation call with correctly_clustered=true succeeds."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "correctly_clustered": True,
+            "clusters": [{"cluster_name": "Confirmed", "thought_items": ["item"]}]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        assert result.isError is not True
+        assert result.structuredContent is not None
+
+    @pytest.mark.asyncio
+    async def test_correctly_clustered_not_in_output(self):
+        """correctly_clustered is input-only, NOT included in tool output.
+
+        This is intentional: it's flow metadata for ChatGPT, not widget data.
+        """
+        arguments = {
+            "thoughts_exhausted": True,
+            "correctly_clustered": True,
+            "clusters": [{"cluster_name": "Test", "thought_items": ["item"]}]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # correctly_clustered should NOT appear in output
+        assert "correctly_clustered" not in result.structuredContent
+        # Only clusters should be in output
+        assert "clusters" in result.structuredContent
+
+    @pytest.mark.asyncio
+    async def test_thoughts_exhausted_not_in_output(self):
+        """thoughts_exhausted is also input-only, NOT included in tool output."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{"cluster_name": "Test", "thought_items": ["item"]}]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # thoughts_exhausted should NOT appear in output
+        assert "thoughts_exhausted" not in result.structuredContent
+
+
+# =============================================================================
 # Test: Cluster Content Validation (flat, nested, mixed, empty)
 # =============================================================================
 
@@ -202,7 +361,10 @@ class TestClusterContentValidation:
                 thought_items=[],
                 subclusters=[]
             )
-        assert "empty" in str(exc_info.value).lower()
+        # Assert on error structure, not message wording
+        errors = exc_info.value.errors()
+        assert len(errors) >= 1
+        assert errors[0]["type"] == "value_error"  # Custom validator error
 
 
 # =============================================================================
@@ -321,6 +483,184 @@ class TestClusterRawThoughtsOutput:
 
 
 # =============================================================================
+# Test: Output Schema Stability
+# =============================================================================
+
+class TestOutputSchemaStability:
+    """Test output schema is stable and doesn't leak unexpected fields.
+
+    These tests catch accidental additions of internal fields to output.
+    If schema changes intentionally, update these tests.
+    """
+
+    def test_top_level_output_keys(self):
+        """Top-level result has exactly expected keys."""
+        clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
+        result = cluster_raw_thoughts(clusters)
+
+        assert set(result.keys()) == {"content", "structuredContent"}
+
+    def test_structured_content_keys(self):
+        """structuredContent has exactly expected keys."""
+        clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
+        result = cluster_raw_thoughts(clusters)
+
+        assert set(result["structuredContent"].keys()) == {"clusters"}
+
+    def test_cluster_output_keys_flat(self):
+        """Flat cluster output has exactly expected keys."""
+        clusters = [{"cluster_name": "Test", "thought_items": ["item"], "tags": ["decide"]}]
+        result = cluster_raw_thoughts(clusters)
+
+        cluster = result["structuredContent"]["clusters"][0]
+        assert set(cluster.keys()) == {
+            "cluster_name",
+            "thought_items",
+            "subclusters",
+            "sum_thought_items",
+            "tags",
+        }
+
+    def test_cluster_output_keys_nested(self):
+        """Nested cluster output has exactly expected keys."""
+        clusters = [{
+            "cluster_name": "Parent",
+            "thought_items": [],
+            "subclusters": [{"subcluster_name": "Child", "thought_items": ["item"]}],
+            "tags": []
+        }]
+        result = cluster_raw_thoughts(clusters)
+
+        cluster = result["structuredContent"]["clusters"][0]
+        assert set(cluster.keys()) == {
+            "cluster_name",
+            "thought_items",
+            "subclusters",
+            "sum_thought_items",
+            "tags",
+        }
+
+    def test_subcluster_output_keys(self):
+        """Subcluster output has exactly expected keys."""
+        clusters = [{
+            "cluster_name": "Parent",
+            "thought_items": [],
+            "subclusters": [{"subcluster_name": "Child", "thought_items": ["item"], "tags": ["research"]}]
+        }]
+        result = cluster_raw_thoughts(clusters)
+
+        subcluster = result["structuredContent"]["clusters"][0]["subclusters"][0]
+        assert set(subcluster.keys()) == {
+            "subcluster_name",
+            "thought_items",
+            "sum_thought_items",
+            "tags",
+        }
+
+    def test_no_internal_fields_leak_to_cluster(self):
+        """Internal fields like user_id, correlation_id don't leak to cluster output."""
+        clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
+        result = cluster_raw_thoughts(clusters)
+
+        cluster = result["structuredContent"]["clusters"][0]
+        forbidden_fields = {"user_id", "correlation_id", "azp", "jti", "scopes", "_meta"}
+        assert forbidden_fields.isdisjoint(cluster.keys())
+
+    def test_no_input_metadata_in_output(self):
+        """Input metadata fields don't appear in output."""
+        clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
+        result = cluster_raw_thoughts(clusters)
+
+        # These are input-only fields
+        assert "thoughts_exhausted" not in result["structuredContent"]
+        assert "correctly_clustered" not in result["structuredContent"]
+
+
+# =============================================================================
+# Test: Ordering Guarantees (contract tests)
+# =============================================================================
+
+class TestOrderingGuarantees:
+    """Test that ordering is preserved in output.
+
+    CONTRACT: Input order is preserved in output.
+    - Clusters appear in the same order as input
+    - Subclusters appear in the same order as input
+    - Thought items appear in the same order as input
+
+    This is important for the widget: users expect clusters to render
+    in the order ChatGPT organized them.
+    """
+
+    def test_cluster_order_preserved(self):
+        """Clusters appear in output in same order as input."""
+        clusters = [
+            {"cluster_name": "First", "thought_items": ["a"]},
+            {"cluster_name": "Second", "thought_items": ["b"]},
+            {"cluster_name": "Third", "thought_items": ["c"]},
+        ]
+        result = cluster_raw_thoughts(clusters)
+
+        output_names = [c["cluster_name"] for c in result["structuredContent"]["clusters"]]
+        assert output_names == ["First", "Second", "Third"]
+
+    def test_subcluster_order_preserved(self):
+        """Subclusters appear in output in same order as input."""
+        clusters = [{
+            "cluster_name": "Parent",
+            "thought_items": [],
+            "subclusters": [
+                {"subcluster_name": "Alpha", "thought_items": ["1"]},
+                {"subcluster_name": "Beta", "thought_items": ["2"]},
+                {"subcluster_name": "Gamma", "thought_items": ["3"]},
+            ]
+        }]
+        result = cluster_raw_thoughts(clusters)
+
+        output_names = [sc["subcluster_name"] for sc in result["structuredContent"]["clusters"][0]["subclusters"]]
+        assert output_names == ["Alpha", "Beta", "Gamma"]
+
+    def test_thought_items_order_preserved_in_cluster(self):
+        """Thought items in cluster appear in same order as input."""
+        clusters = [{
+            "cluster_name": "Tasks",
+            "thought_items": ["first task", "second task", "third task"],
+            "subclusters": []
+        }]
+        result = cluster_raw_thoughts(clusters)
+
+        output_items = result["structuredContent"]["clusters"][0]["thought_items"]
+        assert output_items == ["first task", "second task", "third task"]
+
+    def test_thought_items_order_preserved_in_subcluster(self):
+        """Thought items in subcluster appear in same order as input."""
+        clusters = [{
+            "cluster_name": "Parent",
+            "thought_items": [],
+            "subclusters": [{
+                "subcluster_name": "Child",
+                "thought_items": ["item A", "item B", "item C"]
+            }]
+        }]
+        result = cluster_raw_thoughts(clusters)
+
+        output_items = result["structuredContent"]["clusters"][0]["subclusters"][0]["thought_items"]
+        assert output_items == ["item A", "item B", "item C"]
+
+    def test_tags_order_preserved(self):
+        """Tags appear in same order as input."""
+        clusters = [{
+            "cluster_name": "Tagged",
+            "thought_items": ["item"],
+            "tags": ["decide", "research", "delegate"]
+        }]
+        result = cluster_raw_thoughts(clusters)
+
+        output_tags = result["structuredContent"]["clusters"][0]["tags"]
+        assert output_tags == ["decide", "research", "delegate"]
+
+
+# =============================================================================
 # Test: Behavioral Tags Validation
 # =============================================================================
 
@@ -362,7 +702,10 @@ class TestTagValidation:
                 thought_items=["item"],
                 tags=["decide", "learn", "align", "research"]
             )
-        assert "maximum is 3" in str(exc_info.value).lower()
+        # Assert on error structure, not message wording
+        errors = exc_info.value.errors()
+        assert len(errors) >= 1
+        assert errors[0]["type"] == "value_error"  # Custom validator error
 
     def test_invalid_tag_raises_validation_error(self):
         """Test cluster with invalid tag raises ValidationError."""
@@ -372,16 +715,19 @@ class TestTagValidation:
                 thought_items=["item"],
                 tags=["urgent"]
             )
-        assert "invalid tag" in str(exc_info.value).lower()
+        # Assert on error structure, not message wording
+        errors = exc_info.value.errors()
+        assert len(errors) >= 1
+        assert errors[0]["type"] == "value_error"  # Custom validator error
 
     def test_subcluster_tags_valid(self):
         """Test subcluster with valid tags is valid."""
         subcluster = SubclusterInput(
             subcluster_name="Tagged",
             thought_items=["item"],
-            tags=["delegate", "unblock"]
+            tags=["delegate", "test"]
         )
-        assert subcluster.tags == ["delegate", "unblock"]
+        assert subcluster.tags == ["delegate", "test"]
 
     def test_subcluster_too_many_tags_raises_validation_error(self):
         """Test subcluster with >3 tags raises ValidationError."""
@@ -391,7 +737,10 @@ class TestTagValidation:
                 thought_items=["item"],
                 tags=["decide", "learn", "align", "research"]
             )
-        assert "maximum is 3" in str(exc_info.value).lower()
+        # Assert on error structure, not message wording
+        errors = exc_info.value.errors()
+        assert len(errors) >= 1
+        assert errors[0]["type"] == "value_error"  # Custom validator error
 
     def test_subcluster_invalid_tag_raises_validation_error(self):
         """Test subcluster with invalid tag raises ValidationError."""
@@ -401,20 +750,22 @@ class TestTagValidation:
                 thought_items=["item"],
                 tags=["priority"]
             )
-        assert "invalid tag" in str(exc_info.value).lower()
+        # Assert on error structure, not message wording
+        errors = exc_info.value.errors()
+        assert len(errors) >= 1
+        assert errors[0]["type"] == "value_error"  # Custom validator error
 
     def test_allowed_tags_constant(self):
         """Test ALLOWED_TAGS contains expected values."""
         assert "decide" in ALLOWED_TAGS
-        assert "experiment" in ALLOWED_TAGS
         assert "research" in ALLOWED_TAGS
-        assert "validate" in ALLOWED_TAGS
-        assert "unblock" in ALLOWED_TAGS
+        assert "test" in ALLOWED_TAGS
         assert "delegate" in ALLOWED_TAGS
         assert "automate" in ALLOWED_TAGS
         assert "learn" in ALLOWED_TAGS
         assert "align" in ALLOWED_TAGS
-        assert len(ALLOWED_TAGS) == 9
+        assert "low value admin" in ALLOWED_TAGS
+        assert len(ALLOWED_TAGS) == 8
 
 
 # =============================================================================
@@ -489,3 +840,265 @@ class TestTagsOutput:
 
         assert "tags" in cluster
         assert cluster["tags"] == []
+
+
+# =============================================================================
+# Test: Tool Boundary Validation (raw dicts through _call_tool_request)
+# =============================================================================
+
+class TestToolBoundaryValidation:
+    """Test validation happens at the tool boundary, not just in Pydantic models.
+
+    Critical: These tests ensure malformed tool calls can't bypass validation.
+    A refactor that skips validation should fail these tests.
+    """
+
+    @pytest.mark.asyncio
+    async def test_tool_rejects_empty_cluster(self):
+        """Empty cluster (no thought_items, no subclusters) is rejected at tool boundary."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                "cluster_name": "Empty",
+                "thought_items": [],
+                "subclusters": []
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should return structured error (validation fails, repair fails for empty cluster)
+        assert result.isError is True
+        assert len(result.content) > 0
+        # Check for JSON-RPC -32602 Invalid Params error
+        import json
+        error_response = json.loads(result.content[0].text)
+        assert error_response["error"]["code"] == -32602
+        assert "invalid" in error_response["error"]["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_tool_rejects_missing_cluster_name(self):
+        """Cluster without cluster_name is rejected at tool boundary."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                # Missing cluster_name
+                "thought_items": ["item1", "item2"],
+                "subclusters": []
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should return error
+        assert result.isError is True
+
+    @pytest.mark.asyncio
+    async def test_tool_rejects_empty_subcluster(self):
+        """Subcluster with empty thought_items is rejected at tool boundary."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                "cluster_name": "HasEmptySubcluster",
+                "thought_items": [],
+                "subclusters": [{
+                    "subcluster_name": "Empty",
+                    "thought_items": []  # Empty - invalid
+                }]
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should return error
+        assert result.isError is True
+
+    @pytest.mark.asyncio
+    async def test_tool_rejects_subcluster_missing_thought_items(self):
+        """Subcluster missing thought_items field entirely is rejected at tool boundary.
+
+        This is realistic: LLM/user might send {"subcluster_name": "X"} without thought_items.
+        """
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                "cluster_name": "Parent",
+                "thought_items": [],
+                "subclusters": [{
+                    "subcluster_name": "Broken"
+                    # Missing thought_items field entirely
+                }]
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should return error
+        assert result.isError is True
+
+    @pytest.mark.asyncio
+    async def test_tool_rejects_invalid_tag(self):
+        """Cluster with invalid tag is rejected at tool boundary."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                "cluster_name": "BadTag",
+                "thought_items": ["item"],
+                "subclusters": [],
+                "tags": ["urgent"]  # Invalid tag
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should return error
+        assert result.isError is True
+
+    @pytest.mark.asyncio
+    async def test_tool_rejects_too_many_tags(self):
+        """Cluster with >3 tags is rejected at tool boundary."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                "cluster_name": "TooManyTags",
+                "thought_items": ["item"],
+                "subclusters": [],
+                "tags": ["decide", "research", "test", "delegate"]  # 4 tags - max is 3
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should return error
+        assert result.isError is True
+
+    @pytest.mark.asyncio
+    async def test_tool_accepts_valid_raw_dict(self):
+        """Valid raw dict passes validation at tool boundary."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                "cluster_name": "Valid",
+                "thought_items": ["task 1", "task 2"],
+                "subclusters": []
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should succeed
+        assert result.isError is not True
+        assert result.structuredContent is not None
+        assert "clusters" in result.structuredContent
+
+    @pytest.mark.asyncio
+    async def test_tool_repairs_raw_string_list(self):
+        """Raw string list in clusters field gets repaired to valid cluster."""
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": ["task 1", "task 2", "task 3"]  # Malformed - strings instead of dicts
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            result = await _call_tool_request(_make_tool_request(arguments))
+
+        # Should succeed via repair logic
+        assert result.isError is not True
+        assert result.structuredContent is not None
+        assert len(result.structuredContent["clusters"]) == 1
+        assert result.structuredContent["clusters"][0]["cluster_name"] == "Tasks"
+
+    @pytest.mark.asyncio
+    async def test_validation_runs_before_tool_logic(self):
+        """Verify validation happens before tool logic executes.
+
+        This test ensures a refactor can't accidentally skip validation.
+        We pass invalid data and check it never reaches cluster_raw_thoughts().
+        """
+        arguments = {
+            "thoughts_exhausted": True,
+            "clusters": [{
+                "cluster_name": "Empty",
+                "thought_items": [],
+                "subclusters": []
+            }]
+        }
+
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "client-id"
+            }
+
+            with patch("mcp_server.clarity.server.cluster_raw_thoughts") as mock_tool:
+                result = await _call_tool_request(_make_tool_request(arguments))
+
+                # cluster_raw_thoughts should NOT be called for invalid input
+                mock_tool.assert_not_called()
+
+        assert result.isError is True

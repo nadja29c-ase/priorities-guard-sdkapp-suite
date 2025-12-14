@@ -23,6 +23,7 @@ router = APIRouter(tags=["oauth-provider"])
 
 
 @router.post("/oauth/focused/consent")
+@router.post("/oauth/pg/consent")
 async def consent_endpoint(
     request: Request,
     db: AsyncSession = Depends(get_db)

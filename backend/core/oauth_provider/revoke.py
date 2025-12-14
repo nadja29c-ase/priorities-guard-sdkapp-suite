@@ -26,6 +26,7 @@ router = APIRouter(tags=["oauth-provider"])
 
 
 @router.post("/oauth/focused/revoke")
+@router.post("/oauth/pg/revoke")
 async def revoke_endpoint(
     request: Request,
     token: str = Form(...),

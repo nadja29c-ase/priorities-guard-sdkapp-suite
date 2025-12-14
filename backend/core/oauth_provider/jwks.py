@@ -13,6 +13,7 @@ router = APIRouter(tags=["oauth-provider"])
 
 
 @router.get("/oauth/focused/jwks")
+@router.get("/oauth/pg/jwks")
 async def jwks_endpoint():
     """
     JSON Web Key Set (JWKS) endpoint.

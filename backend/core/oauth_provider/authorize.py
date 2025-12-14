@@ -249,6 +249,7 @@ async def _resolve_user_identity(
 
 
 @router.get("/oauth/focused/authorize", response_class=HTMLResponse)
+@router.get("/oauth/pg/authorize", response_class=HTMLResponse)
 async def authorize_endpoint(
     request: Request,
     response_type: str,

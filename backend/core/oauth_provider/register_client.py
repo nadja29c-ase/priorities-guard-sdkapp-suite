@@ -32,6 +32,7 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/oauth/focused/register")
+@router.post("/oauth/pg/register")
 async def register_endpoint(
     request: Request,
     register_request: RegisterRequest,
