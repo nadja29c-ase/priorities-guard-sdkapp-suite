@@ -9,6 +9,7 @@ from .resources import (
     handle_read_resource,
     embedded_widget_resource,
 )
+from .tools import call_tool_request
 
 __all__ = [
     "WIDGET_URI",
@@ -18,4 +19,5 @@ __all__ = [
     "list_resource_templates",
     "handle_read_resource",
     "embedded_widget_resource",
+    "call_tool_request",
 ]

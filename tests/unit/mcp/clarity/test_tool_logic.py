@@ -8,7 +8,7 @@ Tests for cluster_raw_thoughts tool validation and formatting:
 - Empty validation (both empty = invalid)
 - Confirmation field handling
 - Behavioral tags validation and output
-- Tool boundary validation (raw dicts through _call_tool_request)
+- Tool boundary validation (raw dicts through call_tool_request)
 """
 
 import pytest
@@ -16,14 +16,14 @@ from pydantic import ValidationError
 from unittest.mock import MagicMock, patch
 from mcp import types as mcp_types
 
-from mcp_server.clarity.tools import cluster_raw_thoughts
-from mcp_server.clarity.server import (
+from mcp_server.clarity.tool_logic import cluster_raw_thoughts
+from mcp_server.clarity.tools.cluster_raw_thoughts import (
     ClusterRequest,
     ClusterInput,
     SubclusterInput,
     ALLOWED_TAGS,
-    _call_tool_request,
 )
+from mcp_server.clarity.handlers.tools import call_tool_request
 
 
 # =============================================================================
@@ -211,7 +211,7 @@ class TestConfirmationFieldHandling:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         assert result.isError is not True
         assert result.structuredContent is not None
@@ -233,7 +233,7 @@ class TestConfirmationFieldHandling:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         assert result.isError is not True
         assert result.structuredContent is not None
@@ -255,7 +255,7 @@ class TestConfirmationFieldHandling:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         assert result.isError is not True
         assert result.structuredContent is not None
@@ -280,7 +280,7 @@ class TestConfirmationFieldHandling:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # correctly_clustered should NOT appear in output
         assert "correctly_clustered" not in result.structuredContent
@@ -303,7 +303,7 @@ class TestConfirmationFieldHandling:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # thoughts_exhausted should NOT appear in output
         assert "thoughts_exhausted" not in result.structuredContent
@@ -843,7 +843,7 @@ class TestTagsOutput:
 
 
 # =============================================================================
-# Test: Tool Boundary Validation (raw dicts through _call_tool_request)
+# Test: Tool Boundary Validation (raw dicts through call_tool_request)
 # =============================================================================
 
 class TestToolBoundaryValidation:
@@ -873,7 +873,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should return structured error (validation fails, repair fails for empty cluster)
         assert result.isError is True
@@ -904,7 +904,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should return error
         assert result.isError is True
@@ -932,7 +932,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should return error
         assert result.isError is True
@@ -963,7 +963,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should return error
         assert result.isError is True
@@ -989,7 +989,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should return error
         assert result.isError is True
@@ -1015,7 +1015,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should return error
         assert result.isError is True
@@ -1040,7 +1040,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should succeed
         assert result.isError is not True
@@ -1063,7 +1063,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            result = await _call_tool_request(_make_tool_request(arguments))
+            result = await call_tool_request(_make_tool_request(arguments))
 
         # Should succeed via repair logic
         assert result.isError is not True
@@ -1095,10 +1095,10 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            with patch("mcp_server.clarity.server.cluster_raw_thoughts") as mock_tool:
-                result = await _call_tool_request(_make_tool_request(arguments))
+            with patch("mcp_server.clarity.tools.cluster_raw_thoughts.format_clusters") as mock_tool:
+                result = await call_tool_request(_make_tool_request(arguments))
 
-                # cluster_raw_thoughts should NOT be called for invalid input
+                # format_clusters should NOT be called for invalid input
                 mock_tool.assert_not_called()
 
         assert result.isError is True

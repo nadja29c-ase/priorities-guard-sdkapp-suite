@@ -12,7 +12,8 @@ from unittest.mock import patch, MagicMock
 from httpx import AsyncClient, ASGITransport
 from mcp import types as mcp_types
 
-from mcp_server.clarity.server import create_app, _call_tool_request
+from mcp_server.clarity.server import create_app
+from mcp_server.clarity.handlers.tools import call_tool_request
 from mcp_server.clarity.config import MCP_SERVER_URL, OAUTH_ISSUER_URL, SCOPES_SUPPORTED
 
 
@@ -77,7 +78,7 @@ class TestClarityAuthEnforcement:
     These tests call the tool handler directly to avoid FastMCP session management complexity.
     """
 
-    def _make_call_tool_request(self, tool_name: str, arguments: dict, meta: dict = None):
+    def _makecall_tool_request(self, tool_name: str, arguments: dict, meta: dict = None):
         """Build a CallToolRequest for testing."""
         params = MagicMock()
         params.name = tool_name
@@ -92,7 +93,7 @@ class TestClarityAuthEnforcement:
     async def test_tool_without_auth_returns_32001(self):
         """Tool call without auth returns error code -32001 (Unauthorized)."""
         # Call tool without Authorization header (no _meta)
-        req = self._make_call_tool_request(
+        req = self._makecall_tool_request(
             "cluster_raw_thoughts",
             {
                 "thoughts_exhausted": True,
@@ -101,7 +102,7 @@ class TestClarityAuthEnforcement:
             meta=None  # No auth headers
         )
 
-        result = await _call_tool_request(req)
+        result = await call_tool_request(req)
 
         # Should return error with isError=True
         assert result.isError is True
@@ -125,7 +126,7 @@ class TestClarityAuthEnforcement:
                 "azp": "client-id"
             }
 
-            req = self._make_call_tool_request(
+            req = self._makecall_tool_request(
                 "cluster_raw_thoughts",
                 {
                     "thoughts_exhausted": True,
@@ -134,7 +135,7 @@ class TestClarityAuthEnforcement:
                 meta={"headers": {"authorization": "Bearer valid-token-wrong-scope"}}
             )
 
-            result = await _call_tool_request(req)
+            result = await call_tool_request(req)
 
         # Should return error with isError=True
         assert result.isError is True
@@ -158,7 +159,7 @@ class TestClarityAuthEnforcement:
                 "azp": "client-id"
             }
 
-            req = self._make_call_tool_request(
+            req = self._makecall_tool_request(
                 "cluster_raw_thoughts",
                 {
                     "thoughts_exhausted": True,
@@ -167,7 +168,7 @@ class TestClarityAuthEnforcement:
                 meta={"headers": {"authorization": "Bearer valid-token"}}
             )
 
-            result = await _call_tool_request(req)
+            result = await call_tool_request(req)
 
         # Should return success (no isError or isError=False)
         assert result.isError is not True
