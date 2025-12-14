@@ -23,6 +23,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from typing import List, Optional
+import httpx
 import uvicorn
 import structlog
 from mcp.server.fastmcp import FastMCP
@@ -36,6 +37,8 @@ from .tools import cluster_raw_thoughts
 from mcp_server.clarity.config import (
     MCP_SERVER_URL,
     OAUTH_ISSUER_URL,
+    BACKEND_URL,
+    INTERNAL_API_SECRET,
 )
 from mcp_server.clarity.mcp_auth import (
     authenticate_request,
@@ -49,11 +52,30 @@ from mcp_server.clarity.mcp_auth import (
 from mcp_server.clarity.discovery import oauth_protected_resource
 
 # ============================================================================
-# Configuation 
+# Configuration
 # ============================================================================
 
 # Configure structlog
 logger = structlog.get_logger(__name__)
+
+# Module-level HTTP client for backend calls (reused across requests)
+_http_client: httpx.AsyncClient | None = None
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    """Get or create module-level HTTP client for backend calls."""
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=10.0)
+    return _http_client
+
+
+async def _cleanup_http_client():
+    """Clean up HTTP client on shutdown."""
+    global _http_client
+    if _http_client:
+        await _http_client.aclose()
+        _http_client = None
 
 # Load widget HTML at startup
 WIDGET_VERSION = ""
@@ -617,6 +639,66 @@ async def _call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallTo
         clusters = [c.model_dump() for c in validated_request.clusters]
         result = cluster_raw_thoughts(clusters)
 
+        # ============================================================
+        # PERSISTENCE: Save cluster to backend (non-blocking)
+        # ============================================================
+        # Persistence failure must NOT fail the tool call.
+        # User still sees their clusters even if backend is down.
+        # ============================================================
+        # Build logical cluster data (NO UI metadata like sum_thought_items)
+        cluster_data_to_store = {
+            "clusters": [
+                {
+                    "cluster_name": c.cluster_name,
+                    "thought_items": c.thought_items,
+                    "subclusters": [
+                        {
+                            "subcluster_name": sc.subcluster_name,
+                            "thought_items": sc.thought_items,
+                            "tags": sc.tags,
+                        }
+                        for sc in c.subclusters
+                    ],
+                    "tags": c.tags,
+                }
+                for c in validated_request.clusters
+            ]
+        }
+
+        try:
+            # Build headers with optional internal secret
+            persist_headers = {"X-User-ID": user_id}
+            if INTERNAL_API_SECRET:
+                persist_headers["X-Internal-Secret"] = INTERNAL_API_SECRET
+
+            client = _get_http_client()
+            persist_response = await client.post(
+                f"{BACKEND_URL}/api/clarity/clusters",
+                headers=persist_headers,
+                json={
+                    "cluster_data": cluster_data_to_store,
+                    "thoughts_exhausted": validated_request.thoughts_exhausted,
+                    "correctly_clustered": validated_request.correctly_clustered,
+                },
+            )
+
+            if persist_response.status_code == 201:
+                cluster_id = persist_response.json().get("cluster_id")
+                logger.info("clarity.tool.persisted",
+                           cluster_id=cluster_id,
+                           user_id=user_id)
+            else:
+                logger.warning("clarity.tool.persist_failed",
+                              status=persist_response.status_code,
+                              user_id=user_id,
+                              response=persist_response.text[:200])
+
+        except Exception as e:
+            # Persistence failure should NOT fail the tool response
+            logger.warning("clarity.tool.persist_error",
+                          error=str(e),
+                          user_id=user_id)
+
         logger.info("clarity.tool.complete",
                     cluster_count=len(result["structuredContent"]["clusters"]))
 
@@ -668,9 +750,10 @@ async def wellknown_oauth_protected_resource(_request):
 # ============================================================================
 
 async def _cleanup_on_shutdown():
-    """Clean up JWKS cache HTTP client on shutdown."""
+    """Clean up HTTP clients on shutdown."""
     logger.info("clarity.server.shutdown")
     await cleanup_jwks_cache()
+    await _cleanup_http_client()
 
 
 def create_app():

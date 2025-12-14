@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # Used for constructing OAuth initiation URLs shown to users
     BACKEND_PUBLIC_URL: str = "https://www.priority-guard.com"
 
+    # Internal API secret for MCP server -> backend communication
+    # MCP servers send this in X-Internal-Secret header to authenticate internal calls
+    INTERNAL_API_SECRET: str = ""  # Empty = disabled (dev only)
+
     @model_validator(mode='after')
     def validate_oauth_keys(self) -> 'Settings':
         """Validate OAuth keys are base64-encoded strings."""

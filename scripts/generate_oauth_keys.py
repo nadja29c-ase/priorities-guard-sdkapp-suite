@@ -9,6 +9,7 @@ Outputs environment variables to copy into .env file.
 """
 
 import base64
+import secrets
 from datetime import datetime
 
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -60,9 +61,17 @@ def generate_oauth_keys():
     print(f"OAUTH_JWT_KID={kid}")
     print(f"OAUTH_ISSUER=https://www.priority-guard.com")
     print()
+
+    # Generate internal API secret for MCP -> backend communication
+    internal_secret = secrets.token_urlsafe(32)
+    print("# Internal API Secret (MCP server -> backend authentication)")
+    print(f"INTERNAL_API_SECRET={internal_secret}")
+    print()
+
     print("=" * 80)
     print("IMPORTANT:")
-    print("- Keep OAUTH_RSA_PRIVATE_KEY secret")
+    print("- Keep OAUTH_RSA_PRIVATE_KEY and INTERNAL_API_SECRET secret")
+    print("- INTERNAL_API_SECRET must be the same in backend and MCP server")
     print("- Never commit .env to version control")
     print("- For dev environment, override OAUTH_ISSUER to http://localhost:8000")
     print("=" * 80)

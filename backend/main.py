@@ -28,6 +28,7 @@ from backend.apps.focused.routers.onboarding_router import router as onboarding_
 from backend.apps.focused.routers.shortcut_router import router as shortcut_router
 from backend.apps.focused.routers.offboarding_router import router as offboarding_router
 from backend.apps.focused.routers.google_connection_router import router as google_connection_router
+from backend.apps.clarity import clusters_router
 
 # Initialize logging first
 configure_logging()
@@ -249,3 +250,6 @@ app.include_router(onboarding_router, prefix="/api/focused/onboarding")
 app.include_router(shortcut_router, prefix="/shortcut/focused")
 app.include_router(offboarding_router, prefix="/api/focused")
 app.include_router(google_connection_router, prefix="/api/focused/google")
+
+# Clarity SDK app router (Increment 05)
+app.include_router(clusters_router, prefix="/api/clarity")
