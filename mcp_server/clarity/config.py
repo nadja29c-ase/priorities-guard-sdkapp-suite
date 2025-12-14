@@ -85,9 +85,10 @@ CLARITY_AUDIENCE = get_env(
 )
 
 # Expected ChatGPT client ID for azp claim validation
+# Optional until ChatGPT connector marketplace is available
 CHATGPT_CLIENT_ID_CLARITY = get_env(
     "CHATGPT_CLIENT_ID_CLARITY",
-    required=True
+    default=""  # Empty = skip azp validation (dev/pre-marketplace)
 )
 
 # Token expiry grace period (seconds)

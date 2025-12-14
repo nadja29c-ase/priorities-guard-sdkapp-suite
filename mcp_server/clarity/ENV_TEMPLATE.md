@@ -1,6 +1,6 @@
 # Clarity MCP Server Environment Variables
 
-Required environment variables for Render deployment.
+Environment variables for Render deployment.
 
 ## Required Variables
 
@@ -13,8 +13,13 @@ Required environment variables for Render deployment.
 | `CLARITY_AUDIENCE` | `https://www.priority-guard.com` | Expected `aud` claim in JWT tokens |
 | `CLARITY_BACKEND_URL` | `https://priorities-guard-sdkapp-suite.onrender.com` | Backend API URL for persistence |
 | `INTERNAL_API_SECRET` | `<generate-strong-random-value>` | Secret for MCP→Backend communication |
-| `CHATGPT_CLIENT_ID_CLARITY` | `<from-chatgpt-console>` | ChatGPT client ID for `azp` validation |
 | `ENV` | `production` | Environment mode |
+
+## Optional Variables (Future)
+
+| Variable | Example Value | Description |
+|----------|--------------|-------------|
+| `CHATGPT_CLIENT_ID_CLARITY` | `<from-chatgpt-console>` | ChatGPT client ID for `azp` validation. Not yet available - leave empty until ChatGPT connector marketplace launches. |
 
 ## How to Set on Render
 
@@ -43,5 +48,6 @@ openssl rand -base64 32
 ## Notes
 
 - `CLARITY_ISSUER` and `CLARITY_AUDIENCE` should match what your OAuth provider puts in tokens
-- `CHATGPT_CLIENT_ID_CLARITY` is obtained after registering your connector in ChatGPT
+- `CHATGPT_CLIENT_ID_CLARITY` will be obtained after registering your connector in ChatGPT (not yet available)
 - In dev mode, leave `INTERNAL_API_SECRET` empty to skip verification
+- When `CHATGPT_CLIENT_ID_CLARITY` is empty, `azp` claim validation is skipped

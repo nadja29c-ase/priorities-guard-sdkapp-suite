@@ -14,7 +14,6 @@ from cryptography.hazmat.backends import default_backend
 import jwt
 
 from mcp_server.clarity.mcp_auth import (
-    validate_jwt,
     authenticate_request,
     UnauthorizedError,
     InsufficientScopeError,
@@ -111,7 +110,7 @@ def create_signed_jwt(claims: dict, private_key_pem: bytes, kid: str) -> str:
     )
 
 
-def mock_jwks_cache(jwk: dict):
+def _create_mock_jwks_cache(jwk: dict):
     """Create a mock JWKS cache that returns the test key."""
     mock_cache = MagicMock()
 
@@ -129,6 +128,21 @@ def mock_jwks_cache(jwk: dict):
     return mock_cache
 
 
+@pytest.fixture
+def mock_auth_context(test_keys):
+    """Fixture that patches JWKS cache and client ID for auth tests."""
+    mock_cache = _create_mock_jwks_cache(test_keys["jwk"])
+
+    with patch("mcp_server.clarity.mcp_auth._jwks_cache", mock_cache):
+        with patch("mcp_server.clarity.mcp_auth.CHATGPT_CLIENT_ID_CLARITY", "test-client-id"):
+            yield
+
+
+def make_auth_meta(token: str) -> dict:
+    """Create meta dict with Authorization header for authenticate_request."""
+    return {"headers": {"authorization": f"Bearer {token}"}}
+
+
 # ============================================================================
 # Tests: Valid Token
 # ============================================================================
@@ -137,7 +151,7 @@ class TestValidToken:
     """Tests that valid tokens are accepted."""
 
     @pytest.mark.asyncio
-    async def test_valid_token_passes_validation(self, test_keys, valid_claims):
+    async def test_valid_token_passes_validation(self, test_keys, valid_claims, mock_auth_context):
         """A properly signed token with correct claims should validate."""
         token = create_signed_jwt(
             valid_claims,
@@ -145,11 +159,7 @@ class TestValidToken:
             test_keys["kid"]
         )
 
-        mock_cache = mock_jwks_cache(test_keys["jwk"])
-
-        with patch("mcp_server.clarity.mcp_auth._jwks_cache", mock_cache):
-            with patch("mcp_server.clarity.mcp_auth.CHATGPT_CLIENT_ID_CLARITY", "test-client-id"):
-                result = await validate_jwt(token, "test-correlation-id")
+        result = await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
 
         assert result["user_id"] == "user-123"
         assert "clarity.write" in result["scopes"]
@@ -163,80 +173,74 @@ class TestInvalidIssuer:
     """Tests that wrong issuer is rejected."""
 
     @pytest.mark.asyncio
-    async def test_wrong_issuer_fails(self, test_keys, valid_claims):
+    async def test_wrong_issuer_fails(self, test_keys, valid_claims, mock_auth_context):
         """Token with wrong issuer should fail validation."""
         claims = {**valid_claims, "iss": "https://evil.com"}
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
-        mock_cache = mock_jwks_cache(test_keys["jwk"])
-
-        with patch("mcp_server.clarity.mcp_auth._jwks_cache", mock_cache):
-            with patch("mcp_server.clarity.mcp_auth.CHATGPT_CLIENT_ID_CLARITY", "test-client-id"):
-                with pytest.raises(jwt.InvalidIssuerError):
-                    await validate_jwt(token, "test-correlation-id")
+        with pytest.raises(UnauthorizedError):
+            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
 
 
 class TestInvalidAudience:
     """Tests that wrong audience is rejected."""
 
     @pytest.mark.asyncio
-    async def test_wrong_audience_fails(self, test_keys, valid_claims):
+    async def test_wrong_audience_fails(self, test_keys, valid_claims, mock_auth_context):
         """Token with wrong audience should fail validation."""
         claims = {**valid_claims, "aud": "https://wrong-audience.com"}
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
-        mock_cache = mock_jwks_cache(test_keys["jwk"])
+        with pytest.raises(UnauthorizedError):
+            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
 
-        with patch("mcp_server.clarity.mcp_auth._jwks_cache", mock_cache):
-            with patch("mcp_server.clarity.mcp_auth.CHATGPT_CLIENT_ID_CLARITY", "test-client-id"):
-                with pytest.raises(jwt.InvalidAudienceError):
-                    await validate_jwt(token, "test-correlation-id")
+
+class TestInvalidAzp:
+    """Tests that wrong authorized party (azp) is rejected."""
+
+    @pytest.mark.asyncio
+    async def test_wrong_azp_fails(self, test_keys, valid_claims, mock_auth_context):
+        """Token with wrong azp should fail validation."""
+        claims = {**valid_claims, "azp": "wrong-client-id"}
+        token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
+
+        with pytest.raises(UnauthorizedError):
+            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
 
 
 class TestMissingScope:
     """Tests that missing clarity.write scope is rejected."""
 
     @pytest.mark.asyncio
-    async def test_missing_clarity_write_scope_fails(self, test_keys, valid_claims):
+    async def test_missing_clarity_write_scope_fails(self, test_keys, valid_claims, mock_auth_context):
         """Token without clarity.write scope should be rejected at auth level."""
         claims = {**valid_claims, "scope": "focused.write"}  # Wrong scope
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
-        mock_cache = mock_jwks_cache(test_keys["jwk"])
+        with pytest.raises(InsufficientScopeError) as exc_info:
+            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
 
-        with patch("mcp_server.clarity.mcp_auth._jwks_cache", mock_cache):
-            with patch("mcp_server.clarity.mcp_auth.CHATGPT_CLIENT_ID_CLARITY", "test-client-id"):
-                # validate_jwt succeeds (token is valid), but scope check fails
-                meta = {"headers": {"authorization": f"Bearer {token}"}}
-
-                with pytest.raises(InsufficientScopeError) as exc_info:
-                    await authenticate_request("cluster_raw_thoughts", meta)
-
-                assert "clarity.write" in exc_info.value.required_scopes
+        assert "clarity.write" in exc_info.value.required_scopes
 
 
 class TestExpiredToken:
     """Tests that expired tokens are rejected."""
 
     @pytest.mark.asyncio
-    async def test_expired_token_fails(self, test_keys, valid_claims):
+    async def test_expired_token_fails(self, test_keys, valid_claims, mock_auth_context):
         """Expired token should fail validation."""
         claims = {**valid_claims, "exp": int(time.time()) - 3600}  # Expired 1 hour ago
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
-        mock_cache = mock_jwks_cache(test_keys["jwk"])
-
-        with patch("mcp_server.clarity.mcp_auth._jwks_cache", mock_cache):
-            with patch("mcp_server.clarity.mcp_auth.CHATGPT_CLIENT_ID_CLARITY", "test-client-id"):
-                with pytest.raises(jwt.ExpiredSignatureError):
-                    await validate_jwt(token, "test-correlation-id")
+        with pytest.raises(UnauthorizedError):
+            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
 
 
 class TestInvalidSignature:
     """Tests that tokens with invalid signatures are rejected."""
 
     @pytest.mark.asyncio
-    async def test_wrong_key_fails(self, test_keys, valid_claims):
+    async def test_wrong_key_fails(self, test_keys, valid_claims, mock_auth_context):
         """Token signed with different key should fail."""
         # Generate a different key pair
         other_private, _ = generate_test_rsa_keypair()
@@ -245,9 +249,23 @@ class TestInvalidSignature:
         # Sign with different key but use original key's kid
         token = create_signed_jwt(valid_claims, other_pem, test_keys["kid"])
 
-        mock_cache = mock_jwks_cache(test_keys["jwk"])
+        with pytest.raises(UnauthorizedError):
+            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
 
-        with patch("mcp_server.clarity.mcp_auth._jwks_cache", mock_cache):
-            with patch("mcp_server.clarity.mcp_auth.CHATGPT_CLIENT_ID_CLARITY", "test-client-id"):
-                with pytest.raises(jwt.InvalidSignatureError):
-                    await validate_jwt(token, "test-correlation-id")
+
+class TestMissingKid:
+    """Tests that tokens without kid in header are rejected."""
+
+    @pytest.mark.asyncio
+    async def test_missing_kid_fails(self, test_keys, valid_claims, mock_auth_context):
+        """Token without kid in header should fail validation."""
+        # Create token without kid in header
+        token = jwt.encode(
+            valid_claims,
+            test_keys["private_key_pem"],
+            algorithm="RS256",
+            headers={}  # no kid
+        )
+
+        with pytest.raises(UnauthorizedError):
+            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))

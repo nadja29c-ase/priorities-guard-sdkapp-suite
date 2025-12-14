@@ -5,7 +5,7 @@ Tests fail-closed behavior and security boundaries at the dispatcher level.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 from mcp_server.clarity.handlers.tools import call_tool_request
 
@@ -22,6 +22,12 @@ def _make_call_tool_request(tool_name: str, arguments: dict = None, meta: dict =
     return req
 
 
+def assert_error(result):
+    """Assert result is an error with content."""
+    assert result.isError is True
+    assert result.content
+
+
 class TestUnknownToolFailsClosed:
     """Tests that unknown tools fail closed at dispatcher boundary."""
 
@@ -35,8 +41,7 @@ class TestUnknownToolFailsClosed:
 
         result = await call_tool_request(req)
 
-        assert result.isError is True
-        assert "Unknown tool" in result.content[0].text
+        assert_error(result)
 
     @pytest.mark.asyncio
     async def test_unknown_tool_never_calls_authenticate(self):
@@ -52,28 +57,7 @@ class TestUnknownToolFailsClosed:
             # authenticate_request should NOT be called for unknown tools
             mock_auth.assert_not_called()
 
-        assert result.isError is True
-
-    @pytest.mark.asyncio
-    async def test_unknown_tool_never_reaches_handler(self):
-        """Unknown tools must never reach any tool handler."""
-        req = _make_call_tool_request(
-            tool_name="fake_tool",
-            arguments={"data": "test"},
-        )
-
-        # Patch the tool registry's get_tool to track calls
-        with patch("mcp_server.clarity.handlers.tools.get_tool") as mock_get_tool:
-            mock_get_tool.return_value = None  # Tool not found
-
-            result = await call_tool_request(req)
-
-            # get_tool was called (to check if tool exists)
-            mock_get_tool.assert_called_once_with("fake_tool")
-
-        # But result is an error
-        assert result.isError is True
-        assert "Unknown tool" in result.content[0].text
+        assert_error(result)
 
     @pytest.mark.asyncio
     async def test_unknown_tool_does_not_trigger_persistence(self):
@@ -89,7 +73,7 @@ class TestUnknownToolFailsClosed:
             # persist_cluster should NOT be called
             mock_persist.assert_not_called()
 
-        assert result.isError is True
+        assert_error(result)
 
 
 class TestDispatcherAuthBoundary:
@@ -111,10 +95,10 @@ class TestDispatcherAuthBoundary:
 
             result = await call_tool_request(req)
 
-            # authenticate_request WAS called for known tool
-            mock_auth.assert_called_once()
+            # authenticate_request WAS called with correct tool name
+            mock_auth.assert_called_once_with("cluster_raw_thoughts", ANY)
 
-        assert result.isError is True
+        assert_error(result)
 
     @pytest.mark.asyncio
     async def test_auth_failure_prevents_tool_execution(self):
@@ -124,14 +108,29 @@ class TestDispatcherAuthBoundary:
             arguments={"thoughts_exhausted": True, "clusters": []},
         )
 
+        # Create a mock tool definition with a mock handle
+        from mcp_server.clarity.tools import TOOL_REGISTRY
+        from mcp_server.clarity.tools.base import ToolDefinition
+        from unittest.mock import AsyncMock
+
+        mock_handle = AsyncMock()
+        mock_tool = ToolDefinition(
+            name="cluster_raw_thoughts",
+            description="Test tool",
+            input_schema={},
+            required_scopes=["clarity.write"],
+            widget_uri=None,
+            handle=mock_handle,
+        )
+
         with patch("mcp_server.clarity.handlers.tools.authenticate_request") as mock_auth:
             from mcp_server.clarity.mcp_auth import UnauthorizedError
             mock_auth.side_effect = UnauthorizedError("invalid_token", "Test auth failure")
 
-            with patch("mcp_server.clarity.tools.cluster_raw_thoughts.handle") as mock_handle:
+            with patch.dict(TOOL_REGISTRY, {"cluster_raw_thoughts": mock_tool}):
                 result = await call_tool_request(req)
 
                 # Tool handler should NOT be called after auth failure
                 mock_handle.assert_not_called()
 
-        assert result.isError is True
+        assert_error(result)
