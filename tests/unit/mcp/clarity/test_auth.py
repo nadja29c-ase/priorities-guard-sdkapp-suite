@@ -321,6 +321,19 @@ class TestAuthenticateRequest:
             mock_validate.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_validate_jwt_not_called_when_token_extraction_fails(self):
+        """If no bearer token, validate_jwt should never be called.
+
+        Defense-in-depth: Ensures auth short-circuits before JWT validation
+        when token extraction fails. Prevents future refactors from
+        reintroducing fail-open behavior.
+        """
+        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
+            with pytest.raises(UnauthorizedError):
+                await authenticate_request("cluster_raw_thoughts", {})
+            mock_validate.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_missing_headers_dict(self):
         """Missing headers dict raises UnauthorizedError."""
         meta = {}
