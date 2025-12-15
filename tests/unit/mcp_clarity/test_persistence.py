@@ -203,6 +203,42 @@ class TestGetCluster:
     """Tests for the get_cluster function."""
 
     @pytest.mark.asyncio
+    async def test_get_cluster_returns_single_latest_snapshot(self):
+        """Documents contract: backend returns the single most recent cluster snapshot.
+
+        IMPORTANT CONTRACT ASSUMPTION (Increment 10):
+        - Backend GET /api/clarity/clusters returns ONE snapshot (the latest)
+        - Not a list, not paginated - single most recent row per user
+        - Backend handles ordering (ORDER BY created_at DESC LIMIT 1)
+        - If backend changes to return multiple/paginated, this test should fail
+          and get_my_clusters tool logic needs updating
+
+        This test doesn't verify ordering (can't at this layer) but documents
+        the assumption that callers depend on.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "cluster_id": "latest-snapshot-id",
+            "cluster_data": {"clusters": [{"cluster_name": "Latest"}]},
+            "thoughts_exhausted": True,
+            "correctly_clustered": True,
+            "created_at": "2025-01-15T12:00:00Z",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            result = await get_cluster(user_id="user-456")
+
+        # Contract: returns a single dict, not a list
+        assert isinstance(result, dict)
+        assert "cluster_id" in result
+        assert "cluster_data" in result
+        assert "created_at" in result
+
+    @pytest.mark.asyncio
     async def test_get_cluster_success(self):
         """Should return cluster_data when 200 response."""
         mock_response = MagicMock()
