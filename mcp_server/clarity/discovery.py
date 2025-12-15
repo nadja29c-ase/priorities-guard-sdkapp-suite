@@ -1,9 +1,10 @@
 """
-OAuth Discovery Endpoint for Clarity MCP Server.
+OAuth Discovery Endpoints for Clarity MCP Server.
 
-Only provides oauth-protected-resource metadata.
-OpenID/authorization server discovery belongs to the backend OAuth provider,
-not the MCP resource server.
+Provides all required OAuth discovery endpoints:
+- oauth-authorization-server (RFC 8414)
+- oauth-protected-resource (RFC 9728)
+- openid-configuration (OpenID Connect Discovery)
 """
 
 from mcp_server.clarity.config import (
@@ -11,6 +12,29 @@ from mcp_server.clarity.config import (
     OAUTH_ISSUER_URL,
     SCOPES_SUPPORTED,
 )
+
+
+async def openid_configuration():
+    """OpenID Connect Discovery (RFC 8414)."""
+    return {
+        "issuer": OAUTH_ISSUER_URL,
+        "authorization_endpoint": f"{OAUTH_ISSUER_URL}/authorize",
+        "token_endpoint": f"{OAUTH_ISSUER_URL}/token",
+        "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
+        "registration_endpoint": f"{OAUTH_ISSUER_URL}/register",
+        "scopes_supported": SCOPES_SUPPORTED,
+    }
+
+
+async def oauth_authorization_server():
+    """OAuth 2.0 Authorization Server Metadata (RFC 8414)."""
+    return {
+        "issuer": OAUTH_ISSUER_URL,
+        "authorization_endpoint": f"{OAUTH_ISSUER_URL}/authorize",
+        "token_endpoint": f"{OAUTH_ISSUER_URL}/token",
+        "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
+        "scopes_supported": SCOPES_SUPPORTED,
+    }
 
 
 async def oauth_protected_resource():

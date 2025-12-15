@@ -25,7 +25,11 @@ from starlette.routing import Route
 
 from mcp_server.clarity.http_client import cleanup_http_client
 from mcp_server.clarity.mcp_auth import cleanup_jwks_cache
-from mcp_server.clarity.discovery import oauth_protected_resource
+from mcp_server.clarity.discovery import (
+    openid_configuration,
+    oauth_authorization_server,
+    oauth_protected_resource,
+)
 from mcp_server.clarity.handlers import (
     list_resources,
     list_resource_templates,
@@ -120,9 +124,21 @@ mcp._mcp_server.request_handlers[mcp_types.CallToolRequest] = call_tool_request
 # OAuth Discovery Endpoints
 # ============================================================================
 
+async def wellknown_openid_configuration(_request):
+    """Starlette wrapper for discovery.openid_configuration."""
+    logger.debug("oauth.discovery.openid_configuration")
+    return JSONResponse(await openid_configuration())
+
+
+async def wellknown_oauth_authorization_server(_request):
+    """Starlette wrapper for discovery.oauth_authorization_server."""
+    logger.debug("oauth.discovery.authorization_server")
+    return JSONResponse(await oauth_authorization_server())
+
+
 async def wellknown_oauth_protected_resource(_request):
     """Starlette wrapper for discovery.oauth_protected_resource."""
-    logger.debug("oauth.discovery.request")
+    logger.debug("oauth.discovery.protected_resource")
     return JSONResponse(await oauth_protected_resource())
 
 
@@ -169,9 +185,14 @@ def create_app():
     # Register shutdown handler
     fastmcp_app.add_event_handler("shutdown", _cleanup_on_shutdown)
 
-    # Discovery routes - only oauth-protected-resource
+    # Discovery routes - all OAuth discovery endpoints
     discovery_routes = [
+        Route("/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/oauth-authorization-server", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
         Route("/oauth-protected-resource", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
+        # /mcp suffix variants for compatibility
+        Route("/openid-configuration/mcp", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
+        Route("/oauth-authorization-server/mcp", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
         Route("/oauth-protected-resource/mcp", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
     ]
     discovery_app = Starlette(routes=discovery_routes)
