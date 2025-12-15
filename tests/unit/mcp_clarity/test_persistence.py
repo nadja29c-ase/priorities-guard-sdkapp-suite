@@ -19,7 +19,7 @@ class TestPersistCluster:
         mock_response.json.return_value = {"cluster_id": "test-cluster-123"}
 
         mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
+        mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await persist_cluster(
@@ -45,7 +45,7 @@ class TestPersistCluster:
         mock_response.text = "Internal Server Error"
 
         mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
+        mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await persist_cluster(
@@ -61,7 +61,7 @@ class TestPersistCluster:
     async def test_persist_cluster_exception_returns_none(self):
         """Should return None on network/exception error."""
         mock_client = AsyncMock()
-        mock_client.post.side_effect = Exception("Network error")
+        mock_client.post = AsyncMock(side_effect=Exception("Network error"))
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await persist_cluster(
@@ -81,7 +81,7 @@ class TestPersistCluster:
         mock_response.json.return_value = {"cluster_id": "test-123"}
 
         mock_client = AsyncMock()
-        mock_client.post.return_value = mock_response
+        mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             with patch("mcp_server.clarity.persistence.INTERNAL_API_SECRET", "secret-key"):
@@ -113,7 +113,7 @@ class TestGetCluster:
         }
 
         mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
+        mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await get_cluster(user_id="user-456")
@@ -135,7 +135,7 @@ class TestGetCluster:
         mock_response.text = "Not Found"
 
         mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
+        mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await get_cluster(user_id="user-no-clusters")
@@ -146,7 +146,7 @@ class TestGetCluster:
     async def test_get_cluster_error_handling(self):
         """Should return None on network/server error."""
         mock_client = AsyncMock()
-        mock_client.get.side_effect = Exception("Network error")
+        mock_client.get = AsyncMock(side_effect=Exception("Network error"))
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await get_cluster(user_id="user-456")
@@ -167,7 +167,7 @@ class TestGetCluster:
         }
 
         mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
+        mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             with patch("mcp_server.clarity.persistence.INTERNAL_API_SECRET", "secret-key"):
@@ -184,7 +184,7 @@ class TestGetCluster:
         mock_response.text = "Internal Server Error"
 
         mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
+        mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await get_cluster(user_id="user-456")
