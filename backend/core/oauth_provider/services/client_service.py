@@ -22,6 +22,7 @@ async def create_oauth_client(
     client_name: str,
     redirect_uris: list[str],
     grant_types: list[str] | None = None,
+    scopes: list[str] | None = None,
     correlation_id: str | None = None
 ) -> tuple[str, str]:
     """
@@ -63,6 +64,10 @@ async def create_oauth_client(
     if grant_types is None:
         grant_types = ["authorization_code", "refresh_token"]
 
+    # Set default scopes
+    if scopes is None:
+        scopes = ["focused.read", "focused.write", "focused.notify"]
+
     # Generate client credentials
     client_id = f"focused-client-{uuid4()}"
     client_secret = secrets.token_urlsafe(32)  # 256-bit random secret
@@ -83,7 +88,7 @@ async def create_oauth_client(
         grant_types=grant_types,
         # Required fields (set to defaults for oauth_provider connections)
         encrypted_access_token="",  # Not applicable for inbound OAuth
-        scopes=["focused.read", "focused.write", "focused.notify"],  # OAuth scopes
+        scopes=scopes,  # OAuth scopes (defaults or requested)
         token_expires_at=datetime.now(timezone.utc) + timedelta(days=365)  # Placeholder
     )
 

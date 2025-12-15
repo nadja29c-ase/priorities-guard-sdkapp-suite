@@ -20,6 +20,14 @@ from backend.core.config import settings
 
 router = APIRouter(tags=["oauth-provider"])
 
+# Supported scopes advertised in discovery (exported for testing)
+SCOPES_SUPPORTED = [
+    "focused.read",
+    "focused.write",
+    "focused.notify",
+    "clarity.write",
+]
+
 
 @router.get("/.well-known/openid-configuration")
 async def openid_configuration():
@@ -46,12 +54,7 @@ async def openid_configuration():
         "token_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/token",
         "jwks_uri": f"{settings.OAUTH_ISSUER}/oauth/pg/jwks",
         "registration_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/register",
-        "scopes_supported": [
-            "focused.read",
-            "focused.write",
-            "focused.notify",
-            "clarity.write"
-        ],
+        "scopes_supported": SCOPES_SUPPORTED,
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],

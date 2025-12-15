@@ -30,6 +30,26 @@ logger = get_logger(__name__)
 
 router = APIRouter(tags=["oauth-provider"])
 
+# ============================================================================
+# SCOPE DESCRIPTIONS (for consent UI and testing)
+# ============================================================================
+# These are exported at module level so they can be imported and tested.
+# Keys must match scopes in discovery.py scopes_supported.
+
+SCOPE_DESCRIPTIONS_EN = {
+    "focused.read": "Read your calendar events to detect focus sessions and provide insights.",
+    "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
+    "focused.notify": "Send notifications related to your focus schedule.",
+    "clarity.write": "Organize and cluster your thoughts into visual groups.",
+}
+
+SCOPE_DESCRIPTIONS_DE = {
+    "focused.read": "Deine Kalendertermine lesen, um Fokus-Zeiten zu erkennen und dir hilfreiche Einblicke zu geben.",
+    "focused.write": "Apple Fokus (den integrierten \"Nicht stören\"-Modus) auf deinem iPhone waehrend deiner Fokus-Zeiten ein- und ausschalten.",
+    "focused.notify": "Relevante Benachrichtigungen senden",
+    "clarity.write": "Deine Gedanken in visuelle Gruppen organisieren und clustern.",
+}
+
 # Initialize Jinja2 templates
 templates = Jinja2Templates(directory="backend/templates")
 
@@ -560,19 +580,8 @@ async def authorize_endpoint(
     language = _detect_language(request)
     template_name = f"oauth_consent_{language}.html"
 
-    # Scope descriptions for consent UI (localized)
-    # TODO: Move to i18n system for proper localization
-    scope_descriptions_en = {
-        "focused.read": "Read your calendar events to detect focus sessions and provide insights.",
-        "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
-        "focused.notify": "Send notifications related to your focus schedule.",
-    }
-    scope_descriptions_de = {
-        "focused.read": "Deine Kalendertermine lesen, um Fokus-Zeiten zu erkennen und dir hilfreiche Einblicke zu geben.",
-        "focused.write": "Apple Fokus (den integrierten „Nicht stören“-Modus) auf deinem iPhone während deiner Fokus-Zeiten ein- und ausschalten.",
-        "focused.notify": "Relevante Benachrichtigungen senden",
-    }
-    scope_descriptions = scope_descriptions_de if language == "de" else scope_descriptions_en
+    # Use module-level scope descriptions (localized)
+    scope_descriptions = SCOPE_DESCRIPTIONS_DE if language == "de" else SCOPE_DESCRIPTIONS_EN
 
     request_logger.info(
         "oauth.authorize.consent_rendered",

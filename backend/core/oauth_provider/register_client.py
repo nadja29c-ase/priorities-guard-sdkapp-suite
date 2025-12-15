@@ -29,6 +29,12 @@ class RegisterRequest(BaseModel):
     client_name: str
     redirect_uris: list[str]
     grant_types: list[str] | None = None
+    scope: str | None = None  # Space-separated list of requested scopes
+
+
+# Supported scopes that can be registered
+SUPPORTED_SCOPES = {"focused.read", "focused.write", "focused.notify", "clarity.write"}
+DEFAULT_SCOPES = ["focused.read", "focused.write", "focused.notify"]
 
 
 @router.post("/oauth/focused/register")
@@ -93,12 +99,26 @@ async def register_endpoint(
     # Set default grant types
     grant_types = register_request.grant_types or ["authorization_code", "refresh_token"]
 
+    # Parse and validate requested scopes
+    if register_request.scope:
+        requested_scopes = register_request.scope.split()
+        invalid_scopes = set(requested_scopes) - SUPPORTED_SCOPES
+        if invalid_scopes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported scopes: {', '.join(sorted(invalid_scopes))}"
+            )
+        scopes = list(set(requested_scopes))  # Remove duplicates
+    else:
+        scopes = DEFAULT_SCOPES.copy()
+
     # Create OAuth client (handles encryption and DB persistence)
     client_id, client_secret = await create_oauth_client(
         db=db,
         client_name=register_request.client_name,
         redirect_uris=register_request.redirect_uris,
         grant_types=grant_types,
+        scopes=scopes,
         correlation_id=correlation_id
     )
 
@@ -107,5 +127,5 @@ async def register_endpoint(
         "client_id": client_id,
         "client_secret": client_secret,
         "redirect_uris": register_request.redirect_uris,
-        "scope": "focused.read focused.write focused.notify"
+        "scope": " ".join(sorted(scopes))
     })
