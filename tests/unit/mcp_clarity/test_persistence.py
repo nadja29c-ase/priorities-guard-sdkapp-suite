@@ -150,8 +150,8 @@ class TestGetCluster:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_cluster_error_handling(self):
-        """Should return None on network/server error."""
+    async def test_get_cluster_network_error_returns_none(self):
+        """Should return None on network exception (connection refused, timeout, etc)."""
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(side_effect=Exception("Network error"))
 
