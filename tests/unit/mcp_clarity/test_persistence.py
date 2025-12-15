@@ -80,6 +80,37 @@ class TestPersistCluster:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_persist_cluster_uses_shared_http_client(self):
+        """Should use get_http_client() which has timeout configured.
+
+        IMPORTANT: The timeout guarantee comes from the shared HTTP client
+        (see http_client.py: httpx.AsyncClient(timeout=10.0)).
+
+        This test ensures we always use get_http_client() and don't bypass it
+        with a custom client that might lack timeout configuration.
+        If this test fails, MCP could hang on slow/unresponsive backends.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"cluster_id": "test-123"}
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client") as mock_get_client:
+            mock_get_client.return_value = mock_client
+
+            await persist_cluster(
+                user_id="user-456",
+                cluster_data={"clusters": []},
+                thoughts_exhausted=True,
+                correctly_clustered=None,
+            )
+
+            # Verify get_http_client() was called (not bypassed)
+            mock_get_client.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_persist_cluster_includes_internal_secret(self):
         """Should include X-Internal-Secret header when configured."""
         mock_response = MagicMock()
@@ -159,6 +190,32 @@ class TestGetCluster:
             result = await get_cluster(user_id="user-456")
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cluster_uses_shared_http_client(self):
+        """Should use get_http_client() which has timeout configured.
+
+        IMPORTANT: The timeout guarantee comes from the shared HTTP client
+        (see http_client.py: httpx.AsyncClient(timeout=10.0)).
+
+        This test ensures we always use get_http_client() and don't bypass it
+        with a custom client that might lack timeout configuration.
+        If this test fails, MCP could hang on slow/unresponsive backends.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"cluster_id": "test-123", "cluster_data": {}}
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client") as mock_get_client:
+            mock_get_client.return_value = mock_client
+
+            await get_cluster(user_id="user-456")
+
+            # Verify get_http_client() was called (not bypassed)
+            mock_get_client.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_cluster_includes_internal_secret(self):
