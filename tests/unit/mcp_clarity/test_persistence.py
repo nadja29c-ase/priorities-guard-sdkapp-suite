@@ -237,3 +237,23 @@ class TestGetCluster:
             result = await get_cluster(user_id="user-456")
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cluster_none_user_id_returns_none(self):
+        """Should return None when user_id is None (defensive boundary test).
+
+        Documents behavior: sends X-User-ID: None header, backend returns 401,
+        function returns None without crashing. Type hint says str but we handle
+        None gracefully at the boundary.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.text = "Unauthorized"
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            result = await get_cluster(user_id=None)
+
+        assert result is None
