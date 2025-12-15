@@ -1,5 +1,10 @@
 """
 Unit tests for Clarity persistence module.
+
+Note on patching INTERNAL_API_SECRET:
+  We patch at 'mcp_server.clarity.persistence.INTERNAL_API_SECRET' because
+  persistence.py imports it directly: `from .config import INTERNAL_API_SECRET`.
+  If that import style changes, these patches will need updating.
 """
 
 import pytest
