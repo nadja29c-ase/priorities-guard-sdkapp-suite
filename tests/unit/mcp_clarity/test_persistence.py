@@ -32,8 +32,9 @@ class TestPersistCluster:
         assert result == "test-cluster-123"
         mock_client.post.assert_called_once()
 
-        # Verify payload
+        # Verify URL and payload
         call_args = mock_client.post.call_args
+        assert call_args.args[0].endswith("/api/clarity/clusters")
         assert "X-User-ID" in call_args.kwargs["headers"]
         assert call_args.kwargs["json"]["thoughts_exhausted"] is True
 
@@ -123,8 +124,9 @@ class TestGetCluster:
         assert result["cluster_data"]["clusters"][0]["cluster_name"] == "Test Cluster"
         mock_client.get.assert_called_once()
 
-        # Verify headers
+        # Verify URL and headers
         call_args = mock_client.get.call_args
+        assert call_args.args[0].endswith("/api/clarity/clusters")
         assert call_args.kwargs["headers"]["X-User-ID"] == "user-456"
 
     @pytest.mark.asyncio
