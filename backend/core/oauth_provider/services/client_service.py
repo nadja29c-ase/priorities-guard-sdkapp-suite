@@ -64,9 +64,9 @@ async def create_oauth_client(
     if grant_types is None:
         grant_types = ["authorization_code", "refresh_token"]
 
-    # Set default scopes
+    # Set default scopes (must include all supported scopes)
     if scopes is None:
-        scopes = ["focused.read", "focused.write", "focused.notify"]
+        scopes = ["focused.read", "focused.write", "focused.notify", "clarity.write"]
 
     # Generate client credentials
     client_id = f"focused-client-{uuid4()}"

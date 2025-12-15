@@ -109,8 +109,17 @@ async def register_endpoint(
                 detail=f"Unsupported scopes: {', '.join(sorted(invalid_scopes))}"
             )
         scopes = list(set(requested_scopes))  # Remove duplicates
+        request_logger.info(
+            "oauth.register.scopes_requested",
+            requested_scope=register_request.scope,
+            parsed_scopes=scopes
+        )
     else:
         scopes = DEFAULT_SCOPES.copy()
+        request_logger.info(
+            "oauth.register.scopes_default",
+            default_scopes=scopes
+        )
 
     # Create OAuth client (handles encryption and DB persistence)
     client_id, client_secret = await create_oauth_client(
