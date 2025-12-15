@@ -39,6 +39,7 @@ from mcp_server.clarity.config import (
     TOOL_SCOPES,
     MCP_SERVER_URL,
 )
+from mcp_server.clarity.request_context import auth_header_var
 
 logger = structlog.get_logger(__name__)
 
@@ -629,13 +630,19 @@ async def authenticate_request(
     correlation_id = extract_or_generate_correlation_id(meta)
 
     try:
-        # Step 2: Extract Authorization header (defensive: meta could be non-dict)
-        if not isinstance(meta, dict):
-            headers = {}
-        else:
-            raw_headers = meta.get("headers")
-            headers = raw_headers if isinstance(raw_headers, dict) else {}
-        auth_header = extract_authorization_header(headers)
+        # Step 2: Extract Authorization header
+        # Priority: context var (from HTTP request via middleware) > meta.headers
+        # Context var is set by MCPContentTypeAndAcceptFixMiddleware for /mcp requests
+        auth_header = auth_header_var.get(None)
+
+        if not auth_header:
+            # Fallback to meta.headers (for direct calls or testing)
+            if not isinstance(meta, dict):
+                headers = {}
+            else:
+                raw_headers = meta.get("headers")
+                headers = raw_headers if isinstance(raw_headers, dict) else {}
+            auth_header = extract_authorization_header(headers)
 
         if not auth_header:
             logger.warning("auth.missing_header", correlation_id=correlation_id, tool=tool_name)

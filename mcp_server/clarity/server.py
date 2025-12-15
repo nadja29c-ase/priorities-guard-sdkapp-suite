@@ -25,6 +25,7 @@ from starlette.routing import Route
 
 from mcp_server.clarity.http_client import cleanup_http_client
 from mcp_server.clarity.mcp_auth import cleanup_jwks_cache
+from mcp_server.clarity.request_context import auth_header_var
 from mcp_server.clarity.discovery import (
     openid_configuration,
     oauth_authorization_server,
@@ -54,12 +55,18 @@ mcp = FastMCP("clarity-mcp", streamable_http_path="/mcp")
 
 class MCPContentTypeAndAcceptFixMiddleware:
     """
-    Fix ChatGPT → FastMCP header mismatch:
-    - ChatGPT sends Content-Type: application/octet-stream
-    - ChatGPT sends Accept: */*
-    FastMCP requires:
-    - Content-Type: application/json
-    - Accept: text/event-stream (for SSE handshake)
+    Fix ChatGPT → FastMCP header mismatch and capture Authorization header.
+
+    Header fixes:
+    - ChatGPT sends Content-Type: application/octet-stream → application/json
+    - ChatGPT sends Accept: */* → text/event-stream, application/json
+
+    Authorization capture:
+    - Extracts Authorization header from HTTP request
+    - Sets it in request_context.auth_header_var for tool handlers
+    - This bridges the gap between HTTP headers and MCP tool handlers
+      (FastMCP's @mcp.tool() decorator does this automatically, but
+      Clarity uses a custom registry pattern that bypasses injection)
     """
 
     def __init__(self, app):
@@ -70,6 +77,7 @@ class MCPContentTypeAndAcceptFixMiddleware:
             if scope.get("path") == "/mcp":
                 new_headers = []
                 modified = False
+                auth_header = None
 
                 for name, value in scope["headers"]:
                     if name == b"content-type" and b"application/octet-stream" in value:
@@ -80,11 +88,19 @@ class MCPContentTypeAndAcceptFixMiddleware:
                         value = b"text/event-stream, application/json"
                         modified = True
 
+                    # Capture Authorization header for tool handlers
+                    if name == b"authorization":
+                        auth_header = value.decode("utf-8")
+
                     new_headers.append((name, value))
 
                 if modified:
                     scope = dict(scope)
                     scope["headers"] = new_headers
+
+                # Set Authorization header in context for tool handlers
+                if auth_header:
+                    auth_header_var.set(auth_header)
 
         await self.app(scope, receive, send)
 
