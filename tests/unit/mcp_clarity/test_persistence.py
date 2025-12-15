@@ -192,3 +192,25 @@ class TestGetCluster:
             result = await get_cluster(user_id="user-456")
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cluster_unexpected_payload_passes_through(self):
+        """Should pass through unexpected JSON shapes (caller handles gracefully).
+
+        Note: This documents current behavior. The MCP layer trusts the backend
+        but consumers (get_my_clusters tool) handle missing keys with .get() defaults.
+        If stricter validation is needed, add it to persistence.py and update this test.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"unexpected": "shape"}  # Missing expected keys
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            result = await get_cluster(user_id="user-456")
+
+        # Currently passes through as-is (no validation at persistence layer)
+        assert result == {"unexpected": "shape"}
+        # Consumer must handle missing keys gracefully
