@@ -34,7 +34,7 @@ class RegisterRequest(BaseModel):
 
 # Supported scopes that can be registered
 SUPPORTED_SCOPES = {"focused.read", "focused.write", "focused.notify", "clarity.write"}
-DEFAULT_SCOPES = ["focused.read", "focused.write", "focused.notify"]
+DEFAULT_SCOPES = ["focused.read", "focused.write", "focused.notify", "clarity.write"]
 
 
 @router.post("/oauth/focused/register")
