@@ -219,3 +219,21 @@ class TestGetCluster:
         # Currently passes through as-is (no validation at persistence layer)
         assert result == {"unexpected": "shape"}
         # Consumer must handle missing keys gracefully
+
+    @pytest.mark.asyncio
+    async def test_get_cluster_invalid_json_returns_none(self):
+        """Should return None when backend returns invalid JSON (e.g., HTML error page).
+
+        This locks in the 'never crash MCP on backend weirdness' guarantee.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.side_effect = ValueError("Invalid JSON")
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            result = await get_cluster(user_id="user-456")
+
+        assert result is None
