@@ -80,6 +80,28 @@ class TestPersistCluster:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_persist_cluster_uses_post_not_get(self):
+        """Should use POST method, never GET (defensive method check)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"cluster_id": "test-123"}
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.get = AsyncMock()
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            await persist_cluster(
+                user_id="user-456",
+                cluster_data={"clusters": []},
+                thoughts_exhausted=True,
+                correctly_clustered=None,
+            )
+
+        mock_client.post.assert_called_once()
+        mock_client.get.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_persist_cluster_uses_shared_http_client(self):
         """Should use get_http_client() which has timeout configured.
 
@@ -190,6 +212,23 @@ class TestGetCluster:
             result = await get_cluster(user_id="user-456")
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cluster_uses_get_not_post(self):
+        """Should use GET method, never POST (defensive method check)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"cluster_id": "test-123", "cluster_data": {}}
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.post = AsyncMock()
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            await get_cluster(user_id="user-456")
+
+        mock_client.get.assert_called_once()
+        mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_cluster_uses_shared_http_client(self):
