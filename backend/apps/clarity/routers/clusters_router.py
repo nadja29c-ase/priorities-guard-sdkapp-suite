@@ -2,6 +2,22 @@
 Clarity clusters persistence endpoint.
 
 POST /api/clarity/clusters - Create new cluster snapshot
+GET /api/clarity/clusters - Retrieve latest cluster snapshot
+
+PERSISTENCE SEMANTICS:
+    Single-row-per-user (replace-latest), NOT append-only.
+
+    Each POST creates a new snapshot and deletes all previous snapshots
+    for that user. GET returns the single most recent snapshot.
+
+    This design was chosen because:
+    - Clarity is stateless from ChatGPT's perspective
+    - Only the current brain dump state matters
+    - Historical snapshots have no use case
+    - Simpler retention (no cleanup needed)
+
+    If append-only history is needed later, change the DELETE in
+    create_cluster() and update GET to handle multiple rows.
 """
 
 from uuid import UUID

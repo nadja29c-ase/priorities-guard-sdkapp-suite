@@ -3,6 +3,11 @@ Backend persistence for Clarity clusters.
 
 Handles saving and retrieving cluster snapshots via the backend API.
 Failures are logged but don't crash tool responses - user still sees their clusters.
+
+IMPORTANT:
+This module intentionally does NOT normalize or merge cluster state.
+It is a pure read/write layer. Reconciliation logic (if ever needed) lives
+in the get_my_clusters tool, not here.
 """
 
 import structlog
@@ -99,6 +104,12 @@ async def get_cluster(user_id: str) -> dict | None:
 
         if response.status_code == 200:
             data = response.json()
+            # Contract: backend returns single dict, not list
+            if isinstance(data, list):
+                logger.warning("clarity.retrieve.contract_violation",
+                              user_id=user_id,
+                              error="Backend returned list, expected dict")
+                return None
             logger.info("clarity.retrieve.success",
                        cluster_id=data.get("cluster_id"),
                        user_id=user_id)

@@ -83,9 +83,24 @@ async def handle(
                 user_id=user_id,
                 correlation_id=correlation_id)
 
-    cluster_data = await get_cluster(user_id)
+    # Fetch with exception handling - never crash on backend failures
+    try:
+        cluster_data = await get_cluster(user_id)
+    except Exception as e:
+        logger.warning("get_my_clusters.persistence_error",
+                      user_id=user_id,
+                      error=str(e))
+        cluster_data = None
 
-    if cluster_data is None:
+    # Extract clusters with defensive defaults
+    # Defense in depth: check dict type in case persistence layer returns unexpected type
+    clusters = []
+    if cluster_data is not None and isinstance(cluster_data, dict):
+        inner_data = cluster_data.get("cluster_data") or {}
+        clusters = inner_data.get("clusters") or []
+
+    # No usable history if: None response, missing data, or empty clusters
+    if not clusters:
         logger.info("get_my_clusters.no_history",
                    user_id=user_id)
         return mcp_types.CallToolResult(
@@ -99,7 +114,6 @@ async def handle(
             }
         )
 
-    clusters = cluster_data.get("cluster_data", {}).get("clusters", [])
     cluster_count = len(clusters)
 
     logger.info("get_my_clusters.retrieved",

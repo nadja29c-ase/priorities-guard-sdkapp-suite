@@ -29,7 +29,19 @@ class ClarityCluster(Base):
     Cluster snapshots persisted from MCP tool calls.
 
     Each row represents a single clustering result from `cluster_raw_thoughts`.
-    Append-only: each tool call creates a new row, no updates.
+
+    PERSISTENCE SEMANTICS: Single-row-per-user (replace-latest).
+        Each POST creates a new snapshot and deletes all previous snapshots
+        for that user. GET returns the single most recent snapshot.
+
+        This design was chosen because:
+        - Clarity is stateless from ChatGPT's perspective
+        - Only the current brain dump state matters
+        - Historical snapshots have no use case
+        - Simpler retention (no cleanup needed)
+
+        If append-only history is needed later, change the DELETE in
+        clusters_router.create_cluster() and update GET to handle multiple rows.
 
     cluster_data specification:
     - Stores logical clustering output only: {"clusters": [...]}
@@ -118,9 +130,14 @@ class ClarityCluster(Base):
 
     @property
     def cluster_count(self) -> int:
-        """Compute cluster count from cluster_data (not stored)."""
+        """Compute cluster count from cluster_data (not stored).
+
+        Defensive: handles corrupted data where clusters is None or missing.
+        """
         if self.cluster_data and "clusters" in self.cluster_data:
-            return len(self.cluster_data["clusters"])
+            clusters = self.cluster_data["clusters"]
+            if clusters is not None:
+                return len(clusters)
         return 0
 
     def __repr__(self) -> str:
