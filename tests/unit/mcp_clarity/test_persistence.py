@@ -80,6 +80,30 @@ class TestPersistCluster:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_persist_cluster_empty_user_id_returns_none(self):
+        """Should return None when user_id is empty string (defensive boundary test).
+
+        Documents behavior: sends X-User-ID: '' header, backend returns 401,
+        function returns None without crashing.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.text = "Unauthorized"
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            result = await persist_cluster(
+                user_id="",
+                cluster_data={"clusters": []},
+                thoughts_exhausted=True,
+                correctly_clustered=None,
+            )
+
+        assert result is None
+
+    @pytest.mark.asyncio
     async def test_persist_cluster_uses_post_not_get(self):
         """Should use POST method, never GET (defensive method check)."""
         mock_response = MagicMock()
@@ -351,5 +375,24 @@ class TestGetCluster:
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
             result = await get_cluster(user_id=None)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_cluster_empty_user_id_returns_none(self):
+        """Should return None when user_id is empty string (defensive boundary test).
+
+        Documents behavior: sends X-User-ID: '' header, backend returns 401,
+        function returns None without crashing.
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.text = "Unauthorized"
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            result = await get_cluster(user_id="")
 
         assert result is None
