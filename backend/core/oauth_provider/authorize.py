@@ -370,7 +370,7 @@ async def authorize_endpoint(
     ip = get_client_ip(request)
     await check_rate_limit(
         key=f"ratelimit:oauth:authorize:ip:{ip}",
-        limit=20,
+        limit=100,
         window=60,
         request=request
     )
@@ -453,7 +453,7 @@ async def authorize_endpoint(
     if login_hint:
         await check_rate_limit(
             key=f"ratelimit:oauth:authorize:login_hint:{login_hint}",
-            limit=20,
+            limit=100,
             window=60,
             request=request
         )
