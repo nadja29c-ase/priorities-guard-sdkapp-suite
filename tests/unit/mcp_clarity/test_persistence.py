@@ -157,6 +157,26 @@ class TestPersistCluster:
             mock_get_client.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_persist_cluster_logs_on_failure(self):
+        """Should log warning on failure (ops visibility guarantee)."""
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=Exception("Network failure"))
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            with patch("mcp_server.clarity.persistence.logger") as mock_logger:
+                await persist_cluster(
+                    user_id="user-456",
+                    cluster_data={"clusters": []},
+                    thoughts_exhausted=True,
+                    correctly_clustered=None,
+                )
+
+                mock_logger.warning.assert_called_once()
+                # Verify error details are logged
+                call_args = mock_logger.warning.call_args
+                assert "clarity.persist.error" in call_args.args
+
+    @pytest.mark.asyncio
     async def test_persist_cluster_includes_internal_secret(self):
         """Should include X-Internal-Secret header when configured."""
         mock_response = MagicMock()
@@ -279,6 +299,21 @@ class TestGetCluster:
 
             # Verify get_http_client() was called (not bypassed)
             mock_get_client.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_cluster_logs_on_failure(self):
+        """Should log warning on failure (ops visibility guarantee)."""
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=Exception("Network failure"))
+
+        with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
+            with patch("mcp_server.clarity.persistence.logger") as mock_logger:
+                await get_cluster(user_id="user-456")
+
+                mock_logger.warning.assert_called_once()
+                # Verify error details are logged
+                call_args = mock_logger.warning.call_args
+                assert "clarity.retrieve.error" in call_args.args
 
     @pytest.mark.asyncio
     async def test_get_cluster_includes_internal_secret(self):
