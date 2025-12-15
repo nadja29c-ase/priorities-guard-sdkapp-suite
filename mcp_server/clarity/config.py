@@ -161,6 +161,7 @@ SCOPES_SUPPORTED = ["clarity.write"]
 
 TOOL_SCOPES = {
     "cluster_raw_thoughts": ["clarity.write"],
+    "get_my_clusters": ["clarity.write"],
 }
 
 

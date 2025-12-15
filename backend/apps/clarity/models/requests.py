@@ -43,3 +43,13 @@ class CreateClusterResponse(BaseModel):
 
     cluster_id: UUID
     created_at: datetime
+
+
+class GetClusterResponse(BaseModel):
+    """Response body for GET /api/clarity/clusters."""
+
+    cluster_id: UUID
+    cluster_data: dict[str, Any]  # {"clusters": [...]}
+    thoughts_exhausted: bool
+    correctly_clustered: bool | None
+    created_at: datetime

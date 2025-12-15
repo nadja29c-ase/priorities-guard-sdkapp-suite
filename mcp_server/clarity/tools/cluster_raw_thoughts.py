@@ -29,6 +29,17 @@ logger = structlog.get_logger(__name__)
 DESCRIPTION = """
 Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next.
 
+STATE MANAGEMENT:
+- The database is the source of truth for the user's brain dump
+- If you're uncertain about the current state, call get_my_clusters first
+- When persisting, send ALL clusters (historical + new) in the clusters array
+- Never drop historical data unless user explicitly requests it
+
+MERGE RESPONSIBILITY:
+- get_my_clusters returns user's previous clusters (if any)
+- YOU (ChatGPT) merge previous clusters with new user input
+- This tool persists whatever you send — you control the merge logic
+
 WHEN TO CALL:
 - Call EARLY: After user expresses 5+ thought items, call immediately - don't wait
 - Content is PREDOMINANTLY business-related (NOT personal matters)

@@ -390,3 +390,150 @@ class TestClustersPersistence:
         assert len(all_clusters) == 2
         user_ids = {c.user_id for c in all_clusters}
         assert user_ids == {test_user.id, other_user.id}
+
+
+class TestGetClusters:
+    """Test GET /api/clarity/clusters endpoint."""
+
+    @pytest.fixture
+    async def test_user(self, async_session: AsyncSession) -> CoreUser:
+        """Create a test user for cluster retrieval tests."""
+        user = CoreUser(
+            id=uuid4(),
+            chatgpt_user_id=f"test_get_chatgpt_{uuid4().hex[:8]}",
+        )
+        async_session.add(user)
+        await async_session.commit()
+        await async_session.refresh(user)
+        return user
+
+    @pytest.mark.asyncio
+    async def test_get_clusters_returns_latest(self, client, test_user):
+        """GET returns the most recent cluster snapshot."""
+        # First, create a snapshot via POST
+        cluster_data = {
+            "clusters": [
+                {
+                    "cluster_name": "Work Tasks",
+                    "thought_items": ["Review PR", "Update docs"],
+                    "subclusters": [],
+                    "tags": ["delegate"],
+                }
+            ]
+        }
+
+        post_response = await client.post(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": str(test_user.id)},
+            json={
+                "cluster_data": cluster_data,
+                "thoughts_exhausted": True,
+                "correctly_clustered": True,
+            },
+        )
+        assert post_response.status_code == 201
+        created_cluster_id = post_response.json()["cluster_id"]
+
+        # Now retrieve via GET
+        get_response = await client.get(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": str(test_user.id)},
+        )
+
+        assert get_response.status_code == 200
+        data = get_response.json()
+
+        assert data["cluster_id"] == created_cluster_id
+        assert data["thoughts_exhausted"] is True
+        assert data["correctly_clustered"] is True
+        assert "created_at" in data
+        assert data["cluster_data"]["clusters"][0]["cluster_name"] == "Work Tasks"
+        assert len(data["cluster_data"]["clusters"][0]["thought_items"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_get_clusters_404_when_none(self, client, test_user):
+        """GET returns 404 when user has no cluster snapshots."""
+        response = await client.get(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": str(test_user.id)},
+        )
+
+        assert response.status_code == 404
+        assert "No cluster snapshot found" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_get_clusters_missing_user_id_returns_401(self, client):
+        """GET without X-User-ID returns 401."""
+        response = await client.get("/api/clarity/clusters")
+
+        assert response.status_code == 401
+        assert "X-User-ID" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_get_clusters_nonexistent_user_returns_404(self, client):
+        """GET with unknown user_id returns 404."""
+        fake_user_id = str(uuid4())
+
+        response = await client.get(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": fake_user_id},
+        )
+
+        assert response.status_code == 404
+        assert "User not found" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_get_clusters_invalid_user_id_format_returns_400(self, client):
+        """GET with invalid UUID format returns 400."""
+        response = await client.get(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": "not-a-uuid"},
+        )
+
+        assert response.status_code == 400
+        assert "Invalid user_id format" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_get_clusters_returns_most_recent_after_update(self, client, test_user):
+        """GET returns the most recent snapshot after multiple POSTs."""
+        # First POST
+        await client.post(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": str(test_user.id)},
+            json={
+                "cluster_data": {
+                    "clusters": [
+                        {"cluster_name": "Old", "thought_items": ["old item"], "subclusters": [], "tags": []}
+                    ]
+                },
+                "thoughts_exhausted": False,
+            },
+        )
+
+        # Second POST (replaces first)
+        post_response = await client.post(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": str(test_user.id)},
+            json={
+                "cluster_data": {
+                    "clusters": [
+                        {"cluster_name": "New", "thought_items": ["new item"], "subclusters": [], "tags": []}
+                    ]
+                },
+                "thoughts_exhausted": True,
+            },
+        )
+        new_cluster_id = post_response.json()["cluster_id"]
+
+        # GET should return the latest
+        get_response = await client.get(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": str(test_user.id)},
+        )
+
+        assert get_response.status_code == 200
+        data = get_response.json()
+
+        assert data["cluster_id"] == new_cluster_id
+        assert data["cluster_data"]["clusters"][0]["cluster_name"] == "New"
+        assert data["thoughts_exhausted"] is True

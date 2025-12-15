@@ -79,5 +79,6 @@ async def list_tools() -> List[mcp_types.Tool]:
 # If you add a new tool, import it here or it won't be in the registry.
 
 from . import cluster_raw_thoughts  # noqa: F401, E402
+from . import get_my_clusters  # noqa: F401, E402
 # from . import identify_relevant  # noqa: F401  (future)
 # from . import specify_next_steps  # noqa: F401  (future)

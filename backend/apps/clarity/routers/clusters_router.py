@@ -18,6 +18,7 @@ from backend.apps.clarity.db_models import ClarityCluster
 from backend.apps.clarity.models.requests import (
     CreateClusterRequest,
     CreateClusterResponse,
+    GetClusterResponse,
 )
 
 
@@ -107,6 +108,73 @@ async def _verify_user_exists(user_id: str, session: AsyncSession) -> UUID:
         )
 
     return user_uuid
+
+
+@router.get(
+    "/clusters",
+    response_model=GetClusterResponse,
+)
+async def get_clusters(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> GetClusterResponse:
+    """
+    Retrieve user's latest cluster snapshot.
+
+    Called by Clarity MCP server to fetch historical data for cross-session continuity.
+    Returns the most recent cluster snapshot for the user.
+
+    Headers:
+        X-User-ID: User UUID (required)
+        X-Internal-Secret: Internal API secret (required in production)
+
+    Returns:
+        200: Cluster snapshot data
+        401: Missing X-User-ID header
+        403: Invalid internal secret (production only)
+        404: No cluster snapshot found for user
+
+    Security:
+        Validates X-Internal-Secret header to ensure request comes from
+        trusted MCP server. In dev mode (INTERNAL_API_SECRET empty), this
+        check is skipped.
+    """
+    # Verify internal call (403 if invalid secret in production)
+    _verify_internal_call(request)
+
+    # Extract and validate user_id
+    user_id_str = _extract_user_id(request)
+    user_uuid = await _verify_user_exists(user_id_str, session)
+
+    # Query for latest cluster (ORDER BY created_at DESC LIMIT 1)
+    result = await session.execute(
+        select(ClarityCluster)
+        .where(ClarityCluster.user_id == user_uuid)
+        .order_by(ClarityCluster.created_at.desc())
+        .limit(1)
+    )
+    cluster = result.scalar_one_or_none()
+
+    if cluster is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No cluster snapshot found for user",
+        )
+
+    logger.info(
+        "clarity.cluster.retrieved",
+        cluster_id=str(cluster.id),
+        user_id=str(user_uuid),
+        cluster_count=cluster.cluster_count,
+    )
+
+    return GetClusterResponse(
+        cluster_id=cluster.id,
+        cluster_data=cluster.cluster_data,
+        thoughts_exhausted=cluster.thoughts_exhausted,
+        correctly_clustered=cluster.correctly_clustered,
+        created_at=cluster.created_at,
+    )
 
 
 @router.post(
