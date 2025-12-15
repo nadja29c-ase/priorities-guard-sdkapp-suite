@@ -118,7 +118,7 @@ def get_client_ip(request: Request) -> str:
 
 async def rate_limit_authorize(request: Request) -> None:
     """
-    Rate limit /authorize endpoint: 20 requests per minute per IP.
+    Rate limit /authorize endpoint: 100 requests per minute per IP.
 
     Args:
         request: FastAPI request object
@@ -128,7 +128,7 @@ async def rate_limit_authorize(request: Request) -> None:
     """
     ip = get_client_ip(request)
     key = f"ratelimit:oauth:authorize:{ip}"
-    await check_rate_limit(key, limit=20, window=60, request=request)
+    await check_rate_limit(key, limit=100, window=60, request=request)
 
 
 async def rate_limit_token(request: Request, client_id: str) -> None:
