@@ -253,17 +253,17 @@ async def create_cluster(
             detail=str(e),
         )
 
+    # ATOMIC REPLACE: Delete old snapshots first, then insert new one.
+    # This prevents race conditions where concurrent POSTs could:
+    # - Delete each other's newly inserted rows
+    # - Briefly have two active snapshots
+    # Single commit ensures atomicity.
+    delete_result = await session.execute(
+        delete(ClarityCluster).where(ClarityCluster.user_id == user_uuid)
+    )
     session.add(cluster)
     await session.commit()
     await session.refresh(cluster)
-
-    # Delete previous snapshots for this user (keep only current)
-    delete_result = await session.execute(
-        delete(ClarityCluster)
-        .where(ClarityCluster.user_id == user_uuid)
-        .where(ClarityCluster.id != cluster.id)
-    )
-    await session.commit()
 
     logger.info(
         "clarity.cluster.created",
