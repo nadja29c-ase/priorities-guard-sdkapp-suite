@@ -191,8 +191,10 @@ async def get_clusters(
             detail="No cluster snapshot found for user",
         )
 
+    correlation_id = getattr(request.state, "correlation_id", "system")
     logger.info(
         "clarity.cluster.retrieved",
+        correlation_id=correlation_id,
         cluster_id=str(cluster.id),
         user_id=str(user_uuid),
         cluster_count=cluster.cluster_count,
@@ -289,8 +291,10 @@ async def create_cluster(
     # Compute cluster count from payload (already validated by Pydantic)
     cluster_count = len(payload.cluster_data["clusters"])  # No .get() - fail loud if invariant broken
 
+    correlation_id = getattr(request.state, "correlation_id", "system")
     logger.info(
         "clarity.cluster.upserted",
+        correlation_id=correlation_id,
         cluster_id=str(cluster_id),
         user_id=str(user_uuid),
         cluster_count=cluster_count,
