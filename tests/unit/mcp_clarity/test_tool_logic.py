@@ -764,8 +764,7 @@ class TestTagValidation:
         assert "automate" in ALLOWED_TAGS
         assert "learn" in ALLOWED_TAGS
         assert "align" in ALLOWED_TAGS
-        assert "low value admin" in ALLOWED_TAGS
-        assert len(ALLOWED_TAGS) == 8
+        assert len(ALLOWED_TAGS) == 7
 
 
 # =============================================================================

@@ -79,8 +79,6 @@ Available tags:
 - "automate" → contains repetitive work to systematize
 - "learn" → contains skill gaps requiring knowledge acquisition
 - "align" → contains items needing discussion/agreement with others
-- "low value admin" → low-value administrative tasks to batch or eliminate
-
 CRITICAL: NEVER return plain text lists - ALWAYS use the widget to visualize clusters.
 """
 
@@ -129,7 +127,7 @@ INPUT_SCHEMA = {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                        "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align", "low value admin"]
+                                        "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"]
                                     },
                                     "maxItems": 3,
                                     "description": "Optional behavioral tags (max 3). Only use when intent is clear."
@@ -142,7 +140,7 @@ INPUT_SCHEMA = {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align", "low value admin"]
+                            "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"]
                         },
                         "maxItems": 3,
                         "description": "Optional behavioral tags (max 3). Only use when intent is clear."
@@ -159,14 +157,13 @@ REQUIRED_SCOPES = ["clarity.write"]
 
 # Behavioral tags - signal cluster requires different mental mode than execute-and-done
 ALLOWED_TAGS = [
-    "decide",          # contains choices/tradeoffs needing resolution
-    "research",        # contains unknowns needing investigation
-    "test",            # contains assumptions/hypotheses to test
-    "delegate",        # contains work for others
-    "automate",        # contains repetitive work to systematize
-    "learn",           # contains skill gaps requiring knowledge acquisition
-    "align",           # contains items needing discussion/agreement with others
-    "low value admin", # low-value administrative tasks to batch or eliminate
+    "decide",    # contains choices/tradeoffs needing resolution
+    "research",  # contains unknowns needing investigation
+    "test",      # contains assumptions/hypotheses to test
+    "delegate",  # contains work for others
+    "automate",  # contains repetitive work to systematize
+    "learn",     # contains skill gaps requiring knowledge acquisition
+    "align",     # contains items needing discussion/agreement with others
 ]
 
 # ============================================================================
