@@ -159,13 +159,13 @@ class TestClusterRequestValidation:
         )
         assert request.correctly_clustered is True
 
-    def test_missing_thoughts_exhausted(self):
-        """Test missing thoughts_exhausted raises ValidationError."""
-        with pytest.raises(ValidationError):
-            ClusterRequest(
-                correctly_clustered=None,
-                clusters=[ClusterInput(cluster_name="Test", thought_items=["item"])]
-            )
+    def test_missing_thoughts_exhausted_defaults_to_false(self):
+        """Test missing thoughts_exhausted defaults to False (LLM resilience)."""
+        request = ClusterRequest(
+            correctly_clustered=None,
+            clusters=[ClusterInput(cluster_name="Test", thought_items=["item"])]
+        )
+        assert request.thoughts_exhausted is False  # Safe default: user may have more
 
     def test_correctly_clustered_optional(self):
         """Test correctly_clustered defaults to None."""

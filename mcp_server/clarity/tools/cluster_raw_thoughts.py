@@ -150,7 +150,7 @@ INPUT_SCHEMA = {
             }
         }
     },
-    "required": ["thoughts_exhausted", "clusters"]
+    "required": ["clusters"]  # thoughts_exhausted defaults to false if missing
 }
 
 REQUIRED_SCOPES = ["clarity.write"]
@@ -228,7 +228,7 @@ class ClusterInput(BaseModel):
 
 class ClusterRequest(BaseModel):
     """Expected top-level structure from ChatGPT."""
-    thoughts_exhausted: bool
+    thoughts_exhausted: bool = False  # Default: user may have more thoughts
     correctly_clustered: Optional[bool] = None
     clusters: List[ClusterInput]
 
@@ -288,7 +288,7 @@ async def handle(
                       details=str(e.errors()))
 
         clusters_data = None
-        thoughts_exhausted = arguments.get("thoughts_exhausted", True)
+        thoughts_exhausted = arguments.get("thoughts_exhausted", False)  # Default: user may have more
         correctly_clustered = arguments.get("correctly_clustered", None)
         raw_clusters = arguments.get("clusters", [])
 
