@@ -29,6 +29,25 @@ logger = structlog.get_logger(__name__)
 DESCRIPTION = """
 Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next.
 
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL: TWO-TOOL CHAINING WORKFLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+If this is a NEW SESSION or you're UNSURE about user's history:
+1. Call get_my_clusters FIRST to retrieve existing clusters
+2. Merge returned clusters with new user thoughts
+3. Call THIS tool with the COMPLETE merged set
+4. THEN respond to user with the widget
+
+BOTH CALLS HAPPEN IN ONE TURN. Do NOT respond to user between calls.
+
+If you JUST called this tool or already know the full state:
+- Skip get_my_clusters
+- Merge new thoughts with clusters in your context
+- Call this tool directly
+
+═══════════════════════════════════════════════════════════════════════════════
+
 STATE MANAGEMENT:
 - The database is the source of truth for the user's brain dump
 - If you're uncertain about the current state, call get_my_clusters first

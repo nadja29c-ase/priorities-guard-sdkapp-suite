@@ -51,24 +51,44 @@ RESPONSE HANDLING:
 - If has_history=true and is_empty_snapshot=true: User had a session but cleared it
 - If has_history=true and is_empty_snapshot=false: Show user summary of clusters, ask what to add/change
 
-AFTER CALLING THIS TOOL (MERGE WORKFLOW):
-If user provided new thoughts AND has_history=true:
-1. You now have BOTH: new user thoughts + historical clusters from this tool
-2. Merge new thoughts into appropriate clusters:
-   - Add to existing clusters if they fit thematically
-   - Create new clusters for thoughts that don't fit existing ones
-   - Ask user if unsure about placement
-3. Call cluster_raw_thoughts with the COMPLETE merged set (historical + new)
-4. NEVER drop historical clusters - send ALL clusters in the array
-5. The widget will display the full merged brain dump
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL: TWO-TOOL CHAINING WORKFLOW
+═══════════════════════════════════════════════════════════════════════════════
 
-If user provided new thoughts AND has_history=false:
+If user provided new thoughts to organize, you MUST complete BOTH tool calls in ONE turn.
+Do NOT respond to the user between get_my_clusters and cluster_raw_thoughts.
+
+CORRECT FLOW (single turn, no user response between):
+1. Call get_my_clusters → receive historical clusters
+2. Merge new user thoughts with historical clusters
+3. Call cluster_raw_thoughts with the COMPLETE merged set
+4. THEN respond to user with the widget
+
+WRONG FLOW (breaks the experience):
+1. Call get_my_clusters → receive historical clusters
+2. Respond to user with text ← WRONG: user sees no widget, state is confused
+3. Wait for user input ← WRONG: user has to prompt again
+
+MERGE LOGIC (when has_history=true AND user has new thoughts):
+- You have: historical clusters (from this tool) + new thoughts (from user)
+- Merge new thoughts INTO existing clusters if they fit thematically
+- Create NEW clusters for thoughts that don't fit existing ones
+- Send ALL clusters (historical + new) to cluster_raw_thoughts
+- NEVER drop historical clusters unless user explicitly asks
+
+EXAMPLE:
+- get_my_clusters returns 4 clusters
+- User gave 7 new thoughts
+- You merge: some thoughts go into existing clusters, others form new clusters
+- You call cluster_raw_thoughts with 6 total clusters (merged result)
+- User sees widget with 6 clusters
+
+If has_history=false AND user has new thoughts:
 1. Cluster the new thoughts into logical groups
-2. Call cluster_raw_thoughts with the new clusters
+2. Call cluster_raw_thoughts immediately (same turn)
+3. THEN respond to user with the widget
 
-COMMON MISTAKE TO AVOID:
-Getting 4 historical clusters + 7 new thoughts ≠ confusion.
-It means: merge the 7 new thoughts INTO or ALONGSIDE the 4 clusters, then persist ALL.
+═══════════════════════════════════════════════════════════════════════════════
 
 The guarantee: Whenever you are uncertain, you can rehydrate from the database.
 """
