@@ -47,7 +47,9 @@ from mcp_server.clarity.config import CORS_ALLOWED_ORIGINS, IS_DEV
 logger = structlog.get_logger(__name__)
 
 # Create FastMCP instance
-mcp = FastMCP("clarity-mcp", streamable_http_path="/mcp")
+# stateless_http=True: Each request is self-contained, authenticated via JWT.
+# This avoids session ID issues on deploy (server restart clears in-memory sessions).
+mcp = FastMCP("clarity-mcp", streamable_http_path="/mcp", stateless_http=True)
 
 
 # ============================================================================
