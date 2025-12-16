@@ -44,6 +44,10 @@ class CreateClusterRequest(BaseModel):
         if not isinstance(clusters, list):
             raise ValueError("cluster_data['clusters'] must be a list")
 
+        # NOTE: Empty clusters list IS allowed.
+        # Valid use case: user starts brain dump but hasn't clustered yet.
+        # MCP tool handles empty state appropriately.
+
         # Validate each cluster has cluster_name
         for i, cluster in enumerate(clusters):
             if not isinstance(cluster, dict):
@@ -64,7 +68,13 @@ class CreateClusterResponse(BaseModel):
 
 
 class GetClusterResponse(BaseModel):
-    """Response body for GET /api/clarity/clusters."""
+    """Response body for GET /api/clarity/clusters.
+
+    NOTE: updated_at intentionally omitted.
+        Persistence uses replace-latest semantics (single row per user).
+        Each POST creates a new snapshot; there are no updates to existing rows.
+        updated_at would always equal created_at, providing no useful information.
+    """
 
     cluster_id: UUID
     cluster_data: dict[str, Any]  # {"clusters": [...]}
