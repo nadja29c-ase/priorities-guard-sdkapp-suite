@@ -273,7 +273,7 @@ async def create_cluster(
     result = await session.execute(stmt)
     row = result.one()
     cluster_id, created_at = row
-    await session.commit()
+    await session.commit()  # Explicit commit ensures data is persisted before response
 
     # Compute cluster count from payload (already validated by Pydantic)
     cluster_count = len(payload.cluster_data.get("clusters", []))
