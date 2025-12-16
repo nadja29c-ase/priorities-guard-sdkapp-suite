@@ -172,6 +172,8 @@ async def get_clusters(
     cluster = result.scalar_one_or_none()
 
     if cluster is None:
+        # 404 here means "user exists but has no snapshot"
+        # (distinct from 404 "User not found" in _verify_user_exists)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No cluster snapshot found for user",
