@@ -265,6 +265,16 @@ async def create_cluster(
     await session.commit()
     await session.refresh(cluster)
 
+    # Observability: warn if multiple rows were deleted (invariant drift)
+    # Should be 0 (first snapshot) or 1 (replacement). More indicates a bug.
+    if delete_result.rowcount and delete_result.rowcount > 1:
+        logger.warning(
+            "clarity.cluster.multiple_old_rows_deleted",
+            user_id=str(user_uuid),
+            deleted_count=delete_result.rowcount,
+            msg="Expected 0 or 1 old snapshots, found more. Check for race condition or bug.",
+        )
+
     logger.info(
         "clarity.cluster.created",
         cluster_id=str(cluster.id),
