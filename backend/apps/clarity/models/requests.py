@@ -18,7 +18,25 @@ class CreateClusterRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_cluster_data(self) -> "CreateClusterRequest":
-        """Validate cluster_data has required structure."""
+        """Validate cluster_data has required structure.
+
+        VALIDATION BOUNDARY:
+            This validates MINIMAL STRUCTURAL VIABILITY only:
+            - cluster_data contains "clusters" key
+            - clusters is a list
+            - each cluster is a dict with "cluster_name"
+
+            This does NOT validate:
+            - thought_items, subclusters, tags
+            - cluster object shape beyond name
+            - semantic correctness
+
+            Semantic validation is the MCP tool's responsibility.
+            The LLM controls cluster content; backend is a passthrough store.
+
+            Do NOT add deep validation here - it would break MCP flexibility
+            and couple backend to LLM prompt changes.
+        """
         if "clusters" not in self.cluster_data:
             raise ValueError("cluster_data must contain 'clusters' key")
 
