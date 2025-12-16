@@ -569,7 +569,7 @@ class TestClientRegistration:
             data = response.json()
             assert "client_id" in data
             assert "client_secret" in data
-            assert data["client_id"].startswith("focused-client-")
+            assert data["client_id"].startswith("pg-client-")
 
 
 # ============================================================================

@@ -40,6 +40,7 @@ SCOPE_DESCRIPTIONS_EN = {
     "focused.read": "Read your calendar events to detect focus sessions and provide insights.",
     "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
     "focused.notify": "Send notifications related to your focus schedule.",
+    "clarity.read": "View your existing thought clusters and brain dump history.",
     "clarity.write": "Organize and cluster your thoughts into visual groups.",
 }
 
@@ -47,6 +48,7 @@ SCOPE_DESCRIPTIONS_DE = {
     "focused.read": "Deine Kalendertermine lesen, um Fokus-Zeiten zu erkennen und dir hilfreiche Einblicke zu geben.",
     "focused.write": "Apple Fokus (den integrierten \"Nicht stören\"-Modus) auf deinem iPhone waehrend deiner Fokus-Zeiten ein- und ausschalten.",
     "focused.notify": "Relevante Benachrichtigungen senden",
+    "clarity.read": "Deine bestehenden Gedanken-Cluster und Brain-Dump-Verlauf ansehen.",
     "clarity.write": "Deine Gedanken in visuelle Gruppen organisieren und clustern.",
 }
 
@@ -118,7 +120,7 @@ def _normalize(s: str | None) -> str | None:
 def _normalize_redirect_uri(uri: str) -> str | None:
     """
     Normalize redirect_uri per RFC 3986 rules:
-    - scheme: lowercased
+    - scheme: must be HTTPS (or HTTP for localhost in dev)
     - host: lowercased
     - path: preserved case-sensitive
     - query: must be empty
@@ -143,9 +145,20 @@ def _normalize_redirect_uri(uri: str) -> str | None:
     if parsed.query or parsed.fragment:
         return None
 
+    scheme = parsed.scheme.lower()
+    host = parsed.netloc.lower().split(":")[0]  # Strip port for localhost check
+
+    # Enforce HTTPS for production security
+    # Allow HTTP only for localhost (dev/testing convenience)
+    is_localhost = host in ("localhost", "127.0.0.1", "::1")
+    if scheme == "http" and not is_localhost:
+        return None
+    if scheme not in ("http", "https"):
+        return None
+
     # Normalize scheme and host to lowercase
     normalized = parsed._replace(
-        scheme=parsed.scheme.lower(),
+        scheme=scheme,
         netloc=parsed.netloc.lower(),
         # Keep path exact
     )
@@ -339,6 +352,9 @@ async def authorize_endpoint(
     code_challenge = _normalize(code_challenge)
     code_challenge_method = _normalize(code_challenge_method)
     state = _normalize(state)
+    # NOTE: nonce is accepted for OIDC compatibility but intentionally not validated.
+    # We don't implement full OpenID Connect, and ChatGPT doesn't require nonce validation.
+    # It's passed through to the authorization code for clients that want it.
     nonce = _normalize(nonce)
 
     # =========================================================================

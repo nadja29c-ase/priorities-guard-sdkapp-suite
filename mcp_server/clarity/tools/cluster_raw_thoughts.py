@@ -385,6 +385,7 @@ async def handle(
         cluster_data=cluster_data_to_store,
         thoughts_exhausted=validated_request.thoughts_exhausted,
         correctly_clustered=validated_request.correctly_clustered,
+        correlation_id=correlation_id,
     )
 
     # ============================================================

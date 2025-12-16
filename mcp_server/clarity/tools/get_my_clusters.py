@@ -39,9 +39,17 @@ DO NOT CALL THIS TOOL IF:
 - You just persisted clusters via cluster_raw_thoughts (you know the current state)
 - You are certain the full state is present in your context
 
+RESPONSE FIELDS:
+- clusters: Array of cluster objects (empty if none)
+- has_history: Whether any prior snapshot exists in the database
+- is_empty_snapshot: True if a snapshot exists but contains no clusters
+  (e.g., user previously cleared their brain dump). Only meaningful when has_history=true.
+- last_updated: ISO timestamp of last snapshot update (only present when has_history=true)
+
 RESPONSE HANDLING:
-- If has_history=true: Show user summary of their clusters, ask what to add/change
-- If has_history=false: Tell user they're starting fresh, proceed to collect thoughts
+- If has_history=false: User is starting fresh, proceed to collect thoughts
+- If has_history=true and is_empty_snapshot=true: User had a session but cleared it
+- If has_history=true and is_empty_snapshot=false: Show user summary of clusters, ask what to add/change
 
 The guarantee: Whenever you are uncertain, you can rehydrate from the database.
 """
@@ -53,7 +61,7 @@ INPUT_SCHEMA = {
     "additionalProperties": False
 }
 
-REQUIRED_SCOPES = ["clarity.write"]
+REQUIRED_SCOPES = ["clarity.read"]  # Read-only tool
 
 # ============================================================================
 # Tool Handler
@@ -63,7 +71,7 @@ REQUIRED_SCOPES = ["clarity.write"]
 async def handle(
     user_id: str,
     correlation_id: str,
-    arguments: dict,
+    arguments: dict,  # Intentionally unused - read-only tool with no parameters
 ) -> mcp_types.CallToolResult:
     """
     Retrieve user's existing clusters.
@@ -71,13 +79,14 @@ async def handle(
     Args:
         user_id: Authenticated user ID from JWT
         correlation_id: Request correlation ID for tracing
-        arguments: Raw arguments from ChatGPT (empty for this tool)
+        arguments: Raw arguments from ChatGPT (unused - this tool takes no input)
 
     Returns:
-        CallToolResult with:
+        CallToolResult with structuredContent containing:
         - clusters: List of cluster objects (empty if none)
-        - has_history: Boolean indicating if user has existing data
-        - last_updated: ISO timestamp of last update (if has_history)
+        - has_history: Whether any prior snapshot exists
+        - is_empty_snapshot: True if snapshot exists but has no clusters
+        - last_updated: ISO timestamp of last update (if has_history=true)
     """
     logger.debug("get_my_clusters.handle.start",
                 user_id=user_id,
@@ -85,7 +94,10 @@ async def handle(
 
     # Fetch with exception handling - never crash on backend failures
     try:
-        cluster_data = await get_cluster(user_id)
+        cluster_data = await get_cluster(
+            user_id=user_id,
+            correlation_id=correlation_id,
+        )
     except Exception as e:
         logger.warning("get_my_clusters.persistence_error",
                       user_id=user_id,
@@ -95,27 +107,47 @@ async def handle(
     # Extract clusters with defensive defaults
     # Defense in depth: check dict type in case persistence layer returns unexpected type
     clusters = []
-    if cluster_data is not None and isinstance(cluster_data, dict):
+    has_snapshot = cluster_data is not None and isinstance(cluster_data, dict)
+    if has_snapshot:
         inner_data = cluster_data.get("cluster_data") or {}
         clusters = inner_data.get("clusters") or []
 
-    # No usable history if: None response, missing data, or empty clusters
-    if not clusters:
-        logger.info("get_my_clusters.no_history",
+    # No snapshot exists at all - truly starting fresh
+    if not has_snapshot:
+        logger.info("get_my_clusters.no_snapshot",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text="No existing clusters found. User is starting fresh."
+                text="No previous brain dump found. Starting fresh."
             )],
             structuredContent={
                 "clusters": [],
-                "has_history": False
+                "has_history": False,
+                "is_empty_snapshot": False  # No snapshot at all
             }
         )
 
     cluster_count = len(clusters)
 
+    # Snapshot exists but is empty (user cleared their clusters)
+    if cluster_count == 0:
+        logger.info("get_my_clusters.empty_snapshot",
+                   user_id=user_id)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Found your previous session, but clusters were cleared."
+            )],
+            structuredContent={
+                "clusters": [],
+                "has_history": True,
+                "is_empty_snapshot": True,
+                "last_updated": cluster_data.get("created_at")
+            }
+        )
+
+    # Snapshot exists with clusters
     logger.info("get_my_clusters.retrieved",
                user_id=user_id,
                cluster_count=cluster_count)
@@ -123,11 +155,12 @@ async def handle(
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Retrieved {cluster_count} existing clusters."
+            text=f"Found {cluster_count} cluster{'s' if cluster_count != 1 else ''} from your previous session."
         )],
         structuredContent={
             "clusters": clusters,
             "has_history": True,
+            "is_empty_snapshot": False,
             "last_updated": cluster_data.get("created_at")
         }
     )

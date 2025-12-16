@@ -21,12 +21,14 @@ from backend.core.config import settings
 router = APIRouter(tags=["oauth-provider"])
 
 # Supported scopes advertised in discovery (exported for testing)
-SCOPES_SUPPORTED = [
+# Sorted alphabetically for stable diffs and cleaner ordering
+SCOPES_SUPPORTED = sorted([
+    "clarity.read",
+    "clarity.write",
+    "focused.notify",
     "focused.read",
     "focused.write",
-    "focused.notify",
-    "clarity.write",
-]
+])
 
 
 @router.get("/.well-known/openid-configuration")

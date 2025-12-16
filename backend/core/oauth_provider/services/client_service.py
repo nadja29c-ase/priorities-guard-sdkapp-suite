@@ -29,7 +29,7 @@ async def create_oauth_client(
     Create a new OAuth client with encrypted credentials.
 
     Generates:
-    - Unique client_id (focused-client-{uuid})
+    - Unique client_id (pg-client-{uuid})
     - Secure client_secret (32-byte URL-safe token)
     - Encrypted client_secret_enc (AES-256 via Fernet)
 
@@ -38,6 +38,7 @@ async def create_oauth_client(
         client_name: Human-readable client name
         redirect_uris: List of allowed redirect URIs
         grant_types: Optional list of grant types (default: authorization_code, refresh_token)
+        scopes: Optional list of scopes (caller should provide explicit scopes)
         correlation_id: Optional correlation ID for logging
 
     Returns:
@@ -56,7 +57,7 @@ async def create_oauth_client(
         ...     db, "My App", ["https://example.com/callback"]
         ... )
         >>> print(client_id)
-        focused-client-12345678-1234-1234-1234-123456789abc
+        pg-client-12345678-1234-1234-1234-123456789abc
         >>> print(client_secret)
         dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
     """
@@ -66,10 +67,11 @@ async def create_oauth_client(
 
     # Set default scopes (must include all supported scopes)
     if scopes is None:
-        scopes = ["focused.read", "focused.write", "focused.notify", "clarity.write"]
+        scopes = ["focused.read", "focused.write", "focused.notify", "clarity.read", "clarity.write"]
 
     # Generate client credentials
-    client_id = f"focused-client-{uuid4()}"
+    # Prefix: pg = Priority Guardian (neutral, works for all apps)
+    client_id = f"pg-client-{uuid4()}"
     client_secret = secrets.token_urlsafe(32)  # 256-bit random secret
 
     # Encrypt client_secret for database storage (AES-256)
@@ -78,9 +80,17 @@ async def create_oauth_client(
 
     # Create client record as OAuth provider connection
     # Note: user_id is NULL for OAuth provider connections
+    #
+    # MODELING DECISION: provider=client_name
+    # We reuse the provider field for the human-readable client name.
+    # This means multiple OAuth clients can share the same provider value.
+    # Queries like "SELECT * FROM connections WHERE provider='X'" may return
+    # multiple rows. Use connection_type='oauth_provider' + client_id for
+    # unique lookups. If this becomes problematic, consider adding a fixed
+    # provider value (e.g., "oauth_client") and a separate client_name column.
     client = CoreConnection(
         user_id=None,  # OAuth provider clients are not user-specific
-        provider=client_name,
+        provider=client_name,  # Human-readable name (see note above)
         connection_type="oauth_provider",
         client_id=client_id,
         client_secret_enc=client_secret_encrypted,
@@ -89,11 +99,18 @@ async def create_oauth_client(
         # Required fields (set to defaults for oauth_provider connections)
         encrypted_access_token="",  # Not applicable for inbound OAuth
         scopes=scopes,  # OAuth scopes (defaults or requested)
-        token_expires_at=datetime.now(timezone.utc) + timedelta(days=365)  # Placeholder
+        # token_expires_at: Not meaningful for oauth_provider connections.
+        # OAuth provider clients don't have expiring tokens - they issue tokens.
+        # Set to 1 year as a placeholder to satisfy NOT NULL constraint.
+        token_expires_at=datetime.now(timezone.utc) + timedelta(days=365)
     )
 
     db.add(client)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
     # Log success (no secrets logged)
     request_logger = logger.bind(correlation_id=correlation_id) if correlation_id else logger

@@ -32,8 +32,10 @@ class ClarityCluster(Base):
     Each row represents a single clustering result from `cluster_raw_thoughts`.
 
     PERSISTENCE SEMANTICS: Single-row-per-user (replace-latest).
-        Each POST creates a new snapshot and deletes all previous snapshots
-        for that user. GET returns the single most recent snapshot.
+        Each POST upserts the user's snapshot (INSERT or UPDATE if exists).
+        GET returns the single snapshot for the user.
+
+        Enforced at DB level via UNIQUE constraint on user_id.
 
         This design was chosen because:
         - Clarity is stateless from ChatGPT's perspective
@@ -41,8 +43,9 @@ class ClarityCluster(Base):
         - Historical snapshots have no use case
         - Simpler retention (no cleanup needed)
 
-        If append-only history is needed later, change the DELETE in
-        clusters_router.create_cluster() and update GET to handle multiple rows.
+        If append-only history is needed later, remove the UNIQUE constraint,
+        change upsert to INSERT in clusters_router, and update GET to handle
+        multiple rows.
 
     cluster_data specification:
     - Stores logical clustering output only: {"clusters": [...]}
@@ -103,20 +106,24 @@ class ClarityCluster(Base):
         comment="User confirmation: null=pending, true=correct, false=wrong",
     )
 
-    # Audit timestamps
+    # Timestamps
+    # NOTE: created_at is RESET on each upsert to serve as "snapshot timestamp".
+    # This is intentional for replace-latest semantics - each POST is a fresh snapshot.
+    # It does NOT represent "first creation time" in the traditional audit sense.
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
-        comment="When cluster was created",
+        comment="Snapshot timestamp (reset on each upsert, NOT first creation)",
     )
 
+    # updated_at tracks the last DB write, same as created_at for single-row model
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
         onupdate=func.now(),
-        comment="When cluster was last updated",
+        comment="When row was last written (equals created_at for upserts)",
     )
 
     # Table-level constraints and indexes
@@ -124,7 +131,9 @@ class ClarityCluster(Base):
         # UNIQUE constraint enforces single-row-per-user at DB level
         # Enables upsert and prevents race conditions
         UniqueConstraint("user_id", name="uq_clarity_clusters_user_id"),
-        # Index for user's clusters ordered by creation time (most recent first)
+        # NOTE: This index is now redundant - UNIQUE constraint already indexes user_id,
+        # and single-row model means we never ORDER BY created_at.
+        # Kept for backwards compatibility; can be dropped in future cleanup migration.
         Index(
             "idx_clarity_clusters_user_created",
             "user_id",

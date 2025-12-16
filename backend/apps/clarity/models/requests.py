@@ -70,14 +70,16 @@ class CreateClusterResponse(BaseModel):
 class GetClusterResponse(BaseModel):
     """Response body for GET /api/clarity/clusters.
 
-    NOTE: updated_at intentionally omitted.
-        Persistence uses replace-latest semantics (single row per user).
-        Each POST creates a new snapshot; there are no updates to existing rows.
-        updated_at would always equal created_at, providing no useful information.
+    TIMESTAMP SEMANTICS:
+        created_at is the SNAPSHOT timestamp, reset on each POST.
+        It does NOT represent "first creation time" - each POST is a fresh snapshot.
+        This matches replace-latest semantics (single row per user).
+
+        updated_at is intentionally omitted (would always equal created_at).
     """
 
     cluster_id: UUID
     cluster_data: dict[str, Any]  # {"clusters": [...]}
     thoughts_exhausted: bool
     correctly_clustered: bool | None
-    created_at: datetime
+    created_at: datetime  # Snapshot timestamp (reset on each upsert)

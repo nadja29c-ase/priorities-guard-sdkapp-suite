@@ -85,11 +85,15 @@ CLARITY_AUDIENCE = get_env(
 )
 
 # Expected ChatGPT client ID for azp claim validation
-# Optional until ChatGPT connector marketplace is available
-CHATGPT_CLIENT_ID_CLARITY = get_env(
-    "CHATGPT_CLIENT_ID_CLARITY",
-    default=""  # Empty = skip azp validation (dev/pre-marketplace)
-)
+# SECURITY: Required in production/staging to prevent unauthorized token use.
+# In dev, empty string skips azp validation for local testing.
+if ENV in ("production", "staging"):
+    CHATGPT_CLIENT_ID_CLARITY = get_env("CHATGPT_CLIENT_ID_CLARITY", required=True)
+else:
+    CHATGPT_CLIENT_ID_CLARITY = get_env(
+        "CHATGPT_CLIENT_ID_CLARITY",
+        default=""  # Empty = skip azp validation (dev only)
+    )
 
 # Token expiry grace period (seconds)
 TOKEN_EXPIRY_GRACE_SECONDS = int(get_env(
@@ -125,6 +129,10 @@ BACKEND_URL = get_env(
 
 # Internal API secret for authenticated backend calls
 # Must match INTERNAL_API_SECRET in backend config
+# COUPLING: Empty string "" means "skip verification" in BOTH:
+#   - MCP server (here): sends no X-Internal-API-Secret header
+#   - Backend: accepts requests without the header when its secret is also ""
+# This enables local dev without secrets. In prod, both must have matching values.
 INTERNAL_API_SECRET = get_env(
     "INTERNAL_API_SECRET",
     default=""  # Empty = dev mode (backend skips verification)
@@ -151,8 +159,11 @@ OAUTH_ISSUER_URL = get_env(
     default="http://localhost:8000/oauth/pg"
 )
 
-# Supported OAuth scopes
-SCOPES_SUPPORTED = ["clarity.write"]
+# Supported OAuth scopes for Clarity MCP server
+# NOTE: This must mirror the clarity.* scopes in backend discovery
+# (backend/core/oauth_provider/discovery.py → SCOPES_SUPPORTED).
+# Unit tests in test_clarity_scope.py verify this invariant.
+SCOPES_SUPPORTED = ["clarity.read", "clarity.write"]
 
 
 # ============================================================================
@@ -161,7 +172,7 @@ SCOPES_SUPPORTED = ["clarity.write"]
 
 TOOL_SCOPES = {
     "cluster_raw_thoughts": ["clarity.write"],
-    "get_my_clusters": ["clarity.write"],
+    "get_my_clusters": ["clarity.read"],  # Read-only tool requires read scope
 }
 
 
@@ -169,4 +180,7 @@ TOOL_SCOPES = {
 # Logging Configuration
 # ============================================================================
 
+# NOTE: Currently unused - logging is configured via structlog defaults.
+# Reserved for future use if explicit log level control is needed.
+# To use: import LOG_LEVEL in server.py and pass to structlog.configure().
 LOG_LEVEL = get_env("LOG_LEVEL", default="INFO")

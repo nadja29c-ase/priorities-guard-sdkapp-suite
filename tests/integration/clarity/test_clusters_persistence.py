@@ -292,11 +292,11 @@ class TestClustersPersistence:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_get_returns_latest_after_multiple_posts(self, client, test_user):
-        """GET returns the most recent snapshot after multiple POSTs.
+    async def test_post_upserts_snapshot(self, client, test_user):
+        """POST upserts the user's snapshot (single-row model).
 
-        Behavioral guarantee: Users always see their latest data.
-        Implementation detail (not tested): How old data is handled.
+        Behavioral guarantee: Each POST replaces the previous snapshot.
+        With UNIQUE(user_id), there's THE snapshot, not "latest".
 
         This test asserts behavior via API, not implementation via DB queries.
         """
@@ -331,9 +331,8 @@ class TestClustersPersistence:
         )
         assert response2.status_code == 201
 
-        # Behavioral guarantee: GET returns latest data content
-        # Note: cluster_id may be the same (upsert) or different (delete+insert)
-        # depending on implementation. The guarantee is about DATA, not IDs.
+        # Behavioral guarantee: GET returns the current snapshot data
+        # With upsert, cluster_id stays the same (same row updated).
         get_response = await client.get(
             "/api/clarity/clusters",
             headers={"X-User-ID": str(test_user.id)},
@@ -397,7 +396,7 @@ class TestClustersPersistence:
         )
         user1_v2_cluster_id = response_user1_v2.json()["cluster_id"]
 
-        # Behavioral guarantee: Each user sees their own latest data
+        # Behavioral guarantee: Each user sees only their own snapshot
         get_user1 = await client.get(
             "/api/clarity/clusters",
             headers={"X-User-ID": str(test_user.id)},
@@ -431,8 +430,8 @@ class TestGetClusters:
         return user
 
     @pytest.mark.asyncio
-    async def test_get_clusters_returns_latest(self, client, test_user):
-        """GET returns the most recent cluster snapshot."""
+    async def test_get_clusters_success(self, client, test_user):
+        """GET returns the user's cluster snapshot."""
         # First, create a snapshot via POST
         cluster_data = {
             "clusters": [
@@ -532,9 +531,9 @@ class TestGetClusters:
         assert "Invalid user_id format" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_get_clusters_returns_most_recent_after_update(self, client, test_user):
-        """GET returns the most recent snapshot after multiple POSTs."""
-        # First POST
+    async def test_get_returns_updated_snapshot_after_upsert(self, client, test_user):
+        """GET returns the updated snapshot after upsert."""
+        # First POST (creates)
         await client.post(
             "/api/clarity/clusters",
             headers={"X-User-ID": str(test_user.id)},
@@ -548,7 +547,7 @@ class TestGetClusters:
             },
         )
 
-        # Second POST (replaces first)
+        # Second POST (upserts/updates)
         post_response = await client.post(
             "/api/clarity/clusters",
             headers={"X-User-ID": str(test_user.id)},
@@ -563,7 +562,7 @@ class TestGetClusters:
         )
         new_cluster_id = post_response.json()["cluster_id"]
 
-        # GET should return the latest
+        # GET returns the (single) snapshot
         get_response = await client.get(
             "/api/clarity/clusters",
             headers={"X-User-ID": str(test_user.id)},
@@ -576,71 +575,9 @@ class TestGetClusters:
         assert data["cluster_data"]["clusters"][0]["cluster_name"] == "New"
         assert data["thoughts_exhausted"] is True
 
-    @pytest.mark.asyncio
-    async def test_get_returns_snapshot_with_latest_created_at(self, client, test_user):
-        """GET returns snapshot with the latest created_at timestamp.
-
-        ORDERING GUARANTEE:
-            The query uses ORDER BY created_at DESC LIMIT 1.
-            This test explicitly verifies timestamp ordering to catch:
-            - Bad index definitions
-            - Query regressions
-            - Timezone handling bugs
-
-            Without this test, a broken ORDER BY would silently return stale data.
-        """
-        from datetime import datetime
-
-        # First POST
-        response1 = await client.post(
-            "/api/clarity/clusters",
-            headers={"X-User-ID": str(test_user.id)},
-            json={
-                "cluster_data": {
-                    "clusters": [
-                        {"cluster_name": "First", "thought_items": ["a"], "subclusters": [], "tags": []}
-                    ]
-                },
-                "thoughts_exhausted": True,
-            },
-        )
-        assert response1.status_code == 201
-        first_created_at = response1.json()["created_at"]
-
-        # Second POST
-        response2 = await client.post(
-            "/api/clarity/clusters",
-            headers={"X-User-ID": str(test_user.id)},
-            json={
-                "cluster_data": {
-                    "clusters": [
-                        {"cluster_name": "Second", "thought_items": ["b"], "subclusters": [], "tags": []}
-                    ]
-                },
-                "thoughts_exhausted": False,
-            },
-        )
-        assert response2.status_code == 201
-        second_created_at = response2.json()["created_at"]
-        second_cluster_id = response2.json()["cluster_id"]
-
-        # Verify second is actually later (sanity check)
-        first_dt = datetime.fromisoformat(first_created_at.replace("Z", "+00:00"))
-        second_dt = datetime.fromisoformat(second_created_at.replace("Z", "+00:00"))
-        assert second_dt >= first_dt, "Second snapshot must have later or equal timestamp"
-
-        # GET must return the snapshot with the latest created_at
-        get_response = await client.get(
-            "/api/clarity/clusters",
-            headers={"X-User-ID": str(test_user.id)},
-        )
-        assert get_response.status_code == 200
-        data = get_response.json()
-
-        # Ordering guarantee: returned snapshot is the latest
-        assert data["cluster_id"] == second_cluster_id
-        returned_dt = datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
-        assert returned_dt == second_dt, "GET must return snapshot with latest created_at"
+    # NOTE: test_get_returns_snapshot_with_latest_created_at was removed.
+    # With single-row model (UNIQUE user_id), there's no ordering concept.
+    # Ordering tests are meaningless when there's at most one row per user.
 
 
 class TestCorruptedDataHandling:

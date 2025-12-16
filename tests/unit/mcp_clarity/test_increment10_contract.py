@@ -281,8 +281,9 @@ class TestIncrement10EndToEndContract:
                 arguments={},
             )
 
-        # Contract: Empty clusters = no history
-        assert result.structuredContent["has_history"] is False
+        # Contract: Empty clusters = snapshot exists but empty
+        assert result.structuredContent["has_history"] is True
+        assert result.structuredContent["is_empty_snapshot"] is True
         assert result.structuredContent["clusters"] == []
 
 
@@ -313,7 +314,7 @@ class TestIncrement10OutputSchema:
             )
 
         # Schema contract
-        expected_keys = {"has_history", "clusters", "last_updated"}
+        expected_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated"}
         assert set(result.structuredContent.keys()) == expected_keys
 
     @pytest.mark.asyncio

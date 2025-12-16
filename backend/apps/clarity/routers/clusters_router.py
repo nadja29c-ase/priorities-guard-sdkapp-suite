@@ -1,14 +1,16 @@
 """
 Clarity clusters persistence endpoint.
 
-POST /api/clarity/clusters - Create new cluster snapshot
-GET /api/clarity/clusters - Retrieve latest cluster snapshot
+POST /api/clarity/clusters - Upsert cluster snapshot
+GET /api/clarity/clusters - Retrieve cluster snapshot
 
 PERSISTENCE SEMANTICS:
     Single-row-per-user (replace-latest), NOT append-only.
 
-    Each POST creates a new snapshot and deletes all previous snapshots
-    for that user. GET returns the single most recent snapshot.
+    Each POST upserts the user's snapshot (INSERT or UPDATE if exists).
+    GET returns the single snapshot for the user.
+
+    Enforced at DB level via UNIQUE constraint on user_id.
 
     This design was chosen because:
     - Clarity is stateless from ChatGPT's perspective
@@ -16,8 +18,13 @@ PERSISTENCE SEMANTICS:
     - Historical snapshots have no use case
     - Simpler retention (no cleanup needed)
 
-    If append-only history is needed later, change the DELETE in
-    create_cluster() and update GET to handle multiple rows.
+    If append-only history is needed later, remove the UNIQUE constraint,
+    change upsert to INSERT, and update GET to handle multiple rows.
+
+CONCURRENCY MODEL:
+    Last-write-wins. Concurrent POSTs for the same user may overwrite each
+    other; this is acceptable because Clarity snapshots represent full state
+    (not incremental deltas).
 """
 
 from uuid import UUID
@@ -137,10 +144,10 @@ async def get_clusters(
     session: AsyncSession = Depends(get_db),
 ) -> GetClusterResponse:
     """
-    Retrieve user's latest cluster snapshot.
+    Retrieve user's cluster snapshot.
 
-    Called by Clarity MCP server to fetch historical data for cross-session continuity.
-    Returns the most recent cluster snapshot for the user.
+    Called by Clarity MCP server to fetch persisted data for cross-session continuity.
+    Single-row model: each user has at most one snapshot (enforced by UNIQUE constraint).
 
     Headers:
         X-User-ID: User UUID (required)
@@ -162,14 +169,17 @@ async def get_clusters(
 
     # Extract and validate user_id
     user_id_str = _extract_user_id(request)
+
+    # NOTE: _verify_user_exists adds an extra DB round-trip but provides clearer
+    # error semantics: "User not found" (404) vs "No snapshot for user" (404).
+    # This helps debug MCP server issues (stale user IDs vs missing data).
+    # Trade-off accepted: ~1ms indexed PK lookup for better observability.
     user_uuid = await _verify_user_exists(user_id_str, session)
 
-    # Query for latest cluster (ORDER BY created_at DESC LIMIT 1)
+    # Single-row model: UNIQUE(user_id) guarantees at most one row per user.
+    # No ORDER BY or LIMIT needed - there's THE snapshot, not "latest".
     result = await session.execute(
-        select(ClarityCluster)
-        .where(ClarityCluster.user_id == user_uuid)
-        .order_by(ClarityCluster.created_at.desc())
-        .limit(1)
+        select(ClarityCluster).where(ClarityCluster.user_id == user_uuid)
     )
     cluster = result.scalar_one_or_none()
 
@@ -208,13 +218,14 @@ async def create_cluster(
     session: AsyncSession = Depends(get_db),
 ) -> CreateClusterResponse:
     """
-    Create a new cluster snapshot, replacing any previous snapshot for this user.
+    Upsert the user's cluster snapshot.
 
     Called by Clarity MCP server after successful clustering.
-    Keeps only the most recent snapshot per user (deletes old rows after insert).
+    Single-row model: INSERT if no snapshot exists, UPDATE if one does.
 
     Headers:
         X-User-ID: User UUID (required)
+        X-Internal-Secret: Internal API secret (required in production)
 
     Body:
         cluster_data: {"clusters": [...]}
@@ -258,7 +269,7 @@ async def create_cluster(
             correctly_clustered=payload.correctly_clustered,
         )
         .on_conflict_do_update(
-            constraint="uq_clarity_clusters_user_id",
+            index_elements=["user_id"],  # Safer than hardcoding constraint name
             set_={
                 "cluster_data": payload.cluster_data,
                 "thoughts_exhausted": payload.thoughts_exhausted,
@@ -276,7 +287,7 @@ async def create_cluster(
     await session.commit()  # Explicit commit ensures data is persisted before response
 
     # Compute cluster count from payload (already validated by Pydantic)
-    cluster_count = len(payload.cluster_data.get("clusters", []))
+    cluster_count = len(payload.cluster_data["clusters"])  # No .get() - fail loud if invariant broken
 
     logger.info(
         "clarity.cluster.upserted",

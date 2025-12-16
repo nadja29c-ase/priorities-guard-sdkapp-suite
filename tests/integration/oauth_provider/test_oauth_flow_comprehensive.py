@@ -159,14 +159,14 @@ async def test_user(test_db_session):
 
 @pytest.mark.asyncio
 async def test_client_registration_success(client):
-    """Test successful OAuth client registration."""
+    """Test successful OAuth client registration with default scopes."""
     response = await client.post(
         "/oauth/focused/register",
         json={
             "client_name": "My App",
             "redirect_uris": ["https://myapp.com/callback"],
             "grant_types": ["authorization_code", "refresh_token"],
-            "scope": "focused.read focused.write"
+            # No explicit scope - uses /oauth/focused/register defaults
         }
     )
 
@@ -175,8 +175,10 @@ async def test_client_registration_success(client):
 
     # Verify response structure
     assert "client_id" in data
+    assert data["client_id"].startswith("pg-client-")
     assert "client_secret" in data
     assert data["redirect_uris"] == ["https://myapp.com/callback"]
+    # Default scopes for /oauth/focused/register
     assert "focused.read" in data["scope"]
     assert "focused.write" in data["scope"]
     assert "focused.notify" in data["scope"]

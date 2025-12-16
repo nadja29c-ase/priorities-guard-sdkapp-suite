@@ -51,8 +51,8 @@ class TestGetMyClustersContract:
         assert len(result.content) > 0, "Must have user message"
         assert isinstance(result.content[0].text, str), "Message must be string"
 
-        # Persistence contract: exactly one call, no retries
-        mock_get.assert_called_once_with("user-new")
+        # Persistence contract: exactly one call with correlation_id, no retries
+        mock_get.assert_called_once_with(user_id="user-new", correlation_id="corr-123")
 
     @pytest.mark.asyncio
     async def test_persistence_error_does_not_crash_tool(self):
@@ -73,12 +73,12 @@ class TestGetMyClustersContract:
 
         assert result.isError is not True
         assert result.structuredContent["has_history"] is False
-        # No retry on error - exactly one call
-        mock_get.assert_called_once_with("user-456")
+        # No retry on error - exactly one call with correlation_id
+        mock_get.assert_called_once_with(user_id="user-456", correlation_id="corr-123")
 
     @pytest.mark.asyncio
     async def test_malformed_cluster_payload_missing_clusters_key(self):
-        """Malformed backend data must behave like 'no history'.
+        """Malformed backend data with missing clusters key is treated as empty snapshot.
 
         Backend might return data with missing 'clusters' key due to:
         - Schema changes
@@ -86,6 +86,7 @@ class TestGetMyClustersContract:
         - Partial data corruption
 
         Increment 10 promise: never crash, never hallucinate.
+        Semantic: snapshot exists (has_history=True), but empty (is_empty_snapshot=True).
         """
         malformed = {
             "cluster_id": "cluster-bad",
@@ -104,14 +105,16 @@ class TestGetMyClustersContract:
 
         assert result.isError is not True
         assert result.structuredContent["clusters"] == []
-        # Malformed = no usable history
-        assert result.structuredContent["has_history"] is False
+        # Snapshot exists but is malformed → treated as empty snapshot
+        assert result.structuredContent["has_history"] is True
+        assert result.structuredContent["is_empty_snapshot"] is True
 
     @pytest.mark.asyncio
     async def test_malformed_cluster_payload_clusters_is_none(self):
-        """Backend returning clusters=None must not crash.
+        """Backend returning clusters=None is treated as empty snapshot.
 
         Edge case where clusters key exists but value is None.
+        Semantic: snapshot exists (has_history=True), but empty (is_empty_snapshot=True).
         """
         malformed = {
             "cluster_id": "cluster-bad",
@@ -130,11 +133,15 @@ class TestGetMyClustersContract:
 
         assert result.isError is not True
         assert result.structuredContent["clusters"] == []
-        assert result.structuredContent["has_history"] is False
+        assert result.structuredContent["has_history"] is True
+        assert result.structuredContent["is_empty_snapshot"] is True
 
     @pytest.mark.asyncio
     async def test_malformed_cluster_payload_missing_cluster_data(self):
-        """Backend missing cluster_data entirely must not crash."""
+        """Backend missing cluster_data entirely is treated as empty snapshot.
+
+        Semantic: snapshot exists (has_history=True), but empty (is_empty_snapshot=True).
+        """
         malformed = {
             "cluster_id": "cluster-bad",
             # cluster_data key missing entirely
@@ -152,7 +159,8 @@ class TestGetMyClustersContract:
 
         assert result.isError is not True
         assert result.structuredContent["clusters"] == []
-        assert result.structuredContent["has_history"] is False
+        assert result.structuredContent["has_history"] is True
+        assert result.structuredContent["is_empty_snapshot"] is True
 
     @pytest.mark.asyncio
     async def test_partial_cluster_payload_passed_through(self):
@@ -434,8 +442,8 @@ class TestGetMyClustersContract:
         assert result.isError is not True
         assert result.structuredContent["has_history"] is False
         assert result.structuredContent["clusters"] == []
-        # Critical: no retry on exception - exactly one call
-        mock_get.assert_called_once_with("user-456")
+        # Critical: no retry on exception - exactly one call with correlation_id
+        mock_get.assert_called_once_with(user_id="user-456", correlation_id="corr-123")
 
     @pytest.mark.asyncio
     async def test_output_schema_stable_when_no_history(self):
@@ -463,7 +471,7 @@ class TestGetMyClustersContract:
         assert isinstance(content["clusters"], list)
 
         # No unexpected keys (when no history, last_updated is optional/absent)
-        allowed_keys = {"has_history", "clusters", "last_updated"}
+        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated"}
         assert set(content.keys()) <= allowed_keys, \
             f"Unexpected keys: {set(content.keys()) - allowed_keys}"
 
@@ -501,7 +509,7 @@ class TestGetMyClustersContract:
         assert content["last_updated"] is None or isinstance(content["last_updated"], str)
 
         # No unexpected keys
-        allowed_keys = {"has_history", "clusters", "last_updated"}
+        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated"}
         assert set(content.keys()) == allowed_keys, \
             f"Schema mismatch. Expected {allowed_keys}, got {set(content.keys())}"
 
@@ -793,7 +801,7 @@ class TestGetMyClusters:
 
     @pytest.mark.asyncio
     async def test_handle_calls_get_cluster_with_user_id(self):
-        """Should call get_cluster with correct user_id."""
+        """Should call get_cluster with correct user_id and correlation_id."""
         with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
@@ -803,7 +811,7 @@ class TestGetMyClusters:
                 arguments={},
             )
 
-        mock_get.assert_called_once_with("specific-user-id")
+        mock_get.assert_called_once_with(user_id="specific-user-id", correlation_id="corr-123")
 
     @pytest.mark.asyncio
     async def test_handle_ignores_arguments(self):

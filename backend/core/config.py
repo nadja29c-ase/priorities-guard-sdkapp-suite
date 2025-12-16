@@ -56,6 +56,22 @@ class Settings(BaseSettings):
     INTERNAL_API_SECRET: str = ""  # Empty = disabled (dev only)
 
     @model_validator(mode='after')
+    def validate_production_security(self) -> 'Settings':
+        """Fail fast if production is missing required security settings.
+
+        INTERNAL_API_SECRET protects internal endpoints (MCP -> backend).
+        In dev, empty secret disables verification for convenience.
+        In production, this MUST be set to prevent unauthorized access.
+        """
+        is_production = self.ENV.lower() in ("production", "prod")
+        if is_production and not self.INTERNAL_API_SECRET:
+            raise ValueError(
+                "INTERNAL_API_SECRET is required in production. "
+                "Set ENV=dev to disable this check for local development."
+            )
+        return self
+
+    @model_validator(mode='after')
     def validate_oauth_keys(self) -> 'Settings':
         """Validate OAuth keys are base64-encoded strings."""
         if self.OAUTH_RSA_PRIVATE_KEY:

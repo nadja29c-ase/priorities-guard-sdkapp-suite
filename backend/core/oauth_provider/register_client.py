@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.rate_limit import rate_limit_register
+from backend.core.oauth_provider.discovery import SCOPES_SUPPORTED
 from backend.core.oauth_provider.services.client_service import create_oauth_client
 from backend.core.oauth_provider.validators.client_metadata import (
     validate_client_name,
@@ -32,9 +33,15 @@ class RegisterRequest(BaseModel):
     scope: str | None = None  # Space-separated list of requested scopes
 
 
-# Supported scopes that can be registered
-SUPPORTED_SCOPES = {"focused.read", "focused.write", "focused.notify", "clarity.write"}
-DEFAULT_SCOPES = ["focused.read", "focused.write", "focused.notify", "clarity.write"]
+# Supported scopes derived from discovery (single source of truth)
+# Prevents drift between what's advertised and what's accepted
+SUPPORTED_SCOPES = set(SCOPES_SUPPORTED)
+
+# Route-specific defaults (least privilege principle)
+# - /oauth/focused/register: Focused app scopes only (backward compatibility)
+# - /oauth/pg/register: No default - scope must be explicitly requested
+DEFAULT_SCOPES_FOCUSED = ["focused.read", "focused.write", "focused.notify"]
+DEFAULT_SCOPES_PG = None  # Require explicit scope for /oauth/pg/register
 
 
 @router.post("/oauth/focused/register")
@@ -49,29 +56,35 @@ async def register_endpoint(
 
     Registers a new OAuth client and returns credentials.
 
+    Routes:
+        /oauth/focused/register: Focused app clients (defaults to focused.* scopes)
+        /oauth/pg/register: Priority Guardian clients (scope REQUIRED, no default)
+
     Request Body:
         client_name: Human-readable client name
         redirect_uris: Array of allowed redirect URIs (must use HTTPS)
         grant_types: Optional array of allowed grant types (default: authorization_code, refresh_token)
+        scope: Space-separated scopes (REQUIRED for /oauth/pg/register)
 
     Returns:
-        client_id: Generated client identifier (focused-client-{uuid})
+        client_id: Generated client identifier (pg-client-{uuid})
         client_secret: Generated client secret (32-byte URL-safe token)
         redirect_uris: Registered redirect URIs
-        scope: Allowed scopes (focused.read focused.write focused.notify)
+        scope: Allowed scopes
 
     Security Notes:
         - client_secret is only returned once (never stored in plain text)
         - Client must store client_secret securely
         - All redirect_uris must use HTTPS
         - Rate limited to prevent abuse
+        - Least privilege: /oauth/pg/register requires explicit scope
 
     Example Response:
         {
-            "client_id": "focused-client-12345678-1234-1234-1234-123456789abc",
+            "client_id": "pg-client-12345678-1234-1234-1234-123456789abc",
             "client_secret": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
             "redirect_uris": ["https://chat.openai.com/aip/callback"],
-            "scope": "focused.read focused.write focused.notify"
+            "scope": "clarity.read clarity.write"
         }
     """
     # Get correlation_id for logging
@@ -99,9 +112,19 @@ async def register_endpoint(
     # Set default grant types
     grant_types = register_request.grant_types or ["authorization_code", "refresh_token"]
 
+    # Determine route-specific default scopes (least privilege)
+    route_path = request.url.path
+    if route_path == "/oauth/focused/register":
+        default_scopes = DEFAULT_SCOPES_FOCUSED
+    else:
+        # /oauth/pg/register and any future routes require explicit scope
+        default_scopes = DEFAULT_SCOPES_PG  # None - requires explicit scope
+
     # Parse and validate requested scopes
-    if register_request.scope:
-        requested_scopes = register_request.scope.split()
+    # Normalize: treat whitespace-only as "no scope provided"
+    scope_str = (register_request.scope or "").strip()
+    if scope_str:
+        requested_scopes = scope_str.split()
         invalid_scopes = set(requested_scopes) - SUPPORTED_SCOPES
         if invalid_scopes:
             raise HTTPException(
@@ -111,15 +134,26 @@ async def register_endpoint(
         scopes = list(set(requested_scopes))  # Remove duplicates
         request_logger.info(
             "oauth.register.scopes_requested",
-            requested_scope=register_request.scope,
-            parsed_scopes=scopes
+            requested_scope=scope_str[:200],  # Truncate to prevent log spam
+            parsed_scopes=sorted(scopes)  # Log in sorted order for readability
         )
-    else:
-        scopes = DEFAULT_SCOPES.copy()
+    elif default_scopes is not None:
+        # Use route-specific defaults (only for /oauth/focused/register)
+        scopes = default_scopes.copy()
         request_logger.info(
             "oauth.register.scopes_default",
+            route=route_path,
             default_scopes=scopes
         )
+    else:
+        # /oauth/pg/register requires explicit scope
+        raise HTTPException(
+            status_code=400,
+            detail="scope is required for /oauth/pg/register"
+        )
+
+    # Sort scopes once for deterministic storage and response
+    scopes = sorted(scopes)
 
     # Create OAuth client (handles encryption and DB persistence)
     client_id, client_secret = await create_oauth_client(
@@ -136,5 +170,5 @@ async def register_endpoint(
         "client_id": client_id,
         "client_secret": client_secret,
         "redirect_uris": register_request.redirect_uris,
-        "scope": " ".join(sorted(scopes))
+        "scope": " ".join(scopes)  # Already sorted above
     })
