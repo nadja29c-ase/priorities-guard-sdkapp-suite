@@ -61,7 +61,7 @@ INPUT_SCHEMA = {
     "additionalProperties": False
 }
 
-REQUIRED_SCOPES = ["clarity.read"]  # Read-only tool
+REQUIRED_SCOPES = ["clarity.write"]  # Write implies read - single scope for all Clarity ops
 
 # ============================================================================
 # Tool Handler
