@@ -968,15 +968,15 @@ class TestToolBoundaryValidation:
         assert result.isError is True
 
     @pytest.mark.asyncio
-    async def test_tool_rejects_invalid_tag(self):
-        """Cluster with invalid tag is rejected at tool boundary."""
+    async def test_tool_strips_invalid_tag(self):
+        """Cluster with invalid tag has the tag stripped (resilient to cached schemas)."""
         arguments = {
             "thoughts_exhausted": True,
             "clusters": [{
                 "cluster_name": "BadTag",
                 "thought_items": ["item"],
                 "subclusters": [],
-                "tags": ["urgent"]  # Invalid tag
+                "tags": ["urgent"]  # Invalid tag - will be stripped
             }]
         }
 
@@ -990,8 +990,10 @@ class TestToolBoundaryValidation:
 
             result = await call_tool_request(_make_tool_request(arguments))
 
-        # Should return error
-        assert result.isError is True
+        # Should succeed with invalid tag stripped
+        assert result.isError is False
+        # Verify the invalid tag was removed
+        assert result.structuredContent["clusters"][0]["tags"] == []
 
     @pytest.mark.asyncio
     async def test_tool_rejects_too_many_tags(self):

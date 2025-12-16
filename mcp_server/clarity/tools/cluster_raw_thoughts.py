@@ -292,6 +292,35 @@ async def handle(
         correctly_clustered = arguments.get("correctly_clustered", None)
         raw_clusters = arguments.get("clusters", [])
 
+        # Repair: invalid tags -> strip tags not in ALLOWED_TAGS
+        # This handles ChatGPT using cached schemas with removed tags
+        if raw_clusters and isinstance(raw_clusters, list) and isinstance(raw_clusters[0], dict):
+            repaired_clusters = []
+            tags_stripped = False
+            for cluster in raw_clusters:
+                if not isinstance(cluster, dict):
+                    continue
+                repaired = dict(cluster)
+                # Strip invalid tags from cluster
+                if "tags" in repaired and isinstance(repaired["tags"], list):
+                    valid_tags = [t for t in repaired["tags"] if t in ALLOWED_TAGS]
+                    if len(valid_tags) != len(repaired["tags"]):
+                        tags_stripped = True
+                    repaired["tags"] = valid_tags
+                # Strip invalid tags from subclusters
+                if "subclusters" in repaired and isinstance(repaired["subclusters"], list):
+                    for subcluster in repaired["subclusters"]:
+                        if isinstance(subcluster, dict) and "tags" in subcluster:
+                            if isinstance(subcluster["tags"], list):
+                                valid_sub_tags = [t for t in subcluster["tags"] if t in ALLOWED_TAGS]
+                                if len(valid_sub_tags) != len(subcluster["tags"]):
+                                    tags_stripped = True
+                                subcluster["tags"] = valid_sub_tags
+                repaired_clusters.append(repaired)
+            if tags_stripped and repaired_clusters:
+                logger.info("cluster_raw_thoughts.repair_stripped_invalid_tags")
+                clusters_data = repaired_clusters
+
         # Repair: raw strings list -> wrap into single flat cluster
         if raw_clusters and isinstance(raw_clusters[0], str):
             clusters_data = [{
