@@ -172,7 +172,7 @@ SCOPES_SUPPORTED = ["clarity.read", "clarity.write"]
 
 TOOL_SCOPES = {
     "cluster_raw_thoughts": ["clarity.write"],
-    "get_my_clusters": ["clarity.read"],  # Read-only tool requires read scope
+    "get_my_clusters": ["clarity.write"],  # Write implies read - single scope for all Clarity ops
 }
 
 
