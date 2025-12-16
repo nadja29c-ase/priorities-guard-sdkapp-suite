@@ -184,3 +184,38 @@ TOOL_SCOPES = {
 # Reserved for future use if explicit log level control is needed.
 # To use: import LOG_LEVEL in server.py and pass to structlog.configure().
 LOG_LEVEL = get_env("LOG_LEVEL", default="INFO")
+
+
+# ============================================================================
+# CORS Configuration
+# ============================================================================
+
+# Environment detection for CORS
+IS_DEV = ENV in ("dev", "development", "local")
+
+# Default allowed origins (ChatGPT/OpenAI domains)
+# Used in dev mode only - production requires explicit configuration
+_DEFAULT_CORS_ORIGINS = [
+    "https://web-sandbox.oaiusercontent.com",  # ChatGPT widget sandbox
+    "https://chatgpt.com",
+    "https://chat.openai.com",
+]
+
+# CORS allowed origins from environment
+# SECURITY: Required in production to prevent silent breakage when OpenAI adds domains
+CORS_ALLOWED_ORIGINS_RAW = get_env("CORS_ALLOWED_ORIGINS")
+
+if ENV in ("production", "staging") and not CORS_ALLOWED_ORIGINS_RAW:
+    raise RuntimeError(
+        "CORS_ALLOWED_ORIGINS must be explicitly set in production/staging. "
+        "OpenAI may add subdomains without notice. "
+        "Set to comma-separated list of allowed origins "
+        "(e.g., 'https://web-sandbox.oaiusercontent.com,https://chatgpt.com')."
+    )
+
+# Parse origins from env var or use defaults (dev only)
+CORS_ALLOWED_ORIGINS: list[str] = (
+    [origin.strip() for origin in CORS_ALLOWED_ORIGINS_RAW.split(",") if origin.strip()]
+    if CORS_ALLOWED_ORIGINS_RAW
+    else _DEFAULT_CORS_ORIGINS
+)

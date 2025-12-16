@@ -639,6 +639,33 @@ async def notify_user(
 
 
 # ============================================================================
+# CORS Configuration (currently disabled - no widgets)
+# ============================================================================
+# NOTE: Enable CORS when UI output/widgets are added to Focused.
+# When enabling, follow the same pattern as Clarity:
+#
+# from mcp_server.focused.config import CORS_ALLOWED_ORIGINS, IS_DEV
+# from starlette.middleware.cors import CORSMiddleware
+#
+# # In create_app():
+# allowed_origins = list(CORS_ALLOWED_ORIGINS)
+# if IS_DEV:
+#     allowed_origins.extend([
+#         "http://localhost:5173",
+#         "http://127.0.0.1:5173",
+#     ])
+#
+# fastmcp_app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=allowed_origins,
+#     allow_methods=["GET", "POST", "OPTIONS"],
+#     allow_headers=["Authorization", "Content-Type", "Accept", "X-Correlation-ID"],
+#     allow_credentials=False,
+# )
+# ============================================================================
+
+
+# ============================================================================
 # Application Factory (Increment 14)
 # ============================================================================
 

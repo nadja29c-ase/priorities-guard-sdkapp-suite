@@ -38,6 +38,7 @@ from mcp_server.clarity.handlers import (
 )
 from mcp_server.clarity.handlers.tools import call_tool_request
 from mcp_server.clarity.tools import list_tools
+from mcp_server.clarity.config import CORS_ALLOWED_ORIGINS, IS_DEV
 
 # ============================================================================
 # Configuration
@@ -183,20 +184,30 @@ def create_app():
 
     # Add CORS
     # ---------------------------------------------------------------
-    # SECURITY: Wide-open CORS for development only.
-    # BEFORE PRODUCTION: Restrict allow_origins to specific domains.
+    # SECURITY: Restricted to known ChatGPT/OpenAI domains.
+    # Production requires explicit CORS_ALLOWED_ORIGINS env var.
+    # Dev mode adds localhost origins for MCP Inspector.
     # ---------------------------------------------------------------
-    try:
-        from starlette.middleware.cors import CORSMiddleware
-        fastmcp_app.add_middleware(
-            CORSMiddleware,
-            allow_origins=["*"],  # TODO: Restrict before production
-            allow_methods=["*"],
-            allow_headers=["*"],
-            allow_credentials=False,
-        )
-    except Exception:
-        pass
+    from starlette.middleware.cors import CORSMiddleware
+
+    # Build allowed origins list
+    allowed_origins = list(CORS_ALLOWED_ORIGINS)
+    if IS_DEV:
+        # Add localhost origins for MCP Inspector during development
+        allowed_origins.extend([
+            "http://localhost:5173",   # MCP Inspector default
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",   # Common dev port
+            "http://127.0.0.1:3000",
+        ])
+
+    fastmcp_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_methods=["GET", "POST", "OPTIONS"],  # Restrict to needed methods
+        allow_headers=["Authorization", "Content-Type", "Accept", "X-Correlation-ID"],
+        allow_credentials=False,
+    )
 
     # Register shutdown handler
     fastmcp_app.add_event_handler("shutdown", _cleanup_on_shutdown)
