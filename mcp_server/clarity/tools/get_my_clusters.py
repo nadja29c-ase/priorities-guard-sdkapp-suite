@@ -21,16 +21,15 @@ logger = structlog.get_logger(__name__)
 NAME = "get_my_clusters"
 
 DESCRIPTION = """
-Retrieve the user's historical brain dump clusters from the database in a visual form.
+Retrieve the user's historical brain dump clusters from the database when you can not rely on your own memory.Whenever you are uncertain, you can rehydrate from the database with the use of this tool.
 
 PURPOSE:
 The database is the source of truth. Your conversation context is a cache.
 Use this tool to rehydrate state whenever you're uncertain about the current state.
 
 CALL THIS TOOL WHEN:
-- At the start of a new conversation with the user involving brain dump / clarity / thoughts / tasks organization AND the user asks to see, continue, add to, or review their existing brain dump
-- f.e. user says "show my clusters", "show me my (clarity) board"
-- When the user provides new thoughts to organize, and you need to merge them with existing clusters before re-clustering
+- At the start of each new conversation with the user involving brain dump / clarity / thoughts / tasks organization AND the user asks to see, continue, add to, or review their existing board f.e. user says "show my clusters", "show me my (clarity) board"
+- you CAN NOT reliably recall prior user thoughts, clusters, or tasks from memory
 
 RESPONSE FIELDS:
 - clusters: Array of cluster objects (empty if none)
@@ -44,13 +43,6 @@ RESPONSE HANDLING:
 - If has_history=true and is_empty_snapshot=true: User had a session but cleared it
 - If has_history=true and is_empty_snapshot=false: Show user summary of clusters, ask what to add/change
 
-═══════════════════════════════════════════════════════════════════════════════
-CRITICAL: TWO-TOOL CHAINING WORKFLOW
-═══════════════════════════════════════════════════════════════════════════════
-
-If user provided new thoughts to organize, you MUST complete BOTH tool calls in ONE turn.
-Do NOT respond to the user between get_my_clusters and cluster_raw_thoughts.
-
 CORRECT FLOW (single turn, no user response between):
 1. Call get_my_clusters → receive historical clusters
 2. Merge new user thoughts with historical clusters
@@ -62,28 +54,6 @@ WRONG FLOW (breaks the experience):
 2. Respond to user with text ← WRONG: user sees no widget, state is confused
 3. Wait for user input ← WRONG: user has to prompt again
 
-MERGE LOGIC (when has_history=true AND user has new thoughts):
-- You have: historical clusters (from this tool) + new thoughts (from user)
-- Merge new thoughts INTO existing clusters if they fit thematically
-- Create NEW clusters for thoughts that don't fit existing ones
-- Send ALL clusters (historical + new) to cluster_raw_thoughts
-- NEVER drop historical clusters unless user explicitly asks
-
-EXAMPLE:
-- get_my_clusters returns 4 clusters
-- User gave 7 new thoughts
-- You merge: some thoughts go into existing clusters, others form new clusters
-- You call cluster_raw_thoughts with 6 total clusters (merged result)
-- User sees widget with 6 clusters
-
-If has_history=false AND user has new thoughts:
-1. Cluster the new thoughts into logical groups
-2. Call cluster_raw_thoughts immediately (same turn)
-3. THEN respond to user with the widget
-
-═══════════════════════════════════════════════════════════════════════════════
-
-The guarantee: Whenever you are uncertain, you can rehydrate from the database.
 """
 
 INPUT_SCHEMA = {
