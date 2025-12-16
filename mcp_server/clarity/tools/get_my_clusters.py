@@ -21,23 +21,16 @@ logger = structlog.get_logger(__name__)
 NAME = "get_my_clusters"
 
 DESCRIPTION = """
-Retrieve the user's current persisted brain dump clusters from the database.
+Retrieve the user's historical brain dump clusters from the database in a visual form.
 
 PURPOSE:
 The database is the source of truth. Your conversation context is a cache.
 Use this tool to rehydrate state whenever you're uncertain about the current state.
 
 CALL THIS TOOL WHEN:
-- This is the start of a new conversation involving brain dump / clarity / thoughts
-- You are unsure whether you have the user's full previous brain dump
-- The conversation may have been long enough that context could be truncated
-- The user asks to see, continue, add to, or review their existing brain dump
-- The user says "what do I have?", "show my clusters", "where were we?"
-
-DO NOT CALL THIS TOOL IF:
-- You already retrieved clusters earlier in the same conversation
-- You just persisted clusters via cluster_raw_thoughts (you know the current state)
-- You are certain the full state is present in your context
+- At the start of a new conversation with the user involving brain dump / clarity / thoughts / tasks organization AND the user asks to see, continue, add to, or review their existing brain dump
+- f.e. user says "show my clusters", "show me my (clarity) board"
+- When the user provides new thoughts to organize, and you need to merge them with existing clusters before re-clustering
 
 RESPONSE FIELDS:
 - clusters: Array of cluster objects (empty if none)

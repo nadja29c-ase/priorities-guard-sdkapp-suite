@@ -27,48 +27,40 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """
-Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next.
+(Re)Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next.
 
 ═══════════════════════════════════════════════════════════════════════════════
-CRITICAL: TWO-TOOL CHAINING WORKFLOW
+CRITICAL: HISTORICAL CONTEXT REQUIREMENT
 ═══════════════════════════════════════════════════════════════════════════════
 
-If this is a NEW SESSION or you're UNSURE about user's history:
-1. Call get_my_clusters FIRST to retrieve existing clusters
-2. Merge returned clusters with new user thoughts
-3. Call THIS tool with the COMPLETE merged set
-4. THEN respond to user with the widget
+BEFORE calling this tool, you MUST call get_my_clusters first.
 
-BOTH CALLS HAPPEN IN ONE TURN. Do NOT respond to user between calls.
+WHY: The user may have existing thought items from previous sessions. 
+If you skip this step, you will only cluster NEW thoughts and ignore 
+what the user already organized — resulting in incomplete, fragmented output.
 
-If you JUST called this tool or already know the full state:
-- Skip get_my_clusters
-- Merge new thoughts with clusters in your context
-- Call this tool directly
+WORKFLOW:
+1. Call get_my_clusters → receive existing clusters (if any)
+2. Consider existing clusters when organizing new user input
+3. Call THIS tool with clusters containing BOTH existing + new thought items
+4. Never drop existing thought items unless user explicitly asks to delete them
+
+EXCEPTION: Skip get_my_clusters ONLY if:
+- You already called it earlier in THIS conversation
+- You are certain user has no prior history (brand new user, first interaction)
 
 ═══════════════════════════════════════════════════════════════════════════════
-
-STATE MANAGEMENT:
-- The database is the source of truth for the user's brain dump
-- If you're uncertain about the current state, call get_my_clusters first
-- When persisting, send ALL clusters (historical + new) in the clusters array
-- Never drop historical data unless user explicitly requests it
-
-MERGE RESPONSIBILITY:
-- get_my_clusters returns user's previous clusters (if any)
-- YOU (ChatGPT) merge previous clusters with new user input
-- This tool persists whatever you send — you control the merge logic
 
 WHEN TO CALL:
-- Call EARLY: After user expresses 5+ thought items, call immediately - don't wait
+- After user expresses 5+ thought items — call immediately, don't wait
 - Content is PREDOMINANTLY business-related (NOT personal matters)
-- Call REPEATEDLY as user adds more thoughts to update clusters
+- User asks to add more thoughts, update clusters, or change existing ones
 
 PROGRESSIVE CLUSTERING FLOW:
-1. User shares thoughts → after 5+ items, call tool with thoughts_exhausted: false
-2. Widget renders current clusters, evtl. subclusters, evtl. tags
+1. User shares thoughts → after 5+ items, call get_my_clusters, then this tool
+2. Widget renders current clusters (with subclusters and tags if applicable)
 3. Ask: "What else is on your mind?"
-4. User adds more → ALWAYS re-call tool to update clusters with ALL user thoughts so far
+4. User adds more → call this tool with ALL thoughts (existing + new)
 5. When user says "that's all" → call with thoughts_exhausted: true
 6. Ask: "Do these clusters look accurate?" (correctly_clustered confirmation)
 
@@ -83,12 +75,12 @@ CLUSTERING STRATEGY:
 - Nested: subclusters only (complex groupings)
 - Mixed: both (some ungrouped + some grouped)
 
-BEHAVIORAL- HINT TAGS (optional, max 3 per cluster/subcluster):
+BEHAVIORAL-HINT TAGS (optional, max 3 per cluster/subcluster):
 Tags signal the cluster requires a different mental mode than normal execute-and-done work.
 ONLY TAG WHEN:
-- user intent is NOT AMBIGOUS and DOMINANT within the cluster
-- user intent matches one of the available tags.
-- user thought items are BUSINESS-RELATED (NOT personal matters or household chores f.e. plan a date night, grocery shopping).
+- User intent is NOT AMBIGUOUS and DOMINANT within the cluster
+- User intent matches one of the available tags
+- Thought items are BUSINESS-RELATED (NOT personal matters like "plan a date night")
 
 Available tags:
 - "decide" → contains choices/tradeoffs needing resolution
@@ -98,7 +90,6 @@ Available tags:
 - "automate" → contains repetitive work to systematize
 - "learn" → contains skill gaps requiring knowledge acquisition
 - "align" → contains items needing discussion/agreement with others
-CRITICAL: NEVER return plain text lists - ALWAYS use the widget to visualize clusters.
 """
 
 INPUT_SCHEMA = {
