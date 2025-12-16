@@ -16,6 +16,7 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     Index,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -120,6 +121,9 @@ class ClarityCluster(Base):
 
     # Table-level constraints and indexes
     __table_args__ = (
+        # UNIQUE constraint enforces single-row-per-user at DB level
+        # Enables upsert and prevents race conditions
+        UniqueConstraint("user_id", name="uq_clarity_clusters_user_id"),
         # Index for user's clusters ordered by creation time (most recent first)
         Index(
             "idx_clarity_clusters_user_created",

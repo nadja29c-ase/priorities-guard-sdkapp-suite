@@ -23,8 +23,10 @@ PERSISTENCE SEMANTICS:
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from sqlalchemy import delete, select
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import func
 import structlog
 
 from backend.core.database import get_db
@@ -237,55 +239,53 @@ async def create_cluster(
     user_id_str = _extract_user_id(request)
     user_uuid = await _verify_user_exists(user_id_str, session)
 
-    # Create cluster record
-    cluster = ClarityCluster(
-        user_id=user_uuid,
-        cluster_data=payload.cluster_data,
-        thoughts_exhausted=payload.thoughts_exhausted,
-        correctly_clustered=payload.correctly_clustered,
-    )
+    # Validation is handled by Pydantic (CreateClusterRequest.validate_cluster_data)
+    # which enforces minimal structural viability before we reach here.
 
-    # Validate before insert
-    try:
-        cluster.validate()
-    except ValueError as e:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+    # UPSERT: Insert new row or update existing row for this user.
+    # The UNIQUE constraint on user_id (uq_clarity_clusters_user_id) enforces
+    # single-row-per-user at the database level, preventing race conditions
+    # where concurrent POSTs could create duplicate rows.
+    #
+    # On conflict: we update all data fields AND reset created_at to preserve
+    # "replace-latest" semantics where each POST represents a fresh snapshot.
+    stmt = (
+        insert(ClarityCluster)
+        .values(
+            user_id=user_uuid,
+            cluster_data=payload.cluster_data,
+            thoughts_exhausted=payload.thoughts_exhausted,
+            correctly_clustered=payload.correctly_clustered,
         )
-
-    # ATOMIC REPLACE: Delete old snapshots first, then insert new one.
-    # This prevents race conditions where concurrent POSTs could:
-    # - Delete each other's newly inserted rows
-    # - Briefly have two active snapshots
-    # Single commit ensures atomicity.
-    delete_result = await session.execute(
-        delete(ClarityCluster).where(ClarityCluster.user_id == user_uuid)
+        .on_conflict_do_update(
+            constraint="uq_clarity_clusters_user_id",
+            set_={
+                "cluster_data": payload.cluster_data,
+                "thoughts_exhausted": payload.thoughts_exhausted,
+                "correctly_clustered": payload.correctly_clustered,
+                "created_at": func.now(),  # Reset timestamp on replace
+                "updated_at": func.now(),
+            },
+        )
+        .returning(ClarityCluster.id, ClarityCluster.created_at)
     )
-    session.add(cluster)
+
+    result = await session.execute(stmt)
+    row = result.one()
+    cluster_id, created_at = row
     await session.commit()
-    await session.refresh(cluster)
 
-    # Observability: warn if multiple rows were deleted (invariant drift)
-    # Should be 0 (first snapshot) or 1 (replacement). More indicates a bug.
-    if delete_result.rowcount and delete_result.rowcount > 1:
-        logger.warning(
-            "clarity.cluster.multiple_old_rows_deleted",
-            user_id=str(user_uuid),
-            deleted_count=delete_result.rowcount,
-            msg="Expected 0 or 1 old snapshots, found more. Check for race condition or bug.",
-        )
+    # Compute cluster count from payload (already validated by Pydantic)
+    cluster_count = len(payload.cluster_data.get("clusters", []))
 
     logger.info(
-        "clarity.cluster.created",
-        cluster_id=str(cluster.id),
+        "clarity.cluster.upserted",
+        cluster_id=str(cluster_id),
         user_id=str(user_uuid),
-        cluster_count=cluster.cluster_count,  # Computed property
-        deleted_old_rows=delete_result.rowcount,
+        cluster_count=cluster_count,
     )
 
     return CreateClusterResponse(
-        cluster_id=cluster.id,
-        created_at=cluster.created_at,
+        cluster_id=cluster_id,
+        created_at=created_at,
     )
