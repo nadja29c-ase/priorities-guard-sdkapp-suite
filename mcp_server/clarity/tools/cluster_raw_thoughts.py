@@ -27,37 +27,15 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """
-(Re)Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next.
-
-═══════════════════════════════════════════════════════════════════════════════
-CRITICAL: HISTORICAL CONTEXT REQUIREMENT
-═══════════════════════════════════════════════════════════════════════════════
-
-BEFORE calling this tool, you MUST call get_my_clusters first.
-
-WHY: The user may have existing thought items from previous sessions. 
-If you skip this step, you will only cluster NEW thoughts and ignore 
-what the user already organized — resulting in incomplete, fragmented output.
-
-WORKFLOW:
-1. Call get_my_clusters → receive existing clusters (if any)
-2. Consider existing clusters when organizing new user input
-3. Call THIS tool with clusters containing BOTH existing + new thought items
-4. Never drop existing thought items unless user explicitly asks to delete them
-
-EXCEPTION: Skip get_my_clusters ONLY if:
-- You already called it earlier in THIS conversation
-- You are certain user has no prior history (brand new user, first interaction)
-
-═══════════════════════════════════════════════════════════════════════════════
+(Re)Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next. This tool renders a visual board that is easily digestible to the user.
 
 WHEN TO CALL:
 - After user expresses 5+ thought items — call immediately, don't wait
 - Content is PREDOMINANTLY business-related (NOT personal matters)
-- User asks to add more thoughts, update clusters, or change existing ones
+- User asks to add more thoughts, update clusters, or change existing ones within same conversation with you
 
 PROGRESSIVE CLUSTERING FLOW:
-1. User shares thoughts → after 5+ items, call get_my_clusters, then this tool
+1. User shares thoughts → after 5+ items, call this tool
 2. Widget renders current clusters (with subclusters and tags if applicable)
 3. Ask: "What else is on your mind?"
 4. User adds more → call this tool with ALL thoughts (existing + new)

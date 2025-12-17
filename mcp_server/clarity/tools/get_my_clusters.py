@@ -20,40 +20,40 @@ logger = structlog.get_logger(__name__)
 
 NAME = "get_my_clusters"
 
-DESCRIPTION = """
-Retrieve the user's historical brain dump clusters from the database when you can not rely on your own memory.Whenever you are uncertain, you can rehydrate from the database with the use of this tool.
+DESCRIPTION =DESCRIPTION = """
+Retrieve the user's historical clusters with thought items from the database when you can not rely on your own memory. Whenever you are uncertain, you can rehydrate from the database with the use of this tool.
 
-PURPOSE:
-The database is the source of truth. Your conversation context is a cache.
-Use this tool to rehydrate state whenever you're uncertain about the current state.
+WHEN TO CALL THIS TOOL:
+- At the start of EACH NEW conversation INVOLVING need for clarity / unorganized thoughts and tasks
+- User asks to MERGE new thought items with their prior clusters from previous conversations
+- User asks to VIEW, SHOW, or REVIEW their existing clusters
+- You CAN NOT reliably recall prior user thoughts, clusters, or tasks from memory
 
-CALL THIS TOOL WHEN:
-- At the start of each new conversation with the user involving brain dump / clarity / thoughts / tasks organization AND the user asks to see, continue, add to, or review their existing board f.e. user says "show my clusters", "show me my (clarity) board"
-- you CAN NOT reliably recall prior user thoughts, clusters, or tasks from memory
+DO NOT CALL THIS TOOL:
+- You already called it earlier in THIS conversation AND NO NEW conversation started
 
 RESPONSE FIELDS:
-- clusters: Array of cluster objects (empty if none)
-- has_history: Whether any prior snapshot exists in the database
+- clusters: Array of cluster objects with user's thought items (empty if none)
+- has_history: Whether any prior snapshot of clustered thought items exists in the database
 - is_empty_snapshot: True if a snapshot exists but contains no clusters
-  (e.g., user previously cleared their brain dump). Only meaningful when has_history=true.
+  (e.g., user previously cleared their clusters). Only meaningful when has_history=true.
 - last_updated: ISO timestamp of last snapshot update (only present when has_history=true)
 
 RESPONSE HANDLING:
-- If has_history=false: User is starting fresh, proceed to collect thoughts
-- If has_history=true and is_empty_snapshot=true: User had a session but cleared it
-- If has_history=true and is_empty_snapshot=false: Show user summary of clusters, ask what to add/change
+- If has_history=false: User is starting fresh, proceed to collect thoughts with cluster_raw_thoughts tool
+- If has_history=true and is_empty_snapshot=true: User had a session but cleared it, proceed to collect thoughts with cluster_raw_thoughts tool
+- If has_history=true and is_empty_snapshot=false: Proceed based on user intent (see flows below)
 
-CORRECT FLOW (single turn, no user response between):
+FLOW A — User wants to ADD new thoughts (single turn, no user response between):
 1. Call get_my_clusters → receive historical clusters
-2. Merge new user thoughts with historical clusters
-3. Call cluster_raw_thoughts with the COMPLETE merged set
-4. THEN respond to user with the widget
+2. Merge new user thoughts with historical clusters → NO USER OUTPUT YET 
+3. Call cluster_raw_thoughts with the COMPLETE MERGED SET
+4. THEN respond to user WITH THE WIDGET showing updated merged clusters
 
-WRONG FLOW (breaks the experience):
+FLOW B — User wants to VIEW existing clusters only:
 1. Call get_my_clusters → receive historical clusters
-2. Respond to user with text ← WRONG: user sees no widget, state is confused
-3. Wait for user input ← WRONG: user has to prompt again
-
+2. Summarize ALL clusters for user (names, item counts)
+3. Ask what they'd like to do (add, reorganize, delete)
 """
 
 INPUT_SCHEMA = {
