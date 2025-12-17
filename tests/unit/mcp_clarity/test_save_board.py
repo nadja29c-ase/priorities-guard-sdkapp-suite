@@ -716,12 +716,13 @@ class TestSuccessResponse:
     @pytest.mark.asyncio
     @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
     async def test_success_response_contains_meta_with_widget_template(self, mock_persist):
-        """Success response has _meta with widget template for rendering."""
+        """Success response has _meta with widget template when render_widget=True."""
         result = await handle(
             user_id="test-user",
             correlation_id="test-corr",
             arguments={
                 "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
+                "render_widget": True,
             },
         )
 
@@ -731,6 +732,22 @@ class TestSuccessResponse:
         assert result.meta.get("openai/outputTemplate") == WIDGET_URI
         assert result.meta.get("openai/widgetAccessible") is True
         assert result.meta.get("openai/resultCanProduceWidget") is True
+
+    @pytest.mark.asyncio
+    @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
+    async def test_success_response_no_meta_by_default(self, mock_persist):
+        """Success response has no _meta when render_widget=False (default)."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        # Default render_widget=False means no widget metadata
+        assert result.meta is None
 
     @pytest.mark.asyncio
     @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)

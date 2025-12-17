@@ -56,7 +56,9 @@ WHEN TO CALL:
 - User asks to save their board
 - Widget Save button clicked
 
-Returns the saved board with widget showing "✓ Saved" indicator.
+Parameters:
+- clusters: Board state to save
+- render_widget: If true, show new widget. Default false (existing widget updates via saved_board_hash)
 """
 
 INPUT_SCHEMA = {
@@ -65,6 +67,10 @@ INPUT_SCHEMA = {
         "confirmed": {
             "type": "boolean",
             "description": "Optional. Defaults to true. Used by widget for modal confirmation."
+        },
+        "render_widget": {
+            "type": "boolean",
+            "description": "If true, render widget with saved board. Default false."
         },
         "clusters": {
             "type": "array",
@@ -141,6 +147,7 @@ class SaveBoardRequest(BaseModel):
     """Expected top-level structure for save request."""
     confirmed: bool = True  # Default to True for LLM calls
     clusters: List[ClusterInput]
+    render_widget: bool = False  # Default False - existing widget updates via hash
 
 
 # ============================================================================
@@ -359,15 +366,19 @@ async def handle(
     logger.info("save_board.success",
                user_id=user_id,
                cluster_count=cluster_count,
+               render_widget=validated_request.render_widget,
                content_hash=content_hash[:8])  # Log first 8 chars of hash
 
-    meta = {
-        "openai/outputTemplate": WIDGET_URI,
-        "openai/toolInvocation/invoking": "Saving your board...",
-        "openai/toolInvocation/invoked": "Board saved.",
-        "openai/widgetAccessible": True,
-        "openai/resultCanProduceWidget": True,
-    }
+    # Only include widget metadata if render_widget=True
+    meta = None
+    if validated_request.render_widget:
+        meta = {
+            "openai/outputTemplate": WIDGET_URI,
+            "openai/toolInvocation/invoking": "Saving your board...",
+            "openai/toolInvocation/invoked": "Board saved.",
+            "openai/widgetAccessible": True,
+            "openai/resultCanProduceWidget": True,
+        }
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
