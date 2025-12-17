@@ -412,7 +412,7 @@
     <div id="modal-overlay" class="modal-overlay">
       <div class="modal">
         <h3 class="modal-title">Save Board?</h3>
-        <p class="modal-text">This will replace your previously saved board. You can load it in future conversations.</p>
+        <p class="modal-text">This will replace your previously saved board. Continue?<br><small>Note: you can save only 1 Clarity Board.</small></p>
         <div class="modal-actions">
           <button id="modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
           <button id="modal-confirm" class="modal-btn modal-btn-confirm">Save</button>
@@ -441,6 +441,7 @@
 
         const getToolOutput = () => {
           const t = window.openai?.toolOutput;
+          console.log("getToolOutput raw:", JSON.stringify(t, null, 2));  // TEMP DEBUG
           if (!t) return { clusters: [], savedBoardHash: null };
 
           // Try all known paths for clusters
@@ -453,17 +454,17 @@
             clusters = t.clusters;
           } else if (Array.isArray(t.data?.clusters)) {
             clusters = t.data.clusters;
+          } else if (Array.isArray(t.result?.clusters)) {
+            clusters = t.result.clusters;
           }
 
-          // Get saved_board_hash
+          // Get saved_board_hash - try all paths
           let hash = null;
-          if (t.result?.structuredContent?.saved_board_hash) {
-            hash = t.result.structuredContent.saved_board_hash;
-          } else if (t.structuredContent?.saved_board_hash) {
-            hash = t.structuredContent.saved_board_hash;
-          } else if (t.saved_board_hash) {
-            hash = t.saved_board_hash;
-          }
+          hash = hash || t.result?.structuredContent?.saved_board_hash;
+          hash = hash || t.structuredContent?.saved_board_hash;
+          hash = hash || t.saved_board_hash;
+          hash = hash || t.result?.saved_board_hash;
+          hash = hash || t.data?.saved_board_hash;
 
           return { clusters, savedBoardHash: hash };
         };
