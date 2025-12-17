@@ -1,11 +1,12 @@
 """
 Save Board Tool.
 
-Explicitly saves the current board state to the database.
+Saves the current board state to the database.
 Self-registers at import time.
 
-NOTE: As of Increment 12, this tool handles explicit user-initiated saves.
-      Called by the widget when user clicks Save → Confirm in the modal.
+Callable by:
+- LLM: When user asks to save their board
+- Widget: When user clicks Save button
 """
 
 import hashlib
@@ -15,11 +16,12 @@ from typing import List, Optional
 
 import structlog
 from mcp import types as mcp_types
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError
 
 from .base import ToolDefinition
 from . import register_tool
 from ..persistence import persist_cluster
+from ..handlers.resources import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
@@ -35,7 +37,6 @@ MAX_ITEM_LENGTH = 500  # Characters per thought item
 # Error Codes (standardized, match widget expectations)
 # ============================================================================
 
-ERROR_WIDGET_ONLY = "WIDGET_ONLY"
 ERROR_TOO_MANY_CLUSTERS = "TOO_MANY_CLUSTERS"
 ERROR_TOO_MANY_ITEMS = "TOO_MANY_ITEMS"
 ERROR_ITEM_TOO_LONG = "ITEM_TOO_LONG"
@@ -52,26 +53,10 @@ DESCRIPTION = """
 Save the current Clarity board to the database.
 
 WHEN TO CALL:
-- ONLY when user explicitly clicks [Save] button in the widget
-- Never call automatically - this is for explicit user-initiated saves only
+- User asks to save their board
+- Widget Save button clicked
 
-WIDGET INTEGRATION:
-This tool is called by the widget via window.openai.callTool().
-The widget handles:
-1. User clicks [Save] button
-2. Confirmation modal appears
-3. User confirms → widget calls this tool with current board state
-4. Tool returns success/error
-5. Widget shows "✓ Saved" indicator if content_hash matches
-
-INPUT:
-- clusters: The current board state to save (from widget)
-- confirmed: Must be true (from modal confirmation)
-
-OUTPUT:
-- saved: true if save succeeded
-- saved_board_hash: SHA256 hash of saved board (for saved state detection)
-- error: Error message if save failed
+Returns the saved board with widget showing "✓ Saved" indicator.
 """
 
 INPUT_SCHEMA = {
@@ -79,7 +64,7 @@ INPUT_SCHEMA = {
     "properties": {
         "confirmed": {
             "type": "boolean",
-            "description": "Must be true. Confirms user clicked Save in the modal."
+            "description": "Optional. Defaults to true. Used by widget for modal confirmation."
         },
         "clusters": {
             "type": "array",
@@ -127,7 +112,7 @@ INPUT_SCHEMA = {
             }
         }
     },
-    "required": ["confirmed", "clusters"]
+    "required": ["clusters"]
 }
 
 REQUIRED_SCOPES = ["clarity.write"]
@@ -153,16 +138,9 @@ class ClusterInput(BaseModel):
 
 
 class SaveBoardRequest(BaseModel):
-    """Expected top-level structure from widget."""
-    confirmed: bool
+    """Expected top-level structure for save request."""
+    confirmed: bool = True  # Default to True for LLM calls
     clusters: List[ClusterInput]
-
-    @model_validator(mode="after")
-    def validate_confirmation(self) -> "SaveBoardRequest":
-        """Validate user confirmed the save."""
-        if not self.confirmed:
-            raise ValueError("Save must be confirmed by user (confirmed=true)")
-        return self
 
 
 # ============================================================================
@@ -298,13 +276,6 @@ async def handle(
     except ValidationError as e:
         logger.warning("save_board.validation_failed",
                       error=str(e.errors()))
-        # Check if it's a confirmation error (WIDGET_ONLY)
-        error_str = str(e.errors())
-        if "confirmed" in error_str.lower():
-            return _make_error_response(
-                ERROR_WIDGET_ONLY,
-                "Save must be initiated from the widget's Save button"
-            )
         return _make_error_response(
             ERROR_SERVER_ERROR,
             "Failed to save board: Invalid input format."
@@ -390,6 +361,14 @@ async def handle(
                cluster_count=cluster_count,
                content_hash=content_hash[:8])  # Log first 8 chars of hash
 
+    meta = {
+        "openai/outputTemplate": WIDGET_URI,
+        "openai/toolInvocation/invoking": "Saving your board...",
+        "openai/toolInvocation/invoked": "Board saved.",
+        "openai/widgetAccessible": True,
+        "openai/resultCanProduceWidget": True,
+    }
+
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
@@ -397,9 +376,10 @@ async def handle(
         )],
         structuredContent={
             "saved": True,
+            "clusters": clusters_for_storage,
             "saved_board_hash": content_hash,
-            "error": None
         },
+        _meta=meta,
     )
 
 
@@ -412,7 +392,7 @@ register_tool(ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,  # No widget output - just returns status
+    widget_uri=WIDGET_URI,
     handle=handle,
-    widget_accessible=True,  # Widget can call via window.openai.callTool()
+    widget_accessible=True,
 ))

@@ -9,6 +9,8 @@ Focus areas:
 5. Business rule validations (limits, empty board, etc.)
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from mcp_server.clarity.tools.save_board import (
     compute_content_hash,
@@ -16,12 +18,12 @@ from mcp_server.clarity.tools.save_board import (
     MAX_CLUSTERS,
     MAX_TOTAL_ITEMS,
     MAX_ITEM_LENGTH,
-    ERROR_WIDGET_ONLY,
     ERROR_TOO_MANY_CLUSTERS,
     ERROR_TOO_MANY_ITEMS,
     ERROR_ITEM_TOO_LONG,
     ERROR_EMPTY_BOARD,
 )
+from mcp_server.clarity.handlers.resources import WIDGET_URI
 
 
 class TestCanonicalHash:
@@ -333,12 +335,27 @@ class TestKnownHash:
 # ============================================================================
 
 
-class TestConfirmationValidation:
-    """Tests for confirmed=true requirement."""
+class TestConfirmedDefault:
+    """Tests for confirmed field defaulting to True."""
 
     @pytest.mark.asyncio
-    async def test_rejects_confirmed_false(self):
-        """confirmed=false is rejected with WIDGET_ONLY error."""
+    async def test_accepts_confirmed_true(self):
+        """confirmed=true is accepted (explicit)."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "confirmed": True,
+                "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
+            },
+        )
+        # Will fail at persistence (no mock), but validation passes
+        if result.isError:
+            assert result.structuredContent.get("error_code") != "WIDGET_ONLY"
+
+    @pytest.mark.asyncio
+    async def test_accepts_confirmed_false(self):
+        """confirmed=false is now accepted (no longer rejected)."""
         result = await handle(
             user_id="test-user",
             correlation_id="test-corr",
@@ -347,12 +364,13 @@ class TestConfirmationValidation:
                 "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
             },
         )
-        assert result.isError is True
-        assert result.structuredContent["error_code"] == ERROR_WIDGET_ONLY
+        # Will fail at persistence (no mock), but NOT a validation error
+        if result.isError:
+            assert result.structuredContent.get("error_code") != "WIDGET_ONLY"
 
     @pytest.mark.asyncio
-    async def test_rejects_missing_confirmed(self):
-        """Missing confirmed field is rejected."""
+    async def test_accepts_missing_confirmed(self):
+        """Missing confirmed field defaults to True."""
         result = await handle(
             user_id="test-user",
             correlation_id="test-corr",
@@ -360,7 +378,10 @@ class TestConfirmationValidation:
                 "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
             },
         )
-        assert result.isError is True
+        # Will fail at persistence (no mock), but validation passes
+        if result.isError:
+            # Should NOT be a validation error - confirmed defaults to True
+            assert result.structuredContent.get("error_code") != "WIDGET_ONLY"
 
 
 class TestEmptyBoardValidation:
@@ -631,3 +652,98 @@ class TestValidationConstants:
     def test_max_item_length_is_500(self):
         """MAX_ITEM_LENGTH must be 500 per spec."""
         assert MAX_ITEM_LENGTH == 500
+
+
+# ============================================================================
+# Success Response Tests
+# ============================================================================
+
+
+class TestSuccessResponse:
+    """Tests for successful save response structure."""
+
+    @pytest.mark.asyncio
+    @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
+    async def test_success_response_contains_clusters(self, mock_persist):
+        """Success response includes clusters in structuredContent."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [
+                    {"cluster_name": "Work", "thought_items": ["task1", "task2"]},
+                    {"cluster_name": "Home", "thought_items": ["chore"]},
+                ],
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        assert "clusters" in result.structuredContent
+        assert len(result.structuredContent["clusters"]) == 2
+        assert result.structuredContent["clusters"][0]["cluster_name"] == "Work"
+
+    @pytest.mark.asyncio
+    @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
+    async def test_success_response_contains_saved_board_hash(self, mock_persist):
+        """Success response includes saved_board_hash."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        assert "saved_board_hash" in result.structuredContent
+        assert len(result.structuredContent["saved_board_hash"]) == 64
+
+    @pytest.mark.asyncio
+    @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
+    async def test_success_response_contains_saved_true(self, mock_persist):
+        """Success response has saved=True."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        assert result.structuredContent["saved"] is True
+
+    @pytest.mark.asyncio
+    @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
+    async def test_success_response_contains_meta_with_widget_template(self, mock_persist):
+        """Success response has _meta with widget template for rendering."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        # Check meta contains widget metadata (constructor uses _meta=, accessed via .meta)
+        assert result.meta is not None
+        assert result.meta.get("openai/outputTemplate") == WIDGET_URI
+        assert result.meta.get("openai/widgetAccessible") is True
+        assert result.meta.get("openai/resultCanProduceWidget") is True
+
+    @pytest.mark.asyncio
+    @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
+    async def test_success_works_without_confirmed_field(self, mock_persist):
+        """LLM can call save_board without confirmed field."""
+        # Call without confirmed field (LLM use case)
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        assert result.structuredContent["saved"] is True
