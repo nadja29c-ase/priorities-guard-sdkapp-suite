@@ -192,6 +192,7 @@ register_tool(ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=WIDGET_URI,  # Produces widget for saved board display
+    # widget_uri=WIDGET_URI,  # DISABLED FOR TESTING - uncomment to restore widget
+    widget_uri=None,  # No widget output - testing text-only response
     handle=handle,
 ))
