@@ -16,6 +16,7 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     Index,
+    String,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID, JSONB
@@ -27,9 +28,9 @@ from backend.core.models import Base
 
 class ClarityCluster(Base):
     """
-    Cluster snapshots persisted from MCP tool calls.
+    Saved board snapshots for Clarity (Increment 12: explicit save model).
 
-    Each row represents a single clustering result from `cluster_raw_thoughts`.
+    Each row represents a user's explicitly saved board via `save_board` tool.
 
     PERSISTENCE SEMANTICS: Single-row-per-user (replace-latest).
         Each POST upserts the user's snapshot (INSERT or UPDATE if exists).
@@ -59,8 +60,9 @@ class ClarityCluster(Base):
         cluster = ClarityCluster(
             user_id=UUID("..."),
             cluster_data={"clusters": [{"cluster_name": "Tasks", ...}]},
-            thoughts_exhausted=True,
-            correctly_clustered=None,
+            thoughts_exhausted=False,  # DEPRECATED: always False
+            correctly_clustered=None,  # DEPRECATED: always None
+            content_hash="abc123...",  # SHA256 of canonical board content
         )
     """
 
@@ -90,20 +92,33 @@ class ClarityCluster(Base):
     )
 
     # Metadata from tool call
+    # NOTE: This field is deprecated as of Increment 12 (explicit save model).
+    #       Kept for backward compatibility; always set to False on new saves.
     thoughts_exhausted: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        comment="Whether user confirmed all thoughts were captured",
+        comment="DEPRECATED: Always false in explicit save model.",
     )
 
     # Tri-state confirmation field:
     #   NULL  = user hasn't answered yet (in-progress clustering)
     #   True  = user confirmed clusters are correct
     #   False = user said clusters are wrong (needs re-clustering)
+    # NOTE: This field is deprecated as of Increment 12 (explicit save model).
+    #       Kept for backward compatibility; always set to None on new saves.
     correctly_clustered: Mapped[bool | None] = mapped_column(
         Boolean,
         nullable=True,
-        comment="User confirmation: null=pending, true=correct, false=wrong",
+        comment="DEPRECATED: User confirmation. Always null in explicit save model.",
+    )
+
+    # SHA256 hash of canonical board content for saved state detection.
+    # Allows widget to show "✓ Saved" indicator when current board matches saved.
+    # NULL for rows created before Increment 12.
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="SHA256 hash of canonical board content for saved state detection",
     )
 
     # Timestamps

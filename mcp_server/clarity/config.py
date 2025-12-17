@@ -171,8 +171,9 @@ SCOPES_SUPPORTED = ["clarity.read", "clarity.write"]
 # ============================================================================
 
 TOOL_SCOPES = {
-    "cluster_raw_thoughts": ["clarity.write"],
-    "get_my_clusters": ["clarity.write"],  # Write implies read - single scope for all Clarity ops
+    "organize_thoughts": ["clarity.write"],
+    "load_saved_board": ["clarity.write"],
+    "save_board": ["clarity.write"],
 }
 
 

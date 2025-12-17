@@ -83,7 +83,7 @@ class TestDispatcherAuthBoundary:
     async def test_known_tool_calls_authenticate(self):
         """Known tools must go through authentication."""
         req = _make_call_tool_request(
-            tool_name="cluster_raw_thoughts",
+            tool_name="organize_thoughts",
             arguments={"thoughts_exhausted": True, "clusters": []},
             meta={"headers": {"authorization": "Bearer test-token"}},
         )
@@ -96,7 +96,7 @@ class TestDispatcherAuthBoundary:
             result = await call_tool_request(req)
 
             # authenticate_request WAS called with correct tool name
-            mock_auth.assert_called_once_with("cluster_raw_thoughts", ANY)
+            mock_auth.assert_called_once_with("organize_thoughts", ANY)
 
         assert_error(result)
 
@@ -104,7 +104,7 @@ class TestDispatcherAuthBoundary:
     async def test_auth_failure_prevents_tool_execution(self):
         """Auth failure must prevent tool handler execution."""
         req = _make_call_tool_request(
-            tool_name="cluster_raw_thoughts",
+            tool_name="organize_thoughts",
             arguments={"thoughts_exhausted": True, "clusters": []},
         )
 
@@ -115,7 +115,7 @@ class TestDispatcherAuthBoundary:
 
         mock_handle = AsyncMock()
         mock_tool = ToolDefinition(
-            name="cluster_raw_thoughts",
+            name="organize_thoughts",
             description="Test tool",
             input_schema={},
             required_scopes=["clarity.write"],
@@ -127,7 +127,7 @@ class TestDispatcherAuthBoundary:
             from mcp_server.clarity.mcp_auth import UnauthorizedError
             mock_auth.side_effect = UnauthorizedError("invalid_token", "Test auth failure")
 
-            with patch.dict(TOOL_REGISTRY, {"cluster_raw_thoughts": mock_tool}):
+            with patch.dict(TOOL_REGISTRY, {"organize_thoughts": mock_tool}):
                 result = await call_tool_request(req)
 
                 # Tool handler should NOT be called after auth failure

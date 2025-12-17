@@ -206,6 +206,7 @@ async def get_clusters(
         thoughts_exhausted=cluster.thoughts_exhausted,
         correctly_clustered=cluster.correctly_clustered,
         created_at=cluster.created_at,
+        content_hash=cluster.content_hash,
     )
 
 
@@ -269,6 +270,7 @@ async def create_cluster(
             cluster_data=payload.cluster_data,
             thoughts_exhausted=payload.thoughts_exhausted,
             correctly_clustered=payload.correctly_clustered,
+            content_hash=payload.content_hash,
         )
         .on_conflict_do_update(
             index_elements=["user_id"],  # Safer than hardcoding constraint name
@@ -276,6 +278,7 @@ async def create_cluster(
                 "cluster_data": payload.cluster_data,
                 "thoughts_exhausted": payload.thoughts_exhausted,
                 "correctly_clustered": payload.correctly_clustered,
+                "content_hash": payload.content_hash,
                 "created_at": func.now(),  # Reset timestamp on replace
                 "updated_at": func.now(),
             },

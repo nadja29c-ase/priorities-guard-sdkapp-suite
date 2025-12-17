@@ -20,11 +20,12 @@ class ToolDefinition:
     - input_schema is for ChatGPT/MCP discovery only
 
     Args:
-        name: Tool name (e.g., "cluster_raw_thoughts")
+        name: Tool name (e.g., "organize_thoughts")
         description: Tool description shown to ChatGPT
         input_schema: JSON Schema for ChatGPT/MCP discovery
         required_scopes: OAuth scopes required to call this tool
         widget_uri: Widget URI for tools that produce widgets, None otherwise
+        widget_accessible: If True, tool can be called from widgets via window.openai.callTool()
         handle: Async handler function (user_id, correlation_id, arguments) -> CallToolResult
     """
     name: str
@@ -33,3 +34,4 @@ class ToolDefinition:
     required_scopes: list[str]
     widget_uri: str | None  # None if tool doesn't produce widget
     handle: Callable[[str, str, dict], Awaitable[Any]]  # (user_id, correlation_id, arguments)
+    widget_accessible: bool = False  # If True, adds openai/widgetAccessible to _meta

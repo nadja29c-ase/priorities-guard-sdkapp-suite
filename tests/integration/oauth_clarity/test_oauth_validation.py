@@ -159,7 +159,7 @@ class TestValidToken:
             test_keys["kid"]
         )
 
-        result = await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+        result = await authenticate_request("organize_thoughts", make_auth_meta(token))
 
         assert result["user_id"] == "user-123"
         assert "clarity.write" in result["scopes"]
@@ -179,7 +179,7 @@ class TestInvalidIssuer:
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+            await authenticate_request("organize_thoughts", make_auth_meta(token))
 
 
 class TestInvalidAudience:
@@ -192,7 +192,7 @@ class TestInvalidAudience:
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+            await authenticate_request("organize_thoughts", make_auth_meta(token))
 
 
 class TestInvalidAzp:
@@ -205,7 +205,7 @@ class TestInvalidAzp:
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+            await authenticate_request("organize_thoughts", make_auth_meta(token))
 
 
 class TestMissingScope:
@@ -218,7 +218,7 @@ class TestMissingScope:
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
         with pytest.raises(InsufficientScopeError) as exc_info:
-            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+            await authenticate_request("organize_thoughts", make_auth_meta(token))
 
         assert "clarity.write" in exc_info.value.required_scopes
 
@@ -233,7 +233,7 @@ class TestExpiredToken:
         token = create_signed_jwt(claims, test_keys["private_key_pem"], test_keys["kid"])
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+            await authenticate_request("organize_thoughts", make_auth_meta(token))
 
 
 class TestInvalidSignature:
@@ -250,7 +250,7 @@ class TestInvalidSignature:
         token = create_signed_jwt(valid_claims, other_pem, test_keys["kid"])
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+            await authenticate_request("organize_thoughts", make_auth_meta(token))
 
 
 class TestMissingKid:
@@ -268,4 +268,4 @@ class TestMissingKid:
         )
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", make_auth_meta(token))
+            await authenticate_request("organize_thoughts", make_auth_meta(token))

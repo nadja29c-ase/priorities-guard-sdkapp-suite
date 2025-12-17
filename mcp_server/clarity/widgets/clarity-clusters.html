@@ -15,6 +15,11 @@
         --shadow: rgba(0, 0, 0, 0.05);
         --pill-bg: #ececf1;
         --pill-text: #353540;
+        --save-btn-bg: #10a37f;
+        --save-btn-hover: #0d8a6a;
+        --save-btn-text: #ffffff;
+        --saved-indicator: #10a37f;
+        --modal-overlay: rgba(0, 0, 0, 0.5);
       }
 
       .dark {
@@ -28,6 +33,11 @@
         --shadow: rgba(0, 0, 0, 0.2);
         --pill-bg: #444444;
         --pill-text: #ececec;
+        --save-btn-bg: #10a37f;
+        --save-btn-hover: #0d8a6a;
+        --save-btn-text: #ffffff;
+        --saved-indicator: #10a37f;
+        --modal-overlay: rgba(0, 0, 0, 0.7);
       }
 
       html, body {
@@ -55,6 +65,20 @@
 
       .header {
         margin-bottom: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      .header-text {
+        flex: 1;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-left: 16px;
       }
 
       .title {
@@ -68,6 +92,127 @@
         margin: 0;
         font-size: 13px;
         color: var(--text-secondary);
+      }
+
+      /* Save button styles */
+      .save-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        background: var(--save-btn-bg);
+        color: var(--save-btn-text);
+        border: none;
+        cursor: pointer;
+        transition: background 0.2s, opacity 0.2s;
+      }
+
+      .save-btn:hover:not(:disabled) {
+        background: var(--save-btn-hover);
+      }
+
+      .save-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .save-btn.saving {
+        opacity: 0.7;
+        cursor: wait;
+      }
+
+      /* Saved indicator */
+      .saved-indicator {
+        display: none;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--saved-indicator);
+        font-weight: 500;
+      }
+
+      .saved-indicator.visible {
+        display: flex;
+      }
+
+      .saved-indicator svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* Modal styles */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--modal-overlay);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-overlay.visible {
+        display: flex;
+      }
+
+      .modal {
+        background: var(--bg-card);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      }
+
+      .modal-title {
+        margin: 0 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .modal-text {
+        margin: 0 0 20px;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+
+      .modal-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .modal-btn-cancel {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+      }
+
+      .modal-btn-cancel:hover {
+        background: var(--border-color);
+      }
+
+      .modal-btn-confirm {
+        background: var(--save-btn-bg);
+        color: var(--save-btn-text);
+        border: none;
+      }
+
+      .modal-btn-confirm:hover {
+        background: var(--save-btn-hover);
       }
 
       .cluster-grid {
@@ -246,17 +391,47 @@
   <body>
     <main>
       <div class="header">
-        <p class="title">Clarity Board</p>
-        <p class="subtitle">
-          Your thoughts grouped into clusters. Use the chat to rename, split, or reprioritize them.
-        </p>
+        <div class="header-text">
+          <p class="title">Clarity Board</p>
+          <p class="subtitle">
+            Your thoughts grouped into clusters. Use the chat to rename, split, or reprioritize them.
+          </p>
+        </div>
+        <div class="header-actions">
+          <span id="saved-indicator" class="saved-indicator">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+            Saved
+          </span>
+          <button id="save-btn" class="save-btn" disabled>Save</button>
+        </div>
       </div>
       <div id="cluster-root"></div>
     </main>
 
+    <!-- Confirmation Modal -->
+    <div id="modal-overlay" class="modal-overlay">
+      <div class="modal">
+        <h3 class="modal-title">Save Board?</h3>
+        <p class="modal-text">This will save your current board. You can load it in future conversations.</p>
+        <div class="modal-actions">
+          <button id="modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+          <button id="modal-confirm" class="modal-btn modal-btn-confirm">Save</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module">
       try {
         const rootEl = document.querySelector("#cluster-root");
+        const saveBtn = document.querySelector("#save-btn");
+        const savedIndicator = document.querySelector("#saved-indicator");
+        const modalOverlay = document.querySelector("#modal-overlay");
+        const modalCancel = document.querySelector("#modal-cancel");
+        const modalConfirm = document.querySelector("#modal-confirm");
+
+        let currentClusters = [];
+        let savedBoardHash = null;
+        let isSaving = false;
 
         const applyTheme = () => {
           const theme = window.openai?.theme ?? "light";
@@ -264,35 +439,158 @@
           document.body.classList.add(theme);
         };
 
-        const getClustersFromToolOutput = () => {
+        const getToolOutput = () => {
           const t = window.openai?.toolOutput;
-          if (!t) return [];
+          if (!t) return { clusters: [], savedBoardHash: null };
 
-          // Try all known paths
+          // Try all known paths for clusters
+          let clusters = [];
           if (Array.isArray(t.result?.structuredContent?.clusters)) {
-            return t.result.structuredContent.clusters;
-          }
-          if (Array.isArray(t.structuredContent?.clusters)) {
-            return t.structuredContent.clusters;
-          }
-          if (Array.isArray(t.clusters)) {
-            return t.clusters;
-          }
-          if (Array.isArray(t.data?.clusters)) {
-            return t.data.clusters;
+            clusters = t.result.structuredContent.clusters;
+          } else if (Array.isArray(t.structuredContent?.clusters)) {
+            clusters = t.structuredContent.clusters;
+          } else if (Array.isArray(t.clusters)) {
+            clusters = t.clusters;
+          } else if (Array.isArray(t.data?.clusters)) {
+            clusters = t.data.clusters;
           }
 
-          return [];
+          // Get saved_board_hash
+          let hash = null;
+          if (t.result?.structuredContent?.saved_board_hash) {
+            hash = t.result.structuredContent.saved_board_hash;
+          } else if (t.structuredContent?.saved_board_hash) {
+            hash = t.structuredContent.saved_board_hash;
+          } else if (t.saved_board_hash) {
+            hash = t.saved_board_hash;
+          }
+
+          return { clusters, savedBoardHash: hash };
+        };
+
+        // Compute SHA256 hash of clusters (must match backend algorithm EXACTLY)
+        // CANONICAL HASH SPECIFICATION:
+        // - Explicit key order (NOT alphabetical): cluster_name, subclusters, tags, thought_items
+        // - NFC Unicode normalization
+        // - Clusters sorted alphabetically by cluster_name
+        // - Subclusters sorted alphabetically by subcluster_name
+        // - thought_items and tags sorted lexicographically
+        // - No whitespace in JSON
+        const computeContentHash = async (clusters) => {
+          const normalizeSubcluster = (s) => ({
+            // Key order: subcluster_name, tags, thought_items
+            subcluster_name: (s.subcluster_name || "").trim().normalize("NFC"),
+            tags: (s.tags || []).map(t => t.trim().normalize("NFC")).sort(),
+            thought_items: (s.thought_items || []).map(i => i.trim().normalize("NFC")).sort(),
+          });
+
+          const normalizeCluster = (c) => ({
+            // Key order: cluster_name, subclusters, tags, thought_items
+            cluster_name: (c.cluster_name || "").trim().normalize("NFC"),
+            subclusters: (c.subclusters || [])
+              .map(normalizeSubcluster)
+              .sort((a, b) => a.subcluster_name.localeCompare(b.subcluster_name)),
+            tags: (c.tags || []).map(t => t.trim().normalize("NFC")).sort(),
+            thought_items: (c.thought_items || []).map(i => i.trim().normalize("NFC")).sort(),
+          });
+
+          // Sort clusters by cluster_name, normalize all content
+          const normalized = clusters
+            .map(normalizeCluster)
+            .sort((a, b) => a.cluster_name.localeCompare(b.cluster_name));
+
+          // Key order is determined by object literal construction above
+          // JSON.stringify preserves insertion order in modern JS engines
+          const canonical = JSON.stringify({ clusters: normalized });
+          const encoder = new TextEncoder();
+          const data = encoder.encode(canonical);
+          const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
         };
 
         const truncateText = (text, maxLength = 80) => {
           if (!text || text.length <= maxLength) return text;
-          return text.substring(0, maxLength).trim() + "…";
+          return text.substring(0, maxLength).trim() + "...";
         };
+
+        const updateSaveButtonState = async () => {
+          if (currentClusters.length === 0) {
+            saveBtn.disabled = true;
+            savedIndicator.classList.remove("visible");
+            return;
+          }
+
+          saveBtn.disabled = false;
+
+          // Check if current state matches saved state
+          if (savedBoardHash) {
+            const currentHash = await computeContentHash(currentClusters);
+            if (currentHash === savedBoardHash) {
+              savedIndicator.classList.add("visible");
+            } else {
+              savedIndicator.classList.remove("visible");
+            }
+          } else {
+            savedIndicator.classList.remove("visible");
+          }
+        };
+
+        const showModal = () => {
+          modalOverlay.classList.add("visible");
+        };
+
+        const hideModal = () => {
+          modalOverlay.classList.remove("visible");
+        };
+
+        const handleSave = async () => {
+          if (isSaving || currentClusters.length === 0) return;
+
+          isSaving = true;
+          saveBtn.classList.add("saving");
+          saveBtn.textContent = "Saving...";
+
+          try {
+            // Call save_board tool via OpenAI API
+            if (window.openai?.callTool) {
+              const result = await window.openai.callTool("save_board", {
+                confirmed: true,
+                clusters: currentClusters
+              });
+
+              // Check if save was successful
+              const content = result?.structuredContent || result?.result?.structuredContent || result;
+              if (content?.saved === true && content?.saved_board_hash) {
+                savedBoardHash = content.saved_board_hash;
+                savedIndicator.classList.add("visible");
+              }
+            } else {
+              console.warn("window.openai.callTool not available");
+            }
+          } catch (err) {
+            console.error("Save failed:", err);
+          } finally {
+            isSaving = false;
+            saveBtn.classList.remove("saving");
+            saveBtn.textContent = "Save";
+            hideModal();
+          }
+        };
+
+        // Event listeners
+        saveBtn.addEventListener("click", showModal);
+        modalCancel.addEventListener("click", hideModal);
+        modalConfirm.addEventListener("click", handleSave);
+        modalOverlay.addEventListener("click", (e) => {
+          if (e.target === modalOverlay) hideModal();
+        });
 
         const render = () => {
           applyTheme();
-          const clusters = getClustersFromToolOutput();
+          const { clusters, savedBoardHash: hash } = getToolOutput();
+          currentClusters = clusters;
+          savedBoardHash = hash;
           rootEl.innerHTML = "";
 
           if (!clusters.length) {
@@ -300,6 +598,7 @@
             empty.className = "empty-state";
             empty.textContent = "No clusters yet. Ask in chat to organize your brain dump into clusters.";
             rootEl.appendChild(empty);
+            updateSaveButtonState();
             return;
           }
 
@@ -344,7 +643,7 @@
                 const li = document.createElement("li");
                 const bullet = document.createElement("span");
                 bullet.className = "items-bullet";
-                bullet.textContent = "•";
+                bullet.textContent = "\u2022";
                 const text = document.createElement("span");
                 text.className = "items-text";
                 text.textContent = rawText;
@@ -389,7 +688,7 @@
                     const li = document.createElement("li");
                     const bullet = document.createElement("span");
                     bullet.className = "items-bullet";
-                    bullet.textContent = "•";
+                    bullet.textContent = "\u2022";
                     const text = document.createElement("span");
                     text.className = "items-text";
                     text.textContent = rawText;
@@ -439,6 +738,7 @@
           });
 
           rootEl.appendChild(grid);
+          updateSaveButtonState();
         };
 
         render();

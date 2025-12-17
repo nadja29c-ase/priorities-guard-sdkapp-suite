@@ -303,7 +303,7 @@ class TestGetCluster:
         - Not a list, not paginated - single most recent row per user
         - Backend handles ordering (ORDER BY created_at DESC LIMIT 1)
         - If backend changes to return multiple/paginated, this test should fail
-          and get_my_clusters tool logic needs updating
+          and load_saved_board tool logic needs updating
 
         This test doesn't verify ordering (can't at this layer) but documents
         the assumption that callers depend on.
@@ -562,7 +562,7 @@ class TestGetCluster:
         """Should pass through unexpected JSON shapes (caller handles gracefully).
 
         Note: This documents current behavior. The MCP layer trusts the backend
-        but consumers (get_my_clusters tool) handle missing keys with .get() defaults.
+        but consumers (load_saved_board tool) handle missing keys with .get() defaults.
         If stricter validation is needed, add it to persistence.py and update this test.
         """
         mock_response = MagicMock()

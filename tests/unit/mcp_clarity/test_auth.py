@@ -110,7 +110,7 @@ class TestUnknownToolHandling:
                 "azp": "client-id"
             }
 
-            # Typo: "cluster_raw_thought" instead of "cluster_raw_thoughts"
+            # Typo: "cluster_raw_thought" instead of "organize_thoughts"
             with pytest.raises(InsufficientScopeError):
                 await authenticate_request("cluster_raw_thought", meta)
 
@@ -150,7 +150,7 @@ class TestAzpClientIdValidation:
                 "azp": "chatgpt-client-xyz"
             }
 
-            result = await authenticate_request("cluster_raw_thoughts", meta)
+            result = await authenticate_request("organize_thoughts", meta)
 
             assert "azp" in result
             assert result["azp"] == "chatgpt-client-xyz"
@@ -167,7 +167,7 @@ class TestAzpClientIdValidation:
             )
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_missing_azp_in_token_raises_unauthorized(self):
@@ -179,7 +179,7 @@ class TestAzpClientIdValidation:
             mock_validate.side_effect = jwt.InvalidTokenError("Missing required claim: azp")
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
 
 class TestJWTValidationFailures:
@@ -197,7 +197,7 @@ class TestJWTValidationFailures:
             mock_validate.side_effect = jwt.ExpiredSignatureError("Token expired")
 
             with pytest.raises(UnauthorizedError) as exc_info:
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
             assert "expired" in exc_info.value.description.lower()
 
@@ -210,7 +210,7 @@ class TestJWTValidationFailures:
             mock_validate.side_effect = jwt.InvalidSignatureError("Signature verification failed")
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_invalid_token_raises_unauthorized(self):
@@ -221,7 +221,7 @@ class TestJWTValidationFailures:
             mock_validate.side_effect = jwt.InvalidTokenError("Not a valid JWT")
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_decode_error_raises_unauthorized(self):
@@ -232,7 +232,7 @@ class TestJWTValidationFailures:
             mock_validate.side_effect = jwt.DecodeError("Unable to decode")
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_invalid_issuer_raises_unauthorized(self):
@@ -243,7 +243,7 @@ class TestJWTValidationFailures:
             mock_validate.side_effect = jwt.InvalidIssuerError("Invalid issuer")
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_invalid_audience_raises_unauthorized(self):
@@ -254,7 +254,7 @@ class TestJWTValidationFailures:
             mock_validate.side_effect = jwt.InvalidAudienceError("Invalid audience")
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_generic_exception_raises_unauthorized(self):
@@ -265,7 +265,7 @@ class TestJWTValidationFailures:
             mock_validate.side_effect = Exception("Unexpected JWKS fetch failure")
 
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_jwt_errors_dont_leak_internal_details(self):
@@ -279,7 +279,7 @@ class TestJWTValidationFailures:
             )
 
             with pytest.raises(UnauthorizedError) as exc_info:
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
             # The error description should be generic, not expose internal URLs/key IDs
             # (depends on implementation - this test documents expected behavior)
@@ -295,7 +295,7 @@ class TestAuthenticateRequest:
         meta = {"headers": {}}
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", meta)
+            await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_none_token_never_reaches_validate_jwt(self):
@@ -304,7 +304,7 @@ class TestAuthenticateRequest:
 
         with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
             # validate_jwt should NEVER be called with None
             mock_validate.assert_not_called()
@@ -316,7 +316,7 @@ class TestAuthenticateRequest:
 
         with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
             mock_validate.assert_not_called()
 
@@ -330,7 +330,7 @@ class TestAuthenticateRequest:
         """
         with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
             with pytest.raises(UnauthorizedError):
-                await authenticate_request("cluster_raw_thoughts", {})
+                await authenticate_request("organize_thoughts", {})
             mock_validate.assert_not_called()
 
     @pytest.mark.asyncio
@@ -339,23 +339,23 @@ class TestAuthenticateRequest:
         meta = {}
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", meta)
+            await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_none_meta(self):
         """None meta raises UnauthorizedError."""
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", None)
+            await authenticate_request("organize_thoughts", None)
 
     @pytest.mark.asyncio
     async def test_non_dict_meta_raises_unauthorized(self):
         """Non-dict meta raises UnauthorizedError (defensive guard)."""
         # meta could be a string, list, or other type if FastMCP changes
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", "not a dict")
+            await authenticate_request("organize_thoughts", "not a dict")
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", ["list", "meta"])
+            await authenticate_request("organize_thoughts", ["list", "meta"])
 
     @pytest.mark.asyncio
     async def test_non_dict_headers_raises_unauthorized(self):
@@ -363,11 +363,11 @@ class TestAuthenticateRequest:
         # headers value could be malformed
         meta = {"headers": "not a dict"}
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", meta)
+            await authenticate_request("organize_thoughts", meta)
 
         meta = {"headers": ["list", "headers"]}
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", meta)
+            await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_invalid_token_format(self):
@@ -375,7 +375,7 @@ class TestAuthenticateRequest:
         meta = {"headers": {"authorization": "InvalidFormat"}}
 
         with pytest.raises(UnauthorizedError):
-            await authenticate_request("cluster_raw_thoughts", meta)
+            await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_wrong_scope_raises_insufficient(self):
@@ -392,7 +392,7 @@ class TestAuthenticateRequest:
             }
 
             with pytest.raises(InsufficientScopeError):
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
 
     @pytest.mark.asyncio
     async def test_valid_token_returns_context(self):
@@ -407,7 +407,7 @@ class TestAuthenticateRequest:
                 "azp": "client-id"
             }
 
-            result = await authenticate_request("cluster_raw_thoughts", meta)
+            result = await authenticate_request("organize_thoughts", meta)
 
             assert result["user_id"] == "user-123"
             assert "correlation_id" in result
@@ -426,7 +426,7 @@ class TestAuthenticateRequest:
                 "azp": "client-id"
             }
 
-            result = await authenticate_request("cluster_raw_thoughts", meta)
+            result = await authenticate_request("organize_thoughts", meta)
             assert result["user_id"] == "user-123"
 
 
@@ -651,10 +651,10 @@ class TestExceptionAttributes:
 class TestToolScopeConfig:
     """Test TOOL_SCOPES configuration (config correctness)."""
 
-    def test_cluster_raw_thoughts_requires_clarity_write(self):
-        """cluster_raw_thoughts tool requires clarity.write scope."""
-        assert "cluster_raw_thoughts" in TOOL_SCOPES
-        assert "clarity.write" in TOOL_SCOPES["cluster_raw_thoughts"]
+    def test_organize_thoughts_requires_clarity_write(self):
+        """organize_thoughts tool requires clarity.write scope."""
+        assert "organize_thoughts" in TOOL_SCOPES
+        assert "clarity.write" in TOOL_SCOPES["organize_thoughts"]
 
     def test_all_tools_have_scopes(self):
         """All registered tools have at least one scope."""
@@ -739,7 +739,7 @@ class TestCorrelationId:
 
             import asyncio
             result = asyncio.get_event_loop().run_until_complete(
-                authenticate_request("cluster_raw_thoughts", meta)
+                authenticate_request("organize_thoughts", meta)
             )
 
         assert "correlation_id" in result

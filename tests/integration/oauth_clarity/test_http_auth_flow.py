@@ -131,7 +131,7 @@ class TestAuthenticateRequestContextVarFallback:
         # Call authenticate_request with empty meta
         # It should try to read from contextvar, then fail JWT validation
         try:
-            await authenticate_request("cluster_raw_thoughts", {})
+            await authenticate_request("organize_thoughts", {})
         except UnauthorizedError:
             # Expected - token validation will fail, but that proves
             # the code path that reads from contextvar was reached
@@ -160,7 +160,7 @@ class TestAuthenticateRequestContextVarFallback:
 
         with patch("mcp_server.clarity.mcp_auth.validate_jwt", mock_validate):
             try:
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
             except (UnauthorizedError, Exception):
                 pass
 
@@ -188,7 +188,7 @@ class TestAuthenticateRequestContextVarFallback:
 
         with patch("mcp_server.clarity.mcp_auth.validate_jwt", mock_validate):
             try:
-                await authenticate_request("cluster_raw_thoughts", meta)
+                await authenticate_request("organize_thoughts", meta)
             except (UnauthorizedError, Exception):
                 pass
 

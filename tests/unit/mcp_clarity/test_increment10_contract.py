@@ -17,7 +17,7 @@ violations that unit tests of individual layers might miss.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mcp_server.clarity.tools.get_my_clusters import handle as get_my_clusters_handle
+from mcp_server.clarity.tools.load_saved_board import handle as load_saved_board_handle
 
 
 class TestIncrement10EndToEndContract:
@@ -62,7 +62,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
@@ -98,7 +98,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="new-user",
                 correlation_id="corr-123",
                 arguments={},
@@ -123,7 +123,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
@@ -146,7 +146,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("Request timed out"))
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
@@ -171,7 +171,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
@@ -203,7 +203,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
@@ -242,7 +242,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
@@ -275,7 +275,7 @@ class TestIncrement10EndToEndContract:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
@@ -307,14 +307,14 @@ class TestIncrement10OutputSchema:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},
             )
 
         # Schema contract
-        expected_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated"}
+        expected_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated", "saved_board_hash"}
         assert set(result.structuredContent.keys()) == expected_keys
 
     @pytest.mark.asyncio
@@ -328,7 +328,7 @@ class TestIncrement10OutputSchema:
         mock_client.get = AsyncMock(return_value=mock_http_response)
 
         with patch("mcp_server.clarity.persistence.get_http_client", return_value=mock_client):
-            result = await get_my_clusters_handle(
+            result = await load_saved_board_handle(
                 user_id="user-456",
                 correlation_id="corr-123",
                 arguments={},

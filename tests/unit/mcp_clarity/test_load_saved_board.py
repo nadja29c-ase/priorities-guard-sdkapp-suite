@@ -1,5 +1,5 @@
 """
-Unit tests for get_my_clusters tool.
+Unit tests for load_saved_board tool.
 
 Increment 10 Core Contract:
 - When persistence returns None, tool returns safe empty structure
@@ -10,10 +10,10 @@ Increment 10 Core Contract:
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from mcp_server.clarity.tools.get_my_clusters import handle
+from mcp_server.clarity.tools.load_saved_board import handle
 
 
-class TestGetMyClustersContract:
+class TestLoadSavedBoardContract:
     """Increment 10 core promise: state recovery never crashes."""
 
     @pytest.mark.asyncio
@@ -29,7 +29,7 @@ class TestGetMyClustersContract:
 
         If this test fails, Increment 10's state recovery is broken.
         """
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None  # Simulates: new user, network error, or no history
 
             result = await handle(
@@ -61,7 +61,7 @@ class TestGetMyClustersContract:
         get_cluster() returns None on network errors, timeouts, etc.
         Tool must handle this gracefully with empty structure.
         """
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None  # Persistence returns None on any error
 
             # Must not raise
@@ -94,7 +94,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = malformed
 
             result = await handle(
@@ -122,7 +122,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = malformed
 
             result = await handle(
@@ -148,7 +148,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = malformed
 
             result = await handle(
@@ -168,9 +168,9 @@ class TestGetMyClustersContract:
 
         Tool is NOT a validator - it passes whatever backend returns.
         Clusters missing thought_items/tags/subclusters are still valid history.
-        Validation is the responsibility of cluster_raw_thoughts (write path).
+        Validation is the responsibility of organize_thoughts (write path).
 
-        This locks in the design decision: get_my_clusters is pure read.
+        This locks in the design decision: load_saved_board is pure read.
         """
         partial_cluster = {"cluster_name": "Work"}  # missing thought_items, tags, subclusters
 
@@ -182,7 +182,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -209,7 +209,7 @@ class TestGetMyClustersContract:
         - No filtering, no dropping, no validation
 
         Rationale:
-        - Validation is the responsibility of cluster_raw_thoughts (write path)
+        - Validation is the responsibility of organize_thoughts (write path)
         - Backend is source of truth; if it saved it, we return it
         - Filtering here could hide data corruption issues
         - ChatGPT can handle malformed clusters gracefully
@@ -236,7 +236,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -275,7 +275,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -318,7 +318,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -350,7 +350,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -399,7 +399,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -429,7 +429,7 @@ class TestGetMyClustersContract:
         Locks in resilience even if persistence layer changes.
         Tool must never crash on backend failures.
         """
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Network timeout")
 
             result = await handle(
@@ -451,7 +451,7 @@ class TestGetMyClustersContract:
 
         ChatGPT-side logic depends on exact keys. No drift allowed.
         """
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(
@@ -471,7 +471,7 @@ class TestGetMyClustersContract:
         assert isinstance(content["clusters"], list)
 
         # No unexpected keys (when no history, last_updated is optional/absent)
-        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated"}
+        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated", "saved_board_hash"}
         assert set(content.keys()) <= allowed_keys, \
             f"Unexpected keys: {set(content.keys()) - allowed_keys}"
 
@@ -487,7 +487,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -509,7 +509,7 @@ class TestGetMyClustersContract:
         assert content["last_updated"] is None or isinstance(content["last_updated"], str)
 
         # No unexpected keys
-        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated"}
+        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated", "saved_board_hash"}
         assert set(content.keys()) == allowed_keys, \
             f"Schema mismatch. Expected {allowed_keys}, got {set(content.keys())}"
 
@@ -527,7 +527,7 @@ class TestGetMyClustersContract:
             {"cluster_id": "snap-2", "cluster_data": {"clusters": [{"cluster_name": "B"}]}},
         ]
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = multiple_snapshots
 
             result = await handle(
@@ -566,7 +566,7 @@ class TestGetMyClustersContract:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             # Call twice with identical inputs
@@ -629,7 +629,7 @@ class TestGetMyClustersContract:
         # Deep freeze the original state
         original_state = copy.deepcopy(mock_cluster_data)
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             await handle(
@@ -648,7 +648,7 @@ class TestGetMyClustersContract:
 
         correlation_id is used for tracing only - missing value must not break tool.
         """
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(
@@ -671,7 +671,7 @@ class TestGetMyClustersContract:
         If you want fail-closed behavior, add validation at tool entry and update this test.
         Current behavior: None user_id flows to persistence → returns None → has_history=False
         """
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None  # Persistence returns None for invalid user
 
             result = await handle(
@@ -692,7 +692,7 @@ class TestGetMyClustersContract:
         Same design as test_none_user_id_treated_as_no_history.
         Empty string flows to persistence → backend returns 401 → None → has_history=False
         """
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None  # Persistence returns None for invalid user
 
             result = await handle(
@@ -707,8 +707,8 @@ class TestGetMyClustersContract:
         assert result.structuredContent["clusters"] == []
 
 
-class TestGetMyClusters:
-    """Tests for the get_my_clusters tool handler."""
+class TestLoadSavedBoard:
+    """Tests for the load_saved_board tool handler."""
 
     @pytest.mark.asyncio
     async def test_handle_returns_clusters_when_found(self):
@@ -730,7 +730,7 @@ class TestGetMyClusters:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -751,7 +751,7 @@ class TestGetMyClusters:
     @pytest.mark.asyncio
     async def test_handle_returns_empty_when_no_history(self):
         """Should return empty clusters and has_history=False when user has no data."""
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(
@@ -784,7 +784,7 @@ class TestGetMyClusters:
             "created_at": "2025-01-15T12:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -802,7 +802,7 @@ class TestGetMyClusters:
     @pytest.mark.asyncio
     async def test_handle_calls_get_cluster_with_user_id(self):
         """Should call get_cluster with correct user_id and correlation_id."""
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             await handle(
@@ -816,7 +816,7 @@ class TestGetMyClusters:
     @pytest.mark.asyncio
     async def test_handle_ignores_arguments(self):
         """Should work regardless of arguments passed (tool takes no input)."""
-        with patch("mcp_server.clarity.tools.get_my_clusters.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             # Even with extra arguments, it should work

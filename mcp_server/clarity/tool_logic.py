@@ -6,7 +6,7 @@ Tools only format/validate - no AI logic here.
 """
 
 
-def cluster_raw_thoughts(clusters: list[dict]) -> dict:
+def organize_thoughts(clusters: list[dict]) -> dict:
     """
     Format business thought clusters that ChatGPT has already identified.
 

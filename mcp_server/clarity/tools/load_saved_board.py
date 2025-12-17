@@ -1,8 +1,11 @@
 """
-Get My Clusters Tool.
+Load Saved Board Tool.
 
-Read-only tool to retrieve user's existing cluster snapshot from the database.
+Retrieves user's explicitly saved board from the database with widget rendering.
 Self-registers at import time.
+
+NOTE: As of Increment 12, this is separate from organize_thoughts.
+      organize_thoughts is ephemeral (no DB). This tool loads saved state.
 """
 
 import structlog
@@ -11,6 +14,7 @@ from mcp import types as mcp_types
 from .base import ToolDefinition
 from . import register_tool
 from ..persistence import get_cluster
+from ..handlers.resources import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
@@ -18,42 +22,35 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-NAME = "get_my_clusters"
+NAME = "load_saved_board"
 
-DESCRIPTION =DESCRIPTION = """
-Retrieve the user's historical clusters with thought items from the database when you can not rely on your own memory. Whenever you are uncertain, you can rehydrate from the database with the use of this tool.
+DESCRIPTION = """
+Load your previously saved Clarity board from the database.
 
-WHEN TO CALL THIS TOOL:
-- At the start of EACH NEW conversation INVOLVING need for clarity / unorganized thoughts and tasks
-- User asks to MERGE new thought items with their prior clusters from previous conversations
-- User asks to VIEW, SHOW, or REVIEW their existing clusters
-- You CAN NOT reliably recall prior user thoughts, clusters, or tasks from memory
+WHEN TO CALL:
+- User asks to see/show/load/retrieve their saved board
+- Start of new conversation when user wants to continue from saved state
 
-DO NOT CALL THIS TOOL:
-- You already called it earlier in THIS conversation AND NO NEW conversation started
+Returns the saved board with widget. If no saved board exists, returns empty state.
 
-RESPONSE FIELDS:
-- clusters: Array of cluster objects with user's thought items (empty if none)
-- has_history: Whether any prior snapshot of clustered thought items exists in the database
-- is_empty_snapshot: True if a snapshot exists but contains no clusters
-  (e.g., user previously cleared their clusters). Only meaningful when has_history=true.
-- last_updated: ISO timestamp of last snapshot update (only present when has_history=true)
+EMPTY STATE RESPONSE:
+When no saved board exists:
+{
+  "clusters": [],
+  "saved_board_hash": null
+}
 
-RESPONSE HANDLING:
-- If has_history=false: User is starting fresh, proceed to collect thoughts with cluster_raw_thoughts tool
-- If has_history=true and is_empty_snapshot=true: User had a session but cleared it, proceed to collect thoughts with cluster_raw_thoughts tool
-- If has_history=true and is_empty_snapshot=false: Proceed based on user intent (see flows below)
+Widget behavior for empty state:
+- Show empty state message: "No saved board yet. Create a board and click Save."
+- [Save] button disabled (nothing to save)
+- No "✓ Saved" indicator
 
-FLOW A — User wants to ADD new thoughts (single turn, no user response between):
-1. Call get_my_clusters → receive historical clusters
-2. Merge new user thoughts with historical clusters → NO USER OUTPUT YET 
-3. Call cluster_raw_thoughts with the COMPLETE MERGED SET
-4. THEN respond to user WITH THE WIDGET showing updated merged clusters
-
-FLOW B — User wants to VIEW existing clusters only:
-1. Call get_my_clusters → receive historical clusters
-2. Summarize ALL clusters for user (names, item counts)
-3. Ask what they'd like to do (add, reorganize, delete)
+SAVED STATE RESPONSE:
+When saved board exists:
+{
+  "clusters": [...],
+  "saved_board_hash": "abc123..."
+}
 """
 
 INPUT_SCHEMA = {
@@ -90,7 +87,7 @@ async def handle(
         - is_empty_snapshot: True if snapshot exists but has no clusters
         - last_updated: ISO timestamp of last update (if has_history=true)
     """
-    logger.debug("get_my_clusters.handle.start",
+    logger.debug("load_saved_board.handle.start",
                 user_id=user_id,
                 correlation_id=correlation_id)
 
@@ -101,7 +98,7 @@ async def handle(
             correlation_id=correlation_id,
         )
     except Exception as e:
-        logger.warning("get_my_clusters.persistence_error",
+        logger.warning("load_saved_board.persistence_error",
                       user_id=user_id,
                       error=str(e))
         cluster_data = None
@@ -114,9 +111,18 @@ async def handle(
         inner_data = cluster_data.get("cluster_data") or {}
         clusters = inner_data.get("clusters") or []
 
+    # Build widget metadata for all responses
+    meta = {
+        "openai/outputTemplate": WIDGET_URI,
+        "openai/toolInvocation/invoking": "Loading your saved board...",
+        "openai/toolInvocation/invoked": "Here's your saved Clarity board.",
+        "openai/widgetAccessible": True,
+        "openai/resultCanProduceWidget": True,
+    }
+
     # No snapshot exists at all - truly starting fresh
     if not has_snapshot:
-        logger.info("get_my_clusters.no_snapshot",
+        logger.info("load_saved_board.no_snapshot",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
@@ -126,15 +132,20 @@ async def handle(
             structuredContent={
                 "clusters": [],
                 "has_history": False,
-                "is_empty_snapshot": False  # No snapshot at all
-            }
+                "is_empty_snapshot": False,  # No snapshot at all
+                "saved_board_hash": None
+            },
+            _meta=meta,
         )
 
     cluster_count = len(clusters)
 
+    # Extract content_hash for saved state detection
+    saved_board_hash = cluster_data.get("content_hash")
+
     # Snapshot exists but is empty (user cleared their clusters)
     if cluster_count == 0:
-        logger.info("get_my_clusters.empty_snapshot",
+        logger.info("load_saved_board.empty_snapshot",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
@@ -145,12 +156,14 @@ async def handle(
                 "clusters": [],
                 "has_history": True,
                 "is_empty_snapshot": True,
-                "last_updated": cluster_data.get("created_at")
-            }
+                "last_updated": cluster_data.get("created_at"),
+                "saved_board_hash": saved_board_hash
+            },
+            _meta=meta,
         )
 
     # Snapshot exists with clusters
-    logger.info("get_my_clusters.retrieved",
+    logger.info("load_saved_board.retrieved",
                user_id=user_id,
                cluster_count=cluster_count)
 
@@ -163,8 +176,10 @@ async def handle(
             "clusters": clusters,
             "has_history": True,
             "is_empty_snapshot": False,
-            "last_updated": cluster_data.get("created_at")
-        }
+            "last_updated": cluster_data.get("created_at"),
+            "saved_board_hash": saved_board_hash
+        },
+        _meta=meta,
     )
 
 
@@ -177,6 +192,6 @@ register_tool(ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,  # No widget - data retrieval only
+    widget_uri=WIDGET_URI,  # Produces widget for saved board display
     handle=handle,
 ))

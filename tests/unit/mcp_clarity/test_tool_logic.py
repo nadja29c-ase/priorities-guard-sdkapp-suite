@@ -1,7 +1,7 @@
 """
 Clarity MCP tool unit tests.
 
-Tests for cluster_raw_thoughts tool validation and formatting:
+Tests for organize_thoughts tool validation and formatting:
 - Flat clusters (thought_items only)
 - Nested clusters (subclusters only)
 - Mixed clusters (both thought_items and subclusters)
@@ -16,8 +16,8 @@ from pydantic import ValidationError
 from unittest.mock import MagicMock, patch
 from mcp import types as mcp_types
 
-from mcp_server.clarity.tool_logic import cluster_raw_thoughts
-from mcp_server.clarity.tools.cluster_raw_thoughts import (
+from mcp_server.clarity.tool_logic import organize_thoughts
+from mcp_server.clarity.tools.organize_thoughts import (
     ClusterRequest,
     ClusterInput,
     SubclusterInput,
@@ -33,7 +33,7 @@ from mcp_server.clarity.handlers.tools import call_tool_request
 def _make_tool_request(arguments: dict, has_auth: bool = True) -> mcp_types.CallToolRequest:
     """Build a CallToolRequest with optional auth mock."""
     params = MagicMock()
-    params.name = "cluster_raw_thoughts"
+    params.name = "organize_thoughts"
     params.arguments = arguments
     if has_auth:
         params._meta = {"headers": {"authorization": "Bearer mock-token"}}
@@ -368,11 +368,11 @@ class TestClusterContentValidation:
 
 
 # =============================================================================
-# Test: cluster_raw_thoughts Tool Output
+# Test: organize_thoughts Tool Output
 # =============================================================================
 
-class TestClusterRawThoughtsOutput:
-    """Test cluster_raw_thoughts tool formatting."""
+class TestOrganizeThoughtsOutput:
+    """Test organize_thoughts tool formatting."""
 
     def test_flat_cluster_output(self):
         """Test output for flat cluster."""
@@ -382,7 +382,7 @@ class TestClusterRawThoughtsOutput:
             "subclusters": []
         }]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         assert "content" in result
         assert "structuredContent" in result
@@ -405,7 +405,7 @@ class TestClusterRawThoughtsOutput:
             ]
         }]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         cluster = result["structuredContent"]["clusters"][0]
         assert cluster["cluster_name"] == "Engineering"
@@ -434,7 +434,7 @@ class TestClusterRawThoughtsOutput:
             }
         ]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         assert len(result["structuredContent"]["clusters"]) == 2
         assert result["structuredContent"]["clusters"][0]["sum_thought_items"] == 2
@@ -451,7 +451,7 @@ class TestClusterRawThoughtsOutput:
             ]
         }]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         cluster = result["structuredContent"]["clusters"][0]
         assert cluster["cluster_name"] == "Marketing"
@@ -467,7 +467,7 @@ class TestClusterRawThoughtsOutput:
 
     def test_empty_clusters_list(self):
         """Test output with empty clusters list."""
-        result = cluster_raw_thoughts([])
+        result = organize_thoughts([])
 
         assert result["structuredContent"]["clusters"] == []
         assert "content" in result
@@ -475,7 +475,7 @@ class TestClusterRawThoughtsOutput:
     def test_content_message(self):
         """Test content message is present."""
         clusters = [{"cluster_name": "Test", "thought_items": ["x"], "subclusters": []}]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
@@ -496,21 +496,21 @@ class TestOutputSchemaStability:
     def test_top_level_output_keys(self):
         """Top-level result has exactly expected keys."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         assert set(result.keys()) == {"content", "structuredContent"}
 
     def test_structured_content_keys(self):
         """structuredContent has exactly expected keys."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         assert set(result["structuredContent"].keys()) == {"clusters"}
 
     def test_cluster_output_keys_flat(self):
         """Flat cluster output has exactly expected keys."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"], "tags": ["decide"]}]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         cluster = result["structuredContent"]["clusters"][0]
         assert set(cluster.keys()) == {
@@ -529,7 +529,7 @@ class TestOutputSchemaStability:
             "subclusters": [{"subcluster_name": "Child", "thought_items": ["item"]}],
             "tags": []
         }]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         cluster = result["structuredContent"]["clusters"][0]
         assert set(cluster.keys()) == {
@@ -547,7 +547,7 @@ class TestOutputSchemaStability:
             "thought_items": [],
             "subclusters": [{"subcluster_name": "Child", "thought_items": ["item"], "tags": ["research"]}]
         }]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         subcluster = result["structuredContent"]["clusters"][0]["subclusters"][0]
         assert set(subcluster.keys()) == {
@@ -560,7 +560,7 @@ class TestOutputSchemaStability:
     def test_no_internal_fields_leak_to_cluster(self):
         """Internal fields like user_id, correlation_id don't leak to cluster output."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         cluster = result["structuredContent"]["clusters"][0]
         forbidden_fields = {"user_id", "correlation_id", "azp", "jti", "scopes", "_meta"}
@@ -569,7 +569,7 @@ class TestOutputSchemaStability:
     def test_no_input_metadata_in_output(self):
         """Input metadata fields don't appear in output."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         # These are input-only fields
         assert "thoughts_exhausted" not in result["structuredContent"]
@@ -599,7 +599,7 @@ class TestOrderingGuarantees:
             {"cluster_name": "Second", "thought_items": ["b"]},
             {"cluster_name": "Third", "thought_items": ["c"]},
         ]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         output_names = [c["cluster_name"] for c in result["structuredContent"]["clusters"]]
         assert output_names == ["First", "Second", "Third"]
@@ -615,7 +615,7 @@ class TestOrderingGuarantees:
                 {"subcluster_name": "Gamma", "thought_items": ["3"]},
             ]
         }]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         output_names = [sc["subcluster_name"] for sc in result["structuredContent"]["clusters"][0]["subclusters"]]
         assert output_names == ["Alpha", "Beta", "Gamma"]
@@ -627,7 +627,7 @@ class TestOrderingGuarantees:
             "thought_items": ["first task", "second task", "third task"],
             "subclusters": []
         }]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         output_items = result["structuredContent"]["clusters"][0]["thought_items"]
         assert output_items == ["first task", "second task", "third task"]
@@ -642,7 +642,7 @@ class TestOrderingGuarantees:
                 "thought_items": ["item A", "item B", "item C"]
             }]
         }]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         output_items = result["structuredContent"]["clusters"][0]["subclusters"][0]["thought_items"]
         assert output_items == ["item A", "item B", "item C"]
@@ -654,7 +654,7 @@ class TestOrderingGuarantees:
             "thought_items": ["item"],
             "tags": ["decide", "research", "delegate"]
         }]
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
 
         output_tags = result["structuredContent"]["clusters"][0]["tags"]
         assert output_tags == ["decide", "research", "delegate"]
@@ -772,7 +772,7 @@ class TestTagValidation:
 # =============================================================================
 
 class TestTagsOutput:
-    """Test tags are passed through in cluster_raw_thoughts output."""
+    """Test tags are passed through in organize_thoughts output."""
 
     def test_cluster_tags_in_output(self):
         """Test cluster tags appear in output."""
@@ -783,7 +783,7 @@ class TestTagsOutput:
             "tags": ["decide", "delegate"]
         }]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
         cluster = result["structuredContent"]["clusters"][0]
 
         assert "tags" in cluster
@@ -804,7 +804,7 @@ class TestTagsOutput:
             "tags": []
         }]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
         subcluster = result["structuredContent"]["clusters"][0]["subclusters"][0]
 
         assert "tags" in subcluster
@@ -819,7 +819,7 @@ class TestTagsOutput:
             "tags": []
         }]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
         cluster = result["structuredContent"]["clusters"][0]
 
         assert "tags" in cluster
@@ -834,7 +834,7 @@ class TestTagsOutput:
             # No tags field
         }]
 
-        result = cluster_raw_thoughts(clusters)
+        result = organize_thoughts(clusters)
         cluster = result["structuredContent"]["clusters"][0]
 
         assert "tags" in cluster
@@ -1077,7 +1077,7 @@ class TestToolBoundaryValidation:
         """Verify validation happens before tool logic executes.
 
         This test ensures a refactor can't accidentally skip validation.
-        We pass invalid data and check it never reaches cluster_raw_thoughts().
+        We pass invalid data and check it never reaches organize_thoughts().
         """
         arguments = {
             "thoughts_exhausted": True,
@@ -1096,7 +1096,7 @@ class TestToolBoundaryValidation:
                 "azp": "client-id"
             }
 
-            with patch("mcp_server.clarity.tools.cluster_raw_thoughts.format_clusters") as mock_tool:
+            with patch("mcp_server.clarity.tools.organize_thoughts.format_clusters") as mock_tool:
                 result = await call_tool_request(_make_tool_request(arguments))
 
                 # format_clusters should NOT be called for invalid input

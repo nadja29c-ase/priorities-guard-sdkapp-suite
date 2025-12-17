@@ -4,16 +4,16 @@ Unit tests for Clarity MCP tool registry.
 
 import pytest
 
-from mcp_server.clarity.tools import TOOL_REGISTRY, get_tool, register_tool
+from mcp_server.clarity.tools import TOOL_REGISTRY, get_tool, register_tool, list_tools
 from mcp_server.clarity.tools.base import ToolDefinition
 
 
 class TestToolRegistry:
     """Tests for tool registration and discovery."""
 
-    def test_cluster_raw_thoughts_registered(self):
-        """cluster_raw_thoughts tool should be in registry after import."""
-        assert "cluster_raw_thoughts" in TOOL_REGISTRY
+    def test_organize_thoughts_registered(self):
+        """organize_thoughts tool should be in registry after import."""
+        assert "organize_thoughts" in TOOL_REGISTRY
 
     def test_registry_returns_none_for_unknown(self):
         """get_tool should return None for unknown tool names."""
@@ -22,7 +22,7 @@ class TestToolRegistry:
 
     def test_tool_definition_has_required_fields(self):
         """Tool definitions should have all required fields."""
-        tool = get_tool("cluster_raw_thoughts")
+        tool = get_tool("organize_thoughts")
         assert tool is not None
 
         # Check required fields
@@ -40,16 +40,16 @@ class TestToolRegistry:
 
         assert callable(tool.handle)
 
-    def test_cluster_raw_thoughts_has_widget_uri(self):
-        """cluster_raw_thoughts should have a widget_uri (produces widget)."""
-        tool = get_tool("cluster_raw_thoughts")
+    def test_organize_thoughts_has_widget_uri(self):
+        """organize_thoughts should have a widget_uri (produces widget)."""
+        tool = get_tool("organize_thoughts")
         assert tool is not None
         assert tool.widget_uri is not None
         assert "clarity-clusters" in tool.widget_uri
 
-    def test_cluster_raw_thoughts_requires_clarity_write_scope(self):
-        """cluster_raw_thoughts should require clarity.write scope."""
-        tool = get_tool("cluster_raw_thoughts")
+    def test_organize_thoughts_requires_clarity_write_scope(self):
+        """organize_thoughts should require clarity.write scope."""
+        tool = get_tool("organize_thoughts")
         assert tool is not None
         assert "clarity.write" in tool.required_scopes
 
@@ -83,3 +83,43 @@ class TestRegisterTool:
 
         # Clean up (remove from registry)
         del TOOL_REGISTRY["test_dummy_tool"]
+
+
+class TestSaveBoardRegistration:
+    """Tests for save_board tool registration."""
+
+    def test_save_board_registered(self):
+        """save_board tool should be in registry."""
+        assert "save_board" in TOOL_REGISTRY
+
+    def test_save_board_widget_accessible(self):
+        """save_board should be widget_accessible (for window.openai.callTool)."""
+        tool = get_tool("save_board")
+        assert tool is not None
+        assert tool.widget_accessible is True
+
+    def test_save_board_no_widget_uri(self):
+        """save_board should NOT have widget_uri (doesn't produce widget output)."""
+        tool = get_tool("save_board")
+        assert tool is not None
+        assert tool.widget_uri is None
+
+    @pytest.mark.asyncio
+    async def test_save_board_has_widget_accessible_meta(self):
+        """save_board should have openai/widgetAccessible in meta."""
+        tools = await list_tools()
+        save_board_tool = next((t for t in tools if t.name == "save_board"), None)
+        assert save_board_tool is not None
+        assert save_board_tool.meta is not None
+        assert save_board_tool.meta.get("openai/widgetAccessible") is True
+
+    @pytest.mark.asyncio
+    async def test_widget_producing_tools_have_full_meta(self):
+        """Tools with widget_uri should have full meta including outputTemplate."""
+        tools = await list_tools()
+        organize_thoughts_tool = next((t for t in tools if t.name == "organize_thoughts"), None)
+        assert organize_thoughts_tool is not None
+        assert organize_thoughts_tool.meta is not None
+        assert "openai/outputTemplate" in organize_thoughts_tool.meta
+        assert organize_thoughts_tool.meta.get("openai/widgetAccessible") is True
+        assert organize_thoughts_tool.meta.get("openai/resultCanProduceWidget") is True

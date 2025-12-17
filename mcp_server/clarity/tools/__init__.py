@@ -38,15 +38,18 @@ async def list_tools() -> List[mcp_types.Tool]:
     """
     Build MCP Tool list from registry.
 
-    Follows OpenAI pattern for widget integration - tools with widget_uri
-    get appropriate _meta for ChatGPT widget rendering.
+    Follows OpenAI pattern for widget integration:
+    - Tools with widget_uri get full widget metadata
+    - Tools with widget_accessible=True can be called from widgets via window.openai.callTool()
     """
     tools = []
 
     for tool_def in TOOL_REGISTRY.values():
-        # Build _meta for widget-producing tools
+        # Build _meta based on tool capabilities
         meta = None
+
         if tool_def.widget_uri:
+            # Widget-producing tools get full metadata
             meta = {
                 "openai/outputTemplate": tool_def.widget_uri,
                 "openai/toolInvocation/invoking": "Processing...",
@@ -58,6 +61,12 @@ async def list_tools() -> List[mcp_types.Tool]:
                     "openWorldHint": False,
                     "readOnlyHint": True,
                 }
+            }
+        elif tool_def.widget_accessible:
+            # Widget-callable tools (e.g., save_board) need widgetAccessible
+            # but don't produce a widget output
+            meta = {
+                "openai/widgetAccessible": True,
             }
 
         tool = mcp_types.Tool(
@@ -78,7 +87,6 @@ async def list_tools() -> List[mcp_types.Tool]:
 # WARNING: Tools self-register at import time.
 # If you add a new tool, import it here or it won't be in the registry.
 
-from . import cluster_raw_thoughts  # noqa: F401, E402
-from . import get_my_clusters  # noqa: F401, E402
-# from . import identify_relevant  # noqa: F401  (future)
-# from . import specify_next_steps  # noqa: F401  (future)
+from . import organize_thoughts  # noqa: F401, E402
+from . import load_saved_board  # noqa: F401, E402
+from . import save_board  # noqa: F401, E402

@@ -7,7 +7,7 @@ Failures are logged but don't crash tool responses - user still sees their clust
 IMPORTANT:
     This module intentionally does NOT normalize or merge cluster state.
     It is a pure read/write layer. Reconciliation logic (if ever needed) lives
-    in the get_my_clusters tool, not here.
+    in the load_saved_board tool, not here.
 
 TIMEOUT GUARANTEE:
     All HTTP calls use get_http_client() which has a 10-second timeout.
@@ -28,6 +28,7 @@ async def persist_cluster(
     thoughts_exhausted: bool,
     correctly_clustered: bool | None,
     correlation_id: str | None = None,
+    content_hash: str | None = None,
 ) -> str | None:
     """
     Persist cluster snapshot to backend.
@@ -35,9 +36,10 @@ async def persist_cluster(
     Args:
         user_id: User ID from JWT
         cluster_data: Logical cluster data (no UI metadata)
-        thoughts_exhausted: Whether user confirmed all thoughts captured
-        correctly_clustered: User confirmation of cluster accuracy (null before confirmation)
+        thoughts_exhausted: DEPRECATED - always pass False
+        correctly_clustered: DEPRECATED - always pass None
         correlation_id: Optional correlation ID for distributed tracing
+        content_hash: SHA256 hash of board content for saved state detection
 
     Returns:
         cluster_id on success, None on failure
@@ -56,15 +58,20 @@ async def persist_cluster(
         if correlation_id:
             headers["X-Correlation-ID"] = correlation_id
 
+        # Build payload
+        payload = {
+            "cluster_data": cluster_data,
+            "thoughts_exhausted": thoughts_exhausted,
+            "correctly_clustered": correctly_clustered,
+        }
+        if content_hash is not None:
+            payload["content_hash"] = content_hash
+
         client = get_http_client()
         response = await client.post(
             f"{BACKEND_URL}/api/clarity/clusters",
             headers=headers,
-            json={
-                "cluster_data": cluster_data,
-                "thoughts_exhausted": thoughts_exhausted,
-                "correctly_clustered": correctly_clustered,
-            },
+            json=payload,
         )
 
         if response.status_code == 201:

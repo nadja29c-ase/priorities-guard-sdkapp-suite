@@ -1,8 +1,11 @@
 """
-Cluster Raw Thoughts Tool.
+Organize Thoughts Tool.
 
 Organizes user's thoughts, ideas, tasks into visual clusters for cognitive ease.
 Self-registers at import time.
+
+NOTE: As of Increment 12, this tool is PURE (no DB persistence).
+      Use save_board to explicitly save the board.
 """
 
 import re
@@ -15,8 +18,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .base import ToolDefinition
 from . import register_tool
-from ..tool_logic import cluster_raw_thoughts as format_clusters
-from ..persistence import persist_cluster
+from ..tool_logic import organize_thoughts as format_clusters  # Renamed from cluster_raw_thoughts
 from ..handlers.resources import WIDGET_URI
 from ..mcp_auth import build_invalid_params_error
 
@@ -27,7 +29,8 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """
-(Re)Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next. This tool renders a visual board that is easily digestible to the user.
+(Re)Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next. This tool renders a visual cards/board that is easily digestible to the user.
+Treat the board as a living artifact. 
 
 WHEN TO CALL:
 - After user expresses 5+ thought items — call immediately, don't wait
@@ -232,7 +235,7 @@ async def handle(
     arguments: dict,
 ) -> mcp_types.CallToolResult:
     """
-    Handle cluster_raw_thoughts tool call.
+    Handle organize_thoughts tool call.
 
     Args:
         user_id: Authenticated user ID from JWT
@@ -242,7 +245,7 @@ async def handle(
     Returns:
         CallToolResult with clustered data and widget metadata
     """
-    logger.debug("cluster_raw_thoughts.handle.start",
+    logger.debug("organize_thoughts.handle.start",
                 user_id=user_id,
                 correlation_id=correlation_id,
                 argument_keys=list(arguments.keys()))
@@ -260,7 +263,7 @@ async def handle(
             len(sc.tags) for c in validated_request.clusters for sc in c.subclusters
         )
 
-        logger.debug("cluster_raw_thoughts.validation_success",
+        logger.debug("organize_thoughts.validation_success",
                     cluster_count=len(validated_request.clusters),
                     subcluster_count=subcluster_count,
                     tag_count=tag_count,
@@ -271,7 +274,7 @@ async def handle(
         # ---------------------------------------------------------------
         # LLM Error Compensation - repair common malformed inputs
         # ---------------------------------------------------------------
-        logger.warning("cluster_raw_thoughts.validation_failed_attempt_repair",
+        logger.warning("organize_thoughts.validation_failed_attempt_repair",
                       error=str(type(e).__name__),
                       details=str(e.errors()))
 
@@ -306,7 +309,7 @@ async def handle(
                                 subcluster["tags"] = valid_sub_tags
                 repaired_clusters.append(repaired)
             if tags_stripped and repaired_clusters:
-                logger.info("cluster_raw_thoughts.repair_stripped_invalid_tags")
+                logger.info("organize_thoughts.repair_stripped_invalid_tags")
                 clusters_data = repaired_clusters
 
         # Repair: raw strings list -> wrap into single flat cluster
@@ -329,7 +332,7 @@ async def handle(
                 }]
 
         if clusters_data is None:
-            logger.error("cluster_raw_thoughts.repair_failed", reason="unrecognized_format")
+            logger.error("organize_thoughts.repair_failed", reason="unrecognized_format")
             return mcp_types.CallToolResult(
                 content=[mcp_types.TextContent(
                     type="text",
@@ -348,11 +351,11 @@ async def handle(
                 "correctly_clustered": correctly_clustered,
                 "clusters": clusters_data
             })
-            logger.debug("cluster_raw_thoughts.repair_success",
+            logger.debug("organize_thoughts.repair_success",
                         cluster_count=len(validated_request.clusters))
 
         except ValidationError as repair_error:
-            logger.error("cluster_raw_thoughts.repair_failed",
+            logger.error("organize_thoughts.repair_failed",
                         reason="revalidation_failed",
                         details=str(repair_error.errors()))
             return mcp_types.CallToolResult(
@@ -373,39 +376,9 @@ async def handle(
     result = format_clusters(clusters)
 
     # ============================================================
-    # PERSISTENCE (non-blocking)
+    # BUILD RESPONSE (no persistence - Increment 12 explicit save model)
     # ============================================================
-    cluster_data_to_store = {
-        "clusters": [
-            {
-                "cluster_name": c.cluster_name,
-                "thought_items": c.thought_items,
-                "subclusters": [
-                    {
-                        "subcluster_name": sc.subcluster_name,
-                        "thought_items": sc.thought_items,
-                        "tags": sc.tags,
-                    }
-                    for sc in c.subclusters
-                ],
-                "tags": c.tags,
-            }
-            for c in validated_request.clusters
-        ]
-    }
-
-    await persist_cluster(
-        user_id=user_id,
-        cluster_data=cluster_data_to_store,
-        thoughts_exhausted=validated_request.thoughts_exhausted,
-        correctly_clustered=validated_request.correctly_clustered,
-        correlation_id=correlation_id,
-    )
-
-    # ============================================================
-    # BUILD RESPONSE
-    # ============================================================
-    logger.info("cluster_raw_thoughts.complete",
+    logger.info("organize_thoughts.complete",
                 cluster_count=len(result["structuredContent"]["clusters"]),
                 user_id=user_id)
 
@@ -434,7 +407,7 @@ async def handle(
 # ============================================================================
 
 register_tool(ToolDefinition(
-    name="cluster_raw_thoughts",
+    name="organize_thoughts",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,

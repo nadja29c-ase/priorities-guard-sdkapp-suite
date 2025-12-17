@@ -94,7 +94,7 @@ class TestClarityAuthEnforcement:
         """Tool call without auth returns error code -32001 (Unauthorized)."""
         # Call tool without Authorization header (no _meta)
         req = self._makecall_tool_request(
-            "cluster_raw_thoughts",
+            "organize_thoughts",
             {
                 "thoughts_exhausted": True,
                 "clusters": [{"cluster_name": "Test", "thought_items": ["item1"]}]
@@ -127,7 +127,7 @@ class TestClarityAuthEnforcement:
             }
 
             req = self._makecall_tool_request(
-                "cluster_raw_thoughts",
+                "organize_thoughts",
                 {
                     "thoughts_exhausted": True,
                     "clusters": [{"cluster_name": "Test", "thought_items": ["item1"]}]
@@ -160,7 +160,7 @@ class TestClarityAuthEnforcement:
             }
 
             req = self._makecall_tool_request(
-                "cluster_raw_thoughts",
+                "organize_thoughts",
                 {
                     "thoughts_exhausted": True,
                     "clusters": [{"cluster_name": "Test", "thought_items": ["item1"]}]
