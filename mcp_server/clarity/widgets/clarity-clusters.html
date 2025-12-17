@@ -591,7 +591,8 @@
           applyTheme();
           const { clusters, savedBoardHash: hash } = getToolOutput();
           currentClusters = clusters;
-          savedBoardHash = hash;
+          // Only update savedBoardHash if new hash exists (preserve after save)
+          if (hash) savedBoardHash = hash;
           rootEl.innerHTML = "";
 
           if (!clusters.length) {
