@@ -589,10 +589,19 @@
 
         const render = () => {
           applyTheme();
-          const { clusters, savedBoardHash: hash } = getToolOutput();
+          const { clusters, savedBoardHash: newHash } = getToolOutput();
+
+          // If a different board version was saved, this widget is stale
+          if (newHash && savedBoardHash && newHash !== savedBoardHash) {
+            savedBoardHash = null;  // Invalidate - our version is no longer saved
+          }
+
+          // Only update savedBoardHash if we got a new one
+          if (newHash) {
+            savedBoardHash = newHash;
+          }
+
           currentClusters = clusters;
-          // Only update savedBoardHash if new hash exists (preserve after save)
-          if (hash) savedBoardHash = hash;
           rootEl.innerHTML = "";
 
           if (!clusters.length) {
