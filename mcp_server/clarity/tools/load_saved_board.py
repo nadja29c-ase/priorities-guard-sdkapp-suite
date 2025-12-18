@@ -1,11 +1,10 @@
 """
 Load Saved Board Tool.
 
-Retrieves user's explicitly saved board from the database with widget rendering.
+Retrieves and DISPLAYS user's saved board with widget rendering.
 Self-registers at import time.
 
-NOTE: As of Increment 12, this is separate from organize_thoughts.
-      organize_thoughts is ephemeral (no DB). This tool loads saved state.
+For data-only access (no widget), use read_saved_board instead.
 """
 
 import structlog
@@ -25,48 +24,26 @@ logger = structlog.get_logger(__name__)
 NAME = "load_saved_board"
 
 DESCRIPTION = """
-Load/Read user's previously saved Clarity board from the database.
+Load and DISPLAY user's saved Clarity board with widget.
 
 WHEN TO CALL:
-- User asks to see/show/load/retrieve their saved (clarity) board -> dispay saved board with widget
-- Start of new conversation when user wants to continue from saved state and add to the saved board
-f.e. User says at the beginning of a new conversation "Add this..to my board" -> read saved board, merge new thoughts, re-cluster, show updated board with widget
+- User asks to SEE/SHOW/VIEW/DISPLAY their saved board
+- Example: "Show my board", "What's on my board?"
+
+DO NOT CALL:
+- When user wants to ADD items (use read_saved_board instead)
 
 EMPTY STATE RESPONSE:
-When no saved board exists:
-{
-  "clusters": [],
-  "saved_board_hash": null
-}
-
-Example FLows:
-FLOW A — User wants to ADD new thoughts to saved board:
-1. Call load_saved_board(render_widget=false) → receive historical clusters (NO WIDGET)
-2. Merge new user thoughts with historical clusters
-3. Call organize_thoughts with the COMPLETE MERGED SET → widget renders
-4. Respond to user with the organized board
-
-FLOW B — User wants to VIEW existing saved clusters only:
-1. Call load_saved_board → load saved clusters with Widget
-2. Ask what they'd like to do (add, reorganize, delete)
+When no saved board exists, widget shows empty state message.
 
 SAVED STATE RESPONSE:
-When saved board exists:
-{
-  "clusters": [...],
-  "saved_board_hash": "abc123..."
-}
+Widget renders showing saved clusters.
 """
 
 INPUT_SCHEMA = {
     "type": "object",
-    "properties": {
-        "render_widget": {
-            "type": "boolean",
-            "description": "Required. True to render widget, false for text-only response."
-        }
-    },
-    "required": ["render_widget"],
+    "properties": {},
+    "required": [],
     "additionalProperties": False
 }
 
@@ -83,27 +60,19 @@ async def handle(
     arguments: dict,
 ) -> mcp_types.CallToolResult:
     """
-    Retrieve user's existing clusters.
+    Retrieve and display user's existing clusters with widget.
 
     Args:
         user_id: Authenticated user ID from JWT
         correlation_id: Request correlation ID for tracing
-        arguments: Raw arguments from ChatGPT
-            - render_widget (bool, required): True to render widget, false for text-only
+        arguments: Raw arguments from ChatGPT (unused - no parameters)
 
     Returns:
-        CallToolResult with structuredContent containing:
-        - clusters: List of cluster objects (empty if none)
-        - has_history: Whether any prior snapshot exists
-        - is_empty_snapshot: True if snapshot exists but has no clusters
-        - last_updated: ISO timestamp of last update (if has_history=true)
+        CallToolResult with structuredContent and widget metadata
     """
-    render_widget = arguments.get("render_widget", False)  # Fallback for safety
-
     logger.debug("load_saved_board.handle.start",
                 user_id=user_id,
-                correlation_id=correlation_id,
-                render_widget=render_widget)
+                correlation_id=correlation_id)
 
     # Fetch with exception handling - never crash on backend failures
     try:
@@ -125,16 +94,14 @@ async def handle(
         inner_data = cluster_data.get("cluster_data") or {}
         clusters = inner_data.get("clusters") or []
 
-    # Build widget metadata only if render_widget is True
-    meta = None
-    if render_widget:
-        meta = {
-            "openai/outputTemplate": WIDGET_URI,
-            "openai/toolInvocation/invoking": "Loading your saved board...",
-            "openai/toolInvocation/invoked": "Here's your saved Clarity board.",
-            "openai/widgetAccessible": True,
-            "openai/resultCanProduceWidget": True,
-        }
+    # Always include widget metadata
+    meta = {
+        "openai/outputTemplate": WIDGET_URI,
+        "openai/toolInvocation/invoking": "Loading your saved board...",
+        "openai/toolInvocation/invoked": "Here's your saved Clarity board.",
+        "openai/widgetAccessible": True,
+        "openai/resultCanProduceWidget": True,
+    }
 
     # No snapshot exists at all - truly starting fresh
     if not has_snapshot:
@@ -208,6 +175,6 @@ register_tool(ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=WIDGET_URI,  # Widget controlled by required render_widget parameter
+    widget_uri=WIDGET_URI,  # Always produces widget
     handle=handle,
 ))
