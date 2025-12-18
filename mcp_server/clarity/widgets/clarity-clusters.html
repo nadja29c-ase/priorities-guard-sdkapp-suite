@@ -567,8 +567,18 @@
                 clusters: currentClusters
               });
 
+              // DEBUG: Log raw callTool result
+              console.log(`[${widgetId}] callTool result:`, JSON.stringify(result, null, 2));
+
               // Check if save was successful
               const content = result?.structuredContent || result?.result?.structuredContent || result;
+              console.log(`[${widgetId}] parsed content:`, JSON.stringify(content, null, 2));
+              console.log(`[${widgetId}] saved check:`, {
+                saved: content?.saved,
+                savedType: typeof content?.saved,
+                hash: content?.saved_board_hash?.slice(0, 8) || null
+              });
+
               if (content?.saved === true && content?.saved_board_hash) {
                 savedBoardHash = content.saved_board_hash;
                 savedIndicator.classList.add("visible");
