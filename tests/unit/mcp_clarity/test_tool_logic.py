@@ -519,6 +519,7 @@ class TestOutputSchemaStability:
             "subclusters",
             "sum_thought_items",
             "tags",
+            "priority",  # Added in increment 13
         }
 
     def test_cluster_output_keys_nested(self):
@@ -538,6 +539,7 @@ class TestOutputSchemaStability:
             "subclusters",
             "sum_thought_items",
             "tags",
+            "priority",  # Added in increment 13
         }
 
     def test_subcluster_output_keys(self):
@@ -555,6 +557,7 @@ class TestOutputSchemaStability:
             "thought_items",
             "sum_thought_items",
             "tags",
+            "priority",  # Added in increment 13
         }
 
     def test_no_internal_fields_leak_to_cluster(self):

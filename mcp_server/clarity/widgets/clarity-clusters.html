@@ -386,6 +386,41 @@
         font-size: 10px;
         padding: 1px 6px;
       }
+
+      /* Priority styling */
+      .cluster-card.prioritized {
+        border-color: #10a37f;
+        border-width: 2px;
+      }
+
+      .subcluster-card.prioritized {
+        border-color: #10a37f;
+        border-width: 2px;
+        background: rgba(16, 163, 127, 0.05);
+      }
+
+      .dark .subcluster-card.prioritized {
+        background: rgba(16, 163, 127, 0.1);
+      }
+
+      .priority-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        background: #10a37f;
+        color: #ffffff;
+        margin-left: 6px;
+        flex-shrink: 0;
+      }
+
+      .subcluster-card .priority-badge {
+        font-size: 9px;
+        padding: 1px 5px;
+      }
     </style>
   </head>
   <body>
@@ -463,6 +498,52 @@
           return text.substring(0, maxLength).trim() + "...";
         };
 
+        // Priority ranking: P1 < P2 < P3 < null (lower = higher priority)
+        const rankToNumber = (rank) => {
+          if (rank === "P1") return 1;
+          if (rank === "P2") return 2;
+          if (rank === "P3") return 3;
+          return 999; // null/undefined = lowest priority
+        };
+
+        // Get effective rank for a cluster (min of own rank and best subcluster rank)
+        const getEffectiveRank = (cluster) => {
+          const ownRank = cluster.priority?.rank || null;
+          const subclusters = Array.isArray(cluster.subclusters) ? cluster.subclusters : [];
+
+          let bestSubclusterRank = null;
+          for (const sub of subclusters) {
+            const subRank = sub.priority?.rank || null;
+            if (subRank && (!bestSubclusterRank || rankToNumber(subRank) < rankToNumber(bestSubclusterRank))) {
+              bestSubclusterRank = subRank;
+            }
+          }
+
+          // Return whichever is higher priority (lower number)
+          if (!ownRank && !bestSubclusterRank) return null;
+          if (!ownRank) return bestSubclusterRank;
+          if (!bestSubclusterRank) return ownRank;
+          return rankToNumber(ownRank) <= rankToNumber(bestSubclusterRank) ? ownRank : bestSubclusterRank;
+        };
+
+        // Sort clusters by effective rank (P1 first, then P2, P3, then unranked)
+        const sortClustersByPriority = (clusters) => {
+          return [...clusters].sort((a, b) => {
+            const rankA = rankToNumber(getEffectiveRank(a));
+            const rankB = rankToNumber(getEffectiveRank(b));
+            return rankA - rankB;
+          });
+        };
+
+        // Sort subclusters by own rank
+        const sortSubclustersByPriority = (subclusters) => {
+          return [...subclusters].sort((a, b) => {
+            const rankA = rankToNumber(a.priority?.rank || null);
+            const rankB = rankToNumber(b.priority?.rank || null);
+            return rankA - rankB;
+          });
+        };
+
         const updateSaveButtonState = () => {
           saveBtn.disabled = currentClusters.length === 0;
         };
@@ -536,17 +617,35 @@
             const grid = document.createElement("div");
             grid.className = "cluster-grid";
 
-            clusters.forEach((cluster) => {
+            // Sort clusters by effective priority for display
+            const sortedClusters = sortClustersByPriority(clusters);
+
+            sortedClusters.forEach((cluster) => {
               const card = document.createElement("div");
-              card.className = "cluster-card";
+              const hasPriority = cluster.priority?.rank;
+              card.className = hasPriority ? "cluster-card prioritized" : "cluster-card";
 
               const header = document.createElement("div");
               header.className = "cluster-header";
 
+              const nameContainer = document.createElement("div");
+              nameContainer.style.display = "flex";
+              nameContainer.style.alignItems = "center";
+
               const nameEl = document.createElement("div");
               nameEl.className = "cluster-name";
               nameEl.textContent = truncateText(cluster.cluster_name, 40) || "Untitled cluster";
-              header.appendChild(nameEl);
+              nameContainer.appendChild(nameEl);
+
+              // Add priority badge if cluster is prioritized
+              if (hasPriority) {
+                const priorityBadge = document.createElement("span");
+                priorityBadge.className = "priority-badge";
+                priorityBadge.textContent = cluster.priority.rank;
+                nameContainer.appendChild(priorityBadge);
+              }
+
+              header.appendChild(nameContainer);
 
               const badge = document.createElement("div");
               badge.className = "item-count";
@@ -586,22 +685,40 @@
                 card.appendChild(list);
               }
 
-              // Render subclusters below (if any)
+              // Render subclusters below (if any), sorted by priority
               if (subclusters.length > 0) {
                 const subContainer = document.createElement("div");
                 subContainer.className = "subclusters-container";
 
-                subclusters.forEach((subcluster) => {
+                // Sort subclusters by priority for display
+                const sortedSubclusters = sortSubclustersByPriority(subclusters);
+
+                sortedSubclusters.forEach((subcluster) => {
                   const subCard = document.createElement("div");
-                  subCard.className = "subcluster-card";
+                  const subHasPriority = subcluster.priority?.rank;
+                  subCard.className = subHasPriority ? "subcluster-card prioritized" : "subcluster-card";
 
                   const subHeader = document.createElement("div");
                   subHeader.className = "subcluster-header";
 
+                  const subNameContainer = document.createElement("div");
+                  subNameContainer.style.display = "flex";
+                  subNameContainer.style.alignItems = "center";
+
                   const subName = document.createElement("div");
                   subName.className = "subcluster-name";
                   subName.textContent = truncateText(subcluster.subcluster_name, 30) || "Untitled";
-                  subHeader.appendChild(subName);
+                  subNameContainer.appendChild(subName);
+
+                  // Add priority badge if subcluster is prioritized
+                  if (subHasPriority) {
+                    const subPriorityBadge = document.createElement("span");
+                    subPriorityBadge.className = "priority-badge";
+                    subPriorityBadge.textContent = subcluster.priority.rank;
+                    subNameContainer.appendChild(subPriorityBadge);
+                  }
+
+                  subHeader.appendChild(subNameContainer);
 
                   const subBadge = document.createElement("div");
                   subBadge.className = "subcluster-count";

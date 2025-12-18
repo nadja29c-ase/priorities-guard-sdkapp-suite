@@ -28,13 +28,14 @@ def enrich_clusters(clusters: list[dict]) -> list[dict]:
         thought_items = c.get("thought_items", [])
         tags = c.get("tags", [])
 
-        # Enrich subclusters if present (include tags)
+        # Enrich subclusters if present (include tags and priority)
         enriched_subclusters = [
             {
                 "subcluster_name": sc.get("subcluster_name", ""),
                 "thought_items": sc.get("thought_items", []),
                 "sum_thought_items": len(sc.get("thought_items", [])),
-                "tags": sc.get("tags", [])
+                "tags": sc.get("tags", []),
+                "priority": sc.get("priority"),  # Preserve priority field
             }
             for sc in subclusters
         ]
@@ -48,7 +49,8 @@ def enrich_clusters(clusters: list[dict]) -> list[dict]:
             "thought_items": thought_items,
             "subclusters": enriched_subclusters,
             "sum_thought_items": total_items,
-            "tags": tags
+            "tags": tags,
+            "priority": c.get("priority"),  # Preserve priority field
         })
 
     return enriched
