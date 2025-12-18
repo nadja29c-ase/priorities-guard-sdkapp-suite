@@ -130,6 +130,7 @@ class SubclusterInput(BaseModel):
     subcluster_name: str
     thought_items: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
+    priority: Optional[dict] = None  # Added in increment 13
 
 
 class ClusterInput(BaseModel):
@@ -138,6 +139,7 @@ class ClusterInput(BaseModel):
     thought_items: List[str] = Field(default_factory=list)
     subclusters: List[SubclusterInput] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
+    priority: Optional[dict] = None  # Added in increment 13
 
 
 class SaveBoardRequest(BaseModel):

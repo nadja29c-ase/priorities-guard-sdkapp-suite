@@ -645,3 +645,172 @@ class TestMaxPrioritiesConstant:
     def test_max_priorities_is_3(self):
         """MAX_PRIORITIES must be 3 per spec."""
         assert MAX_PRIORITIES == 3
+
+
+# ============================================================================
+# Integration Tests
+# ============================================================================
+
+
+class TestPriorityPersistenceRoundTrip:
+    """Integration tests for priority persistence through save/load cycle."""
+
+    @pytest.mark.asyncio
+    async def test_priorities_persist_through_save_load_cycle(self):
+        """
+        prioritize_clusters → save_board → load_saved_board preserves priorities.
+
+        This is the critical round-trip test from increment 13 spec.
+        """
+        from unittest.mock import AsyncMock, patch
+        from mcp_server.clarity.tools.save_board import handle as save_handle
+        from mcp_server.clarity.tools.load_saved_board import handle as load_handle
+
+        # Step 1: Create board with priorities using prioritize_clusters
+        # Note: Prioritize Work (cluster) and Home (different cluster), NOT parent+child
+        prioritize_result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [
+                    {
+                        "cluster_name": "Work",
+                        "thought_items": ["task1", "task2"],
+                        "subclusters": [
+                            {"subcluster_name": "Urgent", "thought_items": ["urgent1"]}
+                        ],
+                    },
+                    {
+                        "cluster_name": "Home",
+                        "thought_items": ["chore1"],
+                        "subclusters": [],
+                    },
+                    {
+                        "cluster_name": "Health",
+                        "thought_items": ["exercise"],
+                        "subclusters": [],
+                    },
+                ],
+                "priorities": [
+                    {"name": "Work", "rank": "P1", "reason": "blocker"},
+                    {"name": "Home", "rank": "P2", "reason": "goal-aligned"},
+                ],
+            },
+        )
+
+        assert prioritize_result.isError is None or prioritize_result.isError is False
+        prioritized_clusters = prioritize_result.structuredContent["clusters"]
+
+        # Verify priorities are in the output
+        work = next(c for c in prioritized_clusters if c["cluster_name"] == "Work")
+        home = next(c for c in prioritized_clusters if c["cluster_name"] == "Home")
+        assert work["priority"]["rank"] == "P1"
+        assert home["priority"]["rank"] == "P2"
+
+        # Step 2: Save the prioritized board (mock persistence)
+        saved_data = None
+
+        async def mock_persist(user_id, cluster_data, **kwargs):
+            nonlocal saved_data
+            saved_data = cluster_data
+
+        with patch("mcp_server.clarity.tools.save_board.persist_cluster", mock_persist):
+            save_result = await save_handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "clusters": prioritized_clusters,
+                },
+            )
+
+        assert save_result.isError is None or save_result.isError is False
+        assert saved_data is not None
+
+        # Step 3: Load the saved board (mock get_cluster returns saved data)
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = {
+                "cluster_id": "test-id",
+                "cluster_data": saved_data,
+                "created_at": "2025-01-15T10:00:00Z",
+            }
+
+            load_result = await load_handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={},
+            )
+
+        assert load_result.isError is None or load_result.isError is False
+        loaded_clusters = load_result.structuredContent["clusters"]
+
+        # Step 4: Verify priorities survived the round-trip
+        work_cluster = next(c for c in loaded_clusters if c["cluster_name"] == "Work")
+        home_cluster = next(c for c in loaded_clusters if c["cluster_name"] == "Home")
+        health_cluster = next(c for c in loaded_clusters if c["cluster_name"] == "Health")
+
+        # Work cluster should have P1 priority
+        assert work_cluster["priority"] is not None
+        assert work_cluster["priority"]["rank"] == "P1"
+        assert work_cluster["priority"]["reason"] == "blocker"
+
+        # Home cluster should have P2 priority
+        assert home_cluster["priority"] is not None
+        assert home_cluster["priority"]["rank"] == "P2"
+        assert home_cluster["priority"]["reason"] == "goal-aligned"
+
+        # Health cluster should have no priority
+        assert health_cluster["priority"] is None
+
+    @pytest.mark.asyncio
+    async def test_cleared_priorities_persist(self):
+        """Empty priorities array clears priorities and persists correctly."""
+        from unittest.mock import AsyncMock, patch
+        from mcp_server.clarity.tools.save_board import handle as save_handle
+        from mcp_server.clarity.tools.load_saved_board import handle as load_handle
+
+        # Step 1: Clear priorities
+        prioritize_result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [
+                    {"cluster_name": "Work", "thought_items": ["task"]},
+                ],
+                "priorities": [],  # Clear all priorities
+            },
+        )
+
+        assert prioritize_result.isError is None or prioritize_result.isError is False
+        cleared_clusters = prioritize_result.structuredContent["clusters"]
+        assert cleared_clusters[0]["priority"] is None
+
+        # Step 2: Save
+        saved_data = None
+
+        async def mock_persist(user_id, cluster_data, **kwargs):
+            nonlocal saved_data
+            saved_data = cluster_data
+
+        with patch("mcp_server.clarity.tools.save_board.persist_cluster", mock_persist):
+            await save_handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={"clusters": cleared_clusters},
+            )
+
+        # Step 3: Load and verify priorities are still cleared
+        with patch("mcp_server.clarity.tools.load_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = {
+                "cluster_id": "test-id",
+                "cluster_data": saved_data,
+                "created_at": "2025-01-15T10:00:00Z",
+            }
+
+            load_result = await load_handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={},
+            )
+
+        loaded_clusters = load_result.structuredContent["clusters"]
+        assert loaded_clusters[0]["priority"] is None
