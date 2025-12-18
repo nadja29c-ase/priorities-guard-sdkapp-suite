@@ -103,6 +103,11 @@ async def handle(
         "openai/resultCanProduceWidget": True,
     }
 
+    # DEBUG: Log actual values being returned
+    logger.info("load_saved_board.returning",
+               meta=meta,
+               widget_uri=WIDGET_URI)
+
     # No snapshot exists at all - truly starting fresh
     if not has_snapshot:
         logger.info("load_saved_board.no_snapshot",

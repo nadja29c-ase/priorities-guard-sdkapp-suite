@@ -592,23 +592,15 @@
           applyTheme();
           const { clusters, savedBoardHash: newHash } = getToolOutput();
 
-          if (!isInitialized) {
-            // First render - freeze our clusters
+          // Don't initialize until we have actual data
+          if (!isInitialized && clusters.length > 0) {
+            // First render WITH data - freeze our clusters
             currentClusters = clusters;
             savedBoardHash = newHash;
             isInitialized = true;
 
             // Render DOM
             rootEl.innerHTML = "";
-
-            if (!clusters.length) {
-              const empty = document.createElement("div");
-              empty.className = "empty-state";
-              empty.textContent = "No clusters yet. Ask in chat to organize your brain dump into clusters.";
-              rootEl.appendChild(empty);
-              updateSaveButtonState();
-              return;
-            }
 
             const grid = document.createElement("div");
             grid.className = "cluster-grid";
@@ -748,8 +740,19 @@
             rootEl.appendChild(grid);
             updateSaveButtonState();
 
+          } else if (!isInitialized && clusters.length === 0) {
+            // No data yet - show empty state but DON'T lock initialization
+            // This allows re-render when openai:set_globals fires with actual data
+            rootEl.innerHTML = "";
+            const empty = document.createElement("div");
+            empty.className = "empty-state";
+            empty.textContent = "No clusters yet. Ask in chat to organize your brain dump into clusters.";
+            rootEl.appendChild(empty);
+            updateSaveButtonState();
+            return;  // Don't set isInitialized - allow re-render when data arrives
+
           } else {
-            // Subsequent renders - only update saved indicator
+            // Subsequent renders (isInitialized=true) - only update saved indicator
             if (newHash) {
               computeContentHash(currentClusters).then(ourHash => {
                 if (ourHash === newHash) {
