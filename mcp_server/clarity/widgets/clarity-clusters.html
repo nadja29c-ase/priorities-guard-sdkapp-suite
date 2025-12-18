@@ -433,6 +433,7 @@
         let savedBoardHash = null;
         let isSaving = false;
         let isInitialized = false;
+        let renderVersion = 0;
 
         const applyTheme = () => {
           const theme = window.openai?.theme ?? "light";
@@ -751,19 +752,28 @@
             return;  // Don't set isInitialized - wait for real data
 
           } else {
-            // Subsequent renders (isInitialized=true) - only update saved indicator
+            // Subsequent renders - conservatively verify saved state
+            // ALWAYS hide first to prevent false positives
+            savedIndicator.classList.remove("visible");
+
+            const currentVersion = ++renderVersion;
+
             if (newHash) {
               computeContentHash(currentClusters).then(ourHash => {
+                // Guard: ignore if a newer render happened
+                if (currentVersion !== renderVersion) return;
+
                 if (ourHash === newHash) {
                   savedBoardHash = newHash;
                   savedIndicator.classList.add("visible");
                 } else {
                   savedBoardHash = null;
-                  savedIndicator.classList.remove("visible");
                 }
               });
+            } else {
+              // No hash to verify against - stay hidden
+              savedBoardHash = null;
             }
-            // Don't re-render DOM or change currentClusters
           }
         };
 
