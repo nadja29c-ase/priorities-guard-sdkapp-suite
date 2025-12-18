@@ -591,6 +591,11 @@
           applyTheme();
           const { clusters, savedBoardHash: newHash } = getToolOutput();
 
+          // If we have saved state and incoming data is empty, ignore this stale render
+          if (savedBoardHash && (!clusters || clusters.length === 0)) {
+            return;
+          }
+
           // If a different board version was saved, this widget is stale
           if (newHash && savedBoardHash && newHash !== savedBoardHash) {
             savedBoardHash = null;  // Invalidate - our version is no longer saved
