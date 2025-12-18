@@ -7,6 +7,11 @@ Focus areas:
 3. Unicode normalization (NFC)
 4. Whitespace handling
 5. Business rule validations (limits, empty board, etc.)
+
+NOTE: saved_board_hash is tested for backend consistency and LLM reasoning.
+The widget does NOT use it for persistent saved state detection - it uses
+transient 3-second feedback instead. Any future changes removing hash
+comparison from the widget are intentional, not regressions.
 """
 
 from unittest.mock import AsyncMock, patch

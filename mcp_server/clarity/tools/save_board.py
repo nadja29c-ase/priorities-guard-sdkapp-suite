@@ -53,13 +53,13 @@ Save the current Clarity board to the database.
 
 WHEN TO CALL:
 - ONLY WHEN User EXPLICITELY ASKS TO SAVE their board
-- Or User clicked Widget Save button 
+- Or User clicked Widget Save button
 
 WHEN NOT TO CALL:
 - NEVER call this tool automatically when you are ASSUMING user implied "save"
 
-Returns saved_board_hash for existing widget to detect saved state.
-Does NOT render a new widget - existing widget updates via hash comparison.
+Returns saved=true for widget to show temporary "Saved" confirmation (3 seconds).
+Does NOT render a new widget. Widget shows transient feedback only.
 """
 
 INPUT_SCHEMA = {
@@ -366,6 +366,10 @@ async def handle(
 
     # Pure data operation - never renders widget
     # Widget shows temporary "Saved" indicator via saved=true check
+    #
+    # NOTE: saved_board_hash is provided for LLM reasoning and backend
+    # consistency only. Widget must NOT rely on it for persistent saved
+    # state - the UI uses transient feedback (3-second indicator).
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
