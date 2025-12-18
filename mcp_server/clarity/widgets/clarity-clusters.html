@@ -564,7 +564,8 @@
             if (window.openai?.callTool) {
               const result = await window.openai.callTool("save_board", {
                 confirmed: true,
-                clusters: currentClusters
+                clusters: currentClusters,
+                render_widget: true  // New widget gets saved_board_hash
               });
 
               // DEBUG: Log raw callTool result

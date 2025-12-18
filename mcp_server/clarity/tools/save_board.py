@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, ValidationError
 from .base import ToolDefinition
 from . import register_tool
 from ..persistence import persist_cluster
+from ..handlers.resources import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
@@ -55,6 +56,9 @@ WHEN TO CALL:
 - ONLY WHEN User EXPLICITELY ASKS TO SAVE their board
 - Or User clicked Widget Save button 
 
+WHEN NOT TO CALL:
+- NEVER call this tool automatically when you are ASSUMING user implied "save"
+
 Returns saved_board_hash for existing widget to detect saved state.
 Does NOT render a new widget - existing widget updates via hash comparison.
 """
@@ -65,6 +69,10 @@ INPUT_SCHEMA = {
         "confirmed": {
             "type": "boolean",
             "description": "Optional. Defaults to true. Used by widget for modal confirmation."
+        },
+        "render_widget": {
+            "type": "boolean",
+            "description": "If true, response renders widget with saved_board_hash. Widget sets this; LLM should not."
         },
         "clusters": {
             "type": "array",
@@ -140,6 +148,7 @@ class ClusterInput(BaseModel):
 class SaveBoardRequest(BaseModel):
     """Expected top-level structure for save request."""
     confirmed: bool = True  # Default to True for LLM calls
+    render_widget: bool = False  # Widget sets True; LLM should not
     clusters: List[ClusterInput]
 
 
@@ -359,20 +368,41 @@ async def handle(
     logger.info("save_board.success",
                user_id=user_id,
                cluster_count=cluster_count,
+               render_widget=validated_request.render_widget,
                content_hash=content_hash[:8])  # Log first 8 chars of hash
 
-    # Pure data operation - never renders widget
-    # Existing widget updates its saved indicator via saved_board_hash
+    # Build response - conditionally add widget meta for widget-initiated saves
+    structured_content = {
+        "saved": True,
+        "clusters": clusters_for_storage,
+        "saved_board_hash": content_hash,
+    }
+
+    # Widget sets render_widget=true so the NEW widget gets the hash
+    if validated_request.render_widget:
+        meta = {
+            "openai/outputTemplate": WIDGET_URI,
+            "openai/toolInvocation/invoking": "Saving your board...",
+            "openai/toolInvocation/invoked": "Board saved.",
+            "openai/widgetAccessible": True,
+            "openai/resultCanProduceWidget": True,
+        }
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Board saved successfully ({cluster_count} cluster{'s' if cluster_count != 1 else ''})."
+            )],
+            structuredContent=structured_content,
+            _meta=meta,
+        )
+
+    # LLM-initiated save: no widget render
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
             text=f"Board saved successfully ({cluster_count} cluster{'s' if cluster_count != 1 else ''})."
         )],
-        structuredContent={
-            "saved": True,
-            "clusters": clusters_for_storage,
-            "saved_board_hash": content_hash,
-        },
+        structuredContent=structured_content,
     )
 
 
