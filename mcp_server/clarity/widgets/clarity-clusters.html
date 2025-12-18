@@ -741,15 +741,14 @@
             updateSaveButtonState();
 
           } else if (!isInitialized && clusters.length === 0) {
-            // No data yet - show empty state but DON'T lock initialization
+            // No data yet - show loading state but DON'T lock initialization
             // This allows re-render when openai:set_globals fires with actual data
             rootEl.innerHTML = "";
             const empty = document.createElement("div");
             empty.className = "empty-state";
-            empty.textContent = "No clusters yet. Ask in chat to organize your brain dump into clusters.";
+            empty.textContent = "Loading...";
             rootEl.appendChild(empty);
-            updateSaveButtonState();
-            return;  // Don't set isInitialized - allow re-render when data arrives
+            return;  // Don't set isInitialized - wait for real data
 
           } else {
             // Subsequent renders (isInitialized=true) - only update saved indicator
