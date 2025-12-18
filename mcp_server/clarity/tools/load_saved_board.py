@@ -14,6 +14,7 @@ from .base import ToolDefinition
 from . import register_tool
 from ..persistence import get_cluster
 from ..handlers.resources import WIDGET_URI
+from ..tool_logic import enrich_clusters
 
 logger = structlog.get_logger(__name__)
 
@@ -93,6 +94,8 @@ async def handle(
     if has_snapshot:
         inner_data = cluster_data.get("cluster_data") or {}
         clusters = inner_data.get("clusters") or []
+        # Enrich clusters with sum_thought_items for widget display
+        clusters = enrich_clusters(clusters)
 
     # Always include widget metadata
     meta = {

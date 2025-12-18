@@ -6,6 +6,54 @@ Tools only format/validate - no AI logic here.
 """
 
 
+def enrich_clusters(clusters: list[dict]) -> list[dict]:
+    """
+    Add sum_thought_items to clusters and subclusters.
+
+    Used by:
+    - organize_thoughts: enrich before returning to widget
+    - load_saved_board: enrich persisted data before display
+    - read_saved_board: enrich persisted data before returning
+
+    Args:
+        clusters: List of cluster dicts from ChatGPT or persistence
+
+    Returns:
+        Enriched clusters with sum_thought_items added
+    """
+    enriched = []
+
+    for c in clusters:
+        subclusters = c.get("subclusters", [])
+        thought_items = c.get("thought_items", [])
+        tags = c.get("tags", [])
+
+        # Enrich subclusters if present (include tags)
+        enriched_subclusters = [
+            {
+                "subcluster_name": sc.get("subcluster_name", ""),
+                "thought_items": sc.get("thought_items", []),
+                "sum_thought_items": len(sc.get("thought_items", [])),
+                "tags": sc.get("tags", [])
+            }
+            for sc in subclusters
+        ]
+
+        # Total = direct items + all subcluster items
+        subcluster_total = sum(len(sc.get("thought_items", [])) for sc in subclusters)
+        total_items = len(thought_items) + subcluster_total
+
+        enriched.append({
+            "cluster_name": c.get("cluster_name", ""),
+            "thought_items": thought_items,
+            "subclusters": enriched_subclusters,
+            "sum_thought_items": total_items,
+            "tags": tags
+        })
+
+    return enriched
+
+
 def organize_thoughts(clusters: list[dict]) -> dict:
     """
     Format business thought clusters that ChatGPT has already identified.
@@ -20,35 +68,7 @@ def organize_thoughts(clusters: list[dict]) -> dict:
     Returns:
         Widget-compatible output with content and structuredContent.
     """
-    enriched = []
-
-    for c in clusters:
-        subclusters = c.get("subclusters", [])
-        thought_items = c.get("thought_items", [])
-        tags = c.get("tags", [])
-
-        # Enrich subclusters if present (include tags)
-        enriched_subclusters = [
-            {
-                "subcluster_name": sc["subcluster_name"],
-                "thought_items": sc["thought_items"],
-                "sum_thought_items": len(sc["thought_items"]),
-                "tags": sc.get("tags", [])
-            }
-            for sc in subclusters
-        ]
-
-        # Total = direct items + all subcluster items
-        subcluster_total = sum(len(sc["thought_items"]) for sc in subclusters)
-        total_items = len(thought_items) + subcluster_total
-
-        enriched.append({
-            "cluster_name": c["cluster_name"],
-            "thought_items": thought_items,
-            "subclusters": enriched_subclusters,
-            "sum_thought_items": total_items,
-            "tags": tags
-        })
+    enriched = enrich_clusters(clusters)
 
     return {
         "content": [{"type": "text", "text": "I've organized your thoughts into clusters."}],

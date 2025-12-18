@@ -52,8 +52,8 @@ DESCRIPTION = """
 Save the current Clarity board to the database.
 
 WHEN TO CALL:
-- User asks to save their board
-- Widget Save button clicked
+- ONLY WHEN User EXPLICITELY ASKS TO SAVE their board
+- Or User clicked Widget Save button 
 
 Returns saved_board_hash for existing widget to detect saved state.
 Does NOT render a new widget - existing widget updates via hash comparison.

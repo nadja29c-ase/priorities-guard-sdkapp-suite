@@ -164,13 +164,15 @@ class TestLoadSavedBoardContract:
 
     @pytest.mark.asyncio
     async def test_partial_cluster_payload_passed_through(self):
-        """Partial clusters are passed through unchanged (read-only passthrough).
+        """Partial clusters are enriched with defaults and sum_thought_items.
 
-        Tool is NOT a validator - it passes whatever backend returns.
-        Clusters missing thought_items/tags/subclusters are still valid history.
-        Validation is the responsibility of organize_thoughts (write path).
+        Tool enriches clusters for widget display:
+        - Missing thought_items → []
+        - Missing subclusters → []
+        - Missing tags → []
+        - Adds sum_thought_items count
 
-        This locks in the design decision: load_saved_board is pure read.
+        Core data (cluster_name) is preserved.
         """
         partial_cluster = {"cluster_name": "Work"}  # missing thought_items, tags, subclusters
 
@@ -191,31 +193,34 @@ class TestLoadSavedBoardContract:
                 arguments={},
             )
 
-        # Partial cluster passed through - has_history=True
+        # Cluster enriched with defaults - has_history=True
         assert result.isError is not True
         assert result.structuredContent["has_history"] is True
         assert len(result.structuredContent["clusters"]) == 1
-        assert result.structuredContent["clusters"][0] == partial_cluster
+        cluster = result.structuredContent["clusters"][0]
+        # Core data preserved
+        assert cluster["cluster_name"] == "Work"
+        # Enrichment added
+        assert cluster["thought_items"] == []
+        assert cluster["subclusters"] == []
+        assert cluster["tags"] == []
+        assert cluster["sum_thought_items"] == 0
 
     @pytest.mark.asyncio
-    async def test_mixed_valid_and_malformed_clusters_passed_through(self):
-        """Mixed valid + malformed clusters are passed through unchanged.
+    async def test_mixed_valid_and_malformed_clusters_enriched(self):
+        """Mixed valid + malformed clusters are enriched, not filtered.
 
         DESIGN DECISION:
-        Tool is a read-only passthrough, NOT a validator. When backend returns
-        a mix of valid and malformed clusters:
-        - All clusters are passed through unchanged
+        Tool enriches clusters for widget display but does NOT filter:
+        - All clusters are enriched (add sum_thought_items, normalize structure)
         - has_history=True (non-empty list)
-        - No filtering, no dropping, no validation
+        - No filtering, no dropping - malformed data preserved in enriched form
 
         Rationale:
         - Validation is the responsibility of organize_thoughts (write path)
-        - Backend is source of truth; if it saved it, we return it
+        - Backend is source of truth; if it saved it, we return it (enriched)
         - Filtering here could hide data corruption issues
         - ChatGPT can handle malformed clusters gracefully
-
-        If stricter behavior is needed, add validation to persistence layer
-        or backend, not here.
         """
         mixed_clusters = [
             # Valid cluster
@@ -245,12 +250,30 @@ class TestLoadSavedBoardContract:
                 arguments={},
             )
 
-        # All clusters passed through - no filtering
+        # All clusters enriched - no filtering
         assert result.isError is not True
         assert result.structuredContent["has_history"] is True
-        assert result.structuredContent["clusters"] == mixed_clusters, \
-            "All clusters must be passed through unchanged, including malformed ones"
-        assert len(result.structuredContent["clusters"]) == 5
+        assert len(result.structuredContent["clusters"]) == 5, \
+            "All clusters must be returned (enriched), including malformed ones"
+
+        # Verify enrichment preserves core data and adds structure
+        clusters = result.structuredContent["clusters"]
+        # First cluster: valid, enriched
+        assert clusters[0]["cluster_name"] == "Work"
+        assert clusters[0]["thought_items"] == ["Task 1"]
+        assert clusters[0]["tags"] == ["urgent"]
+        assert clusters[0]["sum_thought_items"] == 1
+        # Second cluster: missing cluster_name → enriched with empty string default
+        assert clusters[1]["cluster_name"] == ""
+        assert clusters[1]["thought_items"] == ["Orphan task"]
+        assert clusters[1]["sum_thought_items"] == 1
+        # Fourth cluster: valid
+        assert clusters[3]["cluster_name"] == "Personal"
+        assert clusters[3]["thought_items"] == ["Call mom"]
+        # Fifth cluster: empty dict → enriched with defaults
+        assert clusters[4]["cluster_name"] == ""
+        assert clusters[4]["thought_items"] == []
+        assert clusters[4]["sum_thought_items"] == 0
 
     @pytest.mark.asyncio
     async def test_cluster_order_preserved_from_backend(self):
@@ -293,7 +316,7 @@ class TestLoadSavedBoardContract:
 
     @pytest.mark.asyncio
     async def test_tool_does_not_sort_or_reorder_clusters(self):
-        """Tool must NOT sort, normalize, or reorder clusters.
+        """Tool must NOT sort or reorder clusters (enrichment preserves order).
 
         Guards against future "helpful" sorting like:
         - Alphabetical by cluster_name
@@ -301,8 +324,8 @@ class TestLoadSavedBoardContract:
         - By thought count
         - By tag priority
 
-        MCP is a passthrough. Backend controls order. User expects
-        clusters in the exact order they were saved.
+        Backend controls order. User expects clusters in the exact order
+        they were saved. Enrichment adds fields but preserves order.
         """
         # Deliberately "wrong" order: Z before A, no logical sorting
         unsorted_clusters = [
@@ -327,10 +350,20 @@ class TestLoadSavedBoardContract:
                 arguments={},
             )
 
-        # Exact order preserved - no sorting applied
+        # Order preserved - enrichment does not sort
         returned = result.structuredContent["clusters"]
-        assert returned == unsorted_clusters, \
-            "Tool must not sort or reorder clusters - exact passthrough required"
+        assert len(returned) == 4
+        # Verify order by checking cluster_name sequence
+        assert returned[0]["cluster_name"] == "Zebra"
+        assert returned[1]["cluster_name"] == "Apple"
+        assert returned[2]["cluster_name"] == "123-Numbers"
+        assert returned[3]["cluster_name"] == "middle"
+        # Verify thought_items preserved in order
+        assert returned[0]["thought_items"] == ["Z1"]
+        assert returned[1]["thought_items"] == ["A1", "A2", "A3"]
+        # Verify enrichment added
+        assert returned[0]["sum_thought_items"] == 1
+        assert returned[1]["sum_thought_items"] == 3
 
     @pytest.mark.asyncio
     async def test_large_cluster_payload_handled(self):
