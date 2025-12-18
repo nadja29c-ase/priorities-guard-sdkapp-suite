@@ -430,15 +430,8 @@
         const modalConfirm = document.querySelector("#modal-confirm");
 
         let currentClusters = [];
-        let savedBoardHash = null;
         let isSaving = false;
         let isInitialized = false;
-        let renderVersion = 0;
-        let justSaved = false;
-
-        // DEBUG: Unique widget ID for logging
-        const widgetId = Math.random().toString(36).substr(2, 6);
-        console.log(`[${widgetId}] Widget initialized`);
 
         const applyTheme = () => {
           const theme = window.openai?.theme ?? "light";
@@ -448,73 +441,21 @@
 
         const getToolOutput = () => {
           const t = window.openai?.toolOutput;
-          console.log("getToolOutput raw:", JSON.stringify(t, null, 2));  // TEMP DEBUG
-          if (!t) return { clusters: [], savedBoardHash: null };
+          if (!t) return [];
 
           // Try all known paths for clusters
-          let clusters = [];
           if (Array.isArray(t.result?.structuredContent?.clusters)) {
-            clusters = t.result.structuredContent.clusters;
+            return t.result.structuredContent.clusters;
           } else if (Array.isArray(t.structuredContent?.clusters)) {
-            clusters = t.structuredContent.clusters;
+            return t.structuredContent.clusters;
           } else if (Array.isArray(t.clusters)) {
-            clusters = t.clusters;
+            return t.clusters;
           } else if (Array.isArray(t.data?.clusters)) {
-            clusters = t.data.clusters;
+            return t.data.clusters;
           } else if (Array.isArray(t.result?.clusters)) {
-            clusters = t.result.clusters;
+            return t.result.clusters;
           }
-
-          // Get saved_board_hash - try all paths
-          let hash = null;
-          hash = hash || t.result?.structuredContent?.saved_board_hash;
-          hash = hash || t.structuredContent?.saved_board_hash;
-          hash = hash || t.saved_board_hash;
-          hash = hash || t.result?.saved_board_hash;
-          hash = hash || t.data?.saved_board_hash;
-
-          return { clusters, savedBoardHash: hash };
-        };
-
-        // Compute SHA256 hash of clusters (must match backend algorithm EXACTLY)
-        // CANONICAL HASH SPECIFICATION:
-        // - Explicit key order (NOT alphabetical): cluster_name, subclusters, tags, thought_items
-        // - NFC Unicode normalization
-        // - Clusters sorted alphabetically by cluster_name
-        // - Subclusters sorted alphabetically by subcluster_name
-        // - thought_items and tags sorted lexicographically
-        // - No whitespace in JSON
-        const computeContentHash = async (clusters) => {
-          const normalizeSubcluster = (s) => ({
-            // Key order: subcluster_name, tags, thought_items
-            subcluster_name: (s.subcluster_name || "").trim().normalize("NFC"),
-            tags: (s.tags || []).map(t => t.trim().normalize("NFC")).sort(),
-            thought_items: (s.thought_items || []).map(i => i.trim().normalize("NFC")).sort(),
-          });
-
-          const normalizeCluster = (c) => ({
-            // Key order: cluster_name, subclusters, tags, thought_items
-            cluster_name: (c.cluster_name || "").trim().normalize("NFC"),
-            subclusters: (c.subclusters || [])
-              .map(normalizeSubcluster)
-              .sort((a, b) => a.subcluster_name.localeCompare(b.subcluster_name)),
-            tags: (c.tags || []).map(t => t.trim().normalize("NFC")).sort(),
-            thought_items: (c.thought_items || []).map(i => i.trim().normalize("NFC")).sort(),
-          });
-
-          // Sort clusters by cluster_name, normalize all content
-          const normalized = clusters
-            .map(normalizeCluster)
-            .sort((a, b) => a.cluster_name.localeCompare(b.cluster_name));
-
-          // Key order is determined by object literal construction above
-          // JSON.stringify preserves insertion order in modern JS engines
-          const canonical = JSON.stringify({ clusters: normalized });
-          const encoder = new TextEncoder();
-          const data = encoder.encode(canonical);
-          const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-          const hashArray = Array.from(new Uint8Array(hashBuffer));
-          return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+          return [];
         };
 
         const truncateText = (text, maxLength = 80) => {
@@ -522,26 +463,8 @@
           return text.substring(0, maxLength).trim() + "...";
         };
 
-        const updateSaveButtonState = async () => {
-          if (currentClusters.length === 0) {
-            saveBtn.disabled = true;
-            savedIndicator.classList.remove("visible");
-            return;
-          }
-
-          saveBtn.disabled = false;
-
-          // Check if current state matches saved state
-          if (savedBoardHash) {
-            const currentHash = await computeContentHash(currentClusters);
-            if (currentHash === savedBoardHash) {
-              savedIndicator.classList.add("visible");
-            } else {
-              savedIndicator.classList.remove("visible");
-            }
-          } else {
-            savedIndicator.classList.remove("visible");
-          }
+        const updateSaveButtonState = () => {
+          saveBtn.disabled = currentClusters.length === 0;
         };
 
         const showModal = () => {
@@ -564,29 +487,17 @@
             if (window.openai?.callTool) {
               const result = await window.openai.callTool("save_board", {
                 confirmed: true,
-                clusters: currentClusters,
-                render_widget: true  // New widget gets saved_board_hash
+                clusters: currentClusters
               });
-
-              // DEBUG: Log raw callTool result
-              console.log(`[${widgetId}] callTool result:`, JSON.stringify(result, null, 2));
 
               // Check if save was successful
               const content = result?.structuredContent || result?.result?.structuredContent || result;
-              console.log(`[${widgetId}] parsed content:`, JSON.stringify(content, null, 2));
-              console.log(`[${widgetId}] saved check:`, {
-                saved: content?.saved,
-                savedType: typeof content?.saved,
-                hash: content?.saved_board_hash?.slice(0, 8) || null
-              });
-
-              if (content?.saved === true && content?.saved_board_hash) {
-                savedBoardHash = content.saved_board_hash;
+              if (content?.saved === true) {
+                // Show "Saved" indicator for 3 seconds
                 savedIndicator.classList.add("visible");
-                justSaved = true;  // Skip next set_globals to preserve "Saved"
-                console.log(`[${widgetId}] handleSave success`, {
-                  newHash: savedBoardHash?.slice(0, 8)
-                });
+                setTimeout(() => {
+                  savedIndicator.classList.remove("visible");
+                }, 3000);
               }
             } else {
               console.warn("window.openai.callTool not available");
@@ -611,22 +522,12 @@
 
         const render = () => {
           applyTheme();
-          const { clusters, savedBoardHash: newHash } = getToolOutput();
-
-          // DEBUG: Log every render call
-          console.log(`[${widgetId}] render() called`, {
-            isInitialized,
-            clusterCount: clusters.length,
-            newHash: newHash?.slice(0, 8) || null,
-            currentSavedHash: savedBoardHash?.slice(0, 8) || null,
-            indicatorVisible: savedIndicator.classList.contains("visible")
-          });
+          const clusters = getToolOutput();
 
           // Don't initialize until we have actual data
           if (!isInitialized && clusters.length > 0) {
             // First render WITH data - freeze our clusters
             currentClusters = clusters;
-            savedBoardHash = newHash;
             isInitialized = true;
 
             // Render DOM
@@ -780,44 +681,12 @@
             rootEl.appendChild(empty);
             return;  // Don't set isInitialized - wait for real data
 
-          } else {
-            // Widget that just saved: skip one set_globals to preserve "Saved"
-            if (justSaved) {
-              console.log(`[${widgetId}] skipping set_globals (justSaved)`);
-              justSaved = false;
-              return;
-            }
-
-            // Subsequent renders - conservatively verify saved state
-            // ALWAYS hide first to prevent false positives
-            savedIndicator.classList.remove("visible");
-
-            const currentVersion = ++renderVersion;
-
-            if (newHash) {
-              computeContentHash(currentClusters).then(ourHash => {
-                // Guard: ignore if a newer render happened
-                if (currentVersion !== renderVersion) return;
-
-                if (ourHash === newHash) {
-                  savedBoardHash = newHash;
-                  savedIndicator.classList.add("visible");
-                } else {
-                  savedBoardHash = null;
-                }
-              });
-            } else {
-              // No hash to verify against - stay hidden
-              savedBoardHash = null;
-            }
           }
+          // else: Already initialized - ignore subsequent set_globals events
         };
 
         render();
-        window.addEventListener("openai:set_globals", () => {
-          console.log(`[${widgetId}] set_globals fired`);
-          render();
-        }, { passive: true });
+        window.addEventListener("openai:set_globals", render, { passive: true });
 
       } catch (err) {
         console.error("WIDGET ERROR:", err);
