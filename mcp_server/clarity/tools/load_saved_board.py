@@ -60,8 +60,13 @@ When saved board exists:
 
 INPUT_SCHEMA = {
     "type": "object",
-    "properties": {},
-    "required": [],
+    "properties": {
+        "render_widget": {
+            "type": "boolean",
+            "description": "Required. True to render widget, false for text-only response."
+        }
+    },
+    "required": ["render_widget"],
     "additionalProperties": False
 }
 
@@ -75,7 +80,7 @@ REQUIRED_SCOPES = ["clarity.write"]  # Write implies read - single scope for all
 async def handle(
     user_id: str,
     correlation_id: str,
-    arguments: dict,  # Intentionally unused - read-only tool with no parameters
+    arguments: dict,
 ) -> mcp_types.CallToolResult:
     """
     Retrieve user's existing clusters.
@@ -83,7 +88,8 @@ async def handle(
     Args:
         user_id: Authenticated user ID from JWT
         correlation_id: Request correlation ID for tracing
-        arguments: Raw arguments from ChatGPT (unused - this tool takes no input)
+        arguments: Raw arguments from ChatGPT
+            - render_widget (bool, required): True to render widget, false for text-only
 
     Returns:
         CallToolResult with structuredContent containing:
@@ -92,9 +98,12 @@ async def handle(
         - is_empty_snapshot: True if snapshot exists but has no clusters
         - last_updated: ISO timestamp of last update (if has_history=true)
     """
+    render_widget = arguments.get("render_widget", False)  # Fallback for safety
+
     logger.debug("load_saved_board.handle.start",
                 user_id=user_id,
-                correlation_id=correlation_id)
+                correlation_id=correlation_id,
+                render_widget=render_widget)
 
     # Fetch with exception handling - never crash on backend failures
     try:
@@ -116,14 +125,16 @@ async def handle(
         inner_data = cluster_data.get("cluster_data") or {}
         clusters = inner_data.get("clusters") or []
 
-    # Build widget metadata for all responses
-    meta = {
-        "openai/outputTemplate": WIDGET_URI,
-        "openai/toolInvocation/invoking": "Loading your saved board...",
-        "openai/toolInvocation/invoked": "Here's your saved Clarity board.",
-        "openai/widgetAccessible": True,
-        "openai/resultCanProduceWidget": True,
-    }
+    # Build widget metadata only if render_widget is True
+    meta = None
+    if render_widget:
+        meta = {
+            "openai/outputTemplate": WIDGET_URI,
+            "openai/toolInvocation/invoking": "Loading your saved board...",
+            "openai/toolInvocation/invoked": "Here's your saved Clarity board.",
+            "openai/widgetAccessible": True,
+            "openai/resultCanProduceWidget": True,
+        }
 
     # No snapshot exists at all - truly starting fresh
     if not has_snapshot:
@@ -197,7 +208,6 @@ register_tool(ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    # widget_uri=WIDGET_URI,  # DISABLED FOR TESTING - uncomment to restore widget
-    widget_uri=None,  # No widget output - testing text-only response
+    widget_uri=WIDGET_URI,  # Widget controlled by required render_widget parameter
     handle=handle,
 ))
