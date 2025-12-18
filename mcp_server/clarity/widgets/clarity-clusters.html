@@ -432,6 +432,7 @@
         let currentClusters = [];
         let savedBoardHash = null;
         let isSaving = false;
+        let isInitialized = false;
 
         const applyTheme = () => {
           const theme = window.openai?.theme ?? "light";
@@ -591,170 +592,177 @@
           applyTheme();
           const { clusters, savedBoardHash: newHash } = getToolOutput();
 
-          // If we have saved state and incoming data is empty, ignore this stale render
-          if (savedBoardHash && (!clusters || clusters.length === 0)) {
-            return;
-          }
-
-          // If a different board version was saved, this widget is stale
-          if (newHash && savedBoardHash && newHash !== savedBoardHash) {
-            savedBoardHash = null;  // Invalidate - our version is no longer saved
-          }
-
-          // Only update savedBoardHash if we got a new one
-          if (newHash) {
+          if (!isInitialized) {
+            // First render - freeze our clusters
+            currentClusters = clusters;
             savedBoardHash = newHash;
-          }
+            isInitialized = true;
 
-          currentClusters = clusters;
-          rootEl.innerHTML = "";
+            // Render DOM
+            rootEl.innerHTML = "";
 
-          if (!clusters.length) {
-            const empty = document.createElement("div");
-            empty.className = "empty-state";
-            empty.textContent = "No clusters yet. Ask in chat to organize your brain dump into clusters.";
-            rootEl.appendChild(empty);
+            if (!clusters.length) {
+              const empty = document.createElement("div");
+              empty.className = "empty-state";
+              empty.textContent = "No clusters yet. Ask in chat to organize your brain dump into clusters.";
+              rootEl.appendChild(empty);
+              updateSaveButtonState();
+              return;
+            }
+
+            const grid = document.createElement("div");
+            grid.className = "cluster-grid";
+
+            clusters.forEach((cluster) => {
+              const card = document.createElement("div");
+              card.className = "cluster-card";
+
+              const header = document.createElement("div");
+              header.className = "cluster-header";
+
+              const nameEl = document.createElement("div");
+              nameEl.className = "cluster-name";
+              nameEl.textContent = truncateText(cluster.cluster_name, 40) || "Untitled cluster";
+              header.appendChild(nameEl);
+
+              const badge = document.createElement("div");
+              badge.className = "item-count";
+              badge.textContent = cluster.sum_thought_items;
+              header.appendChild(badge);
+
+              card.appendChild(header);
+
+              if (cluster.summary) {
+                const summaryEl = document.createElement("div");
+                summaryEl.className = "cluster-summary";
+                summaryEl.textContent = truncateText(cluster.summary, 100);
+                card.appendChild(summaryEl);
+              }
+
+              const items = Array.isArray(cluster.thought_items) ? cluster.thought_items : [];
+              const subclusters = Array.isArray(cluster.subclusters) ? cluster.subclusters : [];
+
+              // Render ungrouped items first (if any)
+              if (items.length > 0) {
+                const list = document.createElement("ul");
+                list.className = "items-list";
+
+                items.forEach((rawText) => {
+                  const li = document.createElement("li");
+                  const bullet = document.createElement("span");
+                  bullet.className = "items-bullet";
+                  bullet.textContent = "\u2022";
+                  const text = document.createElement("span");
+                  text.className = "items-text";
+                  text.textContent = rawText;
+                  li.appendChild(bullet);
+                  li.appendChild(text);
+                  list.appendChild(li);
+                });
+
+                card.appendChild(list);
+              }
+
+              // Render subclusters below (if any)
+              if (subclusters.length > 0) {
+                const subContainer = document.createElement("div");
+                subContainer.className = "subclusters-container";
+
+                subclusters.forEach((subcluster) => {
+                  const subCard = document.createElement("div");
+                  subCard.className = "subcluster-card";
+
+                  const subHeader = document.createElement("div");
+                  subHeader.className = "subcluster-header";
+
+                  const subName = document.createElement("div");
+                  subName.className = "subcluster-name";
+                  subName.textContent = truncateText(subcluster.subcluster_name, 30) || "Untitled";
+                  subHeader.appendChild(subName);
+
+                  const subBadge = document.createElement("div");
+                  subBadge.className = "subcluster-count";
+                  subBadge.textContent = subcluster.sum_thought_items || subcluster.thought_items?.length || 0;
+                  subHeader.appendChild(subBadge);
+
+                  subCard.appendChild(subHeader);
+
+                  const subItems = Array.isArray(subcluster.thought_items) ? subcluster.thought_items : [];
+                  if (subItems.length) {
+                    const subList = document.createElement("ul");
+                    subList.className = "subcluster-items";
+
+                    subItems.forEach((rawText) => {
+                      const li = document.createElement("li");
+                      const bullet = document.createElement("span");
+                      bullet.className = "items-bullet";
+                      bullet.textContent = "\u2022";
+                      const text = document.createElement("span");
+                      text.className = "items-text";
+                      text.textContent = rawText;
+                      li.appendChild(bullet);
+                      li.appendChild(text);
+                      subList.appendChild(li);
+                    });
+
+                    subCard.appendChild(subList);
+                  }
+
+                  // Render subcluster tags
+                  const subTags = Array.isArray(subcluster.tags) ? subcluster.tags : [];
+                  if (subTags.length > 0) {
+                    const subTagsContainer = document.createElement("div");
+                    subTagsContainer.className = "tags-container";
+                    subTags.forEach((tag) => {
+                      const pill = document.createElement("span");
+                      pill.className = "tag-pill";
+                      pill.textContent = tag;
+                      subTagsContainer.appendChild(pill);
+                    });
+                    subCard.appendChild(subTagsContainer);
+                  }
+
+                  subContainer.appendChild(subCard);
+                });
+
+                card.appendChild(subContainer);
+              }
+
+              // Render cluster tags
+              const clusterTags = Array.isArray(cluster.tags) ? cluster.tags : [];
+              if (clusterTags.length > 0) {
+                const tagsContainer = document.createElement("div");
+                tagsContainer.className = "tags-container";
+                clusterTags.forEach((tag) => {
+                  const pill = document.createElement("span");
+                  pill.className = "tag-pill";
+                  pill.textContent = tag;
+                  tagsContainer.appendChild(pill);
+                });
+                card.appendChild(tagsContainer);
+              }
+
+              grid.appendChild(card);
+            });
+
+            rootEl.appendChild(grid);
             updateSaveButtonState();
-            return;
+
+          } else {
+            // Subsequent renders - only update saved indicator
+            if (newHash) {
+              computeContentHash(currentClusters).then(ourHash => {
+                if (ourHash === newHash) {
+                  savedBoardHash = newHash;
+                  savedIndicator.classList.add("visible");
+                } else {
+                  savedBoardHash = null;
+                  savedIndicator.classList.remove("visible");
+                }
+              });
+            }
+            // Don't re-render DOM or change currentClusters
           }
-
-          const grid = document.createElement("div");
-          grid.className = "cluster-grid";
-
-          clusters.forEach((cluster) => {
-            const card = document.createElement("div");
-            card.className = "cluster-card";
-
-            const header = document.createElement("div");
-            header.className = "cluster-header";
-
-            const nameEl = document.createElement("div");
-            nameEl.className = "cluster-name";
-            nameEl.textContent = truncateText(cluster.cluster_name, 40) || "Untitled cluster";
-            header.appendChild(nameEl);
-
-            const badge = document.createElement("div");
-            badge.className = "item-count";
-            badge.textContent = cluster.sum_thought_items;
-            header.appendChild(badge);
-
-            card.appendChild(header);
-
-            if (cluster.summary) {
-              const summaryEl = document.createElement("div");
-              summaryEl.className = "cluster-summary";
-              summaryEl.textContent = truncateText(cluster.summary, 100);
-              card.appendChild(summaryEl);
-            }
-
-            const items = Array.isArray(cluster.thought_items) ? cluster.thought_items : [];
-            const subclusters = Array.isArray(cluster.subclusters) ? cluster.subclusters : [];
-
-            // Render ungrouped items first (if any)
-            if (items.length > 0) {
-              const list = document.createElement("ul");
-              list.className = "items-list";
-
-              items.forEach((rawText) => {
-                const li = document.createElement("li");
-                const bullet = document.createElement("span");
-                bullet.className = "items-bullet";
-                bullet.textContent = "\u2022";
-                const text = document.createElement("span");
-                text.className = "items-text";
-                text.textContent = rawText;
-                li.appendChild(bullet);
-                li.appendChild(text);
-                list.appendChild(li);
-              });
-
-              card.appendChild(list);
-            }
-
-            // Render subclusters below (if any)
-            if (subclusters.length > 0) {
-              const subContainer = document.createElement("div");
-              subContainer.className = "subclusters-container";
-
-              subclusters.forEach((subcluster) => {
-                const subCard = document.createElement("div");
-                subCard.className = "subcluster-card";
-
-                const subHeader = document.createElement("div");
-                subHeader.className = "subcluster-header";
-
-                const subName = document.createElement("div");
-                subName.className = "subcluster-name";
-                subName.textContent = truncateText(subcluster.subcluster_name, 30) || "Untitled";
-                subHeader.appendChild(subName);
-
-                const subBadge = document.createElement("div");
-                subBadge.className = "subcluster-count";
-                subBadge.textContent = subcluster.sum_thought_items || subcluster.thought_items?.length || 0;
-                subHeader.appendChild(subBadge);
-
-                subCard.appendChild(subHeader);
-
-                const subItems = Array.isArray(subcluster.thought_items) ? subcluster.thought_items : [];
-                if (subItems.length) {
-                  const subList = document.createElement("ul");
-                  subList.className = "subcluster-items";
-
-                  subItems.forEach((rawText) => {
-                    const li = document.createElement("li");
-                    const bullet = document.createElement("span");
-                    bullet.className = "items-bullet";
-                    bullet.textContent = "\u2022";
-                    const text = document.createElement("span");
-                    text.className = "items-text";
-                    text.textContent = rawText;
-                    li.appendChild(bullet);
-                    li.appendChild(text);
-                    subList.appendChild(li);
-                  });
-
-                  subCard.appendChild(subList);
-                }
-
-                // Render subcluster tags
-                const subTags = Array.isArray(subcluster.tags) ? subcluster.tags : [];
-                if (subTags.length > 0) {
-                  const subTagsContainer = document.createElement("div");
-                  subTagsContainer.className = "tags-container";
-                  subTags.forEach((tag) => {
-                    const pill = document.createElement("span");
-                    pill.className = "tag-pill";
-                    pill.textContent = tag;
-                    subTagsContainer.appendChild(pill);
-                  });
-                  subCard.appendChild(subTagsContainer);
-                }
-
-                subContainer.appendChild(subCard);
-              });
-
-              card.appendChild(subContainer);
-            }
-
-            // Render cluster tags
-            const clusterTags = Array.isArray(cluster.tags) ? cluster.tags : [];
-            if (clusterTags.length > 0) {
-              const tagsContainer = document.createElement("div");
-              tagsContainer.className = "tags-container";
-              clusterTags.forEach((tag) => {
-                const pill = document.createElement("span");
-                pill.className = "tag-pill";
-                pill.textContent = tag;
-                tagsContainer.appendChild(pill);
-              });
-              card.appendChild(tagsContainer);
-            }
-
-            grid.appendChild(card);
-          });
-
-          rootEl.appendChild(grid);
-          updateSaveButtonState();
         };
 
         render();
