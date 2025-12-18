@@ -52,27 +52,28 @@ ERROR_INVALID_RANK = "Invalid rank. Must be P1, P2, or P3."
 NAME = "prioritize_clusters"
 
 DESCRIPTION = """
-Mark up to 3 clusters or subclusters as P1/P2/P3 priorities.
-
-This tool applies priorities to the board provided in the input.
+Marks up to 3 clusters or subclusters as P1/P2/P3 priorities.
+This tool applies priorities to the board provided in the input, so that the user can identify what to focus on and derive specific action steps FROM there.
 
 WHEN TO CALL:
+- After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
 - After user explicitly names clusters/subclusters and confirms ranking
-- User says "P1 is X, P2 is Y" or similar explicit prioritization
+- User says "Priority 1 is X, Priority 2 is Y" or similar explicit prioritization
+- When the user asks "what now" or "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
 
 DO NOT CALL:
-- Do NOT infer or guess priorities
-- Only call after the user explicitly names clusters/subclusters and confirms ranking
+- NEVER infer or guess priorities
+- Only call after the user explicitly names priorities in form of clusters/subclusters and confirms ranking
 
 FACILITATION SEQUENCE:
-1. Ask about goals: "What are you trying to achieve right now?"
-2. If no goals: Ask about blockers: "What's stuck? What would unblock the most?"
+1. Ask about goals: "What are you trying to achieve RIGHT NOW?"
+2. If user has no explicit goals: Ask about BLOCKERS: "What's stuck? What would unblock the most?"
 3. Prompt identification: "Based on what you've shared, which clusters feel most important? Pick up to 3."
 4. Prompt ranking: "Of those, which is #1?"
-5. Only call this tool after explicit user decisions
+5. ONLY call this tool after EXPLICIT user decisions
 
 INPUT:
-- clusters: The current board (from organize_thoughts or load_saved_board)
+- clusters: The current board that is subject of the conversation (from organize_thoughts or load_saved_board)
 - priorities: Array of { cluster_name OR subcluster_name, rank (P1/P2/P3), reason (optional) }
 
 OUTPUT:
