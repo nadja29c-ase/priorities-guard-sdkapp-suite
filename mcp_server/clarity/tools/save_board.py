@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field, ValidationError
 from .base import ToolDefinition
 from . import register_tool
 from ..persistence import persist_cluster
-from ..handlers.resources import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
@@ -56,9 +55,8 @@ WHEN TO CALL:
 - User asks to save their board
 - Widget Save button clicked
 
-Parameters:
-- clusters: Board state to save
-- render_widget: If true, show new widget. Default false (existing widget updates via saved_board_hash)
+Returns saved_board_hash for existing widget to detect saved state.
+Does NOT render a new widget - existing widget updates via hash comparison.
 """
 
 INPUT_SCHEMA = {
@@ -67,10 +65,6 @@ INPUT_SCHEMA = {
         "confirmed": {
             "type": "boolean",
             "description": "Optional. Defaults to true. Used by widget for modal confirmation."
-        },
-        "render_widget": {
-            "type": "boolean",
-            "description": "If true, render widget with saved board. Default false."
         },
         "clusters": {
             "type": "array",
@@ -147,7 +141,6 @@ class SaveBoardRequest(BaseModel):
     """Expected top-level structure for save request."""
     confirmed: bool = True  # Default to True for LLM calls
     clusters: List[ClusterInput]
-    render_widget: bool = False  # Default False - existing widget updates via hash
 
 
 # ============================================================================
@@ -366,20 +359,10 @@ async def handle(
     logger.info("save_board.success",
                user_id=user_id,
                cluster_count=cluster_count,
-               render_widget=validated_request.render_widget,
                content_hash=content_hash[:8])  # Log first 8 chars of hash
 
-    # Only include widget metadata if render_widget=True
-    meta = None
-    if validated_request.render_widget:
-        meta = {
-            "openai/outputTemplate": WIDGET_URI,
-            "openai/toolInvocation/invoking": "Saving your board...",
-            "openai/toolInvocation/invoked": "Board saved.",
-            "openai/widgetAccessible": True,
-            "openai/resultCanProduceWidget": True,
-        }
-
+    # Pure data operation - never renders widget
+    # Existing widget updates its saved indicator via saved_board_hash
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
@@ -390,7 +373,6 @@ async def handle(
             "clusters": clusters_for_storage,
             "saved_board_hash": content_hash,
         },
-        _meta=meta,
     )
 
 
@@ -403,7 +385,7 @@ register_tool(ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=WIDGET_URI,
+    widget_uri=None,  # Pure data operation - never renders widget
     handle=handle,
-    widget_accessible=True,
+    widget_accessible=True,  # Widget can call this tool
 ))

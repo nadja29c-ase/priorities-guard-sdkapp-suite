@@ -98,23 +98,24 @@ class TestSaveBoardRegistration:
         assert tool is not None
         assert tool.widget_accessible is True
 
-    def test_save_board_has_widget_uri(self):
-        """save_board should have widget_uri (produces widget output)."""
+    def test_save_board_no_widget_uri(self):
+        """save_board should NOT have widget_uri (pure data operation)."""
         tool = get_tool("save_board")
         assert tool is not None
-        assert tool.widget_uri is not None
-        assert "clarity-clusters" in tool.widget_uri
+        assert tool.widget_uri is None
 
     @pytest.mark.asyncio
-    async def test_save_board_has_full_widget_meta(self):
-        """save_board should have full widget meta including outputTemplate."""
+    async def test_save_board_widget_accessible_only_meta(self):
+        """save_board should only have widgetAccessible meta (no outputTemplate)."""
         tools = await list_tools()
         save_board_tool = next((t for t in tools if t.name == "save_board"), None)
         assert save_board_tool is not None
+        # Has meta with widgetAccessible (widget can call it)
         assert save_board_tool.meta is not None
-        assert "openai/outputTemplate" in save_board_tool.meta
         assert save_board_tool.meta.get("openai/widgetAccessible") is True
-        assert save_board_tool.meta.get("openai/resultCanProduceWidget") is True
+        # But does NOT have outputTemplate (doesn't produce widget)
+        assert "openai/outputTemplate" not in save_board_tool.meta
+        assert save_board_tool.meta.get("openai/resultCanProduceWidget") is None
 
     @pytest.mark.asyncio
     async def test_widget_producing_tools_have_full_meta(self):

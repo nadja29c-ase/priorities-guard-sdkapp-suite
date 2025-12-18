@@ -23,7 +23,6 @@ from mcp_server.clarity.tools.save_board import (
     ERROR_ITEM_TOO_LONG,
     ERROR_EMPTY_BOARD,
 )
-from mcp_server.clarity.handlers.resources import WIDGET_URI
 
 
 class TestCanonicalHash:
@@ -715,28 +714,8 @@ class TestSuccessResponse:
 
     @pytest.mark.asyncio
     @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
-    async def test_success_response_contains_meta_with_widget_template(self, mock_persist):
-        """Success response has _meta with widget template when render_widget=True."""
-        result = await handle(
-            user_id="test-user",
-            correlation_id="test-corr",
-            arguments={
-                "clusters": [{"cluster_name": "Work", "thought_items": ["task"]}],
-                "render_widget": True,
-            },
-        )
-
-        assert result.isError is None or result.isError is False
-        # Check meta contains widget metadata (constructor uses _meta=, accessed via .meta)
-        assert result.meta is not None
-        assert result.meta.get("openai/outputTemplate") == WIDGET_URI
-        assert result.meta.get("openai/widgetAccessible") is True
-        assert result.meta.get("openai/resultCanProduceWidget") is True
-
-    @pytest.mark.asyncio
-    @patch("mcp_server.clarity.tools.save_board.persist_cluster", new_callable=AsyncMock)
-    async def test_success_response_no_meta_by_default(self, mock_persist):
-        """Success response has no _meta when render_widget=False (default)."""
+    async def test_success_response_no_meta(self, mock_persist):
+        """Success response has no _meta - pure data operation, never renders widget."""
         result = await handle(
             user_id="test-user",
             correlation_id="test-corr",
@@ -746,7 +725,7 @@ class TestSuccessResponse:
         )
 
         assert result.isError is None or result.isError is False
-        # Default render_widget=False means no widget metadata
+        # Pure data operation - never includes widget metadata
         assert result.meta is None
 
     @pytest.mark.asyncio

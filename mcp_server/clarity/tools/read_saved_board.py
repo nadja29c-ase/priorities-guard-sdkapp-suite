@@ -24,16 +24,18 @@ logger = structlog.get_logger(__name__)
 NAME = "read_saved_board"
 
 DESCRIPTION = """
-Read user's saved Clarity board data from database. NO WIDGET.
-
-IMPORTANT: This tool returns data only - no UI widget is rendered.
+Read user's saved Clarity board data from database.
 
 WHEN TO CALL:
-- User wants to ADD/MODIFY their saved board
+- ONCE AT THE BEGINNING OF EACH NEW CONVERSATION WITH THE USER involving Clarity and SAVED BOARD
+- User wants to ADD/MODIFY their SAVED board at the beginning 
+- User asks to MERGE new thought items with their prior SAVED BOARD from previous conversations
 - Example: "Add X to my board" -> call read_saved_board -> merge -> call organize_thoughts
+- You CAN NOT reliably recall what the saved board contained
 
 DO NOT CALL:
 - When user wants to VIEW/SHOW their board (use load_saved_board instead)
+- You already called it earlier in THIS conversation AND NO NEW conversation started
 
 FLOW:
 1. Call read_saved_board -> receive clusters (no UI)
