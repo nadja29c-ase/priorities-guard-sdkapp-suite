@@ -35,7 +35,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                     "connect_domains": [],
                     "resource_domains": [],
                 },
-                "openai/widgetDescription": "Renders clustered thoughts as visual cards.",
+                "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
             },
         )
     ]
@@ -58,7 +58,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                     "connect_domains": [],
                     "resource_domains": [],
                 },
-                "openai/widgetDescription": "Renders clustered thoughts as visual cards.",
+                "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
             },
         )
     ]
@@ -92,7 +92,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 "connect_domains": [],
                 "resource_domains": [],
             },
-            "openai/widgetDescription": "Renders clustered thoughts as visual cards.",
+            "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
         }
 
         contents = [

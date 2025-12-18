@@ -73,7 +73,7 @@ def organize_thoughts(clusters: list[dict]) -> dict:
     enriched = enrich_clusters(clusters)
 
     return {
-        "content": [{"type": "text", "text": "I've organized your thoughts into clusters."}],
+        "content": [{"type": "text", "text": "Here's your Clarity board. Want to gain more clarity about what to do next by prioritizing the clusters? Tell me which clusters matter most to you right now."}],
         "structuredContent": {
             "clusters": enriched
         }

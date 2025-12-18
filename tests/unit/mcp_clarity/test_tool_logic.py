@@ -473,13 +473,14 @@ class TestOrganizeThoughtsOutput:
         assert "content" in result
 
     def test_content_message(self):
-        """Test content message is present."""
+        """Test content message is present and prompts for prioritization."""
         clusters = [{"cluster_name": "Test", "thought_items": ["x"], "subclusters": []}]
         result = organize_thoughts(clusters)
 
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
-        assert "organized" in result["content"][0]["text"].lower()
+        assert "clarity board" in result["content"][0]["text"].lower()
+        assert "prioritize" in result["content"][0]["text"].lower()
 
 
 # =============================================================================

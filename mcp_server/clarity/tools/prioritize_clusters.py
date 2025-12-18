@@ -57,12 +57,12 @@ This tool applies priorities to the board provided in the input, so that the use
 
 WHEN TO CALL:
 - After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
-- After user explicitly names clusters/subclusters and confirms ranking
-- User says "Priority 1 is X, Priority 2 is Y" or similar explicit prioritization
+- After USER explicitly names clusters/subclusters and confirms ranking
+- USER says "Priority 1 is X, Priority 2 is Y" or similar explicit prioritization
 - When the user asks "what now" or "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
 
 DO NOT CALL:
-- NEVER infer or guess priorities
+- NEVER infer or guess priorities or provide priorities on behalf of the user
 - Only call after the user explicitly names priorities in form of clusters/subclusters and confirms ranking
 
 FACILITATION SEQUENCE:
