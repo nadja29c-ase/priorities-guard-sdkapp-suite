@@ -434,6 +434,7 @@
         let isSaving = false;
         let isInitialized = false;
         let renderVersion = 0;
+        let justSaved = false;
 
         // DEBUG: Unique widget ID for logging
         const widgetId = Math.random().toString(36).substr(2, 6);
@@ -571,6 +572,7 @@
               if (content?.saved === true && content?.saved_board_hash) {
                 savedBoardHash = content.saved_board_hash;
                 savedIndicator.classList.add("visible");
+                justSaved = true;  // Skip next set_globals to preserve "Saved"
                 console.log(`[${widgetId}] handleSave success`, {
                   newHash: savedBoardHash?.slice(0, 8)
                 });
@@ -768,6 +770,13 @@
             return;  // Don't set isInitialized - wait for real data
 
           } else {
+            // Widget that just saved: skip one set_globals to preserve "Saved"
+            if (justSaved) {
+              console.log(`[${widgetId}] skipping set_globals (justSaved)`);
+              justSaved = false;
+              return;
+            }
+
             // Subsequent renders - conservatively verify saved state
             // ALWAYS hide first to prevent false positives
             savedIndicator.classList.remove("visible");
