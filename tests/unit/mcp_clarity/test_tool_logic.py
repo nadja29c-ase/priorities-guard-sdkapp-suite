@@ -480,7 +480,7 @@ class TestOrganizeThoughtsOutput:
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
         assert "clarity board" in result["content"][0]["text"].lower()
-        assert "prioritize" in result["content"][0]["text"].lower()
+        assert "prioritiz" in result["content"][0]["text"].lower()  # matches prioritize/prioritizing
 
 
 # =============================================================================
