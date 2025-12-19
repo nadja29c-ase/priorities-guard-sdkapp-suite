@@ -10,7 +10,7 @@ NOTE: As of Increment 12, this tool is PURE (no DB persistence).
 
 import re
 import json
-from typing import List, Optional
+from typing import List
 
 import structlog
 from mcp import types as mcp_types
@@ -29,48 +29,12 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """
-(Re)Organize user's thoughts, ideas, tasks into visual clusters for cognitive ease and clarity what to focus on next. This tool renders a visual cards/board that is easily digestible to the user.
-Treat the board as a living artifact. 
+Organize user's thoughts into visual clusters to reduce cognitive load. Renders a board widget.
 
-WHEN TO CALL:
-- After user expresses 5+ thought items — call immediately, don't wait
-- Content is PREDOMINANTLY business-related (NOT personal matters)
-- User asks to add more thoughts, update clusters, or change existing ones within same conversation with you
+Call after user expresses 5+ thought items. Include ALL thoughts — never filter.
 
-PROGRESSIVE CLUSTERING FLOW:
-1. User shares thoughts → after 5+ items, call this tool
-2. Widget renders current clusters (with subclusters and tags if applicable)
-3. Ask: "What else is on your mind?"
-4. User adds more → call this tool with ALL thoughts (existing + new)
-5. When user says "that's all" → call with thoughts_exhausted: true
-6. Ask: "Do these clusters look accurate?" (correctly_clustered confirmation)
-
-FIELD USAGE:
-- thoughts_exhausted: false = user may have more, keep asking
-- thoughts_exhausted: true = user confirmed done
-- correctly_clustered: null on calls before final confirmation
-- correctly_clustered: true/false after user reviews final clusters
-
-CLUSTERING STRATEGY:
-- Flat: thought_items only (simple clusters)
-- Nested: subclusters only (complex groupings)
-- Mixed: both (some ungrouped + some grouped)
-
-BEHAVIORAL-HINT TAGS (optional, max 3 per cluster/subcluster):
-Tags signal the cluster requires a different mental mode than normal execute-and-done work.
-ONLY TAG WHEN:
-- User intent is NOT AMBIGUOUS and DOMINANT within the cluster
-- User intent matches one of the available tags
-- Thought items are BUSINESS-RELATED (NOT personal matters like "plan a date night")
-
-Available tags:
-- "decide" → contains choices/tradeoffs needing resolution
-- "research" → contains unknowns needing investigation
-- "test" → contains assumptions/hypotheses to test
-- "delegate" → contains work for others
-- "automate" → contains repetitive work to systematize
-- "learn" → contains skill gaps requiring knowledge acquisition
-- "align" → contains items needing discussion/agreement with others
+After rendering, ask "What else is on your mind?" until user's thoughts are exhausted "that's it".
+Then ask "Want to prioritize which clusters to focus on?"
 """
 
 INPUT_SCHEMA = {
@@ -78,11 +42,7 @@ INPUT_SCHEMA = {
     "properties": {
         "thoughts_exhausted": {
             "type": "boolean",
-            "description": "Must be true. Confirms user has shared all thoughts before clustering."
-        },
-        "correctly_clustered": {
-            "type": ["boolean", "null"],
-            "description": "null on first call. false if user says clusters are wrong (triggers re-cluster). true if confirmed accurate."
+            "description": "Default false. Set true only when user confirms 'that's all'."
         },
         "clusters": {
             "type": "array",
@@ -92,7 +52,7 @@ INPUT_SCHEMA = {
                 "properties": {
                     "cluster_name": {
                         "type": "string",
-                        "description": "Name of the cluster"
+                        "description": "Cluster titel describing the common theme of its thought items, ideally as an intention or outcome."
                     },
                     "thought_items": {
                         "type": "array",
@@ -118,10 +78,11 @@ INPUT_SCHEMA = {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                        "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"]
+                                        "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"],
+                                        "description": "decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others"
                                     },
                                     "maxItems": 3,
-                                    "description": "Optional behavioral tags (max 3). Only use when intent is clear."
+                                    "description": "Optional. Only tag when user intent is clear and dominant."
                                 }
                             },
                             "required": ["subcluster_name", "thought_items"]
@@ -131,10 +92,11 @@ INPUT_SCHEMA = {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"]
+                            "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"],
+                            "description": "decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others"
                         },
                         "maxItems": 3,
-                        "description": "Optional behavioral tags (max 3). Only use when intent is clear."
+                        "description": "Optional. Only tag when user intent is clear and dominant."
                     }
                 },
                 "required": ["cluster_name"]
@@ -220,7 +182,6 @@ class ClusterInput(BaseModel):
 class ClusterRequest(BaseModel):
     """Expected top-level structure from ChatGPT."""
     thoughts_exhausted: bool = False  # Default: user may have more thoughts
-    correctly_clustered: Optional[bool] = None
     clusters: List[ClusterInput]
 
 
@@ -267,8 +228,7 @@ async def handle(
                     cluster_count=len(validated_request.clusters),
                     subcluster_count=subcluster_count,
                     tag_count=tag_count,
-                    thoughts_exhausted=validated_request.thoughts_exhausted,
-                    correctly_clustered=validated_request.correctly_clustered)
+                    thoughts_exhausted=validated_request.thoughts_exhausted)
 
     except ValidationError as e:
         # ---------------------------------------------------------------
@@ -280,7 +240,6 @@ async def handle(
 
         clusters_data = None
         thoughts_exhausted = arguments.get("thoughts_exhausted", False)  # Default: user may have more
-        correctly_clustered = arguments.get("correctly_clustered", None)
         raw_clusters = arguments.get("clusters", [])
 
         # Repair: invalid tags -> strip tags not in ALLOWED_TAGS
@@ -348,7 +307,6 @@ async def handle(
         try:
             validated_request = ClusterRequest.model_validate({
                 "thoughts_exhausted": thoughts_exhausted,
-                "correctly_clustered": correctly_clustered,
                 "clusters": clusters_data
             })
             logger.debug("organize_thoughts.repair_success",
@@ -373,7 +331,7 @@ async def handle(
     # FORMAT CLUSTERS (call pure function)
     # ============================================================
     clusters = [c.model_dump() for c in validated_request.clusters]
-    result = format_clusters(clusters)
+    result = format_clusters(clusters, thoughts_exhausted=validated_request.thoughts_exhausted)
 
     # ============================================================
     # BUILD RESPONSE (no persistence - Increment 12 explicit save model)

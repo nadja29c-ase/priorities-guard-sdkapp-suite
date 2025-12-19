@@ -56,7 +56,7 @@ def enrich_clusters(clusters: list[dict]) -> list[dict]:
     return enriched
 
 
-def organize_thoughts(clusters: list[dict]) -> dict:
+def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) -> dict:
     """
     Format business thought clusters that ChatGPT has already identified.
 
@@ -66,62 +66,22 @@ def organize_thoughts(clusters: list[dict]) -> dict:
             - 'cluster_name' and 'subclusters' (nested structure), or
             - both (mixed: ungrouped items + grouped subclusters)
             - optional 'tags' for behavioral hints
+        thoughts_exhausted: True if user confirmed they're done sharing thoughts
 
     Returns:
         Widget-compatible output with content and structuredContent.
     """
     enriched = enrich_clusters(clusters)
 
+    if thoughts_exhausted:
+        message = "Here's your Clarity board. Want to prioritize? Tell me which clusters matter most to you."
+    else:
+        message = "Here's your Clarity board. What else is on your mind?"
+
     return {
-        "content": [{"type": "text", "text": "Here's your Clarity board. Want to gain more clarity about what to do next by prioritizing the clusters? Tell me which clusters matter most to you right now."}],
+        "content": [{"type": "text", "text": message}],
         "structuredContent": {
             "clusters": enriched
         }
     }
 
-
-'''#def identify_most_relevant_clusters(
-    selected_cluster_names: list[str],
-    clusters: list[dict]
-#) -> dict:
-    """
-    Filter to only the clusters the user selected as most relevant.
-
-    Args:
-        selected_cluster_names: Names of clusters user selected.
-        clusters: Enriched clusters from cluster_raw_thoughts output.
-
-    Returns:
-        Filtered top_clusters.
-    """
-    return {
-        "top_clusters": [
-            c for c in clusters
-            if c["name"] in selected_cluster_names
-        ]
-    }
-
-
-#def specify_next_steps(top_clusters: list[dict]) -> dict:
-    """
-    Generate next steps from the user's top clusters.
-
-    Args:
-        top_clusters: Filtered clusters from identify_most_relevant_clusters.
-
-    Returns:
-        Next steps and clarity summary.
-    """
-    steps = []
-    for cluster in top_clusters[:3]:
-        for item in cluster.get("items", [])[:2]:
-            steps.append({
-                "step": f"Work on: {item}",
-                "source_cluster": cluster["name"],
-                "effort": "low" if len(item) < 30 else "medium"
-            })
-    return {
-        "next_steps": steps[:5],
-        "clarity_summary": f"Focus on {', '.join(c['name'] for c in top_clusters[:3])}"
-    }
-'''

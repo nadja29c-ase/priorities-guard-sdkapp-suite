@@ -6,7 +6,6 @@ Tests for organize_thoughts tool validation and formatting:
 - Nested clusters (subclusters only)
 - Mixed clusters (both thought_items and subclusters)
 - Empty validation (both empty = invalid)
-- Confirmation field handling
 - Behavioral tags validation and output
 - Tool boundary validation (raw dicts through call_tool_request)
 """
@@ -125,171 +124,50 @@ class TestClusterRequestValidation:
     """Test ClusterRequest top-level validation."""
 
     def test_valid_request_first_call(self):
-        """Test valid request on first call (correctly_clustered: null)."""
+        """Test valid request on first call."""
         request = ClusterRequest(
             thoughts_exhausted=True,
-            correctly_clustered=None,
             clusters=[
                 ClusterInput(cluster_name="Tasks", thought_items=["item 1"])
             ]
         )
         assert request.thoughts_exhausted is True
-        assert request.correctly_clustered is None
         assert len(request.clusters) == 1
 
-    def test_valid_request_recluster(self):
-        """Test valid request on re-cluster (correctly_clustered: false)."""
+    def test_valid_request_with_subclusters(self):
+        """Test valid request with subclusters."""
         request = ClusterRequest(
             thoughts_exhausted=True,
-            correctly_clustered=False,
             clusters=[
-                ClusterInput(cluster_name="Revised", thought_items=["item"])
+                ClusterInput(
+                    cluster_name="Work",
+                    subclusters=[
+                        SubclusterInput(subcluster_name="Urgent", thought_items=["item"])
+                    ]
+                )
             ]
         )
-        assert request.correctly_clustered is False
-
-    def test_valid_request_confirmed(self):
-        """Test valid request when user confirms clusters are correct."""
-        request = ClusterRequest(
-            thoughts_exhausted=True,
-            correctly_clustered=True,
-            clusters=[
-                ClusterInput(cluster_name="Confirmed", thought_items=["item"])
-            ]
-        )
-        assert request.correctly_clustered is True
+        assert len(request.clusters) == 1
+        assert len(request.clusters[0].subclusters) == 1
 
     def test_missing_thoughts_exhausted_defaults_to_false(self):
         """Test missing thoughts_exhausted defaults to False (LLM resilience)."""
         request = ClusterRequest(
-            correctly_clustered=None,
             clusters=[ClusterInput(cluster_name="Test", thought_items=["item"])]
         )
         assert request.thoughts_exhausted is False  # Safe default: user may have more
 
-    def test_correctly_clustered_optional(self):
-        """Test correctly_clustered defaults to None."""
-        request = ClusterRequest(
-            thoughts_exhausted=True,
-            clusters=[ClusterInput(cluster_name="Test", thought_items=["item"])]
-        )
-        assert request.correctly_clustered is None
-
 
 # =============================================================================
-# Test: Confirmation Field Handling (correctly_clustered)
+# Test: Input-Only Field Handling
 # =============================================================================
 
-class TestConfirmationFieldHandling:
-    """Test correctly_clustered field behavior.
-
-    correctly_clustered is flow metadata for ChatGPT conversation:
-    - null: first call, user hasn't reviewed yet
-    - false: user said clusters are wrong, triggers re-cluster
-    - true: user confirmed clusters are accurate
-
-    This field is:
-    - Validated at input (part of ClusterRequest)
-    - Logged for observability
-    - NOT included in output (it's input-only metadata)
-    """
-
-    @pytest.mark.asyncio
-    async def test_correctly_clustered_null_accepted(self):
-        """First call with correctly_clustered=null succeeds."""
-        arguments = {
-            "thoughts_exhausted": True,
-            "correctly_clustered": None,
-            "clusters": [{"cluster_name": "Test", "thought_items": ["item"]}]
-        }
-
-        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
-            mock_validate.return_value = {
-                "user_id": "user-123",
-                "scopes": {"clarity.write"},
-                "jti": "token-id",
-                "azp": "client-id"
-            }
-
-            result = await call_tool_request(_make_tool_request(arguments))
-
-        assert result.isError is not True
-        assert result.structuredContent is not None
-
-    @pytest.mark.asyncio
-    async def test_correctly_clustered_false_accepted(self):
-        """Re-cluster call with correctly_clustered=false succeeds."""
-        arguments = {
-            "thoughts_exhausted": True,
-            "correctly_clustered": False,
-            "clusters": [{"cluster_name": "Revised", "thought_items": ["new item"]}]
-        }
-
-        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
-            mock_validate.return_value = {
-                "user_id": "user-123",
-                "scopes": {"clarity.write"},
-                "jti": "token-id",
-                "azp": "client-id"
-            }
-
-            result = await call_tool_request(_make_tool_request(arguments))
-
-        assert result.isError is not True
-        assert result.structuredContent is not None
-
-    @pytest.mark.asyncio
-    async def test_correctly_clustered_true_accepted(self):
-        """Confirmation call with correctly_clustered=true succeeds."""
-        arguments = {
-            "thoughts_exhausted": True,
-            "correctly_clustered": True,
-            "clusters": [{"cluster_name": "Confirmed", "thought_items": ["item"]}]
-        }
-
-        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
-            mock_validate.return_value = {
-                "user_id": "user-123",
-                "scopes": {"clarity.write"},
-                "jti": "token-id",
-                "azp": "client-id"
-            }
-
-            result = await call_tool_request(_make_tool_request(arguments))
-
-        assert result.isError is not True
-        assert result.structuredContent is not None
-
-    @pytest.mark.asyncio
-    async def test_correctly_clustered_not_in_output(self):
-        """correctly_clustered is input-only, NOT included in tool output.
-
-        This is intentional: it's flow metadata for ChatGPT, not widget data.
-        """
-        arguments = {
-            "thoughts_exhausted": True,
-            "correctly_clustered": True,
-            "clusters": [{"cluster_name": "Test", "thought_items": ["item"]}]
-        }
-
-        with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
-            mock_validate.return_value = {
-                "user_id": "user-123",
-                "scopes": {"clarity.write"},
-                "jti": "token-id",
-                "azp": "client-id"
-            }
-
-            result = await call_tool_request(_make_tool_request(arguments))
-
-        # correctly_clustered should NOT appear in output
-        assert "correctly_clustered" not in result.structuredContent
-        # Only clusters should be in output
-        assert "clusters" in result.structuredContent
+class TestInputOnlyFieldHandling:
+    """Test that input-only fields don't appear in output."""
 
     @pytest.mark.asyncio
     async def test_thoughts_exhausted_not_in_output(self):
-        """thoughts_exhausted is also input-only, NOT included in tool output."""
+        """thoughts_exhausted is input-only, NOT included in tool output."""
         arguments = {
             "thoughts_exhausted": True,
             "clusters": [{"cluster_name": "Test", "thought_items": ["item"]}]
@@ -307,6 +185,8 @@ class TestConfirmationFieldHandling:
 
         # thoughts_exhausted should NOT appear in output
         assert "thoughts_exhausted" not in result.structuredContent
+        # Only clusters should be in output
+        assert "clusters" in result.structuredContent
 
 
 # =============================================================================
@@ -472,15 +352,25 @@ class TestOrganizeThoughtsOutput:
         assert result["structuredContent"]["clusters"] == []
         assert "content" in result
 
-    def test_content_message(self):
-        """Test content message is present and prompts for prioritization."""
+    def test_content_message_thoughts_not_exhausted(self):
+        """Test content asks 'what else' when thoughts not exhausted."""
         clusters = [{"cluster_name": "Test", "thought_items": ["x"], "subclusters": []}]
-        result = organize_thoughts(clusters)
+        result = organize_thoughts(clusters, thoughts_exhausted=False)
 
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
         assert "clarity board" in result["content"][0]["text"].lower()
-        assert "prioritiz" in result["content"][0]["text"].lower()  # matches prioritize/prioritizing
+        assert "what else" in result["content"][0]["text"].lower()
+
+    def test_content_message_thoughts_exhausted(self):
+        """Test content prompts for prioritization when thoughts exhausted."""
+        clusters = [{"cluster_name": "Test", "thought_items": ["x"], "subclusters": []}]
+        result = organize_thoughts(clusters, thoughts_exhausted=True)
+
+        assert len(result["content"]) == 1
+        assert result["content"][0]["type"] == "text"
+        assert "clarity board" in result["content"][0]["text"].lower()
+        assert "prioritiz" in result["content"][0]["text"].lower()
 
 
 # =============================================================================
