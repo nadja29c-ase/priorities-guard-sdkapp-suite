@@ -159,15 +159,15 @@ class TestClusterRequestValidation:
 
 
 # =============================================================================
-# Test: Input-Only Field Handling
+# Test: State Field in Output
 # =============================================================================
 
-class TestInputOnlyFieldHandling:
-    """Test that input-only fields don't appear in output."""
+class TestStateFieldInOutput:
+    """Test that thoughts_exhausted state is included in output for LLM reasoning."""
 
     @pytest.mark.asyncio
-    async def test_thoughts_exhausted_not_in_output(self):
-        """thoughts_exhausted is input-only, NOT included in tool output."""
+    async def test_thoughts_exhausted_in_output(self):
+        """thoughts_exhausted is included in output so LLM can track state."""
         arguments = {
             "thoughts_exhausted": True,
             "clusters": [{"cluster_name": "Test", "thought_items": ["item"]}]
@@ -183,9 +183,9 @@ class TestInputOnlyFieldHandling:
 
             result = await call_tool_request(_make_tool_request(arguments))
 
-        # thoughts_exhausted should NOT appear in output
-        assert "thoughts_exhausted" not in result.structuredContent
-        # Only clusters should be in output
+        # thoughts_exhausted should be in output for LLM state tracking
+        assert "thoughts_exhausted" in result.structuredContent
+        assert result.structuredContent["thoughts_exhausted"] is True
         assert "clusters" in result.structuredContent
 
 
@@ -396,7 +396,7 @@ class TestOutputSchemaStability:
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
         result = organize_thoughts(clusters)
 
-        assert set(result["structuredContent"].keys()) == {"clusters"}
+        assert set(result["structuredContent"].keys()) == {"clusters", "thoughts_exhausted"}
 
     def test_cluster_output_keys_flat(self):
         """Flat cluster output has exactly expected keys."""
@@ -460,14 +460,17 @@ class TestOutputSchemaStability:
         forbidden_fields = {"user_id", "correlation_id", "azp", "jti", "scopes", "_meta"}
         assert forbidden_fields.isdisjoint(cluster.keys())
 
-    def test_no_input_metadata_in_output(self):
-        """Input metadata fields don't appear in output."""
+    def test_thoughts_exhausted_state_in_output(self):
+        """thoughts_exhausted is included for LLM state tracking."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
-        result = organize_thoughts(clusters)
 
-        # These are input-only fields
-        assert "thoughts_exhausted" not in result["structuredContent"]
-        assert "correctly_clustered" not in result["structuredContent"]
+        # Default (not exhausted)
+        result = organize_thoughts(clusters, thoughts_exhausted=False)
+        assert result["structuredContent"]["thoughts_exhausted"] is False
+
+        # Exhausted
+        result = organize_thoughts(clusters, thoughts_exhausted=True)
+        assert result["structuredContent"]["thoughts_exhausted"] is True
 
 
 # =============================================================================

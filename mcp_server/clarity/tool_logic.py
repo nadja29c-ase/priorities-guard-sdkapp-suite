@@ -81,7 +81,8 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
     return {
         "content": [{"type": "text", "text": message}],
         "structuredContent": {
-            "clusters": enriched
+            "clusters": enriched,
+            "thoughts_exhausted": thoughts_exhausted
         }
     }
 
