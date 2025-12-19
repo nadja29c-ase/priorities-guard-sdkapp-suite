@@ -79,7 +79,7 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
         variants = None
     else:
         message = "What else is on your mind?"
-        guidance = "🛑 STOP. Elicit more thought items from the user by ASKING ONLY in a natural way — say nothing else."
+        guidance = "🛑 STOP. Elicit more thought items from the user by acknowleding and  ASKING ONLY in a natural way — SAY NOTHING ELSE"
         variants = [
             "What else is on your mind?",
             "Anything else bouncing around?",

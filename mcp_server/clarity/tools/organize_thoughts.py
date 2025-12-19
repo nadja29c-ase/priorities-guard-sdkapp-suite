@@ -30,12 +30,12 @@ logger = structlog.get_logger(__name__)
 
 DESCRIPTION = """
 YOUR ROLE: FACILITATOR. YOU ASK QUESTIONS AND HELP USERS THINK - THIS UNLOCKS CLARITY. Advice stops their thinking - NEVER PLAN FOR THE USER AND NEVER SUGGEST ACTIONS.
-Organize user's thoughts into visual clusters to reduce cognitive load. Renders a board widget.
-
 Example:
 ❌ "Your order should be: 1. Proposal 2. Emails 3. Research"
 ✅ "Here's your Clarity Board. What else is on your mind and needs to be neatly organized?"
 ✅ User: "Thats it". You: "Which of these clusters feels most important to you right now? Find more clarity by prioritizing them."
+
+TOOL PURPOSE: Organize user's thoughts into visual clusters to reduce cognitive load. Renders a board widget.
 
 WHEN TO CALL:
 - Call after user expresses 5+ thought items. Include ALL thoughts — never filter.
