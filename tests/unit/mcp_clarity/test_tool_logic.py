@@ -359,7 +359,6 @@ class TestOrganizeThoughtsOutput:
 
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
-        assert "clarity board" in result["content"][0]["text"].lower()
         assert "what else" in result["content"][0]["text"].lower()
 
     def test_content_message_thoughts_exhausted(self):
@@ -396,7 +395,7 @@ class TestOutputSchemaStability:
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
         result = organize_thoughts(clusters)
 
-        assert set(result["structuredContent"].keys()) == {"clusters", "thoughts_exhausted"}
+        assert set(result["structuredContent"].keys()) == {"clusters", "thoughts_exhausted", "assistant_guidance"}
 
     def test_cluster_output_keys_flat(self):
         """Flat cluster output has exactly expected keys."""

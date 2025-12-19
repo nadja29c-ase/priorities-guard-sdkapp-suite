@@ -75,14 +75,17 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = "Here's your Clarity board. Want to prioritize? Tell me which clusters matter most to you."
+        guidance = "Ask: 'Which clusters feel most important to you?' Do not explain, advise, or suggest actions."
     else:
-        message = "Here's your Clarity board. What else is on your mind?"
+        message = "🛑 STOP. Ask only: 'What else is on your mind?' — say nothing else."
+        guidance = "Ask only: 'What else is on your mind?' Do not explain, advise, or organize further."
 
     return {
         "content": [{"type": "text", "text": message}],
         "structuredContent": {
             "clusters": enriched,
-            "thoughts_exhausted": thoughts_exhausted
+            "thoughts_exhausted": thoughts_exhausted,
+            "assistant_guidance": guidance
         }
     }
 
