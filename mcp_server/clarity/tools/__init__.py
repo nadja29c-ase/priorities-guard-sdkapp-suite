@@ -87,7 +87,8 @@ async def list_tools() -> List[mcp_types.Tool]:
 # WARNING: Tools self-register at import time.
 # If you add a new tool, import it here or it won't be in the registry.
 
-from . import organize_thoughts  # noqa: F401, E402
+# from . import organize_thoughts  # noqa: F401, E402  # DISABLED for v2 test
+from . import organize_thoughts_v2  # noqa: F401, E402  # V2 TEST
 from . import load_saved_board  # noqa: F401, E402
 from . import read_saved_board  # noqa: F401, E402
 from . import save_board  # noqa: F401, E402
