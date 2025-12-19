@@ -397,6 +397,14 @@ async def handle(
         "openai/resultCanProduceWidget": True,
     }
 
+    guidance = (
+        "Mirror back briefly: what clusters emerged, what was/seemed important to the user. "
+        "Then say: 'That's your Clarity board — ready to be saved and revisited. "
+        "You can come back to your board anytime by asking to load it. "
+        "From here we're just chatting — ask me anything or close when you're done.' "
+        "Then answer naturally."
+    )
+
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
@@ -404,6 +412,7 @@ async def handle(
         )],
         structuredContent={
             "clusters": enriched_clusters,
+            "assistant_guidance": guidance,
         },
         _meta=meta,
     )
