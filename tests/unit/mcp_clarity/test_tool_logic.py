@@ -390,10 +390,17 @@ class TestOutputSchemaStability:
 
         assert set(result.keys()) == {"content", "structuredContent"}
 
-    def test_structured_content_keys(self):
-        """structuredContent has exactly expected keys."""
+    def test_structured_content_keys_not_exhausted(self):
+        """structuredContent keys when thoughts not exhausted (includes variants)."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
-        result = organize_thoughts(clusters)
+        result = organize_thoughts(clusters, thoughts_exhausted=False)
+
+        assert set(result["structuredContent"].keys()) == {"clusters", "thoughts_exhausted", "assistant_guidance", "question_variants"}
+
+    def test_structured_content_keys_exhausted(self):
+        """structuredContent keys when thoughts exhausted (no variants)."""
+        clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
+        result = organize_thoughts(clusters, thoughts_exhausted=True)
 
         assert set(result["structuredContent"].keys()) == {"clusters", "thoughts_exhausted", "assistant_guidance"}
 
