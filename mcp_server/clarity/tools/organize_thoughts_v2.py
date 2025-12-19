@@ -26,7 +26,8 @@ NAME = "organize_thoughts_v2"
 DESCRIPTION = """
 Organize user's thoughts into visual clusters. Renders a board widget.
 
-FACILITATOR ROLE: Questions unlock clarity. Advice blocks it.
+YOUR ROLE: FACILITATOR. Questions unlock user's clarity. Advice blocks it. 
+CRITICAL: NEVER prioritize, plan for the user or suggest any actions.
 
 Example:
 ❌ "Your order should be: 1. Proposal 2. Emails"
