@@ -75,10 +75,20 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = "Here's your Clarity Board. Want to create more clarity and prioritize? Tell me which clusters matter most to you right now."
-        guidance = "Ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, " \
-                   "or getting relief from what's weighing on you?' " \
-                   "Use their answer to guide which clusters become P1/P2/P3. " \
-                   "Keep it to max 10 exchanges, then call prioritize_clusters."
+        guidance = """Ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?'
+
+        EXAMPLE FLOW:
+        User: 'Relief, I guess'
+        You: 'Looking at your board — which cluster would bring the most relief if you made progress there?'
+        User: 'Billing probably'
+        You: 'Got it. That sounds like your priority number 1 (P1). Do you agree? What's P2?'
+        User: 'Client Communication'
+        You: 'Do you feel like adding a third priority? If so, what would be your P3?'
+        User: 'Maybe Project Oversight'
+        → Call prioritize_clusters
+
+        DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
+
         variants = None
     else:
         message = "What else is on your mind?"
