@@ -14,7 +14,6 @@ Role boundaries:
 
 from typing import List, Optional
 import copy
-import random
 
 import structlog
 from mcp import types as mcp_types
@@ -45,28 +44,6 @@ ERROR_INVALID_CLUSTER = "Cluster or subcluster not found. Please reference a val
 ERROR_NO_BOARD = "No board available. Use organize_thoughts first to create a board."
 ERROR_PARENT_AND_CHILD = "Cannot prioritize both a cluster and its subcluster. Choose one."
 ERROR_INVALID_RANK = "Invalid rank. Must be P1, P2, or P3."
-
-# ============================================================================
-# Response Messages (rotated by priority count)
-# ============================================================================
-
-P1_SET_MESSAGES = [
-    "P1 is set — you've named what matters most right now. What about P2?",
-    "Got it. First priority locked in. Is there a second one, or is one enough for now?",
-    "P1 done. You're creating focus. Anything else that deserves P2?",
-]
-
-P2_SET_MESSAGES = [
-    "P1 and P2 are set. Clear focus areas. Is there a P3, or are two enough?",
-    "Two priorities locked in. Do you want to add a third, or does this feel complete?",
-    "Focus is forming. Any third priority, or are you good with two?",
-]
-
-PRIORITIZE_CLOSURE_MESSAGES = [
-    "Three priorities set. You know where to focus now.",
-    "P1, P2, P3 — done. That's your Clarity board.",
-    "All set. Three clear focus areas. That's clarity.",
-]
 
 # ============================================================================
 # Tool Metadata
@@ -400,28 +377,13 @@ async def handle(
     # Enrich with sum_thought_items for widget
     enriched_clusters = enrich_clusters(prioritized_clusters)
 
-    # Build response based on priority count
+    # Build response
     priority_count = len(request.priorities)
-
     if priority_count == 0:
         message = "Priorities cleared from board."
-        guidance = "Ask user which clusters they want to prioritize."
-
-    elif priority_count == 1:
-        message = random.choice(P1_SET_MESSAGES)
-        guidance = "User set P1. Ask about P2. Give permission to stop if one is enough."
-
-    elif priority_count == 2:
-        message = random.choice(P2_SET_MESSAGES)
-        guidance = "User set P1 and P2. Ask if there's a P3 or if two is enough."
-
-    else:  # 3
-        message = random.choice(PRIORITIZE_CLOSURE_MESSAGES)
-        guidance = (
-            "Mirror back briefly: what clusters emerged, what user prioritized. "
-            "Say: 'That's your Clarity board — ready to save and revisit anytime. "
-            "You can come back by asking to load it.' Then chat naturally."
-        )
+    else:
+        ranks = [p.rank for p in request.priorities]
+        message = f"Applied {priority_count} priorit{'y' if priority_count == 1 else 'ies'} ({', '.join(sorted(ranks))}) to board."
 
     logger.info("prioritize_clusters.success",
                user_id=user_id,
@@ -434,6 +396,14 @@ async def handle(
         "openai/widgetAccessible": True,
         "openai/resultCanProduceWidget": True,
     }
+
+    guidance = (
+        "Mirror back briefly: what clusters emerged, what was/seemed important to the user. "
+        "Then say: 'That's your Clarity board — ready to be saved and revisited. "
+        "You can come back to your board anytime by asking to load it. "
+        "From here we're just chatting — ask me anything or close when you're done.' "
+        "Then answer naturally."
+    )
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(

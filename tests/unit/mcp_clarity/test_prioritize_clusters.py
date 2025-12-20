@@ -616,9 +616,7 @@ class TestResponseStructure:
 
     @pytest.mark.asyncio
     async def test_success_message_format(self):
-        """Success message is from P2_SET_MESSAGES for 2 priorities."""
-        from mcp_server.clarity.tools.prioritize_clusters import P2_SET_MESSAGES
-
+        """Success message includes priority count and ranks."""
         result = await handle(
             user_id="test-user",
             correlation_id="test-corr",
@@ -636,7 +634,9 @@ class TestResponseStructure:
 
         assert result.isError is None or result.isError is False
         text = result.content[0].text
-        assert text in P2_SET_MESSAGES
+        assert "2" in text  # Count
+        assert "P1" in text
+        assert "P2" in text
 
 
 class TestMaxPrioritiesConstant:
