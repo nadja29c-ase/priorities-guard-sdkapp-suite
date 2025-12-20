@@ -75,7 +75,7 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = "Here's your Clarity Board. Want to create more clarity and prioritize? Tell me which clusters matter most to you right now."
-        guidance = """Acknowledge the user's feelings / thoughts and ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?'
+        guidance = """Acknowledge the user's feelings / thoughts in an EMPATHIC WAY and ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?'
 
         EXAMPLE FLOW:
         User: 'Relief, I guess'
@@ -98,7 +98,7 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
         ]
     else:
         message = "What else is on your mind?"
-        guidance = "🛑 STOP - NO ADVICE - Instead, acknowledge what's been captured, note progress toward clarity, then ask for more thought items. Stay warm."
+        guidance = "🛑 STOP - NO ADVICE - Instead, acknowledge what's been captured in an EMPATHIC WAY, note progress toward clarity, then ask for more thought items. Stay warm."
         variants = [
             "Good — that's already taking shape. Let's get everything out so nothing keeps spinning in your head. What else?",
             "Awesome, you're getting it out of your head and onto the board — that's how the overwhelm shrinks. Anything else?",
