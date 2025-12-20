@@ -92,7 +92,7 @@ EXAMPLE FLOW:
         You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
         User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
 
-        DO NOT: NEVER EXPLORE ROOT CAUSES:. Get P1/P2/P3 names, then call the tool."""
+        DO NOT: NEVER EXPLORE ROOT CAUSES. Get P1/P2/P3 names, then call the tool."""
     else:
         message = ""  # Empty - model ignores this anyway
         guidance = """🛑 STOP - NO ADVICE - Acknowledge progress WARMLY, EXPLAIN WHAT YOU ARE DOING WITH THE USER AND WHY and then ask for more thoughts.
