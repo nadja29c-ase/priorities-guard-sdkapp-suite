@@ -75,18 +75,19 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = "Here's your Clarity Board. Want to create more clarity and prioritize? Tell me which clusters matter most to you right now."
-        guidance = """Ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?'
+        guidance = """Acknowledge the user's feelings / thoughts and ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?'
 
         EXAMPLE FLOW:
         User: 'Relief, I guess'
-        You: 'Looking at your board — which cluster would bring the most relief if you made progress there?'
+        You: 'That makes sense.Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
         User: 'Billing probably'
-        You: 'Got it. That sounds like your priority number 1 (P1). Do you agree? What's P2?'
-        User: 'Client Communication'
-        You: 'Do you feel like adding a third priority? If so, what would be your P3?'
-        User: 'Maybe Project Oversight'
-        → Call prioritize_clusters
-
+        You: 'Billing - got it. That sounds like your priority number 1 (P1). Do you agree?'
+        User: 'Yes' --> call prioritize_clusters display P1
+        You: 'Great, already clearer. What about P2 — anything else that would lighten the load?' 
+        User: 'Client Communication'  → Call prioritize_clusters display P1 & P2
+        You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
+        User: 'Maybe Project Oversight'→ Call prioritize_clusters display P1, P2, P3
+        
         DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
 
         variants = None
