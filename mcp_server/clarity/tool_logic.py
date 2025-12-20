@@ -75,12 +75,11 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = ""  # Empty - model ignores this anyway
-        guidance = """Acknowledge the user's work, then ask what matters most.
+        guidance = """Tell the user what is the next step and why, then ask what matters most.
 
-Use one of these naturally:
+F.e. use one of these naturally:
 - "Everything's out and organized. Clarity comes from knowing where to focus. What matters most right now: progress toward a goal, unblocking something stuck, or relief from what's weighing on you?"
 - "You've done the hard part — it's all out. What would help most: moving toward a goal, clearing a blocker, or getting some relief?"
-- "Your board is ready. Are you chasing a goal, trying to get unstuck, or just need weight off your shoulders?"
 
 EXAMPLE FLOW:
         User: 'Relief, I guess'
@@ -93,18 +92,18 @@ EXAMPLE FLOW:
         You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
         User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
 
-        DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
+        DO NOT: NEVER EXPLORE ROOT CAUSES:. Get P1/P2/P3 names, then call the tool."""
     else:
         message = ""  # Empty - model ignores this anyway
-        guidance = """🛑 STOP - NO ADVICE - Acknowledge progress warmly, then ask for more thoughts.
+        guidance = """🛑 STOP - NO ADVICE - Acknowledge progress WARMLY, EXPLAIN WHAT YOU ARE DOING WITH THE USER AND WHY and then ask for more thoughts.
 
-Use one of these naturally:
+F.e. use one of these naturally:
 - "Good — that's taking shape. Let's get everything out. What else is on your mind?"
 - "You're getting it out of your head — that's how overwhelm shrinks. Anything else?"
 - "The picture's forming. Better to capture it all now. Any loose threads?"
 - "That's a few clusters already. Once it's all out, you can see what you're dealing with. What else?"
 
-No advice. No task lists. Just acknowledge + ask."""
+NO advice. NO task lists. Just acknowledge + ask."""
 
     return {
         "content": [{"type": "text", "text": message}],
