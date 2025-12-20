@@ -91,10 +91,10 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
         DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
 
         variants = [
-            "Everything's out and organized — you can see the full picture now. So, what matters most right now: making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?",
-            "You've done the hard part — it's all out of your head. Now let's focus. What would help most right now: moving toward a goal, clearing a blocker, or just getting some relief?",
+            "Everything's out and organized — you can see the full picture now. But clarity won't come from seeing it all. It comes from knowing where to focus. So, what matters most right now: making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?",
+            "You've done the hard part — it's all out of your head. Now let's focus because clarity comes from knowing what really matters. What would help most right now: moving toward a goal, clearing a blocker, or just getting some relief?",
             "Your Clarity Board is ready. Before we prioritize, tell me: are you chasing a goal, trying to get unstuck, or just need some weight off your shoulders?",
-            "Your scattered thoughts are now visible and grouped. That's the first step to cutting through the noise. Now tell me, what would help you most right now: achieving a specific goal? getting unstuck? finding relief?"
+            "Your scattered thoughts are now visible and grouped. That's the first step to cutting through the noise. Next step isn't doing more — it's deciding less. Pick what actually matters and let the rest wait. Now tell me, what would help you most right now: achieving a specific goal? getting unstuck? finding relief?"
         ]
     else:
         message = "What else is on your mind?"
