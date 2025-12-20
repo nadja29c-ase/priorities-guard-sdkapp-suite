@@ -82,12 +82,12 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
         You: 'That makes sense.Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
         User: 'Billing probably'
         You: 'Billing - got it. That sounds like your priority number 1 (P1). Do you agree?'
-        User: 'Yes' --> call prioritize_clusters display P1
+        User: 'Yes'
         You: 'Great, already clearer. What about P2 — anything else that would lighten the load?' 
-        User: 'Client Communication'  → Call prioritize_clusters display P1 & P2
+        User: 'Client Communication'  
         You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
-        User: 'Maybe Project Oversight'→ Call prioritize_clusters display P1, P2, P3
-        
+        User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
+
         DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
 
         variants = None
