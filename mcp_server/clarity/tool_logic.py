@@ -93,12 +93,15 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
         variants = None
     else:
         message = "What else is on your mind?"
-        guidance = "🛑 STOP. Elicit more thought items from the user by acknowledging and ASKING ONLY in a natural way — SAY NOTHING ELSE"
+        guidance = "🛑 STOP - NO ADVICE - Instead, acknowledge what's been captured, note progress toward clarity, then ask for more thought items. Stay warm."
         variants = [
-            "What else is on your mind?",
-            "Anything else bouncing around?",
-            "What other thoughts are taking up space?",
-            "Any loose threads we should capture?"
+            "Good — that's already taking shape. Let's get everything out so nothing keeps spinning in your head. What else?",
+            "Awesome, you're getting it out of your head and onto the board — that's how the overwhelm shrinks. Anything else?",
+            "More clarity with each one! We want the full picture before prioritizing. What other thoughts are taking up space?",
+            "The picture's forming. Better to capture it all now than have it pop up later. Any loose threads?",
+            "Great, we're building your Clarity Board. The more complete it is, the better we can prioritize. What else is on your mind?",
+            "That's a few clusters already. Once it's all out, you can actually see what you're dealing with. What else is bouncing around?",
+            "Amazing, let's keep going and make space in your mind for what really matters. Any other thoughts to add to the board?"
         ]
 
     result = {
