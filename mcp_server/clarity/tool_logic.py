@@ -74,12 +74,15 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
     enriched = enrich_clusters(clusters)
 
     if thoughts_exhausted:
-        message = "Here's your Clarity board. Want to prioritize? Tell me which clusters matter most to you."
-        guidance = "Ask: 'Which clusters feel most important to you?' Do not explain, advise, or suggest actions."
+        message = "Here's your Clarity Board. Want to create more clarity and prioritize? Tell me which clusters matter most to you right now."
+        guidance = "Ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, " \
+                   "or getting relief from what's weighing on you?' " \
+                   "Use their answer to guide which clusters become P1/P2/P3. " \
+                   "Keep it to max 10 exchanges, then call prioritize_clusters."
         variants = None
     else:
         message = "What else is on your mind?"
-        guidance = "🛑 STOP. Elicit more thought items from the user by acknowleding and  ASKING ONLY in a natural way — SAY NOTHING ELSE"
+        guidance = "🛑 STOP. Elicit more thought items from the user by acknowledging and ASKING ONLY in a natural way — SAY NOTHING ELSE"
         variants = [
             "What else is on your mind?",
             "Anything else bouncing around?",
