@@ -83,18 +83,22 @@ Use one of these naturally:
 - "Your board is ready. Are you chasing a goal, trying to get unstuck, or just need weight off your shoulders?"
 
 EXAMPLE FLOW:
-User: 'Relief'
-You: 'Looking at your board — which cluster would bring the most relief?'
-User: 'Billing'
-You: 'Billing - got it. That's P1. What about P2?'
-...
+        User: 'Relief, I guess'
+        You: 'That makes sense.Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
+        User: 'Billing probably'
+        You: 'Billing - got it. That sounds like your priority number 1 (P1). Do you agree?'
+        User: 'Yes'
+        You: 'Great, already clearer. What about P2 — anything else that would lighten the load?' 
+        User: 'Client Communication'  
+        You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
+        User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
 
-DO NOT explore root causes. Get P1/P2/P3 names, then call prioritize_clusters."""
+        DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
     else:
         message = ""  # Empty - model ignores this anyway
         guidance = """🛑 STOP - NO ADVICE - Acknowledge progress warmly, then ask for more thoughts.
 
-Use one of these naturally (vary each time):
+Use one of these naturally:
 - "Good — that's taking shape. Let's get everything out. What else is on your mind?"
 - "You're getting it out of your head — that's how overwhelm shrinks. Anything else?"
 - "The picture's forming. Better to capture it all now. Any loose threads?"
