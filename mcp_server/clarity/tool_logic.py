@@ -106,7 +106,9 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
             "The picture's forming. Better to capture it all now than have it pop up later. Any loose threads?",
             "Great, we're building your Clarity Board. The more complete it is, the better we can prioritize. What else is on your mind?",
             "That's a few clusters already. Once it's all out, you can actually see what you're dealing with. What else is bouncing around?",
-            "Amazing, let's keep going and make space in your mind for what really matters. Any other thoughts to add to the board?"
+            "Amazing, let's keep going and make space in your mind for what really matters. Any other thoughts to add to the board?",
+            "Nice. Thoughts dumped, clusters formed — you can actually see what you're dealing with now. Any loose threads before we focus in?",
+            "That's your board taking shape — no more spinning in your head. Let's capture anything else so we can prioritize with the full picture. What other thoughts are taking up space?"
         ]
 
     result = {
