@@ -96,23 +96,23 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = random.choice(TRANSITION_TO_PRIORITIZE_MESSAGES)
-        guidance = """Acknowledge the user's feelings / thoughts and ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?'
+        guidance = f"""Respond with something like: '{message}'
 
-        EXAMPLE FLOW:
-        User: 'Relief, I guess'
-        You: 'That makes sense. Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
-        User: 'Billing probably'
-        You: 'Billing - got it. That sounds like your priority number 1 (P1). Do you agree?'
-        User: 'Yes'
-        You: 'Great, already clearer. What about P2 — anything else that would lighten the load?'
-        User: 'Client Communication'
-        You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
-        User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
+EXAMPLE FLOW:
+User: 'Relief, I guess'
+You: 'That makes sense. Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
+User: 'Billing probably'
+You: 'Billing - got it. That sounds like your priority number 1 (P1). Do you agree?'
+User: 'Yes'
+You: 'Great, already clearer. What about P2 — anything else that would lighten the load?'
+User: 'Client Communication'
+You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
+User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
 
-        DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
+DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
     else:
         message = random.choice(ELICIT_MORE_MESSAGES)
-        guidance = "🛑 STOP - NO ADVICE - Instead, acknowledge what's been captured, note progress toward clarity, then ask for more thought items. Stay warm."
+        guidance = f"Respond with something like: '{message}' — keep warmth, vary naturally. No advice. No task lists."
 
     return {
         "content": [{"type": "text", "text": message}],
