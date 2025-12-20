@@ -14,6 +14,7 @@ Role boundaries:
 
 from typing import List, Optional
 import copy
+import random
 
 import structlog
 from mcp import types as mcp_types
@@ -44,6 +45,16 @@ ERROR_INVALID_CLUSTER = "Cluster or subcluster not found. Please reference a val
 ERROR_NO_BOARD = "No board available. Use organize_thoughts first to create a board."
 ERROR_PARENT_AND_CHILD = "Cannot prioritize both a cluster and its subcluster. Choose one."
 ERROR_INVALID_RANK = "Invalid rank. Must be P1, P2, or P3."
+
+# ============================================================================
+# Closure Messages (rotated via random.choice)
+# ============================================================================
+
+PRIORITIZE_CLOSURE_MESSAGES = [
+    "There — your priorities are set. The noise just got quieter. That's your Clarity board — saved and ready to revisit anytime.",
+    "Priorities locked in. You've cut through the clutter. Your board is ready — come back to it whenever you need to refocus.",
+    "Done. You know where to focus now. That's your Clarity board — load it anytime to pick up where you left off.",
+]
 
 # ============================================================================
 # Tool Metadata
@@ -382,8 +393,7 @@ async def handle(
     if priority_count == 0:
         message = "Priorities cleared from board."
     else:
-        ranks = [p.rank for p in request.priorities]
-        message = f"Applied {priority_count} priorit{'y' if priority_count == 1 else 'ies'} ({', '.join(sorted(ranks))}) to board."
+        message = random.choice(PRIORITIZE_CLOSURE_MESSAGES)
 
     logger.info("prioritize_clusters.success",
                user_id=user_id,

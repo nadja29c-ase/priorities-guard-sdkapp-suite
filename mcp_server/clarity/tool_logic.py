@@ -5,6 +5,27 @@ ChatGPT clusters and reasons BEFORE calling each tool.
 Tools only format/validate - no AI logic here.
 """
 
+import random
+
+# ============================================================================
+# Message Constants (rotated via random.choice)
+# ============================================================================
+
+ELICIT_MORE_MESSAGES = [
+    "Good — that's already taking shape. Let's get everything out so nothing keeps spinning. What else is on your mind?",
+    "You're getting it out of your head and onto the board — that's how overwhelm shrinks. Anything else?",
+    "More clarity with each one. We want the full picture before prioritizing. What other thoughts are taking up space?",
+    "The picture's forming. Better to capture it all now than have it pop up later. Any loose threads?",
+    "That's a few clusters already. Once it's all out, you can actually see what you're dealing with. What else is bouncing around?",
+    "Nice — thoughts dumped, clusters formed. Any loose threads before we focus in?",
+]
+
+TRANSITION_TO_PRIORITIZE_MESSAGES = [
+    "Everything's out and organized — you can see the full picture now. Clarity doesn't come from seeing it all. It comes from knowing where to focus. So, what matters most right now: making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?",
+    "You've done the hard part — it's all out of your head. Overwhelm doesn't shrink by organizing. It shrinks by choosing. What would help most right now: moving toward a goal, clearing a blocker, or just getting some relief?",
+    "Your Clarity Board is ready. Next step isn't doing more — it's deciding less. Are you chasing a goal, trying to get unstuck, or just need some weight off your shoulders?",
+]
+
 
 def enrich_clusters(clusters: list[dict]) -> list[dict]:
     """
@@ -74,44 +95,26 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
     enriched = enrich_clusters(clusters)
 
     if thoughts_exhausted:
-        message = "Here's your Clarity Board. Want to create more clarity and prioritize? Tell me which clusters matter most to you right now."
+        message = random.choice(TRANSITION_TO_PRIORITIZE_MESSAGES)
         guidance = """Acknowledge the user's feelings / thoughts and ask: 'What matters most right now — making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?'
 
         EXAMPLE FLOW:
         User: 'Relief, I guess'
-        You: 'That makes sense.Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
+        You: 'That makes sense. Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
         User: 'Billing probably'
         You: 'Billing - got it. That sounds like your priority number 1 (P1). Do you agree?'
         User: 'Yes'
-        You: 'Great, already clearer. What about P2 — anything else that would lighten the load?' 
-        User: 'Client Communication'  
+        You: 'Great, already clearer. What about P2 — anything else that would lighten the load?'
+        User: 'Client Communication'
         You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
         User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
 
         DO NOT: Explore root causes. Get P1/P2/P3 names, then call the tool."""
-
-        variants = [
-            "Everything's out and organized — you can see the full picture now. But clarity won't come from seeing it all. It comes from knowing where to focus. So, what matters most right now: making progress toward a goal, unblocking something stuck, or getting relief from what's weighing on you?",
-            "You've done the hard part — it's all out of your head. Now let's focus because clarity comes from knowing what really matters. What would help most right now: moving toward a goal, clearing a blocker, or just getting some relief?",
-            "Your Clarity Board is ready. Before we prioritize, tell me: are you chasing a goal, trying to get unstuck, or just need some weight off your shoulders?",
-            "Your scattered thoughts are now visible and grouped. That's the first step to cutting through the noise. Next step isn't doing more — it's deciding less. Pick what actually matters and let the rest wait. Now tell me, what would help you most right now: achieving a specific goal? getting unstuck? finding relief?"
-        ]
     else:
-        message = "What else is on your mind?"
+        message = random.choice(ELICIT_MORE_MESSAGES)
         guidance = "🛑 STOP - NO ADVICE - Instead, acknowledge what's been captured, note progress toward clarity, then ask for more thought items. Stay warm."
-        variants = [
-            "Good — that's already taking shape. Let's get everything out so nothing keeps spinning in your head. What else?",
-            "Awesome, you're getting it out of your head and onto the board — that's how the overwhelm shrinks. Anything else?",
-            "More clarity with each one! We want the full picture before prioritizing. What other thoughts are taking up space?",
-            "The picture's forming. Better to capture it all now than have it pop up later. Any loose threads?",
-            "Great, we're building your Clarity Board. The more complete it is, the better we can prioritize. What else is on your mind?",
-            "That's a few clusters already. Once it's all out, you can actually see what you're dealing with. What else is bouncing around?",
-            "Amazing, let's keep going and make space in your mind for what really matters. Any other thoughts to add to the board?",
-            "Nice. Thoughts dumped, clusters formed — you can actually see what you're dealing with now. Any loose threads before we focus in?",
-            "That's your board taking shape — no more spinning in your head. Let's capture anything else so we can prioritize with the full picture. What other thoughts are taking up space?"
-        ]
 
-    result = {
+    return {
         "content": [{"type": "text", "text": message}],
         "structuredContent": {
             "clusters": enriched,
@@ -119,9 +122,4 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
             "assistant_guidance": guidance
         }
     }
-
-    if variants:
-        result["structuredContent"]["question_variants"] = variants
-
-    return result
 

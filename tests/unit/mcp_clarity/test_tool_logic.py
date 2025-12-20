@@ -353,23 +353,26 @@ class TestOrganizeThoughtsOutput:
         assert "content" in result
 
     def test_content_message_thoughts_not_exhausted(self):
-        """Test content asks 'what else' when thoughts not exhausted."""
+        """Test content is from ELICIT_MORE_MESSAGES when thoughts not exhausted."""
+        from mcp_server.clarity.tool_logic import ELICIT_MORE_MESSAGES
+
         clusters = [{"cluster_name": "Test", "thought_items": ["x"], "subclusters": []}]
         result = organize_thoughts(clusters, thoughts_exhausted=False)
 
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
-        assert "what else" in result["content"][0]["text"].lower()
+        assert result["content"][0]["text"] in ELICIT_MORE_MESSAGES
 
     def test_content_message_thoughts_exhausted(self):
-        """Test content prompts for prioritization when thoughts exhausted."""
+        """Test content is from TRANSITION_TO_PRIORITIZE_MESSAGES when thoughts exhausted."""
+        from mcp_server.clarity.tool_logic import TRANSITION_TO_PRIORITIZE_MESSAGES
+
         clusters = [{"cluster_name": "Test", "thought_items": ["x"], "subclusters": []}]
         result = organize_thoughts(clusters, thoughts_exhausted=True)
 
         assert len(result["content"]) == 1
         assert result["content"][0]["type"] == "text"
-        assert "clarity board" in result["content"][0]["text"].lower()
-        assert "prioritiz" in result["content"][0]["text"].lower()
+        assert result["content"][0]["text"] in TRANSITION_TO_PRIORITIZE_MESSAGES
 
 
 # =============================================================================
@@ -391,14 +394,14 @@ class TestOutputSchemaStability:
         assert set(result.keys()) == {"content", "structuredContent"}
 
     def test_structured_content_keys_not_exhausted(self):
-        """structuredContent keys when thoughts not exhausted (includes variants)."""
+        """structuredContent keys when thoughts not exhausted."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
         result = organize_thoughts(clusters, thoughts_exhausted=False)
 
-        assert set(result["structuredContent"].keys()) == {"clusters", "thoughts_exhausted", "assistant_guidance", "question_variants"}
+        assert set(result["structuredContent"].keys()) == {"clusters", "thoughts_exhausted", "assistant_guidance"}
 
     def test_structured_content_keys_exhausted(self):
-        """structuredContent keys when thoughts exhausted (no variants)."""
+        """structuredContent keys when thoughts exhausted."""
         clusters = [{"cluster_name": "Test", "thought_items": ["item"]}]
         result = organize_thoughts(clusters, thoughts_exhausted=True)
 
