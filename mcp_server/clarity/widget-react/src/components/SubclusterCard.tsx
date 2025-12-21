@@ -35,11 +35,11 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
 
       {/* Items */}
       {items.length > 0 && (
-        <ul className="list-none m-0 p-0 space-y-1">
+        <div className="space-y-1">
           {items.map((item, i) => (
             <ThoughtItem key={i} text={item} size="small" />
           ))}
-        </ul>
+        </div>
       )}
 
       {/* Tags */}

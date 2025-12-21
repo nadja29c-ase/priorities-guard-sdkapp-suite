@@ -5,11 +5,11 @@ interface ThoughtItemProps {
 
 export function ThoughtItem({ text, size = 'normal' }: ThoughtItemProps) {
   const textClass = size === 'small' ? 'text-xs' : 'text-sm'
+  const paddingClass = size === 'small' ? 'pl-2 py-0.5' : 'pl-3 py-1'
 
   return (
-    <li className="flex items-start gap-2">
-      <span className={`text-tertiary ${textClass} leading-relaxed shrink-0`}>•</span>
-      <span className={`text-default ${textClass} leading-relaxed break-words`}>{text}</span>
-    </li>
+    <div className={`border-l-2 border-default ${paddingClass}`}>
+      <span className={`${textClass} text-default`}>{text}</span>
+    </div>
   )
 }
