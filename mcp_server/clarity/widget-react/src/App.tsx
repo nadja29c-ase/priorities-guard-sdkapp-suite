@@ -86,7 +86,7 @@ function App() {
   }
 
   return (
-    <div className="bg-surface-tertiary rounded-2xl px-8 py-6 -m-4">
+    <div className="bg-gray-100 rounded-2xl px-8 py-6 -m-4">
       <Header
         canSave={clusters.length > 0}
         showSaved={showSaved}
