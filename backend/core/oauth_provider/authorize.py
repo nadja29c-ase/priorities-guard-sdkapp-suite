@@ -40,16 +40,16 @@ SCOPE_DESCRIPTIONS_EN = {
     "focused.read": "Read your calendar events to detect focus sessions and provide insights.",
     "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
     "focused.notify": "Send notifications related to your focus schedule.",
-    "clarity.read": "View your saved thought boards",
-    "clarity.write": "Save and organize your thought boards",
+    "clarity.read": "View your saved boards",
+    "clarity.write": "Save and organize your boards",
 }
 
 SCOPE_DESCRIPTIONS_DE = {
     "focused.read": "Deine Kalendertermine lesen, um Fokus-Zeiten zu erkennen und dir hilfreiche Einblicke zu geben.",
     "focused.write": "Apple Fokus (den integrierten \"Nicht stören\"-Modus) auf deinem iPhone waehrend deiner Fokus-Zeiten ein- und ausschalten.",
     "focused.notify": "Relevante Benachrichtigungen senden",
-    "clarity.read": "Deine gespeicherten Gedanken-Boards ansehen",
-    "clarity.write": "Deine Gedanken-Boards speichern und organisieren",
+    "clarity.read": "Deine gespeicherten Boards ansehen",
+    "clarity.write": "Deine Boards speichern und organisieren",
 }
 
 # Initialize Jinja2 templates
