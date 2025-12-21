@@ -94,7 +94,7 @@ function App() {
   }
 
   return (
-    <div className="bg-surface-secondary rounded-2xl px-8 py-6 -m-4">
+    <div className="bg-surface-tertiary rounded-2xl px-8 py-6 -m-4">
       <Header />
 
       {sortedClusters.length > 0 ? (
