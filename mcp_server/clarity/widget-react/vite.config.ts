@@ -1,3 +1,10 @@
+/**
+ * Clarity Widget Build Configuration
+ *
+ * DEPENDENCY NOTE: @openai/apps-sdk-ui is pinned to 0.2.1 in package.json.
+ * TODO: Check for SDK updates before major releases. Breaking changes may
+ * affect theme tokens, Badge/Button props, or useDocumentTheme behavior.
+ */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -9,11 +16,6 @@ export default defineConfig({
     target: 'esnext',
     outDir: '../widgets',
     emptyOutDir: false,
-    rollupOptions: {
-      input: 'index.html',
-      output: {
-        entryFileNames: 'clarity-clusters.js',
-      }
-    }
+    // Output is index.html, renamed to clarity-clusters.html by postbuild script
   }
 })

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && mv ../widgets/index.html ../widgets/clarity-clusters.html",
+    "build": "vite build",
+    "postbuild": "node -e \"require('fs').renameSync('../widgets/index.html', '../widgets/clarity-clusters.html')\"",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
