@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useDocumentTheme } from '@openai/apps-sdk-ui/theme'
-import { Button } from '@openai/apps-sdk-ui/components/Button'
 import type { Cluster } from './types'
 import { getToolOutput, sortClustersByPriority } from './utils'
 import { Header } from './components/Header'
@@ -95,7 +94,11 @@ function App() {
 
   return (
     <div className="bg-surface-tertiary rounded-2xl px-8 py-6 -m-4">
-      <Header />
+      <Header
+        canSave={clusters.length > 0}
+        showSaved={showSaved}
+        onSaveClick={() => setIsModalOpen(true)}
+      />
 
       {sortedClusters.length > 0 ? (
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
@@ -108,26 +111,6 @@ function App() {
           No saved board yet. Start one by sharing what's on your mind in the chat.
         </div>
       )}
-
-      {/* Save button at bottom right */}
-      <div className="flex justify-end items-center gap-3 mt-8 mr-4">
-        {showSaved && (
-          <span className="flex items-center gap-1 text-xs text-success font-medium">
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-            </svg>
-            Saved
-          </span>
-        )}
-        <Button
-          color="primary"
-          variant="solid"
-          onClick={() => setIsModalOpen(true)}
-          disabled={clusters.length === 0}
-        >
-          Save
-        </Button>
-      </div>
 
       <SaveModal
         isOpen={isModalOpen}
