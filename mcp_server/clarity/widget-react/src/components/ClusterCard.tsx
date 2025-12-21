@@ -21,7 +21,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
   return (
     <div
-      className={`rounded-2xl border bg-surface shadow-md p-4 flex flex-col min-h-[120px] ${
+      className={`rounded-2xl border bg-surface shadow-lg hover:shadow-xl transition-shadow duration-200 p-4 flex flex-col min-h-[120px] ${
         hasPriority ? 'border-2 border-success-outline' : 'border-default'
       }`}
     >
