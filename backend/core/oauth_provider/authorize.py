@@ -40,16 +40,16 @@ SCOPE_DESCRIPTIONS_EN = {
     "focused.read": "Read your calendar events to detect focus sessions and provide insights.",
     "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
     "focused.notify": "Send notifications related to your focus schedule.",
-    "clarity.read": "View your existing thought clusters and brain dump history.",
-    "clarity.write": "Organize and cluster your thoughts into visual groups.",
+    "clarity.read": "View your saved thought boards",
+    "clarity.write": "Save and organize your thought boards",
 }
 
 SCOPE_DESCRIPTIONS_DE = {
     "focused.read": "Deine Kalendertermine lesen, um Fokus-Zeiten zu erkennen und dir hilfreiche Einblicke zu geben.",
     "focused.write": "Apple Fokus (den integrierten \"Nicht stören\"-Modus) auf deinem iPhone waehrend deiner Fokus-Zeiten ein- und ausschalten.",
     "focused.notify": "Relevante Benachrichtigungen senden",
-    "clarity.read": "Deine bestehenden Gedanken-Cluster und Brain-Dump-Verlauf ansehen.",
-    "clarity.write": "Deine Gedanken in visuelle Gruppen organisieren und clustern.",
+    "clarity.read": "Deine gespeicherten Gedanken-Boards ansehen",
+    "clarity.write": "Deine Gedanken-Boards speichern und organisieren",
 }
 
 # Initialize Jinja2 templates
@@ -594,7 +594,12 @@ async def authorize_endpoint(
 
     # Detect user language preference
     language = _detect_language(request)
-    template_name = f"oauth_consent_{language}.html"
+
+    # Select template based on app (determined by scopes)
+    if any(s.startswith("clarity.") for s in requested_scopes):
+        template_name = f"oauth_consent_clarity_{language}.html"
+    else:
+        template_name = f"oauth_consent_{language}.html"  # Focused (existing)
 
     # Use module-level scope descriptions (localized)
     scope_descriptions = SCOPE_DESCRIPTIONS_DE if language == "de" else SCOPE_DESCRIPTIONS_EN
