@@ -47,7 +47,7 @@
         .app-logo {
             width: 64px;
             height: 52px;
-            margin-bottom: 0;
+            margin-bottom: 8px;
         }
 
         .app-name {
@@ -84,7 +84,7 @@
             margin-bottom: 8px;
             background-color: #f8fafc;
             border-radius: 8px;
-            border-left: 3px solid #94a3b8;
+            border-left: 3px solid #1d1d1f;
         }
 
         .permission-name {
@@ -162,16 +162,16 @@
         }
 
         .btn-deny {
-            background-color: #e8e8ed;
+            background-color: #f8fafc;
             color: #1d1d1f;
         }
 
         .btn-deny:hover {
-            background-color: #d2d2d7;
+            background-color: #f1f5f9;
         }
 
         .btn-deny:active {
-            background-color: #c7c7cc;
+            background-color: #e2e8f0;
         }
 
         /* High contrast mode support */
@@ -220,7 +220,7 @@
         </p>
 
         <section class="permissions-section" aria-labelledby="permissions-title">
-            <h2 id="permissions-title" class="section-title">Save and organize your boards.</h2>
+            <h2 id="permissions-title" class="section-title">Permission Required</h2>
             <ul class="permission-list" role="list">
                 {% for scope in scopes %}
                 <li class="permission-item" aria-label="{{ scope_descriptions.get(scope, scope) }}">
