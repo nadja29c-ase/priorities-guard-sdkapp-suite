@@ -98,6 +98,23 @@ import { getDocumentTheme, applyDocumentTheme } from "@openai/apps-sdk-ui";
 
 **Important:** Do not manually set the `data-theme` attribute. The SDK hook manages theme reactively. The widget should sync with `window.openai.theme` on initial load only if SDK hooks are unavailable.
 
+### Initialization Guard (CRITICAL)
+
+**Canonical Rule:** After initial hydration, cluster state must NOT be overwritten by subsequent `openai:set_globals` events. Only transient UI state (e.g., saved indicator) may update.
+
+In React, this is enforced via state initializer:
+```typescript
+const [clusters, setClusters] = useState<Cluster[]>(() => {
+  return getToolOutput()  // Runs ONCE on mount
+})
+```
+
+The state initializer function only executes on first render. Subsequent `openai:set_globals` events may update `window.openai.toolOutput`, but the React state remains frozen. This prevents:
+- Old widgets incorrectly showing "Saved" when new boards are saved
+- Cluster data flickering between different widget instances
+
+**Do NOT:** Re-read toolOutput on every render or in useEffect without guards.
+
 ### Data Contract (unchanged)
 
 The widget receives this structure via `window.openai.toolOutput.structuredContent.clusters`:

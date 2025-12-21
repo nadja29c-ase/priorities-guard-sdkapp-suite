@@ -1,4 +1,11 @@
-Claude Code Briefing: Freeze Widget Clusters on First Render
+⚠️ SUPERSEDED by Increment 18 (React Migration)
+================================================================================
+This increment applies to the DEPRECATED vanilla HTML widget.
+For the current React widget, see: increment_18_widget_sdk_ui_migration.md
+The initialization guard is now enforced via React useState initializer.
+================================================================================
+
+Claude Code Briefing: Freeze Widget Clusters on First Render (VANILLA HTML - DEPRECATED)
 Problem
 All widgets share window.openai.toolOutput. When new board is saved:
 
