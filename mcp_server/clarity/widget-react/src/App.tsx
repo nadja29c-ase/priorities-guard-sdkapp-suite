@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useDocumentTheme } from '@openai/apps-sdk-ui/theme'
 import type { Cluster } from './types'
 import { extractStructuredContent, getToolOutput, sortClustersByPriority } from './utils'
 import { Header } from './components/Header'
@@ -7,7 +6,7 @@ import { ClusterCard } from './components/ClusterCard'
 import { SaveModal } from './components/SaveModal'
 
 function App() {
-  const theme = useDocumentTheme()
+  // Theme is handled automatically by SDK CSS via data-theme attribute
 
   const [clusters, setClusters] = useState<Cluster[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
@@ -77,12 +76,7 @@ function App() {
   // Sort clusters by priority for display
   const sortedClusters = sortClustersByPriority(clusters)
 
-  // Apply theme class to document
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-  }, [theme])
-
-  // Loading state
+  // Loading state (derive from ref, not separate state)
   if (!isInitialized) {
     return (
       <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
@@ -100,9 +94,9 @@ function App() {
       />
 
       {sortedClusters.length > 0 ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-          {sortedClusters.map((cluster, i) => (
-            <ClusterCard key={i} cluster={cluster} />
+        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
+          {sortedClusters.map((cluster) => (
+            <ClusterCard key={cluster.cluster_name} cluster={cluster} />
           ))}
         </div>
       ) : (
