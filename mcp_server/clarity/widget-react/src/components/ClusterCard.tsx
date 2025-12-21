@@ -21,7 +21,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
   return (
     <div
-      className={`rounded-2xl border bg-surface transition-shadow duration-200 p-4 flex flex-col min-h-[120px] ${
+      className={`rounded-2xl border bg-surface transition-shadow duration-200 p-5 flex flex-col min-h-[120px] ${
         hasPriority ? 'border-2 border-success-outline' : 'border-default'
       }`}
       style={{
@@ -29,7 +29,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-default">
             {truncateText(cluster.cluster_name, 40) || 'Untitled cluster'}
@@ -43,14 +43,14 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
       {/* Summary (if present) */}
       {cluster.summary && (
-        <p className="text-sm text-secondary mb-2.5">
+        <p className="text-sm text-secondary mb-3">
           {truncateText(cluster.summary, 100)}
         </p>
       )}
 
       {/* Direct thought items */}
       {items.length > 0 && (
-        <ul className="list-none m-0 p-0 space-y-1.5 flex-grow">
+        <ul className="list-none m-0 p-0 space-y-2 flex-grow">
           {items.map((item, i) => (
             <ThoughtItem key={i} text={item} />
           ))}
@@ -59,7 +59,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
       {/* Subclusters */}
       {sortedSubclusters.length > 0 && (
-        <div className="flex flex-col gap-2.5 mt-2">
+        <div className="flex flex-col gap-3 mt-3">
           {sortedSubclusters.map((sub, i) => (
             <SubclusterCard key={i} subcluster={sub} />
           ))}
@@ -68,7 +68,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
       {/* Tags */}
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2.5">
+        <div className="flex flex-wrap gap-2 mt-auto pt-3">
           {tags.map((tag, i) => (
             <TagPill key={i} tag={tag} />
           ))}

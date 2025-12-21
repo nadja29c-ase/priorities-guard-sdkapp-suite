@@ -92,7 +92,7 @@ function App() {
   }
 
   return (
-    <div className="bg-surface-secondary rounded-2xl p-4 -m-4">
+    <div className="bg-surface-secondary rounded-2xl p-6 -m-4">
       <Header
         canSave={clusters.length > 0}
         showSaved={showSaved}
@@ -100,7 +100,7 @@ function App() {
       />
 
       {sortedClusters.length > 0 ? (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
           {sortedClusters.map((cluster, i) => (
             <ClusterCard key={i} cluster={cluster} />
           ))}
