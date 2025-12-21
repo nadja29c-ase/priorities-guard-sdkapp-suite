@@ -22,7 +22,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
   return (
     <div
       className={`rounded-2xl border bg-surface shadow-md p-4 flex flex-col min-h-[120px] ${
-        hasPriority ? 'border-2 border-green-500' : 'border-default'
+        hasPriority ? 'border-2 border-success' : 'border-default'
       }`}
     >
       {/* Header */}

@@ -17,7 +17,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
   return (
     <div
       className={`rounded-lg border bg-surface-secondary p-3 ${
-        hasPriority ? 'border-2 border-green-500' : 'border-subtle'
+        hasPriority ? 'border-2 border-success' : 'border-subtle'
       }`}
     >
       {/* Header */}
