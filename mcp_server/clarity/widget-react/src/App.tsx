@@ -109,7 +109,7 @@ function App() {
       )}
 
       {/* Save button at bottom right */}
-      <div className="flex justify-end items-center gap-3 mt-6 mr-2">
+      <div className="flex justify-end items-center gap-3 mt-8 mr-4">
         {showSaved && (
           <span className="flex items-center gap-1 text-xs text-success font-medium">
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
