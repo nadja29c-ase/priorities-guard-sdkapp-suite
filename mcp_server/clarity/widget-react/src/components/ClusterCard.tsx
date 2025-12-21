@@ -57,8 +57,8 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       {/* Subclusters */}
       {sortedSubclusters.length > 0 && (
         <div className="flex flex-col gap-3 mt-3">
-          {sortedSubclusters.map((sub, i) => (
-            <SubclusterCard key={i} subcluster={sub} />
+          {sortedSubclusters.map((sub) => (
+            <SubclusterCard key={sub.subcluster_name} subcluster={sub} />
           ))}
         </div>
       )}
@@ -66,8 +66,8 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       {/* Tags */}
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-auto pt-4">
-          {tags.map((tag, i) => (
-            <TagPill key={i} tag={tag} />
+          {tags.map((tag) => (
+            <TagPill key={tag} tag={tag} />
           ))}
         </div>
       )}

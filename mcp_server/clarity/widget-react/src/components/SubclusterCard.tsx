@@ -45,8 +45,8 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
       {/* Tags */}
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
-          {tags.map((tag, i) => (
-            <TagPill key={i} tag={tag} size="sm" />
+          {tags.map((tag) => (
+            <TagPill key={tag} tag={tag} size="sm" />
           ))}
         </div>
       )}
