@@ -21,7 +21,7 @@ describe('ClusterCard', () => {
     }
 
     render(<ClusterCard cluster={cluster} />)
-    expect(screen.getByText('5')).toBeInTheDocument()
+    expect(screen.getByLabelText('5 items')).toBeInTheDocument()
   })
 
   it('displays priority badge when present', () => {
@@ -32,7 +32,18 @@ describe('ClusterCard', () => {
     }
 
     render(<ClusterCard cluster={cluster} />)
-    expect(screen.getByText('P1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Priority P1')).toBeInTheDocument()
+  })
+
+  it('renders safely with minimal cluster data', () => {
+    const cluster: Cluster = {
+      cluster_name: 'Minimal',
+      sum_thought_items: 0,
+    }
+
+    render(<ClusterCard cluster={cluster} />)
+    expect(screen.getByText('Minimal')).toBeInTheDocument()
+    expect(screen.getByLabelText('0 items')).toBeInTheDocument()
   })
 
   it('renders thought items list', () => {

@@ -33,7 +33,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
           </span>
           {hasPriority && <PriorityBadge rank={hasPriority} />}
         </div>
-        <Badge color="secondary" variant="outline" size="sm">
+        <Badge color="secondary" variant="outline" size="sm" aria-label={`${cluster.sum_thought_items} items`}>
           {cluster.sum_thought_items}
         </Badge>
       </div>

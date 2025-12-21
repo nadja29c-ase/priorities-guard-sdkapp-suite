@@ -7,7 +7,7 @@ interface PriorityBadgeProps {
 
 export function PriorityBadge({ rank, size = 'sm' }: PriorityBadgeProps) {
   return (
-    <Badge color="secondary" variant="solid" size={size}>
+    <Badge color="secondary" variant="solid" size={size} aria-label={`Priority ${rank}`}>
       {rank}
     </Badge>
   )
