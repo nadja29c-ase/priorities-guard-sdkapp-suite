@@ -28,7 +28,7 @@ export function SaveModal({ isOpen, onCancel, onConfirm, isSaving }: SaveModalPr
           <span className="text-xs text-secondary">Note: you can have only 1 saved Clarity Board.</span>
         </p>
         <div className="flex gap-3 justify-end">
-          <Button color="secondary" variant="outline" onClick={onCancel} disabled={isSaving}>
+          <Button color="secondary" variant="outline" onClick={onCancel} disabled={isSaving} autoFocus>
             Cancel
           </Button>
           <Button color="primary" variant="solid" onClick={onConfirm} disabled={isSaving}>
