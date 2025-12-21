@@ -23,12 +23,13 @@ function App() {
   const loadClusters = useCallback(() => {
     if (isInitializedRef.current) return
 
+    const t = window.openai?.toolOutput
+    if (!t) return  // No data yet, wait for event
+
     const data = getToolOutput()
-    if (data.length > 0) {
-      setClusters(data)
-      setIsInitialized(true)
-      isInitializedRef.current = true
-    }
+    setClusters(data)
+    setIsInitialized(true)
+    isInitializedRef.current = true
   }, [])
 
   // Initial load and listen for openai:set_globals
