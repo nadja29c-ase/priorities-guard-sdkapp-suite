@@ -17,7 +17,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
   return (
     <div
       className={`rounded-lg border bg-surface p-3 flex flex-col ${
-        hasPriority ? 'border-l-4 border-l-[var(--green-400)]' : 'border-subtle'
+        hasPriority ? 'border-l-4 border-l-strong' : 'border-subtle'
       }`}
     >
       {/* Header */}
