@@ -573,9 +573,9 @@ async def authorize_endpoint(
     # Priority: 1. login_hint, 2. session cookie, 3. new anonymous user
     user = await _resolve_user_identity(request, db, login_hint, correlation_id)
 
-    # Extract client_name from provider_metadata (human-readable app name for consent UI)
-    # NOTE: client.provider is the connection_type ("oauth_provider"), NOT the app name
-    client_name = client.provider_metadata.get("client_name", client_id)
+    # Extract client_name from provider field (human-readable app name for consent UI)
+    # NOTE: client.provider stores the client_name set during registration
+    client_name = client.provider or client_id
 
     # Create authorization context in Redis (10 minute TTL)
     # IMPORTANT: Store internal user_id (UUID), NOT chatgpt_user_id
@@ -596,10 +596,14 @@ async def authorize_endpoint(
     language = _detect_language(request)
 
     # Select template based on app (determined by scopes)
+    # Filter displayed scopes to only show relevant ones for each app
     if any(s.startswith("clarity.") for s in requested_scopes):
         template_name = f"oauth_consent_clarity_{language}.html"
+        # Only show clarity.* scopes on Clarity consent page
+        display_scopes = {s for s in requested_scopes if s.startswith("clarity.")}
     else:
         template_name = f"oauth_consent_{language}.html"  # Focused (existing)
+        display_scopes = requested_scopes
 
     # Use module-level scope descriptions (localized)
     scope_descriptions = SCOPE_DESCRIPTIONS_DE if language == "de" else SCOPE_DESCRIPTIONS_EN
@@ -618,7 +622,7 @@ async def authorize_endpoint(
             "request": request,
             "auth_context_id": auth_context_id,
             "client_name": client_name,
-            "scopes": requested_scopes,
+            "scopes": display_scopes,
             "scope_descriptions": scope_descriptions,
         }
     )
