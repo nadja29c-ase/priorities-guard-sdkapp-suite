@@ -16,7 +16,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
 
   return (
     <div
-      className={`rounded-lg border bg-surface-secondary p-3 ${
+      className={`rounded-lg border bg-surface-secondary p-3 flex flex-col ${
         hasPriority ? 'border-2 border-success-outline' : 'border-subtle'
       }`}
     >
@@ -44,7 +44,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
 
       {/* Tags */}
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2">
+        <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
           {tags.map((tag, i) => (
             <TagPill key={i} tag={tag} size="sm" />
           ))}
