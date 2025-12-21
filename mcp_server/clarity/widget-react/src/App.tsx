@@ -105,7 +105,7 @@ function App() {
         </div>
       ) : (
         <div className="p-6 text-center text-sm text-secondary bg-surface rounded-xl">
-          No clusters to display
+          No saved board yet. Start one by sharing what's on your mind in the chat.
         </div>
       )}
 
