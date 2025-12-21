@@ -8,7 +8,7 @@ interface HeaderProps {
 
 export function Header({ canSave, showSaved, onSaveClick }: HeaderProps) {
   return (
-    <div className="flex justify-between items-start mb-6">
+    <div className="flex justify-between items-center mb-6">
       <div className="flex-1">
         <p className="heading-sm text-default mb-1">Your Clarity Board</p>
         <p className="text-sm text-secondary">
