@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Clarity clusters</title>
+    <style>
+      :root {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f7f7f8;
+        --bg-card: #ffffff;
+        --text-primary: #0d0d0d;
+        --text-secondary: #6e6e80;
+        --text-muted: #8e8ea0;
+        --border-color: #e5e5e6;
+        --shadow: rgba(0, 0, 0, 0.05);
+        --pill-bg: #ececf1;
+        --pill-text: #353540;
+        --save-btn-bg: #10a37f;
+        --save-btn-hover: #0d8a6a;
+        --save-btn-text: #ffffff;
+        --saved-indicator: #10a37f;
+        --modal-overlay: rgba(0, 0, 0, 0.5);
+      }
+
+      .dark {
+        --bg-primary: #212121;
+        --bg-secondary: #2f2f2f;
+        --bg-card: #2f2f2f;
+        --text-primary: #ececec;
+        --text-secondary: #b4b4b4;
+        --text-muted: #8e8e8e;
+        --border-color: #444444;
+        --shadow: rgba(0, 0, 0, 0.2);
+        --pill-bg: #444444;
+        --pill-text: #ececec;
+        --save-btn-bg: #10a37f;
+        --save-btn-hover: #0d8a6a;
+        --save-btn-text: #ffffff;
+        --saved-indicator: #10a37f;
+        --modal-overlay: rgba(0, 0, 0, 0.7);
+      }
+
+      html, body {
+        width: 100%;
+        min-height: 100%;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        padding: 16px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      main {
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+      }
+
+      .header {
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+
+      .header-text {
+        flex: 1;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-left: 16px;
+      }
+
+      .title {
+        margin: 0 0 4px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .subtitle {
+        margin: 0;
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
+      /* Save button styles */
+      .save-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        background: var(--save-btn-bg);
+        color: var(--save-btn-text);
+        border: none;
+        cursor: pointer;
+        transition: background 0.2s, opacity 0.2s;
+      }
+
+      .save-btn:hover:not(:disabled) {
+        background: var(--save-btn-hover);
+      }
+
+      .save-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .save-btn.saving {
+        opacity: 0.7;
+        cursor: wait;
+      }
+
+      /* Saved indicator */
+      .saved-indicator {
+        display: none;
+        align-items: center;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--saved-indicator);
+        font-weight: 500;
+      }
+
+      .saved-indicator.visible {
+        display: flex;
+      }
+
+      .saved-indicator svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* Modal styles */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--modal-overlay);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .modal-overlay.visible {
+        display: flex;
+      }
+
+      .modal {
+        background: var(--bg-card);
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      }
+
+      .modal-title {
+        margin: 0 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .modal-text {
+        margin: 0 0 20px;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+
+      .modal-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .modal-btn-cancel {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+      }
+
+      .modal-btn-cancel:hover {
+        background: var(--border-color);
+      }
+
+      .modal-btn-confirm {
+        background: var(--save-btn-bg);
+        color: var(--save-btn-text);
+        border: none;
+      }
+
+      .modal-btn-confirm:hover {
+        background: var(--save-btn-hover);
+      }
+
+      .cluster-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+
+      .cluster-card {
+        border-radius: 12px;
+        padding: 14px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 1px 3px var(--shadow);
+        display: flex;
+        flex-direction: column;
+        min-height: 120px;
+      }
+
+      .cluster-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .cluster-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .item-count {
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--pill-bg);
+        color: var(--pill-text);
+      }
+
+      .cluster-summary {
+        font-size: 13px;
+        color: var(--text-secondary);
+        margin-bottom: 10px;
+      }
+
+      .items-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        flex-grow: 1;
+      }
+
+      .items-list li {
+        font-size: 13px;
+        color: var(--text-primary);
+        margin-bottom: 6px;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .items-bullet {
+        color: var(--text-muted);
+        font-size: 13px;
+        line-height: 1.4;
+        flex-shrink: 0;
+      }
+
+      .items-text {
+        flex: 1;
+        line-height: 1.4;
+        word-break: break-word;
+      }
+
+      .empty-state {
+        padding: 24px;
+        text-align: center;
+        font-size: 14px;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        border-radius: 12px;
+      }
+
+      /* Nested cluster styles */
+      .subclusters-container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .subcluster-card {
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+      }
+
+      .subcluster-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        margin-bottom: 6px;
+      }
+
+      .subcluster-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+      }
+
+      .subcluster-count {
+        padding: 1px 6px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: 600;
+        background: var(--pill-bg);
+        color: var(--pill-text);
+      }
+
+      .subcluster-items {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .subcluster-items li {
+        font-size: 12px;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+      }
+
+      .subcluster-items .items-bullet {
+        font-size: 12px;
+      }
+
+      .subcluster-items .items-text {
+        font-size: 12px;
+      }
+
+      /* Tag pill styles */
+      .tags-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .tag-pill {
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 500;
+        background: var(--pill-bg);
+        color: var(--pill-text);
+        text-transform: lowercase;
+      }
+
+      .subcluster-card .tags-container {
+        margin-top: 8px;
+      }
+
+      .subcluster-card .tag-pill {
+        font-size: 10px;
+        padding: 1px 6px;
+      }
+
+      /* Priority styling */
+      .cluster-card.prioritized {
+        border-color: #10a37f;
+        border-width: 2px;
+      }
+
+      .subcluster-card.prioritized {
+        border-color: #10a37f;
+        border-width: 2px;
+        background: rgba(16, 163, 127, 0.05);
+      }
+
+      .dark .subcluster-card.prioritized {
+        background: rgba(16, 163, 127, 0.1);
+      }
+
+      .priority-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        background: #10a37f;
+        color: #ffffff;
+        margin-left: 6px;
+        flex-shrink: 0;
+      }
+
+      .subcluster-card .priority-badge {
+        font-size: 9px;
+        padding: 1px 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="header">
+        <div class="header-text">
+          <p class="title">Clarity Board</p>
+          <p class="subtitle">
+            Your thoughts grouped into clusters. Use the chat to rename, split, or reprioritize them.
+          </p>
+        </div>
+        <div class="header-actions">
+          <span id="saved-indicator" class="saved-indicator">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+            Saved
+          </span>
+          <button id="save-btn" class="save-btn" disabled>Save</button>
+        </div>
+      </div>
+      <div id="cluster-root"></div>
+    </main>
+
+    <!-- Confirmation Modal -->
+    <div id="modal-overlay" class="modal-overlay">
+      <div class="modal">
+        <h3 class="modal-title">Save Board?</h3>
+        <p class="modal-text">This will replace your previously saved board. Continue?<br><small>Note: you can have only 1 saved Clarity Board.</small></p>
+        <div class="modal-actions">
+          <button id="modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+          <button id="modal-confirm" class="modal-btn modal-btn-confirm">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      try {
+        const rootEl = document.querySelector("#cluster-root");
+        const saveBtn = document.querySelector("#save-btn");
+        const savedIndicator = document.querySelector("#saved-indicator");
+        const modalOverlay = document.querySelector("#modal-overlay");
+        const modalCancel = document.querySelector("#modal-cancel");
+        const modalConfirm = document.querySelector("#modal-confirm");
+
+        let currentClusters = [];
+        let isSaving = false;
+        let isInitialized = false;
+
+        const applyTheme = () => {
+          const theme = window.openai?.theme ?? "light";
+          document.body.classList.remove("light", "dark");
+          document.body.classList.add(theme);
+        };
+
+        const getToolOutput = () => {
+          const t = window.openai?.toolOutput;
+          if (!t) return [];
+
+          // Try all known paths for clusters
+          if (Array.isArray(t.result?.structuredContent?.clusters)) {
+            return t.result.structuredContent.clusters;
+          } else if (Array.isArray(t.structuredContent?.clusters)) {
+            return t.structuredContent.clusters;
+          } else if (Array.isArray(t.clusters)) {
+            return t.clusters;
+          } else if (Array.isArray(t.data?.clusters)) {
+            return t.data.clusters;
+          } else if (Array.isArray(t.result?.clusters)) {
+            return t.result.clusters;
+          }
+          return [];
+        };
+
+        const truncateText = (text, maxLength = 80) => {
+          if (!text || text.length <= maxLength) return text;
+          return text.substring(0, maxLength).trim() + "...";
+        };
+
+        // Priority ranking: P1 < P2 < P3 < null (lower = higher priority)
+        const rankToNumber = (rank) => {
+          if (rank === "P1") return 1;
+          if (rank === "P2") return 2;
+          if (rank === "P3") return 3;
+          return 999; // null/undefined = lowest priority
+        };
+
+        // Get effective rank for a cluster (min of own rank and best subcluster rank)
+        const getEffectiveRank = (cluster) => {
+          const ownRank = cluster.priority?.rank || null;
+          const subclusters = Array.isArray(cluster.subclusters) ? cluster.subclusters : [];
+
+          let bestSubclusterRank = null;
+          for (const sub of subclusters) {
+            const subRank = sub.priority?.rank || null;
+            if (subRank && (!bestSubclusterRank || rankToNumber(subRank) < rankToNumber(bestSubclusterRank))) {
+              bestSubclusterRank = subRank;
+            }
+          }
+
+          // Return whichever is higher priority (lower number)
+          if (!ownRank && !bestSubclusterRank) return null;
+          if (!ownRank) return bestSubclusterRank;
+          if (!bestSubclusterRank) return ownRank;
+          return rankToNumber(ownRank) <= rankToNumber(bestSubclusterRank) ? ownRank : bestSubclusterRank;
+        };
+
+        // Sort clusters by effective rank (P1 first, then P2, P3, then unranked)
+        const sortClustersByPriority = (clusters) => {
+          return [...clusters].sort((a, b) => {
+            const rankA = rankToNumber(getEffectiveRank(a));
+            const rankB = rankToNumber(getEffectiveRank(b));
+            return rankA - rankB;
+          });
+        };
+
+        // Sort subclusters by own rank
+        const sortSubclustersByPriority = (subclusters) => {
+          return [...subclusters].sort((a, b) => {
+            const rankA = rankToNumber(a.priority?.rank || null);
+            const rankB = rankToNumber(b.priority?.rank || null);
+            return rankA - rankB;
+          });
+        };
+
+        const updateSaveButtonState = () => {
+          saveBtn.disabled = currentClusters.length === 0;
+        };
+
+        const showModal = () => {
+          modalOverlay.classList.add("visible");
+        };
+
+        const hideModal = () => {
+          modalOverlay.classList.remove("visible");
+        };
+
+        const handleSave = async () => {
+          if (isSaving || currentClusters.length === 0) return;
+
+          isSaving = true;
+          saveBtn.classList.add("saving");
+          saveBtn.textContent = "Saving...";
+
+          try {
+            // Call save_board tool via OpenAI API
+            if (window.openai?.callTool) {
+              const result = await window.openai.callTool("save_board", {
+                confirmed: true,
+                clusters: currentClusters
+              });
+
+              // Check if save was successful
+              const content = result?.structuredContent || result?.result?.structuredContent || result;
+              if (content?.saved === true) {
+                // Show "Saved" indicator for 3 seconds
+                savedIndicator.classList.add("visible");
+                setTimeout(() => {
+                  savedIndicator.classList.remove("visible");
+                }, 3000);
+              }
+            } else {
+              console.warn("window.openai.callTool not available");
+            }
+          } catch (err) {
+            console.error("Save failed:", err);
+          } finally {
+            isSaving = false;
+            saveBtn.classList.remove("saving");
+            saveBtn.textContent = "Save";
+            hideModal();
+          }
+        };
+
+        // Event listeners
+        saveBtn.addEventListener("click", showModal);
+        modalCancel.addEventListener("click", hideModal);
+        modalConfirm.addEventListener("click", handleSave);
+        modalOverlay.addEventListener("click", (e) => {
+          if (e.target === modalOverlay) hideModal();
+        });
+
+        const render = () => {
+          applyTheme();
+          const clusters = getToolOutput();
+
+          // Don't initialize until we have actual data
+          if (!isInitialized && clusters.length > 0) {
+            // First render WITH data - freeze our clusters
+            currentClusters = clusters;
+            isInitialized = true;
+
+            // Render DOM
+            rootEl.innerHTML = "";
+
+            const grid = document.createElement("div");
+            grid.className = "cluster-grid";
+
+            // Sort clusters by effective priority for display
+            const sortedClusters = sortClustersByPriority(clusters);
+
+            sortedClusters.forEach((cluster) => {
+              const card = document.createElement("div");
+              const hasPriority = cluster.priority?.rank;
+              card.className = hasPriority ? "cluster-card prioritized" : "cluster-card";
+
+              const header = document.createElement("div");
+              header.className = "cluster-header";
+
+              const nameContainer = document.createElement("div");
+              nameContainer.style.display = "flex";
+              nameContainer.style.alignItems = "center";
+
+              const nameEl = document.createElement("div");
+              nameEl.className = "cluster-name";
+              nameEl.textContent = truncateText(cluster.cluster_name, 40) || "Untitled cluster";
+              nameContainer.appendChild(nameEl);
+
+              // Add priority badge if cluster is prioritized
+              if (hasPriority) {
+                const priorityBadge = document.createElement("span");
+                priorityBadge.className = "priority-badge";
+                priorityBadge.textContent = cluster.priority.rank;
+                nameContainer.appendChild(priorityBadge);
+              }
+
+              header.appendChild(nameContainer);
+
+              const badge = document.createElement("div");
+              badge.className = "item-count";
+              badge.textContent = cluster.sum_thought_items;
+              header.appendChild(badge);
+
+              card.appendChild(header);
+
+              if (cluster.summary) {
+                const summaryEl = document.createElement("div");
+                summaryEl.className = "cluster-summary";
+                summaryEl.textContent = truncateText(cluster.summary, 100);
+                card.appendChild(summaryEl);
+              }
+
+              const items = Array.isArray(cluster.thought_items) ? cluster.thought_items : [];
+              const subclusters = Array.isArray(cluster.subclusters) ? cluster.subclusters : [];
+
+              // Render ungrouped items first (if any)
+              if (items.length > 0) {
+                const list = document.createElement("ul");
+                list.className = "items-list";
+
+                items.forEach((rawText) => {
+                  const li = document.createElement("li");
+                  const bullet = document.createElement("span");
+                  bullet.className = "items-bullet";
+                  bullet.textContent = "\u2022";
+                  const text = document.createElement("span");
+                  text.className = "items-text";
+                  text.textContent = rawText;
+                  li.appendChild(bullet);
+                  li.appendChild(text);
+                  list.appendChild(li);
+                });
+
+                card.appendChild(list);
+              }
+
+              // Render subclusters below (if any), sorted by priority
+              if (subclusters.length > 0) {
+                const subContainer = document.createElement("div");
+                subContainer.className = "subclusters-container";
+
+                // Sort subclusters by priority for display
+                const sortedSubclusters = sortSubclustersByPriority(subclusters);
+
+                sortedSubclusters.forEach((subcluster) => {
+                  const subCard = document.createElement("div");
+                  const subHasPriority = subcluster.priority?.rank;
+                  subCard.className = subHasPriority ? "subcluster-card prioritized" : "subcluster-card";
+
+                  const subHeader = document.createElement("div");
+                  subHeader.className = "subcluster-header";
+
+                  const subNameContainer = document.createElement("div");
+                  subNameContainer.style.display = "flex";
+                  subNameContainer.style.alignItems = "center";
+
+                  const subName = document.createElement("div");
+                  subName.className = "subcluster-name";
+                  subName.textContent = truncateText(subcluster.subcluster_name, 30) || "Untitled";
+                  subNameContainer.appendChild(subName);
+
+                  // Add priority badge if subcluster is prioritized
+                  if (subHasPriority) {
+                    const subPriorityBadge = document.createElement("span");
+                    subPriorityBadge.className = "priority-badge";
+                    subPriorityBadge.textContent = subcluster.priority.rank;
+                    subNameContainer.appendChild(subPriorityBadge);
+                  }
+
+                  subHeader.appendChild(subNameContainer);
+
+                  const subBadge = document.createElement("div");
+                  subBadge.className = "subcluster-count";
+                  subBadge.textContent = subcluster.sum_thought_items || subcluster.thought_items?.length || 0;
+                  subHeader.appendChild(subBadge);
+
+                  subCard.appendChild(subHeader);
+
+                  const subItems = Array.isArray(subcluster.thought_items) ? subcluster.thought_items : [];
+                  if (subItems.length) {
+                    const subList = document.createElement("ul");
+                    subList.className = "subcluster-items";
+
+                    subItems.forEach((rawText) => {
+                      const li = document.createElement("li");
+                      const bullet = document.createElement("span");
+                      bullet.className = "items-bullet";
+                      bullet.textContent = "\u2022";
+                      const text = document.createElement("span");
+                      text.className = "items-text";
+                      text.textContent = rawText;
+                      li.appendChild(bullet);
+                      li.appendChild(text);
+                      subList.appendChild(li);
+                    });
+
+                    subCard.appendChild(subList);
+                  }
+
+                  // Render subcluster tags
+                  const subTags = Array.isArray(subcluster.tags) ? subcluster.tags : [];
+                  if (subTags.length > 0) {
+                    const subTagsContainer = document.createElement("div");
+                    subTagsContainer.className = "tags-container";
+                    subTags.forEach((tag) => {
+                      const pill = document.createElement("span");
+                      pill.className = "tag-pill";
+                      pill.textContent = tag;
+                      subTagsContainer.appendChild(pill);
+                    });
+                    subCard.appendChild(subTagsContainer);
+                  }
+
+                  subContainer.appendChild(subCard);
+                });
+
+                card.appendChild(subContainer);
+              }
+
+              // Render cluster tags
+              const clusterTags = Array.isArray(cluster.tags) ? cluster.tags : [];
+              if (clusterTags.length > 0) {
+                const tagsContainer = document.createElement("div");
+                tagsContainer.className = "tags-container";
+                clusterTags.forEach((tag) => {
+                  const pill = document.createElement("span");
+                  pill.className = "tag-pill";
+                  pill.textContent = tag;
+                  tagsContainer.appendChild(pill);
+                });
+                card.appendChild(tagsContainer);
+              }
+
+              grid.appendChild(card);
+            });
+
+            rootEl.appendChild(grid);
+            updateSaveButtonState();
+
+          } else if (!isInitialized && clusters.length === 0) {
+            // No data yet - show loading state but DON'T lock initialization
+            // This allows re-render when openai:set_globals fires with actual data
+            rootEl.innerHTML = "";
+            const empty = document.createElement("div");
+            empty.className = "empty-state";
+            empty.textContent = "Loading...";
+            rootEl.appendChild(empty);
+            return;  // Don't set isInitialized - wait for real data
+
+          }
+          // else: Already initialized - ignore subsequent set_globals events
+        };
+
+        render();
+        window.addEventListener("openai:set_globals", render, { passive: true });
+
+      } catch (err) {
+        console.error("WIDGET ERROR:", err);
+      }
+    </script>
+  </body>
+</html>
