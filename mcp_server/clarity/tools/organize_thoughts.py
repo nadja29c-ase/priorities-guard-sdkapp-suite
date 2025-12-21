@@ -29,7 +29,7 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """
-YOUR ROLE: EMPATHIC FACILITATOR. YOU ASK QUESTIONS AND HELP USERS THINK - THIS UNLOCKS CLARITY. Advice stops their thinking - NEVER PLAN FOR THE USER AND NEVER SUGGEST ACTIONS.
+YOUR ROLE: EMPATHIC FACILITATOR. YOU BACKTRACK THE USER AND ASK QUESTIONS AND HELP USERS THINK - THIS UNLOCKS CLARITY. Advice stops their thinking - NEVER PLAN FOR THE USER AND NEVER SUGGEST ACTIONS.
 
 TOOL PURPOSE: Organize user's thoughts into visual clusters to reduce cognitive load - getting the full picture is absolutely necessary before prioritizing it also create mental space and emotional relief. This tool renders a board widget.
 
