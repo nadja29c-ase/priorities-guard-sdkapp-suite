@@ -1,11 +1,13 @@
 // Data contract (unchanged from original widget)
 
+export type Rank = 'P1' | 'P2' | 'P3'
+
 export interface Subcluster {
   subcluster_name: string
   thought_items?: string[]
   sum_thought_items: number
   tags?: string[]
-  priority?: { rank: 'P1' | 'P2' | 'P3' }
+  priority?: { rank: Rank }
 }
 
 export interface Cluster {
@@ -14,7 +16,7 @@ export interface Cluster {
   subclusters?: Subcluster[]
   sum_thought_items: number
   tags?: string[]
-  priority?: { rank: 'P1' | 'P2' | 'P3' }
+  priority?: { rank: Rank }
   summary?: string
 }
 
@@ -37,9 +39,9 @@ declare global {
           clusters?: Cluster[]
         }
       }
-      callTool?: (name: string, args: Record<string, unknown>) => Promise<{
-        structuredContent?: { saved?: boolean }
-        result?: { structuredContent?: { saved?: boolean } }
+      callTool?: <T = unknown>(name: string, args: Record<string, unknown>) => Promise<{
+        structuredContent?: T
+        result?: { structuredContent?: T }
       }>
     }
   }

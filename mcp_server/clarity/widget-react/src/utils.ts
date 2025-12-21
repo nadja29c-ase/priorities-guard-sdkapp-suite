@@ -1,4 +1,25 @@
-import type { Cluster, Subcluster } from './types'
+import type { Cluster, Rank, Subcluster } from './types'
+
+/**
+ * Extract structuredContent from callTool result (tries multiple paths)
+ */
+export function extractStructuredContent<T>(result: unknown): T | undefined {
+  if (!result || typeof result !== 'object') return undefined
+  const r = result as Record<string, unknown>
+
+  // Try: result.structuredContent
+  if (r.structuredContent !== undefined) {
+    return r.structuredContent as T
+  }
+  // Try: result.result.structuredContent
+  if (r.result && typeof r.result === 'object') {
+    const inner = r.result as Record<string, unknown>
+    if (inner.structuredContent !== undefined) {
+      return inner.structuredContent as T
+    }
+  }
+  return undefined
+}
 
 /**
  * Get clusters from window.openai.toolOutput (tries multiple paths)
@@ -16,8 +37,6 @@ export function getToolOutput(): Cluster[] {
     return t.clusters
   } else if (Array.isArray(t.data?.clusters)) {
     return t.data.clusters
-  } else if (Array.isArray(t.result?.clusters)) {
-    return t.result.clusters
   }
   return []
 }
@@ -33,7 +52,7 @@ export function truncateText(text: string | undefined, maxLength = 80): string {
 /**
  * Priority ranking: P1 < P2 < P3 < null (lower = higher priority)
  */
-function rankToNumber(rank: string | null | undefined): number {
+function rankToNumber(rank: Rank | null | undefined): number {
   if (rank === 'P1') return 1
   if (rank === 'P2') return 2
   if (rank === 'P3') return 3
@@ -43,11 +62,11 @@ function rankToNumber(rank: string | null | undefined): number {
 /**
  * Get effective rank for a cluster (min of own rank and best subcluster rank)
  */
-function getEffectiveRank(cluster: Cluster): string | null {
+function getEffectiveRank(cluster: Cluster): Rank | null {
   const ownRank = cluster.priority?.rank ?? null
   const subclusters = cluster.subclusters ?? []
 
-  let bestSubclusterRank: string | null = null
+  let bestSubclusterRank: Rank | null = null
   for (const sub of subclusters) {
     const subRank = sub.priority?.rank ?? null
     if (subRank && (!bestSubclusterRank || rankToNumber(subRank) < rankToNumber(bestSubclusterRank))) {

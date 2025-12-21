@@ -397,4 +397,7 @@ register_tool(ToolDefinition(
     widget_uri=None,  # Pure data operation - never renders widget
     handle=handle,
     widget_accessible=True,  # Widget can call this tool
+    read_only_hint=False,  # Writes to database
+    destructive_hint=True,  # Overwrites previous board
+    open_world_hint=True,  # Persists to external DB
 ))

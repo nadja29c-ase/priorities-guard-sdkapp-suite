@@ -35,3 +35,7 @@ class ToolDefinition:
     widget_uri: str | None  # None if tool doesn't produce widget
     handle: Callable[[str, str, dict], Awaitable[Any]]  # (user_id, correlation_id, arguments)
     widget_accessible: bool = False  # If True, adds openai/widgetAccessible to _meta
+    # Tool annotations (compliance hints for OpenAI)
+    read_only_hint: bool = True  # Default: read-only (no side effects)
+    destructive_hint: bool = False  # True if tool may overwrite/delete data
+    open_world_hint: bool = False  # True if tool interacts with external systems

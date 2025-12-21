@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useDocumentTheme } from '@openai/apps-sdk-ui/theme'
 import type { Cluster } from './types'
-import { getToolOutput, sortClustersByPriority } from './utils'
+import { extractStructuredContent, getToolOutput, sortClustersByPriority } from './utils'
 import { Header } from './components/Header'
 import { ClusterCard } from './components/ClusterCard'
 import { SaveModal } from './components/SaveModal'
@@ -53,14 +53,14 @@ function App() {
 
     try {
       if (window.openai?.callTool) {
-        const result = await window.openai.callTool('save_board', {
+        const result = await window.openai.callTool<{ saved?: boolean }>('save_board', {
           confirmed: true,
           clusters: clusters,
         })
 
         // Check if save was successful
-        const content = result?.structuredContent ?? result?.result?.structuredContent ?? result
-        if ((content as { saved?: boolean })?.saved === true) {
+        const content = extractStructuredContent<{ saved?: boolean }>(result)
+        if (content?.saved === true) {
           setShowSaved(true)
         }
       } else {

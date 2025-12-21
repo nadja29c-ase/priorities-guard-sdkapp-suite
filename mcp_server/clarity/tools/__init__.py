@@ -41,13 +41,19 @@ async def list_tools() -> List[mcp_types.Tool]:
     Follows OpenAI pattern for widget integration:
     - Tools with widget_uri get full widget metadata
     - Tools with widget_accessible=True can be called from widgets via window.openai.callTool()
+    - All tools get annotations for compliance
     """
     tools = []
 
     for tool_def in TOOL_REGISTRY.values():
-        # Build _meta based on tool capabilities
-        meta = None
+        # Build annotations from tool definition
+        annotations = {
+            "readOnlyHint": tool_def.read_only_hint,
+            "destructiveHint": tool_def.destructive_hint,
+            "openWorldHint": tool_def.open_world_hint,
+        }
 
+        # Build _meta based on tool capabilities
         if tool_def.widget_uri:
             # Widget-producing tools get full metadata
             meta = {
@@ -56,17 +62,18 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "openai/toolInvocation/invoked": "Done.",
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
-                "annotations": {
-                    "destructiveHint": False,
-                    "openWorldHint": False,
-                    "readOnlyHint": True,
-                }
+                "annotations": annotations,
             }
         elif tool_def.widget_accessible:
             # Widget-callable tools (e.g., save_board) need widgetAccessible
-            # but don't produce a widget output
             meta = {
                 "openai/widgetAccessible": True,
+                "annotations": annotations,
+            }
+        else:
+            # Data-only tools still need annotations
+            meta = {
+                "annotations": annotations,
             }
 
         tool = mcp_types.Tool(
