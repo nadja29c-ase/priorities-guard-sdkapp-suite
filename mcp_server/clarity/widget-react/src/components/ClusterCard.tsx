@@ -50,7 +50,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
       {/* Direct thought items */}
       {items.length > 0 && (
-        <ul className="list-none m-0 p-0 space-y-2 flex-grow">
+        <ul className="list-none m-0 p-0 space-y-2">
           {items.map((item, i) => (
             <ThoughtItem key={i} text={item} />
           ))}
