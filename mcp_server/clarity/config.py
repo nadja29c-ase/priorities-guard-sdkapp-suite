@@ -163,7 +163,7 @@ OAUTH_ISSUER_URL = get_env(
 # NOTE: This must mirror the clarity.* scopes in backend discovery
 # (backend/core/oauth_provider/discovery.py → SCOPES_SUPPORTED).
 # Unit tests in test_clarity_scope.py verify this invariant.
-SCOPES_SUPPORTED = ["clarity.read", "clarity.write"]
+SCOPES_SUPPORTED = ["clarity.write"]
 
 
 # ============================================================================

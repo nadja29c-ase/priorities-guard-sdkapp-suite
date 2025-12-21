@@ -67,7 +67,7 @@ async def create_oauth_client(
 
     # Set default scopes (must include all supported scopes)
     if scopes is None:
-        scopes = ["focused.read", "focused.write", "focused.notify", "clarity.read", "clarity.write"]
+        scopes = ["focused.read", "focused.write", "focused.notify", "clarity.write"]
 
     # Generate client credentials
     # Prefix: pg = Priority Guardian (neutral, works for all apps)

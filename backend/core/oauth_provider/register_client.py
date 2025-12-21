@@ -84,7 +84,7 @@ async def register_endpoint(
             "client_id": "pg-client-12345678-1234-1234-1234-123456789abc",
             "client_secret": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
             "redirect_uris": ["https://chat.openai.com/aip/callback"],
-            "scope": "clarity.read clarity.write"
+            "scope": "clarity.write"
         }
     """
     # Get correlation_id for logging

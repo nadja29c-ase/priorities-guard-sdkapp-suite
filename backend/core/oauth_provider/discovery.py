@@ -23,7 +23,6 @@ router = APIRouter(tags=["oauth-provider"])
 # Supported scopes advertised in discovery (exported for testing)
 # Sorted alphabetically for stable diffs and cleaner ordering
 SCOPES_SUPPORTED = sorted([
-    "clarity.read",
     "clarity.write",
     "focused.notify",
     "focused.read",
