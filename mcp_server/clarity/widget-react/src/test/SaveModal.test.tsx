@@ -26,9 +26,9 @@ describe('SaveModal', () => {
       />
     )
 
-    expect(screen.getByText('Save Board?')).toBeInTheDocument()
-    expect(screen.getByText('Cancel')).toBeInTheDocument()
-    expect(screen.getByText('Save')).toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
   })
 
   it('calls onCancel when Cancel clicked', () => {
@@ -43,7 +43,7 @@ describe('SaveModal', () => {
       />
     )
 
-    fireEvent.click(screen.getByText('Cancel'))
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onCancel).toHaveBeenCalledOnce()
   })
 
@@ -59,11 +59,11 @@ describe('SaveModal', () => {
       />
     )
 
-    fireEvent.click(screen.getByText('Save'))
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
     expect(onConfirm).toHaveBeenCalledOnce()
   })
 
-  it('shows Saving... text when saving', () => {
+  it('shows Saving... text and disables buttons when saving', () => {
     render(
       <SaveModal
         isOpen={true}
@@ -73,7 +73,8 @@ describe('SaveModal', () => {
       />
     )
 
-    expect(screen.getByText('Saving...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /saving/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeDisabled()
   })
 
   it('closes when clicking overlay background', () => {
@@ -88,11 +89,7 @@ describe('SaveModal', () => {
       />
     )
 
-    // Click the overlay (first div with fixed class)
-    const overlay = screen.getByText('Save Board?').parentElement?.parentElement
-    if (overlay) {
-      fireEvent.click(overlay)
-      expect(onCancel).toHaveBeenCalledOnce()
-    }
+    fireEvent.click(screen.getByRole('dialog'))
+    expect(onCancel).toHaveBeenCalledOnce()
   })
 })
