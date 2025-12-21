@@ -92,7 +92,7 @@ function App() {
   }
 
   return (
-    <>
+    <div className="bg-surface-secondary rounded-2xl p-4 -m-4">
       <Header
         canSave={clusters.length > 0}
         showSaved={showSaved}
@@ -106,7 +106,7 @@ function App() {
           ))}
         </div>
       ) : (
-        <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
+        <div className="p-6 text-center text-sm text-secondary bg-surface rounded-xl">
           No clusters to display
         </div>
       )}
@@ -117,7 +117,7 @@ function App() {
         onConfirm={handleSave}
         isSaving={isSaving}
       />
-    </>
+    </div>
   )
 }
 

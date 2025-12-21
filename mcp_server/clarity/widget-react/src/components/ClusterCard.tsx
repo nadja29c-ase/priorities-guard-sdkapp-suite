@@ -21,9 +21,12 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
   return (
     <div
-      className={`rounded-2xl border bg-surface shadow-lg hover:shadow-xl transition-shadow duration-200 p-4 flex flex-col min-h-[120px] ${
+      className={`rounded-2xl border bg-surface transition-shadow duration-200 p-4 flex flex-col min-h-[120px] ${
         hasPriority ? 'border-2 border-success-outline' : 'border-default'
       }`}
+      style={{
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1)',
+      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-2">
