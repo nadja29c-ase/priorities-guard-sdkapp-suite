@@ -62,7 +62,6 @@ function App() {
         const content = result?.structuredContent ?? result?.result?.structuredContent ?? result
         if ((content as { saved?: boolean })?.saved === true) {
           setShowSaved(true)
-          setTimeout(() => setShowSaved(false), 3000)
         }
       } else {
         console.warn('window.openai.callTool not available')
