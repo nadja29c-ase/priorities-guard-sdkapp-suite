@@ -212,8 +212,7 @@
             <h2 id="permissions-title" class="section-title">Angeforderte Berechtigungen</h2>
             <ul class="permission-list" role="list">
                 {% for scope in scopes %}
-                <li class="permission-item">
-                    <div class="permission-name" aria-label="Berechtigung: {{ scope }}">{{ scope }}</div>
+                <li class="permission-item" aria-label="{{ scope_descriptions.get(scope, scope) }}">
                     <div class="permission-description">{{ scope_descriptions.get(scope, scope) }}</div>
                 </li>
                 {% endfor %}
