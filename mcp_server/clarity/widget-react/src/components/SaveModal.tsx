@@ -22,7 +22,7 @@ export function SaveModal({ isOpen, onCancel, onConfirm, isSaving }: SaveModalPr
         <p className="text-sm text-secondary mb-5">
           This will replace your previously saved board. Continue?
           <br />
-          <span className="text-xs text-tertiary">Note: you can have only 1 saved Clarity Board.</span>
+          <span className="text-xs text-secondary">Note: you can have only 1 saved Clarity Board.</span>
         </p>
         <div className="flex gap-3 justify-end">
           <Button color="secondary" variant="outline" onClick={onCancel} disabled={isSaving}>
