@@ -15,6 +15,7 @@ export function SaveModal({ isOpen, onCancel, onConfirm, isSaving }: SaveModalPr
       role="dialog"
       aria-modal="true"
       aria-labelledby="save-modal-title"
+      aria-describedby="save-modal-description"
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel()
@@ -22,7 +23,7 @@ export function SaveModal({ isOpen, onCancel, onConfirm, isSaving }: SaveModalPr
     >
       <div className="bg-surface rounded-xl p-6 max-w-[400px] w-[90%] shadow-xl">
         <h3 id="save-modal-title" className="heading-sm text-default mb-3">Save Board?</h3>
-        <p className="text-sm text-secondary mb-5">
+        <p id="save-modal-description" className="text-sm text-secondary mb-5">
           This will replace your previously saved board. Continue?
           <br />
           <span className="text-xs text-secondary">Note: you can have only 1 saved Clarity Board.</span>
