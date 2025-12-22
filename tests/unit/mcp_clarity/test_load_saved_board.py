@@ -504,7 +504,7 @@ class TestLoadSavedBoardContract:
         assert isinstance(content["clusters"], list)
 
         # No unexpected keys (when no history, last_updated is optional/absent)
-        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated", "saved_board_hash"}
+        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated", "saved_board_hash", "assistant_guidance"}
         assert set(content.keys()) <= allowed_keys, \
             f"Unexpected keys: {set(content.keys()) - allowed_keys}"
 
@@ -542,7 +542,7 @@ class TestLoadSavedBoardContract:
         assert content["last_updated"] is None or isinstance(content["last_updated"], str)
 
         # No unexpected keys
-        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated", "saved_board_hash"}
+        allowed_keys = {"has_history", "clusters", "is_empty_snapshot", "last_updated", "saved_board_hash", "assistant_guidance"}
         assert set(content.keys()) == allowed_keys, \
             f"Schema mismatch. Expected {allowed_keys}, got {set(content.keys())}"
 

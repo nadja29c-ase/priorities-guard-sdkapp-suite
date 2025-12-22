@@ -39,6 +39,8 @@ When no saved board exists, widget shows empty state message.
 
 SAVED STATE RESPONSE:
 Widget renders showing saved clusters.
+
+AFTER TOOL RETURNS: Follow assistant_guidance in structuredContent.
 """
 
 INPUT_SCHEMA = {
@@ -111,65 +113,64 @@ async def handle(
                meta=meta,
                widget_uri=WIDGET_URI)
 
-    # No snapshot exists at all - truly starting fresh
-    if not has_snapshot:
-        logger.info("load_saved_board.no_snapshot",
-                   user_id=user_id)
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="No previous brain dump found. Starting fresh."
-            )],
-            structuredContent={
-                "clusters": [],
-                "has_history": False,
-                "is_empty_snapshot": False,  # No snapshot at all
-                "saved_board_hash": None
-            },
-            _meta=meta,
-        )
-
+    # Determine state and build response
     cluster_count = len(clusters)
+    saved_board_hash = cluster_data.get("content_hash") if has_snapshot else None
 
-    # Extract content_hash for saved state detection
-    saved_board_hash = cluster_data.get("content_hash")
+    # Compute guidance based on state
+    if not has_snapshot:
+        # No snapshot exists at all - truly starting fresh
+        message = "No previous brain dump found. Starting fresh."
+        guidance = """No saved board found — this is a fresh start.
 
-    # Snapshot exists but is empty (user cleared their clusters)
-    if cluster_count == 0:
-        logger.info("load_saved_board.empty_snapshot",
-                   user_id=user_id)
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Found your previous session, but clusters were cleared."
-            )],
-            structuredContent={
-                "clusters": [],
-                "has_history": True,
-                "is_empty_snapshot": True,
-                "last_updated": cluster_data.get("created_at"),
-                "saved_board_hash": saved_board_hash
-            },
-            _meta=meta,
-        )
+Ask if they'd like to create a new Clarity Board. Something warm like: "Ready for your brain dump session when you are!" Keep it light and inviting."""
+        structured = {
+            "clusters": [],
+            "has_history": False,
+            "is_empty_snapshot": False,
+            "saved_board_hash": None,
+            "assistant_guidance": guidance,
+        }
+        logger.info("load_saved_board.no_snapshot", user_id=user_id)
 
-    # Snapshot exists with clusters
-    logger.info("load_saved_board.retrieved",
-               user_id=user_id,
-               cluster_count=cluster_count)
+    elif cluster_count == 0:
+        # Snapshot exists but is empty (user cleared their clusters)
+        message = "Found your previous session, but clusters were cleared."
+        guidance = """Previous session found but it's empty — they cleared it before.
 
-    return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(
-            type="text",
-            text=f"Found {cluster_count} cluster{'s' if cluster_count != 1 else ''} from your previous session."
-        )],
-        structuredContent={
+Ask if they'd like to start a new Clarity Board. Something warm like: "Ready for your brain dump session when you are!" Keep it light and inviting."""
+        structured = {
+            "clusters": [],
+            "has_history": True,
+            "is_empty_snapshot": True,
+            "last_updated": cluster_data.get("created_at"),
+            "saved_board_hash": saved_board_hash,
+            "assistant_guidance": guidance,
+        }
+        logger.info("load_saved_board.empty_snapshot", user_id=user_id)
+
+    else:
+        # Snapshot exists with clusters
+        message = f"Found {cluster_count} cluster{'s' if cluster_count != 1 else ''} from your previous session."
+        guidance = """Board loaded with existing clusters.
+
+Ask how you can help: "Now that you see your board, how would you like me to assist you?" Let them lead — they might want to add, edit, prioritize, or just reflect."""
+        structured = {
             "clusters": clusters,
             "has_history": True,
             "is_empty_snapshot": False,
             "last_updated": cluster_data.get("created_at"),
-            "saved_board_hash": saved_board_hash
-        },
+            "saved_board_hash": saved_board_hash,
+            "assistant_guidance": guidance,
+        }
+        logger.info("load_saved_board.retrieved", user_id=user_id, cluster_count=cluster_count)
+
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(
+            type="text",
+            text=message
+        )],
+        structuredContent=structured,
         _meta=meta,
     )
 
