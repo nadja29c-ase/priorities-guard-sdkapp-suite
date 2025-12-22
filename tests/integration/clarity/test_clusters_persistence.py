@@ -7,6 +7,12 @@ Tests the POST /api/clarity/clusters endpoint including:
 - Non-existent user handling
 - Malformed cluster_data handling
 - Database persistence verification
+
+Tests the DELETE /api/clarity/data endpoint including:
+- Successful deletion with confirmation
+- Idempotent behavior (no_data on second delete)
+- Rejection without confirmation
+- Audit log persistence
 """
 
 import pytest
@@ -14,7 +20,7 @@ from uuid import uuid4, UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.models import CoreUser
+from backend.core.models import CoreUser, CoreToolAuditLog
 from backend.apps.clarity.db_models import ClarityCluster
 
 
@@ -669,3 +675,214 @@ class TestCorruptedDataHandling:
         # Envelope fields must still be valid despite corrupted payload
         assert "created_at" in data
         assert data["created_at"] is not None
+
+
+class TestDeleteData:
+    """Test DELETE /api/clarity/data endpoint (GDPR compliance)."""
+
+    @pytest.fixture
+    async def test_user(self, async_session: AsyncSession) -> CoreUser:
+        """Create a test user for delete tests."""
+        user = CoreUser(
+            id=uuid4(),
+            chatgpt_user_id=f"test_delete_{uuid4().hex[:8]}",
+        )
+        async_session.add(user)
+        await async_session.commit()
+        await async_session.refresh(user)
+        return user
+
+    @pytest.fixture
+    async def user_with_cluster(self, client, test_user) -> CoreUser:
+        """Create a user with a cluster snapshot."""
+        await client.post(
+            "/api/clarity/clusters",
+            headers={"X-User-ID": str(test_user.id)},
+            json={
+                "cluster_data": {
+                    "clusters": [
+                        {"cluster_name": "Test", "thought_items": ["item"], "subclusters": [], "tags": []}
+                    ]
+                },
+                "thoughts_exhausted": True,
+            },
+        )
+        return test_user
+
+    @pytest.mark.asyncio
+    async def test_delete_success(self, client, user_with_cluster, async_session):
+        """DELETE with confirm=true returns 200 + deleted count."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(user_with_cluster.id)},
+            json={"confirm": True},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "deleted"
+        assert data["deleted"]["clarity_clusters"] == 1
+        assert "permanently deleted" in data["message"]
+
+        # Verify actually deleted from DB
+        result = await async_session.execute(
+            select(ClarityCluster).where(ClarityCluster.user_id == user_with_cluster.id)
+        )
+        assert result.scalar_one_or_none() is None
+
+    @pytest.mark.asyncio
+    async def test_delete_no_data_idempotent(self, client, test_user):
+        """DELETE when no data exists returns 200 + no_data (idempotent)."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(test_user.id)},
+            json={"confirm": True},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "no_data"
+        assert data["deleted"] is None
+
+    @pytest.mark.asyncio
+    async def test_delete_without_confirm_returns_400(self, client, user_with_cluster):
+        """DELETE without confirm parameter returns 400."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(user_with_cluster.id)},
+            json={},  # No confirm
+        )
+
+        assert response.status_code == 400
+        assert "confirm" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_delete_with_confirm_false_returns_400(self, client, user_with_cluster):
+        """DELETE with confirm=false returns 400."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(user_with_cluster.id)},
+            json={"confirm": False},
+        )
+
+        assert response.status_code == 400
+        assert "confirm" in response.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_delete_missing_user_id_returns_401(self, client):
+        """DELETE without X-User-ID returns 401."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            json={"confirm": True},
+        )
+
+        assert response.status_code == 401
+        assert "X-User-ID" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_user_returns_404(self, client):
+        """DELETE with unknown user_id returns 404."""
+        fake_user_id = str(uuid4())
+
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": fake_user_id},
+            json={"confirm": True},
+        )
+
+        assert response.status_code == 404
+        assert "User not found" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_delete_invalid_user_id_format_returns_400(self, client):
+        """DELETE with invalid UUID format returns 400."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": "not-a-uuid"},
+            json={"confirm": True},
+        )
+
+        assert response.status_code == 400
+        assert "Invalid user_id format" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_delete_writes_audit_log(self, client, user_with_cluster, async_session):
+        """DELETE writes audit log entry in same transaction."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(user_with_cluster.id)},
+            json={"confirm": True},
+        )
+
+        assert response.status_code == 200
+
+        # Verify audit log was written
+        result = await async_session.execute(
+            select(CoreToolAuditLog).where(
+                CoreToolAuditLog.user_id == user_with_cluster.id,
+                CoreToolAuditLog.action == "delete_my_data",
+            )
+        )
+        audit_entry = result.scalar_one_or_none()
+
+        assert audit_entry is not None
+        assert audit_entry.app_name == "clarity"
+        assert audit_entry.result_status == "success"
+        assert audit_entry.details["rows_deleted"]["clarity_clusters"] == 1
+        assert audit_entry.details["confirm_provided"] is True
+
+    @pytest.mark.asyncio
+    async def test_delete_no_data_writes_audit_log(self, client, test_user, async_session):
+        """DELETE with no data still writes audit log (for compliance tracking)."""
+        response = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(test_user.id)},
+            json={"confirm": True},
+        )
+
+        assert response.status_code == 200
+
+        # Verify audit log was written even for no_data
+        result = await async_session.execute(
+            select(CoreToolAuditLog).where(
+                CoreToolAuditLog.user_id == test_user.id,
+                CoreToolAuditLog.action == "delete_my_data",
+            )
+        )
+        audit_entry = result.scalar_one_or_none()
+
+        assert audit_entry is not None
+        assert audit_entry.result_status == "no_data"
+        assert audit_entry.details["rows_deleted"]["clarity_clusters"] == 0
+
+    @pytest.mark.asyncio
+    async def test_double_delete_is_idempotent(self, client, user_with_cluster):
+        """Calling DELETE twice returns deleted then no_data (idempotent)."""
+        # First delete
+        response1 = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(user_with_cluster.id)},
+            json={"confirm": True},
+        )
+        assert response1.status_code == 200
+        assert response1.json()["status"] == "deleted"
+
+        # Second delete (same user)
+        response2 = await client.request(
+            "DELETE",
+            "/api/clarity/data",
+            headers={"X-User-ID": str(user_with_cluster.id)},
+            json={"confirm": True},
+        )
+        assert response2.status_code == 200
+        assert response2.json()["status"] == "no_data"

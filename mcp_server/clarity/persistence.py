@@ -221,7 +221,9 @@ async def delete_cluster(user_id: str, correlation_id: str | None = None) -> dic
         response = await client.delete(
             f"{BACKEND_URL}/api/clarity/data",
             headers=headers,
-            json={"confirm": True},  # Always confirm from tool (tool validates first)
+            # Defense in depth: MCP tool validates confirm=True before calling,
+            # backend also validates. Double-validation is intentional.
+            json={"confirm": True},
         )
 
         if response.status_code == 200:
