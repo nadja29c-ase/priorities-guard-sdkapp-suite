@@ -59,14 +59,19 @@ ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it 
 NAME = "prioritize_clusters"
 
 DESCRIPTION = """
-PURPOSE: Marks up to 3 clusters or subclusters as P1/P2/P3 priorities on the board.
-This helps the user focus on what really matters most and reduce overwhelm but also be more .
+PURPOSE: Marks up to 3 priorities (P1/P2/P3) on the board.
+This helps the user focus on what really matters most and reduce overwhelm.
+
+TARGETING:
+- Cluster/Subcluster: { name: "Work", rank: "P1" }
+- Thought item: { item_index: 0, parent_name: "Work", rank: "P1" }
+  (item_index is 0-based position in the parent's thought_items array)
 
 CRITICAL: NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS - ACKNOWLEDGE IT AND KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES - THIS WILL CREATE CLARITY AND EASE.
 
 WHEN TO CALL:
 - After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
-- After USER explicitly names which clusters/subclusters are their priorities (e.g. "My P1 is X, P2 is Y")
+- After USER explicitly names which clusters/subclusters/items are their priorities (e.g. "My P1 is X, P2 is Y")
 - When the user asks "what now" or "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
 
 DO NOT CALL:
