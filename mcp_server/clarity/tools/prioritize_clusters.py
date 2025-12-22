@@ -89,11 +89,16 @@ INPUT_SCHEMA = {
     "properties": {
         "clusters": {
             "type": "array",
-            "description": "The current board clusters to prioritize.",
+            "description": "The current board clusters to prioritize. IMPORTANT: Include existing 'priority' fields from previous tool output to preserve them.",
             "items": {
                 "type": "object",
                 "properties": {
                     "cluster_name": {"type": "string"},
+                    "priority": {
+                        "type": ["object", "null"],
+                        "description": "Existing priority on this cluster (pass through from previous output to preserve)",
+                        "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
+                    },
                     "thought_items": {
                         "type": "array",
                         "items": {
@@ -109,6 +114,11 @@ INPUT_SCHEMA = {
                             "type": "object",
                             "properties": {
                                 "subcluster_name": {"type": "string"},
+                                "priority": {
+                                    "type": ["object", "null"],
+                                    "description": "Existing priority on this subcluster (pass through from previous output to preserve)",
+                                    "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
+                                },
                                 "thought_items": {
                                     "type": "array",
                                     "items": {
