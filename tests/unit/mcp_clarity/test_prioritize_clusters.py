@@ -17,6 +17,7 @@ from mcp_server.clarity.tools.prioritize_clusters import (
     _apply_priorities,
     _normalize_thought_item,
     _clear_all_thought_item_priorities,
+    _clear_all_priorities,
     PriorityInput,
     MAX_PRIORITIES,
     ERROR_TOO_MANY_PRIORITIES,
@@ -1254,3 +1255,306 @@ class TestHandlerWithThoughtItems:
 
         assert result.isError is True
         assert ERROR_DUPLICATE_RANK in result.content[0].text
+
+
+# ============================================================================
+# Priority Preservation Tests (Increment 23)
+# ============================================================================
+
+
+class TestClearAllPriorities:
+    """Tests for _clear_all_priorities helper."""
+
+    def test_clears_cluster_priorities(self):
+        """Clears priority from all clusters."""
+        clusters = [
+            {"cluster_name": "Work", "thought_items": [], "subclusters": [], "priority": {"rank": "P1"}},
+            {"cluster_name": "Home", "thought_items": [], "subclusters": [], "priority": {"rank": "P2"}},
+        ]
+        result = _clear_all_priorities(clusters)
+        assert result[0]["priority"] is None
+        assert result[1]["priority"] is None
+
+    def test_clears_subcluster_priorities(self):
+        """Clears priority from all subclusters."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [],
+            "subclusters": [
+                {"subcluster_name": "Urgent", "thought_items": [], "priority": {"rank": "P1"}},
+            ],
+        }]
+        result = _clear_all_priorities(clusters)
+        assert result[0]["subclusters"][0]["priority"] is None
+
+    def test_clears_thought_item_priorities(self):
+        """Clears priority from all thought items."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [
+                {"text": "task1", "priority": {"rank": "P1"}},
+                {"text": "task2", "priority": {"rank": "P2"}},
+            ],
+            "subclusters": [],
+        }]
+        result = _clear_all_priorities(clusters)
+        assert result[0]["thought_items"][0]["priority"] is None
+        assert result[0]["thought_items"][1]["priority"] is None
+
+    def test_does_not_mutate_original(self):
+        """Original clusters are not mutated."""
+        clusters = [{"cluster_name": "Work", "thought_items": [], "subclusters": [], "priority": {"rank": "P1"}}]
+        _clear_all_priorities(clusters)
+        assert clusters[0]["priority"] == {"rank": "P1"}
+
+
+class TestPriorityPreservation:
+    """Tests for priority preservation behavior (Increment 23 fix)."""
+
+    def test_adding_priority_preserves_existing(self):
+        """Add P3 to board with P1/P2, verify P1/P2 preserved."""
+        clusters = [
+            {"cluster_name": "Work", "thought_items": [], "subclusters": [], "priority": {"rank": "P1", "reason": None}},
+            {"cluster_name": "Home", "thought_items": [], "subclusters": [], "priority": {"rank": "P2", "reason": None}},
+            {"cluster_name": "Health", "thought_items": [], "subclusters": []},
+        ]
+        priorities = [make_priority(name="Health", rank="P3")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # P1 and P2 should be preserved
+        assert result[0]["priority"]["rank"] == "P1"
+        assert result[1]["priority"]["rank"] == "P2"
+        # P3 should be added
+        assert result[2]["priority"]["rank"] == "P3"
+
+    def test_moving_rank_clears_old_holder(self):
+        """Move P1 from Work to Health, verify Work cleared."""
+        clusters = [
+            {"cluster_name": "Work", "thought_items": [], "subclusters": [], "priority": {"rank": "P1", "reason": None}},
+            {"cluster_name": "Home", "thought_items": [], "subclusters": [], "priority": {"rank": "P2", "reason": None}},
+            {"cluster_name": "Health", "thought_items": [], "subclusters": []},
+        ]
+        priorities = [make_priority(name="Health", rank="P1")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # Work's P1 should be cleared (rank taken by Health)
+        assert result[0]["priority"] is None
+        # Home's P2 should be preserved
+        assert result[1]["priority"]["rank"] == "P2"
+        # Health gets P1
+        assert result[2]["priority"]["rank"] == "P1"
+
+    def test_empty_priorities_clears_all_explicit(self):
+        """Empty array clears everything via explicit early return."""
+        clusters = [
+            {"cluster_name": "Work", "thought_items": [{"text": "task", "priority": {"rank": "P3"}}], "subclusters": [], "priority": {"rank": "P1", "reason": None}},
+            {"cluster_name": "Home", "thought_items": [], "subclusters": [], "priority": {"rank": "P2", "reason": None}},
+        ]
+        priorities = []
+
+        result = _apply_priorities(clusters, priorities)
+
+        assert result[0]["priority"] is None
+        assert result[1]["priority"] is None
+        assert result[0]["thought_items"][0]["priority"] is None
+
+    def test_replacing_rank_on_same_entity(self):
+        """Change Home from P2 to P3, verify P1 preserved."""
+        clusters = [
+            {"cluster_name": "Work", "thought_items": [], "subclusters": [], "priority": {"rank": "P1", "reason": None}},
+            {"cluster_name": "Home", "thought_items": [], "subclusters": [], "priority": {"rank": "P2", "reason": None}},
+        ]
+        priorities = [make_priority(name="Home", rank="P3")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # Work's P1 should be preserved
+        assert result[0]["priority"]["rank"] == "P1"
+        # Home gets P3 (P2 is gone)
+        assert result[1]["priority"]["rank"] == "P3"
+
+    def test_same_entity_same_rank_preserved(self):
+        """Re-assign P1 to Work (already has P1), verify works."""
+        clusters = [
+            {"cluster_name": "Work", "thought_items": [], "subclusters": [], "priority": {"rank": "P1", "reason": None}},
+            {"cluster_name": "Home", "thought_items": [], "subclusters": [], "priority": {"rank": "P2", "reason": None}},
+        ]
+        priorities = [make_priority(name="Work", rank="P1")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # Work keeps P1 (request wins, same value)
+        assert result[0]["priority"]["rank"] == "P1"
+        # Home's P2 should be preserved
+        assert result[1]["priority"]["rank"] == "P2"
+
+    def test_subcluster_priority_preserved(self):
+        """Subcluster priorities are preserved when not reassigned."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [],
+            "subclusters": [
+                {"subcluster_name": "Urgent", "thought_items": [], "priority": {"rank": "P1", "reason": None}},
+                {"subcluster_name": "Later", "thought_items": [], "priority": {"rank": "P2", "reason": None}},
+            ],
+        }]
+        priorities = [make_priority(name="Later", rank="P3")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # Urgent keeps P1
+        assert result[0]["subclusters"][0]["priority"]["rank"] == "P1"
+        # Later gets P3
+        assert result[0]["subclusters"][1]["priority"]["rank"] == "P3"
+
+    def test_thought_item_priority_preserved(self):
+        """Thought item priorities are preserved when not reassigned."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [
+                {"text": "task1", "priority": {"rank": "P1", "reason": None}},
+                {"text": "task2", "priority": {"rank": "P2", "reason": None}},
+                "task3",  # string item, no priority
+            ],
+            "subclusters": [],
+        }]
+        priorities = [make_item_priority("Work", 2, "P3")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # task1 keeps P1
+        assert result[0]["thought_items"][0]["priority"]["rank"] == "P1"
+        # task2 keeps P2
+        assert result[0]["thought_items"][1]["priority"]["rank"] == "P2"
+        # task3 gets P3
+        assert result[0]["thought_items"][2]["priority"]["rank"] == "P3"
+
+    def test_moving_rank_from_item_to_cluster(self):
+        """Moving P1 from thought item to cluster clears item."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [
+                {"text": "task1", "priority": {"rank": "P1", "reason": None}},
+            ],
+            "subclusters": [],
+        }, {
+            "cluster_name": "Home",
+            "thought_items": [],
+            "subclusters": [],
+        }]
+        priorities = [make_priority(name="Home", rank="P1")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # task1's P1 should be cleared (rank taken by Home)
+        assert result[0]["thought_items"][0]["priority"] is None
+        # Home gets P1
+        assert result[1]["priority"]["rank"] == "P1"
+
+    def test_moving_rank_from_cluster_to_item(self):
+        """Moving P1 from cluster to thought item clears cluster."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": ["task1"],
+            "subclusters": [],
+            "priority": {"rank": "P1", "reason": None},
+        }]
+        priorities = [make_item_priority("Work", 0, "P1")]
+
+        result = _apply_priorities(clusters, priorities)
+
+        # Work cluster's P1 should be cleared (rank taken by item)
+        assert result[0]["priority"] is None
+        # task1 gets P1
+        assert result[0]["thought_items"][0]["priority"]["rank"] == "P1"
+
+
+class TestPriorityPreservationHandler:
+    """Handler-level tests for priority preservation."""
+
+    @pytest.mark.asyncio
+    async def test_adding_p3_preserves_p1_p2(self):
+        """Integration: Add P3 to board with P1/P2, verify preserved."""
+        # First call: set P1 and P2
+        result1 = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [
+                    {"cluster_name": "Work", "thought_items": ["task"]},
+                    {"cluster_name": "Home", "thought_items": ["chore"]},
+                    {"cluster_name": "Health", "thought_items": ["exercise"]},
+                ],
+                "priorities": [
+                    {"name": "Work", "rank": "P1"},
+                    {"name": "Home", "rank": "P2"},
+                ],
+            },
+        )
+        assert result1.isError is None or result1.isError is False
+        clusters = result1.structuredContent["clusters"]
+
+        # Second call: add P3 only
+        result2 = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": clusters,
+                "priorities": [
+                    {"name": "Health", "rank": "P3"},
+                ],
+            },
+        )
+        assert result2.isError is None or result2.isError is False
+        final_clusters = result2.structuredContent["clusters"]
+
+        # Verify all priorities
+        work = next(c for c in final_clusters if c["cluster_name"] == "Work")
+        home = next(c for c in final_clusters if c["cluster_name"] == "Home")
+        health = next(c for c in final_clusters if c["cluster_name"] == "Health")
+
+        assert work["priority"]["rank"] == "P1"
+        assert home["priority"]["rank"] == "P2"
+        assert health["priority"]["rank"] == "P3"
+
+    @pytest.mark.asyncio
+    async def test_moving_rank_clears_old_holder_handler(self):
+        """Integration: Move P1 from Work to Health."""
+        # First call: set P1 on Work
+        result1 = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": [
+                    {"cluster_name": "Work", "thought_items": ["task"]},
+                    {"cluster_name": "Health", "thought_items": ["exercise"]},
+                ],
+                "priorities": [
+                    {"name": "Work", "rank": "P1"},
+                ],
+            },
+        )
+        clusters = result1.structuredContent["clusters"]
+
+        # Second call: move P1 to Health
+        result2 = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "clusters": clusters,
+                "priorities": [
+                    {"name": "Health", "rank": "P1"},
+                ],
+            },
+        )
+        final_clusters = result2.structuredContent["clusters"]
+
+        work = next(c for c in final_clusters if c["cluster_name"] == "Work")
+        health = next(c for c in final_clusters if c["cluster_name"] == "Health")
+
+        # Work's P1 should be cleared
+        assert work["priority"] is None
+        # Health gets P1
+        assert health["priority"]["rank"] == "P1"

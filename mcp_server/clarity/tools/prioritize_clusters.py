@@ -386,14 +386,44 @@ def _clear_all_thought_item_priorities(items: List[Union[str, dict]]) -> List[Un
     return result
 
 
+def _clear_all_priorities(clusters: List[dict]) -> List[dict]:
+    """
+    Recursively clear priority on all clusters, subclusters, and thought items.
+
+    Used when priorities array is empty (explicit clear all).
+    """
+    result = copy.deepcopy(clusters)
+    for cluster in result:
+        cluster["priority"] = None
+        # Clear thought item priorities
+        cluster["thought_items"] = _clear_all_thought_item_priorities(
+            cluster.get("thought_items", [])
+        )
+        # Clear subcluster priorities
+        for subcluster in cluster.get("subclusters", []):
+            subcluster["priority"] = None
+            subcluster["thought_items"] = _clear_all_thought_item_priorities(
+                subcluster.get("thought_items", [])
+            )
+    return result
+
+
 def _apply_priorities(clusters: List[dict], priorities: List[PriorityInput]) -> List[dict]:
     """
     Apply priority metadata to clusters, subclusters, and thought items.
 
     Returns deep copy of clusters with priority fields added.
     Converts string thought items to objects when prioritized.
-    Clears priorities from entities not in the priorities list.
+
+    Priority preservation rules:
+    - Empty priorities array = clear ALL priorities (explicit early return)
+    - Entities explicitly in request = always get new priority (request wins)
+    - Entities NOT in request = preserve UNLESS their rank is being reassigned elsewhere
     """
+    # EXPLICIT EARLY RETURN: empty priorities = clear all
+    if not priorities:
+        return _clear_all_priorities(clusters)
+
     # Build lookups
     container_priority_map = {}  # name -> {rank, reason}
     item_priority_map = {}  # (parent_name, item_index) -> {rank, reason}
@@ -404,6 +434,9 @@ def _apply_priorities(clusters: List[dict], priorities: List[PriorityInput]) -> 
         elif p.is_container_target():
             container_priority_map[p.name] = {"rank": p.rank, "reason": p.reason}
 
+    # Ranks being assigned in this call (for conflict detection)
+    assigned_ranks = {p.rank for p in priorities}
+
     # Deep copy to avoid mutating input
     result = copy.deepcopy(clusters)
 
@@ -412,43 +445,84 @@ def _apply_priorities(clusters: List[dict], priorities: List[PriorityInput]) -> 
 
         # Apply cluster priority
         if cluster_name in container_priority_map:
+            # Explicitly in request → always set (request wins)
             cluster["priority"] = container_priority_map[cluster_name]
         else:
-            cluster["priority"] = None
+            # Not in request → preserve UNLESS rank is being reassigned elsewhere
+            existing_priority = cluster.get("priority")
+            existing_rank = existing_priority.get("rank") if existing_priority else None
+            if existing_rank and existing_rank in assigned_ranks:
+                cluster["priority"] = None  # Rank taken by someone else
+            elif existing_priority is None and "priority" not in cluster:
+                # Ensure priority key exists for consistent output structure
+                cluster["priority"] = None
+            # else: keep existing priority (do nothing)
 
         # Process cluster's direct thought items
         items = cluster.get("thought_items", [])
-        # First clear all existing priorities
-        items = _clear_all_thought_item_priorities(items)
-        # Then apply new priorities
-        for idx in range(len(items)):
+        new_items = []
+        for idx, item in enumerate(items):
             key = (cluster_name, idx)
             if key in item_priority_map:
-                # Convert to object and set priority
-                items[idx] = _normalize_thought_item(items[idx])
-                items[idx]["priority"] = item_priority_map[key]
-        cluster["thought_items"] = items
+                # Explicitly in request → set new priority
+                normalized = _normalize_thought_item(item)
+                normalized["priority"] = item_priority_map[key]
+                new_items.append(normalized)
+            elif isinstance(item, dict) and item.get("priority"):
+                # Not in request but has existing priority → check for rank conflict
+                existing_rank = item["priority"].get("rank")
+                if existing_rank and existing_rank in assigned_ranks:
+                    # Rank taken by someone else → clear
+                    new_items.append({"text": item.get("text", ""), "priority": None})
+                else:
+                    # Preserve existing priority
+                    new_items.append(item)
+            else:
+                # No existing priority and not in request → keep as-is
+                new_items.append(item)
+        cluster["thought_items"] = new_items
 
         # Apply subcluster priorities
         for subcluster in cluster.get("subclusters", []):
             sub_name = subcluster.get("subcluster_name", "")
+
             if sub_name in container_priority_map:
+                # Explicitly in request → always set (request wins)
                 subcluster["priority"] = container_priority_map[sub_name]
             else:
-                subcluster["priority"] = None
+                # Not in request → preserve UNLESS rank is being reassigned elsewhere
+                existing_priority = subcluster.get("priority")
+                existing_rank = existing_priority.get("rank") if existing_priority else None
+                if existing_rank and existing_rank in assigned_ranks:
+                    subcluster["priority"] = None  # Rank taken by someone else
+                elif existing_priority is None and "priority" not in subcluster:
+                    # Ensure priority key exists for consistent output structure
+                    subcluster["priority"] = None
+                # else: keep existing priority (do nothing)
 
             # Process subcluster's thought items
             sub_items = subcluster.get("thought_items", [])
-            # First clear all existing priorities
-            sub_items = _clear_all_thought_item_priorities(sub_items)
-            # Then apply new priorities
-            for idx in range(len(sub_items)):
+            new_sub_items = []
+            for idx, item in enumerate(sub_items):
                 key = (sub_name, idx)
                 if key in item_priority_map:
-                    # Convert to object and set priority
-                    sub_items[idx] = _normalize_thought_item(sub_items[idx])
-                    sub_items[idx]["priority"] = item_priority_map[key]
-            subcluster["thought_items"] = sub_items
+                    # Explicitly in request → set new priority
+                    normalized = _normalize_thought_item(item)
+                    normalized["priority"] = item_priority_map[key]
+                    new_sub_items.append(normalized)
+                elif isinstance(item, dict) and item.get("priority"):
+                    # Not in request but has existing priority → check for rank conflict
+                    existing_rank = item["priority"].get("rank")
+                    if existing_rank and existing_rank in assigned_ranks:
+                        # Rank taken by someone else → clear
+                        new_sub_items.append({"text": item.get("text", ""), "priority": None})
+                    else:
+                        # Preserve existing priority
+                        new_sub_items.append(item)
+                else:
+                    # No existing priority and not in request → keep as-is
+                    new_sub_items.append(item)
+            subcluster["thought_items"] = new_sub_items
 
     return result
 
