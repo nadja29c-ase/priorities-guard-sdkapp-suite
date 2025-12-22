@@ -63,8 +63,8 @@ ERROR_PARENT_NOT_FOUND = "Parent '{parent}' not found."
 NAME = "edit_board"
 
 DESCRIPTION = """
-PURPOSE: Edit an existing board — change priorities, rename clusters, or delete items.
-Use this when user wants to MODIFY their current board, not create a new one.
+PURPOSE: Edit an existing board — reassign priorities, rename clusters, or delete items.
+Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
 
 WHEN TO CALL:
 - User says "make X my P2" or "change P1 to Y"
@@ -118,15 +118,7 @@ INPUT_SCHEMA = {
                                     "description": "Existing priority (MUST pass through from previous output)",
                                     "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
                                 },
-                                "thought_items": {
-                                    "type": "array",
-                                    "items": {
-                                        "oneOf": [
-                                            {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
-                                        ]
-                                    }
-                                },
+                                "thought_items": {"type": "array"},
                                 "tags": {"type": "array", "items": {"type": "string"}}
                             }
                         }
@@ -569,11 +561,37 @@ async def handle(
         "openai/resultCanProduceWidget": True,
     }
 
+    # Operation-specific guidance - always prompt about saving
+    if request.operation == "set_priority":
+        guidance = f"""Done — {request.rank} is now set. Acknowledge this briefly.
+
+IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
+    elif request.operation == "clear_priority":
+        guidance = """Priority cleared. Acknowledge this briefly.
+
+IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
+    elif request.operation in ("rename_cluster", "rename_subcluster"):
+        guidance = f"""Renamed to '{request.new_name}'. Acknowledge this briefly.
+
+IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
+    elif request.operation in ("delete_cluster", "delete_subcluster", "delete_thought_item"):
+        guidance = """Deleted. Acknowledge this briefly.
+
+IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
+    else:  # clear_all_priorities
+        guidance = """All priorities cleared. Acknowledge this briefly.
+
+IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(type="text", text=message)],
         structuredContent={
             "clusters": enriched,
-            "assistant_guidance": "Confirm the change was made. Changes are not saved yet — if user wants to keep them, remind them to save."
+            "assistant_guidance": guidance,
         },
         _meta=meta,
     )
