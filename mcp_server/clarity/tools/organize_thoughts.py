@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .base import ToolDefinition
 from . import register_tool
+from .board_utils import ALLOWED_TAGS
 from ..tool_logic import organize_thoughts as format_clusters  # Renamed from cluster_raw_thoughts
 from ..handlers.resources import WIDGET_URI
 from ..mcp_auth import build_invalid_params_error
@@ -36,6 +37,7 @@ TOOL PURPOSE: Organize user's thoughts into visual clusters to reduce cognitive 
 WHEN TO CALL:
 - Call after user expresses 5+ thought items. Include ALL thoughts — never filter.
 - Until user says "That's all. Nothing else on my mind"
+- When user wants to merge boards, combine and recluster thought items into one board.
 
 AFTER TOOL RETURNS: Follow the assistant_guidance in structuredContent for what to say.
 """
@@ -111,16 +113,7 @@ INPUT_SCHEMA = {
 
 REQUIRED_SCOPES = ["clarity.write"]
 
-# Behavioral tags - signal cluster requires different mental mode than execute-and-done
-ALLOWED_TAGS = [
-    "decide",    # contains choices/tradeoffs needing resolution
-    "research",  # contains unknowns needing investigation
-    "test",      # contains assumptions/hypotheses to test
-    "delegate",  # contains work for others
-    "automate",  # contains repetitive work to systematize
-    "learn",     # contains skill gaps requiring knowledge acquisition
-    "align",     # contains items needing discussion/agreement with others
-]
+# ALLOWED_TAGS imported from board_utils.py (single source of truth)
 
 # ============================================================================
 # Pydantic Models for Validation

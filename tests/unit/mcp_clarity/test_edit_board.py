@@ -7,7 +7,10 @@ Tests:
 3. rename operations
 4. delete operations
 5. clear_all_priorities
-6. Error handling
+6. add_thought_item operations
+7. add_tag operations
+8. remove_tag operations
+9. Error handling
 """
 
 import pytest
@@ -21,6 +24,9 @@ from mcp_server.clarity.tools.edit_board import (
     _op_delete_subcluster,
     _op_delete_thought_item,
     _op_clear_all_priorities,
+    _op_add_thought_item,
+    _op_add_tag,
+    _op_remove_tag,
     ERROR_NO_BOARD,
     ERROR_INVALID_OPERATION,
     ERROR_MISSING_TARGET,
@@ -29,6 +35,13 @@ from mcp_server.clarity.tools.edit_board import (
     ERROR_ITEM_NOT_FOUND,
     ERROR_MISSING_NEW_NAME,
     ERROR_MISSING_RANK,
+    ERROR_MISSING_TEXT,
+    ERROR_MISSING_TAG,
+    ERROR_INVALID_TAG,
+    ERROR_TAG_LIMIT,
+    ERROR_TAG_NOT_FOUND,
+    ERROR_AMBIGUOUS_NAME,
+    ERROR_TEXT_TOO_LONG,
 )
 
 
@@ -493,3 +506,237 @@ class TestHandler:
         assert clusters[0]["priority"]["rank"] == "P1"
         assert clusters[1]["priority"]["rank"] == "P2"
         assert clusters[2]["priority"]["rank"] == "P3"
+
+
+# ============================================================================
+# Add Thought Item Tests
+# ============================================================================
+
+
+class TestAddThoughtItem:
+    """Tests for add_thought_item operation."""
+
+    def test_add_thought_item_to_cluster(self):
+        """Adds item to cluster's thought_items."""
+        clusters = [make_cluster("Work", items=["task1"])]
+        result, error = _op_add_thought_item(clusters, "Work", "new task")
+
+        assert error is None
+        assert len(result[0]["thought_items"]) == 2
+        assert result[0]["thought_items"][1] == "new task"
+
+    def test_add_thought_item_to_subcluster(self):
+        """Adds item to subcluster's thought_items."""
+        clusters = [make_cluster("Work", subclusters=[
+            make_subcluster("Urgent", items=["task1"])
+        ])]
+        result, error = _op_add_thought_item(clusters, "Urgent", "new task")
+
+        assert error is None
+        assert len(result[0]["subclusters"][0]["thought_items"]) == 2
+        assert result[0]["subclusters"][0]["thought_items"][1] == "new task"
+
+    def test_add_thought_item_missing_parent(self):
+        """Rejects missing parent_name."""
+        clusters = [make_cluster("Work")]
+        result, error = _op_add_thought_item(clusters, None, "new task")
+
+        assert result is None
+        assert "not found" in error.lower()
+
+    def test_add_thought_item_missing_text(self):
+        """Rejects missing text."""
+        clusters = [make_cluster("Work")]
+        result, error = _op_add_thought_item(clusters, "Work", None)
+
+        assert result is None
+        assert ERROR_MISSING_TEXT in error
+
+    def test_add_thought_item_parent_not_found(self):
+        """Rejects invalid parent_name."""
+        clusters = [make_cluster("Work")]
+        result, error = _op_add_thought_item(clusters, "NotExist", "new task")
+
+        assert result is None
+        assert "not found" in error.lower()
+
+    def test_add_thought_item_text_too_long(self):
+        """Rejects text > 500 chars."""
+        clusters = [make_cluster("Work")]
+        long_text = "x" * 501
+        result, error = _op_add_thought_item(clusters, "Work", long_text)
+
+        assert result is None
+        assert "500" in error
+
+    def test_add_thought_item_ambiguous_parent(self):
+        """Rejects if parent name is both cluster and subcluster."""
+        # Create a cluster with a subcluster that has the same name
+        clusters = [
+            make_cluster("Shared", items=["item1"]),
+            make_cluster("Work", subclusters=[
+                make_subcluster("Shared", items=["item2"])
+            ])
+        ]
+        result, error = _op_add_thought_item(clusters, "Shared", "new task")
+
+        assert result is None
+        assert ERROR_AMBIGUOUS_NAME.format(name="Shared") == error
+
+
+# ============================================================================
+# Add Tag Tests
+# ============================================================================
+
+
+class TestAddTag:
+    """Tests for add_tag operation."""
+
+    def test_add_tag_to_cluster(self):
+        """Adds valid tag to cluster."""
+        clusters = [make_cluster("Work")]
+        result, error = _op_add_tag(clusters, "Work", "research")
+
+        assert error is None
+        assert "research" in result[0]["tags"]
+
+    def test_add_tag_to_subcluster(self):
+        """Adds valid tag to subcluster."""
+        clusters = [make_cluster("Work", subclusters=[make_subcluster("Urgent")])]
+        result, error = _op_add_tag(clusters, "Urgent", "decide")
+
+        assert error is None
+        assert "decide" in result[0]["subclusters"][0]["tags"]
+
+    def test_add_tag_invalid_value(self):
+        """Rejects invalid tag value."""
+        clusters = [make_cluster("Work")]
+        result, error = _op_add_tag(clusters, "Work", "invalid_tag")
+
+        assert result is None
+        assert ERROR_INVALID_TAG in error
+
+    def test_add_tag_at_limit(self):
+        """Rejects when already at 3 tags."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [],
+            "subclusters": [],
+            "tags": ["decide", "research", "test"],
+            "priority": None,
+        }]
+        result, error = _op_add_tag(clusters, "Work", "delegate")
+
+        assert result is None
+        assert "3 tags" in error
+
+    def test_add_tag_duplicate_silent(self):
+        """Succeeds silently if tag already present."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [],
+            "subclusters": [],
+            "tags": ["research"],
+            "priority": None,
+        }]
+        result, error = _op_add_tag(clusters, "Work", "research")
+
+        assert error is None
+        assert result[0]["tags"] == ["research"]  # No duplicate added
+
+    def test_add_tag_ambiguous_target(self):
+        """Rejects if target name is both cluster and subcluster."""
+        clusters = [
+            make_cluster("Shared"),
+            make_cluster("Work", subclusters=[make_subcluster("Shared")])
+        ]
+        result, error = _op_add_tag(clusters, "Shared", "research")
+
+        assert result is None
+        assert ERROR_AMBIGUOUS_NAME.format(name="Shared") == error
+
+
+# ============================================================================
+# Remove Tag Tests
+# ============================================================================
+
+
+class TestRemoveTag:
+    """Tests for remove_tag operation."""
+
+    def test_remove_tag_from_cluster(self):
+        """Removes existing tag from cluster."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [],
+            "subclusters": [],
+            "tags": ["research", "decide"],
+            "priority": None,
+        }]
+        result, error = _op_remove_tag(clusters, "Work", "research")
+
+        assert error is None
+        assert "research" not in result[0]["tags"]
+        assert "decide" in result[0]["tags"]
+
+    def test_remove_tag_from_subcluster(self):
+        """Removes existing tag from subcluster."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [],
+            "subclusters": [{
+                "subcluster_name": "Urgent",
+                "thought_items": [],
+                "tags": ["research", "decide"],
+                "priority": None,
+            }],
+            "tags": [],
+            "priority": None,
+        }]
+        result, error = _op_remove_tag(clusters, "Urgent", "research")
+
+        assert error is None
+        assert "research" not in result[0]["subclusters"][0]["tags"]
+        assert "decide" in result[0]["subclusters"][0]["tags"]
+
+    def test_remove_tag_not_found(self):
+        """Rejects if tag not present."""
+        clusters = [{
+            "cluster_name": "Work",
+            "thought_items": [],
+            "subclusters": [],
+            "tags": ["research"],
+            "priority": None,
+        }]
+        result, error = _op_remove_tag(clusters, "Work", "decide")
+
+        assert result is None
+        assert ERROR_TAG_NOT_FOUND.format(tag="decide", name="Work") == error
+
+    def test_remove_tag_ambiguous_target(self):
+        """Rejects if target name is both cluster and subcluster."""
+        clusters = [
+            {
+                "cluster_name": "Shared",
+                "thought_items": [],
+                "subclusters": [],
+                "tags": ["research"],
+                "priority": None,
+            },
+            {
+                "cluster_name": "Work",
+                "thought_items": [],
+                "subclusters": [{
+                    "subcluster_name": "Shared",
+                    "thought_items": [],
+                    "tags": ["decide"],
+                    "priority": None,
+                }],
+                "tags": [],
+                "priority": None,
+            }
+        ]
+        result, error = _op_remove_tag(clusters, "Shared", "research")
+
+        assert result is None
+        assert ERROR_AMBIGUOUS_NAME.format(name="Shared") == error

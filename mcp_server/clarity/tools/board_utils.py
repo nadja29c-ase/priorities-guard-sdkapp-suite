@@ -19,6 +19,19 @@ from pydantic import BaseModel, field_validator
 MAX_PRIORITIES = 3
 VALID_RANKS = {"P1", "P2", "P3"}
 
+# Behavioral tags - signal cluster requires different mental mode than execute-and-done
+ALLOWED_TAGS = frozenset({
+    "decide",    # contains choices/tradeoffs needing resolution
+    "research",  # contains unknowns needing investigation
+    "test",      # contains assumptions/hypotheses to test
+    "delegate",  # contains work for others
+    "automate",  # contains repetitive work to systematize
+    "learn",     # contains skill gaps requiring knowledge acquisition
+    "align",     # contains items needing discussion/agreement with others
+})
+MAX_TAGS_PER_CONTAINER = 3
+MAX_ITEM_LENGTH = 500
+
 
 # ============================================================================
 # Priority Input Model

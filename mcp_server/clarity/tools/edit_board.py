@@ -20,6 +20,9 @@ from ..handlers.resources import WIDGET_URI
 from ..tool_logic import enrich_clusters
 from .board_utils import (
     VALID_RANKS,
+    ALLOWED_TAGS,
+    MAX_TAGS_PER_CONTAINER,
+    MAX_ITEM_LENGTH,
     PriorityInput,
     apply_priorities,
     clear_all_priorities,
@@ -40,6 +43,9 @@ VALID_OPERATIONS = {
     "delete_subcluster",
     "delete_thought_item",
     "clear_all_priorities",
+    "add_thought_item",
+    "add_tag",
+    "remove_tag",
 }
 
 # ============================================================================
@@ -47,7 +53,7 @@ VALID_OPERATIONS = {
 # ============================================================================
 
 ERROR_NO_BOARD = "No board provided. Pass the current board to edit."
-ERROR_INVALID_OPERATION = "Invalid operation. Supported: set_priority, clear_priority, rename_cluster, rename_subcluster, delete_cluster, delete_subcluster, delete_thought_item, clear_all_priorities"
+ERROR_INVALID_OPERATION = "Invalid operation. Supported: set_priority, clear_priority, rename_cluster, rename_subcluster, delete_cluster, delete_subcluster, delete_thought_item, clear_all_priorities, add_thought_item, add_tag, remove_tag"
 ERROR_MISSING_TARGET = "Target not specified. Provide target_name or item_index + parent_name."
 ERROR_CLUSTER_NOT_FOUND = "Cluster '{name}' not found."
 ERROR_SUBCLUSTER_NOT_FOUND = "Subcluster '{name}' not found in '{parent}'."
@@ -55,6 +61,13 @@ ERROR_ITEM_NOT_FOUND = "Item index {index} not found in '{parent}'."
 ERROR_MISSING_NEW_NAME = "new_name required for rename operation."
 ERROR_MISSING_RANK = "rank required for set_priority operation."
 ERROR_PARENT_NOT_FOUND = "Parent '{parent}' not found."
+ERROR_MISSING_TEXT = "text required for add_thought_item operation."
+ERROR_MISSING_TAG = "tag required for add_tag/remove_tag operation."
+ERROR_INVALID_TAG = f"Invalid tag. Must be one of: {', '.join(sorted(ALLOWED_TAGS))}"
+ERROR_TAG_LIMIT = "'{name}' already has 3 tags (maximum). Remove a tag first."
+ERROR_TAG_NOT_FOUND = "Tag '{tag}' not found on '{name}'."
+ERROR_AMBIGUOUS_NAME = "'{name}' exists as both a cluster and subcluster. Please rename one to make it unique."
+ERROR_TEXT_TOO_LONG = f"Text exceeds maximum length of {MAX_ITEM_LENGTH} characters."
 
 # ============================================================================
 # Tool Metadata
@@ -63,14 +76,17 @@ ERROR_PARENT_NOT_FOUND = "Parent '{parent}' not found."
 NAME = "edit_board"
 
 DESCRIPTION = """
-PURPOSE: Edit an existing board — reassign priorities, rename clusters, or delete items.
+PURPOSE: Edit an existing board — add items, manage tags, reassign priorities, rename clusters, or delete items.
 Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
 
 WHEN TO CALL:
-- User says "make X my P2" or "change P1 to Y"
-- User says "rename X to Y"
-- User says "delete X" or "remove X"
-- User says "clear my priorities"
+- User says "add X to Y" (use add_thought_item)
+- User says "tag X as research" (use add_tag)
+- User says "remove the research tag from X" (use remove_tag)
+- User says "make X my P2" or "change P1 to Y" (use set_priority)
+- User says "rename X to Y" (use rename_cluster/rename_subcluster)
+- User says "delete X" or "remove X" (use delete_cluster/delete_subcluster/delete_thought_item)
+- User says "clear my priorities" (use clear_all_priorities)
 
 CRITICAL INPUT REQUIREMENT:
 You MUST pass the EXACT board JSON from the previous tool output.
@@ -130,7 +146,7 @@ INPUT_SCHEMA = {
         },
         "operation": {
             "type": "string",
-            "enum": ["set_priority", "clear_priority", "rename_cluster", "rename_subcluster", "delete_cluster", "delete_subcluster", "delete_thought_item", "clear_all_priorities"],
+            "enum": ["set_priority", "clear_priority", "rename_cluster", "rename_subcluster", "delete_cluster", "delete_subcluster", "delete_thought_item", "clear_all_priorities", "add_thought_item", "add_tag", "remove_tag"],
             "description": "The edit operation to perform"
         },
         "target_name": {
@@ -139,7 +155,7 @@ INPUT_SCHEMA = {
         },
         "parent_name": {
             "type": "string",
-            "description": "Parent container name (for subclusters and thought items)"
+            "description": "Parent container name (for subclusters, thought items, and add_thought_item)"
         },
         "item_index": {
             "type": "integer",
@@ -153,6 +169,16 @@ INPUT_SCHEMA = {
         "new_name": {
             "type": "string",
             "description": "For rename operations"
+        },
+        "text": {
+            "type": "string",
+            "description": "For add_thought_item: the thought item text to add",
+            "maxLength": MAX_ITEM_LENGTH
+        },
+        "tag": {
+            "type": "string",
+            "enum": sorted(ALLOWED_TAGS),
+            "description": "For add_tag/remove_tag operations"
         }
     },
     "required": ["board", "operation"]
@@ -191,6 +217,8 @@ class EditBoardRequest(BaseModel):
     item_index: Optional[int] = None
     rank: Optional[str] = None
     new_name: Optional[str] = None
+    text: Optional[str] = None
+    tag: Optional[str] = None
 
 
 # ============================================================================
@@ -239,6 +267,23 @@ def _find_container(clusters: List[dict], name: str) -> tuple:
         return subcluster, "subcluster", parent
 
     return None, None, None
+
+
+def _check_ambiguous_name(clusters: List[dict], name: str) -> Optional[str]:
+    """
+    Check if name exists as both a cluster and subcluster.
+
+    Returns error message if ambiguous, None if OK.
+    """
+    cluster_names = {c.get("cluster_name") for c in clusters}
+    subcluster_names = set()
+    for c in clusters:
+        for s in c.get("subclusters", []):
+            subcluster_names.add(s.get("subcluster_name"))
+
+    if name in cluster_names and name in subcluster_names:
+        return ERROR_AMBIGUOUS_NAME.format(name=name)
+    return None
 
 
 # ============================================================================
@@ -433,6 +478,97 @@ def _op_clear_all_priorities(clusters: List[dict]) -> tuple:
     return result, None
 
 
+def _op_add_thought_item(clusters: List[dict], parent_name: Optional[str],
+                         text: Optional[str]) -> tuple:
+    """Add a thought item to a container."""
+    if not parent_name:
+        return None, ERROR_PARENT_NOT_FOUND.format(parent="(empty)")
+    if not text:
+        return None, ERROR_MISSING_TEXT
+    if len(text) > MAX_ITEM_LENGTH:
+        return None, ERROR_TEXT_TOO_LONG
+
+    # Check for ambiguous name
+    error = _check_ambiguous_name(clusters, parent_name)
+    if error:
+        return None, error
+
+    result = copy.deepcopy(clusters)
+    container, _, _ = _find_container(result, parent_name)
+
+    if not container:
+        return None, ERROR_PARENT_NOT_FOUND.format(parent=parent_name)
+
+    # Append as string (not object) per spec
+    container.get("thought_items", []).append(text)
+    return result, None
+
+
+def _op_add_tag(clusters: List[dict], target_name: Optional[str],
+                tag: Optional[str]) -> tuple:
+    """Add a tag to a container."""
+    if not target_name:
+        return None, ERROR_MISSING_TARGET
+    if not tag:
+        return None, ERROR_MISSING_TAG
+    if tag not in ALLOWED_TAGS:
+        return None, ERROR_INVALID_TAG
+
+    # Check for ambiguous name
+    error = _check_ambiguous_name(clusters, target_name)
+    if error:
+        return None, error
+
+    result = copy.deepcopy(clusters)
+    container, _, _ = _find_container(result, target_name)
+
+    if not container:
+        return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
+
+    tags = container.get("tags", [])
+
+    # Silently skip if tag already present (no duplicate)
+    if tag in tags:
+        return result, None
+
+    # Check tag limit
+    if len(tags) >= MAX_TAGS_PER_CONTAINER:
+        return None, ERROR_TAG_LIMIT.format(name=target_name)
+
+    tags.append(tag)
+    container["tags"] = tags
+    return result, None
+
+
+def _op_remove_tag(clusters: List[dict], target_name: Optional[str],
+                   tag: Optional[str]) -> tuple:
+    """Remove a tag from a container."""
+    if not target_name:
+        return None, ERROR_MISSING_TARGET
+    if not tag:
+        return None, ERROR_MISSING_TAG
+
+    # Check for ambiguous name
+    error = _check_ambiguous_name(clusters, target_name)
+    if error:
+        return None, error
+
+    result = copy.deepcopy(clusters)
+    container, _, _ = _find_container(result, target_name)
+
+    if not container:
+        return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
+
+    tags = container.get("tags", [])
+
+    if tag not in tags:
+        return None, ERROR_TAG_NOT_FOUND.format(tag=tag, name=target_name)
+
+    tags.remove(tag)
+    container["tags"] = tags
+    return result, None
+
+
 # ============================================================================
 # Tool Handler
 # ============================================================================
@@ -518,6 +654,12 @@ async def handle(
         )
     elif request.operation == "clear_all_priorities":
         result, error = _op_clear_all_priorities(clusters_data)
+    elif request.operation == "add_thought_item":
+        result, error = _op_add_thought_item(clusters_data, request.parent_name, request.text)
+    elif request.operation == "add_tag":
+        result, error = _op_add_tag(clusters_data, request.target_name, request.tag)
+    elif request.operation == "remove_tag":
+        result, error = _op_remove_tag(clusters_data, request.target_name, request.tag)
     else:
         result, error = None, ERROR_INVALID_OPERATION
 
@@ -545,6 +687,9 @@ async def handle(
         "delete_subcluster": f"Deleted subcluster '{request.target_name}'.",
         "delete_thought_item": "Deleted thought item.",
         "clear_all_priorities": "All priorities cleared.",
+        "add_thought_item": f"Added '{request.text}' to '{request.parent_name}'.",
+        "add_tag": f"Added tag '{request.tag}' to '{request.target_name}'.",
+        "remove_tag": f"Removed tag '{request.tag}' from '{request.target_name}'.",
     }
     message = operation_messages.get(request.operation, "Edit complete.")
 
@@ -579,6 +724,16 @@ IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like 
 
     elif request.operation in ("delete_cluster", "delete_subcluster", "delete_thought_item"):
         guidance = """Deleted. Acknowledge this briefly.
+
+IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
+    elif request.operation == "add_thought_item":
+        guidance = f"""Added to '{request.parent_name}'. Acknowledge this briefly.
+
+IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
+    elif request.operation in ("add_tag", "remove_tag"):
+        guidance = """Tag updated. Acknowledge this briefly.
 
 IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
 
