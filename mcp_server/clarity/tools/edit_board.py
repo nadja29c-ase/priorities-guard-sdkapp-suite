@@ -67,6 +67,8 @@ ERROR_INVALID_TAG = f"Invalid tag. Must be one of: {', '.join(sorted(ALLOWED_TAG
 ERROR_TAG_LIMIT = "'{name}' already has 3 tags (maximum). Remove a tag first."
 ERROR_TAG_NOT_FOUND = "Tag '{tag}' not found on '{name}'."
 ERROR_AMBIGUOUS_NAME = "'{name}' exists as both a cluster and subcluster. Please rename one to make it unique."
+ERROR_NAME_COLLISION = "A cluster named '{name}' already exists. Choose a different name."
+ERROR_SUBCLUSTER_NAME_COLLISION = "A subcluster named '{name}' already exists in '{parent}'. Choose a different name."
 ERROR_TEXT_TOO_LONG = f"Text exceeds maximum length of {MAX_ITEM_LENGTH} characters."
 ERROR_MIXED_MODE = "Use 'operation' (single) OR 'operations' (batch), not both."
 ERROR_NO_OPERATION = "Provide 'operation' (single) or 'operations' (batch)."
@@ -436,6 +438,11 @@ def _op_rename_cluster(clusters: List[dict], target_name: Optional[str],
     if not cluster:
         return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
 
+    # Check for name collision (another cluster with the new name)
+    existing = _find_cluster(result, new_name)
+    if existing and existing is not cluster:
+        return None, ERROR_NAME_COLLISION.format(name=new_name)
+
     cluster["cluster_name"] = new_name
     return result, None
 
@@ -455,6 +462,12 @@ def _op_rename_subcluster(clusters: List[dict], target_name: Optional[str],
         if parent_name:
             return None, ERROR_SUBCLUSTER_NOT_FOUND.format(name=target_name, parent=parent_name)
         return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
+
+    # Check for name collision within same parent's subclusters
+    parent_cluster_name = parent.get("cluster_name", "unknown")
+    for sc in parent.get("subclusters", []):
+        if sc.get("subcluster_name") == new_name and sc is not subcluster:
+            return None, ERROR_SUBCLUSTER_NAME_COLLISION.format(name=new_name, parent=parent_cluster_name)
 
     subcluster["subcluster_name"] = new_name
     return result, None
