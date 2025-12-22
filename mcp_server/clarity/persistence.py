@@ -218,7 +218,9 @@ async def delete_cluster(user_id: str, correlation_id: str | None = None) -> dic
             headers["X-Correlation-ID"] = correlation_id
 
         client = get_http_client()
-        response = await client.delete(
+        # Use request() instead of delete() because httpx delete() doesn't support json param
+        response = await client.request(
+            "DELETE",
             f"{BACKEND_URL}/api/clarity/data",
             headers=headers,
             # Defense in depth: MCP tool validates confirm=True before calling,
