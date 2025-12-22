@@ -175,6 +175,10 @@ async def handle(
             "last_updated": cluster_data.get("created_at"),
             "saved_board_hash": saved_board_hash
         },
+        _meta={
+            "openai/toolInvocation/invoking": "Loading your board...",
+            "openai/toolInvocation/invoked": "Board loaded.",
+        },
     )
 
 

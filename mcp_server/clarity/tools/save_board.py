@@ -382,6 +382,10 @@ async def handle(
             "clusters": clusters_for_storage,
             "saved_board_hash": content_hash,
         },
+        _meta={
+            "openai/toolInvocation/invoking": "Saving your board...",
+            "openai/toolInvocation/invoked": "Board saved.",
+        },
     )
 
 
