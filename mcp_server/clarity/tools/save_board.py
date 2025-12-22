@@ -12,7 +12,7 @@ Callable by:
 import hashlib
 import json
 import unicodedata
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import structlog
 from mcp import types as mcp_types
@@ -81,8 +81,13 @@ INPUT_SCHEMA = {
                     },
                     "thought_items": {
                         "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Direct thought items"
+                        "items": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                            ]
+                        },
+                        "description": "Direct thought items (string or object)"
                     },
                     "subclusters": {
                         "type": "array",
@@ -95,7 +100,12 @@ INPUT_SCHEMA = {
                                 },
                                 "thought_items": {
                                     "type": "array",
-                                    "items": {"type": "string"}
+                                    "items": {
+                                        "oneOf": [
+                                            {"type": "string"},
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                        ]
+                                    }
                                 },
                                 "tags": {
                                     "type": "array",
@@ -128,7 +138,7 @@ REQUIRED_SCOPES = ["clarity.write"]
 class SubclusterInput(BaseModel):
     """Expected structure for each subcluster."""
     subcluster_name: str
-    thought_items: List[str] = Field(default_factory=list)
+    thought_items: List[Union[str, dict]] = Field(default_factory=list)  # string or {text, priority?}
     tags: List[str] = Field(default_factory=list)
     priority: Optional[dict] = None  # Added in increment 13
 
@@ -136,7 +146,7 @@ class SubclusterInput(BaseModel):
 class ClusterInput(BaseModel):
     """Expected structure for each cluster."""
     cluster_name: str
-    thought_items: List[str] = Field(default_factory=list)
+    thought_items: List[Union[str, dict]] = Field(default_factory=list)  # string or {text, priority?}
     subclusters: List[SubclusterInput] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
     priority: Optional[dict] = None  # Added in increment 13
@@ -177,16 +187,25 @@ def _count_total_items(clusters: List["ClusterInput"]) -> int:
     return total
 
 
+def _get_item_text(item: Union[str, dict]) -> str:
+    """Extract text from thought item (handles both string and object format)."""
+    if isinstance(item, dict):
+        return item.get("text", "")
+    return item
+
+
 def _find_long_item(clusters: List["ClusterInput"], max_length: int) -> Optional[str]:
     """Find first item exceeding max_length, or None if all valid."""
     for cluster in clusters:
         for item in cluster.thought_items:
-            if len(item) > max_length:
-                return item
+            text = _get_item_text(item)
+            if len(text) > max_length:
+                return text
         for subcluster in cluster.subclusters:
             for item in subcluster.thought_items:
-                if len(item) > max_length:
-                    return item
+                text = _get_item_text(item)
+                if len(text) > max_length:
+                    return text
     return None
 
 
@@ -212,13 +231,19 @@ def compute_content_hash(clusters: List[dict]) -> str:
         """NFC normalize and trim whitespace."""
         return unicodedata.normalize("NFC", s.strip())
 
+    def normalize_thought_item(item: Union[str, dict]) -> str:
+        """Extract text from thought item (handles both string and object format)."""
+        if isinstance(item, dict):
+            return normalize_string(item.get("text", ""))
+        return normalize_string(item)
+
     def normalize_subcluster(s: dict) -> dict:
         """Normalize subcluster with explicit key order."""
         # Key order: subcluster_name, tags, thought_items
         return {
             "subcluster_name": normalize_string(s.get("subcluster_name", "")),
             "tags": sorted([normalize_string(t) for t in s.get("tags", [])]),
-            "thought_items": sorted([normalize_string(i) for i in s.get("thought_items", [])]),
+            "thought_items": sorted([normalize_thought_item(i) for i in s.get("thought_items", [])]),
         }
 
     def normalize_cluster(c: dict) -> dict:
@@ -231,7 +256,7 @@ def compute_content_hash(clusters: List[dict]) -> str:
                 key=lambda x: x["subcluster_name"]
             ),
             "tags": sorted([normalize_string(t) for t in c.get("tags", [])]),
-            "thought_items": sorted([normalize_string(i) for i in c.get("thought_items", [])]),
+            "thought_items": sorted([normalize_thought_item(i) for i in c.get("thought_items", [])]),
         }
 
     # Sort clusters by cluster_name, normalize all content
