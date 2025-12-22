@@ -722,7 +722,7 @@ class TestDeleteData:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "deleted"
-        assert data["deleted"]["clarity_clusters"] == 1
+        assert data["deleted"]["boards"] == 1
         assert "permanently deleted" in data["message"]
 
         # Verify actually deleted from DB

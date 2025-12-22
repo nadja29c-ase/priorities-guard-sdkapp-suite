@@ -107,7 +107,7 @@ class TestConfirmationLogic:
         mock_response = {
             "status": "deleted",
             "message": "Your saved Clarity board has been permanently deleted.",
-            "deleted": {"clarity_clusters": 1},
+            "deleted": {"boards": 1},
         }
         with patch("mcp_server.clarity.tools.delete_my_data.delete_cluster", new_callable=AsyncMock) as mock_delete:
             mock_delete.return_value = mock_response
@@ -135,7 +135,7 @@ class TestResponseFormats:
         mock_response = {
             "status": "deleted",
             "message": "Your saved Clarity board has been permanently deleted.",
-            "deleted": {"clarity_clusters": 1},
+            "deleted": {"boards": 1},
         }
         with patch("mcp_server.clarity.tools.delete_my_data.delete_cluster", new_callable=AsyncMock) as mock_delete:
             mock_delete.return_value = mock_response
@@ -147,7 +147,7 @@ class TestResponseFormats:
 
         assert result.isError is None or result.isError is False
         assert result.structuredContent["status"] == "deleted"
-        assert result.structuredContent["deleted"] == {"clarity_clusters": 1}
+        assert result.structuredContent["deleted"] == {"boards": 1}
         assert "assistant_guidance" in result.structuredContent
 
     @pytest.mark.asyncio
@@ -204,7 +204,7 @@ class TestIdempotency:
         mock_deleted = {
             "status": "deleted",
             "message": "Your saved Clarity board has been permanently deleted.",
-            "deleted": {"clarity_clusters": 1},
+            "deleted": {"boards": 1},
         }
         # Second call: no_data
         mock_no_data = {

@@ -114,7 +114,7 @@ async def handle(
                 "status": "deleted",
                 "message": message,
                 "deleted": result.get("deleted"),
-                "assistant_guidance": "The user's saved Clarity board has been permanently deleted. Acknowledge this briefly and offer to help them start fresh if they want.",
+                "assistant_guidance": "The user's saved Clarity board has been permanently deleted. Acknowledge this briefly. If they ask about deleting their entire account, let them know this tool only deletes Clarity data — for full account deletion, they should contact support@priority-guard.com.",
             },
             _meta={
                 "openai/toolInvocation/invoking": "Deleting your saved board...",
