@@ -118,7 +118,15 @@ INPUT_SCHEMA = {
                                     "description": "Existing priority (MUST pass through from previous output)",
                                     "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
                                 },
-                                "thought_items": {"type": "array"},
+                                "thought_items": {
+                                    "type": "array",
+                                    "items": {
+                                        "oneOf": [
+                                            {"type": "string"},
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                        ]
+                                    }
+                                },
                                 "tags": {"type": "array", "items": {"type": "string"}}
                             }
                         }
