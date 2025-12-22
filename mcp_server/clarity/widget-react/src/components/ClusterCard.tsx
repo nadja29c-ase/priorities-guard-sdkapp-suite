@@ -1,6 +1,6 @@
 import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import type { Cluster } from '../types'
-import { truncateText, sortSubclustersByPriority } from '../utils'
+import { truncateText, sortSubclustersByPriority, normalizeThoughtItem, sortThoughtItemsByPriority } from '../utils'
 import { PriorityBadge } from './PriorityBadge'
 import { TagPill } from './TagPill'
 import { ThoughtItem } from './ThoughtItem'
@@ -12,9 +12,13 @@ interface ClusterCardProps {
 
 export function ClusterCard({ cluster }: ClusterCardProps) {
   const hasPriority = cluster.priority?.rank
-  const items = cluster.thought_items ?? []
+  const rawItems = cluster.thought_items ?? []
   const subclusters = cluster.subclusters ?? []
   const tags = cluster.tags ?? []
+
+  // Normalize and sort thought items by priority
+  const normalizedItems = rawItems.map(normalizeThoughtItem)
+  const sortedItems = sortThoughtItemsByPriority(normalizedItems)
 
   // Sort subclusters by priority
   const sortedSubclusters = sortSubclustersByPriority(subclusters)
@@ -46,10 +50,10 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       )}
 
       {/* Direct thought items */}
-      {items.length > 0 && (
+      {sortedItems.length > 0 && (
         <div className="space-y-2">
-          {items.map((item, i) => (
-            <ThoughtItem key={i} text={item} />
+          {sortedItems.map((item, i) => (
+            <ThoughtItem key={`${cluster.cluster_name}-item-${i}-${item.text.slice(0,20)}`} item={item} />
           ))}
         </div>
       )}

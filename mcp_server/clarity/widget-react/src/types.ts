@@ -2,9 +2,17 @@
 
 export type Rank = 'P1' | 'P2' | 'P3'
 
+// Thought item types - accepts both string and object formats
+export interface ThoughtItem {
+  text: string
+  priority?: { rank: Rank }
+}
+
+export type ThoughtItemInput = string | ThoughtItem
+
 export interface Subcluster {
   subcluster_name: string
-  thought_items?: string[]
+  thought_items?: ThoughtItemInput[]
   sum_thought_items: number
   tags?: string[]
   priority?: { rank: Rank }
@@ -12,7 +20,7 @@ export interface Subcluster {
 
 export interface Cluster {
   cluster_name: string
-  thought_items?: string[]
+  thought_items?: ThoughtItemInput[]
   subclusters?: Subcluster[]
   sum_thought_items: number
   tags?: string[]

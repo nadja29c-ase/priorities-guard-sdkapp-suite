@@ -1,7 +1,10 @@
 """
 Prioritize Clusters Tool.
 
-Allows user to mark MAX 3 clusters or subclusters as P1/P2/P3.
+Single authority for ALL priority mutations across the board.
+Handles clusters, subclusters, AND thought item priorities.
+
+Allows user to mark MAX 3 entities as P1/P2/P3.
 Updates widget to visually highlight priorities and reorder display.
 
 Self-registers at import time.
@@ -12,7 +15,7 @@ Role boundaries:
 - Tool: Receives final decisions, updates widget (execution only)
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional, Union
 import copy
 
 import structlog
@@ -44,6 +47,10 @@ ERROR_INVALID_CLUSTER = "Cluster or subcluster not found. Please reference a val
 ERROR_NO_BOARD = "No board available. Use organize_thoughts first to create a board."
 ERROR_PARENT_AND_CHILD = "Cannot prioritize both a cluster and its subcluster. Choose one."
 ERROR_INVALID_RANK = "Invalid rank. Must be P1, P2, or P3."
+ERROR_AMBIGUOUS_NAME = "'{name}' exists as both a cluster and subcluster. Please rename one to make it unique."
+ERROR_INVALID_PARENT = "Parent '{parent}' not found. Please reference a valid cluster or subcluster name."
+ERROR_ITEM_INDEX_OUT_OF_BOUNDS = "Item index {index} is out of bounds for '{parent}' (has {count} items)."
+ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it first or choose a different rank."
 
 # ============================================================================
 # Tool Metadata
@@ -55,7 +62,7 @@ DESCRIPTION = """
 PURPOSE: Marks up to 3 clusters or subclusters as P1/P2/P3 priorities on the board.
 This helps the user focus on what really matters most and reduce overwhelm but also be more .
 
-CRITICAL: NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS - KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES - THIS WILL CREATE CLARITY AND EASE.
+CRITICAL: NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS - ACKNOWLEDGE IT AND KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES - THIS WILL CREATE CLARITY AND EASE.
 
 WHEN TO CALL:
 - After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
@@ -97,13 +104,21 @@ INPUT_SCHEMA = {
         },
         "priorities": {
             "type": "array",
-            "description": "Priority assignments (max 3). Use cluster_name for clusters, subcluster_name for subclusters.",
+            "description": "Priority assignments (max 3). Use name for clusters/subclusters, or item_index + parent_name for thought items.",
             "items": {
                 "type": "object",
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "The cluster_name or subcluster_name to prioritize"
+                        "description": "The cluster_name or subcluster_name to prioritize (for cluster/subcluster targeting)"
+                    },
+                    "item_index": {
+                        "type": "integer",
+                        "description": "0-based position in parent's thought_items array (for thought item targeting)"
+                    },
+                    "parent_name": {
+                        "type": "string",
+                        "description": "Required when targeting a thought item - the cluster or subcluster name containing the item"
                     },
                     "rank": {
                         "type": "string",
@@ -116,7 +131,7 @@ INPUT_SCHEMA = {
                         "description": "Optional reason for prioritization"
                     }
                 },
-                "required": ["name", "rank"]
+                "required": ["rank"]
             },
             "maxItems": 3
         }
@@ -132,8 +147,16 @@ REQUIRED_SCOPES = ["clarity.write"]
 
 
 class PriorityInput(BaseModel):
-    """A single priority assignment."""
-    name: str
+    """A single priority assignment.
+
+    Targeting rules:
+    - Cluster: { name: "Work", rank: "P1" }
+    - Subcluster: { name: "Urgent Tasks", rank: "P2" }
+    - Thought item: { item_index: 0, parent_name: "Work", rank: "P3" }
+    """
+    name: Optional[str] = None  # For cluster/subcluster targeting
+    item_index: Optional[int] = None  # For thought item targeting
+    parent_name: Optional[str] = None  # Required when targeting thought item
     rank: str
     reason: Optional[str] = None
 
@@ -151,11 +174,19 @@ class PriorityInput(BaseModel):
             raise ValueError(f"Invalid reason: {v}. Must be 'blocker' or 'goal-aligned'.")
         return v
 
+    def is_item_target(self) -> bool:
+        """Check if this priority targets a thought item."""
+        return self.item_index is not None
+
+    def is_container_target(self) -> bool:
+        """Check if this priority targets a cluster or subcluster."""
+        return self.name is not None and self.item_index is None
+
 
 class SubclusterInput(BaseModel):
     """Subcluster structure."""
     subcluster_name: str
-    thought_items: List[str] = Field(default_factory=list)
+    thought_items: List[Union[str, dict]] = Field(default_factory=list)  # string or {text, priority?}
     tags: List[str] = Field(default_factory=list)
     priority: Optional[dict] = None  # Will be added by tool
 
@@ -163,7 +194,7 @@ class SubclusterInput(BaseModel):
 class ClusterInput(BaseModel):
     """Cluster structure."""
     cluster_name: str
-    thought_items: List[str] = Field(default_factory=list)
+    thought_items: List[Union[str, dict]] = Field(default_factory=list)  # string or {text, priority?}
     subclusters: List[SubclusterInput] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
     priority: Optional[dict] = None  # Will be added by tool
@@ -207,14 +238,42 @@ def _find_all_names(clusters: List[dict]) -> tuple[set, set, dict]:
     return cluster_names, subcluster_names, subcluster_to_parent
 
 
+def _get_thought_item_count(container: dict) -> int:
+    """Get the count of thought items in a container (cluster or subcluster)."""
+    return len(container.get("thought_items", []))
+
+
+def _find_container_by_name(clusters: List[dict], name: str) -> tuple[Optional[dict], str]:
+    """
+    Find a container (cluster or subcluster) by name.
+
+    Returns:
+        - container: The cluster or subcluster dict, or None if not found
+        - container_type: "cluster", "subcluster", or "" if not found
+    """
+    # Check clusters first
+    for cluster in clusters:
+        if cluster.get("cluster_name") == name:
+            return cluster, "cluster"
+
+    # Check subclusters
+    for cluster in clusters:
+        for subcluster in cluster.get("subclusters", []):
+            if subcluster.get("subcluster_name") == name:
+                return subcluster, "subcluster"
+
+    return None, ""
+
+
 def _validate_priorities(
     priorities: List[PriorityInput],
+    clusters_data: List[dict],
     cluster_names: set,
     subcluster_names: set,
     subcluster_to_parent: dict
 ) -> Optional[str]:
     """
-    Validate priority assignments.
+    Validate priority assignments across all entity types.
 
     Returns error message if invalid, None if valid.
     """
@@ -222,26 +281,58 @@ def _validate_priorities(
     if len(priorities) > MAX_PRIORITIES:
         return ERROR_TOO_MANY_PRIORITIES
 
-    # Check for duplicate ranks
+    # Check for duplicate ranks in incoming request
     ranks_used = set()
     for p in priorities:
         if p.rank in ranks_used:
             return ERROR_DUPLICATE_RANK
         ranks_used.add(p.rank)
 
-    # Check all names are valid and track what's prioritized
+    # Check for ambiguous names (exists as both cluster and subcluster)
+    ambiguous_names = cluster_names & subcluster_names
+    for p in priorities:
+        if p.is_container_target() and p.name in ambiguous_names:
+            return ERROR_AMBIGUOUS_NAME.format(name=p.name)
+
+    # Validate each priority target
     prioritized_clusters = set()
     prioritized_subclusters = set()
 
     for p in priorities:
-        if p.name in cluster_names:
-            prioritized_clusters.add(p.name)
-        elif p.name in subcluster_names:
-            prioritized_subclusters.add(p.name)
-        else:
-            return ERROR_INVALID_CLUSTER
+        if p.is_item_target():
+            # Targeting a thought item - validate parent_name and item_index
+            if not p.parent_name:
+                return ERROR_INVALID_PARENT.format(parent="(empty)")
 
-    # Check for parent + child conflict
+            # Check for ambiguous parent name
+            if p.parent_name in ambiguous_names:
+                return ERROR_AMBIGUOUS_NAME.format(name=p.parent_name)
+
+            container, _container_type = _find_container_by_name(clusters_data, p.parent_name)
+            if container is None:
+                return ERROR_INVALID_PARENT.format(parent=p.parent_name)
+
+            item_count = _get_thought_item_count(container)
+            if p.item_index < 0 or p.item_index >= item_count:
+                return ERROR_ITEM_INDEX_OUT_OF_BOUNDS.format(
+                    index=p.item_index,
+                    parent=p.parent_name,
+                    count=item_count
+                )
+
+        elif p.is_container_target():
+            # Targeting a cluster or subcluster
+            if p.name in cluster_names:
+                prioritized_clusters.add(p.name)
+            elif p.name in subcluster_names:
+                prioritized_subclusters.add(p.name)
+            else:
+                return ERROR_INVALID_CLUSTER
+        else:
+            # Neither name nor item_index provided
+            return "Priority must have either 'name' (for cluster/subcluster) or 'item_index' + 'parent_name' (for thought item)."
+
+    # Check for parent + child conflict (cluster and its subcluster both prioritized)
     for sub_name in prioritized_subclusters:
         parent_name = subcluster_to_parent.get(sub_name)
         if parent_name and parent_name in prioritized_clusters:
@@ -250,14 +341,43 @@ def _validate_priorities(
     return None
 
 
+def _normalize_thought_item(item: Union[str, dict]) -> dict:
+    """Convert string thought item to object format."""
+    if isinstance(item, str):
+        return {"text": item}
+    return item
+
+
+def _clear_all_thought_item_priorities(items: List[Union[str, dict]]) -> List[Union[str, dict]]:
+    """Clear priorities from all thought items, preserving object structure."""
+    result = []
+    for item in items:
+        if isinstance(item, dict):
+            # Keep object format, clear priority
+            result.append({"text": item.get("text", ""), "priority": None})
+        else:
+            # Keep as string (no priority to clear)
+            result.append(item)
+    return result
+
+
 def _apply_priorities(clusters: List[dict], priorities: List[PriorityInput]) -> List[dict]:
     """
-    Apply priority metadata to clusters and subclusters.
+    Apply priority metadata to clusters, subclusters, and thought items.
 
     Returns deep copy of clusters with priority fields added.
+    Converts string thought items to objects when prioritized.
+    Clears priorities from entities not in the priorities list.
     """
-    # Build lookup: name -> priority
-    priority_map = {p.name: {"rank": p.rank, "reason": p.reason} for p in priorities}
+    # Build lookups
+    container_priority_map = {}  # name -> {rank, reason}
+    item_priority_map = {}  # (parent_name, item_index) -> {rank, reason}
+
+    for p in priorities:
+        if p.is_item_target():
+            item_priority_map[(p.parent_name, p.item_index)] = {"rank": p.rank, "reason": p.reason}
+        elif p.is_container_target():
+            container_priority_map[p.name] = {"rank": p.rank, "reason": p.reason}
 
     # Deep copy to avoid mutating input
     result = copy.deepcopy(clusters)
@@ -266,18 +386,44 @@ def _apply_priorities(clusters: List[dict], priorities: List[PriorityInput]) -> 
         cluster_name = cluster.get("cluster_name", "")
 
         # Apply cluster priority
-        if cluster_name in priority_map:
-            cluster["priority"] = priority_map[cluster_name]
+        if cluster_name in container_priority_map:
+            cluster["priority"] = container_priority_map[cluster_name]
         else:
             cluster["priority"] = None
+
+        # Process cluster's direct thought items
+        items = cluster.get("thought_items", [])
+        # First clear all existing priorities
+        items = _clear_all_thought_item_priorities(items)
+        # Then apply new priorities
+        for idx in range(len(items)):
+            key = (cluster_name, idx)
+            if key in item_priority_map:
+                # Convert to object and set priority
+                items[idx] = _normalize_thought_item(items[idx])
+                items[idx]["priority"] = item_priority_map[key]
+        cluster["thought_items"] = items
 
         # Apply subcluster priorities
         for subcluster in cluster.get("subclusters", []):
             sub_name = subcluster.get("subcluster_name", "")
-            if sub_name in priority_map:
-                subcluster["priority"] = priority_map[sub_name]
+            if sub_name in container_priority_map:
+                subcluster["priority"] = container_priority_map[sub_name]
             else:
                 subcluster["priority"] = None
+
+            # Process subcluster's thought items
+            sub_items = subcluster.get("thought_items", [])
+            # First clear all existing priorities
+            sub_items = _clear_all_thought_item_priorities(sub_items)
+            # Then apply new priorities
+            for idx in range(len(sub_items)):
+                key = (sub_name, idx)
+                if key in item_priority_map:
+                    # Convert to object and set priority
+                    sub_items[idx] = _normalize_thought_item(sub_items[idx])
+                    sub_items[idx]["priority"] = item_priority_map[key]
+            subcluster["thought_items"] = sub_items
 
     return result
 
@@ -342,6 +488,7 @@ async def handle(
     # Validate priorities
     error = _validate_priorities(
         request.priorities,
+        clusters_data,
         cluster_names,
         subcluster_names,
         subcluster_to_parent

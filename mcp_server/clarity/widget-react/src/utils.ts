@@ -1,4 +1,4 @@
-import type { Cluster, Rank, Subcluster } from './types'
+import type { Cluster, Rank, Subcluster, ThoughtItem, ThoughtItemInput } from './types'
 
 /**
  * Extract structuredContent from callTool result (tries multiple paths)
@@ -50,9 +50,19 @@ export function truncateText(text: string | undefined, maxLength = 80): string {
 }
 
 /**
+ * Normalize a thought item input to ThoughtItem object
+ */
+export function normalizeThoughtItem(item: ThoughtItemInput): ThoughtItem {
+  if (typeof item === 'string') {
+    return { text: item }
+  }
+  return item
+}
+
+/**
  * Priority ranking: P1 < P2 < P3 < null (lower = higher priority)
  */
-function rankToNumber(rank: Rank | null | undefined): number {
+export function rankToNumber(rank: Rank | null | undefined): number {
   if (rank === 'P1') return 1
   if (rank === 'P2') return 2
   if (rank === 'P3') return 3
@@ -60,25 +70,72 @@ function rankToNumber(rank: Rank | null | undefined): number {
 }
 
 /**
- * Get effective rank for a cluster (min of own rank and best subcluster rank)
+ * Sort thought items by priority (P1 first, then P2, P3, then unranked)
+ */
+export function sortThoughtItemsByPriority(items: ThoughtItem[]): ThoughtItem[] {
+  return [...items].sort((a, b) => {
+    const rankA = rankToNumber(a.priority?.rank ?? null)
+    const rankB = rankToNumber(b.priority?.rank ?? null)
+    return rankA - rankB
+  })
+}
+
+/**
+ * Get best rank from an array of thought items
+ */
+function getBestThoughtItemRank(items: ThoughtItem[]): Rank | null {
+  let bestRank: Rank | null = null
+  for (const item of items) {
+    const itemRank = item.priority?.rank ?? null
+    if (itemRank && (!bestRank || rankToNumber(itemRank) < rankToNumber(bestRank))) {
+      bestRank = itemRank
+    }
+  }
+  return bestRank
+}
+
+/**
+ * Get effective rank for a subcluster (own rank or best thought item rank)
+ */
+export function getEffectiveSubclusterRank(subcluster: Subcluster): Rank | null {
+  const ownRank = subcluster.priority?.rank ?? null
+  const items = (subcluster.thought_items ?? []).map(normalizeThoughtItem)
+  const bestItemRank = getBestThoughtItemRank(items)
+
+  // Return whichever is higher priority (lower number)
+  if (!ownRank && !bestItemRank) return null
+  if (!ownRank) return bestItemRank
+  if (!bestItemRank) return ownRank
+  return rankToNumber(ownRank) <= rankToNumber(bestItemRank) ? ownRank : bestItemRank
+}
+
+/**
+ * Get effective rank for a cluster (min of own rank, best subcluster rank, and best thought item rank)
  */
 function getEffectiveRank(cluster: Cluster): Rank | null {
   const ownRank = cluster.priority?.rank ?? null
   const subclusters = cluster.subclusters ?? []
+  const directItems = (cluster.thought_items ?? []).map(normalizeThoughtItem)
 
+  // Best rank from direct thought items
+  const bestDirectItemRank = getBestThoughtItemRank(directItems)
+
+  // Best rank from subclusters (including their thought items)
   let bestSubclusterRank: Rank | null = null
   for (const sub of subclusters) {
-    const subRank = sub.priority?.rank ?? null
-    if (subRank && (!bestSubclusterRank || rankToNumber(subRank) < rankToNumber(bestSubclusterRank))) {
-      bestSubclusterRank = subRank
+    const subEffectiveRank = getEffectiveSubclusterRank(sub)
+    if (subEffectiveRank && (!bestSubclusterRank || rankToNumber(subEffectiveRank) < rankToNumber(bestSubclusterRank))) {
+      bestSubclusterRank = subEffectiveRank
     }
   }
 
-  // Return whichever is higher priority (lower number)
-  if (!ownRank && !bestSubclusterRank) return null
-  if (!ownRank) return bestSubclusterRank
-  if (!bestSubclusterRank) return ownRank
-  return rankToNumber(ownRank) <= rankToNumber(bestSubclusterRank) ? ownRank : bestSubclusterRank
+  // Find the best among all sources
+  const candidates = [ownRank, bestSubclusterRank, bestDirectItemRank].filter((r): r is Rank => r !== null)
+  if (candidates.length === 0) return null
+
+  return candidates.reduce((best, current) =>
+    rankToNumber(current) < rankToNumber(best) ? current : best
+  )
 }
 
 /**
@@ -93,12 +150,12 @@ export function sortClustersByPriority(clusters: Cluster[]): Cluster[] {
 }
 
 /**
- * Sort subclusters by own rank
+ * Sort subclusters by effective rank (own rank or best child priority)
  */
 export function sortSubclustersByPriority(subclusters: Subcluster[]): Subcluster[] {
   return [...subclusters].sort((a, b) => {
-    const rankA = rankToNumber(a.priority?.rank ?? null)
-    const rankB = rankToNumber(b.priority?.rank ?? null)
+    const rankA = rankToNumber(getEffectiveSubclusterRank(a))
+    const rankB = rankToNumber(getEffectiveSubclusterRank(b))
     return rankA - rankB
   })
 }
