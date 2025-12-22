@@ -583,6 +583,20 @@ class TestAddThoughtItem:
         assert result is None
         assert ERROR_AMBIGUOUS_NAME.format(name="Shared") == error
 
+    def test_add_thought_item_to_container_without_thought_items_key(self):
+        """Adds item even if thought_items key is missing."""
+        clusters = [{
+            "cluster_name": "Work",
+            "subclusters": [],
+            "tags": [],
+            "priority": None,
+            # Note: no "thought_items" key at all
+        }]
+        result, error = _op_add_thought_item(clusters, "Work", "new task")
+
+        assert error is None
+        assert "new task" in result[0]["thought_items"]
+
 
 # ============================================================================
 # Add Tag Tests
