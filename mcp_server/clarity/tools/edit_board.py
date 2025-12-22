@@ -508,7 +508,7 @@ def _op_add_thought_item(clusters: List[dict], parent_name: Optional[str],
         return None, ERROR_PARENT_NOT_FOUND.format(parent=parent_name)
 
     # Append as string (not object) per spec
-    container.get("thought_items", []).append(text)
+    container.setdefault("thought_items", []).append(text)
     return result, None
 
 

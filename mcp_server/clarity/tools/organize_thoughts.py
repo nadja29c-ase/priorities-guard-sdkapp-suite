@@ -83,7 +83,7 @@ INPUT_SCHEMA = {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                        "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"],
+                                        "enum": sorted(ALLOWED_TAGS),
                                         "description": "decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others"
                                     },
                                     "maxItems": 3,
@@ -97,7 +97,7 @@ INPUT_SCHEMA = {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["decide", "research", "test", "delegate", "automate", "learn", "align"],
+                            "enum": sorted(ALLOWED_TAGS),
                             "description": "decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others"
                         },
                         "maxItems": 3,
