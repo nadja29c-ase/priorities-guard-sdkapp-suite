@@ -90,14 +90,30 @@ INPUT_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "cluster_name": {"type": "string"},
-                    "thought_items": {"type": "array", "items": {"type": "string"}},
+                    "thought_items": {
+                        "type": "array",
+                        "items": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                            ]
+                        }
+                    },
                     "subclusters": {
                         "type": "array",
                         "items": {
                             "type": "object",
                             "properties": {
                                 "subcluster_name": {"type": "string"},
-                                "thought_items": {"type": "array", "items": {"type": "string"}},
+                                "thought_items": {
+                                    "type": "array",
+                                    "items": {
+                                        "oneOf": [
+                                            {"type": "string"},
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                        ]
+                                    }
+                                },
                                 "tags": {"type": "array", "items": {"type": "string"}}
                             }
                         }
