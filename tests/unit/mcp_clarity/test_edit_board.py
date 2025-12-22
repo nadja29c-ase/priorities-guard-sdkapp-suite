@@ -11,6 +11,7 @@ Tests:
 7. add_tag operations
 8. remove_tag operations
 9. Error handling
+10. Batch mode operations
 """
 
 import pytest
@@ -42,6 +43,9 @@ from mcp_server.clarity.tools.edit_board import (
     ERROR_TAG_NOT_FOUND,
     ERROR_AMBIGUOUS_NAME,
     ERROR_TEXT_TOO_LONG,
+    ERROR_MIXED_MODE,
+    ERROR_NO_OPERATION,
+    ERROR_EMPTY_BATCH,
 )
 
 
@@ -754,3 +758,128 @@ class TestRemoveTag:
 
         assert result is None
         assert ERROR_AMBIGUOUS_NAME.format(name="Shared") == error
+
+
+# ============================================================================
+# Batch Mode Tests
+# ============================================================================
+
+
+class TestBatchMode:
+    """Tests for batch mode (operations array)."""
+
+    @pytest.mark.asyncio
+    async def test_batch_two_operations(self):
+        """Batch: rename + set_priority in one call."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "board": [make_cluster("Work", items=["task1"])],
+                "operations": [
+                    {"operation": "rename_cluster", "target_name": "Work", "new_name": "Career"},
+                    {"operation": "set_priority", "target_name": "Career", "rank": "P1"},
+                ],
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        clusters = result.structuredContent["clusters"]
+
+        # Verify rename happened
+        assert clusters[0]["cluster_name"] == "Career"
+        # Verify priority set
+        assert clusters[0]["priority"]["rank"] == "P1"
+        # Verify batch message
+        assert "Completed 2 edits" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_batch_first_fails(self):
+        """First op fails → nothing applied."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "board": [make_cluster("Work", items=["task1"])],
+                "operations": [
+                    {"operation": "rename_cluster", "target_name": "NotExist", "new_name": "Career"},
+                    {"operation": "set_priority", "target_name": "Work", "rank": "P1"},
+                ],
+            },
+        )
+
+        assert result.isError is True
+        assert "Operation 1" in result.content[0].text
+        assert "rename_cluster" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_batch_second_fails(self):
+        """Second op fails → returns error with index."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "board": [make_cluster("Work", items=["task1"])],
+                "operations": [
+                    {"operation": "rename_cluster", "target_name": "Work", "new_name": "Career"},
+                    {"operation": "set_priority", "target_name": "NotExist", "rank": "P1"},
+                ],
+            },
+        )
+
+        assert result.isError is True
+        assert "Operation 2" in result.content[0].text
+        assert "set_priority" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_batch_empty_array(self):
+        """Empty operations array → ERROR_EMPTY_BATCH."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "board": [make_cluster("Work", items=["task1"])],
+                "operations": [],
+            },
+        )
+
+        assert result.isError is True
+        assert ERROR_EMPTY_BATCH in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_mixed_mode_rejected(self):
+        """Both operation and operations → ERROR_MIXED_MODE."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "board": [make_cluster("Work", items=["task1"])],
+                "operation": "set_priority",
+                "operations": [
+                    {"operation": "set_priority", "target_name": "Work", "rank": "P1"},
+                ],
+            },
+        )
+
+        assert result.isError is True
+        assert ERROR_MIXED_MODE in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_single_op_still_works(self):
+        """Existing single-op calls unchanged."""
+        result = await handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "board": [make_cluster("Work", items=["task1"])],
+                "operation": "set_priority",
+                "target_name": "Work",
+                "rank": "P1",
+            },
+        )
+
+        assert result.isError is None or result.isError is False
+        clusters = result.structuredContent["clusters"]
+        assert clusters[0]["priority"]["rank"] == "P1"
+        # Single op message format
+        assert "Set P1" in result.content[0].text

@@ -68,6 +68,9 @@ ERROR_TAG_LIMIT = "'{name}' already has 3 tags (maximum). Remove a tag first."
 ERROR_TAG_NOT_FOUND = "Tag '{tag}' not found on '{name}'."
 ERROR_AMBIGUOUS_NAME = "'{name}' exists as both a cluster and subcluster. Please rename one to make it unique."
 ERROR_TEXT_TOO_LONG = f"Text exceeds maximum length of {MAX_ITEM_LENGTH} characters."
+ERROR_MIXED_MODE = "Use 'operation' (single) OR 'operations' (batch), not both."
+ERROR_NO_OPERATION = "Provide 'operation' (single) or 'operations' (batch)."
+ERROR_EMPTY_BATCH = "Batch operations list cannot be empty."
 
 # ============================================================================
 # Tool Metadata
@@ -87,6 +90,8 @@ WHEN TO CALL:
 - User says "rename X to Y" (use rename_cluster/rename_subcluster)
 - User says "delete X" or "remove X" (use delete_cluster/delete_subcluster/delete_thought_item)
 - User says "clear my priorities" (use clear_all_priorities)
+- User requests multiple changes at once (use operations array)
+  Example: "Rename X to Y and make it P1" → batch with rename_cluster + set_priority
 
 CRITICAL INPUT REQUIREMENT:
 You MUST pass the EXACT board JSON from the previous tool output.
@@ -187,9 +192,30 @@ INPUT_SCHEMA = {
             "type": "string",
             "enum": sorted(ALLOWED_TAGS),
             "description": "For add_tag/remove_tag operations"
+        },
+        "operations": {
+            "type": "array",
+            "description": "Batch mode: multiple operations applied in order. Use EITHER 'operation' (single) OR 'operations' (batch), not both.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": list(VALID_OPERATIONS)
+                    },
+                    "target_name": {"type": "string"},
+                    "parent_name": {"type": "string"},
+                    "item_index": {"type": "integer"},
+                    "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
+                    "new_name": {"type": "string"},
+                    "text": {"type": "string"},
+                    "tag": {"type": "string", "enum": sorted(ALLOWED_TAGS)}
+                },
+                "required": ["operation"]
+            }
         }
     },
-    "required": ["board", "operation"]
+    "required": ["board"]
 }
 
 REQUIRED_SCOPES = ["clarity.write"]
@@ -216,9 +242,8 @@ class ClusterInput(BaseModel):
     priority: Optional[dict] = None
 
 
-class EditBoardRequest(BaseModel):
-    """Request structure for edit_board tool."""
-    board: List[ClusterInput]
+class SingleOperation(BaseModel):
+    """One edit operation (for batch mode)."""
     operation: str
     target_name: Optional[str] = None
     parent_name: Optional[str] = None
@@ -227,6 +252,22 @@ class EditBoardRequest(BaseModel):
     new_name: Optional[str] = None
     text: Optional[str] = None
     tag: Optional[str] = None
+
+
+class EditBoardRequest(BaseModel):
+    """Request structure — single or batch mode."""
+    board: List[ClusterInput]
+    # Single mode
+    operation: Optional[str] = None
+    target_name: Optional[str] = None
+    parent_name: Optional[str] = None
+    item_index: Optional[int] = None
+    rank: Optional[str] = None
+    new_name: Optional[str] = None
+    text: Optional[str] = None
+    tag: Optional[str] = None
+    # Batch mode
+    operations: Optional[List[SingleOperation]] = None
 
 
 # ============================================================================
@@ -577,6 +618,34 @@ def _op_remove_tag(clusters: List[dict], target_name: Optional[str],
     return result, None
 
 
+def _dispatch_operation(clusters: List[dict], op: SingleOperation) -> tuple:
+    """Route operation to handler. Returns (updated_clusters, error)."""
+    if op.operation == "set_priority":
+        return _op_set_priority(clusters, op.target_name, op.parent_name, op.item_index, op.rank)
+    elif op.operation == "clear_priority":
+        return _op_clear_priority(clusters, op.target_name, op.parent_name, op.item_index)
+    elif op.operation == "add_thought_item":
+        return _op_add_thought_item(clusters, op.parent_name, op.text)
+    elif op.operation == "add_tag":
+        return _op_add_tag(clusters, op.target_name, op.tag)
+    elif op.operation == "remove_tag":
+        return _op_remove_tag(clusters, op.target_name, op.tag)
+    elif op.operation == "rename_cluster":
+        return _op_rename_cluster(clusters, op.target_name, op.new_name)
+    elif op.operation == "rename_subcluster":
+        return _op_rename_subcluster(clusters, op.target_name, op.parent_name, op.new_name)
+    elif op.operation == "delete_cluster":
+        return _op_delete_cluster(clusters, op.target_name)
+    elif op.operation == "delete_subcluster":
+        return _op_delete_subcluster(clusters, op.target_name, op.parent_name)
+    elif op.operation == "delete_thought_item":
+        return _op_delete_thought_item(clusters, op.parent_name, op.item_index)
+    elif op.operation == "clear_all_priorities":
+        return _op_clear_all_priorities(clusters)
+    else:
+        return None, ERROR_INVALID_OPERATION
+
+
 # ============================================================================
 # Tool Handler
 # ============================================================================
@@ -588,12 +657,13 @@ async def handle(
     arguments: dict,
 ) -> mcp_types.CallToolResult:
     """
-    Edit an existing board with a single operation.
+    Edit an existing board with single or batch operations.
 
     Args:
         user_id: Authenticated user ID from JWT
         correlation_id: Request correlation ID for tracing
-        arguments: { board: [...], operation: "...", ... }
+        arguments: { board: [...], operation: "..." } for single mode
+                   { board: [...], operations: [...] } for batch mode
 
     Returns:
         CallToolResult with edited board and widget metadata
@@ -624,86 +694,100 @@ async def handle(
             isError=True,
         )
 
-    # Validate operation
-    if request.operation not in VALID_OPERATIONS:
+    # CRITICAL: Check empty batch FIRST (before mode detection)
+    if request.operations is not None and len(request.operations) == 0:
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(type="text", text=ERROR_INVALID_OPERATION)],
+            content=[mcp_types.TextContent(type="text", text=ERROR_EMPTY_BATCH)],
             isError=True,
         )
 
-    # Convert to dicts for processing
-    clusters_data = [c.model_dump() for c in request.board]
+    # Determine mode
+    if request.operations and request.operation:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text=ERROR_MIXED_MODE)],
+            isError=True,
+        )
 
-    # Route to operation handler
-    if request.operation == "set_priority":
-        result, error = _op_set_priority(
-            clusters_data, request.target_name, request.parent_name,
-            request.item_index, request.rank
+    if not request.operations and not request.operation:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text=ERROR_NO_OPERATION)],
+            isError=True,
         )
-    elif request.operation == "clear_priority":
-        result, error = _op_clear_priority(
-            clusters_data, request.target_name, request.parent_name, request.item_index
-        )
-    elif request.operation == "rename_cluster":
-        result, error = _op_rename_cluster(clusters_data, request.target_name, request.new_name)
-    elif request.operation == "rename_subcluster":
-        result, error = _op_rename_subcluster(
-            clusters_data, request.target_name, request.parent_name, request.new_name
-        )
-    elif request.operation == "delete_cluster":
-        result, error = _op_delete_cluster(clusters_data, request.target_name)
-    elif request.operation == "delete_subcluster":
-        result, error = _op_delete_subcluster(
-            clusters_data, request.target_name, request.parent_name
-        )
-    elif request.operation == "delete_thought_item":
-        result, error = _op_delete_thought_item(
-            clusters_data, request.parent_name, request.item_index
-        )
-    elif request.operation == "clear_all_priorities":
-        result, error = _op_clear_all_priorities(clusters_data)
-    elif request.operation == "add_thought_item":
-        result, error = _op_add_thought_item(clusters_data, request.parent_name, request.text)
-    elif request.operation == "add_tag":
-        result, error = _op_add_tag(clusters_data, request.target_name, request.tag)
-    elif request.operation == "remove_tag":
-        result, error = _op_remove_tag(clusters_data, request.target_name, request.tag)
+
+    # Build ops list
+    if request.operations:
+        ops = request.operations
     else:
-        result, error = None, ERROR_INVALID_OPERATION
+        # Wrap single op
+        ops = [SingleOperation(
+            operation=request.operation,
+            target_name=request.target_name,
+            parent_name=request.parent_name,
+            item_index=request.item_index,
+            rank=request.rank,
+            new_name=request.new_name,
+            text=request.text,
+            tag=request.tag,
+        )]
 
-    # Handle operation error
-    if error:
-        logger.warning("edit_board.operation_failed",
-                      user_id=user_id,
-                      operation=request.operation,
-                      error=error)
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(type="text", text=error)],
-            isError=True,
-        )
+    # Validate all operations
+    for op in ops:
+        if op.operation not in VALID_OPERATIONS:
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(type="text", text=ERROR_INVALID_OPERATION)],
+                isError=True,
+            )
+
+    # Execute in order — fail fast
+    clusters_data = [c.model_dump() for c in request.board]
+    completed = []
+
+    for i, op in enumerate(ops):
+        result, error = _dispatch_operation(clusters_data, op)
+        if error:
+            # Report which operation failed (1-indexed for user clarity)
+            logger.warning("edit_board.operation_failed",
+                          user_id=user_id,
+                          operation=op.operation,
+                          index=i + 1,
+                          error=error)
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(
+                    type="text",
+                    text=f"Operation {i + 1} ({op.operation}) failed: {error}"
+                )],
+                isError=True,
+            )
+        clusters_data = result
+        completed.append(op.operation)
 
     # Enrich for widget display
-    enriched = enrich_clusters(result)
+    enriched = enrich_clusters(clusters_data)
 
     # Build success message
-    operation_messages = {
-        "set_priority": f"Set {request.rank} on target.",
-        "clear_priority": "Priority cleared.",
-        "rename_cluster": f"Renamed cluster to '{request.new_name}'.",
-        "rename_subcluster": f"Renamed subcluster to '{request.new_name}'.",
-        "delete_cluster": f"Deleted cluster '{request.target_name}'.",
-        "delete_subcluster": f"Deleted subcluster '{request.target_name}'.",
-        "delete_thought_item": "Deleted thought item.",
-        "clear_all_priorities": "All priorities cleared.",
-        "add_thought_item": f"Added '{request.text}' to '{request.parent_name}'.",
-        "add_tag": f"Added tag '{request.tag}' to '{request.target_name}'.",
-        "remove_tag": f"Removed tag '{request.tag}' from '{request.target_name}'.",
-    }
-    message = operation_messages.get(request.operation, "Edit complete.")
+    if len(completed) == 1:
+        # Single operation — use detailed message
+        operation_messages = {
+            "set_priority": f"Set {request.rank} on target.",
+            "clear_priority": "Priority cleared.",
+            "rename_cluster": f"Renamed cluster to '{request.new_name}'.",
+            "rename_subcluster": f"Renamed subcluster to '{request.new_name}'.",
+            "delete_cluster": f"Deleted cluster '{request.target_name}'.",
+            "delete_subcluster": f"Deleted subcluster '{request.target_name}'.",
+            "delete_thought_item": "Deleted thought item.",
+            "clear_all_priorities": "All priorities cleared.",
+            "add_thought_item": f"Added '{request.text}' to '{request.parent_name}'.",
+            "add_tag": f"Added tag '{request.tag}' to '{request.target_name}'.",
+            "remove_tag": f"Removed tag '{request.tag}' from '{request.target_name}'.",
+        }
+        message = operation_messages.get(completed[0], "Edit complete.")
+    else:
+        # Batch mode — summary message
+        message = f"Completed {len(completed)} edits: {', '.join(completed)}."
 
     logger.info("edit_board.success",
                user_id=user_id,
-               operation=request.operation)
+               operations=completed)
 
     # Widget metadata
     meta = {
@@ -715,32 +799,38 @@ async def handle(
     }
 
     # Operation-specific guidance - always prompt about saving
-    if request.operation == "set_priority":
+    if len(completed) > 1:
+        # Batch mode — generic guidance
+        guidance = f"""Completed {len(completed)} edits. Acknowledge this briefly.
+
+IMPORTANT: These changes are NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+
+    elif completed[0] == "set_priority":
         guidance = f"""Done — {request.rank} is now set. Acknowledge this briefly.
 
 IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
 
-    elif request.operation == "clear_priority":
+    elif completed[0] == "clear_priority":
         guidance = """Priority cleared. Acknowledge this briefly.
 
 IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
 
-    elif request.operation in ("rename_cluster", "rename_subcluster"):
+    elif completed[0] in ("rename_cluster", "rename_subcluster"):
         guidance = f"""Renamed to '{request.new_name}'. Acknowledge this briefly.
 
 IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
 
-    elif request.operation in ("delete_cluster", "delete_subcluster", "delete_thought_item"):
+    elif completed[0] in ("delete_cluster", "delete_subcluster", "delete_thought_item"):
         guidance = """Deleted. Acknowledge this briefly.
 
 IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
 
-    elif request.operation == "add_thought_item":
+    elif completed[0] == "add_thought_item":
         guidance = f"""Added to '{request.parent_name}'. Acknowledge this briefly.
 
 IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
 
-    elif request.operation in ("add_tag", "remove_tag"):
+    elif completed[0] in ("add_tag", "remove_tag"):
         guidance = """Tag updated. Acknowledge this briefly.
 
 IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
