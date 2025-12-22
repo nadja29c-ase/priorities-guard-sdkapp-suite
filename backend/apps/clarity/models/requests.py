@@ -85,3 +85,20 @@ class GetClusterResponse(BaseModel):
     correctly_clustered: bool | None
     created_at: datetime  # Snapshot timestamp (reset on each upsert)
     content_hash: str | None = None  # SHA256 hash for saved state detection
+
+
+class DeleteDataRequest(BaseModel):
+    """Request body for DELETE /api/clarity/data."""
+    confirm: bool = False  # Must be True to execute deletion
+
+
+class DeleteDataResponse(BaseModel):
+    """Response body for DELETE /api/clarity/data.
+
+    Statuses:
+    - deleted: Data was successfully deleted
+    - no_data: No data found for user (idempotent success)
+    """
+    status: str  # "deleted" or "no_data"
+    message: str
+    deleted: dict[str, int] | None = None  # {"clarity_clusters": N} when status="deleted"

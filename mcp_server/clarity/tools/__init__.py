@@ -100,3 +100,4 @@ from . import read_saved_board  # noqa: F401, E402
 from . import save_board  # noqa: F401, E402
 from . import prioritize_clusters  # noqa: F401, E402
 from . import edit_board  # noqa: F401, E402
+from . import delete_my_data  # noqa: F401, E402

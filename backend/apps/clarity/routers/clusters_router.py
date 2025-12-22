@@ -30,7 +30,7 @@ CONCURRENCY MODEL:
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
@@ -38,12 +38,14 @@ import structlog
 
 from backend.core.database import get_db
 from backend.core.config import settings
-from backend.core.models import CoreUser
+from backend.core.models import CoreUser, CoreToolAuditLog
 from backend.apps.clarity.db_models import ClarityCluster
 from backend.apps.clarity.models.requests import (
     CreateClusterRequest,
     CreateClusterResponse,
     GetClusterResponse,
+    DeleteDataRequest,
+    DeleteDataResponse,
 )
 
 
@@ -307,3 +309,110 @@ async def create_cluster(
         cluster_id=cluster_id,
         created_at=created_at,
     )
+
+
+@router.delete(
+    "/data",
+    response_model=DeleteDataResponse,
+)
+async def delete_data(
+    payload: DeleteDataRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> DeleteDataResponse:
+    """
+    Delete user's Clarity data (GDPR/compliance endpoint).
+
+    Permanently deletes the user's saved board. This cannot be undone.
+    Requires confirm=true in request body to execute.
+
+    Headers:
+        X-User-ID: User UUID (required)
+        X-Internal-Secret: Internal API secret (required in production)
+
+    Body:
+        confirm: bool (must be true to execute deletion)
+
+    Returns:
+        200: {"status": "deleted", "message": "...", "deleted": {"clarity_clusters": N}}
+        200: {"status": "no_data", "message": "..."}  (idempotent - no data to delete)
+        400: Missing or false confirm parameter
+        401: Missing X-User-ID header
+        403: Invalid internal secret (production only)
+        404: User not found
+
+    Transaction Safety:
+        Delete and audit log write happen in the SAME database transaction.
+        If either fails, the entire transaction rolls back.
+    """
+    # Verify internal call (403 if invalid secret in production)
+    _verify_internal_call(request)
+
+    # Check confirmation BEFORE any database operations
+    if not payload.confirm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Deletion requires explicit confirmation. Call with confirm=true.",
+        )
+
+    # Extract and validate user_id
+    user_id_str = _extract_user_id(request)
+    user_uuid = await _verify_user_exists(user_id_str, session)
+
+    correlation_id = getattr(request.state, "correlation_id", "system")
+
+    # TRANSACTION: Delete data AND write audit log atomically
+    # Using session.begin() ensures both operations succeed or both roll back
+    async with session.begin_nested():
+        # 1. Delete user's clarity clusters
+        delete_stmt = (
+            delete(ClarityCluster)
+            .where(ClarityCluster.user_id == user_uuid)
+            .returning(ClarityCluster.id)
+        )
+        result = await session.execute(delete_stmt)
+        deleted_ids = result.scalars().all()
+        deleted_count = len(deleted_ids)
+
+        # 2. Write audit log (same transaction)
+        audit_entry = CoreToolAuditLog(
+            user_id=user_uuid,
+            app_name="clarity",
+            action="delete_my_data",
+            result_status="success" if deleted_count > 0 else "no_data",
+            details={
+                "scope": "clarity_data",
+                "rows_deleted": {"clarity_clusters": deleted_count},
+                "confirm_provided": True,
+                "trigger": "user_request",
+            },
+        )
+        session.add(audit_entry)
+
+    # Commit transaction
+    await session.commit()
+
+    # Build response
+    if deleted_count > 0:
+        logger.info(
+            "clarity.data.deleted",
+            correlation_id=correlation_id,
+            user_id=str(user_uuid),
+            deleted_count=deleted_count,
+        )
+        return DeleteDataResponse(
+            status="deleted",
+            message="Your saved Clarity board has been permanently deleted.",
+            deleted={"clarity_clusters": deleted_count},
+        )
+    else:
+        logger.info(
+            "clarity.data.no_data",
+            correlation_id=correlation_id,
+            user_id=str(user_uuid),
+        )
+        return DeleteDataResponse(
+            status="no_data",
+            message="No saved board found. Nothing to delete.",
+            deleted=None,
+        )

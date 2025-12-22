@@ -177,6 +177,7 @@ TOOL_SCOPES = {
     "save_board": ["clarity.write"],
     "prioritize_clusters": ["clarity.write"],
     "edit_board": ["clarity.write"],
+    "delete_my_data": ["clarity.write"],
 }
 
 

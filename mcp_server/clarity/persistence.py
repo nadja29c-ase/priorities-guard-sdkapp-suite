@@ -186,3 +186,76 @@ async def get_cluster(user_id: str, correlation_id: str | None = None) -> dict |
                    error=str(e),
                    user_id=user_id)
         return None
+
+
+async def delete_cluster(user_id: str, correlation_id: str | None = None) -> dict:
+    """
+    Delete user's cluster snapshot from backend.
+
+    Args:
+        user_id: User ID from JWT
+        correlation_id: Optional correlation ID for distributed tracing
+
+    Returns:
+        Response dict with status and details:
+        - {"status": "deleted", "deleted": {"clarity_clusters": N}}
+        - {"status": "no_data"}
+        - {"status": "rejected", "message": "..."}  (confirm missing)
+        - {"status": "error", "message": "..."}
+
+    Note:
+        Always returns a dict, never raises. Caller handles status appropriately.
+    """
+    # Bind correlation_id to logger for consistent tracing
+    log = logger.bind(correlation_id=correlation_id) if correlation_id else logger
+
+    try:
+        # Build headers
+        headers = {"X-User-ID": user_id}
+        if INTERNAL_API_SECRET:
+            headers["X-Internal-Secret"] = INTERNAL_API_SECRET
+        if correlation_id:
+            headers["X-Correlation-ID"] = correlation_id
+
+        client = get_http_client()
+        response = await client.delete(
+            f"{BACKEND_URL}/api/clarity/data",
+            headers=headers,
+            json={"confirm": True},  # Always confirm from tool (tool validates first)
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            log.info("clarity.delete.success",
+                    user_id=user_id,
+                    status=data.get("status"))
+            return data
+
+        # Auth issues
+        if response.status_code in (401, 403):
+            log.error("clarity.delete.auth_failed",
+                     status=response.status_code,
+                     user_id=user_id,
+                     response=response.text[:200])
+            return {"status": "error", "message": "Session expired. Please reconnect."}
+
+        # Validation failed (confirm=false)
+        if response.status_code == 400:
+            log.warning("clarity.delete.rejected",
+                       status=response.status_code,
+                       user_id=user_id,
+                       response=response.text[:200])
+            return {"status": "rejected", "message": response.json().get("detail", "Deletion rejected.")}
+
+        # Other errors (500, etc.)
+        log.error("clarity.delete.failed",
+                 status=response.status_code,
+                 user_id=user_id,
+                 response=response.text[:200])
+        return {"status": "error", "message": "Failed to delete data. Please try again or contact support@priority-guard.com"}
+
+    except Exception as e:
+        log.error("clarity.delete.error",
+                 error=str(e),
+                 user_id=user_id)
+        return {"status": "error", "message": "Failed to delete data. Please try again or contact support@priority-guard.com"}
