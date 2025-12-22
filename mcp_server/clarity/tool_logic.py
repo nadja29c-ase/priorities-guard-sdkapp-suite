@@ -75,11 +75,11 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = ""  # Empty - model ignores this anyway
-        guidance = """Tell the user what is the next step and why, then ask what matters most.
+        guidance = """ Acnowlegde what the user shared so far by backtracking or sharing neutral observations.Tell the user what is the next step and WHY, then ask what matters most.
 
-F.e. use one of these naturally:
+Use one of these naturally:
 - "Everything's out and organized. Clarity comes from knowing where to focus. What matters most right now: progress toward a goal, unblocking something stuck, or relief from what's weighing on you?"
-- "You've done the hard part — it's all out. What would help most: moving toward a goal, clearing a blocker, or getting some relief?"
+- “I’ve grouped what you shared into a few clusters so you can see the big picture. What would help most right now — progress on a goal, removing a blocker, or just getting some relief?”
 
 EXAMPLE FLOW:
         User: 'Relief, I guess'
@@ -97,11 +97,12 @@ EXAMPLE FLOW:
         message = ""  # Empty - model ignores this anyway
         guidance = """🛑 STOP - NO ADVICE - Acknowledge progress WARMLY, EXPLAIN WHAT YOU ARE DOING WITH THE USER AND WHY and then ask for more thoughts.
 
-F.e. use one of these naturally:
-- "Good — that's taking shape. Let's get everything out. What else is on your mind?"
-- "You're getting it out of your head — that's how overwhelm shrinks. Anything else?"
-- "The picture's forming. Better to capture it all now. Any loose threads?"
-- "That's a few clusters already. Once it's all out, you can see what you're dealing with. What else?"
+Use one of these naturally:
+- "That’s forming clear clusters already. Once the brain dump’s complete, we’ll decide what actually matters. What else?”
+- “I can see patterns emerging. Let’s finish getting it out, then we’ll prioritize. What else?”
+- "Good — that's taking shape. Let's get everything out - we will prioritize after. What else is on your mind?"
+- "I’m already seeing some clusters. Once it’s all out, we can see what we’re dealing with and prioritize. What else?"
+- "The picture's forming. Better to capture it all now before we prioritize in the next step. Any loose threads?"
 
 NO advice. NO task lists. Just acknowledge + ask."""
 
