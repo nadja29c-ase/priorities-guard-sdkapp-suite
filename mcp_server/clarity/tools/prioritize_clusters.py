@@ -62,10 +62,14 @@ DESCRIPTION = """
 PURPOSE: Marks up to 3 priorities (P1/P2/P3) on the board.
 This helps the user focus on what really matters most and reduce overwhelm.
 
-TARGETING:
-- Cluster/Subcluster: { name: "Work", rank: "P1" }
-- Thought item: { item_index: 0, parent_name: "Work", rank: "P1" }
-  (item_index is 0-based position in the parent's thought_items array)
+TARGETING (choose the right method):
+1. For CLUSTERS or SUBCLUSTERS → use "name":
+   { name: "Work Projects", rank: "P1" }
+   { name: "Urgent Tasks", rank: "P2" }
+
+2. For individual THOUGHT ITEMS (the bullet points inside clusters) → use "item_index" + "parent_name":
+   { item_index: 0, parent_name: "Work Projects", rank: "P3" }
+   (item_index is 0-based position in the parent's thought_items array)
 
 CRITICAL: NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS - ACKNOWLEDGE IT AND KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES - THIS WILL CREATE CLARITY AND EASE.
 
