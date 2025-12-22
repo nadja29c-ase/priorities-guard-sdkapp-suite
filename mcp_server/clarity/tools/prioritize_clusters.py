@@ -55,7 +55,7 @@ DESCRIPTION = """
 PURPOSE: Marks up to 3 clusters or subclusters as P1/P2/P3 priorities on the board.
 This helps the user focus on what really matters most and reduce overwhelm but also be more .
 
-CRITICAL: NEVER EXPLORE ROOT CAUSES - KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES.
+CRITICAL: NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS - KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES - THIS WILL CREATE CLARITY AND EASE.
 
 WHEN TO CALL:
 - After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
