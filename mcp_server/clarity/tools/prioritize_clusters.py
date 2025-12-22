@@ -490,4 +490,8 @@ register_tool(ToolDefinition(
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,
     handle=handle,
+    # OpenAI compliance annotations
+    read_only_hint=False,  # Mutates priority state
+    destructive_hint=False,  # Does not delete data
+    open_world_hint=False,  # Only affects own backend
 ))
