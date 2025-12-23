@@ -35,7 +35,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <h3 id={headingId} tabIndex={0} className="text-sm font-semibold text-default m-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]">
+          <h3 id={headingId} tabIndex={0} aria-label={`Cluster: ${cluster.cluster_name}`} className="text-sm font-semibold text-default m-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]">
             {truncateText(cluster.cluster_name, 40) || 'Untitled cluster'}
           </h3>
           {hasPriority && <PriorityBadge rank={hasPriority} />}

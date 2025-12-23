@@ -29,7 +29,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
-          <h4 id={headingId} className="text-sm font-medium text-default m-0">
+          <h4 id={headingId} aria-label={`Subcluster: ${subcluster.subcluster_name}`} className="text-sm font-medium text-default m-0">
             {truncateText(subcluster.subcluster_name, 30) || 'Untitled'}
           </h4>
           {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}
