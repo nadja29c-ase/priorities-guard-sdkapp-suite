@@ -26,17 +26,16 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
   return (
     <article
-      tabIndex={0}
       data-testid="cluster-card"
       aria-labelledby={headingId}
-      className={`rounded-2xl border bg-surface-secondary transition-shadow duration-200 p-5 flex flex-col min-h-[120px] shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ${
+      className={`rounded-2xl border bg-surface-secondary transition-shadow duration-200 p-5 flex flex-col min-h-[120px] shadow-lg ${
         hasPriority ? 'border-l-4 border-l-strong pl-6' : 'border-default'
       }`}
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <h3 id={headingId} className="text-sm font-semibold text-default m-0">
+          <h3 id={headingId} tabIndex={0} className="text-sm font-semibold text-default m-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]">
             {truncateText(cluster.cluster_name, 40) || 'Untitled cluster'}
           </h3>
           {hasPriority && <PriorityBadge rank={hasPriority} />}
