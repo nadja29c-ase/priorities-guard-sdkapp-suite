@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Clarity helps you organize scattered thoughts into visual clusters you can prioritize and save.">
-    <title>Clarity | Turn scattered thoughts into clear priorities</title>
+    <meta name="description" content="Priority Guard - AI productivity tools for ChatGPT. Organize thoughts, manage priorities, and stay focused.">
+    <title>Priority Guard | AI Productivity Tools</title>
     <style>
         * {
             box-sizing: border-box;
@@ -41,81 +41,76 @@
             }
         }
 
-        .logo {
-            width: 72px;
-            height: 58px;
-            margin-bottom: 16px;
-        }
-
         h1 {
             font-size: 28px;
             font-weight: 600;
             color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: #6e6e73;
+            margin-bottom: 40px;
+        }
+
+        .app-section {
+            margin-bottom: 32px;
+        }
+
+        .app-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             margin-bottom: 16px;
         }
 
-        .tagline {
-            font-size: 17px;
-            color: #1d1d1f;
-            margin-bottom: 32px;
-            line-height: 1.5;
+        .app-card {
+            display: block;
+            background-color: #f8fafc;
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
         }
 
-        .features {
-            text-align: left;
-            margin-bottom: 32px;
+        .app-card:hover {
+            border-color: #e2e8f0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
 
-        .feature {
+        .app-header {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
+            justify-content: center;
             gap: 12px;
-            padding: 12px 16px;
-            margin-bottom: 8px;
-            background-color: #f8fafc;
-            border-radius: 8px;
-            border-left: 3px solid #94a3b8;
-        }
-
-        .feature-icon {
-            flex-shrink: 0;
-            width: 20px;
-            height: 20px;
-            color: #64748b;
-        }
-
-        .feature-text {
-            font-size: 14px;
-            color: #4a4a4a;
-        }
-
-        .cta {
-            background-color: #f8fafc;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-
-        .cta-text {
-            font-size: 14px;
-            color: #6e6e73;
             margin-bottom: 12px;
         }
 
-        .cta-link {
-            display: inline-block;
-            background-color: #1d1d1f;
-            color: #ffffff;
-            text-decoration: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            transition: background-color 0.2s ease;
+        .app-logo {
+            width: 40px;
+            height: 32px;
         }
 
-        .cta-link:hover {
-            background-color: #000000;
+        .app-name {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        .app-description {
+            font-size: 14px;
+            color: #4a4a4a;
+            margin-bottom: 12px;
+        }
+
+        .app-cta {
+            font-size: 14px;
+            color: #2563eb;
+            font-weight: 500;
         }
 
         .footer-links {
@@ -138,7 +133,6 @@
         .support {
             font-size: 13px;
             color: #6e6e73;
-            margin-bottom: 16px;
         }
 
         .support a {
@@ -149,58 +143,28 @@
         .support a:hover {
             text-decoration: underline;
         }
-
-        .suite-note {
-            font-size: 12px;
-            color: #9ca3af;
-        }
     </style>
 </head>
 <body>
     <main class="container">
-        <svg class="logo" width="72" height="58" viewBox="0 0 64 52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M16 38 A20 20 0 1 1 48 38" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round"/>
-            <circle cx="32" cy="28" r="11" fill="#94a3b8"/>
-            <rect x="27" y="40" width="10" height="9" rx="3" fill="#94a3b8"/>
-        </svg>
-        
-        <h1>Clarity</h1>
-        
-        <p class="tagline">
-            Turn scattered thoughts into clear priorities. Clarity helps you organize what's on your mind into visual clusters you can prioritize, save, and revisit.
-        </p>
+        <h1>Priority Guard</h1>
+        <p class="subtitle">AI productivity tools for ChatGPT</p>
 
-        <div class="features">
-            <div class="feature">
-                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="3"/>
-                    <circle cx="5" cy="8" r="2"/>
-                    <circle cx="19" cy="8" r="2"/>
-                    <circle cx="5" cy="16" r="2"/>
-                    <circle cx="19" cy="16" r="2"/>
-                    <path d="M9.5 10.5L7 9M14.5 10.5L17 9M9.5 13.5L7 15M14.5 13.5L17 15"/>
-                </svg>
-                <span class="feature-text">Cluster related thoughts into visual groups</span>
-            </div>
-            <div class="feature">
-                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2L15 8L22 9L17 14L18 21L12 18L6 21L7 14L2 9L9 8L12 2Z"/>
-                </svg>
-                <span class="feature-text">Prioritize what matters most</span>
-            </div>
-            <div class="feature">
-                <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                    <polyline points="17 21 17 13 7 13 7 21"/>
-                    <polyline points="7 3 7 8 15 8"/>
-                </svg>
-                <span class="feature-text">Save your board and pick up where you left off</span>
-            </div>
-        </div>
-
-        <div class="cta">
-            <p class="cta-text">Available as a ChatGPT app</p>
-            <a href="https://chatgpt.com" class="cta-link">Open ChatGPT</a>
+        <div class="app-section">
+            <p class="app-label">Our Apps</p>
+            
+            <a href="/clarity" class="app-card">
+                <div class="app-header">
+                    <svg class="app-logo" width="40" height="32" viewBox="0 0 64 52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M16 38 A20 20 0 1 1 48 38" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round"/>
+                        <circle cx="32" cy="28" r="11" fill="#94a3b8"/>
+                        <rect x="27" y="40" width="10" height="9" rx="3" fill="#94a3b8"/>
+                    </svg>
+                    <span class="app-name">Clarity</span>
+                </div>
+                <p class="app-description">Turn scattered thoughts into clear priorities. Organize what's on your mind into visual clusters you can save and revisit.</p>
+                <span class="app-cta">Learn more →</span>
+            </a>
         </div>
 
         <div class="footer-links">
@@ -209,10 +173,8 @@
         </div>
 
         <p class="support">
-            Questions? Contact <a href="mailto:support@priority-guard.com">support@priority-guard.com</a>
+            Questions? <a href="mailto:support@priority-guard.com">support@priority-guard.com</a>
         </p>
-
-        <p class="suite-note">Part of the Priority Guard suite</p>
     </main>
 </body>
 </html>

@@ -247,6 +247,13 @@ async def terms_of_service():
     return FileResponse(file_path)
 
 
+@app.get("/clarity")
+async def clarity_landing():
+    """Serve the Clarity landing page."""
+    file_path = Path(__file__).parent / "static" / "clarity.html"
+    return FileResponse(file_path)
+
+
 # Include new modular routers
 app.include_router(tools_router, prefix="/api/focused/tools")
 app.include_router(webhook_router, prefix="/webhook/focused")
