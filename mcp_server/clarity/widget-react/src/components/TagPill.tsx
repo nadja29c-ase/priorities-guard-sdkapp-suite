@@ -7,7 +7,7 @@ interface TagPillProps {
 
 export function TagPill({ tag, size = 'sm' }: TagPillProps) {
   return (
-    <span role="listitem" aria-label={`Tag: ${tag}`}>
+    <span role="listitem" aria-label={tag}>
       <Badge color="secondary" variant="soft" size={size} aria-hidden="true">
         {tag.toLowerCase()}
       </Badge>
