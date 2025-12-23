@@ -39,7 +39,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
 
       {/* Items */}
       {sortedItems.length > 0 && (
-        <ul className="space-y-1 list-none m-0 p-0">
+        <ul role="list" className="space-y-1 list-none m-0 p-0">
           {sortedItems.map((item, i) => (
             <ThoughtItem key={`${subcluster.subcluster_name}-item-${i}-${item.text.slice(0,20)}`} item={item} size="small" />
           ))}

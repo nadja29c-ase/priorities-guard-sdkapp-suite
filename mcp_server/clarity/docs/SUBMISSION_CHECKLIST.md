@@ -2,15 +2,15 @@
 
 ## Pre-Submission Verification
 
-- [ ] Privacy policy live at https://www.priority-guard.com/privacy
-- [ ] Support email configured in OpenAI developer portal
+- [X] Privacy policy live at https://www.priority-guard.com/privacy
+- [X] Support email configured in OpenAI developer portal
 - [ ] Reviewer testing guide attached (docs/REVIEWER_TESTING_GUIDE.md)
 - [ ] Screenshots captured showing real functionality
 - [ ] Annotation justifications document attached (docs/ANNOTATION_JUSTIFICATIONS.md)
 
 ## Technical Verification
 
-- [ ] All tools have correct annotations (readOnlyHint, destructiveHint, openWorldHint)
+- [X] All tools have correct annotations (readOnlyHint, destructiveHint, openWorldHint)
 - [ ] Widget renders in both light and dark mode
 - [ ] Keyboard navigation works (tab through clusters)
 - [ ] Focus rings visible in both themes
@@ -19,7 +19,7 @@
 
 ## Store Listing Metadata
 
-- [ ] App name: Clarity
-- [ ] Description: Clear and accurate
-- [ ] Support email: clarity@priority-guard.com
-- [ ] Privacy policy URL: https://www.priority-guard.com/privacy
+- [X] App name: Clarity
+- [X] Description: Clear and accurate
+- [X] Support email: clarity@priority-guard.com
+- [X] Privacy policy URL: https://www.priority-guard.com/privacy

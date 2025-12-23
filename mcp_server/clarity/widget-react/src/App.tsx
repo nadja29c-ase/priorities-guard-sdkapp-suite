@@ -94,7 +94,11 @@ function App() {
   }
 
   return (
-    <div className="bg-gray-100 rounded-2xl px-8 py-6 -m-4">
+    <main
+      role="main"
+      aria-label="Clarity Board"
+      className="bg-gray-100 rounded-2xl px-8 py-6 -m-4"
+    >
       <Header
         ref={saveButtonRef}
         canSave={clusters.length > 0}
@@ -127,7 +131,7 @@ function App() {
         isSaving={isSaving}
         triggerRef={saveButtonRef}
       />
-    </div>
+    </main>
   )
 }
 

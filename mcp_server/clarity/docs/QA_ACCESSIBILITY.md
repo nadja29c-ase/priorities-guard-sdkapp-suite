@@ -4,10 +4,12 @@ Run through this checklist before submission.
 
 ## Keyboard Navigation
 
-- [ ] Tab through widget — verify focus ring visible on each ClusterCard
-- [ ] Count tab stops — should equal number of clusters (NOT subclusters or items)
-- [ ] Verify focus never gets "stuck"
-- [ ] Shift+Tab moves backwards correctly
+- [X] Tab through widget — verify focus ring visible on each ClusterCard
+Note: YES works on CLUSTERS BUT NOT SUBCLUSTERS. What is the purpose?
+- [X] Count tab stops — should equal number of clusters (NOT subclusters or items)
+Note: includes Save button
+- [X] Verify focus never gets "stuck"
+- [X] Shift+Tab moves backwards correctly
 
 ## Screen Reader (VoiceOver on Mac / NVDA on Windows)
 
