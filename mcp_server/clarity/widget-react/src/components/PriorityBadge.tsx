@@ -6,9 +6,13 @@ interface PriorityBadgeProps {
 }
 
 export function PriorityBadge({ rank, size = 'sm' }: PriorityBadgeProps) {
+  const priorityNumber = rank.replace('P', '')
+
   return (
-    <Badge color="secondary" variant="solid" size={size} aria-label={`Priority ${rank}`}>
-      {rank}
-    </Badge>
+    <span aria-label={`Priority ${priorityNumber}`}>
+      <Badge color="secondary" variant="solid" size={size} aria-hidden="true">
+        {rank}
+      </Badge>
+    </span>
   )
 }
