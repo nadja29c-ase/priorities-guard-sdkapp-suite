@@ -13,6 +13,7 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Ref to avoid re-running effect on clusters change
   const isInitializedRef = useRef(false)
@@ -52,6 +53,7 @@ function App() {
     if (isSaving || clusters.length === 0) return
 
     setIsSaving(true)
+    setSaveError(null)
 
     try {
       if (window.openai?.callTool) {
@@ -70,6 +72,7 @@ function App() {
       }
     } catch (err) {
       console.error('Save failed:', err)
+      setSaveError('Save failed. Please try again.')
     } finally {
       setIsSaving(false)
       setIsModalOpen(false)
@@ -98,6 +101,12 @@ function App() {
         showSaved={showSaved}
         onSaveClick={() => setIsModalOpen(true)}
       />
+
+      {saveError && (
+        <div className="mb-4 p-3 text-sm text-red-700 bg-red-50 rounded-lg">
+          {saveError}
+        </div>
+      )}
 
       {sortedClusters.length > 0 ? (
         <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
