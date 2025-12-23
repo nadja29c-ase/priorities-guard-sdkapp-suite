@@ -100,4 +100,18 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
                 user_id=user_id,
                 correlation_id=correlation_id)
 
-    return await tool.handle(user_id, correlation_id, arguments)
+    try:
+        return await tool.handle(user_id, correlation_id, arguments)
+    except Exception as e:
+        logger.error("tool.dispatch.unexpected_error",
+                    tool_name=name,
+                    user_id=user_id,
+                    correlation_id=correlation_id,
+                    error=str(e))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Something went wrong. Please try again."
+            )],
+            isError=True,
+        )
