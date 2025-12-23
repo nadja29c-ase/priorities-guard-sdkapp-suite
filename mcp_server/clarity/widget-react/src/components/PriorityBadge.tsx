@@ -9,7 +9,7 @@ export function PriorityBadge({ rank, size = 'sm' }: PriorityBadgeProps) {
   const priorityNumber = rank.replace('P', '')
 
   return (
-    <span aria-label={`Priority ${priorityNumber}`}>
+    <span role="text" aria-label={`Priority ${priorityNumber}`}>
       <Badge color="secondary" variant="solid" size={size} aria-hidden="true">
         {rank}
       </Badge>

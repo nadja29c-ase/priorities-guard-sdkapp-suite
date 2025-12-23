@@ -1,42 +1,40 @@
 # Accessibility QA Checklist
 
-Run through this checklist before submission.
+Run through this checklist before submission. Test in **Safari** (VoiceOver's native browser).
 
 ## Keyboard Navigation
 
-- [X] Tab through widget — verify focus ring visible on each ClusterCard
-Note: YES works on CLUSTERS BUT NOT SUBCLUSTERS. What is the purpose?
-- [X] Count tab stops — should equal number of clusters (NOT subclusters or items)
-Note: includes Save button
-- [X] Verify focus never gets "stuck"
-- [X] Shift+Tab moves backwards correctly
+- [ ] Tab through widget — verify focus ring visible on ALL elements:
+  - Cluster articles
+  - Subcluster headings (h4)
+  - Thought items (li)
+  - Save button
+- [ ] Tab order flows logically: Cluster → its items → its subclusters → subcluster items → next Cluster → Save
+- [ ] Verify focus never gets "stuck"
+- [ ] Shift+Tab moves backwards correctly
+- [ ] Focus rings use correct color (var(--color-ring))
 
-## Screen Reader (VoiceOver on Mac / NVDA on Windows)
+## Screen Reader (VoiceOver in Safari)
 
-- [ ] Navigate by headings (Ctrl+Alt+H on NVDA, VO+Cmd+H on Mac)
-  - Cluster names announced as h3
-  - Subcluster names announced as h4
-- [ ] Navigate lists
-  - Thought items announced as list items
-- [ ] Tags announced with visible text (no duplicate announcements)
-- [ ] Priority badges announced
+Enable: Cmd+F5
+
+- [ ] Tab to cluster — VoiceOver announces cluster name
+- [ ] Tab to subcluster — VoiceOver announces "Subcluster: [name], heading level 4"
+- [ ] Tab to thought item — VoiceOver announces item text
+- [ ] Priority badges announced as "Priority 1/2/3" (not "P1")
+- [ ] Item counts announced as "X items in this cluster" (not just number)
 
 ## Modal Focus Management
 
 - [ ] Click Save button → modal opens
-- [ ] Focus automatically on Cancel button
-- [ ] Tab → focus moves to Save button
-- [ ] Tab → focus returns to Cancel button (trapped)
-- [ ] Shift+Tab cycles backwards
-- [ ] Tab does NOT escape modal to background content
+- [ ] Focus trapped inside modal (Tab cycles through modal buttons only)
 - [ ] Press Escape → modal closes
-- [ ] After close → focus returns to Header Save button
-- [ ] Click backdrop → modal closes
-- [ ] After backdrop close → focus returns to Header Save button
+- [ ] After close → focus returns to Save button
+- [ ] Click backdrop → modal closes (if implemented)
 
 ## Theme Compatibility
 
-- [ ] Toggle to dark mode
+- [ ] Toggle to dark mode in ChatGPT settings
 - [ ] Focus rings visible in dark mode
 - [ ] All text readable in dark mode
 - [ ] Toggle back to light mode

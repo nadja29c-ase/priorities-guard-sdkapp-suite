@@ -33,7 +33,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
           </h4>
           {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}
         </div>
-        <span aria-label={`${subcluster.sum_thought_items || rawItems.length} items in this subcluster`}>
+        <span role="text" aria-label={`${subcluster.sum_thought_items || rawItems.length} items in this subcluster`}>
           <Badge color="secondary" variant="outline" size="sm" aria-hidden="true">
             {subcluster.sum_thought_items || rawItems.length}
           </Badge>
