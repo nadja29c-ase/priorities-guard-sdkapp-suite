@@ -228,19 +228,22 @@ app.add_middleware(CorrelationIDMiddleware)
 
 @app.get("/")
 async def root():
-    """Root endpoint.A health-check / landing endpoint so you can hit the root URL and confirm the backend is running"""
-    return {
-        "success": True,
-        "data": {
-            "message": "Priority Guardian Backend"
-        }
-    }
+    """Serve the landing page."""
+    file_path = Path(__file__).parent / "static" / "index.html"
+    return FileResponse(file_path)
 
 
 @app.get("/privacy")
 async def privacy_policy():
     """Serve the Privacy Policy HTML page."""
     file_path = Path(__file__).parent / "static" / "PrivacyPolicy_PGS.html"
+    return FileResponse(file_path)
+
+
+@app.get("/terms")
+async def terms_of_service():
+    """Serve the Terms of Service HTML page."""
+    file_path = Path(__file__).parent / "static" / "terms.html"
     return FileResponse(file_path)
 
 
