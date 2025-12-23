@@ -1,4 +1,5 @@
-import { useRef, useEffect, type RefObject } from 'react'
+import { useEffect, useRef } from 'react'
+import type { RefObject } from 'react'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 
 interface SaveModalProps {
@@ -13,42 +14,42 @@ export function SaveModal({ isOpen, onCancel, onConfirm, isSaving, triggerRef }:
   const cancelRef = useRef<HTMLButtonElement>(null)
   const saveRef = useRef<HTMLButtonElement>(null)
 
-  const handleClose = () => {
-    onCancel()
-    // Restore focus to trigger button after modal closes
-    setTimeout(() => {
-      triggerRef?.current?.focus()
-    }, 0)
-  }
-
-  // Focus cancel button when modal opens
+  // Focus Cancel button when modal opens
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => {
-        cancelRef.current?.focus()
-      }, 0)
+      setTimeout(() => cancelRef.current?.focus(), 0)
     }
   }, [isOpen])
 
   if (!isOpen) return null
 
+  const handleClose = () => {
+    onCancel()
+    setTimeout(() => triggerRef?.current?.focus(), 0)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
+      e.preventDefault()
       handleClose()
       return
     }
 
     if (e.key === 'Tab') {
-      const focusables = [cancelRef.current, saveRef.current].filter(Boolean) as HTMLButtonElement[]
+      const focusables = [cancelRef.current, saveRef.current].filter(Boolean) as HTMLElement[]
       const first = focusables[0]
       const last = focusables[focusables.length - 1]
 
       if (e.shiftKey && document.activeElement === first) {
         e.preventDefault()
-        last?.focus()
+        last.focus()
       } else if (!e.shiftKey && document.activeElement === last) {
         e.preventDefault()
-        first?.focus()
+        first.focus()
+      } else if (!focusables.includes(document.activeElement as HTMLElement)) {
+        // Focus escaped somehow, bring it back
+        e.preventDefault()
+        first.focus()
       }
     }
   }
