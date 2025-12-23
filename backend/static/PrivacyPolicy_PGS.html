@@ -43,17 +43,17 @@
 <h1>Privacy Policy</h1>
 <p class="meta">
     <strong>Effective Date:</strong> December 23, 2025<br>
-    <strong>Version:</strong> 1.2<br>
+    <strong>Version:</strong> 1.3<br>
     <strong>Last Updated:</strong> December 23, 2025
 </p>
 
 <div class="tldr">
-    <strong>In short:</strong> We don't know who you are, we don't store your chat history, and we don't track you. We only store your organized board when you choose to save it — nothing is stored automatically.
+    <strong>In short:</strong> We don't know who you are, we do not store your ChatGPT conversation history on our servers, and we don't track you. We only store your organized board when you choose to save it — nothing is stored automatically.
 </div>
 
-<p>This Privacy Policy explains how Priority Guard ("we", "us", "our") collects, uses, and protects your data when you use our ChatGPT SDK applications, including <strong>Clarity</strong> and future apps in the Priority Guard suite.</p>
+<p>This Privacy Policy explains how Priority Guard ("we", "us", "our") collects, uses, and protects your data in accordance with the General Data Protection Regulation (GDPR) when you use our ChatGPT SDK applications, including <strong>Clarity</strong> and future apps in the Priority Guard suite.</p>
 
-<p>Clarity runs inside ChatGPT and uses OpenAI's infrastructure to process your input. We store only your organized board — not your conversation history with ChatGPT.</p>
+<p>Clarity runs inside ChatGPT and uses OpenAI's infrastructure to process your input. We do not store your ChatGPT conversation history on our servers — we store only your organized board when you explicitly save it.</p>
 
 <h2>1. Controller &amp; Contact</h2>
 <p>
@@ -102,7 +102,7 @@
 </table>
 
 <p class="highlight">
-    <strong>What we do NOT store:</strong> Your full chat conversation or the raw text you type into ChatGPT. When you share thoughts, ChatGPT organizes them into structured clusters. If you choose to save your board, only this organized output (cluster names and thought items) is stored — not your conversation history or original unstructured messages. Nothing is saved unless you explicitly click save.
+    <strong>What we do NOT store:</strong> Your full chat conversation or the raw text you type into ChatGPT. When you share thoughts, ChatGPT organizes them into structured clusters. If you choose to save your board, only this organized output (cluster names and thought items) is stored on our servers — not your conversation history or original unstructured messages. Nothing is saved unless you explicitly click save.
 </p>
 
 <h3>2.2 Data Limits</h3>
@@ -132,7 +132,7 @@
 </ul>
 
 <h2>3. Lawful Basis for Processing</h2>
-<p>We process your data based on <strong>your consent</strong>, granted when you authorize the app through ChatGPT's OAuth flow. You can withdraw consent at any time by disconnecting the app or deleting your data.</p>
+<p>We process your data based on <strong>your consent</strong>, granted when you authorize the app through ChatGPT's OAuth flow, and where applicable, to <strong>perform the service you request</strong> (saving and restoring your board). You can withdraw consent at any time by disconnecting the app or deleting your data.</p>
 
 <h2>4. Data Retention</h2>
 <table>
@@ -157,8 +157,8 @@
         <td>30 days</td>
     </tr>
     <tr>
-        <td>Browser session</td>
-        <td>2 years (or until 6-month inactivity cleanup, whichever is sooner)</td>
+        <td>Authentication session metadata</td>
+        <td>Up to 2 years (or until 6-month inactivity cleanup, whichever is sooner)</td>
     </tr>
     <tr>
         <td>Audit logs</td>
@@ -245,7 +245,7 @@
 <p>You will be asked to confirm before deletion proceeds. This action permanently deletes your saved board and cannot be undone.</p>
 
 <h3>8.2 By Email</h3>
-<p>Contact <a href="mailto:support@priority-guard.com">support@priority-guard.com</a> to request deletion of your data.</p>
+<p>Contact <a href="mailto:support@priority-guard.com">support@priority-guard.com</a> to request deletion of your data. Please specify which app (e.g., Clarity) in your request.</p>
 
 <h3>8.3 What Happens When You Delete</h3>
 <p>When you delete your Clarity data:</p>
@@ -257,9 +257,10 @@
 <p><strong>Note:</strong> Deleting your Clarity board does not delete your Priority Guard account. To delete your entire account across all apps, contact <a href="mailto:support@priority-guard.com">support@priority-guard.com</a>.</p>
 
 <h2>9. Cookies</h2>
-<p>We use a single, strictly necessary session cookie (<code>pg_session</code>) for authentication. This cookie:</p>
+<p>We use a single, strictly necessary session cookie (<code>pg_session</code>) for authentication on our own domain (e.g., during OAuth flows). This cookie is not accessible within the ChatGPT app iframe and is not used for tracking or analytics.</p>
+<p>This cookie:</p>
 <ul>
-    <li>Enables you to stay logged in across Priority Guard apps</li>
+    <li>Enables you to stay logged in across Priority Guard apps during authorization</li>
     <li>Is HttpOnly (not accessible via JavaScript)</li>
     <li>Is Secure (HTTPS only)</li>
     <li>Is SameSite=Lax (sent on OAuth redirects, blocked on cross-site POST)</li>
@@ -275,7 +276,7 @@
 <p>Clarity uses ChatGPT to organize your thoughts into clusters. Important notes about AI processing:</p>
 <ul>
     <li>Your text input is processed by ChatGPT to create structured clusters</li>
-    <li>Only the structured output (clusters, items, tags) is stored by Clarity</li>
+    <li>Only the structured output (clusters, items, tags) is stored by Clarity on our servers</li>
     <li>AI-generated cluster names and organization may not be perfectly accurate—review and edit as needed</li>
     <li>OpenAI processes your input according to their own <a href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener">Privacy Policy</a></li>
 </ul>
