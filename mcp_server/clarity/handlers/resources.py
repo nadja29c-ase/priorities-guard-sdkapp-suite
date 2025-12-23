@@ -36,6 +36,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                     "resource_domains": [],
                 },
                 "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
+                "openai/widgetDomain": "https://clarity.priority-guard.com",
             },
         )
     ]
@@ -59,6 +60,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                     "resource_domains": [],
                 },
                 "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
+                "openai/widgetDomain": "https://clarity.priority-guard.com",
             },
         )
     ]
@@ -93,6 +95,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 "resource_domains": [],
             },
             "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
+            "openai/widgetDomain": "https://clarity.priority-guard.com",
         }
 
         contents = [
