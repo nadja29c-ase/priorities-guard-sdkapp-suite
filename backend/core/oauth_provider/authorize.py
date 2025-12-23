@@ -595,8 +595,11 @@ async def authorize_endpoint(
 
     # Select template based on app (determined by scopes)
     # Filter displayed scopes to only show relevant ones for each app
+    # Override client_name to show APP name, not OAuth CLIENT name
+    # (ChatGPT = OAuth client, Clarity = app being authorized)
     if any(s.startswith("clarity.") for s in requested_scopes):
         template_name = f"oauth_consent_clarity_{language}.html"
+        client_name = "Clarity"  # App name, not OAuth client name
         # Only show clarity.* scopes on Clarity consent page
         display_scopes = {s for s in requested_scopes if s.startswith("clarity.")}
     else:
