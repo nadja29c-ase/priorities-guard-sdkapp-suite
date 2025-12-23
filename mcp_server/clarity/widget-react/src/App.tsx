@@ -73,8 +73,8 @@ function App() {
     } finally {
       setIsSaving(false)
       setIsModalOpen(false)
-      // Restore focus to Save button after modal closes
-      saveButtonRef.current?.focus()
+      // Restore focus to Save button after modal closes (defer to allow DOM update)
+      setTimeout(() => saveButtonRef.current?.focus(), 0)
     }
   }
 
