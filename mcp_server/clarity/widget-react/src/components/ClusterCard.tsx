@@ -11,6 +11,7 @@ interface ClusterCardProps {
 }
 
 export function ClusterCard({ cluster }: ClusterCardProps) {
+  const headingId = `cluster-heading-${cluster.cluster_name.replace(/\s+/g, '-')}`
   const hasPriority = cluster.priority?.rank
   const rawItems = cluster.thought_items ?? []
   const subclusters = cluster.subclusters ?? []
@@ -27,6 +28,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
     <article
       tabIndex={0}
       data-testid="cluster-card"
+      aria-labelledby={headingId}
       className={`rounded-2xl border bg-surface-secondary transition-shadow duration-200 p-5 flex flex-col min-h-[120px] shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ${
         hasPriority ? 'border-l-4 border-l-strong pl-6' : 'border-default'
       }`}
@@ -34,7 +36,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-default m-0">
+          <h3 id={headingId} className="text-sm font-semibold text-default m-0">
             {truncateText(cluster.cluster_name, 40) || 'Untitled cluster'}
           </h3>
           {hasPriority && <PriorityBadge rank={hasPriority} />}

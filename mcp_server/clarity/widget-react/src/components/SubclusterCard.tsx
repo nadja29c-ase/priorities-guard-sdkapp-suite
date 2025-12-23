@@ -10,6 +10,7 @@ interface SubclusterCardProps {
 }
 
 export function SubclusterCard({ subcluster }: SubclusterCardProps) {
+  const headingId = `subcluster-heading-${subcluster.subcluster_name.replace(/\s+/g, '-')}`
   const hasPriority = subcluster.priority?.rank
   const rawItems = subcluster.thought_items ?? []
   const tags = subcluster.tags ?? []
@@ -19,7 +20,8 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
   const sortedItems = sortThoughtItemsByPriority(normalizedItems)
 
   return (
-    <div
+    <section
+      aria-labelledby={headingId}
       className={`rounded-lg border bg-surface p-3 flex flex-col ${
         hasPriority ? 'border-l-4 border-l-strong' : 'border-subtle'
       }`}
@@ -27,7 +29,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
-          <h4 className="text-sm font-medium text-default m-0">
+          <h4 id={headingId} className="text-sm font-medium text-default m-0">
             {truncateText(subcluster.subcluster_name, 30) || 'Untitled'}
           </h4>
           {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}
@@ -57,6 +59,6 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
           ))}
         </div>
       )}
-    </div>
+    </section>
   )
 }
