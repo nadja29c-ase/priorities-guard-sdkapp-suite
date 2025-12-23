@@ -20,8 +20,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
   const sortedItems = sortThoughtItemsByPriority(normalizedItems)
 
   return (
-    <section
-      aria-labelledby={headingId}
+    <div
       className={`rounded-lg border bg-surface p-3 flex flex-col ${
         hasPriority ? 'border-l-4 border-l-strong' : 'border-subtle'
       }`}
@@ -59,6 +58,6 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
           ))}
         </div>
       )}
-    </section>
+    </div>
   )
 }
