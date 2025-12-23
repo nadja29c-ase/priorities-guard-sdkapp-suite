@@ -15,7 +15,7 @@ export function ThoughtItem({ item, size = 'normal' }: ThoughtItemProps) {
   const borderClass = hasPriority ? 'border-l-4 border-l-strong' : 'border-l-2 border-default'
 
   return (
-    <li aria-label={item.text} className={`${borderClass} ${paddingClass} flex items-center gap-2`}>
+    <li tabIndex={0} aria-label={item.text} className={`${borderClass} ${paddingClass} flex items-center gap-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]`}>
       <span className={`${textClass} text-default`}>{item.text}</span>
       {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}
     </li>
