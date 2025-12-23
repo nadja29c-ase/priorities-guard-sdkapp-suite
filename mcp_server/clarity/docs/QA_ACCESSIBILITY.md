@@ -23,17 +23,21 @@ Enable: Cmd+F5
 - [x] Priority badges announced as "Priority 1/2/3" (not "P1")
 - [x] Item counts announced as "X items" (not just number)
 
-## Modal Focus Management
+## Modal Accessibility
 
-- [ ] Click Save button → modal opens
-- [ ] Focus trapped inside modal (Tab cycles through modal buttons only)
-- [ ] Press Escape → modal closes
-- [ ] After close → focus returns to Save button
+- [x] Click Save button → modal opens
+- [x] Modal has `role="dialog"` and `aria-modal="true"`
+- [x] Modal title linked via `aria-labelledby`
+- [x] Press Escape → modal closes
+- [x] After close → focus returns to Save button
+- [x] Modal buttons keyboard accessible
+
+> **Note:** Focus trapping (Tab cycling only within modal) does not work due to ChatGPT iframe sandbox limitations. This is a known platform constraint, not an app bug.
 
 ## Theme Compatibility
 
-- [ ] Toggle to dark mode in ChatGPT settings
-- [ ] Focus rings visible in dark mode
-- [ ] All text readable in dark mode
-- [ ] Toggle back to light mode
-- [ ] Focus rings visible in light mode
+- [X] Toggle to dark mode in ChatGPT settings
+- [X] Focus rings visible in dark mode
+- [X] All text readable in dark mode
+- [X] Toggle back to light mode
+- [X] Focus rings visible in light mode
