@@ -76,7 +76,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
       {/* Tags */}
       {tags.length > 0 && (
-        <div role="list" aria-label="Actions" className="flex flex-wrap gap-2 mt-auto pt-4">
+        <div role="list" aria-label="Suggested actions" className="flex flex-wrap gap-2 mt-auto pt-4">
           {tags.map((tag) => (
             <TagPill key={tag} tag={tag} />
           ))}
