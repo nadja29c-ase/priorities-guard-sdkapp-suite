@@ -27,9 +27,9 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-default">
+          <h4 className="text-sm font-medium text-default m-0">
             {truncateText(subcluster.subcluster_name, 30) || 'Untitled'}
-          </span>
+          </h4>
           {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}
         </div>
         <Badge color="secondary" variant="outline" size="sm">
@@ -39,11 +39,11 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
 
       {/* Items */}
       {sortedItems.length > 0 && (
-        <div className="space-y-1">
+        <ul className="space-y-1 list-none m-0 p-0">
           {sortedItems.map((item, i) => (
             <ThoughtItem key={`${subcluster.subcluster_name}-item-${i}-${item.text.slice(0,20)}`} item={item} size="small" />
           ))}
-        </div>
+        </ul>
       )}
 
       {/* Tags */}

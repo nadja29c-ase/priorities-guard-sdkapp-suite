@@ -1,3 +1,4 @@
+import { forwardRef } from 'react'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { Check } from '@openai/apps-sdk-ui/components/Icon'
 
@@ -7,7 +8,10 @@ interface HeaderProps {
   onSaveClick: () => void
 }
 
-export function Header({ canSave, showSaved, onSaveClick }: HeaderProps) {
+export const Header = forwardRef<HTMLButtonElement, HeaderProps>(function Header(
+  { canSave, showSaved, onSaveClick },
+  ref
+) {
   return (
     <div className="flex justify-between items-center mb-6">
       <div className="flex-1">
@@ -22,11 +26,12 @@ export function Header({ canSave, showSaved, onSaveClick }: HeaderProps) {
             className="flex items-center gap-1 text-xs text-success font-medium"
             aria-live="polite"
           >
-            <Check className="w-3.5 h-3.5" />
+            <Check className="w-3.5 h-3.5" aria-hidden="true" />
             Saved
           </span>
         )}
         <Button
+          ref={ref}
           color="primary"
           variant="solid"
           onClick={onSaveClick}
@@ -37,4 +42,4 @@ export function Header({ canSave, showSaved, onSaveClick }: HeaderProps) {
       </div>
     </div>
   )
-}
+})

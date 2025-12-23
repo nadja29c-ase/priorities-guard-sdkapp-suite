@@ -24,17 +24,19 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
   const sortedSubclusters = sortSubclustersByPriority(subclusters)
 
   return (
-    <div
-      className={`rounded-2xl border bg-surface-secondary transition-shadow duration-200 p-5 flex flex-col min-h-[120px] shadow-lg ${
+    <article
+      tabIndex={0}
+      data-testid="cluster-card"
+      className={`rounded-2xl border bg-surface-secondary transition-shadow duration-200 p-5 flex flex-col min-h-[120px] shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ${
         hasPriority ? 'border-l-4 border-l-strong pl-6' : 'border-default'
       }`}
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-default">
+          <h3 className="text-sm font-semibold text-default m-0">
             {truncateText(cluster.cluster_name, 40) || 'Untitled cluster'}
-          </span>
+          </h3>
           {hasPriority && <PriorityBadge rank={hasPriority} />}
         </div>
         <Badge color="secondary" variant="outline" size="sm" aria-label={`${cluster.sum_thought_items} items`}>
@@ -51,11 +53,11 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
 
       {/* Direct thought items */}
       {sortedItems.length > 0 && (
-        <div className="space-y-2">
+        <ul className="space-y-2 list-none m-0 p-0">
           {sortedItems.map((item, i) => (
             <ThoughtItem key={`${cluster.cluster_name}-item-${i}-${item.text.slice(0,20)}`} item={item} />
           ))}
-        </div>
+        </ul>
       )}
 
       {/* Subclusters */}
@@ -75,6 +77,6 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
           ))}
         </div>
       )}
-    </div>
+    </article>
   )
 }

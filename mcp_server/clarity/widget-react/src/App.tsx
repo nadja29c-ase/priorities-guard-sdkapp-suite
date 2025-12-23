@@ -17,6 +17,9 @@ function App() {
   // Ref to avoid re-running effect on clusters change
   const isInitializedRef = useRef(false)
 
+  // Ref for Save button focus restoration after modal closes
+  const saveButtonRef = useRef<HTMLButtonElement>(null)
+
   // Load clusters from window.openai.toolOutput
   const loadClusters = useCallback(() => {
     if (isInitializedRef.current) return
@@ -70,6 +73,8 @@ function App() {
     } finally {
       setIsSaving(false)
       setIsModalOpen(false)
+      // Restore focus to Save button after modal closes
+      saveButtonRef.current?.focus()
     }
   }
 
@@ -88,6 +93,7 @@ function App() {
   return (
     <div className="bg-gray-100 rounded-2xl px-8 py-6 -m-4">
       <Header
+        ref={saveButtonRef}
         canSave={clusters.length > 0}
         showSaved={showSaved}
         onSaveClick={() => setIsModalOpen(true)}
@@ -110,6 +116,7 @@ function App() {
         onCancel={() => setIsModalOpen(false)}
         onConfirm={handleSave}
         isSaving={isSaving}
+        triggerRef={saveButtonRef}
       />
     </div>
   )
