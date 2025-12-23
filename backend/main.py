@@ -4,9 +4,10 @@ Mounts OAuth provider and all SDK app routers.
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 import httpx
 
 from backend.core.config import settings
@@ -234,6 +235,13 @@ async def root():
             "message": "Priority Guardian Backend"
         }
     }
+
+
+@app.get("/privacy")
+async def privacy_policy():
+    """Serve the Privacy Policy HTML page."""
+    file_path = Path(__file__).parent / "static" / "PrivacyPolicy_PGS.html"
+    return FileResponse(file_path)
 
 
 # Include new modular routers

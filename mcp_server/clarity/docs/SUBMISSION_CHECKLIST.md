@@ -21,5 +21,5 @@
 
 - [ ] App name: Clarity
 - [ ] Description: Clear and accurate
-- [ ] Support email: support@priority-guard.com
+- [ ] Support email: clarity@priority-guard.com
 - [ ] Privacy policy URL: https://www.priority-guard.com/privacy

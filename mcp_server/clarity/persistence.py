@@ -256,10 +256,10 @@ async def delete_cluster(user_id: str, correlation_id: str | None = None) -> dic
                  status=response.status_code,
                  user_id=user_id,
                  response=response.text[:200])
-        return {"status": "error", "message": "Failed to delete data. Please try again or contact support@priority-guard.com"}
+        return {"status": "error", "message": "Failed to delete data. Please try again or contact clarity@priority-guard.com"}
 
     except Exception as e:
         log.error("clarity.delete.error",
                  error=str(e),
                  user_id=user_id)
-        return {"status": "error", "message": "Failed to delete data. Please try again or contact support@priority-guard.com"}
+        return {"status": "error", "message": "Failed to delete data. Please try again or contact clarity@priority-guard.com"}
