@@ -39,9 +39,9 @@ SUPPORTED_SCOPES = set(SCOPES_SUPPORTED)
 
 # Route-specific defaults (least privilege principle)
 # - /oauth/focused/register: Focused app scopes only (backward compatibility)
-# - /oauth/pg/register: No default - scope must be explicitly requested
+# - /oauth/pg/register: Clarity scopes (TODO: refactor to route-aware defaults when adding second app)
 DEFAULT_SCOPES_FOCUSED = ["focused.read", "focused.write", "focused.notify"]
-DEFAULT_SCOPES_PG = None  # Require explicit scope for /oauth/pg/register
+DEFAULT_SCOPES_PG = ["clarity.write"]  # Default for Clarity (refactor when adding second app)
 
 
 @router.post("/oauth/focused/register")
@@ -117,8 +117,8 @@ async def register_endpoint(
     if route_path == "/oauth/focused/register":
         default_scopes = DEFAULT_SCOPES_FOCUSED
     else:
-        # /oauth/pg/register and any future routes require explicit scope
-        default_scopes = DEFAULT_SCOPES_PG  # None - requires explicit scope
+        # /oauth/pg/register: Clarity defaults (ChatGPT doesn't send scope param)
+        default_scopes = DEFAULT_SCOPES_PG
 
     # Parse and validate requested scopes
     # Normalize: treat whitespace-only as "no scope provided"
