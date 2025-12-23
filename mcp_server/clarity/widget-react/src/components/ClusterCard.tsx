@@ -28,7 +28,7 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
     <article
       tabIndex={0}
       data-testid="cluster-card"
-      aria-labelledby={headingId}
+      aria-label={`Cluster: ${cluster.cluster_name}${hasPriority ? `, Priority ${hasPriority.replace('P', '')}` : ''}, ${cluster.sum_thought_items} items`}
       className={`rounded-2xl border bg-surface-secondary transition-shadow duration-200 p-5 flex flex-col min-h-[120px] shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ${
         hasPriority ? 'border-l-4 border-l-strong pl-6' : 'border-default'
       }`}
