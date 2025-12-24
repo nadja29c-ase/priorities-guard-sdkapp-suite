@@ -124,21 +124,24 @@ async def handle(
         )
 
     elif status == "no_data":
+        # Treat as success - user either had no data, or LLM called twice after deletion
+        # Either way, user's Clarity data is now clear
         logger.info("delete_my_data.no_data",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text=message
+                text="Your Clarity data has been deleted."
             )],
             structuredContent={
-                "status": "no_data",
-                "message": message,
-                "assistant_guidance": "No saved board was found to delete. Let the user know their data is already clear.",
+                "status": "deleted",
+                "success": True,
+                "message": "Your Clarity data has been deleted.",
+                "assistant_guidance": "DELETION COMPLETE. The user's Clarity data is now clear. Tell them: 'Your Clarity data has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes Clarity data — for full account deletion, they should contact clarity@priority-guard.com.",
             },
             _meta={
-                "openai/toolInvocation/invoking": "Checking for saved data...",
-                "openai/toolInvocation/invoked": "No data found.",
+                "openai/toolInvocation/invoking": "Deleting your saved board...",
+                "openai/toolInvocation/invoked": "Data deleted.",
             },
         )
 
