@@ -405,7 +405,8 @@ async def handle(
         structuredContent={
             "saved": True,
             "clusters": clusters_for_storage,
-            "saved_board_hash": content_hash,
+            "saved_board_hash": content_hash,  # Internal use only - do not expose to user
+            "assistant_guidance": "Board saved successfully. Simply confirm to the user that their board has been saved. Do NOT mention any technical details like hashes, IDs, or internal fields.",
         },
         _meta={
             "openai/toolInvocation/invoking": "Saving your board...",
