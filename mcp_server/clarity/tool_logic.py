@@ -75,7 +75,7 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = ""  # Empty - model ignores this anyway
-        guidance = """ Acnowlegde what the user shared so far by backtracking or sharing neutral observations.Tell the user what is the next step and WHY, then ask what matters most.
+        guidance = """ Acnowlegde what the user shared so far by backtracking or sharing neutral observations.Tell the user what is the next step and WHY, then ask what matters most. CRITICAL: NO advice, NO task lists, NO Planning on user's behalf!!!
 
 Use one of these naturally:
 - "Everything's out and organized. Clarity comes from knowing where to focus. What matters most right now: progress toward a goal, unblocking something stuck, or relief from what's weighing on you?"
