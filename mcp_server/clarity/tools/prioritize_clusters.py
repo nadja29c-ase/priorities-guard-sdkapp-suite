@@ -82,7 +82,7 @@ CRITICAL: NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS - ACKNOWLEDGE I
 WHEN TO CALL:
 - After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
 - After USER explicitly names which clusters/subclusters/items are their priorities (e.g. "My P1 is X, P2 is Y")
-- When the user asks "what now" or "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
+- When the user sayd "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
 
 DO NOT CALL:
 - NEVER when you infer or guess priorities or provide priorities on behalf of the user
@@ -449,22 +449,40 @@ async def handle(
     }
 
     if priority_count == 0:
-        guidance = "No priorities set. Ask which clusters feel most important to them RIGHT NOW."
+        guidance = """No priorities yet. Facilitate discovery with FUTURE-ORIENTED questions.
+
+Examples:
+- "Which of these would bring the most relief if you made progress on it?"
+- "Is anything here blocking the others?"
+
+NOT allowed: "Why do you feel overwhelmed?" or "What's causing this stress?" Stay forward-focused."""
 
     elif priority_count == 1:
-        guidance = """Nice — P1 is set. Acknowledge that they've named what matters most.
+        guidance = """P1 is set. Continue naturally, but stay FUTURE-ORIENTED.
 
-Then genuinely ask if there's a second priority pulling at them, or if one focus is enough right now. Let them decide — no pressure either way."""
+Guide toward: "Is there a P2, or is one focus enough?"
+
+Allowed: Warmth, acknowledgment, brief reflection on their choice.
+NOT allowed: Exploring WHY they're overwhelmed, root causes, emotional processing.
+
+Keep momentum toward completing priorities or confirming they're done."""
 
     elif priority_count == 2:
-        guidance = """Two priorities locked in. Reflect that back — they're creating real focus.
+        guidance = """P1 and P2 are set. Continue naturally, stay FUTURE-ORIENTED.
 
-Check if there's a third, but make it clear that two is perfectly fine. "Is there a P3, or does this feel complete?" """
+Guide toward: "Is there a P3, or does this feel complete?"
+
+Allowed: Acknowledge progress, be encouraging.
+NOT allowed: Diving into root causes, exploring feelings about the priorities.
+
+Keep momentum toward P3 or confirmation they're done."""
 
     else:  # 3
-        guidance = """Three priorities — they've cut through the noise. Acknowledge and celebratethat briefly.
+        guidance = """All priorities set. Acknowledge warmly, then let user lead.
 
-Let them know their board is ready to save and come back to anytime. Then just be present — if they want to keep talking about next specific steps, talk. If they're done, that's fine too."""
+Example: "You've got your focus areas. Board's ready to save when you are."
+
+Now follow user's lead — they may want to discuss next steps, or they may be done."""
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
