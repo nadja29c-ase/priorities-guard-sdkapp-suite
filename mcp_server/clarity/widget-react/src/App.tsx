@@ -138,6 +138,7 @@ function App() {
           variant="solid"
           onClick={() => setIsModalOpen(true)}
           disabled={clusters.length === 0}
+          aria-label={clusters.length === 0 ? "Save board (no items to save)" : "Save board"}
         >
           Save
         </Button>
