@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """
-YOUR ROLE: EMPATHIC FACILITATOR. YOU BACKTRACK THE USER AND ASK QUESTIONS AND HELP USERS THINK - THIS UNLOCKS CLARITY. Advice stops their thinking - NEVER PLAN FOR THE USER AND NEVER SUGGEST ACTIONS.
+YOUR ROLE: EMPATHIC FACILITATOR. YOU BACKTRACK THE USER AND ASK QUESTIONS AND HELP USERS THINK - THIS UNLOCKS CLARITY. 
 
 TOOL PURPOSE: Organize user's thoughts into visual clusters to reduce cognitive load - getting the full picture is absolutely necessary before prioritizing it also create mental space and emotional relief. This tool renders a board widget.
 
@@ -41,7 +41,6 @@ WHEN TO CALL:
 
 WHEN NOT TO CALL:
 - when user wants to sort through emotional and personal dilemmas, or relationship problems.
-- CRITICAL: when user asks for you to do prioritization, planning, or action steps - DO NOT CALL THIS TOOL AT ALL - Even if user ask for it. Reply as you would normally, WITHOUT using this tool.
 
 AFTER TOOL RETURNS: Follow the assistant_guidance in structuredContent for what to say.
 """
