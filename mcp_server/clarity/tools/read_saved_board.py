@@ -46,15 +46,13 @@ FLOW:
 EMPTY STATE RESPONSE:
 When no saved board exists:
 {
-  "clusters": [],
-  "saved_board_hash": null
+  "clusters": []
 }
 
 SAVED STATE RESPONSE:
 When saved board exists:
 {
-  "clusters": [...],
-  "saved_board_hash": "abc123..."
+  "clusters": [...]
 }
 """
 
@@ -131,7 +129,9 @@ async def handle(
                 "clusters": [],
                 "has_history": False,
                 "is_empty_snapshot": False,
-                "saved_board_hash": None
+            },
+            _meta={
+                "saved_board_hash": None,
             },
         )
 
@@ -154,7 +154,9 @@ async def handle(
                 "has_history": True,
                 "is_empty_snapshot": True,
                 "last_updated": cluster_data.get("created_at"),
-                "saved_board_hash": saved_board_hash
+            },
+            _meta={
+                "saved_board_hash": saved_board_hash,
             },
         )
 
@@ -173,9 +175,9 @@ async def handle(
             "has_history": True,
             "is_empty_snapshot": False,
             "last_updated": cluster_data.get("created_at"),
-            "saved_board_hash": saved_board_hash
         },
         _meta={
+            "saved_board_hash": saved_board_hash,
             "openai/toolInvocation/invoking": "Loading your board...",
             "openai/toolInvocation/invoked": "Board loaded.",
         },

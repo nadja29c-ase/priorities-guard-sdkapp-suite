@@ -99,23 +99,24 @@ async def handle(
         # Enrich clusters with sum_thought_items for widget display
         clusters = enrich_clusters(clusters)
 
-    # Always include widget metadata
+    # Determine state and build response
+    cluster_count = len(clusters)
+    saved_board_hash = cluster_data.get("content_hash") if has_snapshot else None
+
+    # Widget metadata - hash in _meta so LLM cannot see it
     meta = {
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Loading your saved board...",
         "openai/toolInvocation/invoked": "Here's your saved Clarity board.",
         "openai/widgetAccessible": True,
         "openai/resultCanProduceWidget": True,
+        "saved_board_hash": saved_board_hash,  # Widget can read, LLM cannot
     }
 
     # DEBUG: Log actual values being returned
     logger.info("load_saved_board.returning",
                meta=meta,
                widget_uri=WIDGET_URI)
-
-    # Determine state and build response
-    cluster_count = len(clusters)
-    saved_board_hash = cluster_data.get("content_hash") if has_snapshot else None
 
     # Compute guidance based on state
     if not has_snapshot:
@@ -128,7 +129,6 @@ Ask if they'd like to create a new Clarity Board. Something warm like: "Ready fo
             "clusters": [],
             "has_history": False,
             "is_empty_snapshot": False,
-            "saved_board_hash": None,
             "assistant_guidance": guidance,
         }
         logger.info("load_saved_board.no_snapshot", user_id=user_id)
@@ -144,7 +144,6 @@ Ask if they'd like to start a new Clarity Board. Something warm like: "Ready for
             "has_history": True,
             "is_empty_snapshot": True,
             "last_updated": cluster_data.get("created_at"),
-            "saved_board_hash": saved_board_hash,
             "assistant_guidance": guidance,
         }
         logger.info("load_saved_board.empty_snapshot", user_id=user_id)
@@ -160,7 +159,6 @@ Ask how you can help: "Now that you see your board, how would you like me to ass
             "has_history": True,
             "is_empty_snapshot": False,
             "last_updated": cluster_data.get("created_at"),
-            "saved_board_hash": saved_board_hash,
             "assistant_guidance": guidance,
         }
         logger.info("load_saved_board.retrieved", user_id=user_id, cluster_count=cluster_count)

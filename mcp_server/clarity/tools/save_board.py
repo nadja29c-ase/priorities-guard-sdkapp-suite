@@ -393,10 +393,7 @@ async def handle(
 
     # Pure data operation - never renders widget
     # Widget shows temporary "Saved" indicator via saved=true check
-    #
-    # NOTE: saved_board_hash is provided for LLM reasoning and backend
-    # consistency only. Widget must NOT rely on it for persistent saved
-    # state - the UI uses transient feedback (3-second indicator).
+    # Hash in _meta: widget can read it, LLM cannot see it
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
@@ -405,10 +402,10 @@ async def handle(
         structuredContent={
             "saved": True,
             "clusters": clusters_for_storage,
-            "saved_board_hash": content_hash,  # Internal use only - do not expose to user
-            "assistant_guidance": "Board saved successfully. Simply confirm to the user that their board has been saved. Do NOT mention any technical details like hashes, IDs, or internal fields.",
+            "assistant_guidance": "Board saved successfully. Confirm briefly.",
         },
         _meta={
+            "saved_board_hash": content_hash,
             "openai/toolInvocation/invoking": "Saving your board...",
             "openai/toolInvocation/invoked": "Board saved.",
         },
