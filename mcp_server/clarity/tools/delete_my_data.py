@@ -35,7 +35,7 @@ INPUT_SCHEMA = {
     "properties": {
         "confirm": {
             "type": "boolean",
-            "description": "Must be true to confirm deletion. Required.",
+            "description": "Set to true when USER has confirmed they want to delete. Only call this tool ONCE with confirm=true after user consent.",
         }
     },
     "required": ["confirm"]
