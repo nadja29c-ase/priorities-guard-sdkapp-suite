@@ -99,22 +99,24 @@ export function SaveModal({ isOpen, onCancel, onConfirm, isSaving, triggerRef }:
           <span className="text-xs text-secondary">Note: you can have only 1 saved Clarity Board.</span>
         </p>
         <div className="flex gap-3 justify-end">
-          <button
+          <Button
             ref={firstButtonRef}
             onClick={handleClose}
             disabled={isSaving}
-            className="px-4 py-2 text-sm font-medium rounded-lg border border-default bg-surface text-default hover:bg-surface-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] disabled:opacity-50"
+            color="secondary"
+            variant="outline"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             ref={lastButtonRef}
             onClick={onConfirm}
             disabled={isSaving}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] disabled:opacity-50"
+            color="primary"
+            variant="solid"
           >
             {isSaving ? 'Saving...' : 'Save'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
