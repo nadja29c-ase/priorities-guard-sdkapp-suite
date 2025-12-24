@@ -39,7 +39,7 @@ WHEN TO CALL:
 - Call after user expresses 5+ thought items RELATED TO PRODUCTIVITY (tasks, chores, thoughts, ideas). Include ALL thoughts — never filter.
 - Until user says "That's all. Nothing else on my mind"
 - When user wants to merge boards, combine and recluster thought items into one board.
-- When user asks you "help me organize my thoughts", "help me sort my tasks", "help me find focus", "help me declutter my mind", or similar.
+- When user asks you "help me organize my thoughts", "help me sort my tasks", "help me find focus", "help me declutter my mind", "help me understand what to focus on" or similar.
 
 WHEN NOT TO CALL:
 - when user wants to sort through emotional and personal dilemmas, or relationship problems.
