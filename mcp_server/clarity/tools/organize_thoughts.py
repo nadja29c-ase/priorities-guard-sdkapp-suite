@@ -41,7 +41,7 @@ WHEN TO CALL:
 
 WHEN NOT TO CALL:
 - when user wants to sort through emotional and personal dilemmas, or relationship problems.
-- CRITICAL: when user asks for you to do prioritization, planning, or action steps. Use prioritize_thoughts tool then.
+- CRITICAL: when user asks for you to do prioritization, planning, or action steps. 
 
 AFTER TOOL RETURNS: Follow the assistant_guidance in structuredContent for what to say.
 """
