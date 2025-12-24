@@ -73,7 +73,7 @@ async def handle(
     Returns:
         CallToolResult with structuredContent and widget metadata
     """
-    logger.debug("load_saved_board.handle.start",
+    logger.info("load_saved_board.handle.start",
                 user_id=user_id,
                 correlation_id=correlation_id)
 

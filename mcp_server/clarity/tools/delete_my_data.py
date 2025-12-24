@@ -65,7 +65,7 @@ async def handle(
     Returns:
         CallToolResult with deletion status
     """
-    logger.debug("delete_my_data.handle.start",
+    logger.info("delete_my_data.handle.start",
                 user_id=user_id,
                 correlation_id=correlation_id)
 

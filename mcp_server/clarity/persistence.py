@@ -209,6 +209,8 @@ async def delete_cluster(user_id: str, correlation_id: str | None = None) -> dic
     # Bind correlation_id to logger for consistent tracing
     log = logger.bind(correlation_id=correlation_id) if correlation_id else logger
 
+    log.info("clarity.delete.starting", user_id=user_id)
+
     try:
         # Build headers
         headers = {"X-User-ID": user_id}
