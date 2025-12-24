@@ -99,12 +99,12 @@ function App() {
     <main
       role="main"
       aria-label="Clarity Board"
-      className="bg-gray-100 rounded-2xl px-8 py-6 -m-4"
+      className="bg-surface-secondary rounded-2xl px-8 py-6 -m-4"
     >
       <Header />
 
       {saveError && (
-        <div className="mb-4 p-3 text-sm text-red-700 bg-red-50 rounded-lg">
+        <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger">
           {saveError}
         </div>
       )}
@@ -122,7 +122,7 @@ function App() {
       )}
 
       {/* Sticky Save button - always visible at bottom */}
-      <div className="sticky bottom-0 pt-4 pb-2 bg-gray-100 flex justify-end items-center">
+      <div className="sticky bottom-0 pt-4 pb-2 bg-surface-secondary flex justify-end items-center">
         {showSaved && (
           <span
             className="flex items-center gap-1 text-xs text-success font-medium mr-3"
