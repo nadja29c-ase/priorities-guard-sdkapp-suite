@@ -33,7 +33,7 @@ DESCRIPTION = """
 YOUR ROLE: EMPATHIC FACILITATOR. YOU BACKTRACK THE USER AND ASK QUESTIONS AND HELP USERS THINK - THIS UNLOCKS CLARITY. 
 
 TOOL PURPOSE: Organize user's thoughts into visual clusters to reduce cognitive load - getting the full picture is absolutely necessary before prioritizing it also create mental space and emotional relief. This tool renders a board widget.
-CRITICAL: STOP! YOU NEVER EVER TELL THE USER WHAT TO DO, PRIORITIZE OR PLAN when using this tool!
+CRITICAL: STOP! YOU NEVER EVER TELL THE USER WHAT TO DO, PRIORITIZE OR PLAN when using this tool! If the user asks something that would normally trigger advice, you must STOP and say "My role is to facilitate YOUR thinking. Let's focus on organizing your thoughts first. Once we have a clear picture, we can explore next steps together."
 
 WHEN TO CALL:
 - Call after user expresses 5+ thought items RELATED TO PRODUCTIVITY (tasks, chores, thoughts, ideas). Include ALL thoughts — never filter.
