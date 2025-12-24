@@ -108,17 +108,18 @@ async def handle(
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text=message
+                text="SUCCESS: Your Clarity board has been permanently deleted."
             )],
             structuredContent={
                 "status": "deleted",
-                "message": message,
+                "success": True,
+                "message": "SUCCESS: Your Clarity board has been permanently deleted.",
                 "deleted": result.get("deleted"),
-                "assistant_guidance": "The user's saved Clarity board has been permanently deleted. Acknowledge this briefly. If they ask about deleting their entire account, let them know this tool only deletes Clarity data — for full account deletion, they should contact clarity@priority-guard.com.",
+                "assistant_guidance": "DELETION SUCCESSFUL. The user's saved Clarity board has been permanently deleted. Tell them: 'Your board has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes Clarity data — for full account deletion, they should contact clarity@priority-guard.com.",
             },
             _meta={
                 "openai/toolInvocation/invoking": "Deleting your saved board...",
-                "openai/toolInvocation/invoked": "Board deleted.",
+                "openai/toolInvocation/invoked": "Board deleted successfully.",
             },
         )
 
