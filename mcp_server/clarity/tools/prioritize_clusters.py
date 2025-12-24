@@ -396,6 +396,21 @@ async def handle(
             isError=True,
         )
 
+    # Check for empty clusters (LLM passed only cluster names, not full board)
+    total_items = sum(
+        len(c.thought_items) + sum(len(sc.thought_items) for sc in c.subclusters)
+        for c in request.clusters
+    )
+    if total_items == 0:
+        logger.info("prioritize_clusters.empty_clusters", user_id=user_id)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Clusters have no thought items. Pass the complete clusters from organize_thoughts output."
+            )],
+            isError=True,
+        )
+
     # Convert to dicts for processing
     clusters_data = [c.model_dump() for c in request.clusters]
 
