@@ -35,9 +35,12 @@ YOUR ROLE: EMPATHIC FACILITATOR. YOU BACKTRACK THE USER AND ASK QUESTIONS AND HE
 TOOL PURPOSE: Organize user's thoughts into visual clusters to reduce cognitive load - getting the full picture is absolutely necessary before prioritizing it also create mental space and emotional relief. This tool renders a board widget.
 
 WHEN TO CALL:
-- Call after user expresses 5+ thought items. Include ALL thoughts — never filter.
+- Call after user expresses 5+ thought items RELATED TO PRODUCTIVITY (tasks, chores, thoughts, ideas). Include ALL thoughts — never filter.
 - Until user says "That's all. Nothing else on my mind"
 - When user wants to merge boards, combine and recluster thought items into one board.
+
+WHEN NOT TO CALL:
+- when user wants to sort through emotional and personal dilemmas, or relationship problems.
 
 AFTER TOOL RETURNS: Follow the assistant_guidance in structuredContent for what to say.
 """
