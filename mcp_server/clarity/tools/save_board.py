@@ -84,7 +84,19 @@ INPUT_SCHEMA = {
                         "items": {
                             "oneOf": [
                                 {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "text": {"type": "string"},
+                                        "priority": {
+                                            "type": ["object", "null"],
+                                            "properties": {
+                                                "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
+                                                "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
+                                            }
+                                        }
+                                    }
+                                }
                             ]
                         },
                         "description": "Direct thought items (string or object)"
@@ -103,13 +115,33 @@ INPUT_SCHEMA = {
                                     "items": {
                                         "oneOf": [
                                             {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                            {
+                                                "type": "object",
+                                                "properties": {
+                                                    "text": {"type": "string"},
+                                                    "priority": {
+                                                        "type": ["object", "null"],
+                                                        "properties": {
+                                                            "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
+                                                            "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         ]
                                     }
                                 },
                                 "tags": {
                                     "type": "array",
                                     "items": {"type": "string"}
+                                },
+                                "priority": {
+                                    "type": ["object", "null"],
+                                    "description": "Priority assignment on this subcluster",
+                                    "properties": {
+                                        "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
+                                        "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
+                                    }
                                 }
                             },
                             "required": ["subcluster_name", "thought_items"]
@@ -119,6 +151,14 @@ INPUT_SCHEMA = {
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Optional behavioral tags"
+                    },
+                    "priority": {
+                        "type": ["object", "null"],
+                        "description": "Priority assignment on this cluster",
+                        "properties": {
+                            "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
+                            "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
+                        }
                     }
                 },
                 "required": ["cluster_name"]
