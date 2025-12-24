@@ -27,18 +27,18 @@ NAME = "delete_my_data"
 DESCRIPTION = """
 Permanently deletes the user's saved Clarity board. This cannot be undone.
 Use when user explicitly requests to delete their data.
-Requires confirm=true to execute.
+Requires user_confirmed_deletion=true to execute.
 """
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "confirm": {
+        "user_confirmed_deletion": {
             "type": "boolean",
-            "description": "Set to true when USER has confirmed they want to delete. Only call this tool ONCE with confirm=true after user consent.",
+            "description": "Set to true ONLY when the user has explicitly confirmed they want to delete their data. Call this tool exactly ONCE after user gives consent.",
         }
     },
-    "required": ["confirm"]
+    "required": ["user_confirmed_deletion"]
 }
 
 REQUIRED_SCOPES = ["clarity.write"]
@@ -72,19 +72,19 @@ async def handle(
     # ============================================================
     # CONFIRMATION CHECK (defense against model regressions)
     # ============================================================
-    confirm = arguments.get("confirm", False)
+    user_confirmed = arguments.get("user_confirmed_deletion", False)
 
-    if not confirm:
+    if not user_confirmed:
         logger.info("delete_my_data.rejected.no_confirm",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text="Deletion requires explicit confirmation. Call again with confirm=true."
+                text="Deletion requires user confirmation. Call again with user_confirmed_deletion=true after user confirms."
             )],
             structuredContent={
                 "status": "rejected",
-                "message": "Deletion requires explicit confirmation. Call again with confirm=true.",
+                "message": "Deletion requires user confirmation. Call again with user_confirmed_deletion=true after user confirms.",
                 "assistant_guidance": "Deletion was not confirmed. Ask the user if they're sure they want to permanently delete their saved board.",
             },
             isError=False,  # Not an error, just rejected
