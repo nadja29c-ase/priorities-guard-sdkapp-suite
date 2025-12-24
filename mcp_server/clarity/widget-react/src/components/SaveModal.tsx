@@ -101,21 +101,21 @@ export function SaveModal({ isOpen, onCancel, onConfirm, isSaving, triggerRef }:
         <div className="flex gap-3 justify-end">
           <Button
             ref={firstButtonRef}
-            onClick={handleClose}
-            disabled={isSaving}
-            color="secondary"
-            variant="outline"
-          >
-            Cancel
-          </Button>
-          <Button
-            ref={lastButtonRef}
             onClick={onConfirm}
             disabled={isSaving}
             color="primary"
             variant="solid"
           >
             {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+          <Button
+            ref={lastButtonRef}
+            onClick={handleClose}
+            disabled={isSaving}
+            color="secondary"
+            variant="outline"
+          >
+            Cancel
           </Button>
         </div>
       </div>
