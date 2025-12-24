@@ -66,6 +66,14 @@ class PriorityInput(BaseModel):
             raise ValueError(f"Invalid reason: {v}. Must be 'blocker' or 'goal-aligned'.")
         return v
 
+    @field_validator("item_index", mode="before")
+    @classmethod
+    def coerce_float_to_int(cls, v):
+        """Coerce whole floats to int - ChatGPT sends 0.0 instead of 0."""
+        if isinstance(v, float) and v.is_integer():
+            return int(v)
+        return v
+
     def is_item_target(self) -> bool:
         """Check if this priority targets a thought item."""
         return self.item_index is not None
