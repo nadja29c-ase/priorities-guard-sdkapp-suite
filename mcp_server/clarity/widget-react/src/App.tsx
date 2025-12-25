@@ -21,6 +21,20 @@ function App() {
   // Ref for Save button focus management
   const saveButtonRef = useRef<HTMLButtonElement>(null)
 
+  // Notify host of height changes (for iOS scroll fix)
+  const notifyHeight = useCallback(() => {
+    requestAnimationFrame(() => {
+      window.openai?.notifyIntrinsicHeight?.()
+    })
+  }, [])
+
+  // Log widgetState on mount (infrastructure for future state persistence)
+  useEffect(() => {
+    if (window.openai?.widgetState) {
+      console.debug('Clarity: widgetState available', window.openai.widgetState)
+    }
+  }, [])
+
   // Load clusters from window.openai.toolOutput
   const loadClusters = useCallback(() => {
     if (isInitializedRef.current) return
@@ -32,7 +46,10 @@ function App() {
     setClusters(data)
     setIsInitialized(true)
     isInitializedRef.current = true
-  }, [])
+
+    // Notify host of new content height
+    notifyHeight()
+  }, [notifyHeight])
 
   // Initial load and listen for openai:set_globals
   useEffect(() => {
@@ -47,6 +64,13 @@ function App() {
       window.removeEventListener('openai:set_globals', handleSetGlobals)
     }
   }, [loadClusters])
+
+  // Notify host when error state changes (affects widget height)
+  useEffect(() => {
+    if (isInitialized) {
+      notifyHeight()
+    }
+  }, [saveError, isInitialized, notifyHeight])
 
   // Handle save
   const handleSave = async () => {

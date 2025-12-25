@@ -32,7 +32,16 @@ export interface Cluster {
 declare global {
   interface Window {
     openai?: {
+      // Theme and display
       theme?: 'light' | 'dark'
+      locale?: string
+      userAgent?: string
+      displayMode?: 'inline' | 'pip' | 'fullscreen'
+      maxHeight?: number
+      safeArea?: { top: number; bottom: number; left: number; right: number }
+      view?: 'default' | 'launcher'
+
+      // Tool output data
       toolOutput?: {
         result?: {
           structuredContent?: {
@@ -47,10 +56,28 @@ declare global {
           clusters?: Cluster[]
         }
       }
+
+      // Tool calling
       callTool?: <T = unknown>(name: string, args: Record<string, unknown>) => Promise<{
         structuredContent?: T
         result?: { structuredContent?: T }
       }>
+
+      // Widget state persistence
+      widgetState?: Record<string, unknown>
+      setWidgetState?: (state: Record<string, unknown>) => void
+
+      // Layout & height
+      notifyIntrinsicHeight?: (height?: number) => void
+      requestDisplayMode?: (options: { mode: 'inline' | 'pip' | 'fullscreen' }) => Promise<void>
+      requestClose?: () => void
+      requestModal?: (options: unknown) => Promise<unknown>
+
+      // User actions
+      sendFollowUpMessage?: (options: { prompt: string }) => Promise<void>
+      uploadFile?: (file: File) => Promise<{ fileId: string }>
+      getFileDownloadUrl?: (options: { fileId: string }) => Promise<{ downloadUrl: string }>
+      openExternal?: (options: { href: string }) => void
     }
   }
 }
