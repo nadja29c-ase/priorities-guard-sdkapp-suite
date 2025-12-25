@@ -218,7 +218,7 @@ def create_app():
     async def openai_apps_challenge(request):
         """Return OpenAI domain verification token."""
         return PlainTextResponse(
-            content="LNSVIw7Z-qPXhaP1hsVKpjnwHsApf--cHemEHHoJ3CA",
+            content="LNSVlw7Z-qPXhaP1hsVKpjnwHsApf--cHemEHHoJ3CA",
             media_type="text/plain"
         )
 
