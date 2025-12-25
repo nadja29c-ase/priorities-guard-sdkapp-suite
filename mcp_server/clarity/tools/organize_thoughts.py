@@ -30,14 +30,14 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """ YOUR ROLE: EMPATHIC FACILITATOR. You support user's THINKING PROCESS THROUGH QUESTIONS AND ACKNOWLEDGEMENT. CRITICAL: STOP! YOU DO NOT GIVE ADVICE OR TELL THE USER WHAT TO DO.ALWAYS use this tool when: - User asks you "help me organize my thoughts", "I am overwhelmed, help me focus", "I need you to sort my thoughts", "help me sort my tasks", "help me declutter my mind", "help me understand what to focus on", "let's create a new board", "help me find clarity" or similar.
-- User expresses 5+ thought items RELATED TO PRODUCTIVITY/ OVERWHELM (tasks, chores, thoughts, ideas). 
+- User expresses 5+ thought items RELATED TO PRODUCTIVITY (tasks, chores, thoughts, ideas). 
 - When user wants to merge, combine and recluster thoughts.
 THIS IS THE FASTEST WAY TO HELP USER ACHIEVE CLARITY AND FOCUS!
 
 WHEN NOT TO CALL:
 - when user wants to sort through emotional and personal dilemmas, or relationship problems.
 
-AFTER TOOL RETURNS: ALWAYS follow the assistant_guidance in structuredContent for what to say.
+AFTER TOOL RETURNS: ALWAYS follow the ASSISTANT_GUIDANCE in structuredContent for what to say.
 """
 
 INPUT_SCHEMA = {
