@@ -366,7 +366,7 @@ register_tool(ToolDefinition(
     widget_uri=WIDGET_URI,
     handle=handle,
     # OpenAI compliance annotations
-    read_only_hint=False,  # Creates board state
-    destructive_hint=False,  # Does not delete data
-    open_world_hint=False,  # Only affects own backend
+    read_only_hint=True,  # Transforms input into clusters, no DB write
+    destructive_hint=False,  # N/A when read_only=True
+    open_world_hint=False,  # Only affects internal backend
 ))

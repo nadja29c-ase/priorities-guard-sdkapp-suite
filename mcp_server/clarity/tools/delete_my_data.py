@@ -165,7 +165,7 @@ async def handle(
 
 
 # ============================================================================
-# Self-register at import time
+# Self-register at import time. Annotations.
 # ============================================================================
 
 register_tool(ToolDefinition(
