@@ -12,7 +12,7 @@ import copy
 
 import structlog
 from mcp import types as mcp_types
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .base import ToolDefinition
 from . import register_tool
@@ -255,6 +255,16 @@ class SingleOperation(BaseModel):
     text: Optional[str] = None
     tag: Optional[str] = None
 
+    @field_validator("item_index", mode="before")
+    @classmethod
+    def coerce_item_index(cls, v):
+        """Coerce float to int (LLM sometimes sends 0.0 instead of 0)."""
+        if v is None:
+            return None
+        if isinstance(v, float):
+            return int(v)
+        return v
+
 
 class EditBoardRequest(BaseModel):
     """Request structure — single or batch mode."""
@@ -270,6 +280,16 @@ class EditBoardRequest(BaseModel):
     tag: Optional[str] = None
     # Batch mode
     operations: Optional[List[SingleOperation]] = None
+
+    @field_validator("item_index", mode="before")
+    @classmethod
+    def coerce_item_index(cls, v):
+        """Coerce float to int (LLM sometimes sends 0.0 instead of 0)."""
+        if v is None:
+            return None
+        if isinstance(v, float):
+            return int(v)
+        return v
 
 
 # ============================================================================
