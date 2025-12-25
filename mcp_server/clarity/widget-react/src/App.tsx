@@ -43,6 +43,7 @@ function App() {
     if (!t) return  // No data yet, wait for event
 
     const data = getToolOutput()
+    setShowSaved(false)  // Reset stale indicator on new data load
     setClusters(data)
     setIsInitialized(true)
     isInitializedRef.current = true
@@ -90,6 +91,8 @@ function App() {
         const content = extractStructuredContent<{ saved?: boolean }>(result)
         if (content?.saved === true) {
           setShowSaved(true)
+          // Clear after 3 seconds
+          setTimeout(() => setShowSaved(false), 3000)
         }
       } else {
         console.warn('window.openai.callTool not available')
@@ -144,7 +147,7 @@ function App() {
 
       {/* Sticky Save button - always visible at bottom */}
       <div className="sticky bottom-0 pt-4 pb-2 bg-surface-secondary">
-        <div className="flex justify-end items-center">
+        <div className="flex justify-start items-center">
           {showSaved && (
             <span
               className="flex items-center gap-1 text-xs text-success font-medium mr-3"
@@ -165,7 +168,7 @@ function App() {
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
         </div>
-        <p className="text-xs text-secondary mt-1 text-right">Only 1 board can be saved</p>
+        <p className="text-xs text-secondary mt-1 text-left">Only 1 board can be saved</p>
       </div>
     </main>
   )
