@@ -67,7 +67,10 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         correlation_id = auth_context["correlation_id"]
 
     except UnauthorizedError:
-        logger.warning("tool.dispatch.unauthorized", tool_name=name)
+        auth_ms = (time.perf_counter() - start_auth) * 1000
+        logger.warning("tool.dispatch.unauthorized",
+                      tool_name=name,
+                      auth_ms=round(auth_ms, 1))
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
@@ -77,9 +80,11 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
             isError=True,
         )
     except InsufficientScopeError as e:
+        auth_ms = (time.perf_counter() - start_auth) * 1000
         logger.warning("tool.dispatch.forbidden",
                       tool_name=name,
-                      required_scopes=e.required_scopes)
+                      required_scopes=e.required_scopes,
+                      auth_ms=round(auth_ms, 1))
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
