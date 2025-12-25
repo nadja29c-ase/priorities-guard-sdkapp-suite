@@ -60,9 +60,14 @@ ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it 
 
 NAME = "prioritize_clusters"
 
-DESCRIPTION = """
-PURPOSE: Marks up to 3 priorities (P1/P2/P3) on the board.
-This helps the user focus on what really matters most and reduce overwhelm.
+DESCRIPTION = """ WHEN TO CALL:
+- After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
+- After USER explicitly names which clusters/subclusters/items are their priorities (e.g. "My P1 is X, P2 is Y")
+- When the user sayd "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
+The Tool marks up to 3 priorities (P1/P2/P3) on the board. This helps the user focus on what really matters most and reduce overwhelm.
+
+CRITICAL: - NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS: ACKNOWLEDGE IT AND KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES.
+- NEVER when you INFER or GUESS PRIORITIES; NOR PROVIDE ANY ADVICE on prioritization.
 
 TARGETING (choose the right method):
 1. For CLUSTERS or SUBCLUSTERS → use "name":
@@ -72,16 +77,6 @@ TARGETING (choose the right method):
 2. For individual THOUGHT ITEMS (the bullet points inside clusters) → use "item_index" + "parent_name":
    { item_index: 0, parent_name: "Work Projects", rank: "P3" }
    (item_index is 0-based position in the parent's thought_items array)
-
-CRITICAL: NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS - ACKNOWLEDGE IT AND KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES - THIS WILL CREATE CLARITY AND EASE.
-
-WHEN TO CALL:
-- After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
-- After USER explicitly names which clusters/subclusters/items are their priorities (e.g. "My P1 is X, P2 is Y")
-- When the user sayd "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
-
-DO NOT CALL:
-- NEVER when you infer or guess priorities or provide priorities on behalf of the user
 
 AFTER TOOL RETURNS: Follow assistant_guidance in structuredContent.
 """
