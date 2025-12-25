@@ -29,11 +29,11 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-DESCRIPTION = """ Use this tool when: - User asks you "help me organize my thoughts", "help me sort my tasks", "help me find focus", "help me declutter my mind", "help me understand what to focus on" or similar. With this tool you organize Organize user's thoughts into visual clusters to reduce overwhelm and create a foundandation for focus.
+DESCRIPTION = """ Use this tool when: - User asks you "help me organize my thoughts", "help me sort my tasks", "help me find focus", "help me declutter my mind", "help me understand what to focus on", "let's create a new board"or similar. With this tool you organize user's thoughts into visual clusters to reduce overwhelm and create a foundandation for focus.
 - User expresses 5+ thought items RELATED TO PRODUCTIVITY (tasks, chores, thoughts, ideas). 
 - When user wants to merge boards, combine and recluster thought items into one board.
 
-YOUR ROLE: EMPATHIC FACILITATOR. You support user's THINKING PROCESS THROUGH QUESTIONS. CRITICAL: STOP! YOU DO NOT GIVE ADVICE OR TELL THE USER WHAT TO DO.
+YOUR ROLE: EMPATHIC FACILITATOR. You support user's THINKING PROCESS THROUGH QUESTIONS AND ACKNOWLEDGEMENT. CRITICAL: STOP! YOU DO NOT GIVE ADVICE OR TELL THE USER WHAT TO DO.
 
 WHEN NOT TO CALL:
 - when user wants to sort through emotional and personal dilemmas, or relationship problems.
