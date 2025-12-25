@@ -6,6 +6,11 @@ import { ClusterCard } from './components/ClusterCard'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { Check } from '@openai/apps-sdk-ui/components/Icon'
 
+// Widget state persisted across re-renders via OpenAI SDK
+interface ClarityWidgetState {
+  scrollY: number
+}
+
 function App() {
   // Theme is handled automatically by SDK CSS via data-theme attribute
 
@@ -28,12 +33,16 @@ function App() {
     })
   }, [])
 
-  // Log widgetState on mount (infrastructure for future state persistence)
+  // Restore scroll position from widgetState on mount
   useEffect(() => {
-    if (window.openai?.widgetState) {
-      console.debug('Clarity: widgetState available', window.openai.widgetState)
+    const savedState = window.openai?.widgetState as ClarityWidgetState | undefined
+    if (savedState?.scrollY) {
+      // Defer to ensure DOM is ready
+      requestAnimationFrame(() => {
+        window.scrollTo(0, savedState.scrollY)
+      })
     }
-  }, [])
+  }, []) // Run once on mount
 
   // Load clusters from window.openai.toolOutput
   const loadClusters = useCallback(() => {
@@ -72,6 +81,29 @@ function App() {
       notifyHeight()
     }
   }, [saveError, isInitialized, notifyHeight])
+
+  // Persist scroll position to widgetState
+  useEffect(() => {
+    if (!isInitialized) return
+
+    let timeoutId: ReturnType<typeof setTimeout>
+
+    const handleScroll = () => {
+      // Debounce: only save after user stops scrolling for 150ms
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        window.openai?.setWidgetState?.({
+          scrollY: window.scrollY
+        } satisfies ClarityWidgetState)
+      }, 150)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      clearTimeout(timeoutId)
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [isInitialized])
 
   // Handle save
   const handleSave = async () => {
