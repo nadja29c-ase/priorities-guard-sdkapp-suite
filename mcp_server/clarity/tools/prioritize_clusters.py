@@ -15,7 +15,7 @@ Role boundaries:
 - Tool: Receives final decisions, updates widget (execution only)
 """
 
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
 import structlog
 from mcp import types as mcp_types
@@ -27,11 +27,7 @@ from ..handlers.resources import WIDGET_URI
 from ..tool_logic import enrich_clusters
 from .board_utils import (
     MAX_PRIORITIES,
-    VALID_RANKS,
     PriorityInput,
-    normalize_thought_item as _normalize_thought_item,
-    clear_all_thought_item_priorities as _clear_all_thought_item_priorities,
-    clear_all_priorities as _clear_all_priorities,
     apply_priorities as _apply_priorities,
 )
 
@@ -312,7 +308,7 @@ def _validate_priorities(
             if p.parent_name in ambiguous_names:
                 return ERROR_AMBIGUOUS_NAME.format(name=p.parent_name)
 
-            container, _container_type = _find_container_by_name(clusters_data, p.parent_name)
+            container, _ = _find_container_by_name(clusters_data, p.parent_name)
             if container is None:
                 return ERROR_INVALID_PARENT.format(parent=p.parent_name)
 
