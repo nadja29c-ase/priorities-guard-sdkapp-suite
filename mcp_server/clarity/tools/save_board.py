@@ -67,7 +67,7 @@ INPUT_SCHEMA = {
     "properties": {
         "confirmed": {
             "type": "boolean",
-            "description": "Optional. Defaults to true. Used by widget for modal confirmation."
+            "description": "Must be true to save. Set to true ONLY after user explicitly confirms. Note: Users can only have ONE saved board - saving replaces any previously saved board."
         },
         "clusters": {
             "type": "array",
@@ -194,7 +194,7 @@ class ClusterInput(BaseModel):
 
 class SaveBoardRequest(BaseModel):
     """Expected top-level structure for save request."""
-    confirmed: bool = True  # Default to True for LLM calls
+    confirmed: bool = False  # Default to False - requires explicit confirmation
     clusters: List[ClusterInput]
 
 
@@ -349,6 +349,24 @@ async def handle(
         return _make_error_response(
             ERROR_SERVER_ERROR,
             "Failed to save board: Invalid input format."
+        )
+
+    # ============================================================
+    # CONFIRMATION CHECK
+    # ============================================================
+    if not validated_request.confirmed:
+        logger.info("save_board.awaiting_confirmation", user_id=user_id)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Save requires user confirmation. Note: You can only have ONE saved board - saving will replace any previously saved board."
+            )],
+            structuredContent={
+                "saved": False,
+                "status": "awaiting_confirmation",
+                "assistant_guidance": "Ask user to confirm they want to save. IMPORTANT: Inform them that they can only have ONE saved board at a time - if they already have a saved board, this will REPLACE it with the current board. Once they confirm, call save_board again with confirmed=true.",
+            },
+            isError=False,
         )
 
     # ============================================================
