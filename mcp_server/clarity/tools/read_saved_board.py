@@ -129,6 +129,7 @@ async def handle(
                 "clusters": [],
                 "has_history": False,
                 "is_empty_snapshot": False,
+                "assistant_guidance": "No saved board exists. Tell the user briefly, then proceed with their request (e.g., 'Starting fresh — let me help you organize...').",
             },
             _meta={
                 "saved_board_hash": None,
@@ -154,6 +155,7 @@ async def handle(
                 "has_history": True,
                 "is_empty_snapshot": True,
                 "last_updated": cluster_data.get("created_at"),
+                "assistant_guidance": "Board was cleared previously. Tell the user briefly, then proceed with their request (e.g., 'Your board is empty — let me help you organize...').",
             },
             _meta={
                 "saved_board_hash": saved_board_hash,
@@ -165,6 +167,9 @@ async def handle(
                user_id=user_id,
                cluster_count=cluster_count)
 
+    # Extract cluster names for acknowledgment
+    cluster_names = [c.get("cluster_name", "") for c in clusters if c.get("cluster_name")]
+
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
@@ -172,9 +177,17 @@ async def handle(
         )],
         structuredContent={
             "clusters": clusters,
+            "cluster_names": cluster_names,
             "has_history": True,
             "is_empty_snapshot": False,
             "last_updated": cluster_data.get("created_at"),
+            "assistant_guidance": f"""IMPORTANT: Acknowledge the board briefly BEFORE making changes. This gives the user feedback that you understood.
+
+Examples:
+- "Found your board — {cluster_count} clusters. Making the change now..."
+- "Got your board with {', '.join(cluster_names[:3])}{'...' if len(cluster_names) > 3 else ''}. Let me [action]..."
+
+Keep it to ONE short sentence, then proceed with the user's request.""",
         },
         _meta={
             "saved_board_hash": saved_board_hash,
