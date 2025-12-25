@@ -4,8 +4,6 @@ Tool call dispatcher for Clarity MCP.
 Routes tool calls to the appropriate handler in the registry.
 """
 
-import json
-
 import structlog
 from mcp import types as mcp_types
 
@@ -73,8 +71,9 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text=json.dumps(build_unauthorized_error())
+                text="Authentication required. Please connect your account."
             )],
+            _meta=build_unauthorized_error(),
             isError=True,
         )
     except InsufficientScopeError as e:
@@ -84,11 +83,9 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text=json.dumps(build_forbidden_error(
-                    required_scopes=e.required_scopes,
-                    actual_scopes=e.actual_scopes
-                ))
+                text="Insufficient permissions. Please reconnect your account."
             )],
+            _meta=build_forbidden_error(required_scopes=e.required_scopes),
             isError=True,
         )
 

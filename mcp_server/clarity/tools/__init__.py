@@ -42,10 +42,12 @@ async def list_tools() -> List[mcp_types.Tool]:
     - Tools with widget_uri get full widget metadata
     - Tools with widget_accessible=True can be called from widgets via window.openai.callTool()
     - All tools get annotations for compliance
+    - Tools are returned sorted by name for deterministic output
     """
     tools = []
 
-    for tool_def in TOOL_REGISTRY.values():
+    # Sort by name for deterministic output
+    for tool_def in sorted(TOOL_REGISTRY.values(), key=lambda t: t.name):
         # Build annotations from tool definition
         annotations = {
             "readOnlyHint": tool_def.read_only_hint,
@@ -91,6 +93,11 @@ async def list_tools() -> List[mcp_types.Tool]:
             inputSchema=deepcopy(tool_def.input_schema),
             _meta=meta,
         )
+
+        # Future-proof: mirror annotations at top level if SDK supports it
+        if hasattr(tool, "annotations"):
+            tool.annotations = annotations
+
         tools.append(tool)
 
     logger.debug("tools.list.returning", tool_count=len(tools))

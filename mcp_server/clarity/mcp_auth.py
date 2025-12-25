@@ -484,78 +484,47 @@ class InsufficientScopeError(OAuthError):
         super().__init__(self.description)
 
 
-def build_unauthorized_error(
-    error: str = None,  # noqa: ARG001 - kept for backward compatibility
-    description: str = None,  # noqa: ARG001 - kept for backward compatibility
-) -> Dict[str, Any]:
+def build_unauthorized_error() -> Dict[str, Any]:
     """
-    Build JSON-RPC error response for 401 Unauthorized.
+    Build RFC 6750 WWW-Authenticate header for 401 Unauthorized.
 
-    Returns MCP-compliant error with _meta["mcp/www_authenticate"] for ChatGPT
-    OAuth discovery. Error code -32001 indicates authentication required.
-
-    Args:
-        error: OAuth error code - kept for backward compatibility, not used
-        description: Error description - kept for backward compatibility, not used
+    Returns dict with mcp/www_authenticate containing RFC 6750 Bearer challenge string.
+    This format is required by ChatGPT Apps SDK to trigger OAuth linking UI.
 
     Returns:
-        JSON-RPC error response dictionary with _meta for OAuth discovery
+        Dict with mcp/www_authenticate list containing RFC 6750 header string
     """
-    del error, description  # Explicitly mark as unused
     return {
-        "error": {
-            "code": -32001,
-            "message": "Unauthorized",
-            "data": {
-                "_meta": {
-                    "mcp/www_authenticate": [{
-                        "type": "oauth2",
-                        "resource_metadata": f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource"
-                    }]
-                }
-            }
-        }
+        "mcp/www_authenticate": [
+            f'Bearer resource_metadata="{MCP_SERVER_URL}/.well-known/oauth-protected-resource", '
+            f'error="invalid_token", error_description="No access token provided"'
+        ]
     }
 
 
 def build_forbidden_error(
     required_scopes: Optional[List[str]] = None,
-    actual_scopes: Optional[List[str]] = None,  # noqa: ARG001 - not surfaced for security
 ) -> Dict[str, Any]:
     """
-    Build JSON-RPC error response for 403 Forbidden.
+    Build RFC 6750 WWW-Authenticate header for 403 Forbidden (insufficient scope).
 
-    Returns MCP-compliant error with _meta["mcp/www_authenticate"] for ChatGPT
-    OAuth discovery. Error code -32003 indicates valid token but insufficient scope.
+    Returns dict with mcp/www_authenticate containing RFC 6750 Bearer challenge string.
+    This format is required by ChatGPT Apps SDK to trigger OAuth linking UI.
 
     Args:
-        required_scopes: Required scopes for the tool (surfaced to help debugging)
-        actual_scopes: Actual scopes in token (NOT surfaced - could leak token info)
+        required_scopes: Required scopes for the tool
 
     Returns:
-        JSON-RPC error response dictionary with _meta for OAuth discovery
+        Dict with mcp/www_authenticate list containing RFC 6750 header string
     """
-    del actual_scopes  # Don't surface actual scopes (could leak token info)
-
-    error_data: Dict[str, Any] = {
-        "_meta": {
-            "mcp/www_authenticate": [{
-                "type": "oauth2",
-                "resource_metadata": f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource"
-            }]
-        }
-    }
-
-    # Include required scope if provided (safe to surface, helps debugging)
-    if required_scopes:
-        error_data["required_scope"] = " ".join(required_scopes)
+    scope_str = " ".join(required_scopes) if required_scopes else "clarity.write"
 
     return {
-        "error": {
-            "code": -32003,
-            "message": "Forbidden",
-            "data": error_data
-        }
+        "mcp/www_authenticate": [
+            f'Bearer resource_metadata="{MCP_SERVER_URL}/.well-known/oauth-protected-resource", '
+            f'error="insufficient_scope", error_description="Required scope: {scope_str}", '
+            f'scope="{scope_str}"'
+        ]
     }
 
 

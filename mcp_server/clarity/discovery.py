@@ -23,6 +23,7 @@ async def openid_configuration():
         "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
         "registration_endpoint": f"{OAUTH_ISSUER_URL}/register",
         "scopes_supported": SCOPES_SUPPORTED,
+        "code_challenge_methods_supported": ["S256"],
     }
 
 
@@ -34,6 +35,7 @@ async def oauth_authorization_server():
         "token_endpoint": f"{OAUTH_ISSUER_URL}/token",
         "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
         "scopes_supported": SCOPES_SUPPORTED,
+        "code_challenge_methods_supported": ["S256"],
     }
 
 
