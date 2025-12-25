@@ -1,5 +1,6 @@
 import pytest
-from mcp_server.clarity.tools import list_tools, TOOL_REGISTRY
+from mcp_server.clarity.tools import list_tools, TOOL_REGISTRY, register_tool
+from mcp_server.clarity.tools.base import ToolDefinition
 
 
 @pytest.mark.asyncio
@@ -42,3 +43,33 @@ async def test_security_schemes_format():
             if scheme["type"] == "oauth2":
                 assert "scopes" in scheme
                 assert isinstance(scheme["scopes"], list)
+
+
+@pytest.mark.asyncio
+async def test_noauth_security_scheme_for_tool_without_scopes():
+    """Tools without required_scopes get noauth securitySchemes."""
+
+    # Dummy handler for test tool
+    async def dummy_handler(user_id, correlation_id, arguments):
+        pass
+
+    # Create temporary tool with no scopes
+    mock_tool = ToolDefinition(
+        name="_test_noauth_tool",
+        description="Test tool",
+        input_schema={"type": "object", "properties": {}},
+        required_scopes=[],  # Empty = noauth
+        widget_uri=None,
+        handle=dummy_handler,
+    )
+
+    try:
+        register_tool(mock_tool)
+        tools = await list_tools()
+        test_tool = next(t for t in tools if t.name == "_test_noauth_tool")
+
+        schemes = test_tool.meta["securitySchemes"]
+        assert schemes == [{"type": "noauth"}]
+    finally:
+        # Cleanup
+        TOOL_REGISTRY.pop("_test_noauth_tool", None)
