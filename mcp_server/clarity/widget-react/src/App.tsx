@@ -3,7 +3,6 @@ import type { Cluster } from './types'
 import { extractStructuredContent, getToolOutput, sortClustersByPriority } from './utils'
 import { Header } from './components/Header'
 import { ClusterCard } from './components/ClusterCard'
-import { SaveModal } from './components/SaveModal'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { Check } from '@openai/apps-sdk-ui/components/Icon'
 
@@ -12,7 +11,6 @@ function App() {
 
   const [clusters, setClusters] = useState<Cluster[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -20,7 +18,7 @@ function App() {
   // Ref to avoid re-running effect on clusters change
   const isInitializedRef = useRef(false)
 
-  // Ref for Save button focus restoration after modal closes
+  // Ref for Save button focus management
   const saveButtonRef = useRef<HTMLButtonElement>(null)
 
   // Load clusters from window.openai.toolOutput
@@ -77,8 +75,7 @@ function App() {
       setSaveError('Save failed. Please try again.')
     } finally {
       setIsSaving(false)
-      setIsModalOpen(false)
-      // Restore focus to Save button after modal closes (defer to allow DOM update)
+      // Restore focus to Save button after async save completes
       setTimeout(() => saveButtonRef.current?.focus(), 0)
     }
   }
@@ -104,7 +101,7 @@ function App() {
       <Header />
 
       {saveError && (
-        <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger">
+        <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline">
           {saveError}
         </div>
       )}
@@ -122,35 +119,30 @@ function App() {
       )}
 
       {/* Sticky Save button - always visible at bottom */}
-      <div className="sticky bottom-0 pt-4 pb-2 bg-surface-secondary flex justify-end items-center">
-        {showSaved && (
-          <span
-            className="flex items-center gap-1 text-xs text-success font-medium mr-3"
-            aria-live="polite"
+      <div className="sticky bottom-0 pt-4 pb-2 bg-surface-secondary">
+        <div className="flex justify-end items-center">
+          {showSaved && (
+            <span
+              className="flex items-center gap-1 text-xs text-success font-medium mr-3"
+              aria-live="polite"
+            >
+              <Check className="w-3.5 h-3.5" aria-hidden="true" />
+              Saved
+            </span>
+          )}
+          <Button
+            ref={saveButtonRef}
+            color="primary"
+            variant="solid"
+            onClick={handleSave}
+            disabled={clusters.length === 0 || isSaving}
+            aria-label={clusters.length === 0 ? "Save board (no items to save)" : "Save board"}
           >
-            <Check className="w-3.5 h-3.5" aria-hidden="true" />
-            Saved
-          </span>
-        )}
-        <Button
-          ref={saveButtonRef}
-          color="primary"
-          variant="solid"
-          onClick={() => setIsModalOpen(true)}
-          disabled={clusters.length === 0}
-          aria-label={clusters.length === 0 ? "Save board (no items to save)" : "Save board"}
-        >
-          Save
-        </Button>
+            {isSaving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+        <p className="text-xs text-secondary mt-1 text-right">Only 1 board can be saved</p>
       </div>
-
-      <SaveModal
-        isOpen={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        onConfirm={handleSave}
-        isSaving={isSaving}
-        triggerRef={saveButtonRef}
-      />
     </main>
   )
 }
