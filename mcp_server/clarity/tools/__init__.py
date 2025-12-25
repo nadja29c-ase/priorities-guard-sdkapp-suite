@@ -53,6 +53,12 @@ async def list_tools() -> List[mcp_types.Tool]:
             "openWorldHint": tool_def.open_world_hint,
         }
 
+        # Build securitySchemes based on required_scopes
+        if tool_def.required_scopes:
+            security_schemes = [{"type": "oauth2", "scopes": tool_def.required_scopes}]
+        else:
+            security_schemes = [{"type": "noauth"}]
+
         # Build _meta based on tool capabilities
         if tool_def.widget_uri:
             # Widget-producing tools get full metadata
@@ -63,17 +69,20 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
                 "annotations": annotations,
+                "securitySchemes": security_schemes,
             }
         elif tool_def.widget_accessible:
             # Widget-callable tools (e.g., save_board) need widgetAccessible
             meta = {
                 "openai/widgetAccessible": True,
                 "annotations": annotations,
+                "securitySchemes": security_schemes,
             }
         else:
             # Data-only tools still need annotations
             meta = {
                 "annotations": annotations,
+                "securitySchemes": security_schemes,
             }
 
         tool = mcp_types.Tool(

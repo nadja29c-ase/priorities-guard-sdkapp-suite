@@ -1,0 +1,1 @@
+# Clarity MCP Server tests
