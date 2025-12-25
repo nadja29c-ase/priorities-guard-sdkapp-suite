@@ -83,7 +83,6 @@ function App() {
     try {
       if (window.openai?.callTool) {
         const result = await window.openai.callTool<{ saved?: boolean }>('save_board', {
-          confirmed: true,
           clusters: clusters,
         })
 
