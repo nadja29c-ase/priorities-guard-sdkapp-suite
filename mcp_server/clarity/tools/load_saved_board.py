@@ -184,4 +184,7 @@ register_tool(ToolDefinition(
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,  # Always produces widget
     handle=handle,
+    read_only_hint=True,
+    destructive_hint=False,
+    open_world_hint=False,
 ))
