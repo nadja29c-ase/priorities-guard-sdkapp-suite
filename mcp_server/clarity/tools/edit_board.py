@@ -811,47 +811,8 @@ async def handle(
         "openai/resultCanProduceWidget": True,
     }
 
-    # Operation-specific guidance - always prompt about saving
-    if len(completed) > 1:
-        # Batch mode — generic guidance
-        guidance = f"""Completed {len(completed)} edits. Acknowledge this briefly.
-
-IMPORTANT: These changes are NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
-
-    elif completed[0] == "set_priority":
-        guidance = f"""Done — {request.rank} is now set. Acknowledge this briefly.
-
-IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
-
-    elif completed[0] == "clear_priority":
-        guidance = """Priority cleared. Acknowledge this briefly.
-
-IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
-
-    elif completed[0] in ("rename_cluster", "rename_subcluster"):
-        guidance = f"""Renamed to '{request.new_name}'. Acknowledge this briefly.
-
-IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
-
-    elif completed[0] in ("delete_cluster", "delete_subcluster", "delete_thought_item"):
-        guidance = """Deleted. Acknowledge this briefly.
-
-IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
-
-    elif completed[0] == "add_thought_item":
-        guidance = f"""Added to '{request.parent_name}'. Acknowledge this briefly.
-
-IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
-
-    elif completed[0] in ("add_tag", "remove_tag"):
-        guidance = """Tag updated. Acknowledge this briefly.
-
-IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
-
-    else:  # clear_all_priorities
-        guidance = """All priorities cleared. Acknowledge this briefly.
-
-IMPORTANT: This change is NOT saved yet. Ask the user directly: "Would you like me to save this update to your board?" """
+    # Guidance for all operations
+    guidance = "Confirm the edit briefly, then continue with whatever you were doing with the user."
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(type="text", text=message)],
