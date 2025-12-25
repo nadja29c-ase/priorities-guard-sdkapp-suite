@@ -4,6 +4,8 @@ Tool call dispatcher for Clarity MCP.
 Routes tool calls to the appropriate handler in the registry.
 """
 
+import time
+
 import structlog
 from mcp import types as mcp_types
 
@@ -29,6 +31,8 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
     Returns:
         CallToolResult from the tool handler or error response
     """
+    start_total = time.perf_counter()
+
     name = req.params.name
     arguments = req.params.arguments or {}
     meta = getattr(req.params, '_meta', None) or {}
@@ -54,17 +58,13 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         )
 
     # ============================================================
-    # AUTHENTICATION
+    # AUTHENTICATION (with timing)
     # ============================================================
+    start_auth = time.perf_counter()
     try:
         auth_context = await authenticate_request(name, meta)
         user_id = auth_context["user_id"]
         correlation_id = auth_context["correlation_id"]
-
-        logger.info("tool.dispatch.authenticated",
-                    user_id=user_id,
-                    correlation_id=correlation_id,
-                    tool_name=name)
 
     except UnauthorizedError:
         logger.warning("tool.dispatch.unauthorized", tool_name=name)
@@ -88,17 +88,19 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
             _meta=build_forbidden_error(required_scopes=e.required_scopes),
             isError=True,
         )
+    auth_ms = (time.perf_counter() - start_auth) * 1000
 
     # ============================================================
-    # DISPATCH TO TOOL HANDLER
+    # DISPATCH TO TOOL HANDLER (with timing)
     # ============================================================
     logger.debug("tool.dispatch.executing",
                 tool_name=name,
                 user_id=user_id,
                 correlation_id=correlation_id)
 
+    start_tool = time.perf_counter()
     try:
-        return await tool.handle(user_id, correlation_id, arguments)
+        result = await tool.handle(user_id, correlation_id, arguments)
     except Exception:
         logger.exception("tool.dispatch.unexpected_error",
                         tool_name=name,
@@ -111,3 +113,18 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
             )],
             isError=True,
         )
+    tool_ms = (time.perf_counter() - start_tool) * 1000
+
+    # ============================================================
+    # LOG TIMING BREAKDOWN
+    # ============================================================
+    total_ms = (time.perf_counter() - start_total) * 1000
+
+    logger.info("tool.timing",
+                tool_name=name,
+                auth_ms=round(auth_ms, 1),
+                tool_ms=round(tool_ms, 1),
+                total_ms=round(total_ms, 1),
+                user_id=user_id)
+
+    return result
