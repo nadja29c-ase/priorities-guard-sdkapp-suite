@@ -20,7 +20,7 @@ import structlog
 from mcp.server.fastmcp import FastMCP
 from mcp import types as mcp_types
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Route
 
 from mcp_server.clarity.http_client import cleanup_http_client
@@ -214,6 +214,14 @@ def create_app():
     # Register shutdown handler
     fastmcp_app.add_event_handler("shutdown", _cleanup_on_shutdown)
 
+    # OpenAI Apps SDK domain verification endpoint
+    async def openai_apps_challenge(request):
+        """Return OpenAI domain verification token."""
+        return PlainTextResponse(
+            content="LNSVIw7Z-qPXhaP1hsVKpjnwHsApf--cHemEHHoJ3CA",
+            media_type="text/plain"
+        )
+
     # Discovery routes - all OAuth discovery endpoints
     discovery_routes = [
         Route("/openid-configuration", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
@@ -223,6 +231,8 @@ def create_app():
         Route("/openid-configuration/mcp", wellknown_openid_configuration, methods=["GET", "HEAD", "OPTIONS"]),
         Route("/oauth-authorization-server/mcp", wellknown_oauth_authorization_server, methods=["GET", "HEAD", "OPTIONS"]),
         Route("/oauth-protected-resource/mcp", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
+        # OpenAI Apps SDK domain verification
+        Route("/openai-apps-challenge", openai_apps_challenge, methods=["GET"]),
     ]
     discovery_app = Starlette(routes=discovery_routes)
 
