@@ -29,7 +29,7 @@ DESCRIPTION = """
 Transforms a vague problem description into a specific problem statement.
 
 WHEN TO CALL:
-- User describes a problem, challenge, or stuck situation and needs help clarifying it
+- User describes a problem, challenge, or stuck situation and needs help clarifying/understanding it
 - User says they need help thinking through something
 - User mentions feeling overwhelmed or unclear and needs help thinking it through
 
@@ -43,19 +43,19 @@ INPUT_SCHEMA = {
     "properties": {
         "actor": {
             "type": "string",
-            "description": "Who is experiencing the problem (e.g., 'I', 'my team', 'our company')"
+            "description": "Who is experiencing the problem (e.g., 'I', 'my team', 'our company'). Explicitly stated by the user."
         },
         "goal": {
             "type": "string",
-            "description": "What they're trying to achieve"
+            "description": "What they're trying to achieve. Explicitly stated by the user."
         },
         "obstacle": {
             "type": "string",
-            "description": "What keeps blocking progress"
+            "description": "What keeps blocking progress. Explicitly stated by the user."
         },
         "cost": {
             "type": "string",
-            "description": "Impact in terms of time, money, energy, or clarity"
+            "description": "Impact in terms of time, money, energy, or clarity. Explicitly stated by the user."
         }
     },
     # NO "required" - all fields optional at schema level
