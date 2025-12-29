@@ -168,33 +168,10 @@ def formulate_problem(
 # Cluster Questions Logic
 # ============================================================================
 
-# Valid uncertainty types for clustering
-VALID_UNCERTAINTY_TYPES = frozenset([
-    "causes",
-    "constraints",
-    "unknowns",
-    "dependencies",
-    "risks",
-    "options",
-])
 
-# Insight templates per uncertainty type
-INSIGHT_TEMPLATES = {
-    "causes": "These questions focus on what may be driving {topic}.",
-    "constraints": "These questions explore what might be limiting options around {topic}.",
-    "unknowns": "These questions identify missing information about {topic}.",
-    "dependencies": "These questions consider how others factor into {topic}.",
-    "risks": "These questions examine what could go wrong with {topic}.",
-    "options": "These questions explore possible approaches to {topic}.",
-}
-
-
-def generate_insight(label: str, uncertainty_type: str) -> str:
+def generate_insight(theme: str) -> str:
     """Generate a structural insight for a cluster."""
-    template = INSIGHT_TEMPLATES.get(uncertainty_type, INSIGHT_TEMPLATES["unknowns"])
-    # Use label as topic, lowercase for natural reading
-    topic = label.lower()
-    return template.format(topic=topic)
+    return f"These questions explore {theme.lower()}."
 
 
 def generate_summary_markdown(
@@ -209,22 +186,22 @@ def generate_summary_markdown(
         "## Problem",
         problem_statement,
         "",
-        "## Questions by Uncertainty Type",
+        "## Questions by Theme",
         "",
     ]
 
     for cluster in clusters:
-        lines.append(f"### {cluster['label']} ({cluster['uncertainty_type']})")
+        lines.append(f"### {cluster['theme']}")
         for q in cluster["questions"]:
             lines.append(f"- {q}")
         lines.append(f"_{cluster['insight']}_")
         lines.append("")
 
     if unclustered:
-        lines.append("### Unclustered")
+        lines.append("### Other Questions")
         for q in unclustered:
             lines.append(f"- {q}")
-        lines.append("_These questions don't fit a single uncertainty type._")
+        lines.append("_These questions didn't fit a clear theme._")
         lines.append("")
 
     lines.extend([
@@ -250,7 +227,7 @@ def cluster_questions(
     Args:
         problem_statement: Confirmed problem from formulate_problem
         questions: All questions collected
-        clusters: ChatGPT-generated clusters with label, uncertainty_type, questions
+        clusters: ChatGPT-generated clusters with theme and questions
         unclustered: Questions that don't fit any cluster (optional)
 
     Returns:
@@ -310,28 +287,22 @@ def cluster_questions(
     processed_clusters = []
     for i, cluster in enumerate(clusters):
         # Validate required fields
-        label = cluster.get("label", "").strip()
-        uncertainty_type = cluster.get("uncertainty_type", "").strip().lower()
+        theme = cluster.get("theme", "").strip()
         cluster_questions_list = cluster.get("questions", [])
 
-        if not label:
-            label = f"Cluster {i + 1}"
-
-        # Map invalid uncertainty types to "unknowns"
-        if uncertainty_type not in VALID_UNCERTAINTY_TYPES:
-            uncertainty_type = "unknowns"
+        if not theme:
+            theme = f"Theme {i + 1}"
 
         # Ensure at least one question in cluster
         if not cluster_questions_list:
             continue  # Skip empty clusters
 
         # Generate insight
-        insight = generate_insight(label, uncertainty_type)
+        insight = generate_insight(theme)
 
         processed_clusters.append({
             "id": f"cluster_{i + 1}",
-            "label": label,
-            "uncertainty_type": uncertainty_type,
+            "theme": theme,
             "questions": cluster_questions_list,
             "insight": insight,
         })

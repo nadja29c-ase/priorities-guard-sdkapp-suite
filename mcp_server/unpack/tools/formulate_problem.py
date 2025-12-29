@@ -166,7 +166,7 @@ Once confirmed, facilitate question brainstorming:
 
 3. COLLECT all questions. Track count. Minimum 3 from user.
 
-4. When user says 'done', cluster the questions by uncertainty type and call cluster_questions.
+4. When user says 'done', group questions by semantic similarity, name each group with a descriptive theme, and call cluster_questions.
 
 RULES:
 - Do NOT discuss, evaluate, or answer any question

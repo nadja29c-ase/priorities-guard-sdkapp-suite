@@ -17,7 +17,6 @@ from .base import ToolDefinition, ToolUsageError
 from . import register_tool
 from ..tool_logic import (
     cluster_questions as process_clusters,
-    ClusterValidationError,
     MissingProblemStatementError,
     InsufficientQuestionsError,
     InvalidClustersError,
@@ -39,29 +38,18 @@ WHEN TO CALL:
 - User has confirmed their problem statement
 - User has generated at least 3 questions
 - User has signaled they are done brainstorming
-- You have clustered the questions by uncertainty type
+- You have clustered the questions by semantic similarity
 
 BEFORE CALLING:
-1. Collect all questions from the brainstorming session
-2. Group questions semantically into clusters by uncertainty type
-3. Assign each cluster:
-   - label: A short name describing what these questions are about
-   - uncertainty_type: One of [causes, constraints, unknowns, dependencies, risks, options]
-   - questions: The questions belonging to this cluster
-4. Put questions that don't fit cleanly into "unclustered"
-
-UNCERTAINTY TYPES:
-- causes: Questions about WHY something happens
-- constraints: Questions about what LIMITS options
-- unknowns: Questions about MISSING INFORMATION
-- dependencies: Questions about OTHER PEOPLE or factors
-- risks: Questions about what could GO WRONG
-- options: Questions about POSSIBLE PATHS forward
+1. Group questions by semantic similarity — what do they have in common?
+2. Name each cluster with a short THEME that captures the shared meaning
+3. Questions that don't fit any group go in "unclustered"
 
 RULES:
+- Themes should be descriptive, not generic ("Understanding the behavior" not "Questions")
+- Do NOT use pre-defined categories — let themes emerge from the questions
+- A cluster needs at least 2 questions (single questions go to unclustered)
 - Minimum 3 questions total required
-- Questions may remain unclustered if they don't fit any type
-- Do NOT force questions into ill-fitting clusters
 - Do NOT call if fewer than 3 questions collected
 """
 
@@ -83,14 +71,9 @@ INPUT_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "label": {
+                    "theme": {
                         "type": "string",
-                        "description": "Short name describing what these questions are about"
-                    },
-                    "uncertainty_type": {
-                        "type": "string",
-                        "enum": ["causes", "constraints", "unknowns", "dependencies", "risks", "options"],
-                        "description": "Type of uncertainty these questions represent"
+                        "description": "Short theme capturing what these questions have in common"
                     },
                     "questions": {
                         "type": "array",
@@ -99,14 +82,14 @@ INPUT_SCHEMA = {
                         "description": "Questions belonging to this cluster"
                     }
                 },
-                "required": ["label", "uncertainty_type", "questions"]
+                "required": ["theme", "questions"]
             },
-            "description": "Questions grouped by uncertainty type (clustered by ChatGPT)"
+            "description": "Questions grouped by semantic similarity"
         },
         "unclustered": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Questions that don't fit any uncertainty type cleanly",
+            "description": "Questions that don't fit any cluster",
             "default": []
         }
     },
@@ -121,9 +104,8 @@ INPUT_SCHEMA = {
 
 
 class ClusterInput(BaseModel):
-    """A single cluster from ChatGPT."""
-    label: str = Field(description="Short name for the cluster")
-    uncertainty_type: str = Field(description="Type of uncertainty")
+    """A single cluster of semantically similar questions."""
+    theme: str = Field(description="Theme capturing what these questions have in common")
     questions: List[str] = Field(min_length=1, description="Questions in this cluster")
 
 
@@ -131,8 +113,8 @@ class ClusterQuestionsInput(BaseModel):
     """Expected structure from ChatGPT."""
     problem_statement: str = Field(description="Confirmed problem statement")
     questions: List[str] = Field(description="All questions collected")  # min 3 validated in logic
-    clusters: List[ClusterInput] = Field(description="ChatGPT-clustered questions")
-    unclustered: List[str] = Field(default=[], description="Questions that don't fit")
+    clusters: List[ClusterInput] = Field(description="Questions grouped by semantic similarity")
+    unclustered: List[str] = Field(default=[], description="Questions that don't fit any cluster")
 
 
 # ============================================================================
@@ -176,7 +158,7 @@ async def handle(
                       error=str(e.errors()))
         raise ToolUsageError(
             "I couldn't process the clusters. Make sure you have at least 3 questions "
-            "and each cluster has a label, uncertainty type, and questions."
+            "and each cluster has a theme and questions."
         )
 
     # ============================================================
@@ -243,7 +225,7 @@ async def handle(
                 "detail": e.detail or "Unknown issue",
                 "assistant_guidance": {
                     "action": "RETRY_CLUSTERING",
-                    "instruction": "Re-cluster the questions ensuring each cluster has a label, uncertainty_type, and at least one question."
+                    "instruction": "Re-cluster the questions ensuring each cluster has a theme and at least one question."
                 }
             },
             isError=True,
@@ -294,8 +276,7 @@ async def handle(
                 "action": "PRESENT_CLUSTERS",
                 "instruction": (
                     "Present the clusters to the user. For each cluster, show:\n"
-                    "- The cluster name\n"
-                    "- The uncertainty type\n"
+                    "- The theme\n"
                     "- The questions in that cluster\n"
                     "- The insight\n\n"
                     "If there are unclustered questions, show them separately.\n\n"
