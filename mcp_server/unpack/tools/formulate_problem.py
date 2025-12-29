@@ -33,7 +33,7 @@ WHEN TO CALL:
 - User says they need help thinking through something
 - User mentions feeling overwhelmed or unclear and needs help thinking it through
 
-CRITICAL: If a component is not clearly stated by the user, pass an empty string — NEVER INFER OR INVENT - ask clarifying questions.
+CRITICAL: If a component is not clearly stated by the user, pass an empty string — NEVER INFER OR INVENT - ask clarifying questions MAX 3 at a time.
 
 OUTPUT FORMAT: "[Actor] is trying to [goal], but [obstacle] keeps happening, which costs [cost]."
 """
@@ -141,17 +141,27 @@ async def handle(
     full_statement = result["formulated_problem"]["full_statement"]
     needs_clarification = result.get("needs_clarification", False)
 
-    # Build assistant guidance as intent codes (not prose)
-    # Tool decides WHAT, assistant decides HOW to phrase it
+    # Build assistant guidance with intent codes + instructions
+    # Keeps codes for debugging/logging, adds clear instructions for LLM
     if not needs_clarification:
         guidance = {
             "action": "CONFIRM_PROBLEM",
+            "instruction": "Present the problem statement to the user and ask: 'Does this capture what you're dealing with?' Do not offer advice.",
             "problem_statement": full_statement,
         }
     else:
         clarify_type = result.get("clarify", {}).get("type", "GENERAL")
+
+        clarify_instructions = {
+            "GOAL": "Ask the user: 'What are you ultimately trying to achieve?'",
+            "OBSTACLE": "Ask the user: 'What specifically keeps getting in the way?'",
+            "COST": "Ask the user: 'What is this costing you — time, energy, peace of mind?'",
+            "GENERAL": "Ask the user for more details about their situation.",
+        }
+
         guidance = {
             "action": "ASK_CLARIFYING",
+            "instruction": f"Present the current problem statement, then {clarify_instructions[clarify_type]} Do not offer advice.",
             "problem_statement": full_statement,
             "clarify_type": clarify_type,
         }
