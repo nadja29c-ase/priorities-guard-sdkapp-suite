@@ -1,35 +1,31 @@
 # Unpack — North Star Context
 
-**Status:** Pre-development  
+**Status:** Increment 1 complete, deployed to Render  
 **Target:** ChatGPT Apps SDK submission  
-**Timeline:** 4-5 days to submission-ready
+**Suite:** Fulfilling Productivity (fulfilling-productivity.com)  
+**Repo:** github.com/nadja29c-ase/fulfilling-productivity
 
 ---
 
-## Repository Strategy
+## Repository Structure
 
-Unpack will be built inside the Priority Guardian repository to maximize code pattern reuse, then extracted to a separate repo later.
-
-**Isolation Rule:** Unpack must be fully self-contained within its folder. No imports from other Priority Guardian modules (`backend/`, `clarity/`, `focused/`). If utility code is needed, copy it into Unpack's folder. This enables clean extraction to a separate repo later.
+Unpack lives in the Fulfilling Productivity repo (separate from Priority Guardian):
 
 ```
-priority-guardian/
-├── backend/              # Shared backend (Focused, Clarity, Done) — DO NOT IMPORT
-├── clarity/              # Clarity MCP + widget — DO NOT IMPORT
-├── focused/              # Focused MCP + widget — DO NOT IMPORT
-└── unpack/               # ISOLATED — fully self-contained
-    ├── server/
-    │   ├── main.py
-    │   ├── tools/
-    │   └── tests/
-    ├── widget/
-    ├── requirements.txt  # Own dependencies
-    └── README.md
+fulfilling-productivity/
+├── apps/
+│   └── unpack/               # First app in suite
+│       ├── server.py
+│       ├── config.py
+│       ├── tool_logic.py
+│       ├── handlers/
+│       ├── tools/
+│       └── tests/
+├── docs/
+├── pyproject.toml
+├── requirements.txt
+└── render.yaml
 ```
-
-**What IS allowed:** Look at Clarity's patterns (widget structure, FastMCP setup, error handling) and replicate them.
-
-**What is NOT allowed:** `from backend.utils import ...` or `from clarity.widgets import ...`
 
 ---
 
@@ -46,6 +42,51 @@ A question-first sensemaking tool that helps people discover **where to think ne
 - Not therapy
 
 **Role:** Pure facilitator. The LLM guides the process but never prescribes.
+
+---
+
+## Store Differentiation (Why Unpack Is Not a Thin Wrapper)
+
+OpenAI's test: *"Is this the default experience of ChatGPT without this app?"*
+
+**What ChatGPT does by default:**
+- Asks questions (inconsistent order)
+- Mixes reflection + advice
+- Drifts into solutions
+- Loses structure across turns
+- No stopping rules
+- No clustering quality guarantee
+
+**What Unpack guarantees:**
+- Fixed problem formulation schema
+- Question-only phase (no answers)
+- Minimum question volume enforced
+- Semantic clustering by uncertainty type
+- Explicit non-solution framing
+- Deterministic stopping point
+- Named, exportable output artifact
+
+**This is process enforcement, not prompting.**
+
+---
+
+## Output Artifact: "Unpack Summary"
+
+**Purpose:** A durable, user-owned deliverable that survives the conversation.
+
+**What it is:**
+- Named output ("Your Unpack Summary")
+- Structured (Problem + Questions + Clusters)
+- Exportable (Copy as markdown)
+
+**What it is NOT:**
+- Not persistence (no save/load)
+- Not resumable (cannot paste back to continue)
+- Not state (no "continue later" promise)
+
+**Framing:** "Here's what we unpacked. Take this with you."
+
+**Implementation:** Widget includes "Copy Summary" button that exports markdown.
 
 ---
 
@@ -74,7 +115,7 @@ Examples:
 | "I don't know where to start" | "I know where clarity is missing" |
 | Tempted to jump to solutions | Grounded in what's actually unknown |
 
-**The output is not an answer. It's orientation.**
+**The output is not an answer. It's orientation — and a summary you can take with you.**
 
 ---
 
@@ -108,12 +149,14 @@ Step 3: Cluster Questions
         ↓
         User selects one cluster to explore
 
-Step 4: Closing Reflection
+Step 4: Closing Reflection + Summary
         LLM reflects on what the chosen cluster reveals
         ↓
         One non-prescriptive observation
         ↓
         One reflection QUESTION (not a next step, not advice)
+        ↓
+        Widget offers "Copy Summary" (markdown export)
         ↓
         End — no iteration, no looping back
 ```
@@ -139,16 +182,17 @@ Step 4: Closing Reflection
 ```
 
 **Output:**
-- `full_statement`: "[Actor] is trying to [goal], but [obstacle] keeps happening, which costs [cost]."
+- `formulated_problem`: { actor, goal, obstacle, cost, full_statement }
 - `confidence`: high | medium | low (based on component quality)
-- `clarifying_question`: Present if any component is weak/empty
+- `needs_clarification`: boolean
+- `clarify`: { type: "GOAL" | "OBSTACLE" | "COST" | "GENERAL" } (if needs_clarification)
+- `assistant_guidance`: { action, clarify_type } (intent codes, not prose)
 
 **Tool responsibilities:**
-- Validate all 4 components present and non-empty
+- Validate component quality (empty, short, vague)
 - Construct `full_statement` from components
-- Determine `confidence` (empty/vague components = lower confidence)
-- Generate `clarifying_question` if confidence not high
-- Return `assistant_guidance` for LLM behavior
+- Determine `confidence` 
+- Return intent codes for LLM behavior (not full prose)
 
 **Triggers when:** User describes a problem, challenge, or stuck situation. ChatGPT extracts the 4 components and passes them to the tool.
 
@@ -171,24 +215,50 @@ Step 4: Closing Reflection
   - Questions in cluster
   - One-sentence insight
 - Unclustered questions (if any)
+- `summary_markdown`: Pre-formatted Unpack Summary for export
 
 **Triggers when:** User signals done with question collection.
 
-**Renders:** Widget for cluster display + selection.
+**Renders:** Widget for cluster display + selection + export.
 
 ---
 
 ## Widget
 
-### `cluster-display.html`
+### `unpack-widget.html`
 
-**Purpose:** Visual display of question clusters. User selects one to explore.
+**Purpose:** Visual display of question clusters + summary export.
 
 **Behavior:**
 1. Render clusters as cards (collapsed by default)
 2. Tap to expand → show questions
 3. Tap "Explore this" → submit selection
 4. Selection triggers closing reflection from LLM
+5. **"Copy Summary" button** → exports Unpack Summary as markdown
+
+**Summary Export Format:**
+```markdown
+# Unpack Summary
+
+## Problem
+[Actor] is trying to [goal], but [obstacle] keeps happening, which costs [cost].
+
+## Questions Explored
+### [Cluster Name] (uncertainty type)
+- Question 1
+- Question 2
+- Question 3
+
+### [Cluster Name] (uncertainty type)
+- Question 4
+- Question 5
+
+## Focus Area Selected
+[Cluster user chose to explore]
+
+---
+Generated with Unpack • fulfilling-productivity.com
+```
 
 **Styling:** OpenAI Design Tokens (same patterns as Clarity widget)
 
@@ -207,7 +277,8 @@ Step 4: Closing Reflection
 | Hosting | Render | Existing infrastructure; fast deploys |
 | Clustering logic | LLM-facilitated semantic clustering | Tool structures the output schema; LLM groups questions by meaning + uncertainty type. No embeddings needed. |
 | Database | None | Session-only = no DB |
-| Iteration | None — single pass only | No looping back to Step 1, no editing after clustering. Restart = new session. |
+| Iteration | None — single pass only | No looping back. Restart = new session. |
+| Artifact | Exportable summary (markdown) | Creates durable output without persistence infrastructure |
 
 ---
 
@@ -219,9 +290,11 @@ Step 4: Closing Reflection
 
 3. **Tool descriptions control WHEN tools are called** — Must be precise to avoid misfires
 
-4. **`assistant_guidance` controls WHAT LLM says after tool** — Embed exact phrasing and constraints
+4. **`assistant_guidance` controls WHAT LLM says after tool** — Use intent codes, not prose (decoupled wording)
 
 5. **ChatGPT caches aggressively** — Use versioned resource URIs for widgets
+
+6. **Artifact is output-only** — "Copy Summary" exports markdown; no import/resume capability
 
 ---
 
@@ -236,6 +309,7 @@ Step 4: Closing Reflection
 | All questions fall into same type | Surface this as an insight: "Your questions center on [type]" |
 | Questions are incoherent/unrelated | Create an "unclustered" group, surface it honestly |
 | User selects cluster but asks to go back | Politely decline. Restart = new session. |
+| User asks to save/continue later | Explain: "Use Copy Summary to save your thinking. Start fresh next time." |
 
 **Principle:** When uncertain, proceed with honesty rather than inventing structure.
 
@@ -285,6 +359,7 @@ Before submission:
 - [ ] Keyboard navigation works
 - [ ] VoiceOver reads correctly
 - [ ] Full flow completes end-to-end
+- [ ] **Copy Summary exports valid markdown**
 - [ ] Demo video recorded
 
 ---
@@ -292,8 +367,8 @@ Before submission:
 ## What This App Is NOT Building
 
 - User accounts
-- Data persistence
-- Save/load
+- Data persistence (save/load)
+- Resume from artifact
 - Multiple sessions
 - Analytics
 - Complex NLP
@@ -320,9 +395,9 @@ Before submission:
 
 | # | Scope | Output |
 |---|-------|--------|
-| 1 | Server foundation + `formulate_problem` | Working tool in MCP Inspector |
+| 1 | Server foundation + `formulate_problem` | ✅ Complete, deployed |
 | 2 | `cluster_questions` tool | Working tool in MCP Inspector |
-| 3 | Widget implementation | Widget renders + accepts selection |
+| 3 | Widget + Copy Summary export | Widget renders + export works |
 | 4 | Integration + testing + submission | Submitted to OpenAI |
 
 Each increment has its own briefing. This document is the shared context.
