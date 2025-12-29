@@ -116,3 +116,188 @@ def formulate_problem(
         result["clarify"] = {"type": clarify_type}
 
     return result
+
+
+# ============================================================================
+# Cluster Questions Logic
+# ============================================================================
+
+# Valid uncertainty types for clustering
+VALID_UNCERTAINTY_TYPES = frozenset([
+    "causes",
+    "constraints",
+    "unknowns",
+    "dependencies",
+    "risks",
+    "options",
+])
+
+# Insight templates per uncertainty type
+INSIGHT_TEMPLATES = {
+    "causes": "These questions focus on what may be driving {topic}.",
+    "constraints": "These questions explore what might be limiting options around {topic}.",
+    "unknowns": "These questions identify missing information about {topic}.",
+    "dependencies": "These questions consider how others factor into {topic}.",
+    "risks": "These questions examine what could go wrong with {topic}.",
+    "options": "These questions explore possible approaches to {topic}.",
+}
+
+
+def generate_insight(label: str, uncertainty_type: str) -> str:
+    """Generate a structural insight for a cluster."""
+    template = INSIGHT_TEMPLATES.get(uncertainty_type, INSIGHT_TEMPLATES["unknowns"])
+    # Use label as topic, lowercase for natural reading
+    topic = label.lower()
+    return template.format(topic=topic)
+
+
+def generate_summary_markdown(
+    problem_statement: str,
+    clusters: list[dict],
+    unclustered: list[str],
+) -> str:
+    """Generate markdown summary for export."""
+    lines = [
+        "# Unpack Summary",
+        "",
+        "## Problem",
+        problem_statement,
+        "",
+        "## Questions by Uncertainty Type",
+        "",
+    ]
+
+    for cluster in clusters:
+        lines.append(f"### {cluster['label']} ({cluster['uncertainty_type']})")
+        for q in cluster["questions"]:
+            lines.append(f"- {q}")
+        lines.append(f"_{cluster['insight']}_")
+        lines.append("")
+
+    if unclustered:
+        lines.append("### Unclustered")
+        for q in unclustered:
+            lines.append(f"- {q}")
+        lines.append("_These questions don't fit a single uncertainty type._")
+        lines.append("")
+
+    lines.extend([
+        "---",
+        "Generated with Unpack • fulfilling-productivity.com"
+    ])
+
+    return "\n".join(lines)
+
+
+def cluster_questions(
+    problem_statement: str,
+    questions: list[str],
+    clusters: list[dict],
+    unclustered: list[str] | None = None,
+) -> dict:
+    """
+    Validate clustered questions and generate summary.
+
+    ChatGPT performs semantic clustering before calling this function.
+    This function validates structure, generates insights, and creates summary markdown.
+
+    Args:
+        problem_statement: Confirmed problem from formulate_problem
+        questions: All questions collected
+        clusters: ChatGPT-generated clusters with label, uncertainty_type, questions
+        unclustered: Questions that don't fit any cluster (optional)
+
+    Returns:
+        Dict with:
+        - clusters: Validated clusters with insights added
+        - unclustered: Questions that don't fit
+        - summary_markdown: Pre-formatted export
+        - error (if validation fails): error_type and details
+    """
+    # Normalize unclustered
+    unclustered = unclustered or []
+
+    # ============================================================
+    # VALIDATION
+    # ============================================================
+
+    # Check problem statement
+    if not problem_statement or not problem_statement.strip():
+        return {
+            "error": True,
+            "error_type": "missing_problem_statement",
+        }
+
+    # Check minimum questions
+    if len(questions) < 3:
+        return {
+            "error": True,
+            "error_type": "insufficient_questions",
+            "count": len(questions),
+            "required_minimum": 3,
+        }
+
+    # Validate clusters structure
+    if not clusters:
+        return {
+            "error": True,
+            "error_type": "invalid_clusters",
+            "detail": "No clusters provided",
+        }
+
+    # ============================================================
+    # PROCESS CLUSTERS
+    # ============================================================
+
+    processed_clusters = []
+    for i, cluster in enumerate(clusters):
+        # Validate required fields
+        label = cluster.get("label", "").strip()
+        uncertainty_type = cluster.get("uncertainty_type", "").strip().lower()
+        cluster_questions_list = cluster.get("questions", [])
+
+        if not label:
+            label = f"Cluster {i + 1}"
+
+        # Map invalid uncertainty types to "unknowns"
+        if uncertainty_type not in VALID_UNCERTAINTY_TYPES:
+            uncertainty_type = "unknowns"
+
+        # Ensure at least one question in cluster
+        if not cluster_questions_list:
+            continue  # Skip empty clusters
+
+        # Generate insight
+        insight = generate_insight(label, uncertainty_type)
+
+        processed_clusters.append({
+            "id": f"cluster_{i + 1}",
+            "label": label,
+            "uncertainty_type": uncertainty_type,
+            "questions": cluster_questions_list,
+            "insight": insight,
+        })
+
+    # If no valid clusters after processing, return error
+    if not processed_clusters:
+        return {
+            "error": True,
+            "error_type": "invalid_clusters",
+            "detail": "No valid clusters after validation",
+        }
+
+    # ============================================================
+    # GENERATE OUTPUT
+    # ============================================================
+
+    summary_markdown = generate_summary_markdown(
+        problem_statement=problem_statement,
+        clusters=processed_clusters,
+        unclustered=unclustered,
+    )
+
+    return {
+        "clusters": processed_clusters,
+        "unclustered": unclustered,
+        "summary_markdown": summary_markdown,
+    }

@@ -145,8 +145,37 @@ async def handle(
     # Keeps codes for debugging/logging, adds clear instructions for LLM
     if not needs_clarification:
         guidance = {
-            "action": "CONFIRM_PROBLEM",
-            "instruction": "Present the problem statement to the user and ask: 'Does this capture what you're dealing with?' Do not offer advice.",
+            "action": "CONFIRM_AND_COLLECT_QUESTIONS",
+            "instruction": f"""Present the problem statement: '{full_statement}'
+Ask: 'Does this capture what you're dealing with?'
+
+Once confirmed, facilitate question brainstorming:
+
+1. SEED with 3 starter questions relevant to this problem:
+   - A 'why' question about causes
+   - A 'what if' question about risks
+   - A 'who' question about stakeholders
+   Frame as: 'Here are a few to start. Now add yours.'
+
+2. FACILITATE by offering LENSES (not answers):
+   - 'What questions would [stakeholder] have?'
+   - 'Looking back in 6 months, what would you wish you'd asked?'
+   - 'What if your assumption about [X] is wrong?'
+   - 'What's underneath this — questions about root cause?'
+   - 'What would need to be true for this to resolve?'
+
+3. COLLECT all questions. Track count. Minimum 3 from user.
+
+4. When user says 'done', cluster the questions by uncertainty type and call cluster_questions.
+
+RULES:
+- Do NOT discuss, evaluate, or answer any question
+- Do NOT comment on importance or quality
+- Do NOT rephrase user questions
+- ONLY prompt for more or offer lenses
+- Goal is QUANTITY and BREADTH
+
+After cluster_questions is called, collection is OVER.""",
             "problem_statement": full_statement,
         }
     else:

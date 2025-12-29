@@ -183,7 +183,7 @@ class TestFormulateProblemHandler:
 
     @pytest.mark.asyncio
     async def test_high_confidence_guidance_returns_confirm_action(self):
-        """High confidence response returns CONFIRM_PROBLEM action."""
+        """High confidence response returns CONFIRM_AND_COLLECT_QUESTIONS action."""
         result = await handle(
             user_id="",
             correlation_id="test-123",
@@ -197,7 +197,7 @@ class TestFormulateProblemHandler:
 
         sc = result.structuredContent
         assert sc["confidence"] == "high"
-        assert sc["assistant_guidance"]["action"] == "CONFIRM_PROBLEM"
+        assert sc["assistant_guidance"]["action"] == "CONFIRM_AND_COLLECT_QUESTIONS"
         assert "problem_statement" in sc["assistant_guidance"]
 
     @pytest.mark.asyncio
@@ -241,5 +241,5 @@ class TestFormulateProblemHandler:
         # Guidance should be a dict with action, not a string
         assert isinstance(guidance, dict), "Guidance should be intent codes, not prose"
         assert "action" in guidance
-        assert guidance["action"] in ("CONFIRM_PROBLEM", "ASK_CLARIFYING")
+        assert guidance["action"] in ("CONFIRM_AND_COLLECT_QUESTIONS", "ASK_CLARIFYING")
         assert "problem_statement" in guidance
