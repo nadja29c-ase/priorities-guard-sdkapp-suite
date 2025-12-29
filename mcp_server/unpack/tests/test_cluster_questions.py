@@ -5,7 +5,15 @@ Tests both the pure tool_logic function and the tool handler.
 """
 
 import pytest
-from mcp_server.unpack.tool_logic import cluster_questions, generate_insight, generate_summary_markdown
+from mcp_server.unpack.tool_logic import (
+    cluster_questions,
+    generate_insight,
+    generate_summary_markdown,
+    MissingProblemStatementError,
+    InsufficientQuestionsError,
+    InvalidClustersError,
+    HallucinatedQuestionsError,
+)
 from mcp_server.unpack.tools.cluster_questions import handle
 
 
@@ -45,40 +53,40 @@ class TestClusterQuestionsLogic:
         assert "summary_markdown" in result
         assert result["summary_markdown"].startswith("# Unpack Summary")
 
-    def test_fewer_than_3_questions_returns_error(self):
-        """Fewer than 3 questions returns error."""
-        result = cluster_questions(
-            problem_statement="Test problem",
-            questions=["Why?", "What?"],
-            clusters=[{"label": "Test", "uncertainty_type": "causes", "questions": ["Why?"]}],
-        )
+    def test_fewer_than_3_questions_raises_error(self):
+        """Fewer than 3 questions raises InsufficientQuestionsError."""
+        with pytest.raises(InsufficientQuestionsError) as exc_info:
+            cluster_questions(
+                problem_statement="Test problem",
+                questions=["Why?", "What?"],
+                clusters=[{"label": "Test", "uncertainty_type": "causes", "questions": ["Why?"]}],
+            )
 
-        assert result.get("error") is True
-        assert result["error_type"] == "insufficient_questions"
-        assert result["count"] == 2
-        assert result["required_minimum"] == 3
+        assert exc_info.value.error_type == "insufficient_questions"
+        assert exc_info.value.extra["count"] == 2
+        assert exc_info.value.extra["required_minimum"] == 3
 
-    def test_empty_problem_statement_returns_error(self):
-        """Empty problem statement returns error."""
-        result = cluster_questions(
-            problem_statement="",
-            questions=["Q1", "Q2", "Q3"],
-            clusters=[{"label": "Test", "uncertainty_type": "causes", "questions": ["Q1"]}],
-        )
+    def test_empty_problem_statement_raises_error(self):
+        """Empty problem statement raises MissingProblemStatementError."""
+        with pytest.raises(MissingProblemStatementError) as exc_info:
+            cluster_questions(
+                problem_statement="",
+                questions=["Q1", "Q2", "Q3"],
+                clusters=[{"label": "Test", "uncertainty_type": "causes", "questions": ["Q1"]}],
+            )
 
-        assert result.get("error") is True
-        assert result["error_type"] == "missing_problem_statement"
+        assert exc_info.value.error_type == "missing_problem_statement"
 
-    def test_whitespace_problem_statement_returns_error(self):
-        """Whitespace-only problem statement returns error."""
-        result = cluster_questions(
-            problem_statement="   ",
-            questions=["Q1", "Q2", "Q3"],
-            clusters=[{"label": "Test", "uncertainty_type": "causes", "questions": ["Q1"]}],
-        )
+    def test_whitespace_problem_statement_raises_error(self):
+        """Whitespace-only problem statement raises MissingProblemStatementError."""
+        with pytest.raises(MissingProblemStatementError) as exc_info:
+            cluster_questions(
+                problem_statement="   ",
+                questions=["Q1", "Q2", "Q3"],
+                clusters=[{"label": "Test", "uncertainty_type": "causes", "questions": ["Q1"]}],
+            )
 
-        assert result.get("error") is True
-        assert result["error_type"] == "missing_problem_statement"
+        assert exc_info.value.error_type == "missing_problem_statement"
 
     def test_with_unclustered_questions(self):
         """Unclustered questions are preserved in output."""
@@ -111,16 +119,16 @@ class TestClusterQuestionsLogic:
         assert "error" not in result
         assert result["clusters"][0]["uncertainty_type"] == "unknowns"
 
-    def test_empty_clusters_returns_error(self):
-        """Empty clusters list returns error."""
-        result = cluster_questions(
-            problem_statement="Test problem",
-            questions=["Q1", "Q2", "Q3"],
-            clusters=[],
-        )
+    def test_empty_clusters_raises_error(self):
+        """Empty clusters list raises InvalidClustersError."""
+        with pytest.raises(InvalidClustersError) as exc_info:
+            cluster_questions(
+                problem_statement="Test problem",
+                questions=["Q1", "Q2", "Q3"],
+                clusters=[],
+            )
 
-        assert result.get("error") is True
-        assert result["error_type"] == "invalid_clusters"
+        assert exc_info.value.error_type == "invalid_clusters"
 
     def test_cluster_with_no_questions_skipped(self):
         """Clusters with no questions are skipped."""
@@ -151,6 +159,35 @@ class TestClusterQuestionsLogic:
         assert "error" not in result
         assert result["clusters"][0]["id"] == "cluster_1"
         assert result["clusters"][1]["id"] == "cluster_2"
+
+    def test_hallucinated_questions_raises_error(self):
+        """Clusters with questions not in provided list raises HallucinatedQuestionsError."""
+        with pytest.raises(HallucinatedQuestionsError) as exc_info:
+            cluster_questions(
+                problem_statement="Test problem statement",
+                questions=["Q1", "Q2", "Q3"],
+                clusters=[
+                    {"label": "Test", "uncertainty_type": "causes", "questions": ["Q1", "Q99"]},  # Q99 not in list
+                ],
+            )
+
+        assert exc_info.value.error_type == "hallucinated_questions"
+        assert "Q99" in exc_info.value.extra["hallucinated"]
+
+    def test_hallucinated_unclustered_raises_error(self):
+        """Unclustered questions not in provided list raises HallucinatedQuestionsError."""
+        with pytest.raises(HallucinatedQuestionsError) as exc_info:
+            cluster_questions(
+                problem_statement="Test problem statement",
+                questions=["Q1", "Q2", "Q3"],
+                clusters=[
+                    {"label": "Test", "uncertainty_type": "causes", "questions": ["Q1"]},
+                ],
+                unclustered=["Q2", "Q_fake"],  # Q_fake not in list
+            )
+
+        assert exc_info.value.error_type == "hallucinated_questions"
+        assert "Q_fake" in exc_info.value.extra["hallucinated"]
 
 
 class TestGenerateInsight:

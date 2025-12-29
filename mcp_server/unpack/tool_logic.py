@@ -14,6 +14,52 @@ from typing import Literal
 ClarifyType = Literal["GOAL", "OBSTACLE", "COST", "GENERAL"]
 
 
+# ============================================================================
+# Exceptions for cluster validation (handlers map to ToolUsageError)
+# ============================================================================
+
+class ClusterValidationError(Exception):
+    """Base exception for cluster validation failures."""
+    def __init__(self, error_type: str, detail: str | None = None, **kwargs):
+        self.error_type = error_type
+        self.detail = detail
+        self.extra = kwargs
+        super().__init__(f"{error_type}: {detail}" if detail else error_type)
+
+
+class MissingProblemStatementError(ClusterValidationError):
+    """Raised when problem statement is missing."""
+    def __init__(self):
+        super().__init__("missing_problem_statement", "Problem statement is required")
+
+
+class InsufficientQuestionsError(ClusterValidationError):
+    """Raised when fewer than 3 questions provided."""
+    def __init__(self, count: int):
+        super().__init__(
+            "insufficient_questions",
+            f"Need at least 3 questions, got {count}",
+            count=count,
+            required_minimum=3,
+        )
+
+
+class InvalidClustersError(ClusterValidationError):
+    """Raised when clusters are invalid or empty."""
+    def __init__(self, detail: str):
+        super().__init__("invalid_clusters", detail)
+
+
+class HallucinatedQuestionsError(ClusterValidationError):
+    """Raised when clusters contain questions not in the provided list."""
+    def __init__(self, hallucinated: set[str]):
+        super().__init__(
+            "hallucinated_questions",
+            "Clusters contain questions not in the provided list",
+            hallucinated=list(hallucinated),
+        )
+
+
 def formulate_problem(
     actor: str,
     goal: str,
@@ -212,7 +258,12 @@ def cluster_questions(
         - clusters: Validated clusters with insights added
         - unclustered: Questions that don't fit
         - summary_markdown: Pre-formatted export
-        - error (if validation fails): error_type and details
+
+    Raises:
+        MissingProblemStatementError: If problem_statement is empty
+        InsufficientQuestionsError: If fewer than 3 questions provided
+        InvalidClustersError: If clusters are empty or invalid
+        HallucinatedQuestionsError: If clusters contain questions not in provided list
     """
     # Normalize unclustered
     unclustered = unclustered or []
@@ -223,27 +274,34 @@ def cluster_questions(
 
     # Check problem statement
     if not problem_statement or not problem_statement.strip():
-        return {
-            "error": True,
-            "error_type": "missing_problem_statement",
-        }
+        raise MissingProblemStatementError()
 
     # Check minimum questions
     if len(questions) < 3:
-        return {
-            "error": True,
-            "error_type": "insufficient_questions",
-            "count": len(questions),
-            "required_minimum": 3,
-        }
+        raise InsufficientQuestionsError(count=len(questions))
 
     # Validate clusters structure
     if not clusters:
-        return {
-            "error": True,
-            "error_type": "invalid_clusters",
-            "detail": "No clusters provided",
-        }
+        raise InvalidClustersError("No clusters provided")
+
+    # ============================================================
+    # VALIDATE CLUSTERED QUESTIONS ARE SUBSET OF PROVIDED QUESTIONS
+    # ============================================================
+
+    provided_questions = set(questions)
+    all_clustered_questions: set[str] = set()
+
+    for cluster in clusters:
+        cluster_questions_list = cluster.get("questions", [])
+        all_clustered_questions.update(cluster_questions_list)
+
+    # Also include unclustered in the check
+    all_clustered_questions.update(unclustered)
+
+    # Check for hallucinated questions (in clusters but not in provided)
+    hallucinated = all_clustered_questions - provided_questions
+    if hallucinated:
+        raise HallucinatedQuestionsError(hallucinated)
 
     # ============================================================
     # PROCESS CLUSTERS
@@ -278,13 +336,9 @@ def cluster_questions(
             "insight": insight,
         })
 
-    # If no valid clusters after processing, return error
+    # If no valid clusters after processing, raise error
     if not processed_clusters:
-        return {
-            "error": True,
-            "error_type": "invalid_clusters",
-            "detail": "No valid clusters after validation",
-        }
+        raise InvalidClustersError("No valid clusters after validation")
 
     # ============================================================
     # GENERATE OUTPUT

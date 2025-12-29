@@ -15,7 +15,14 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .base import ToolDefinition, ToolUsageError
 from . import register_tool
-from ..tool_logic import cluster_questions as process_clusters
+from ..tool_logic import (
+    cluster_questions as process_clusters,
+    ClusterValidationError,
+    MissingProblemStatementError,
+    InsufficientQuestionsError,
+    InvalidClustersError,
+    HallucinatedQuestionsError,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -175,69 +182,92 @@ async def handle(
     # ============================================================
     # PROCESS CLUSTERS (call pure function)
     # ============================================================
-    result = process_clusters(
-        problem_statement=validated.problem_statement,
-        questions=validated.questions,
-        clusters=[c.model_dump() for c in validated.clusters],
-        unclustered=validated.unclustered,
-    )
+    try:
+        result = process_clusters(
+            problem_statement=validated.problem_statement,
+            questions=validated.questions,
+            clusters=[c.model_dump() for c in validated.clusters],
+            unclustered=validated.unclustered,
+        )
 
-    # ============================================================
-    # HANDLE ERRORS FROM LOGIC
-    # ============================================================
-    if result.get("error"):
-        error_type = result.get("error_type", "unknown")
+    except MissingProblemStatementError:
+        logger.warning("cluster_questions.missing_problem_statement",
+                      correlation_id=correlation_id)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Missing problem statement."
+            )],
+            structuredContent={
+                "error_type": "missing_problem_statement",
+                "assistant_guidance": {
+                    "action": "RESTART_FLOW",
+                    "instruction": "The problem statement is missing. Ask the user to describe their problem first."
+                }
+            },
+            isError=True,
+        )
 
-        if error_type == "missing_problem_statement":
-            return mcp_types.CallToolResult(
-                content=[mcp_types.TextContent(
-                    type="text",
-                    text="Missing problem statement."
-                )],
-                structuredContent={
-                    "error_type": "missing_problem_statement",
-                    "assistant_guidance": {
-                        "action": "RESTART_FLOW",
-                        "instruction": "The problem statement is missing. Ask the user to describe their problem first."
-                    }
-                },
-                isError=True,
-            )
+    except InsufficientQuestionsError as e:
+        logger.warning("cluster_questions.insufficient_questions",
+                      correlation_id=correlation_id,
+                      count=e.extra.get("count", 0))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Insufficient questions for clustering."
+            )],
+            structuredContent={
+                "error_type": "insufficient_questions",
+                "count": e.extra.get("count", 0),
+                "required_minimum": 3,
+                "assistant_guidance": {
+                    "action": "REQUEST_MORE_QUESTIONS",
+                    "instruction": "Tell the user you need at least 3 questions to find patterns. Ask what other questions come to mind."
+                }
+            },
+            isError=True,
+        )
 
-        elif error_type == "insufficient_questions":
-            return mcp_types.CallToolResult(
-                content=[mcp_types.TextContent(
-                    type="text",
-                    text="Insufficient questions for clustering."
-                )],
-                structuredContent={
-                    "error_type": "insufficient_questions",
-                    "count": result.get("count", 0),
-                    "required_minimum": 3,
-                    "assistant_guidance": {
-                        "action": "REQUEST_MORE_QUESTIONS",
-                        "instruction": "Tell the user you need at least 3 questions to find patterns. Ask what other questions come to mind."
-                    }
-                },
-                isError=True,
-            )
+    except InvalidClustersError as e:
+        logger.warning("cluster_questions.invalid_clusters",
+                      correlation_id=correlation_id,
+                      detail=e.detail)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Invalid cluster structure."
+            )],
+            structuredContent={
+                "error_type": "invalid_clusters",
+                "detail": e.detail or "Unknown issue",
+                "assistant_guidance": {
+                    "action": "RETRY_CLUSTERING",
+                    "instruction": "Re-cluster the questions ensuring each cluster has a label, uncertainty_type, and at least one question."
+                }
+            },
+            isError=True,
+        )
 
-        elif error_type == "invalid_clusters":
-            return mcp_types.CallToolResult(
-                content=[mcp_types.TextContent(
-                    type="text",
-                    text="Invalid cluster structure."
-                )],
-                structuredContent={
-                    "error_type": "invalid_clusters",
-                    "detail": result.get("detail", "Unknown issue"),
-                    "assistant_guidance": {
-                        "action": "RETRY_CLUSTERING",
-                        "instruction": "Re-cluster the questions ensuring each cluster has a label, uncertainty_type, and at least one question."
-                    }
-                },
-                isError=True,
-            )
+    except HallucinatedQuestionsError as e:
+        logger.warning("cluster_questions.hallucinated_questions",
+                      correlation_id=correlation_id,
+                      hallucinated=e.extra.get("hallucinated", []))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Clusters contain questions not in the provided list."
+            )],
+            structuredContent={
+                "error_type": "hallucinated_questions",
+                "hallucinated": e.extra.get("hallucinated", []),
+                "assistant_guidance": {
+                    "action": "RETRY_CLUSTERING",
+                    "instruction": "Re-cluster using ONLY the questions from the provided list. Do not add or invent questions."
+                }
+            },
+            isError=True,
+        )
 
     # ============================================================
     # BUILD SUCCESS RESPONSE
