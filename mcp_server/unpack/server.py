@@ -36,6 +36,7 @@ transport_security = TransportSecuritySettings(
     enable_dns_rebinding_protection=not IS_DEV,  # Disable in dev for local testing
     allowed_hosts=[
         "fulfilling-productivity.onrender.com",
+        "unpack.fulfilling-productivity.com",
         "localhost:8003",
         "127.0.0.1:8003",
     ],
