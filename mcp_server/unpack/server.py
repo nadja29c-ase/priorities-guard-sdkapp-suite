@@ -35,7 +35,7 @@ logger = structlog.get_logger(__name__)
 transport_security = TransportSecuritySettings(
     enable_dns_rebinding_protection=not IS_DEV,  # Disable in dev for local testing
     allowed_hosts=[
-        "unpack-mcp.onrender.com",
+        "fulfilling-productivity.onrender.com",
         "localhost:8003",
         "127.0.0.1:8003",
     ],
