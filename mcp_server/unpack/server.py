@@ -17,6 +17,7 @@ import os
 import uvicorn
 import structlog
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp import types as mcp_types
 
 from mcp_server.unpack.config import CORS_ALLOWED_ORIGINS, IS_DEV, PORT
@@ -29,9 +30,29 @@ from mcp_server.unpack.handlers.tools import call_tool_request
 
 logger = structlog.get_logger(__name__)
 
+# Configure transport security for DNS rebinding protection
+# In production, allow Render hostname and ChatGPT origins
+transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=not IS_DEV,  # Disable in dev for local testing
+    allowed_hosts=[
+        "unpack-mcp.onrender.com",
+        "localhost:8003",
+        "127.0.0.1:8003",
+    ],
+    allowed_origins=list(CORS_ALLOWED_ORIGINS) + [
+        "http://localhost:5173",   # MCP Inspector
+        "http://127.0.0.1:5173",
+    ],
+)
+
 # Create FastMCP instance
 # stateless_http=True: Each request is self-contained
-mcp = FastMCP("unpack-mcp", streamable_http_path="/mcp", stateless_http=True)
+mcp = FastMCP(
+    "unpack-mcp",
+    streamable_http_path="/mcp",
+    stateless_http=True,
+    transport_security=transport_security,
+)
 
 
 # ============================================================================
