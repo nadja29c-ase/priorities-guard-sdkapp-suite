@@ -34,10 +34,6 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
         ))}
       </div>
 
-      {/* Insight */}
-      <p className="text-xs text-secondary italic mt-3 pt-3 border-t border-default">
-        {cluster.insight}
-      </p>
     </article>
   )
 }
