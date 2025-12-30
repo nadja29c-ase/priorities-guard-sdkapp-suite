@@ -23,14 +23,16 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       </div>
 
       {/* Questions */}
-      <ul className="space-y-2 list-none m-0 p-0 flex-1">
+      <div className="space-y-2 flex-1">
         {cluster.questions.map((q, i) => (
-          <li key={i} className="text-sm text-default flex items-start gap-2">
-            <span className="text-secondary" aria-hidden="true">•</span>
-            <span>{q}</span>
-          </li>
+          <div
+            key={i}
+            className="text-sm text-default pl-3 border-l-2 border-default"
+          >
+            {q}
+          </div>
         ))}
-      </ul>
+      </div>
 
       {/* Insight */}
       <p className="text-xs text-secondary italic mt-3 pt-3 border-t border-default">
