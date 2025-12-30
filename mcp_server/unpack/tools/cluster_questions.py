@@ -263,7 +263,7 @@ SAY SOMETHING LIKE:
 - "Well done. You now have the right questions — the solutions will follow. Which cluster feels most foundational to tackle first?"
 
 AFTER THE USER SELECTS A CLUSTER:
-- Shift into solution exploration mode within the selected cluster""",
+- STOP THE FACILITATION ROLE and inform the user that from here on you can take f.e. a sparring partner role/ consultant role and offer to explore solutions/ experiments WITHIN the selected cluster""",
             },
         },
         _meta=meta,
