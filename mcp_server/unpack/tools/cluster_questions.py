@@ -48,11 +48,7 @@ RULES:
 - Themes should be descriptive, not generic ("Understanding the behavior" not "Questions")
 - A cluster needs at least 2 questions (single questions go to unclustered)
 
-AFTER WIDGET RENDERS:
-- Give a brief observation about what you notice in the clusters
-- Ask: 'Which area would you like to explore further?'
-- Do NOT offer advice or solutions
-- Wait for user to select a cluster
+After the tool call, follow the instructions in the assistant_guidance response.
 """
 
 INPUT_SCHEMA = {
@@ -258,8 +254,16 @@ async def handle(
             "unclustered": unclustered,
             "summary_markdown": summary_markdown,
             "assistant_guidance": {
-                "action": "WIDGET_RENDERED",
-                "next_step": "SELECT_CLUSTER",
+                "action": "BRAINSTORM_COMPLETE",
+                "instruction": """Question brainstorming complete. The widget shows the user's clustered questions.
+
+SAY SOMETHING LIKE:
+- "Good work. You've uncovered angles that will lead to better solutions. Which cluster do you want to start with?"
+- "Nice. These questions open doors to solutions you wouldn't have found by jumping straight to answers. Which cluster first?"
+- "Well done. You now have the right questions — the solutions will follow. Which cluster do you want to explore?"
+
+AFTER THE USER SELECTS A CLUSTER:
+- Shift into solution exploration mode within the selected cluster""",
             },
         },
         _meta=meta,

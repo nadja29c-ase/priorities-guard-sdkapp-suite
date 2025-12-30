@@ -60,21 +60,18 @@ function App() {
 
       {/* Unclustered Questions */}
       {data.unclustered.length > 0 && (
-        <div className="mt-4 p-4 bg-surface rounded-xl border border-default">
-          <h3 className="text-sm font-semibold text-default mb-2">Other Questions</h3>
+        <div className="mt-4 p-5 bg-surface-secondary rounded-2xl border border-default shadow-lg">
+          <h3 className="text-sm font-semibold text-default mb-3">Other Questions</h3>
           <div className="space-y-2">
             {data.unclustered.map((q, i) => (
               <div
                 key={i}
-                className="text-sm text-secondary pl-3 border-l-2 border-default"
+                className="text-sm text-default pl-3 border-l-2 border-default"
               >
                 {q}
               </div>
             ))}
           </div>
-          <p className="text-xs text-secondary italic mt-2">
-            These questions didn't fit a clear theme.
-          </p>
         </div>
       )}
     </main>
