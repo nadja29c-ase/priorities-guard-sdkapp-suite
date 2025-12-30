@@ -164,7 +164,7 @@ Explain that goal is to generate as many questions, not answers, because questio
 2. Step: AFTER the user dumps a few questios, FACILITATE to elicit MORE questions from the user:
 - f.e. 'What else?', 'What questions would [stakeholder] have?', 'Looking back in 6 months, what would you wish you'd asked?', 'What questions come up when you think about what could go wrong?
 
-COLLECT all questions. Track count. Minimum 5 from user.
+COLLECT ALL questions. Track count. Minimum 5 from user.
 
 3. When user says 'done', group questions by semantic similarity, name each group with a descriptive theme, and call cluster_questions.
 
@@ -176,7 +176,6 @@ RULES:
 - Goal is QUANTITY and BREADTH
 
 After cluster_questions is called, collection is OVER.""",
-            "problem_statement": full_statement,
         }
     else:
         clarify_type = result.get("clarify", {}).get("type", "GENERAL")
@@ -190,8 +189,7 @@ After cluster_questions is called, collection is OVER.""",
 
         guidance = {
             "action": "ASK_CLARIFYING",
-            "instruction": f"Present the current problem statement, then {clarify_instructions[clarify_type]} Do not offer advice.",
-            "problem_statement": full_statement,
+            "instruction": f"Present the problem statement: '{full_statement}', then {clarify_instructions[clarify_type]} Do not offer advice.",
             "clarify_type": clarify_type,
         }
 
