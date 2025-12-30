@@ -20,7 +20,6 @@ from ..tool_logic import (
     MissingProblemStatementError,
     InsufficientQuestionsError,
     InvalidClustersError,
-    HallucinatedQuestionsError,
 )
 
 logger = structlog.get_logger(__name__)
@@ -35,10 +34,8 @@ DESCRIPTION = """
 Validates clustered questions and generates summary for export.
 
 WHEN TO CALL:
-- User has confirmed their problem statement
-- User has generated at least 3 questions
-- User has signaled they are done brainstorming
-- You have clustered the questions by semantic similarity
+- AFTER User has confirmed their problem statement
+- AFTER User has explicitely communicated that the user is done with the brainstorming
 
 BEFORE CALLING:
 1. Group questions by semantic similarity — what do they have in common?
@@ -47,10 +44,7 @@ BEFORE CALLING:
 
 RULES:
 - Themes should be descriptive, not generic ("Understanding the behavior" not "Questions")
-- Do NOT use pre-defined categories — let themes emerge from the questions
 - A cluster needs at least 2 questions (single questions go to unclustered)
-- Minimum 3 questions total required
-- Do NOT call if fewer than 3 questions collected
 """
 
 INPUT_SCHEMA = {
@@ -60,12 +54,6 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "The confirmed problem statement from formulate_problem"
         },
-        "questions": {
-            "type": "array",
-            "items": {"type": "string"},
-            "minItems": 3,
-            "description": "All questions collected during brainstorming"
-        },
         "clusters": {
             "type": "array",
             "items": {
@@ -73,7 +61,7 @@ INPUT_SCHEMA = {
                 "properties": {
                     "theme": {
                         "type": "string",
-                        "description": "Short theme capturing what these questions have in common"
+                        "description": "Theme capturing what these questions have in common"
                     },
                     "questions": {
                         "type": "array",
@@ -93,7 +81,7 @@ INPUT_SCHEMA = {
             "default": []
         }
     },
-    "required": ["problem_statement", "questions", "clusters"],
+    "required": ["problem_statement", "clusters"],
     "additionalProperties": False
 }
 
@@ -112,7 +100,6 @@ class ClusterInput(BaseModel):
 class ClusterQuestionsInput(BaseModel):
     """Expected structure from ChatGPT."""
     problem_statement: str = Field(description="Confirmed problem statement")
-    questions: List[str] = Field(description="All questions collected")  # min 3 validated in logic
     clusters: List[ClusterInput] = Field(description="Questions grouped by semantic similarity")
     unclustered: List[str] = Field(default=[], description="Questions that don't fit any cluster")
 
@@ -149,7 +136,6 @@ async def handle(
         validated = ClusterQuestionsInput.model_validate(arguments)
         logger.debug("cluster_questions.validation_success",
                     correlation_id=correlation_id,
-                    question_count=len(validated.questions),
                     cluster_count=len(validated.clusters))
 
     except ValidationError as e:
@@ -167,7 +153,6 @@ async def handle(
     try:
         result = process_clusters(
             problem_statement=validated.problem_statement,
-            questions=validated.questions,
             clusters=[c.model_dump() for c in validated.clusters],
             unclustered=validated.unclustered,
         )
@@ -231,42 +216,24 @@ async def handle(
             isError=True,
         )
 
-    except HallucinatedQuestionsError as e:
-        logger.warning("cluster_questions.hallucinated_questions",
-                      correlation_id=correlation_id,
-                      hallucinated=e.extra.get("hallucinated", []))
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Clusters contain questions not in the provided list."
-            )],
-            structuredContent={
-                "error_type": "hallucinated_questions",
-                "hallucinated": e.extra.get("hallucinated", []),
-                "assistant_guidance": {
-                    "action": "RETRY_CLUSTERING",
-                    "instruction": "Re-cluster using ONLY the questions from the provided list. Do not add or invent questions."
-                }
-            },
-            isError=True,
-        )
-
     # ============================================================
     # BUILD SUCCESS RESPONSE
     # ============================================================
     clusters = result["clusters"]
     unclustered = result["unclustered"]
     summary_markdown = result["summary_markdown"]
+    total_questions = result["total_questions"]
 
     logger.info("cluster_questions.complete",
                 correlation_id=correlation_id,
                 cluster_count=len(clusters),
-                unclustered_count=len(unclustered))
+                unclustered_count=len(unclustered),
+                total_questions=total_questions)
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Clustered {len(validated.questions)} questions into {len(clusters)} groups."
+            text=f"Clustered {total_questions} questions into {len(clusters)} groups."
         )],
         structuredContent={
             "clusters": clusters,

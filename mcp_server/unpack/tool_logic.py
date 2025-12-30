@@ -50,16 +50,6 @@ class InvalidClustersError(ClusterValidationError):
         super().__init__("invalid_clusters", detail)
 
 
-class HallucinatedQuestionsError(ClusterValidationError):
-    """Raised when clusters contain questions not in the provided list."""
-    def __init__(self, hallucinated: set[str]):
-        super().__init__(
-            "hallucinated_questions",
-            "Clusters contain questions not in the provided list",
-            hallucinated=list(hallucinated),
-        )
-
-
 def formulate_problem(
     actor: str,
     goal: str,
@@ -214,7 +204,6 @@ def generate_summary_markdown(
 
 def cluster_questions(
     problem_statement: str,
-    questions: list[str],
     clusters: list[dict],
     unclustered: list[str] | None = None,
 ) -> dict:
@@ -226,7 +215,6 @@ def cluster_questions(
 
     Args:
         problem_statement: Confirmed problem from formulate_problem
-        questions: All questions collected
         clusters: ChatGPT-generated clusters with theme and questions
         unclustered: Questions that don't fit any cluster (optional)
 
@@ -235,12 +223,12 @@ def cluster_questions(
         - clusters: Validated clusters with insights added
         - unclustered: Questions that don't fit
         - summary_markdown: Pre-formatted export
+        - total_questions: Count of all questions (clustered + unclustered)
 
     Raises:
         MissingProblemStatementError: If problem_statement is empty
-        InsufficientQuestionsError: If fewer than 3 questions provided
+        InsufficientQuestionsError: If fewer than 3 total questions
         InvalidClustersError: If clusters are empty or invalid
-        HallucinatedQuestionsError: If clusters contain questions not in provided list
     """
     # Normalize unclustered
     unclustered = unclustered or []
@@ -253,38 +241,17 @@ def cluster_questions(
     if not problem_statement or not problem_statement.strip():
         raise MissingProblemStatementError()
 
-    # Check minimum questions
-    if len(questions) < 3:
-        raise InsufficientQuestionsError(count=len(questions))
-
     # Validate clusters structure
     if not clusters:
         raise InvalidClustersError("No clusters provided")
-
-    # ============================================================
-    # VALIDATE CLUSTERED QUESTIONS ARE SUBSET OF PROVIDED QUESTIONS
-    # ============================================================
-
-    provided_questions = set(questions)
-    all_clustered_questions: set[str] = set()
-
-    for cluster in clusters:
-        cluster_questions_list = cluster.get("questions", [])
-        all_clustered_questions.update(cluster_questions_list)
-
-    # Also include unclustered in the check
-    all_clustered_questions.update(unclustered)
-
-    # Check for hallucinated questions (in clusters but not in provided)
-    hallucinated = all_clustered_questions - provided_questions
-    if hallucinated:
-        raise HallucinatedQuestionsError(hallucinated)
 
     # ============================================================
     # PROCESS CLUSTERS
     # ============================================================
 
     processed_clusters = []
+    total_questions = 0
+
     for i, cluster in enumerate(clusters):
         # Validate required fields
         theme = cluster.get("theme", "").strip()
@@ -297,6 +264,8 @@ def cluster_questions(
         if not cluster_questions_list:
             continue  # Skip empty clusters
 
+        total_questions += len(cluster_questions_list)
+
         # Generate insight
         insight = generate_insight(theme)
 
@@ -306,6 +275,13 @@ def cluster_questions(
             "questions": cluster_questions_list,
             "insight": insight,
         })
+
+    # Add unclustered to total
+    total_questions += len(unclustered)
+
+    # Check minimum questions (after counting all)
+    if total_questions < 3:
+        raise InsufficientQuestionsError(count=total_questions)
 
     # If no valid clusters after processing, raise error
     if not processed_clusters:
@@ -325,4 +301,5 @@ def cluster_questions(
         "clusters": processed_clusters,
         "unclustered": unclustered,
         "summary_markdown": summary_markdown,
+        "total_questions": total_questions,
     }
