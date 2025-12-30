@@ -147,7 +147,7 @@ async def handle(
             "instruction": f"""Present the problem statement: '{full_statement}'
 Ask: 'Does this capture what you're dealing with?'
 
-Once confirmed, prompt the user to do the questions brainstorming. Your job is to FACILITATE the brainstorming.
+AFTER user confirms, prompt the user to do the questions brainstorming - not before. Your job is to FACILITATE the brainstorming.
 
 1. Step: Inform the user about the process.
 Ask the user: Take a few minutes to brainstorm. What are ALL the questions you would love to have answers to around this problem? Avoid Yes/No Questions and don't hold back — the more the better! Dump them into the chat and I will cluster them for you when your are done.
