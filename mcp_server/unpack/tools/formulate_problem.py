@@ -26,7 +26,7 @@ logger = structlog.get_logger(__name__)
 NAME = "formulate_problem"
 
 DESCRIPTION = """
-Transforms a vague problem description into a specific problem statement through conversation with the user.
+Transforms a vague problem description into a problem statement through conversation with the user.
 
 WHEN TO CALL:
 - User describes a problem, challenge, or stuck situation and needs help clarifying/understanding it

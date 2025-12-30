@@ -39,15 +39,3 @@ export function truncateText(text: string | undefined, maxLength = 80): string {
   if (!text || text.length <= maxLength) return text ?? ''
   return text.substring(0, maxLength).trim() + '...'
 }
-
-/**
- * Copy text to clipboard
- */
-export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    return false
-  }
-}

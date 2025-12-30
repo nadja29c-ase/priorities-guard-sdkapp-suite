@@ -1,15 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { Check } from '@openai/apps-sdk-ui/components/Icon'
 import type { UnpackData } from './types'
-import { getToolOutput, copyToClipboard } from './utils'
+import { getToolOutput } from './utils'
 import { Header } from './components/Header'
 import { ClusterCard } from './components/ClusterCard'
 
 function App() {
   const [data, setData] = useState<UnpackData | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
-  const [copied, setCopied] = useState(false)
 
   const notifyHeight = useCallback(() => {
     requestAnimationFrame(() => {
@@ -31,15 +28,6 @@ function App() {
     window.addEventListener('openai:set_globals', loadData, { passive: true })
     return () => window.removeEventListener('openai:set_globals', loadData)
   }, [loadData])
-
-  const handleCopy = async () => {
-    if (!data?.summary_markdown) return
-    const success = await copyToClipboard(data.summary_markdown)
-    if (success) {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
 
   if (!isInitialized || !data) {
     return (
@@ -89,25 +77,6 @@ function App() {
           </p>
         </div>
       )}
-
-      {/* Copy Summary Button */}
-      <div className="sticky bottom-0 pt-4 pb-2 bg-surface-secondary">
-        <div className="flex items-center gap-3">
-          <Button
-            color="primary"
-            variant="outline"
-            onClick={handleCopy}
-            aria-label="Copy summary to clipboard"
-          >
-            {copied ? 'Copied!' : 'Copy Summary'}
-          </Button>
-          {copied && (
-            <span className="flex items-center gap-1 text-xs text-success">
-              <Check className="w-3.5 h-3.5" aria-hidden="true" />
-            </span>
-          )}
-        </div>
-      </div>
     </main>
   )
 }
