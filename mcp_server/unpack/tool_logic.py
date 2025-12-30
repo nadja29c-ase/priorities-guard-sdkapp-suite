@@ -72,29 +72,29 @@ def formulate_problem(
     goal = (goal or "").strip()
     obstacle = (obstacle or "").strip()
 
-    # Determine confidence based on component quality
-    # Both goal and obstacle must be present and detailed for high confidence
+    def is_valid(value: str) -> bool:
+        """Check if value is meaningful, not a placeholder."""
+        if not value or len(value) < 5:
+            return False
+        lower = value.lower()
+        return "[" not in lower and "unclear" not in lower
+
+    goal_valid = is_valid(goal)
+    obstacle_valid = is_valid(obstacle)
+
+    # Determine confidence
     confidence: Literal["high", "medium", "low"]
-
-    goal_present = bool(goal)
-    obstacle_present = bool(obstacle)
-    goal_detailed = len(goal) >= 5
-    obstacle_detailed = len(obstacle) >= 5
-
-    if not goal_present or not obstacle_present:
-        # Missing core component -> low
-        confidence = "low"
-    elif goal_detailed and obstacle_detailed:
-        # Both present and detailed -> high
+    if goal_valid and obstacle_valid:
         confidence = "high"
-    else:
-        # Both present but one is too short -> medium
+    elif goal_valid or obstacle_valid:
         confidence = "medium"
+    else:
+        confidence = "low"
 
-    # Use defaults for empty components (to construct full_statement)
+    # Display values (keep placeholders for output)
     actor_display = actor or "I"
-    goal_display = goal or "[goal unclear]"
-    obstacle_display = obstacle or "[obstacle unclear]"
+    goal_display = goal if goal_valid else "[goal unclear]"
+    obstacle_display = obstacle if obstacle_valid else "[obstacle unclear]"
 
     # Handle "I" vs other actors for grammar
     if actor_display.lower() == "i":
@@ -102,16 +102,16 @@ def formulate_problem(
     else:
         verb = "is"
 
-    # Construct full statement (simplified format without cost)
+    # Construct full statement
     full_statement = (
         f"{actor_display} {verb} trying to {goal_display}, "
         f"but {obstacle_display}."
     )
 
-    # Determine clarification type based on what's missing or weak
+    # Determine clarification type based on what's invalid
     clarify_type: ClarifyType | None = None
     if confidence != "high":
-        if not goal or len(goal) < 5:
+        if not goal_valid:
             clarify_type = "GOAL"
         else:
             clarify_type = "OBSTACLE"
