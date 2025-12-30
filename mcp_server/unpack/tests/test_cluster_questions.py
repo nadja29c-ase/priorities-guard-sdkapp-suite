@@ -26,7 +26,7 @@ class TestClusterQuestionsLogic:
             clusters=[
                 {"theme": "Understanding the behavior", "questions": ["Why does the team interrupt me?", "Is this intentional?"]},
                 {"theme": "How to respond", "questions": ["Should I talk to my manager?", "Should I address it directly?"]},
-                {"theme": "Potential consequences", "questions": ["What if it gets worse?"]},
+                {"theme": "Potential consequences", "questions": ["What if it gets worse?", "Will it affect my career?"]},
             ],
             unclustered=[],
         )
@@ -154,12 +154,33 @@ class TestClusterQuestionsLogic:
             problem_statement="Test problem",
             clusters=[
                 {"theme": "Theme A", "questions": ["Q1", "Q2", "Q3"]},
-                {"theme": "Theme B", "questions": ["Q4"]},
+                {"theme": "Theme B", "questions": ["Q4", "Q5"]},
             ],
-            unclustered=["Q5"],
+            unclustered=[],
         )
 
         assert result["total_questions"] == 5
+
+    def test_single_question_clusters_moved_to_unclustered(self):
+        """Single-question clusters should be moved to unclustered."""
+        result = cluster_questions(
+            problem_statement="Test problem",
+            clusters=[
+                {"theme": "Valid cluster", "questions": ["Q1", "Q2", "Q3"]},
+                {"theme": "Single question", "questions": ["Lonely Q"]},  # Should move
+                {"theme": "Another valid", "questions": ["Q4", "Q5"]},
+            ],
+            unclustered=[],
+        )
+
+        # Only 2 valid clusters
+        assert len(result["clusters"]) == 2
+
+        # Single question moved to unclustered
+        assert "Lonely Q" in result["unclustered"]
+
+        # Total still counts all questions
+        assert result["total_questions"] == 6
 
 
 class TestDataShapeForWidget:

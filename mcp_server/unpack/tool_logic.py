@@ -257,9 +257,14 @@ def cluster_questions(
         if not theme:
             theme = f"Theme {i + 1}"
 
-        # Ensure at least one question in cluster
+        # Skip empty clusters
         if not cluster_questions_list:
-            continue  # Skip empty clusters
+            continue
+
+        # Single questions don't form a cluster — move to unclustered
+        if len(cluster_questions_list) == 1:
+            unclustered.append(cluster_questions_list[0])
+            continue
 
         total_questions += len(cluster_questions_list)
 
@@ -273,7 +278,7 @@ def cluster_questions(
             "insight": insight,
         })
 
-    # Add unclustered to total
+    # Add unclustered to total (includes singles moved from clusters)
     total_questions += len(unclustered)
 
     # Check minimum questions (after counting all)
