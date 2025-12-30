@@ -173,14 +173,14 @@ After cluster_questions is called, collection is OVER.""",
         clarify_type = result.get("clarify", {}).get("type", "GENERAL")
 
         clarify_instructions = {
-            "GOAL": "Ask the user: 'What are you ultimately trying to achieve?'",
-            "OBSTACLE": "Ask the user: 'What specifically keeps getting in the way?'",
-            "GENERAL": "Ask the user for more details about their situation.",
+            "GOAL": "clarify what the user is ultimately trying to achieve.",
+            "OBSTACLE": "clarify what specifically keeps getting in the way.",
+            "GENERAL": "get more details about their situation.",
         }
 
         guidance = {
             "action": "ASK_CLARIFYING",
-            "instruction": f"Present the problem statement: '{full_statement}', then {clarify_instructions[clarify_type]} Do not offer advice.",
+            "instruction": f"Present the problem statement: '{full_statement}', then ask 1 or 2 questions to {clarify_instructions[clarify_type]} Do not offer advice. Call this tool again until you get confidence=high.",
             "clarify_type": clarify_type,
         }
 
