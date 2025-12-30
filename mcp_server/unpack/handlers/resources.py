@@ -74,12 +74,23 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     if uri_str == WIDGET_URI:
         try:
             html = get_widget_html()
+
+            # Build _meta for TextResourceContents (required for widget rendering)
+            resource_meta = {
+                "openai/outputTemplate": WIDGET_URI,
+                "openai/toolInvocation/invoking": "Clustering your questions...",
+                "openai/toolInvocation/invoked": "Here's your Unpack summary.",
+                "openai/widgetAccessible": True,
+                "openai/resultCanProduceWidget": True,
+            }
+
             return mcp_types.ReadResourceResult(
                 contents=[
                     mcp_types.TextResourceContents(
                         uri=WIDGET_URI,
                         mimeType="text/html+skybridge",
                         text=html,
+                        _meta=resource_meta,
                     )
                 ]
             )

@@ -93,9 +93,8 @@ def formulate_problem(
         # All 4 present - check detail quality (except actor which can be short)
         goal_detailed = len(goal) >= 5
         obstacle_detailed = len(obstacle) >= 5
-        cost_detailed = len(cost) >= 5
 
-        if goal_detailed and obstacle_detailed and cost_detailed:
+        if goal_detailed and obstacle_detailed:
             confidence = "high"
         else:
             confidence = "medium"
@@ -129,8 +128,6 @@ def formulate_problem(
             clarify_type = "GOAL"
         elif not obstacle or len(obstacle) < 5:
             clarify_type = "OBSTACLE"
-        elif not cost or len(cost) < 5:
-            clarify_type = "COST"
         else:
             # Components present but may need more clarity
             clarify_type = "GENERAL"
