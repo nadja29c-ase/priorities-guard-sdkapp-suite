@@ -25,10 +25,9 @@ logger = structlog.get_logger(__name__)
 
 NAME = "formulate_problem"
 
-DESCRIPTION = """
-Transforms a vague problem description into a problem statement through conversation with the user, so that the question brainstorming can proceed effectively.
-
+DESCRIPTION = """ YOUR ROLE FACILITATOR: Help the user clearly articulate their problem and the subsequent brainstorming process.
 WHEN TO CALL:
+- When user want to brainstorm around a problem or challenge
 - When user says "Help me brainstorm this problem" or similar
 - User describes a problem, challenge, or stuck situation and needs help clarifying/understanding it "Help me formulate this problem" or similar
 
