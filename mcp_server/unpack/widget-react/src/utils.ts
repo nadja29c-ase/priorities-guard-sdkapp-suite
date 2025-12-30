@@ -8,9 +8,13 @@ export function getToolOutput(): UnpackData | null {
   const t = window.openai?.toolOutput
   if (!t) return null
 
-  // Try paths (same as Clarity pattern)
-  const data = t.result?.structuredContent ?? t.structuredContent
-  if (!data) return null
+  // Try multiple paths (ChatGPT puts data in different places)
+  const data: any =
+    t.result?.structuredContent ??
+    t.structuredContent ??
+    t  // Sometimes the data IS toolOutput directly
+
+  if (!data || !data.clusters) return null
 
   // Defensive mapping: handle both "theme" and "label" field names
   const clusters: QuestionCluster[] = (data.clusters ?? []).map((c: any) => ({
