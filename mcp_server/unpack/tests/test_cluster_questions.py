@@ -7,7 +7,6 @@ Tests both the pure tool_logic function and the tool handler.
 import pytest
 from mcp_server.unpack.tool_logic import (
     cluster_questions,
-    generate_insight,
     generate_summary_markdown,
     MissingProblemStatementError,
     InsufficientQuestionsError,
@@ -19,8 +18,8 @@ from mcp_server.unpack.tools.cluster_questions import handle
 class TestClusterQuestionsLogic:
     """Tests for the pure cluster_questions function."""
 
-    def test_valid_input_returns_clusters_with_insights(self):
-        """Valid input returns clusters with insights added."""
+    def test_valid_input_returns_clusters(self):
+        """Valid input returns clusters with expected structure."""
         result = cluster_questions(
             problem_statement="I am trying to get respect at work, but the team keeps interrupting me, which costs my confidence.",
             clusters=[
@@ -33,11 +32,6 @@ class TestClusterQuestionsLogic:
 
         assert "error" not in result
         assert len(result["clusters"]) == 3
-
-        # Check insights were added
-        for cluster in result["clusters"]:
-            assert "insight" in cluster
-            assert cluster["insight"].startswith("These questions explore")
 
         # Check themes are preserved
         assert result["clusters"][0]["theme"] == "Understanding the behavior"
@@ -242,20 +236,6 @@ class TestDataShapeForWidget:
         assert result["total_questions"] == 5
 
 
-class TestGenerateInsight:
-    """Tests for insight generation."""
-
-    def test_insight_uses_theme(self):
-        """Insight includes the theme in lowercase."""
-        insight = generate_insight("Understanding Team Dynamics")
-        assert "These questions explore understanding team dynamics." == insight
-
-    def test_insight_lowercases_theme(self):
-        """Insight lowercases the theme."""
-        insight = generate_insight("ROOT CAUSE ANALYSIS")
-        assert "root cause analysis" in insight
-
-
 class TestGenerateSummaryMarkdown:
     """Tests for summary markdown generation."""
 
@@ -263,7 +243,7 @@ class TestGenerateSummaryMarkdown:
         """Summary starts with '# Unpack Summary'."""
         md = generate_summary_markdown(
             problem_statement="Test problem",
-            clusters=[{"theme": "Test theme", "questions": ["Q1"], "insight": "Test insight"}],
+            clusters=[{"theme": "Test theme", "questions": ["Q1"]}],
             unclustered=[],
         )
         assert md.startswith("# Unpack Summary")
@@ -272,7 +252,7 @@ class TestGenerateSummaryMarkdown:
         """Summary contains problem statement."""
         md = generate_summary_markdown(
             problem_statement="My specific problem statement",
-            clusters=[{"theme": "Test theme", "questions": ["Q1"], "insight": "Test insight"}],
+            clusters=[{"theme": "Test theme", "questions": ["Q1"]}],
             unclustered=[],
         )
         assert "## Problem" in md
@@ -283,19 +263,18 @@ class TestGenerateSummaryMarkdown:
         md = generate_summary_markdown(
             problem_statement="Test",
             clusters=[
-                {"theme": "Understanding the root cause", "questions": ["Why?"], "insight": "Insight here"},
+                {"theme": "Understanding the root cause", "questions": ["Why?"]},
             ],
             unclustered=[],
         )
         assert "### Understanding the root cause" in md
         assert "- Why?" in md
-        assert "_Insight here_" in md
 
     def test_summary_uses_questions_by_theme_header(self):
         """Summary uses 'Questions by Theme' section header."""
         md = generate_summary_markdown(
             problem_statement="Test",
-            clusters=[{"theme": "Test", "questions": ["Q1"], "insight": "Insight"}],
+            clusters=[{"theme": "Test", "questions": ["Q1"]}],
             unclustered=[],
         )
         assert "## Questions by Theme" in md
@@ -304,7 +283,7 @@ class TestGenerateSummaryMarkdown:
         """Summary contains 'Other Questions' section when unclustered present."""
         md = generate_summary_markdown(
             problem_statement="Test",
-            clusters=[{"theme": "Test theme", "questions": ["Q1"], "insight": "Insight"}],
+            clusters=[{"theme": "Test theme", "questions": ["Q1"]}],
             unclustered=["Random question"],
         )
         assert "### Other Questions" in md
@@ -315,7 +294,7 @@ class TestGenerateSummaryMarkdown:
         """Summary ends with attribution."""
         md = generate_summary_markdown(
             problem_statement="Test",
-            clusters=[{"theme": "Test theme", "questions": ["Q1"], "insight": "Insight"}],
+            clusters=[{"theme": "Test theme", "questions": ["Q1"]}],
             unclustered=[],
         )
         assert "Generated with Unpack" in md
@@ -406,27 +385,3 @@ class TestClusterQuestionsHandler:
         assert guidance["action"] == "WIDGET_RENDERED"
         # Simplified guidance - no prose, just intent codes
         assert "next_step" in guidance
-
-    @pytest.mark.asyncio
-    async def test_insight_uses_structural_framing(self):
-        """Insights use structural framing, not user-state framing."""
-        result = await handle(
-            user_id="",
-            correlation_id="test-123",
-            arguments={
-                "problem_statement": "Test problem",
-                "clusters": [
-                    {"theme": "Root cause analysis", "questions": ["Why?", "What?", "How?", "When?", "Where?"]},
-                ],
-            },
-        )
-
-        assert result.isError is not True
-        cluster = result.structuredContent["clusters"][0]
-        insight = cluster["insight"]
-
-        # Should use structural framing
-        assert "These questions explore" in insight
-        # Should NOT use user-state framing
-        assert "You're uncertain" not in insight
-        assert "You are uncertain" not in insight

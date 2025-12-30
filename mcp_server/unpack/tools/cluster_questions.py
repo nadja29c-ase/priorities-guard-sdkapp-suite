@@ -4,7 +4,7 @@ Cluster Questions Tool.
 Validates ChatGPT-clustered questions and generates summary for export.
 Self-registers at import time.
 
-Pattern: ChatGPT clusters → Tool validates and enriches with insights + markdown.
+Pattern: ChatGPT clusters → Tool validates and generates markdown summary.
 """
 
 from typing import List
@@ -33,7 +33,7 @@ from ..handlers.resources import WIDGET_URI
 NAME = "cluster_questions"
 
 DESCRIPTION = """
-Presents the user the results of their questions brainstorming, clustered, to generate insights.
+Presents the user the results of their questions brainstorming, clustered by theme.
 
 WHEN TO CALL:
 - AFTER User has confirmed their problem statement
@@ -131,7 +131,7 @@ async def handle(
         arguments: ChatGPT-clustered questions
 
     Returns:
-        CallToolResult with validated clusters, insights, and summary markdown
+        CallToolResult with validated clusters and summary markdown
     """
     logger.debug("cluster_questions.handle.start",
                 correlation_id=correlation_id,

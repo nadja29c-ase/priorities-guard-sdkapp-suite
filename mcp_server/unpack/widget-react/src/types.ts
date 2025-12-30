@@ -4,7 +4,6 @@ export interface QuestionCluster {
   id: string
   theme: string
   questions: string[]
-  insight: string
 }
 
 export interface UnpackData {

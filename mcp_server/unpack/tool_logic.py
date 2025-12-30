@@ -156,11 +156,6 @@ def formulate_problem(
 # ============================================================================
 
 
-def generate_insight(theme: str) -> str:
-    """Generate a structural insight for a cluster."""
-    return f"These questions explore {theme.lower()}."
-
-
 def generate_summary_markdown(
     problem_statement: str,
     clusters: list[dict],
@@ -181,7 +176,6 @@ def generate_summary_markdown(
         lines.append(f"### {cluster['theme']}")
         for q in cluster["questions"]:
             lines.append(f"- {q}")
-        lines.append(f"_{cluster['insight']}_")
         lines.append("")
 
     if unclustered:
@@ -208,7 +202,7 @@ def cluster_questions(
     Validate clustered questions and generate summary.
 
     ChatGPT performs semantic clustering before calling this function.
-    This function validates structure, generates insights, and creates summary markdown.
+    This function validates structure and creates summary markdown.
 
     Args:
         problem_statement: Confirmed problem from formulate_problem
@@ -217,7 +211,7 @@ def cluster_questions(
 
     Returns:
         Dict with:
-        - clusters: Validated clusters with insights added
+        - clusters: Validated clusters
         - unclustered: Questions that don't fit
         - summary_markdown: Pre-formatted export
         - total_questions: Count of all questions (clustered + unclustered)
@@ -268,14 +262,10 @@ def cluster_questions(
 
         total_questions += len(cluster_questions_list)
 
-        # Generate insight
-        insight = generate_insight(theme)
-
         processed_clusters.append({
             "id": f"cluster_{i + 1}",
             "theme": theme,
             "questions": cluster_questions_list,
-            "insight": insight,
         })
 
     # Add unclustered to total (includes singles moved from clusters)

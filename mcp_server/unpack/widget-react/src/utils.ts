@@ -21,7 +21,6 @@ export function getToolOutput(): UnpackData | null {
     id: c.id ?? '',
     theme: c.theme ?? c.label ?? 'Untitled',  // Fallback to label if theme missing
     questions: c.questions ?? [],
-    insight: c.insight ?? '',
   }))
 
   return {
