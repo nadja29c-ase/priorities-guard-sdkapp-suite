@@ -31,7 +31,7 @@ logger = structlog.get_logger(__name__)
 NAME = "cluster_questions"
 
 DESCRIPTION = """
-Validates clustered questions and generates summary for export.
+Presents the user the results of their questions brainstorming, clustered, to generate insights.
 
 WHEN TO CALL:
 - AFTER User has confirmed their problem statement
@@ -247,7 +247,7 @@ async def handle(
                     "- The questions in that cluster\n"
                     "- The insight\n\n"
                     "If there are unclustered questions, show them separately.\n\n"
-                    "Then ask: 'Which area would you like to explore further?'\n\n"
+                    "Then ask: 'What new insights have you generated for yourself? Which area would you like to explore further?'\n\n"
                     "Do NOT offer advice or solutions. Do NOT answer any questions.\n"
                     "Wait for the user to select a cluster."
                 ),

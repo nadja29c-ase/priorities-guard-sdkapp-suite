@@ -149,30 +149,24 @@ async def handle(
             "instruction": f"""Present the problem statement: '{full_statement}'
 Ask: 'Does this capture what you're dealing with?'
 
-Once confirmed, facilitate question brainstorming:
+Once confirmed, prompt the user to do the questions brainstorming. Your job is to FACILITATE the brainstorming.
 
-1. SEED with 3 starter questions relevant to this problem:
-   - A 'why' question about causes
-   - A 'what if' question about risks
-   - A 'who' question about stakeholders
-   Frame as: 'Here are a few to start. Now add yours.'
+1. Step: Inform the user about the process.
+Ask the user: Take a few minutes to brainstorm. What are ALL the questions you would love to have answers to around this problem? Avoid Yes/No Questions and don't hold back — the more the better! Dump them into the chat and I will cluster them for you when your are done.
+Explain that goal is to generate as many questions, not answers, because questions will help uncover insights and new perspectives and help find creative solutions.
 
-2. FACILITATE by offering LENSES (not answers):
-   - 'What questions would [stakeholder] have?'
-   - 'Looking back in 6 months, what would you wish you'd asked?'
-   - 'What if your assumption about [X] is wrong?'
-   - 'What's underneath this — questions about root cause?'
-   - 'What would need to be true for this to resolve?'
+2. Step: AFTER the user dumps a few questios, FACILITATE to elicit MORE questions from the user:
+- f.e. 'What else?', 'What questions would [stakeholder] have?', 'Looking back in 6 months, what would you wish you'd asked?', 'What questions come up when you think about what could go wrong?
 
-3. COLLECT all questions. Track count. Minimum 3 from user.
+COLLECT all questions. Track count. Minimum 5 from user.
 
-4. When user says 'done', group questions by semantic similarity, name each group with a descriptive theme, and call cluster_questions.
+3. When user says 'done', group questions by semantic similarity, name each group with a descriptive theme, and call cluster_questions.
 
 RULES:
 - Do NOT discuss, evaluate, or answer any question
 - Do NOT comment on importance or quality
 - Do NOT rephrase user questions
-- ONLY prompt for more or offer lenses
+- ONLY prompt for more questions
 - Goal is QUANTITY and BREADTH
 
 After cluster_questions is called, collection is OVER.""",
