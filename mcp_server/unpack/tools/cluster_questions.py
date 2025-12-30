@@ -245,6 +245,12 @@ async def handle(
         "openai/toolInvocation/invoked": "Here's your Unpack summary.",
         "openai/widgetAccessible": True,
         "openai/resultCanProduceWidget": True,
+        "openai/widgetCSP": {
+            "connect_domains": [],
+            "resource_domains": [],
+        },
+        "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
+        "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
     }
 
     return mcp_types.CallToolResult(
