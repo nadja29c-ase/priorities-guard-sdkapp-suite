@@ -11,7 +11,7 @@ from typing import Literal
 
 
 # Clarification types (handlers map these to user-friendly phrases)
-ClarifyType = Literal["GOAL", "OBSTACLE", "COST", "GENERAL"]
+ClarifyType = Literal["GOAL", "OBSTACLE", "GENERAL"]
 
 
 # ============================================================================
@@ -54,7 +54,6 @@ def formulate_problem(
     actor: str,
     goal: str,
     obstacle: str,
-    cost: str,
 ) -> dict:
     """
     Construct a structured problem statement from LLM-extracted components.
@@ -63,7 +62,6 @@ def formulate_problem(
         actor: Who is experiencing the problem
         goal: What they're trying to achieve
         obstacle: What keeps blocking progress
-        cost: Impact in terms of time, money, energy, or clarity
 
     Returns:
         Dict with formulated_problem, confidence, and optional clarify info.
@@ -73,40 +71,30 @@ def formulate_problem(
     actor = (actor or "").strip()
     goal = (goal or "").strip()
     obstacle = (obstacle or "").strip()
-    cost = (cost or "").strip()
-
-    # Core components (goal, obstacle) must be present for medium+
-    # Actor can be short (e.g., "I"), cost can be inferred
-    core_components = {"goal": goal, "obstacle": obstacle}
-    core_filled = {k: v for k, v in core_components.items() if v}
-
-    all_components = {"actor": actor, "goal": goal, "obstacle": obstacle, "cost": cost}
-    total_filled = len([v for v in all_components.values() if v])
 
     # Determine confidence based on component quality
+    # Both goal and obstacle must be present and detailed for high confidence
     confidence: Literal["high", "medium", "low"]
 
-    if len(core_filled) < 2:
-        # Missing core component (goal or obstacle) -> low
-        confidence = "low"
-    elif total_filled == 4:
-        # All 4 present - check detail quality (except actor which can be short)
-        goal_detailed = len(goal) >= 5
-        obstacle_detailed = len(obstacle) >= 5
+    goal_present = bool(goal)
+    obstacle_present = bool(obstacle)
+    goal_detailed = len(goal) >= 5
+    obstacle_detailed = len(obstacle) >= 5
 
-        if goal_detailed and obstacle_detailed:
-            confidence = "high"
-        else:
-            confidence = "medium"
+    if not goal_present or not obstacle_present:
+        # Missing core component -> low
+        confidence = "low"
+    elif goal_detailed and obstacle_detailed:
+        # Both present and detailed -> high
+        confidence = "high"
     else:
-        # Core present but something else weak/missing
+        # Both present but one is too short -> medium
         confidence = "medium"
 
     # Use defaults for empty components (to construct full_statement)
     actor_display = actor or "I"
     goal_display = goal or "[goal unclear]"
     obstacle_display = obstacle or "[obstacle unclear]"
-    cost_display = cost or "[cost unclear]"
 
     # Handle "I" vs other actors for grammar
     if actor_display.lower() == "i":
@@ -114,11 +102,10 @@ def formulate_problem(
     else:
         verb = "is"
 
-    # Construct full statement
+    # Construct full statement (simplified format without cost)
     full_statement = (
         f"{actor_display} {verb} trying to {goal_display}, "
-        f"but {obstacle_display} keeps happening, "
-        f"which costs {cost_display}."
+        f"but {obstacle_display}."
     )
 
     # Determine clarification type based on what's missing or weak
@@ -138,7 +125,6 @@ def formulate_problem(
             "actor": actor_display,
             "goal": goal_display,
             "obstacle": obstacle_display,
-            "cost": cost_display,
             "full_statement": full_statement,
         },
         "confidence": confidence,

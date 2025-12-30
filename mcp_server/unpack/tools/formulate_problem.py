@@ -27,19 +27,19 @@ NAME = "formulate_problem"
 
 DESCRIPTION = """ YOUR ROLE -> FACILITATOR: Help the user clearly articulate their problem and the subsequent brainstorming process.
 WHEN TO CALL:
-- When user want to brainstorm around a problem or challenge
+- When user wants to brainstorm around a problem or challenge
 - When user says "Help me brainstorm this problem" or similar
 - User describes a problem, challenge, or stuck situation and needs help clarifying/understanding it "Help me formulate this problem" or similar
 
 HOW TO USE:
 Call this tool iteratively and have a back-and-forth conversation with the user to create a problem statement with high confidence. Each call validates what you have so far.
 - If components are missing → tool returns what to clarify
-- Ask the user → get their words → call again with updated components
+- Ask the user ONE QUESTION AT A TIME → get their words → call again with updated components
 - Repeat until confidence is high
 
-CRITICAL: NEVER INFER THE PROBLEM STATEMENT. NO SOLUTIONS NOR ROOT CAUSE ANALYSIS YET -this comes AFTER the brainstorming!!! DO NOT ASK MORE THAN 1 CLARIFYING QUESTIONS PER TURN.
+CRITICAL: NEVER INFER THE PROBLEM STATEMENT. NO SOLUTIONS NOR ROOT CAUSE ANALYSIS YET -this comes AFTER the brainstorming!!! DO NOT ASK MORE THAN 1 CLARIFYING QUESTIONS PER TURN. KEEP IT CONCISE.
 
-OUTPUT FORMAT: "[Actor] is trying to [goal], but [obstacle] keeps happening, which costs [cost]."
+OUTPUT FORMAT: "[Actor] is trying to [goal], but [obstacle]."
 """
 
 INPUT_SCHEMA = {
@@ -56,10 +56,6 @@ INPUT_SCHEMA = {
         "obstacle": {
             "type": "string",
             "description": "What keeps blocking progress. Explicitly stated by the user."
-        },
-        "cost": {
-            "type": "string",
-            "description": "Impact in terms of time, money, energy, or clarity. Explicitly stated by the user."
         }
     },
     # NO "required" - all fields optional at schema level
@@ -82,7 +78,6 @@ class FormulateInput(BaseModel):
     actor: str = Field(default="", description="Who is experiencing the problem")
     goal: str = Field(default="", description="What they're trying to achieve")
     obstacle: str = Field(default="", description="What keeps blocking progress")
-    cost: str = Field(default="", description="Impact in terms of time, money, energy, or clarity")
 
 
 # ============================================================================
@@ -101,7 +96,7 @@ async def handle(
     Args:
         user_id: Empty string (Unpack uses noauth)
         correlation_id: Request correlation ID for tracing
-        arguments: LLM-extracted problem components {actor, goal, obstacle, cost}
+        arguments: LLM-extracted problem components {actor, goal, obstacle}
 
     Returns:
         CallToolResult with structured problem statement
@@ -135,7 +130,6 @@ async def handle(
         actor=validated.actor,
         goal=validated.goal,
         obstacle=validated.obstacle,
-        cost=validated.cost,
     )
 
     # ============================================================
@@ -181,7 +175,6 @@ After cluster_questions is called, collection is OVER.""",
         clarify_instructions = {
             "GOAL": "Ask the user: 'What are you ultimately trying to achieve?'",
             "OBSTACLE": "Ask the user: 'What specifically keeps getting in the way?'",
-            "COST": "Ask the user: 'What is this costing you — time, energy, peace of mind?'",
             "GENERAL": "Ask the user for more details about their situation.",
         }
 
