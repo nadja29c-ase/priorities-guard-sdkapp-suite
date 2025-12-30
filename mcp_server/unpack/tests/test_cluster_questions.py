@@ -307,8 +307,8 @@ class TestClusterQuestionsHandler:
         assert sc["assistant_guidance"]["action"] == "RESTART_FLOW"
 
     @pytest.mark.asyncio
-    async def test_guidance_contains_present_clusters_action(self):
-        """Successful response has PRESENT_CLUSTERS action."""
+    async def test_guidance_uses_widget_rendered_action(self):
+        """Successful response has WIDGET_RENDERED action with simple structure."""
         result = await handle(
             user_id="",
             correlation_id="test-123",
@@ -323,8 +323,10 @@ class TestClusterQuestionsHandler:
 
         assert result.isError is not True
         guidance = result.structuredContent["assistant_guidance"]
-        assert guidance["action"] == "PRESENT_CLUSTERS"
-        assert "Do NOT offer advice" in guidance["instruction"]
+        assert guidance["action"] == "WIDGET_RENDERED"
+        assert "follow_up" in guidance
+        assert "forbidden" in guidance
+        assert "advice" in guidance["forbidden"]
 
     @pytest.mark.asyncio
     async def test_insight_uses_structural_framing(self):

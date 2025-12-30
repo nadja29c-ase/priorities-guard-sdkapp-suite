@@ -240,17 +240,9 @@ async def handle(
             "unclustered": unclustered,
             "summary_markdown": summary_markdown,
             "assistant_guidance": {
-                "action": "PRESENT_CLUSTERS",
-                "instruction": (
-                    "Present the clusters to the user. For each cluster, show:\n"
-                    "- The theme\n"
-                    "- The questions in that cluster\n"
-                    "- The insight\n\n"
-                    "If there are unclustered questions, show them separately.\n\n"
-                    "Then ask: 'What new insights have you generated for yourself? Which area would you like to explore further?'\n\n"
-                    "Do NOT offer advice or solutions. Do NOT answer any questions.\n"
-                    "Wait for the user to select a cluster."
-                ),
+                "action": "WIDGET_RENDERED",
+                "follow_up": "Give a brief observation about what you notice in the clusters, then ask: 'Which area would you like to explore further?'",
+                "forbidden": ["advice", "solutions"],
             },
         },
     )
