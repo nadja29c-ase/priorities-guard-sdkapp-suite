@@ -227,7 +227,7 @@ def cluster_questions(
 
     Raises:
         MissingProblemStatementError: If problem_statement is empty
-        InsufficientQuestionsError: If fewer than 3 total questions
+        InsufficientQuestionsError: If fewer than 5 total questions
         InvalidClustersError: If clusters are empty or invalid
     """
     # Normalize unclustered

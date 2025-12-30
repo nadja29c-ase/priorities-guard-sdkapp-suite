@@ -1,5 +1,5 @@
 /**
- * Clarity Widget Build Configuration
+ * Unpack Widget Build Configuration
  *
  * DEPENDENCY NOTE: @openai/apps-sdk-ui is pinned to 0.2.1 in package.json.
  * TODO: Check for SDK updates before major releases. Breaking changes may
@@ -16,6 +16,6 @@ export default defineConfig({
     target: 'esnext',
     outDir: '../widgets',
     emptyOutDir: false,
-    // Output is index.html, renamed to clarity-clusters.html by postbuild script
+    // Output is index.html, renamed to unpack-clusters.html by postbuild script
   }
 })
