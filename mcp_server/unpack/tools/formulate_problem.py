@@ -37,7 +37,7 @@ Call this tool iteratively and have a back-and-forth conversation with the user 
 - Ask the user → get their words → call again with updated components
 - Repeat until confidence is high
 
-CRITICAL: NEVER INFER THE PROBLEM STATEMENT. NO SOLUTIONS NOR ROOT CAUSE ANALYSIS YET -this comes AFTER the brainstorming!!! DO NOT ASK MORE THAN 3 QUESTIONS PER TURN.
+CRITICAL: NEVER INFER THE PROBLEM STATEMENT. NO SOLUTIONS NOR ROOT CAUSE ANALYSIS YET -this comes AFTER the brainstorming!!! DO NOT ASK MORE THAN 1 CLARIFYING QUESTIONS PER TURN.
 
 OUTPUT FORMAT: "[Actor] is trying to [goal], but [obstacle] keeps happening, which costs [cost]."
 """
