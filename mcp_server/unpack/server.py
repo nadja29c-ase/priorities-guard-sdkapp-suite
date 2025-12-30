@@ -23,6 +23,11 @@ from mcp import types as mcp_types
 from mcp_server.unpack.config import CORS_ALLOWED_ORIGINS, IS_DEV, PORT
 from mcp_server.unpack.tools import list_tools
 from mcp_server.unpack.handlers.tools import call_tool_request
+from mcp_server.unpack.handlers import (
+    list_resources,
+    list_resource_templates,
+    handle_read_resource,
+)
 
 # ============================================================================
 # Configuration
@@ -112,6 +117,20 @@ async def _list_tools():
 
 
 mcp._mcp_server.request_handlers[mcp_types.CallToolRequest] = call_tool_request
+
+
+# Resource handlers (widget discovery and serving)
+@mcp._mcp_server.list_resources()
+async def _list_resources():
+    return await list_resources()
+
+
+@mcp._mcp_server.list_resource_templates()
+async def _list_resource_templates():
+    return await list_resource_templates()
+
+
+mcp._mcp_server.request_handlers[mcp_types.ReadResourceRequest] = handle_read_resource
 
 
 # ============================================================================

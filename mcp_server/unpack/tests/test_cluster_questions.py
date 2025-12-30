@@ -25,7 +25,7 @@ class TestClusterQuestionsLogic:
             problem_statement="I am trying to get respect at work, but the team keeps interrupting me, which costs my confidence.",
             clusters=[
                 {"theme": "Understanding the behavior", "questions": ["Why does the team interrupt me?", "Is this intentional?"]},
-                {"theme": "How to respond", "questions": ["Should I talk to my manager?"]},
+                {"theme": "How to respond", "questions": ["Should I talk to my manager?", "Should I address it directly?"]},
                 {"theme": "Potential consequences", "questions": ["What if it gets worse?"]},
             ],
             unclustered=[],
@@ -49,17 +49,17 @@ class TestClusterQuestionsLogic:
         assert "summary_markdown" in result
         assert result["summary_markdown"].startswith("# Unpack Summary")
 
-    def test_fewer_than_3_questions_raises_error(self):
-        """Fewer than 3 total questions raises InsufficientQuestionsError."""
+    def test_fewer_than_5_questions_raises_error(self):
+        """Fewer than 5 total questions raises InsufficientQuestionsError."""
         with pytest.raises(InsufficientQuestionsError) as exc_info:
             cluster_questions(
                 problem_statement="Test problem",
-                clusters=[{"theme": "Test theme", "questions": ["Why?", "What?"]}],
+                clusters=[{"theme": "Test theme", "questions": ["Why?", "What?", "How?", "When?"]}],
             )
 
         assert exc_info.value.error_type == "insufficient_questions"
-        assert exc_info.value.extra["count"] == 2
-        assert exc_info.value.extra["required_minimum"] == 3
+        assert exc_info.value.extra["count"] == 4
+        assert exc_info.value.extra["required_minimum"] == 5
 
     def test_empty_problem_statement_raises_error(self):
         """Empty problem statement raises MissingProblemStatementError."""
@@ -86,8 +86,8 @@ class TestClusterQuestionsLogic:
         result = cluster_questions(
             problem_statement="Test problem statement here",
             clusters=[
-                {"theme": "Root causes", "questions": ["Why?"]},
-                {"theme": "Options to consider", "questions": ["Should I?"]},
+                {"theme": "Root causes", "questions": ["Why?", "What caused this?"]},
+                {"theme": "Options to consider", "questions": ["Should I?", "Could I try?"]},
             ],
             unclustered=["What's for lunch?"],
         )
@@ -114,7 +114,7 @@ class TestClusterQuestionsLogic:
             problem_statement="Test problem statement here",
             clusters=[
                 {"theme": "Empty theme", "questions": []},  # Empty - should be skipped
-                {"theme": "Valid theme", "questions": ["Q1", "Q2", "Q3"]},
+                {"theme": "Valid theme", "questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]},
             ],
         )
 
@@ -127,8 +127,8 @@ class TestClusterQuestionsLogic:
         result = cluster_questions(
             problem_statement="Test problem statement here",
             clusters=[
-                {"theme": "First theme", "questions": ["Q1"]},
-                {"theme": "Second theme", "questions": ["Q2", "Q3"]},
+                {"theme": "First theme", "questions": ["Q1", "Q2"]},
+                {"theme": "Second theme", "questions": ["Q3", "Q4", "Q5"]},
             ],
         )
 
@@ -141,7 +141,7 @@ class TestClusterQuestionsLogic:
         result = cluster_questions(
             problem_statement="Test problem statement here",
             clusters=[
-                {"theme": "", "questions": ["Q1", "Q2", "Q3"]},
+                {"theme": "", "questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]},
             ],
         )
 
@@ -153,13 +153,72 @@ class TestClusterQuestionsLogic:
         result = cluster_questions(
             problem_statement="Test problem",
             clusters=[
-                {"theme": "Theme A", "questions": ["Q1", "Q2"]},
-                {"theme": "Theme B", "questions": ["Q3"]},
+                {"theme": "Theme A", "questions": ["Q1", "Q2", "Q3"]},
+                {"theme": "Theme B", "questions": ["Q4"]},
             ],
-            unclustered=["Q4"],
+            unclustered=["Q5"],
         )
 
-        assert result["total_questions"] == 4
+        assert result["total_questions"] == 5
+
+
+class TestDataShapeForWidget:
+    """Tests verifying data shape expected by widget.
+
+    These tests ensure the backend outputs match what the widget expects.
+    Critical for widget rendering.
+    """
+
+    def test_cluster_output_uses_theme_field(self):
+        """Widget depends on 'theme' not 'label'."""
+        result = cluster_questions(
+            problem_statement="Test problem",
+            clusters=[
+                {"theme": "Test theme", "questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]}
+            ],
+        )
+
+        assert "theme" in result["clusters"][0]
+        assert "label" not in result["clusters"][0]
+        assert result["clusters"][0]["theme"] == "Test theme"
+
+    @pytest.mark.asyncio
+    async def test_handler_includes_problem_statement_in_response(self):
+        """Widget header depends on problem_statement in structuredContent."""
+        result = await handle(
+            user_id="",
+            correlation_id="test-data-shape",
+            arguments={
+                "problem_statement": "My specific problem statement for header",
+                "clusters": [
+                    {"theme": "Test theme", "questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]}
+                ],
+                "unclustered": [],
+            },
+        )
+
+        assert result.isError is not True
+        sc = result.structuredContent
+        assert "problem_statement" in sc
+        assert sc["problem_statement"] == "My specific problem statement for header"
+
+    def test_minimum_five_questions_enforced(self):
+        """Changed from 3 to 5 for better clustering quality."""
+        # Should raise for 4 questions
+        with pytest.raises(InsufficientQuestionsError) as exc_info:
+            cluster_questions(
+                problem_statement="Test problem",
+                clusters=[{"theme": "Test", "questions": ["Q1", "Q2", "Q3", "Q4"]}],
+            )
+
+        assert exc_info.value.extra["required_minimum"] == 5
+
+        # Should succeed for 5 questions
+        result = cluster_questions(
+            problem_statement="Test problem",
+            clusters=[{"theme": "Test", "questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]}],
+        )
+        assert result["total_questions"] == 5
 
 
 class TestGenerateInsight:
@@ -254,8 +313,8 @@ class TestClusterQuestionsHandler:
             arguments={
                 "problem_statement": "I am trying to get promoted, but my work is invisible, which costs my career growth.",
                 "clusters": [
-                    {"theme": "Understanding visibility", "questions": ["Why is my work invisible?"]},
-                    {"theme": "Key stakeholders", "questions": ["Who should I talk to?"]},
+                    {"theme": "Understanding visibility", "questions": ["Why is my work invisible?", "Is it a communication issue?"]},
+                    {"theme": "Key stakeholders", "questions": ["Who should I talk to?", "Who makes promotion decisions?"]},
                     {"theme": "Possible actions", "questions": ["What if I ask for feedback?"]},
                 ],
                 "unclustered": [],
@@ -274,13 +333,13 @@ class TestClusterQuestionsHandler:
 
     @pytest.mark.asyncio
     async def test_insufficient_questions_returns_error(self):
-        """Fewer than 3 total questions returns error with guidance."""
+        """Fewer than 5 total questions returns error with guidance."""
         result = await handle(
             user_id="",
             correlation_id="test-123",
             arguments={
                 "problem_statement": "Test problem",
-                "clusters": [{"theme": "Test theme", "questions": ["Q1", "Q2"]}],
+                "clusters": [{"theme": "Test theme", "questions": ["Q1", "Q2", "Q3", "Q4"]}],
             },
         )
 
@@ -297,7 +356,7 @@ class TestClusterQuestionsHandler:
             correlation_id="test-123",
             arguments={
                 "problem_statement": "",
-                "clusters": [{"theme": "Test theme", "questions": ["Q1", "Q2", "Q3"]}],
+                "clusters": [{"theme": "Test theme", "questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]}],
             },
         )
 
@@ -315,7 +374,7 @@ class TestClusterQuestionsHandler:
             arguments={
                 "problem_statement": "Test problem statement",
                 "clusters": [
-                    {"theme": "Test theme", "questions": ["Q1", "Q2", "Q3"]},
+                    {"theme": "Test theme", "questions": ["Q1", "Q2", "Q3", "Q4", "Q5"]},
                 ],
                 "unclustered": [],
             },
@@ -324,9 +383,8 @@ class TestClusterQuestionsHandler:
         assert result.isError is not True
         guidance = result.structuredContent["assistant_guidance"]
         assert guidance["action"] == "WIDGET_RENDERED"
-        assert "follow_up" in guidance
-        assert "forbidden" in guidance
-        assert "advice" in guidance["forbidden"]
+        # Simplified guidance - no prose, just intent codes
+        assert "next_step" in guidance
 
     @pytest.mark.asyncio
     async def test_insight_uses_structural_framing(self):
@@ -337,7 +395,7 @@ class TestClusterQuestionsHandler:
             arguments={
                 "problem_statement": "Test problem",
                 "clusters": [
-                    {"theme": "Root cause analysis", "questions": ["Why?", "What?", "How?"]},
+                    {"theme": "Root cause analysis", "questions": ["Why?", "What?", "How?", "When?", "Where?"]},
                 ],
             },
         )

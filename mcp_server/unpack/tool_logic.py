@@ -34,13 +34,13 @@ class MissingProblemStatementError(ClusterValidationError):
 
 
 class InsufficientQuestionsError(ClusterValidationError):
-    """Raised when fewer than 3 questions provided."""
+    """Raised when fewer than 5 questions provided."""
     def __init__(self, count: int):
         super().__init__(
             "insufficient_questions",
-            f"Need at least 3 questions, got {count}",
+            f"Need at least 5 questions, got {count}",
             count=count,
-            required_minimum=3,
+            required_minimum=5,
         )
 
 
@@ -280,7 +280,7 @@ def cluster_questions(
     total_questions += len(unclustered)
 
     # Check minimum questions (after counting all)
-    if total_questions < 3:
+    if total_questions < 5:
         raise InsufficientQuestionsError(count=total_questions)
 
     # If no valid clusters after processing, raise error

@@ -28,6 +28,8 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
+from ..handlers.resources import WIDGET_URI
+
 NAME = "cluster_questions"
 
 DESCRIPTION = """
@@ -35,7 +37,7 @@ Presents the user the results of their questions brainstorming, clustered, to ge
 
 WHEN TO CALL:
 - AFTER User has confirmed their problem statement
-- AFTER User has explicitely communicated that the user is done with the brainstorming
+- AFTER User has explicitly communicated that the user is done with the brainstorming
 
 BEFORE CALLING:
 1. Group questions by semantic similarity — what do they have in common?
@@ -45,6 +47,12 @@ BEFORE CALLING:
 RULES:
 - Themes should be descriptive, not generic ("Understanding the behavior" not "Questions")
 - A cluster needs at least 2 questions (single questions go to unclustered)
+
+AFTER WIDGET RENDERS:
+- Give a brief observation about what you notice in the clusters
+- Ask: 'Which area would you like to explore further?'
+- Do NOT offer advice or solutions
+- Wait for user to select a cluster
 """
 
 INPUT_SCHEMA = {
@@ -143,7 +151,7 @@ async def handle(
                       correlation_id=correlation_id,
                       error=str(e.errors()))
         raise ToolUsageError(
-            "I couldn't process the clusters. Make sure you have at least 3 questions "
+            "I couldn't process the clusters. Make sure you have at least 5 questions "
             "and each cluster has a theme and questions."
         )
 
@@ -187,10 +195,10 @@ async def handle(
             structuredContent={
                 "error_type": "insufficient_questions",
                 "count": e.extra.get("count", 0),
-                "required_minimum": 3,
+                "required_minimum": 5,
                 "assistant_guidance": {
                     "action": "REQUEST_MORE_QUESTIONS",
-                    "instruction": "Tell the user you need at least 3 questions to find patterns. Ask what other questions come to mind."
+                    "instruction": "Tell the user you need at least 5 questions to find patterns. Ask what other questions come to mind."
                 }
             },
             isError=True,
@@ -230,21 +238,31 @@ async def handle(
                 unclustered_count=len(unclustered),
                 total_questions=total_questions)
 
+    # Widget metadata for OpenAI rendering
+    meta = {
+        "openai/outputTemplate": WIDGET_URI,
+        "openai/toolInvocation/invoking": "Clustering your questions...",
+        "openai/toolInvocation/invoked": "Here's your Unpack summary.",
+        "openai/widgetAccessible": True,
+        "openai/resultCanProduceWidget": True,
+    }
+
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
             text=f"Clustered {total_questions} questions into {len(clusters)} groups."
         )],
         structuredContent={
+            "problem_statement": validated.problem_statement,
             "clusters": clusters,
             "unclustered": unclustered,
             "summary_markdown": summary_markdown,
             "assistant_guidance": {
                 "action": "WIDGET_RENDERED",
-                "follow_up": "Give a brief observation about what you notice in the clusters, then ask: 'Which area would you like to explore further?'",
-                "forbidden": ["advice", "solutions"],
+                "next_step": "SELECT_CLUSTER",
             },
         },
+        _meta=meta,
     )
 
 
@@ -256,7 +274,7 @@ register_tool(ToolDefinition(
     name=NAME,
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
-    widget_uri=None,  # Widget comes in Increment 3
+    widget_uri=WIDGET_URI,
     handle=handle,
     # OpenAI compliance annotations
     read_only_hint=True,  # Transforms input, no side effects
