@@ -106,20 +106,7 @@ class MCPContentTypeAndAcceptFixMiddleware:
 # Register MCP Handlers
 # ============================================================================
 
-# Tool handlers
-@mcp._mcp_server.list_tools()
-async def _list_tools():
-    # Get tools from registry
-    registry_tools = await list_tools()
-    # Get any tools registered via @mcp.tool() decorator
-    decorator_tools = await mcp.list_tools()
-    return registry_tools + list(decorator_tools)
-
-
-mcp._mcp_server.request_handlers[mcp_types.CallToolRequest] = call_tool_request
-
-
-# Resource handlers (widget discovery and serving)
+# Resource handlers (widget discovery and serving) - must be registered first
 @mcp._mcp_server.list_resources()
 async def _list_resources():
     return await list_resources()
@@ -131,6 +118,19 @@ async def _list_resource_templates():
 
 
 mcp._mcp_server.request_handlers[mcp_types.ReadResourceRequest] = handle_read_resource
+
+
+# Tool handlers
+@mcp._mcp_server.list_tools()
+async def _list_tools():
+    # Get tools from registry
+    registry_tools = await list_tools()
+    # Get any tools registered via @mcp.tool() decorator
+    decorator_tools = await mcp.list_tools()
+    return registry_tools + list(decorator_tools)
+
+
+mcp._mcp_server.request_handlers[mcp_types.CallToolRequest] = call_tool_request
 
 
 # ============================================================================
