@@ -258,9 +258,9 @@ async def handle(
                 "instruction": """Question brainstorming complete. The widget shows the user's clustered questions.
 
 SAY SOMETHING LIKE:
-- "Good work. You've uncovered angles that will lead to better solutions. Which cluster do you want to start with?"
-- "Nice. These questions open doors to solutions you wouldn't have found by jumping straight to answers. Which cluster first?"
-- "Well done. You now have the right questions — the solutions will follow. Which cluster do you want to explore?"
+- "Good work. You've uncovered angles that will lead to better solutions. Which cluster, if explored now, might also create more clarity in other clusers?"
+- "Nice. These questions open doors to solutions you wouldn't have found by jumping straight to answers. Which cluster, if explored first, might unlock the others?"
+- "Well done. You now have the right questions — the solutions will follow. Which cluster feels most foundational to tackle first?"
 
 AFTER THE USER SELECTS A CLUSTER:
 - Shift into solution exploration mode within the selected cluster""",
