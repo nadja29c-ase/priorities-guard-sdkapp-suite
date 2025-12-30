@@ -26,14 +26,20 @@ logger = structlog.get_logger(__name__)
 NAME = "formulate_problem"
 
 DESCRIPTION = """
-Transforms a vague problem description into a specific problem statement.
+Transforms a vague problem description into a specific problem statement through conversation with the user.
 
 WHEN TO CALL:
 - User describes a problem, challenge, or stuck situation and needs help clarifying/understanding it
 - User says they need help thinking through something
 - User mentions feeling overwhelmed or unclear and needs help thinking it through
 
-CRITICAL: If a component is not clearly stated by the user, pass an empty string — NEVER INFER OR INVENT - ask clarifying questions MAX 3 at a time.
+HOW TO USE:
+Call this tool iteratively and have a back-and-forth conversation with the user to create a problem statement with high confidence. Each call validates what you have so far.
+- If components are missing → tool returns what to clarify
+- Ask the user → get their words → call again with updated components
+- Repeat until confidence is high
+
+CRITICAL: NEVER INFER OR INVENT.
 
 OUTPUT FORMAT: "[Actor] is trying to [goal], but [obstacle] keeps happening, which costs [cost]."
 """
