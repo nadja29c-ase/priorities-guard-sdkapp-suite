@@ -170,12 +170,11 @@ RULES:
 After cluster_questions is called, collection is OVER.""",
         }
     else:
-        clarify_type = result.get("clarify", {}).get("type", "GENERAL")
+        clarify_type = result["clarify"]["type"]  # Always present when needs_clarification=True
 
         clarify_instructions = {
             "GOAL": "clarify what the user is ultimately trying to achieve.",
             "OBSTACLE": "clarify what specifically keeps getting in the way.",
-            "GENERAL": "get more details about their situation.",
         }
 
         guidance = {

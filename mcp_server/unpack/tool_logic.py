@@ -11,7 +11,7 @@ from typing import Literal
 
 
 # Clarification types (handlers map these to user-friendly phrases)
-ClarifyType = Literal["GOAL", "OBSTACLE", "GENERAL"]
+ClarifyType = Literal["GOAL", "OBSTACLE"]
 
 
 # ============================================================================
@@ -113,11 +113,8 @@ def formulate_problem(
     if confidence != "high":
         if not goal or len(goal) < 5:
             clarify_type = "GOAL"
-        elif not obstacle or len(obstacle) < 5:
-            clarify_type = "OBSTACLE"
         else:
-            # Components present but may need more clarity
-            clarify_type = "GENERAL"
+            clarify_type = "OBSTACLE"
 
     # Build result
     result = {
