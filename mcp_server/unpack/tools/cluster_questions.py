@@ -238,19 +238,13 @@ async def handle(
                 unclustered_count=len(unclustered),
                 total_questions=total_questions)
 
-    # Widget metadata for OpenAI rendering
+    # Widget metadata for OpenAI rendering (matches Clarity pattern)
     meta = {
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Clustering your questions...",
         "openai/toolInvocation/invoked": "Here's your Unpack summary.",
         "openai/widgetAccessible": True,
         "openai/resultCanProduceWidget": True,
-        "openai/widgetCSP": {
-            "connect_domains": [],
-            "resource_domains": [],
-        },
-        "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
-        "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
     }
 
     return mcp_types.CallToolResult(
