@@ -25,7 +25,7 @@ logger = structlog.get_logger(__name__)
 
 NAME = "formulate_problem"
 
-DESCRIPTION = """ YOUR ROLE FACILITATOR: Help the user clearly articulate their problem and the subsequent brainstorming process.
+DESCRIPTION = """ YOUR ROLE -> FACILITATOR: Help the user clearly articulate their problem and the subsequent brainstorming process.
 WHEN TO CALL:
 - When user want to brainstorm around a problem or challenge
 - When user says "Help me brainstorm this problem" or similar
