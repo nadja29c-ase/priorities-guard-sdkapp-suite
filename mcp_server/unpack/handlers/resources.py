@@ -44,6 +44,12 @@ async def list_resources() -> List[mcp_types.Resource]:
                 "openai/outputTemplate": WIDGET_URI,
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
+                "openai/widgetCSP": {
+                    "connect_domains": [],
+                    "resource_domains": [],
+                },
+                "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
+                "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
             },
         )
     ]
@@ -62,6 +68,12 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                 "openai/outputTemplate": WIDGET_URI,
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
+                "openai/widgetCSP": {
+                    "connect_domains": [],
+                    "resource_domains": [],
+                },
+                "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
+                "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
             },
         )
     ]
@@ -82,6 +94,12 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 "openai/toolInvocation/invoked": "Here's your Unpack summary.",
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
+                "openai/widgetCSP": {
+                    "connect_domains": [],
+                    "resource_domains": [],
+                },
+                "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
+                "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
             }
 
             return mcp_types.ReadResourceResult(
