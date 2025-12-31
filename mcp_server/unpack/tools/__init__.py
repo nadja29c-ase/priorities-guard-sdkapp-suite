@@ -63,8 +63,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "openai/outputTemplate": tool_def.widget_uri,
                 "openai/toolInvocation/invoking": "Processing...",
                 "openai/toolInvocation/invoked": "Done.",
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }

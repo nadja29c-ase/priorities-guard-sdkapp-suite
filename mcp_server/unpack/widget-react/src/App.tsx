@@ -16,11 +16,11 @@ function App() {
 
   const loadData = useCallback(() => {
     const output = getToolOutput()
+    setIsInitialized(true)
     if (output) {
       setData(output)
-      setIsInitialized(true)
-      notifyHeight()
     }
+    notifyHeight()
   }, [notifyHeight])
 
   useEffect(() => {
@@ -29,10 +29,18 @@ function App() {
     return () => window.removeEventListener('openai:set_globals', loadData)
   }, [loadData])
 
-  if (!isInitialized || !data) {
+  if (!isInitialized) {
     return (
       <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
         Loading...
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
+        Unable to load summary.
       </div>
     )
   }

@@ -239,8 +239,6 @@ async def handle(
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Clustering your questions...",
         "openai/toolInvocation/invoked": "Here's your Unpack summary.",
-        "openai/widgetAccessible": True,
-        "openai/resultCanProduceWidget": True,
     }
 
     return mcp_types.CallToolResult(

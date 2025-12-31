@@ -179,7 +179,7 @@ After cluster_questions is called, collection is OVER.""",
 
         guidance = {
             "action": "ASK_CLARIFYING",
-            "instruction": f"Present the problem statement: '{full_statement}', then ask 1 or 2 questions to {clarify_instructions[clarify_type]} Do not offer advice. Call this tool again until you get confidence=high.",
+            "instruction": f"Present the problem statement: '{full_statement}', then ask 1 question to {clarify_instructions[clarify_type]} Do not offer advice. Call this tool again until you get confidence=high.",
             "clarify_type": clarify_type,
         }
 

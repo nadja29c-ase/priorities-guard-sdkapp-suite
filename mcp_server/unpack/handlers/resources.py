@@ -42,8 +42,6 @@ async def list_resources() -> List[mcp_types.Resource]:
             mimeType="text/html+skybridge",
             _meta={
                 "openai/outputTemplate": WIDGET_URI,
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
                 "openai/widgetCSP": {
                     "connect_domains": [],
                     "resource_domains": [],
@@ -66,8 +64,6 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
             mimeType="text/html+skybridge",
             _meta={
                 "openai/outputTemplate": WIDGET_URI,
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
                 "openai/widgetCSP": {
                     "connect_domains": [],
                     "resource_domains": [],
@@ -92,8 +88,6 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 "openai/outputTemplate": WIDGET_URI,
                 "openai/toolInvocation/invoking": "Clustering your questions...",
                 "openai/toolInvocation/invoked": "Here's your Unpack summary.",
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
                 "openai/widgetCSP": {
                     "connect_domains": [],
                     "resource_domains": [],

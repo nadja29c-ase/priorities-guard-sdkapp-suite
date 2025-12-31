@@ -67,7 +67,7 @@ class MCPContentTypeAndAcceptFixMiddleware:
                         value = b"application/json"
                         modified = True
 
-                    if name == b"accept":
+                    if name == b"accept" and value == b"*/*":
                         value = b"text/event-stream, application/json"
                         modified = True
 

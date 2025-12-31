@@ -231,6 +231,10 @@ def cluster_questions(
         theme = cluster.get("theme", "").strip()
         cluster_questions_list = cluster.get("questions", [])
 
+        # Validate questions is a list
+        if not isinstance(cluster_questions_list, list):
+            raise InvalidClustersError("Cluster questions must be a list")
+
         if not theme:
             theme = f"Theme {i + 1}"
 
