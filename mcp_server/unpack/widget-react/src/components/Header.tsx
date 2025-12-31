@@ -11,7 +11,7 @@ export function Header({ problemStatement }: HeaderProps) {
         aria-labelledby="problem-label"
         className="p-4 bg-surface rounded-xl border border-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
       >
-        <h3 id="problem-label" className="text-sm text-secondary mb-1">Problem</h3>
+        <h2 id="problem-label" className="text-sm text-secondary mb-1">Problem</h2>
         <p tabIndex={0} aria-label={problemStatement} className="text-sm text-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]">{problemStatement}</p>
       </section>
     </div>

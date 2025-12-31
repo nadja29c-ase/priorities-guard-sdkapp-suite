@@ -55,11 +55,14 @@ function App() {
 
       {/* Cluster Cards */}
       {data.clusters.length > 0 ? (
-        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
+        <>
+          <h2 className="text-sm font-semibold text-default mb-3">Question Clusters</h2>
+          <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
           {data.clusters.map((cluster) => (
             <ClusterCard key={cluster.id} cluster={cluster} />
           ))}
-        </div>
+          </div>
+        </>
       ) : (
         <div className="p-6 text-center text-sm text-secondary bg-surface rounded-xl">
           No clusters to display.
@@ -69,7 +72,7 @@ function App() {
       {/* Unclustered Questions */}
       {data.unclustered.length > 0 && (
         <div className="mt-4 p-5 bg-surface-secondary rounded-2xl border border-default shadow-lg">
-          <h3 className="text-sm font-semibold text-default mb-3">Other Questions</h3>
+          <h2 className="text-sm font-semibold text-default mb-3">Other Questions</h2>
           <ul role="list" className="space-y-2 list-none m-0 p-0">
             {data.unclustered.map((q, i) => (
               <li
