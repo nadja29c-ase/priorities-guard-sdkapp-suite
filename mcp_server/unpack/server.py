@@ -88,7 +88,17 @@ class MCPContentTypeAndAcceptFixMiddleware:
 # Static Routes
 # ============================================================================
 
-PRIVACY_POLICY_PATH = Path(__file__).parent / "assets" / "privacy-policy.html"
+ASSETS_DIR = Path(__file__).parent / "assets"
+INDEX_PATH = ASSETS_DIR / "index.html"
+PRIVACY_POLICY_PATH = ASSETS_DIR / "privacy-policy.html"
+TERMS_PATH = ASSETS_DIR / "terms.html"
+
+
+async def index_handler(request):
+    """Serve the landing page."""
+    if INDEX_PATH.exists():
+        return HTMLResponse(INDEX_PATH.read_text())
+    return PlainTextResponse("Page not found", status_code=404)
 
 
 async def privacy_policy_handler(request):
@@ -96,6 +106,13 @@ async def privacy_policy_handler(request):
     if PRIVACY_POLICY_PATH.exists():
         return HTMLResponse(PRIVACY_POLICY_PATH.read_text())
     return PlainTextResponse("Privacy policy not found", status_code=404)
+
+
+async def terms_handler(request):
+    """Serve the terms of service HTML page."""
+    if TERMS_PATH.exists():
+        return HTMLResponse(TERMS_PATH.read_text())
+    return PlainTextResponse("Terms of service not found", status_code=404)
 
 
 # ============================================================================
@@ -144,7 +161,9 @@ def create_app():
     fastmcp_app = mcp.streamable_http_app()
 
     # Add static routes
+    fastmcp_app.add_route("/", index_handler, methods=["GET"])
     fastmcp_app.add_route("/privacy-policy", privacy_policy_handler, methods=["GET"])
+    fastmcp_app.add_route("/terms", terms_handler, methods=["GET"])
 
     # Add CORS
     from starlette.middleware.cors import CORSMiddleware
