@@ -47,7 +47,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                     "resource_domains": [],
                 },
                 "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
-                "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
+                "openai/widgetDomain": "https://unpack.fulfilling-productivity.com",
             },
         )
     ]
@@ -69,7 +69,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                     "resource_domains": [],
                 },
                 "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
-                "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
+                "openai/widgetDomain": "https://unpack.fulfilling-productivity.com",
             },
         )
     ]
@@ -93,7 +93,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                     "resource_domains": [],
                 },
                 "openai/widgetDescription": "Shows clustered questions from user's brainstorming session.",
-                "openai/widgetDomain": "https://fulfilling-productivity.onrender.com",
+                "openai/widgetDomain": "https://unpack.fulfilling-productivity.com",
             }
 
             return mcp_types.ReadResourceResult(
