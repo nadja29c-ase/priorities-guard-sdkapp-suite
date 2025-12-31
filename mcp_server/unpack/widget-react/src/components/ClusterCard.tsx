@@ -27,7 +27,8 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
         {cluster.questions.map((q, i) => (
           <li
             key={i}
-            className="text-sm text-default pl-3 border-l-2 border-default"
+            tabIndex={0}
+            className="text-sm text-default pl-3 border-l-2 border-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
           >
             {q}
           </li>
