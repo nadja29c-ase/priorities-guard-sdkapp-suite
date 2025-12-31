@@ -16,19 +16,13 @@ logger = structlog.get_logger(__name__)
 WIDGET_URI = "ui://widget/unpack-clusters.html"
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/unpack-clusters.html")
 
-# Lazy-loaded cache
-_widget_html_cache: str | None = None
-
-
 def get_widget_html() -> str:
-    """Load widget HTML lazily (not at import time)."""
-    global _widget_html_cache
-    if _widget_html_cache is None:
-        if not WIDGET_PATH.exists():
-            raise FileNotFoundError(f"Widget not found: {WIDGET_PATH}")
-        _widget_html_cache = WIDGET_PATH.read_text()
-        logger.debug("widget.loaded", path=str(WIDGET_PATH), size=len(_widget_html_cache))
-    return _widget_html_cache
+    """Load widget HTML from disk (no caching for debugging)."""
+    if not WIDGET_PATH.exists():
+        raise FileNotFoundError(f"Widget not found: {WIDGET_PATH}")
+    html = WIDGET_PATH.read_text()
+    logger.debug("widget.loaded", path=str(WIDGET_PATH), size=len(html))
+    return html
 
 
 async def list_resources() -> List[mcp_types.Resource]:
