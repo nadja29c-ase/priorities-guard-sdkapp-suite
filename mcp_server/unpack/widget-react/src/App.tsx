@@ -70,16 +70,16 @@ function App() {
       {data.unclustered.length > 0 && (
         <div className="mt-4 p-5 bg-surface-secondary rounded-2xl border border-default shadow-lg">
           <h3 className="text-sm font-semibold text-default mb-3">Other Questions</h3>
-          <div className="space-y-2">
+          <ul className="space-y-2 list-none m-0 p-0" role="list" aria-label="Unclustered questions">
             {data.unclustered.map((q, i) => (
-              <div
+              <li
                 key={i}
                 className="text-sm text-default pl-3 border-l-2 border-default"
               >
                 {q}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
     </main>
