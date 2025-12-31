@@ -13,11 +13,14 @@ Or run directly:
 """
 
 import os
+from pathlib import Path
 
 import uvicorn
 import structlog
 from mcp.server.fastmcp import FastMCP
 from mcp import types as mcp_types
+from starlette.responses import HTMLResponse, PlainTextResponse
+from starlette.routing import Route
 
 from mcp_server.unpack.config import CORS_ALLOWED_ORIGINS, IS_DEV, PORT
 from mcp_server.unpack.tools import list_tools
@@ -82,6 +85,20 @@ class MCPContentTypeAndAcceptFixMiddleware:
 
 
 # ============================================================================
+# Static Routes
+# ============================================================================
+
+PRIVACY_POLICY_PATH = Path(__file__).parent / "assets" / "privacy-policy.html"
+
+
+async def privacy_policy_handler(request):
+    """Serve the privacy policy HTML page."""
+    if PRIVACY_POLICY_PATH.exists():
+        return HTMLResponse(PRIVACY_POLICY_PATH.read_text())
+    return PlainTextResponse("Privacy policy not found", status_code=404)
+
+
+# ============================================================================
 # Register MCP Handlers
 # ============================================================================
 
@@ -125,6 +142,9 @@ def create_app():
     - Header fix middleware for ChatGPT
     """
     fastmcp_app = mcp.streamable_http_app()
+
+    # Add static routes
+    fastmcp_app.add_route("/privacy-policy", privacy_policy_handler, methods=["GET"])
 
     # Add CORS
     from starlette.middleware.cors import CORSMiddleware
