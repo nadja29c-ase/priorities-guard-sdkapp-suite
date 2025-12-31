@@ -90,14 +90,24 @@ class MCPContentTypeAndAcceptFixMiddleware:
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 INDEX_PATH = ASSETS_DIR / "index.html"
+UNPACK_LANDING_PATH = ASSETS_DIR / "unpack-landing.html"
 PRIVACY_POLICY_PATH = ASSETS_DIR / "privacy-policy.html"
 TERMS_PATH = ASSETS_DIR / "terms.html"
 
 
 async def index_handler(request):
-    """Serve the landing page."""
-    if INDEX_PATH.exists():
-        return HTMLResponse(INDEX_PATH.read_text())
+    """Serve the landing page based on host."""
+    host = request.headers.get("host", "")
+
+    # Unpack subdomain gets app-specific landing page
+    if host.startswith("unpack."):
+        if UNPACK_LANDING_PATH.exists():
+            return HTMLResponse(UNPACK_LANDING_PATH.read_text())
+    else:
+        # Main domain gets suite landing page
+        if INDEX_PATH.exists():
+            return HTMLResponse(INDEX_PATH.read_text())
+
     return PlainTextResponse("Page not found", status_code=404)
 
 
