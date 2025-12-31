@@ -70,11 +70,12 @@ function App() {
       {data.unclustered.length > 0 && (
         <div className="mt-4 p-5 bg-surface-secondary rounded-2xl border border-default shadow-lg">
           <h3 className="text-sm font-semibold text-default mb-3">Other Questions</h3>
-          <ul className="space-y-2 list-none m-0 p-0" role="list" aria-label="Unclustered questions">
+          <ul role="list" className="space-y-2 list-none m-0 p-0">
             {data.unclustered.map((q, i) => (
               <li
                 key={i}
                 tabIndex={0}
+                aria-label={q}
                 className="text-sm text-default pl-3 border-l-2 border-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
               >
                 {q}

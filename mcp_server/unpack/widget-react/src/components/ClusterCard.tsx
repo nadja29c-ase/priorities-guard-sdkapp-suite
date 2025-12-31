@@ -23,11 +23,12 @@ export function ClusterCard({ cluster }: ClusterCardProps) {
       </div>
 
       {/* Questions */}
-      <ul className="space-y-2 flex-1 list-none m-0 p-0" role="list" aria-label="Questions">
+      <ul role="list" className="space-y-2 flex-1 list-none m-0 p-0">
         {cluster.questions.map((q, i) => (
           <li
             key={i}
             tabIndex={0}
+            aria-label={q}
             className="text-sm text-default pl-3 border-l-2 border-default focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
           >
             {q}
