@@ -19,6 +19,7 @@ function App() {
   const [isSaving, setIsSaving] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   // Ref to avoid re-running effect on clusters change
   const isInitializedRef = useRef(false)
@@ -51,7 +52,15 @@ function App() {
     const t = window.openai?.toolOutput
     if (!t) return  // No data yet, wait for event
 
-    const data = getToolOutput()
+    const { clusters: data, error } = getToolOutput()
+
+    if (error) {
+      setLoadError(error)
+      console.error('Clarity widget load error:', error)
+    } else {
+      setLoadError(null)
+    }
+
     setShowSaved(false)  // Reset stale indicator on new data load
     setClusters(data)
     setIsInitialized(true)
@@ -80,7 +89,7 @@ function App() {
     if (isInitialized) {
       notifyHeight()
     }
-  }, [saveError, isInitialized, notifyHeight])
+  }, [saveError, loadError, isInitialized, notifyHeight])
 
   // Persist scroll position to widgetState
   useEffect(() => {
@@ -158,8 +167,14 @@ function App() {
     >
       <Header />
 
+      {loadError && (
+        <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
+          {loadError}
+        </div>
+      )}
+
       {saveError && (
-        <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline">
+        <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
           {saveError}
         </div>
       )}

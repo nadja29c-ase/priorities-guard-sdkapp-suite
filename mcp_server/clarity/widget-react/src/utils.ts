@@ -22,23 +22,52 @@ export function extractStructuredContent<T>(result: unknown): T | undefined {
 }
 
 /**
- * Get clusters from window.openai.toolOutput (tries multiple paths)
+ * Result type for getToolOutput with error information
  */
-export function getToolOutput(): Cluster[] {
-  const t = window.openai?.toolOutput
-  if (!t) return []
+export interface ToolOutputResult {
+  clusters: Cluster[]
+  error: string | null
+}
 
-  // Try all known paths for clusters
-  if (Array.isArray(t.result?.structuredContent?.clusters)) {
-    return t.result.structuredContent.clusters
-  } else if (Array.isArray(t.structuredContent?.clusters)) {
-    return t.structuredContent.clusters
-  } else if (Array.isArray(t.clusters)) {
-    return t.clusters
-  } else if (Array.isArray(t.data?.clusters)) {
-    return t.data.clusters
+/**
+ * Get clusters from window.openai.toolOutput (tries multiple paths)
+ * Returns both data and any error that occurred during parsing
+ */
+export function getToolOutput(): ToolOutputResult {
+  try {
+    const t = window.openai?.toolOutput
+    if (!t) return { clusters: [], error: null }
+
+    // Try all known paths for clusters
+    let clusters: unknown[] | undefined
+
+    if (Array.isArray(t.result?.structuredContent?.clusters)) {
+      clusters = t.result.structuredContent.clusters
+    } else if (Array.isArray(t.structuredContent?.clusters)) {
+      clusters = t.structuredContent.clusters
+    } else if (Array.isArray(t.clusters)) {
+      clusters = t.clusters
+    } else if (Array.isArray(t.data?.clusters)) {
+      clusters = t.data.clusters
+    }
+
+    if (!clusters) {
+      return { clusters: [], error: null }
+    }
+
+    // Validate that clusters have required structure
+    const validClusters = clusters.filter((c): c is Cluster => {
+      return c !== null && typeof c === 'object' && 'cluster_name' in c
+    })
+
+    return { clusters: validClusters, error: null }
+  } catch (err) {
+    console.error('Failed to parse tool output:', err)
+    return {
+      clusters: [],
+      error: 'Failed to load board data. The data may be corrupted.',
+    }
   }
-  return []
 }
 
 /**
