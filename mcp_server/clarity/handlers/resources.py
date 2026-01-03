@@ -15,7 +15,30 @@ logger = structlog.get_logger(__name__)
 # Widget configuration
 WIDGET_VERSION = ""
 WIDGET_URI = "ui://widget/clarity-clusters.html"
-WIDGET_HTML = Path(__file__).parent.parent.joinpath("widgets/clarity-clusters.html").read_text()
+WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/clarity-clusters.html")
+
+# Fallback HTML if widget file cannot be loaded
+WIDGET_FALLBACK_HTML = """<!DOCTYPE html>
+<html><head><title>Clarity Widget</title></head>
+<body style="font-family: system-ui; padding: 20px; text-align: center;">
+<p style="color: #dc2626;">Widget failed to load. Please try again later.</p>
+</body></html>"""
+
+def _load_widget_html() -> str:
+    """Load widget HTML with error handling."""
+    try:
+        return WIDGET_PATH.read_text()
+    except FileNotFoundError:
+        logger.error("widget.load.file_not_found", path=str(WIDGET_PATH))
+        return WIDGET_FALLBACK_HTML
+    except PermissionError:
+        logger.error("widget.load.permission_denied", path=str(WIDGET_PATH))
+        return WIDGET_FALLBACK_HTML
+    except Exception as e:
+        logger.error("widget.load.unexpected_error", path=str(WIDGET_PATH), error=str(e))
+        return WIDGET_FALLBACK_HTML
+
+WIDGET_HTML = _load_widget_html()
 
 
 async def list_resources() -> List[mcp_types.Resource]:
