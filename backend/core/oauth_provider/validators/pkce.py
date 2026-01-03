@@ -5,6 +5,7 @@ Implements RFC 7636 PKCE verification for OAuth 2.1 authorization code flow.
 """
 
 import base64
+import secrets
 from hashlib import sha256
 
 
@@ -33,7 +34,7 @@ def verify_pkce(code_verifier: str, code_challenge: str) -> bool:
     code_challenge_computed = base64.urlsafe_b64encode(code_verifier_hash).rstrip(b'=').decode('ascii')
 
     # Constant-time comparison to prevent timing attacks
-    return code_challenge_computed == code_challenge
+    return secrets.compare_digest(code_challenge_computed, code_challenge)
 
 
 def validate_code_challenge_method(method: str) -> bool:
