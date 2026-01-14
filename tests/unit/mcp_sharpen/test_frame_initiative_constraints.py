@@ -66,7 +66,7 @@ class TestValidateInitiativeConstraints:
         assert result["intent_missing"] is True
 
     def test_user_claims_no_constraints_returns_force_constraint(self):
-        """user_claims_no_constraints=True returns force_constraint=True."""
+        """user_claims_no_constraints=True returns force_constraint=True, framing=None."""
         result = validate_initiative_constraints(
             confirmed_intent={"who": "My team", "what": "A dashboard"},
             user_claims_no_constraints=True,
@@ -74,6 +74,7 @@ class TestValidateInitiativeConstraints:
 
         assert result["force_constraint"] is True
         assert result["confidence"] == "low"
+        assert result["initiative_framing"] is None  # Framing NOT finalized
 
     def test_empty_constraint_value_returns_low_confidence(self):
         """Empty constraint_value returns low confidence, clarify CONSTRAINT."""
@@ -194,7 +195,7 @@ class TestFrameInitiativeConstraintsHandler:
 
     @pytest.mark.asyncio
     async def test_force_constraint_returns_force_constraint_action(self):
-        """user_claims_no_constraints returns FORCE_CONSTRAINT action."""
+        """user_claims_no_constraints returns FORCE_CONSTRAINT action, framing=None."""
         arguments = {
             "confirmed_intent": {"who": "My team", "what": "A dashboard"},
             "user_claims_no_constraints": True,
@@ -204,6 +205,7 @@ class TestFrameInitiativeConstraintsHandler:
 
         assert result.structuredContent["assistant_guidance"]["action"] == "FORCE_CONSTRAINT"
         assert result.structuredContent["force_constraint"] is True
+        assert result.structuredContent["initiative_framing"] is None  # Framing NOT finalized
 
     @pytest.mark.asyncio
     async def test_missing_confirmed_intent_returns_error(self):

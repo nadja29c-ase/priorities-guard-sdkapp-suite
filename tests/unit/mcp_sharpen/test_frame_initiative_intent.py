@@ -240,3 +240,27 @@ class TestFrameInitiativeIntentHandler:
         instruction = result.structuredContent["assistant_guidance"]["instruction"]
         assert "Ask ONE question" in instruction
         assert "Do not suggest" in instruction
+
+    @pytest.mark.asyncio
+    async def test_handler_ignores_missing_why(self):
+        """WHY is optional — handler returns high confidence without it."""
+        arguments = {
+            "who": "My team",
+            "what": "A dashboard",
+        }
+
+        result = await handle(arguments)
+
+        assert result.structuredContent["confidence"] == "high"
+        assert result.structuredContent["framing_intent"]["why"] is None
+
+    @pytest.mark.asyncio
+    async def test_semantic_failures_do_not_return_error(self):
+        """Semantic failures (low confidence) are not errors — just clarification needed."""
+        arguments = {"who": "", "what": ""}
+
+        result = await handle(arguments)
+
+        assert result.isError is not True
+        assert result.structuredContent["confidence"] == "low"
+        assert result.structuredContent["needs_clarification"] is True

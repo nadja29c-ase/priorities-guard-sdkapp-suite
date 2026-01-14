@@ -256,10 +256,11 @@ def validate_initiative_constraints(
         "definition_of_finished": definition_of_finished,
     }
 
-    # Handle user claiming no constraints
+    # Handle user claiming no constraints — framing is NOT finalized
+    # This is a blocking clarification loop, not a valid state
     if user_claims_no_constraints:
         return {
-            "initiative_framing": initiative_framing,
+            "initiative_framing": None,
             "confidence": "low",
             "needs_clarification": False,
             "clarify_type": None,
@@ -267,8 +268,19 @@ def validate_initiative_constraints(
             "intent_missing": False,
         }
 
-    # Check constraint_value validity
-    if constraint_type and not constraint_value:
+    # Check constraint_type first — ONE dominant constraint must be identified
+    if not constraint_type:
+        return {
+            "initiative_framing": initiative_framing,
+            "confidence": "low",
+            "needs_clarification": True,
+            "clarify_type": "CONSTRAINT",
+            "force_constraint": False,
+            "intent_missing": False,
+        }
+
+    # Check constraint_value validity (constraint_type is guaranteed to exist)
+    if not constraint_value:
         return {
             "initiative_framing": initiative_framing,
             "confidence": "low",
@@ -305,17 +317,6 @@ def validate_initiative_constraints(
             "confidence": "medium",
             "needs_clarification": True,
             "clarify_type": "FINISHED",
-            "force_constraint": False,
-            "intent_missing": False,
-        }
-
-    # Need constraint_type to be valid for high confidence
-    if not constraint_type:
-        return {
-            "initiative_framing": initiative_framing,
-            "confidence": "low",
-            "needs_clarification": True,
-            "clarify_type": "CONSTRAINT",
             "force_constraint": False,
             "intent_missing": False,
         }

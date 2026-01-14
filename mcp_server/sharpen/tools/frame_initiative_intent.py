@@ -65,7 +65,7 @@ class FrameIntentRequest(BaseModel):
 
 GUIDANCE_CLARIFY_WHO = """Ask ONE question to clarify who benefits from this work. Do not suggest who it should be. Do not give examples. Do not ask about constraints or deliverables yet. Your role is to facilitate their thinking, not direct it. Call this tool again with updated components."""
 
-GUIDANCE_CLARIFY_WHAT = """Ask ONE question to clarify what must exist. Focus on artifact/deliverable, not activity. Do not suggest what it should be. Do not offer examples. Do not ask about constraints yet. Reflect their words back and ask them to sharpen. Call this tool again with updated components."""
+GUIDANCE_CLARIFY_WHAT = """Ask ONE question to clarify what must exist. Focus on artifact/deliverable, not activity. Do not suggest what it should be. Do not offer examples. Do not ask about constraints yet. Reflect their words back and ask them to make it more concrete. Call this tool again with updated components."""
 
 GUIDANCE_CONFIRM = """Present the intent: '[WHO] needs [WHAT]' (include 'so that [WHY]' only if WHY was provided). Ask user to confirm — do not rephrase or improve their words. If confirmed, call frame_initiative_constraints with confirmed_intent. Do not skip to deliverables. Do not offer suggestions for next steps beyond the constraint question."""
 

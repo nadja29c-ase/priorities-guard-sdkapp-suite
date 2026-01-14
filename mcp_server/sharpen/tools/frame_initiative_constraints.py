@@ -41,6 +41,8 @@ INPUT_SCHEMA = {
             },
             "required": ["who", "what"],
         },
+        # NOTE: forced_mvp behaves like a normal constraint_type in validation,
+        # but is only set after user_claims_no_constraints forcing loop completes.
         "constraint_type": {
             "type": "string",
             "enum": ["time", "capacity", "budget", "forced_mvp"],
@@ -91,7 +93,7 @@ class FrameConstraintsRequest(BaseModel):
 
 GUIDANCE_INTENT_MISSING = """Intent framing must be confirmed before capturing constraints. Call frame_initiative_intent first and get user confirmation. Do not assume or infer the intent — the user must state it."""
 
-GUIDANCE_FORCE_CONSTRAINT = """User claims no constraints. Ask: 'What is the smallest concrete result that would make this initiative worth continuing?' Wait for their answer — do not suggest what it might be. That result becomes the constraint. Do not accept 'no constraints'. Call this tool again with constraint_type='forced_mvp' and constraint_value set to their answer."""
+GUIDANCE_FORCE_CONSTRAINT = """User claims no constraints. Ask: 'What is the smallest concrete result that would make this initiative worth continuing?' Wait for their answer — do not suggest what it might be. Use their answer as the constraint for the next call. Do not accept 'no constraints'. Call this tool again with constraint_type='forced_mvp' and constraint_value set to their answer."""
 
 GUIDANCE_CLARIFY_CONSTRAINT = """Ask ONE question to clarify the constraint. For time: 'By when?' For capacity: 'How many hours or focused sessions per week can you realistically invest?' For budget: 'What's the maximum spend?' Do not suggest values. Do not estimate for them. Wait for their number. Call this tool again with updated value."""
 
