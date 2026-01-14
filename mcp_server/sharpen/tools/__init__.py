@@ -84,3 +84,5 @@ async def list_tools() -> List[mcp_types.Tool]:
 # If you add a new tool, import it here or it won't be in the registry.
 
 from . import export_checklist  # noqa: F401, E402
+from . import frame_initiative_intent  # noqa: F401, E402
+from . import frame_initiative_constraints  # noqa: F401, E402
