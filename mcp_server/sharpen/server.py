@@ -18,6 +18,7 @@ from pathlib import Path
 import uvicorn
 import structlog
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp import types as mcp_types
 from starlette.applications import Starlette
 from starlette.responses import HTMLResponse, PlainTextResponse
@@ -36,9 +37,32 @@ logger = structlog.get_logger(__name__)
 # Path to assets directory
 ASSETS_PATH = Path(__file__).parent / "assets"
 
+# Configure transport security for DNS rebinding protection
+# Required for external hosts (Render, ChatGPT) to connect
+transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=[
+        # Production
+        "priorities-guard-sharpen-mcp.onrender.com",
+        # Local development
+        "localhost:8004",
+        "127.0.0.1:8004",
+    ],
+    allowed_origins=[
+        # ChatGPT
+        "https://chatgpt.com",
+        "https://web-sandbox.oaiusercontent.com",
+    ],
+)
+
 # Create FastMCP instance
 # stateless_http=True: Each request is self-contained, no session management needed.
-mcp = FastMCP("sharpen-mcp", streamable_http_path="/mcp", stateless_http=True)
+mcp = FastMCP(
+    "sharpen-mcp",
+    streamable_http_path="/mcp",
+    stateless_http=True,
+    transport_security=transport_security,
+)
 
 
 # ============================================================================
