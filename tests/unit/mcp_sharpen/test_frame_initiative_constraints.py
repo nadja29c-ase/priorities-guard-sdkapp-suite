@@ -2,6 +2,7 @@
 Tests for frame_initiative_constraints tool.
 
 Tests both pure logic (tool_logic.py) and handler (tools/frame_initiative_constraints.py).
+Structural validation only — semantic quality is the LLM's job.
 """
 
 import pytest
@@ -16,10 +17,10 @@ from mcp_server.sharpen.tools.frame_initiative_constraints import handle
 
 
 class TestValidateInitiativeConstraints:
-    """Tests for validate_initiative_constraints function."""
+    """Tests for validate_initiative_constraints function — structural validation only."""
 
-    def test_valid_constraint_and_finished_returns_high_confidence(self):
-        """Valid constraint and definition of finished returns high confidence."""
+    def test_valid_constraint_and_finished_returns_valid_true(self):
+        """Valid constraint and definition of finished returns valid=True."""
         result = validate_initiative_constraints(
             confirmed_intent={"who": "My team", "what": "A dashboard"},
             constraint_type="time",
@@ -27,8 +28,8 @@ class TestValidateInitiativeConstraints:
             definition_of_finished="Dashboard deployed and team trained",
         )
 
-        assert result["confidence"] == "high"
-        assert result["needs_clarification"] is False
+        assert result["valid"] is True
+        assert result["missing"] == []
         assert result["force_constraint"] is False
 
     def test_missing_confirmed_intent_returns_intent_missing(self):
@@ -73,11 +74,23 @@ class TestValidateInitiativeConstraints:
         )
 
         assert result["force_constraint"] is True
-        assert result["confidence"] == "low"
+        assert result["valid"] is False
         assert result["initiative_framing"] is None  # Framing NOT finalized
 
-    def test_empty_constraint_value_returns_low_confidence(self):
-        """Empty constraint_value returns low confidence, clarify CONSTRAINT."""
+    def test_missing_constraint_type_returns_valid_false(self):
+        """Missing constraint_type returns valid=False."""
+        result = validate_initiative_constraints(
+            confirmed_intent={"who": "My team", "what": "A dashboard"},
+            constraint_type=None,
+            constraint_value="by Friday",
+            definition_of_finished="Dashboard deployed",
+        )
+
+        assert result["valid"] is False
+        assert "constraint_type" in result["missing"]
+
+    def test_missing_constraint_value_returns_valid_false(self):
+        """Missing constraint_value returns valid=False."""
         result = validate_initiative_constraints(
             confirmed_intent={"who": "My team", "what": "A dashboard"},
             constraint_type="time",
@@ -85,25 +98,11 @@ class TestValidateInitiativeConstraints:
             definition_of_finished="Dashboard live",
         )
 
-        assert result["confidence"] == "low"
-        assert result["needs_clarification"] is True
-        assert result["clarify_type"] == "CONSTRAINT"
+        assert result["valid"] is False
+        assert "constraint_value" in result["missing"]
 
-    def test_vague_constraint_value_returns_medium_confidence(self):
-        """Vague constraint_value like 'soon' returns medium confidence."""
-        result = validate_initiative_constraints(
-            confirmed_intent={"who": "My team", "what": "A dashboard"},
-            constraint_type="time",
-            constraint_value="soon",
-            definition_of_finished="Dashboard live and team using it",
-        )
-
-        assert result["confidence"] == "medium"
-        assert result["needs_clarification"] is True
-        assert result["clarify_type"] == "CONSTRAINT"
-
-    def test_empty_definition_of_finished_returns_low_confidence(self):
-        """Empty definition_of_finished returns low confidence, clarify FINISHED."""
+    def test_missing_definition_of_finished_returns_valid_false(self):
+        """Missing definition_of_finished returns valid=False."""
         result = validate_initiative_constraints(
             confirmed_intent={"who": "My team", "what": "A dashboard"},
             constraint_type="time",
@@ -111,22 +110,22 @@ class TestValidateInitiativeConstraints:
             definition_of_finished="",
         )
 
-        assert result["confidence"] == "low"
-        assert result["needs_clarification"] is True
-        assert result["clarify_type"] == "FINISHED"
+        assert result["valid"] is False
+        assert "definition_of_finished" in result["missing"]
 
-    def test_vague_definition_of_finished_returns_medium_confidence(self):
-        """Vague definition_of_finished like 'done' returns medium confidence."""
+    def test_all_fields_missing_returns_all_missing(self):
+        """All constraint fields missing returns all in missing list."""
         result = validate_initiative_constraints(
             confirmed_intent={"who": "My team", "what": "A dashboard"},
-            constraint_type="time",
-            constraint_value="by end of month",
-            definition_of_finished="when it's done",
+            constraint_type=None,
+            constraint_value=None,
+            definition_of_finished=None,
         )
 
-        assert result["confidence"] == "medium"
-        assert result["needs_clarification"] is True
-        assert result["clarify_type"] == "FINISHED"
+        assert result["valid"] is False
+        assert "constraint_type" in result["missing"]
+        assert "constraint_value" in result["missing"]
+        assert "definition_of_finished" in result["missing"]
 
     def test_initiative_framing_merges_intent_and_constraints(self):
         """initiative_framing contains all fields from intent plus constraints."""
@@ -145,18 +144,6 @@ class TestValidateInitiativeConstraints:
         assert framing["constraint_value"] == "$5000 max"
         assert framing["definition_of_finished"] == "Tracker shows live campaign metrics"
 
-    def test_missing_constraint_type_returns_low_confidence(self):
-        """Missing constraint_type returns low confidence."""
-        result = validate_initiative_constraints(
-            confirmed_intent={"who": "My team", "what": "A dashboard"},
-            constraint_type=None,
-            constraint_value="by Friday",
-            definition_of_finished="Dashboard deployed",
-        )
-
-        assert result["confidence"] == "low"
-        assert result["clarify_type"] == "CONSTRAINT"
-
     def test_forced_mvp_constraint_type_accepted(self):
         """forced_mvp is a valid constraint_type."""
         result = validate_initiative_constraints(
@@ -166,8 +153,34 @@ class TestValidateInitiativeConstraints:
             definition_of_finished="Chart visible on homepage",
         )
 
-        assert result["confidence"] == "high"
+        assert result["valid"] is True
         assert result["initiative_framing"]["constraint_type"] == "forced_mvp"
+
+    def test_whitespace_is_stripped(self):
+        """Whitespace is stripped from constraint inputs."""
+        result = validate_initiative_constraints(
+            confirmed_intent={"who": "My team", "what": "A dashboard"},
+            constraint_type="  time  ",
+            constraint_value="  by Friday  ",
+            definition_of_finished="  Dashboard live  ",
+        )
+
+        assert result["valid"] is True
+        assert result["initiative_framing"]["constraint_type"] == "time"
+        assert result["initiative_framing"]["constraint_value"] == "by Friday"
+        assert result["initiative_framing"]["definition_of_finished"] == "Dashboard live"
+
+    def test_whitespace_only_is_empty(self):
+        """Whitespace-only inputs are treated as empty."""
+        result = validate_initiative_constraints(
+            confirmed_intent={"who": "My team", "what": "A dashboard"},
+            constraint_type="time",
+            constraint_value="   ",
+            definition_of_finished="Dashboard live",
+        )
+
+        assert result["valid"] is False
+        assert "constraint_value" in result["missing"]
 
 
 # ============================================================================
@@ -179,8 +192,8 @@ class TestFrameInitiativeConstraintsHandler:
     """Tests for the MCP tool handler."""
 
     @pytest.mark.asyncio
-    async def test_valid_input_returns_confirm_framing_complete(self):
-        """Valid input returns CONFIRM_FRAMING_COMPLETE action."""
+    async def test_valid_input_returns_confirmed_true(self):
+        """Valid input returns confirmed=True."""
         arguments = {
             "confirmed_intent": {"who": "My team", "what": "A dashboard"},
             "constraint_type": "time",
@@ -191,11 +204,28 @@ class TestFrameInitiativeConstraintsHandler:
         result = await handle(arguments)
 
         assert result.isError is not True
-        assert result.structuredContent["assistant_guidance"]["action"] == "CONFIRM_FRAMING_COMPLETE"
+        assert result.structuredContent["confirmed"] is True
 
     @pytest.mark.asyncio
-    async def test_force_constraint_returns_force_constraint_action(self):
-        """user_claims_no_constraints returns FORCE_CONSTRAINT action, framing=None."""
+    async def test_valid_input_includes_initiative_framing(self):
+        """Valid input includes initiative_framing in structuredContent."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "capacity",
+            "constraint_value": "4 hours per week",
+            "definition_of_finished": "Dashboard shows key metrics",
+        }
+
+        result = await handle(arguments)
+
+        assert "initiative_framing" in result.structuredContent
+        framing = result.structuredContent["initiative_framing"]
+        assert framing["who"] == "My team"
+        assert framing["constraint_type"] == "capacity"
+
+    @pytest.mark.asyncio
+    async def test_force_constraint_returns_force_constraint_true(self):
+        """user_claims_no_constraints returns force_constraint=True, no error."""
         arguments = {
             "confirmed_intent": {"who": "My team", "what": "A dashboard"},
             "user_claims_no_constraints": True,
@@ -203,9 +233,8 @@ class TestFrameInitiativeConstraintsHandler:
 
         result = await handle(arguments)
 
-        assert result.structuredContent["assistant_guidance"]["action"] == "FORCE_CONSTRAINT"
+        assert result.isError is not True  # Not an error, just needs clarification
         assert result.structuredContent["force_constraint"] is True
-        assert result.structuredContent["initiative_framing"] is None  # Framing NOT finalized
 
     @pytest.mark.asyncio
     async def test_missing_confirmed_intent_returns_error(self):
@@ -218,35 +247,7 @@ class TestFrameInitiativeConstraintsHandler:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert "intent_missing" in str(result.structuredContent.get("error", ""))
-
-    @pytest.mark.asyncio
-    async def test_clarify_object_present_when_needed(self):
-        """clarify object is present when needs_clarification is true."""
-        arguments = {
-            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
-            "constraint_type": "time",
-            "constraint_value": "",
-            "definition_of_finished": "Done",
-        }
-
-        result = await handle(arguments)
-
-        assert "clarify" in result.structuredContent
-        assert result.structuredContent["clarify"]["type"] == "CONSTRAINT"
-
-    @pytest.mark.asyncio
-    async def test_guidance_instruction_enforces_facilitator_role(self):
-        """Guidance instructions enforce facilitator role."""
-        arguments = {
-            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
-            "user_claims_no_constraints": True,
-        }
-
-        result = await handle(arguments)
-
-        instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "do not suggest" in instruction.lower()
+        assert result.structuredContent["error"] == "intent_missing"
 
     @pytest.mark.asyncio
     async def test_empty_confirmed_intent_returns_error(self):
@@ -261,6 +262,99 @@ class TestFrameInitiativeConstraintsHandler:
         result = await handle(arguments)
 
         assert result.isError is True
+        assert result.structuredContent["error"] == "intent_missing"
+
+    @pytest.mark.asyncio
+    async def test_missing_constraint_fields_returns_error(self):
+        """Missing constraint fields returns isError=True with missing list."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "time",
+            "constraint_value": "",
+            "definition_of_finished": "Done",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "missing_fields"
+        assert "constraint_value" in result.structuredContent["missing"]
+
+    @pytest.mark.asyncio
+    async def test_missing_fields_includes_partial_framing(self):
+        """Missing fields response includes partial initiative_framing."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "time",
+            "constraint_value": "by Friday",
+            "definition_of_finished": "",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert "initiative_framing" in result.structuredContent
+        assert result.structuredContent["initiative_framing"]["constraint_type"] == "time"
+
+    @pytest.mark.asyncio
+    async def test_guidance_instruction_present(self):
+        """assistant_guidance with instruction is always present."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "time",
+            "constraint_value": "by end of Q1",
+            "definition_of_finished": "Dashboard deployed",
+        }
+
+        result = await handle(arguments)
+
+        assert "assistant_guidance" in result.structuredContent
+        assert "instruction" in result.structuredContent["assistant_guidance"]
+
+    @pytest.mark.asyncio
+    async def test_guidance_instruction_for_force_constraint(self):
+        """Guidance instruction for force_constraint enforces facilitator role."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "user_claims_no_constraints": True,
+        }
+
+        result = await handle(arguments)
+
+        instruction = result.structuredContent["assistant_guidance"]["instruction"]
+        assert "do not suggest" in instruction.lower()
+        assert "forced_mvp" in instruction
+
+    @pytest.mark.asyncio
+    async def test_guidance_instruction_for_missing_fields(self):
+        """Guidance instruction for missing fields enforces facilitator role."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "time",
+            "constraint_value": "",
+            "definition_of_finished": "",
+        }
+
+        result = await handle(arguments)
+
+        instruction = result.structuredContent["assistant_guidance"]["instruction"]
+        assert "Do not suggest" in instruction
+
+    @pytest.mark.asyncio
+    async def test_text_content_for_valid_input(self):
+        """Valid input returns human-readable text content."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "time",
+            "constraint_value": "by Friday",
+            "definition_of_finished": "Dashboard live",
+        }
+
+        result = await handle(arguments)
+
+        assert len(result.content) == 1
+        assert "Framing complete" in result.content[0].text
+        assert "My team" in result.content[0].text
 
 
 # ============================================================================
@@ -271,27 +365,41 @@ class TestFrameInitiativeConstraintsHandler:
 class TestToolRegistration:
     """Tests for tool registration and discovery."""
 
-    def test_frame_initiative_intent_in_registry(self):
-        """frame_initiative_intent is registered in tool registry."""
-        from mcp_server.sharpen.tools import TOOL_REGISTRY
-
-        assert "frame_initiative_intent" in TOOL_REGISTRY
-
     def test_frame_initiative_constraints_in_registry(self):
         """frame_initiative_constraints is registered in tool registry."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         assert "frame_initiative_constraints" in TOOL_REGISTRY
 
-    def test_tools_have_correct_annotations(self):
-        """Both tools have correct compliance annotations."""
+    def test_tool_has_correct_annotations(self):
+        """Tool has correct compliance annotations."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        for tool_name in ["frame_initiative_intent", "frame_initiative_constraints"]:
-            tool = TOOL_REGISTRY[tool_name]
-            assert tool.read_only_hint is False
-            assert tool.destructive_hint is False
-            assert tool.open_world_hint is False
+        tool = TOOL_REGISTRY["frame_initiative_constraints"]
+        assert tool.read_only_hint is False
+        assert tool.destructive_hint is False
+        assert tool.open_world_hint is False
+
+    def test_tool_description_includes_facilitator_role(self):
+        """Tool description includes FACILITATOR ROLE guidance."""
+        from mcp_server.sharpen.tools import TOOL_REGISTRY
+
+        tool = TOOL_REGISTRY["frame_initiative_constraints"]
+        assert "FACILITATOR ROLE" in tool.description
+
+    def test_tool_description_includes_call_criteria(self):
+        """Tool description includes CALL ONLY WHEN criteria."""
+        from mcp_server.sharpen.tools import TOOL_REGISTRY
+
+        tool = TOOL_REGISTRY["frame_initiative_constraints"]
+        assert "CALL ONLY WHEN" in tool.description
+
+    def test_tool_description_includes_no_constraints_case(self):
+        """Tool description includes NO CONSTRAINTS CLAIMED special case."""
+        from mcp_server.sharpen.tools import TOOL_REGISTRY
+
+        tool = TOOL_REGISTRY["frame_initiative_constraints"]
+        assert "NO CONSTRAINTS CLAIMED" in tool.description
 
     def test_constraints_tool_requires_confirmed_intent(self):
         """frame_initiative_constraints input schema requires confirmed_intent."""

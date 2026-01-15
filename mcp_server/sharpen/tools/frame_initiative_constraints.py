@@ -3,11 +3,8 @@ Frame Initiative Constraints Tool.
 
 Captures the dominant constraint and definition of finished.
 Requires confirmed intent from frame_initiative_intent.
-Rejects empty constraints — forces user to identify MVP.
+Structural validation only — semantic quality is the LLM's job.
 Self-registers at import time.
-
-FACILITATOR ROLE: Ask questions to surface user's real limits.
-Never suggest constraints. Never give advice.
 """
 
 from typing import Optional, Literal
@@ -23,10 +20,32 @@ from ..tool_logic import validate_initiative_constraints
 logger = structlog.get_logger(__name__)
 
 # ============================================================================
-# Tool Metadata
+# Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Capture the dominant constraint and definition of finished for an initiative. Requires confirmed intent. Rejects empty constraints. FACILITATOR ROLE: Ask questions to surface user's real limits. Never suggest constraints. Never give advice."""
+DESCRIPTION = """Records the confirmed CONSTRAINT and DEFINITION OF FINISHED for an initiative.
+
+PURPOSE: This tool locks in the dominant constraint and success criteria before breakdown begins. Without a clear constraint, scope expands endlessly. Without a definition of finished, work is never done.
+
+REQUIRES: Confirmed intent from frame_initiative_intent (pass as confirmed_intent).
+
+CALL ONLY WHEN:
+- User has stated ONE dominant constraint:
+  - time: specific deadline ("by March 15", "within 2 weeks")
+  - capacity: specific availability ("4 hours per week", "2 focused sessions")
+  - budget: specific limit ("under $500", "no external spend")
+  - forced_mvp: smallest result worth continuing (use when user initially claimed no constraints)
+- User has stated a concrete definition of finished (verifiable condition, not "done" or "ready")
+- User has confirmed both
+
+SPECIAL CASE — NO CONSTRAINTS CLAIMED:
+If user says "no constraints", set user_claims_no_constraints=true.
+Then ask: "What is the smallest concrete result that would make this initiative worth continuing?"
+Use their answer as constraint_type="forced_mvp" with their answer as constraint_value.
+
+DO NOT CALL when constraint or definition of finished are vague or unconfirmed. Ask clarifying questions first.
+
+FACILITATOR ROLE: Your job is to surface real limits through questions. Never suggest constraints. Never estimate for the user. Wait for their numbers."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -41,8 +60,6 @@ INPUT_SCHEMA = {
             },
             "required": ["who", "what"],
         },
-        # NOTE: forced_mvp behaves like a normal constraint_type in validation,
-        # but is only set after user_claims_no_constraints forcing loop completes.
         "constraint_type": {
             "type": "string",
             "enum": ["time", "capacity", "budget", "forced_mvp"],
@@ -88,69 +105,32 @@ class FrameConstraintsRequest(BaseModel):
 
 
 # ============================================================================
-# Assistant Guidance Instructions
-# ============================================================================
-
-GUIDANCE_INTENT_MISSING = """Intent framing must be confirmed before capturing constraints. Call frame_initiative_intent first and get user confirmation. Do not assume or infer the intent — the user must state it."""
-
-GUIDANCE_FORCE_CONSTRAINT = """User claims no constraints. Ask: 'What is the smallest concrete result that would make this initiative worth continuing?' Wait for their answer — do not suggest what it might be. Use their answer as the constraint for the next call. Do not accept 'no constraints'. Call this tool again with constraint_type='forced_mvp' and constraint_value set to their answer."""
-
-GUIDANCE_CLARIFY_CONSTRAINT = """Ask ONE question to clarify the constraint. For time: 'By when?' For capacity: 'How many hours or focused sessions per week can you realistically invest?' For budget: 'What's the maximum spend?' Do not suggest values. Do not estimate for them. Wait for their number. Call this tool again with updated value."""
-
-GUIDANCE_CLARIFY_FINISHED = """Ask ONE question to clarify definition of finished. Push for concrete and verifiable: 'How will you know [WHAT] is actually done — what will you see or be able to do?' Do not suggest criteria. Do not give examples. Reflect their vague answer back and ask them to make it concrete. Call this tool again with updated value."""
-
-GUIDANCE_CONFIRM_COMPLETE = """Present complete initiative framing using their exact words: '[WHO] needs [WHAT]. Constraint: [CONSTRAINT_TYPE] — [CONSTRAINT_VALUE]. Finished when: [DEFINITION_OF_FINISHED].' Ask user to confirm. Do not rephrase, improve, or add to their words. Only after confirmation, proceed to Step 2 (deliverable identification). Do not suggest what deliverables might be."""
-
-
-# ============================================================================
 # Tool Handler
 # ============================================================================
 
 
 async def handle(arguments: dict) -> mcp_types.CallToolResult:
-    """
-    Handle frame_initiative_constraints tool call.
-
-    Args:
-        arguments: Raw arguments from ChatGPT
-
-    Returns:
-        CallToolResult with framing constraints and guidance
-    """
+    """Handle frame_initiative_constraints tool call."""
     logger.debug("frame_initiative_constraints.handle.start",
                 argument_keys=list(arguments.keys()))
 
-    # ============================================================
-    # VALIDATION
-    # ============================================================
+    # Pydantic validation
     try:
         validated_request = FrameConstraintsRequest.model_validate(arguments)
-        logger.debug("frame_initiative_constraints.validation_success")
-
     except ValidationError as e:
-        logger.warning("frame_initiative_constraints.validation_failed",
-                      error=str(type(e).__name__),
-                      details=str(e.errors()))
+        logger.warning("frame_initiative_constraints.validation_failed", error=str(e.errors()))
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Invalid input format.",
-            )],
-            structuredContent={
-                "error": "validation_error",
-                "details": e.errors(),
-            },
+            content=[mcp_types.TextContent(type="text", text="Invalid input format.")],
+            structuredContent={"error": "validation_error", "details": e.errors()},
             isError=True,
         )
 
-    # Convert Pydantic model to dict for pure function
+    # Convert to dict for pure function
     confirmed_intent = None
     if validated_request.confirmed_intent:
         confirmed_intent = validated_request.confirmed_intent.model_dump()
 
-    # ============================================================
-    # VALIDATE CONSTRAINTS (call pure function)
-    # ============================================================
+    # Structural validation
     result = validate_initiative_constraints(
         confirmed_intent=confirmed_intent,
         constraint_type=validated_request.constraint_type,
@@ -159,11 +139,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         user_claims_no_constraints=validated_request.user_claims_no_constraints,
     )
 
-    # ============================================================
-    # HANDLE MISSING INTENT (return error)
-    # ============================================================
+    # Handle missing intent
     if result["intent_missing"]:
-        logger.warning("frame_initiative_constraints.intent_missing")
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
@@ -172,71 +149,66 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             structuredContent={
                 "error": "intent_missing",
                 "assistant_guidance": {
-                    "action": "CALL_INTENT_TOOL_FIRST",
-                    "instruction": GUIDANCE_INTENT_MISSING,
+                    "instruction": "Call frame_initiative_intent first and get user confirmation before capturing constraints.",
                 },
             },
             isError=True,
         )
 
-    # ============================================================
-    # BUILD RESPONSE (handler shapes MCP transport layer)
-    # ============================================================
-    logger.info("frame_initiative_constraints.complete",
-                confidence=result["confidence"],
-                force_constraint=result["force_constraint"],
-                needs_clarification=result["needs_clarification"])
-
-    # Determine action and guidance based on result
+    # Handle force constraint (user claimed no constraints)
     if result["force_constraint"]:
-        action = "FORCE_CONSTRAINT"
-        instruction = GUIDANCE_FORCE_CONSTRAINT
-    elif result["needs_clarification"]:
-        if result["clarify_type"] == "CONSTRAINT":
-            action = "ASK_CLARIFYING"
-            instruction = GUIDANCE_CLARIFY_CONSTRAINT
-        else:  # FINISHED
-            action = "ASK_CLARIFYING"
-            instruction = GUIDANCE_CLARIFY_FINISHED
-    else:
-        action = "CONFIRM_FRAMING_COMPLETE"
-        instruction = GUIDANCE_CONFIRM_COMPLETE
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="User claims no constraints. Ask for smallest concrete result worth continuing.",
+            )],
+            structuredContent={
+                "force_constraint": True,
+                "assistant_guidance": {
+                    "instruction": "Ask: 'What is the smallest concrete result that would make this initiative worth continuing?' Wait for their answer — do not suggest. Use their answer as constraint_type='forced_mvp' and constraint_value=their answer. Then call this tool again.",
+                },
+            },
+        )
 
-    # Build structuredContent
-    structured_content = {
-        "initiative_framing": result["initiative_framing"],
-        "confidence": result["confidence"],
-        "needs_clarification": result["needs_clarification"],
-        "assistant_guidance": {
-            "action": action,
-            "instruction": instruction,
-        },
-    }
+    # If structurally invalid (missing fields)
+    if not result["valid"]:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Missing required fields: {', '.join(result['missing'])}",
+            )],
+            structuredContent={
+                "error": "missing_fields",
+                "missing": result["missing"],
+                "initiative_framing": result["initiative_framing"],
+                "assistant_guidance": {
+                    "instruction": "Ask the user to provide the missing information. Do not suggest what it should be. Do not estimate for them.",
+                },
+            },
+            isError=True,
+        )
 
-    # Add clarify object only when needed
-    if result["needs_clarification"] and result["clarify_type"]:
-        structured_content["clarify"] = {
-            "type": result["clarify_type"],
-        }
-
-    # Add force_constraint flag only when true
-    if result["force_constraint"]:
-        structured_content["force_constraint"] = True
-
-    # Build human-readable summary
+    # Valid — return confirmed framing
     framing = result["initiative_framing"]
-    if result["confidence"] == "high":
-        summary = f"Framing complete: {framing['who']} needs {framing['what']}. "
-        summary += f"Constraint: {framing['constraint_type']} — {framing['constraint_value']}. "
-        summary += f"Finished when: {framing['definition_of_finished']}"
-    elif result["force_constraint"]:
-        summary = "User claims no constraints. Ask for smallest concrete result worth continuing."
-    else:
-        summary = f"Clarification needed for {result['clarify_type']}."
+
+    logger.info("frame_initiative_constraints.complete",
+                constraint_type=framing["constraint_type"],
+                definition_of_finished=framing["definition_of_finished"][:50])
 
     return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(type="text", text=summary)],
-        structuredContent=structured_content,
+        content=[mcp_types.TextContent(
+            type="text",
+            text=f"Framing complete: {framing['who']} needs {framing['what']}. "
+                 f"Constraint: {framing['constraint_type']} — {framing['constraint_value']}. "
+                 f"Finished when: {framing['definition_of_finished']}",
+        )],
+        structuredContent={
+            "initiative_framing": framing,
+            "confirmed": True,
+            "assistant_guidance": {
+                "instruction": "Present the complete framing to the user using their exact words. Ask them to confirm. Only after confirmation, proceed to Step 2 (deliverable identification). Do not suggest what deliverables might be.",
+            },
+        },
     )
 
 

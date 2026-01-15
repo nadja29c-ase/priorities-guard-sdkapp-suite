@@ -2,38 +2,10 @@
 Pure business logic for Sharpen tools.
 
 Contains stateless functions that can be tested independently of MCP types.
+Structural validation only — semantic quality is the LLM's job.
 """
 
 from typing import Any
-
-
-# ============================================================================
-# Constants for Vague Word Detection
-# ============================================================================
-
-# Words that indicate vague WHAT (not concrete deliverable)
-VAGUE_WHAT_WORDS = [
-    "improve", "better", "fix", "work on", "handle",
-    "deal with", "address", "enhance", "optimize"
-]
-
-# Verbs that indicate activity-based WHAT (not artifact)
-ACTIVITY_VERBS = [
-    "do", "make", "create", "build", "work", "handle",
-    "deal", "manage", "run", "execute", "perform"
-]
-
-# Words that indicate vague constraint value
-VAGUE_CONSTRAINT_WORDS = [
-    "soon", "flexible", "not sure", "whenever", "no rush",
-    "asap", "when possible", "eventually", "sometime"
-]
-
-# Words that indicate vague definition of finished
-VAGUE_FINISHED_WORDS = [
-    "done", "complete", "finished", "ready", "working",
-    "good", "acceptable", "satisfactory", "ok", "fine"
-]
 
 
 def generate_checklist_markdown(project_name: str, items: list[dict]) -> str:
@@ -97,22 +69,8 @@ def export_checklist(project_name: str, items: list[dict]) -> dict[str, Any]:
 
 
 # ============================================================================
-# Step 1: Initiative Framing Logic
+# Step 1: Initiative Framing Logic (Structural Validation Only)
 # ============================================================================
-
-def _contains_vague_word(text: str, vague_words: list[str]) -> bool:
-    """Check if text contains any vague word (case-insensitive substring match)."""
-    text_lower = text.lower()
-    return any(word.lower() in text_lower for word in vague_words)
-
-
-def _starts_with_activity_verb(text: str) -> bool:
-    """Check if text starts with an activity verb (indicates activity, not artifact)."""
-    text_lower = text.lower().strip()
-    for verb in ACTIVITY_VERBS:
-        if text_lower.startswith(verb + " ") or text_lower == verb:
-            return True
-    return False
 
 
 def validate_initiative_intent(
@@ -121,10 +79,9 @@ def validate_initiative_intent(
     why: str | None = None,
 ) -> dict[str, Any]:
     """
-    Validate WHO and WHAT for initiative intent framing.
+    Validate structure of WHO and WHAT for initiative intent.
 
-    WHY is optional and never affects confidence — it's only used
-    to stress-test WHAT clarity.
+    Structural validation only — semantic quality is LLM's job.
 
     Args:
         who: Who benefits from this work?
@@ -132,62 +89,30 @@ def validate_initiative_intent(
         why: Optional — so that the beneficiary benefits how?
 
     Returns:
-        Pure domain data with confidence and clarification needs
+        framing_intent dict + valid flag
     """
     # Normalize inputs
     who = (who or "").strip()
     what = (what or "").strip()
     why = (why or "").strip() if why else None
 
-    # Build framing intent
-    framing_intent = {
-        "who": who,
-        "what": what,
-        "why": why,
-    }
+    # Structural validation only
+    valid = bool(who) and bool(what)
 
-    # Check WHO validity
-    if not who or len(who) < 3:
-        return {
-            "framing_intent": framing_intent,
-            "confidence": "low",
-            "needs_clarification": True,
-            "clarify_type": "WHO",
-        }
+    missing = []
+    if not who:
+        missing.append("who")
+    if not what:
+        missing.append("what")
 
-    # Check WHAT validity
-    if not what or len(what) < 5:
-        return {
-            "framing_intent": framing_intent,
-            "confidence": "low",
-            "needs_clarification": True,
-            "clarify_type": "WHAT",
-        }
-
-    # Check for vague WHAT
-    if _contains_vague_word(what, VAGUE_WHAT_WORDS):
-        return {
-            "framing_intent": framing_intent,
-            "confidence": "medium",
-            "needs_clarification": True,
-            "clarify_type": "WHAT",
-        }
-
-    # Check for activity-based WHAT
-    if _starts_with_activity_verb(what):
-        return {
-            "framing_intent": framing_intent,
-            "confidence": "medium",
-            "needs_clarification": True,
-            "clarify_type": "WHAT",
-        }
-
-    # All valid — high confidence
     return {
-        "framing_intent": framing_intent,
-        "confidence": "high",
-        "needs_clarification": False,
-        "clarify_type": None,
+        "framing_intent": {
+            "who": who,
+            "what": what,
+            "why": why,
+        },
+        "valid": valid,
+        "missing": missing,
     }
 
 
@@ -199,10 +124,9 @@ def validate_initiative_constraints(
     user_claims_no_constraints: bool = False,
 ) -> dict[str, Any]:
     """
-    Validate constraints and definition of finished for initiative framing.
+    Validate structure of constraints and definition of finished.
 
-    Requires confirmed intent from validate_initiative_intent.
-    Rejects "no constraints" — forces user to identify MVP.
+    Structural validation only — semantic quality is LLM's job.
 
     Args:
         confirmed_intent: Output from frame_initiative_intent (who, what, why)
@@ -212,17 +136,16 @@ def validate_initiative_constraints(
         user_claims_no_constraints: True if user claims no constraints
 
     Returns:
-        Pure domain data with confidence and clarification needs
+        initiative_framing dict + valid flag + force_constraint flag
     """
-    # Validate confirmed_intent exists and has required fields
+    # Validate confirmed_intent exists
     if not confirmed_intent:
         return {
             "initiative_framing": None,
-            "confidence": "low",
-            "needs_clarification": False,
-            "clarify_type": None,
-            "force_constraint": False,
+            "valid": False,
+            "missing": [],
             "intent_missing": True,
+            "force_constraint": False,
         }
 
     who = (confirmed_intent.get("who") or "").strip()
@@ -234,11 +157,10 @@ def validate_initiative_constraints(
     if not who or not what:
         return {
             "initiative_framing": None,
-            "confidence": "low",
-            "needs_clarification": False,
-            "clarify_type": None,
-            "force_constraint": False,
+            "valid": False,
+            "missing": [],
             "intent_missing": True,
+            "force_constraint": False,
         }
 
     # Normalize inputs
@@ -246,7 +168,17 @@ def validate_initiative_constraints(
     constraint_value = (constraint_value or "").strip() or None
     definition_of_finished = (definition_of_finished or "").strip() or None
 
-    # Build initiative framing (merge intent with constraints)
+    # Handle user claiming no constraints — return early, don't build framing
+    if user_claims_no_constraints:
+        return {
+            "initiative_framing": None,
+            "valid": False,
+            "missing": [],
+            "intent_missing": False,
+            "force_constraint": True,
+        }
+
+    # Build initiative framing
     initiative_framing = {
         "who": who,
         "what": what,
@@ -256,77 +188,21 @@ def validate_initiative_constraints(
         "definition_of_finished": definition_of_finished,
     }
 
-    # Handle user claiming no constraints — framing is NOT finalized
-    # This is a blocking clarification loop, not a valid state
-    if user_claims_no_constraints:
-        return {
-            "initiative_framing": None,
-            "confidence": "low",
-            "needs_clarification": False,
-            "clarify_type": None,
-            "force_constraint": True,
-            "intent_missing": False,
-        }
+    # Structural validation
+    valid = bool(constraint_type) and bool(constraint_value) and bool(definition_of_finished)
 
-    # Check constraint_type first — ONE dominant constraint must be identified
+    missing = []
     if not constraint_type:
-        return {
-            "initiative_framing": initiative_framing,
-            "confidence": "low",
-            "needs_clarification": True,
-            "clarify_type": "CONSTRAINT",
-            "force_constraint": False,
-            "intent_missing": False,
-        }
-
-    # Check constraint_value validity (constraint_type is guaranteed to exist)
+        missing.append("constraint_type")
     if not constraint_value:
-        return {
-            "initiative_framing": initiative_framing,
-            "confidence": "low",
-            "needs_clarification": True,
-            "clarify_type": "CONSTRAINT",
-            "force_constraint": False,
-            "intent_missing": False,
-        }
-
-    if constraint_value and _contains_vague_word(constraint_value, VAGUE_CONSTRAINT_WORDS):
-        return {
-            "initiative_framing": initiative_framing,
-            "confidence": "medium",
-            "needs_clarification": True,
-            "clarify_type": "CONSTRAINT",
-            "force_constraint": False,
-            "intent_missing": False,
-        }
-
-    # Check definition_of_finished validity
+        missing.append("constraint_value")
     if not definition_of_finished:
-        return {
-            "initiative_framing": initiative_framing,
-            "confidence": "low",
-            "needs_clarification": True,
-            "clarify_type": "FINISHED",
-            "force_constraint": False,
-            "intent_missing": False,
-        }
+        missing.append("definition_of_finished")
 
-    if _contains_vague_word(definition_of_finished, VAGUE_FINISHED_WORDS):
-        return {
-            "initiative_framing": initiative_framing,
-            "confidence": "medium",
-            "needs_clarification": True,
-            "clarify_type": "FINISHED",
-            "force_constraint": False,
-            "intent_missing": False,
-        }
-
-    # All valid — high confidence
     return {
         "initiative_framing": initiative_framing,
-        "confidence": "high",
-        "needs_clarification": False,
-        "clarify_type": None,
-        "force_constraint": False,
+        "valid": valid,
+        "missing": missing,
         "intent_missing": False,
+        "force_constraint": False,
     }

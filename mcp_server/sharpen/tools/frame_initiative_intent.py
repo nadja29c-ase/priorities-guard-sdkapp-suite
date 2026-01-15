@@ -2,11 +2,8 @@
 Frame Initiative Intent Tool.
 
 Captures WHO benefits and WHAT must exist. WHY is optional.
-Call iteratively until confidence is high.
+Structural validation only — semantic quality is the LLM's job.
 Self-registers at import time.
-
-FACILITATOR ROLE: Ask questions to draw out user's thinking.
-Never suggest what WHO or WHAT should be. Never give advice.
 """
 
 from typing import Optional
@@ -22,10 +19,21 @@ from ..tool_logic import validate_initiative_intent
 logger = structlog.get_logger(__name__)
 
 # ============================================================================
-# Tool Metadata
+# Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Capture the beneficiary and intended outcome of an initiative. Call iteratively until confidence is high. FACILITATOR ROLE: Ask questions to draw out user's thinking. Never suggest what WHO or WHAT should be. Never give advice."""
+DESCRIPTION = """Records the confirmed WHO and WHAT of an initiative after the user has articulated them clearly.
+
+PURPOSE: This tool creates a checkpoint — it locks in the beneficiary and concrete outcome before breakdown begins. Without clear WHO and WHAT, you cannot evaluate what work to eliminate.
+
+CALL ONLY WHEN:
+- User has stated WHO benefits (specific person or group, not "someone", "people", "users")
+- User has stated WHAT must exist (a concrete artifact or deliverable, not an activity like "work on X" or vague like "improve Y")
+- User has confirmed both
+
+DO NOT CALL when WHO or WHAT are still vague, abstract, or unconfirmed. Ask clarifying questions first.
+
+FACILITATOR ROLE: Your job is to draw out clarity through questions. Never suggest what WHO or WHAT should be. Never give examples. Use the user's exact words."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -60,114 +68,68 @@ class FrameIntentRequest(BaseModel):
 
 
 # ============================================================================
-# Assistant Guidance Instructions
-# ============================================================================
-
-GUIDANCE_CLARIFY_WHO = """Ask ONE question to clarify who benefits from this work. Do not suggest who it should be. Do not give examples. Do not ask about constraints or deliverables yet. Your role is to facilitate their thinking, not direct it. Call this tool again with updated components."""
-
-GUIDANCE_CLARIFY_WHAT = """Ask ONE question to clarify what must exist. Focus on artifact/deliverable, not activity. Do not suggest what it should be. Do not offer examples. Do not ask about constraints yet. Reflect their words back and ask them to make it more concrete. Call this tool again with updated components."""
-
-GUIDANCE_CONFIRM = """Present the intent: '[WHO] needs [WHAT]' (include 'so that [WHY]' only if WHY was provided). Ask user to confirm — do not rephrase or improve their words. If confirmed, call frame_initiative_constraints with confirmed_intent. Do not skip to deliverables. Do not offer suggestions for next steps beyond the constraint question."""
-
-
-# ============================================================================
 # Tool Handler
 # ============================================================================
 
 
 async def handle(arguments: dict) -> mcp_types.CallToolResult:
-    """
-    Handle frame_initiative_intent tool call.
-
-    Args:
-        arguments: Raw arguments from ChatGPT
-
-    Returns:
-        CallToolResult with framing intent and guidance
-    """
+    """Handle frame_initiative_intent tool call."""
     logger.debug("frame_initiative_intent.handle.start",
                 argument_keys=list(arguments.keys()))
 
-    # ============================================================
-    # VALIDATION
-    # ============================================================
+    # Pydantic validation
     try:
         validated_request = FrameIntentRequest.model_validate(arguments)
-        logger.debug("frame_initiative_intent.validation_success")
-
     except ValidationError as e:
-        logger.warning("frame_initiative_intent.validation_failed",
-                      error=str(type(e).__name__),
-                      details=str(e.errors()))
+        logger.warning("frame_initiative_intent.validation_failed", error=str(e.errors()))
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Invalid input format.",
-            )],
-            structuredContent={
-                "error": "validation_error",
-                "details": e.errors(),
-            },
+            content=[mcp_types.TextContent(type="text", text="Invalid input format.")],
+            structuredContent={"error": "validation_error", "details": e.errors()},
             isError=True,
         )
 
-    # ============================================================
-    # VALIDATE INTENT (call pure function)
-    # ============================================================
+    # Structural validation only
     result = validate_initiative_intent(
         who=validated_request.who,
         what=validated_request.what,
         why=validated_request.why,
     )
 
-    # ============================================================
-    # BUILD RESPONSE (handler shapes MCP transport layer)
-    # ============================================================
-    logger.info("frame_initiative_intent.complete",
-                confidence=result["confidence"],
-                needs_clarification=result["needs_clarification"])
+    # If structurally invalid, return error
+    if not result["valid"]:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Missing required fields: {', '.join(result['missing'])}",
+            )],
+            structuredContent={
+                "error": "missing_fields",
+                "missing": result["missing"],
+                "assistant_guidance": {
+                    "instruction": "Ask the user to provide the missing information. Do not suggest what it should be.",
+                },
+            },
+            isError=True,
+        )
 
-    # Determine action and guidance based on result
-    if result["needs_clarification"]:
-        if result["clarify_type"] == "WHO":
-            action = "ASK_CLARIFYING"
-            instruction = GUIDANCE_CLARIFY_WHO
-        else:  # WHAT
-            action = "ASK_CLARIFYING"
-            instruction = GUIDANCE_CLARIFY_WHAT
-    else:
-        action = "CONFIRM_AND_PROCEED"
-        instruction = GUIDANCE_CONFIRM
-
-    # Build structuredContent
-    structured_content = {
-        "framing_intent": result["framing_intent"],
-        "confidence": result["confidence"],
-        "needs_clarification": result["needs_clarification"],
-        "assistant_guidance": {
-            "action": action,
-            "instruction": instruction,
-        },
-    }
-
-    # Add clarify object only when needed
-    if result["needs_clarification"] and result["clarify_type"]:
-        structured_content["clarify"] = {
-            "type": result["clarify_type"],
-        }
-
-    # Build human-readable summary
+    # Valid — return confirmed framing
     intent = result["framing_intent"]
-    if result["confidence"] == "high":
-        summary = f"Intent captured: {intent['who']} needs {intent['what']}"
-        if intent.get("why"):
-            summary += f" so that {intent['why']}"
-    else:
-        summary = f"Clarification needed for {result['clarify_type']}."
+
+    logger.info("frame_initiative_intent.complete", who=intent["who"], what=intent["what"])
 
     return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(type="text", text=summary)],
-        structuredContent=structured_content,
+        content=[mcp_types.TextContent(
+            type="text",
+            text=f"Intent confirmed: {intent['who']} needs {intent['what']}" +
+                 (f" so that {intent['why']}" if intent.get("why") else ""),
+        )],
+        structuredContent={
+            "framing_intent": intent,
+            "confirmed": True,
+            "assistant_guidance": {
+                "instruction": "Present the confirmed intent to the user. Then proceed to capture constraints by calling frame_initiative_constraints. Do not suggest what constraints might be — ask the user.",
+            },
+        },
     )
 
 
