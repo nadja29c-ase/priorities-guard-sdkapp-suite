@@ -39,16 +39,6 @@ CRITICAL: Your role is to facilitate and find the answers by asking the user que
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "confirmed_intent": {
-            "type": "object",
-            "description": "Confirmed output from frame_initiative_intent (required)",
-            "properties": {
-                "who": {"type": "string"},
-                "what": {"type": "string"},
-                "why": {"type": "string"},
-            },
-            "required": ["who", "what"],
-        },
         "constraint_type": {
             "type": "string",
             "enum": ["time", "capacity", "budget", "forced_mvp"],
@@ -72,7 +62,7 @@ INPUT_SCHEMA = {
             "description": "Your confidence that CONSTRAINT and DEFINITION OF FINISHED are concrete and user-confirmed. Must be 'high' to proceed.",
         },
     },
-    "required": ["confirmed_intent", "confidence"],
+    "required": ["confidence"],
     "additionalProperties": False,
 }
 
@@ -82,16 +72,8 @@ INPUT_SCHEMA = {
 # ============================================================================
 
 
-class ConfirmedIntent(BaseModel):
-    """Confirmed intent from Tool 1."""
-    who: str
-    what: str
-    why: Optional[str] = None
-
-
 class FrameConstraintsRequest(BaseModel):
     """Expected input structure from ChatGPT."""
-    confirmed_intent: Optional[ConfirmedIntent] = None
     constraint_type: Optional[Literal["time", "capacity", "budget", "forced_mvp"]] = None
     constraint_value: Optional[str] = None
     definition_of_finished: Optional[str] = None
@@ -139,35 +121,13 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Convert to dict for pure function
-    confirmed_intent = None
-    if validated_request.confirmed_intent:
-        confirmed_intent = validated_request.confirmed_intent.model_dump()
-
     # Structural validation
     result = validate_initiative_constraints(
-        confirmed_intent=confirmed_intent,
         constraint_type=validated_request.constraint_type,
         constraint_value=validated_request.constraint_value,
         definition_of_finished=validated_request.definition_of_finished,
         user_claims_no_constraints=validated_request.user_claims_no_constraints,
     )
-
-    # Handle missing intent
-    if result["intent_missing"]:
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Confirmed intent is required. Call frame_initiative_intent first.",
-            )],
-            structuredContent={
-                "error": "intent_missing",
-                "assistant_guidance": {
-                    "instruction": "Call frame_initiative_intent first and get user confirmation before capturing constraints.",
-                },
-            },
-            isError=True,
-        )
 
     # Handle force constraint (user claimed no constraints)
     if result["force_constraint"]:
@@ -194,7 +154,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             structuredContent={
                 "error": "missing_fields",
                 "missing": result["missing"],
-                "initiative_framing": result["initiative_framing"],
+                "constraint_framing": result["constraint_framing"],
                 "assistant_guidance": {
                     "instruction": "Ask the user to provide the missing information. Do not suggest what it should be. Do not estimate for them.",
                 },
@@ -202,8 +162,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Valid — return confirmed framing
-    framing = result["initiative_framing"]
+    # Valid — return confirmed constraint framing
+    framing = result["constraint_framing"]
 
     logger.info("frame_initiative_constraints.complete",
                 constraint_type=framing["constraint_type"],
@@ -213,16 +173,15 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Framing complete: {framing['who']} needs {framing['what']}. "
-                 f"Constraint: {framing['constraint_type']} — {framing['constraint_value']}. "
+            text=f"Constraints confirmed: {framing['constraint_type']} — {framing['constraint_value']}. "
                  f"Finished when: {framing['definition_of_finished']}",
         )],
         structuredContent={
-            "initiative_framing": framing,
+            "constraint_framing": framing,
             "confidence": "high",
             "confirmed": True,
             "assistant_guidance": {
-                "instruction": "Present the complete framing to the user using their exact words. Ask them to confirm. Only after confirmation, proceed to Step 2 (deliverable identification). Do not suggest what deliverables might be.",
+                "instruction": "Consolidate the outputs from frame_initiative_intent (WHO, WHAT, WHY) and frame_initiative_constraints (CONSTRAINT, DEFINITION OF FINISHED). Present the complete initiative framing to the user using their exact words and ask for final confirmation before proceeding.",
             },
         },
     )

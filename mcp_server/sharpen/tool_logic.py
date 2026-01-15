@@ -117,7 +117,6 @@ def validate_initiative_intent(
 
 
 def validate_initiative_constraints(
-    confirmed_intent: dict | None,
     constraint_type: str | None = None,
     constraint_value: str | None = None,
     definition_of_finished: str | None = None,
@@ -129,38 +128,21 @@ def validate_initiative_constraints(
     Structural validation only — semantic quality is LLM's job.
 
     Args:
-        confirmed_intent: Output from frame_initiative_intent (who, what, why)
         constraint_type: time, capacity, budget, or forced_mvp
         constraint_value: The specific constraint in user's words
         definition_of_finished: How will you know WHAT is finished?
         user_claims_no_constraints: True if user claims no constraints
 
     Returns:
-        initiative_framing dict + valid flag + force_constraint flag
+        constraint_framing dict + valid flag + force_constraint flag
     """
-    # Validate confirmed_intent exists
-    if not confirmed_intent:
+    # Handle user claiming no constraints — return early
+    if user_claims_no_constraints:
         return {
-            "initiative_framing": None,
+            "constraint_framing": None,
             "valid": False,
             "missing": [],
-            "intent_missing": True,
-            "force_constraint": False,
-        }
-
-    who = (confirmed_intent.get("who") or "").strip()
-    what = (confirmed_intent.get("what") or "").strip()
-    why = confirmed_intent.get("why")
-    if why:
-        why = why.strip() if why else None
-
-    if not who or not what:
-        return {
-            "initiative_framing": None,
-            "valid": False,
-            "missing": [],
-            "intent_missing": True,
-            "force_constraint": False,
+            "force_constraint": True,
         }
 
     # Normalize inputs
@@ -168,21 +150,8 @@ def validate_initiative_constraints(
     constraint_value = (constraint_value or "").strip() or None
     definition_of_finished = (definition_of_finished or "").strip() or None
 
-    # Handle user claiming no constraints — return early, don't build framing
-    if user_claims_no_constraints:
-        return {
-            "initiative_framing": None,
-            "valid": False,
-            "missing": [],
-            "intent_missing": False,
-            "force_constraint": True,
-        }
-
-    # Build initiative framing
-    initiative_framing = {
-        "who": who,
-        "what": what,
-        "why": why,
+    # Build constraint framing
+    constraint_framing = {
         "constraint_type": constraint_type,
         "constraint_value": constraint_value,
         "definition_of_finished": definition_of_finished,
@@ -200,9 +169,8 @@ def validate_initiative_constraints(
         missing.append("definition_of_finished")
 
     return {
-        "initiative_framing": initiative_framing,
+        "constraint_framing": constraint_framing,
         "valid": valid,
         "missing": missing,
-        "intent_missing": False,
         "force_constraint": False,
     }
