@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed CONSTRAINT and DEFINITION OF FINISHED for an initiative. Without a clear constraint, scope expands endlessly. Without a definition of finished, work is never done. Requires confidence="high".
+DESCRIPTION = """Records confirmed CONSTRAINT and DEFINITION OF FINISHED for an initiative. Without a clear constraint, scope expands endlessly. Without a definition of finished, work is never done. So this is an additional filter to maximize work not done later. Requires confidence="high".
 
 CONFIDENCE EXAMPLES:
   HIGH: constraint_type="time" constraint_value="by March 15" definition_of_finished="Dashboard deployed and accessible to team". These are user confirmed.
