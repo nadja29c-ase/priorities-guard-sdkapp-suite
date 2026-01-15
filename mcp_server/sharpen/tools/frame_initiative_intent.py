@@ -154,7 +154,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             "confidence": "high",
             "confirmed": True,
             "assistant_guidance": {
-                "instruction": "Present the confirmed intent to the user. Then proceed to capture constraints by calling frame_initiative_constraints. Do not suggest what constraints might be — ask the user.",
+                "instruction": "Proceed with further framing the initiative and capture the one most dominant initiative constraint by calling frame_initiative_constraints. NEVER suggest what constraints might be — ask the user.",
             },
         },
     )
