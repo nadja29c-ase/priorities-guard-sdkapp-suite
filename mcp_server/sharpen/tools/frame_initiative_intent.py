@@ -32,7 +32,7 @@ CONFIDENCE EXAMPLES:
 
 Backend rejects confidence="low" or "medium". Only call when WHO is specific (not "users"/"people") and WHAT is a concrete artifact (not an activity like "work on X").
 
-CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how to frame the initiative correctly."""
+CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how to frame the initiative correctly. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next."""
 
 INPUT_SCHEMA = {
     "type": "object",

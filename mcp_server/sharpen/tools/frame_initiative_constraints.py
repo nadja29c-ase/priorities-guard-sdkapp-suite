@@ -34,7 +34,7 @@ Backend rejects confidence="low" or "medium". Only call when CONSTRAINT is speci
 
 If user claims "no constraints", set user_claims_no_constraints=true — backend will guide next steps.
 
-CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest constraints. NEVER estimate for the user. Wait for their numbers."""
+CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest constraints. NEVER estimate for the user. Wait for their numbers. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next."""
 
 INPUT_SCHEMA = {
     "type": "object",
