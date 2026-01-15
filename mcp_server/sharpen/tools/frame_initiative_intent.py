@@ -39,15 +39,15 @@ INPUT_SCHEMA = {
     "properties": {
         "who": {
             "type": "string",
-            "description": "WHO is supposed to benefit from this work getting done first and foremost?",
+            "description": "WHO is supposed to benefit from this work getting done first and foremost? ACCORDING TO THE USER.",
         },
         "what": {
             "type": "string",
-            "description": "WHAT artifact, deliverable, or handoff must exist when this initiative is finished? (concrete output=not activity)",
+            "description": "WHAT artifact, deliverable, or handoff must exist when this initiative is finished? (concrete output=not activity) ACCORDING TO THE USER.",
         },
         "why": {
             "type": "string",
-            "description": "Optional: So that the beneficiary benefits in what specific way? Used to find the value of the output (WHAT), this creates the outcome-focus.",
+            "description": "Optional: So that the beneficiary benefits in what specific way? ACCORDING TO THE USER. Used to find the value of the output (WHAT), this creates the outcome-focus.",
         },
         "confidence": {
             "type": "string",
