@@ -22,37 +22,37 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed WHO and WHAT of an initiative. Requires confidence="high".
+DESCRIPTION = """Records confirmed WHO and WHAT of an initiative. This help frame the initiative as outcome-focused so that later the amount of work can be minimized based on outcome. Requires confidence="high".
 
 CONFIDENCE EXAMPLES:
-  HIGH: who="The sales team" what="A CRM integration that syncs contacts daily"
-  LOW:  who="users" what="improve the onboarding experience"
-  HIGH: who="My team lead" what="A deployment runbook with rollback steps"
+  HIGH: who="The sales team" what="A CRM integration that syncs contacts daily". These are user confirmed.
+  LOW:  who="users" what="improve the onboarding experience". 
+  HIGH: who="My team lead" what="A deployment runbook with rollback steps". These are user confirmed.
   LOW:  who="stakeholders" what="work on the infrastructure"
 
 Backend rejects confidence="low" or "medium". Only call when WHO is specific (not "users"/"people") and WHAT is a concrete artifact (not an activity like "work on X").
 
-FACILITATOR ROLE: Draw out clarity through questions. Never suggest WHO or WHAT. Use user's exact words."""
+CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how to frame the initiative correctly."""
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "who": {
             "type": "string",
-            "description": "Who is supposed to benefit from this work getting done first and foremost?",
+            "description": "WHO is supposed to benefit from this work getting done first and foremost?",
         },
         "what": {
             "type": "string",
-            "description": "What artifact, deliverable, or handoff must exist?",
+            "description": "WHAT artifact, deliverable, or handoff must exist when this initiative is finished? (concrete output=not activity)",
         },
         "why": {
             "type": "string",
-            "description": "Optional: So that the beneficiary benefits in what specific way? Used to test clarity of WHAT, not required.",
+            "description": "Optional: So that the beneficiary benefits in what specific way? Used to find the value of the output (WHAT), this creates the outcome-focus.",
         },
         "confidence": {
             "type": "string",
             "enum": ["high", "medium", "low"],
-            "description": "Your confidence that WHO and WHAT are specific, concrete, and user-confirmed. Must be 'high' to proceed.",
+            "description": "Your confidence that WHO and WHAT are concrete and user-confirmed. Must be 'high' to proceed.",
         },
     },
     "required": ["who", "what", "confidence"],

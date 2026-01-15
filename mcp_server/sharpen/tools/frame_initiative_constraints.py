@@ -32,7 +32,7 @@ CONFIDENCE EXAMPLES:
 
 Backend rejects confidence="low" or "medium". Only call when CONSTRAINT is specific (not "soon"/"flexible") and DEFINITION OF FINISHED is verifiable (not "done"/"ready").
 
-SPECIAL CASE — NO CONSTRAINTS: If user says "no constraints", set user_claims_no_constraints=true. Then ask for the smallest result worth continuing. Use their answer as constraint_type="forced_mvp".
+If user claims "no constraints", set user_claims_no_constraints=true — backend will guide next steps.
 
 CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest constraints. NEVER estimate for the user. Wait for their numbers."""
 

@@ -453,11 +453,11 @@ class TestToolRegistration:
         assert "CONFIDENCE EXAMPLES" in tool.description
 
     def test_tool_description_includes_no_constraints_case(self):
-        """Tool description includes NO CONSTRAINTS special case."""
+        """Tool description mentions user_claims_no_constraints."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_constraints"]
-        assert "NO CONSTRAINTS" in tool.description
+        assert "user_claims_no_constraints" in tool.description
 
     def test_constraints_tool_requires_confirmed_intent(self):
         """frame_initiative_constraints input schema requires confirmed_intent."""
