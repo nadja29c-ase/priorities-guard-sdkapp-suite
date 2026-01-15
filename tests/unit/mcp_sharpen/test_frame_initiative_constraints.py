@@ -193,12 +193,13 @@ class TestFrameInitiativeConstraintsHandler:
 
     @pytest.mark.asyncio
     async def test_valid_input_returns_confirmed_true(self):
-        """Valid input returns confirmed=True."""
+        """Valid input with high confidence returns confirmed=True."""
         arguments = {
             "confirmed_intent": {"who": "My team", "what": "A dashboard"},
             "constraint_type": "time",
             "constraint_value": "by end of Q1",
             "definition_of_finished": "Dashboard deployed and team trained",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -214,6 +215,7 @@ class TestFrameInitiativeConstraintsHandler:
             "constraint_type": "capacity",
             "constraint_value": "4 hours per week",
             "definition_of_finished": "Dashboard shows key metrics",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -224,16 +226,50 @@ class TestFrameInitiativeConstraintsHandler:
         assert framing["constraint_type"] == "capacity"
 
     @pytest.mark.asyncio
-    async def test_force_constraint_returns_force_constraint_true(self):
-        """user_claims_no_constraints returns force_constraint=True, no error."""
+    async def test_low_confidence_rejected(self):
+        """Low confidence is rejected with error."""
         arguments = {
             "confirmed_intent": {"who": "My team", "what": "A dashboard"},
-            "user_claims_no_constraints": True,
+            "constraint_type": "time",
+            "constraint_value": "by Friday",
+            "definition_of_finished": "Dashboard live",
+            "confidence": "low",
         }
 
         result = await handle(arguments)
 
-        assert result.isError is not True  # Not an error, just needs clarification
+        assert result.isError is True
+        assert result.structuredContent["error"] == "confidence_too_low"
+        assert result.structuredContent["confidence_provided"] == "low"
+
+    @pytest.mark.asyncio
+    async def test_medium_confidence_rejected(self):
+        """Medium confidence is rejected with error."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "time",
+            "constraint_value": "by Friday",
+            "definition_of_finished": "Dashboard live",
+            "confidence": "medium",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "confidence_too_low"
+
+    @pytest.mark.asyncio
+    async def test_force_constraint_bypasses_confidence_check(self):
+        """user_claims_no_constraints bypasses confidence check."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "user_claims_no_constraints": True,
+            "confidence": "low",  # Even with low confidence, force_constraint works
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is not True
         assert result.structuredContent["force_constraint"] is True
 
     @pytest.mark.asyncio
@@ -242,6 +278,7 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by Friday",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -257,6 +294,7 @@ class TestFrameInitiativeConstraintsHandler:
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "definition_of_finished": "Done",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -272,6 +310,7 @@ class TestFrameInitiativeConstraintsHandler:
             "constraint_type": "time",
             "constraint_value": "",
             "definition_of_finished": "Done",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -288,6 +327,7 @@ class TestFrameInitiativeConstraintsHandler:
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "definition_of_finished": "",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -304,6 +344,7 @@ class TestFrameInitiativeConstraintsHandler:
             "constraint_type": "time",
             "constraint_value": "by end of Q1",
             "definition_of_finished": "Dashboard deployed",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -332,6 +373,7 @@ class TestFrameInitiativeConstraintsHandler:
             "confirmed_intent": {"who": "My team", "what": "A dashboard"},
             "constraint_type": "time",
             "constraint_value": "",
+            "confidence": "high",
             "definition_of_finished": "",
         }
 
@@ -348,6 +390,7 @@ class TestFrameInitiativeConstraintsHandler:
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "definition_of_finished": "Dashboard live",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -355,6 +398,21 @@ class TestFrameInitiativeConstraintsHandler:
         assert len(result.content) == 1
         assert "Framing complete" in result.content[0].text
         assert "My team" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_high_confidence_in_response(self):
+        """High confidence is included in response structuredContent."""
+        arguments = {
+            "confirmed_intent": {"who": "My team", "what": "A dashboard"},
+            "constraint_type": "time",
+            "constraint_value": "by Friday",
+            "definition_of_finished": "Dashboard live",
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.structuredContent["confidence"] == "high"
 
 
 # ============================================================================
@@ -380,26 +438,26 @@ class TestToolRegistration:
         assert tool.destructive_hint is False
         assert tool.open_world_hint is False
 
-    def test_tool_description_includes_facilitator_role(self):
-        """Tool description includes FACILITATOR ROLE guidance."""
+    def test_tool_description_includes_critical_role(self):
+        """Tool description includes CRITICAL role guidance."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_constraints"]
-        assert "FACILITATOR ROLE" in tool.description
+        assert "CRITICAL" in tool.description
 
-    def test_tool_description_includes_call_criteria(self):
-        """Tool description includes CALL ONLY WHEN criteria."""
+    def test_tool_description_includes_confidence_examples(self):
+        """Tool description includes CONFIDENCE EXAMPLES."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_constraints"]
-        assert "CALL ONLY WHEN" in tool.description
+        assert "CONFIDENCE EXAMPLES" in tool.description
 
     def test_tool_description_includes_no_constraints_case(self):
-        """Tool description includes NO CONSTRAINTS CLAIMED special case."""
+        """Tool description includes NO CONSTRAINTS special case."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_constraints"]
-        assert "NO CONSTRAINTS CLAIMED" in tool.description
+        assert "NO CONSTRAINTS" in tool.description
 
     def test_constraints_tool_requires_confirmed_intent(self):
         """frame_initiative_constraints input schema requires confirmed_intent."""

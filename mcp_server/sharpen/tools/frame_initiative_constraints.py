@@ -3,7 +3,6 @@ Frame Initiative Constraints Tool.
 
 Captures the dominant constraint and definition of finished.
 Requires confirmed intent from frame_initiative_intent.
-Structural validation only — semantic quality is the LLM's job.
 Self-registers at import time.
 """
 
@@ -23,29 +22,19 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records the confirmed CONSTRAINT and DEFINITION OF FINISHED for an initiative.
+DESCRIPTION = """Records confirmed CONSTRAINT and DEFINITION OF FINISHED for an initiative. Without a clear constraint, scope expands endlessly. Without a definition of finished, work is never done. Requires confidence="high".
 
-PURPOSE: This tool locks in the dominant constraint and success criteria before breakdown begins. Without a clear constraint, scope expands endlessly. Without a definition of finished, work is never done.
+CONFIDENCE EXAMPLES:
+  HIGH: constraint_type="time" constraint_value="by March 15" definition_of_finished="Dashboard deployed and accessible to team". These are user confirmed.
+  LOW:  constraint_type="time" constraint_value="soon" definition_of_finished="when it's done"
+  HIGH: constraint_type="capacity" constraint_value="4 hours per week" definition_of_finished="API returns valid responses for all endpoints". These are user confirmed.
+  LOW:  constraint_type="budget" constraint_value="flexible" definition_of_finished="ready to use"
 
-REQUIRES: Confirmed intent from frame_initiative_intent (pass as confirmed_intent).
+Backend rejects confidence="low" or "medium". Only call when CONSTRAINT is specific (not "soon"/"flexible") and DEFINITION OF FINISHED is verifiable (not "done"/"ready").
 
-CALL ONLY WHEN:
-- User has stated ONE dominant constraint:
-  - time: specific deadline ("by March 15", "within 2 weeks")
-  - capacity: specific availability ("4 hours per week", "2 focused sessions")
-  - budget: specific limit ("under $500", "no external spend")
-  - forced_mvp: smallest result worth continuing (use when user initially claimed no constraints)
-- User has stated a concrete definition of finished (verifiable condition, not "done" or "ready")
-- User has confirmed both
+SPECIAL CASE — NO CONSTRAINTS: If user says "no constraints", set user_claims_no_constraints=true. Then ask for the smallest result worth continuing. Use their answer as constraint_type="forced_mvp".
 
-SPECIAL CASE — NO CONSTRAINTS CLAIMED:
-If user says "no constraints", set user_claims_no_constraints=true.
-Then ask: "What is the smallest concrete result that would make this initiative worth continuing?"
-Use their answer as constraint_type="forced_mvp" with their answer as constraint_value.
-
-DO NOT CALL when constraint or definition of finished are vague or unconfirmed. Ask clarifying questions first.
-
-FACILITATOR ROLE: Your job is to surface real limits through questions. Never suggest constraints. Never estimate for the user. Wait for their numbers."""
+CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest constraints. NEVER estimate for the user. Wait for their numbers."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -63,22 +52,27 @@ INPUT_SCHEMA = {
         "constraint_type": {
             "type": "string",
             "enum": ["time", "capacity", "budget", "forced_mvp"],
-            "description": "Which constraint dominates: time (deadline), capacity (hours or focused sessions per week available), budget, or forced_mvp (smallest result worth continuing, used after user claimed no constraints).",
+            "description": "Which ONE constraint dominates: time (deadline), capacity (hours/sessions per week), budget, or forced_mvp (smallest result worth continuing).",
         },
         "constraint_value": {
             "type": "string",
-            "description": "The specific constraint in the user's own words.",
+            "description": "The specific constraint in the user's own words (concrete, not vague like 'soon' or 'flexible').",
         },
         "definition_of_finished": {
             "type": "string",
-            "description": "How will you know the WHAT is finished? Concrete, verifiable condition.",
+            "description": "How will you know the WHAT is finished? Concrete, verifiable condition (not 'done' or 'ready').",
         },
         "user_claims_no_constraints": {
             "type": "boolean",
-            "description": "Set true if user explicitly claims no constraints exist. Triggers forcing logic.",
+            "description": "Set true if user explicitly claims no constraints exist. Triggers forced_mvp flow.",
+        },
+        "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Your confidence that CONSTRAINT and DEFINITION OF FINISHED are concrete and user-confirmed. Must be 'high' to proceed.",
         },
     },
-    "required": ["confirmed_intent"],
+    "required": ["confirmed_intent", "confidence"],
     "additionalProperties": False,
 }
 
@@ -102,6 +96,7 @@ class FrameConstraintsRequest(BaseModel):
     constraint_value: Optional[str] = None
     definition_of_finished: Optional[str] = None
     user_claims_no_constraints: bool = False
+    confidence: Optional[Literal["high", "medium", "low"]] = None
 
 
 # ============================================================================
@@ -122,6 +117,25 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(type="text", text="Invalid input format.")],
             structuredContent={"error": "validation_error", "details": e.errors()},
+            isError=True,
+        )
+
+    # Reject low/medium confidence (except for user_claims_no_constraints flow)
+    if not validated_request.user_claims_no_constraints and validated_request.confidence != "high":
+        logger.info("frame_initiative_constraints.confidence_rejected",
+                   confidence=validated_request.confidence)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Confidence '{validated_request.confidence}' rejected. Only 'high' accepted.",
+            )],
+            structuredContent={
+                "error": "confidence_too_low",
+                "confidence_provided": validated_request.confidence,
+                "assistant_guidance": {
+                    "instruction": "Ask clarifying questions until CONSTRAINT is specific and DEFINITION OF FINISHED is verifiable. Get user confirmation, then call with confidence='high'.",
+                },
+            },
             isError=True,
         )
 
@@ -165,7 +179,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             structuredContent={
                 "force_constraint": True,
                 "assistant_guidance": {
-                    "instruction": "Ask: 'What is the smallest concrete result that would make this initiative worth continuing?' Wait for their answer — do not suggest. Use their answer as constraint_type='forced_mvp' and constraint_value=their answer. Then call this tool again.",
+                    "instruction": "Ask: 'What is the smallest concrete result that would make this initiative worth continuing?' Wait for their answer — do not suggest. Use their answer as constraint_type='forced_mvp' and constraint_value=their answer. Then call this tool again with confidence='high'.",
                 },
             },
         )
@@ -193,7 +207,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     logger.info("frame_initiative_constraints.complete",
                 constraint_type=framing["constraint_type"],
-                definition_of_finished=framing["definition_of_finished"][:50])
+                definition_of_finished=framing["definition_of_finished"][:50],
+                confidence="high")
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
@@ -204,6 +219,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         )],
         structuredContent={
             "initiative_framing": framing,
+            "confidence": "high",
             "confirmed": True,
             "assistant_guidance": {
                 "instruction": "Present the complete framing to the user using their exact words. Ask them to confirm. Only after confirmation, proceed to Step 2 (deliverable identification). Do not suggest what deliverables might be.",
