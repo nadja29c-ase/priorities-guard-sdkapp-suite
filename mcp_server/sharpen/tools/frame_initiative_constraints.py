@@ -43,7 +43,16 @@ END STATE: User commits to 7 days of focused work with maximum work eliminated b
 THIS TOOL IS STEP 1. 
 Stay in framing and your FACILITATOR ROLE until WHO, WHAT, CONSTRAINT, and FINISHED are formulated by the user..
 
-CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER pass your own constraints - ONLY user's or user confirmed. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next."""
+CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER pass your own constraints - ONLY user's or user confirmed. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next.
+
+EXAMPLE CONVERSATION:
+  You: "What's the one constraint that limits this initiative most — a deadline, limited hours per week, or a budget cap?"
+  User: "I only have about 3 hours a week to work on this"
+  You: "3 hours per week — got it. How will you know the checklist is truly finished?"
+  User: "When a new hire has used it and said it was helpful"
+  You: "So it's finished when at least one new hire has used the checklist and confirmed it was helpful. Is that right?"
+  User: "Yes"
+  → Now call frame_initiative_constraints with constraint_type="capacity", constraint_value="3 hours per week", definition_of_finished="At least one new hire has used the checklist and confirmed it was helpful", confidence="high"."""
 
 INPUT_SCHEMA = {
     "type": "object",

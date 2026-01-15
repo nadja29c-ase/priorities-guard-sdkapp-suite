@@ -41,7 +41,17 @@ END STATE: User commits to 7 days of focused work with maximum work eliminated b
 THIS TOOL IS STEP 1. 
 Stay in framing and your FACILITATOR ROLE until WHO, WHAT, CONSTRAINT, and FINISHED are formulated by the user..
 
-CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how to frame the initiative correctly. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next."""
+CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how to frame the initiative correctly. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next.
+
+EXAMPLE CONVERSATION:
+  User: "I want to improve our onboarding"
+  You: "Who specifically will benefit most from this improved onboarding?"
+  User: "New engineering hires"
+  You: "Got it — new engineering hires. When onboarding is improved, what concrete thing will exist that doesn't exist today?"
+  User: "A checklist they can follow in their first week"
+  You: "So new engineering hires need a first-week checklist. Is that correct?"
+  User: "Yes"
+  → Now call frame_initiative_intent with who="New engineering hires", what="A first-week onboarding checklist", confidence="high"."""
 
 INPUT_SCHEMA = {
     "type": "object",
