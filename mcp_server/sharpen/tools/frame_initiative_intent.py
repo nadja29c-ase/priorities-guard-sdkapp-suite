@@ -107,7 +107,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "error": "confidence_too_low",
                 "confidence_provided": validated_request.confidence,
                 "assistant_guidance": {
-                    "instruction": "Ask clarifying questions until WHO is specific and WHAT is a concrete artifact. Get user confirmation, then call with confidence='high'.",
+                    "instruction": "STAY IN YOUR FACILITATOR ROLE and ask the user clarifying questions until WHO is specific and WHAT is a concrete artifact. Get user confirmation, then call with confidence='high'.",
                 },
             },
             isError=True,
