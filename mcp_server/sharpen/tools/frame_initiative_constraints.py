@@ -30,11 +30,11 @@ CONFIDENCE EXAMPLES:
   HIGH: constraint_type="capacity" constraint_value="4 hours per week" definition_of_finished="API returns valid responses for all endpoints". These are user confirmed.
   LOW:  constraint_type="budget" constraint_value="flexible" definition_of_finished="ready to use"
 
-Backend rejects confidence="low" or "medium". Only call when CONSTRAINT is specific (not "soon"/"flexible") and DEFINITION OF FINISHED is verifiable (not "done"/"ready").
+Backend rejects confidence="low" or "medium". Only call when confidence is high.
 
 If user claims "no constraints", set user_claims_no_constraints=true — backend will guide next steps.
 
-CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest constraints. NEVER estimate for the user. Wait for their numbers. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next."""
+CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER pass your own constraints - ONLY user's or user confirmed. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -42,7 +42,7 @@ INPUT_SCHEMA = {
         "constraint_type": {
             "type": "string",
             "enum": ["time", "capacity", "budget", "forced_mvp"],
-            "description": "Which ONE constraint dominates: time (deadline), capacity (hours/sessions per week), budget, or forced_mvp (smallest result worth continuing).",
+            "description": "Which ONE constraint dominates: time (deadline), capacity (hours/sessions per week), budget, or forced_mvp (smallest result worth continuing). ACCORDING TO THE USER.",
         },
         "constraint_value": {
             "type": "string",
@@ -50,11 +50,11 @@ INPUT_SCHEMA = {
         },
         "definition_of_finished": {
             "type": "string",
-            "description": "How will you know the WHAT is finished? Concrete, verifiable condition (not 'done' or 'ready').",
+            "description": "How will you know the WHAT is finished? Concrete, verifiable condition (not 'done' or 'ready'). ACCORDING TO THE USER.",
         },
         "user_claims_no_constraints": {
             "type": "boolean",
-            "description": "Set true if user explicitly claims no constraints exist. Triggers forced_mvp flow.",
+            "description": "Set true if user explicitly claims no constraints exist. Triggers forced_mvp flow to help the user define a minimal viable product.",
         },
         "confidence": {
             "type": "string",
