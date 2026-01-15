@@ -146,10 +146,11 @@ class TestFrameInitiativeIntentHandler:
 
     @pytest.mark.asyncio
     async def test_valid_input_returns_confirmed_true(self):
-        """Valid input returns confirmed=True."""
+        """Valid input with high confidence returns confirmed=True."""
         arguments = {
             "who": "My team",
             "what": "A project dashboard",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -164,6 +165,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -173,11 +175,55 @@ class TestFrameInitiativeIntentHandler:
         assert result.structuredContent["framing_intent"]["what"] == "A dashboard"
 
     @pytest.mark.asyncio
+    async def test_low_confidence_rejected(self):
+        """Low confidence is rejected with error."""
+        arguments = {
+            "who": "My team",
+            "what": "A dashboard",
+            "confidence": "low",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "confidence_too_low"
+        assert result.structuredContent["confidence_provided"] == "low"
+
+    @pytest.mark.asyncio
+    async def test_medium_confidence_rejected(self):
+        """Medium confidence is rejected with error."""
+        arguments = {
+            "who": "My team",
+            "what": "A dashboard",
+            "confidence": "medium",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "confidence_too_low"
+        assert result.structuredContent["confidence_provided"] == "medium"
+
+    @pytest.mark.asyncio
+    async def test_missing_confidence_rejected(self):
+        """Missing confidence is rejected with error."""
+        arguments = {
+            "who": "My team",
+            "what": "A dashboard",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "confidence_too_low"
+
+    @pytest.mark.asyncio
     async def test_missing_who_returns_error(self):
         """Missing WHO returns isError=True with missing fields."""
         arguments = {
             "who": "",
             "what": "A dashboard",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -192,6 +238,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -201,22 +248,12 @@ class TestFrameInitiativeIntentHandler:
         assert "what" in result.structuredContent["missing"]
 
     @pytest.mark.asyncio
-    async def test_empty_arguments_returns_error(self):
-        """Empty arguments returns isError=True with both missing."""
-        arguments = {}
-
-        result = await handle(arguments)
-
-        assert result.isError is True
-        assert "who" in result.structuredContent["missing"]
-        assert "what" in result.structuredContent["missing"]
-
-    @pytest.mark.asyncio
     async def test_guidance_instruction_present(self):
         """assistant_guidance with instruction is always present."""
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -227,7 +264,7 @@ class TestFrameInitiativeIntentHandler:
     @pytest.mark.asyncio
     async def test_guidance_instruction_for_missing_fields(self):
         """Guidance instruction for missing fields enforces facilitator role."""
-        arguments = {"who": "", "what": "A dashboard"}
+        arguments = {"who": "", "what": "A dashboard", "confidence": "high"}
 
         result = await handle(arguments)
 
@@ -240,6 +277,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -254,6 +292,7 @@ class TestFrameInitiativeIntentHandler:
             "who": "My team",
             "what": "A dashboard",
             "why": "to track progress",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -266,6 +305,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -274,6 +314,19 @@ class TestFrameInitiativeIntentHandler:
         assert "Intent confirmed" in result.content[0].text
         assert "My team" in result.content[0].text
         assert "A dashboard" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_high_confidence_in_response(self):
+        """High confidence is included in response structuredContent."""
+        arguments = {
+            "who": "My team",
+            "what": "A dashboard",
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.structuredContent["confidence"] == "high"
 
 
 # ============================================================================
@@ -306,9 +359,9 @@ class TestToolRegistration:
         tool = TOOL_REGISTRY["frame_initiative_intent"]
         assert "FACILITATOR ROLE" in tool.description
 
-    def test_tool_description_includes_call_criteria(self):
-        """Tool description includes CALL ONLY WHEN criteria."""
+    def test_tool_description_includes_confidence_examples(self):
+        """Tool description includes CONFIDENCE EXAMPLES."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_intent"]
-        assert "CALL ONLY WHEN" in tool.description
+        assert "CONFIDENCE EXAMPLES" in tool.description

@@ -6,7 +6,7 @@ Structural validation only — semantic quality is the LLM's job.
 Self-registers at import time.
 """
 
-from typing import Optional
+from typing import Optional, Literal
 
 import structlog
 from mcp import types as mcp_types
@@ -22,18 +22,17 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records the confirmed WHO and WHAT of an initiative after the user has articulated them clearly.
+DESCRIPTION = """Records confirmed WHO and WHAT of an initiative. Requires confidence="high".
 
-PURPOSE: This tool creates a checkpoint — it locks in the beneficiary and concrete outcome before breakdown begins. Without clear WHO and WHAT, you cannot evaluate what work to eliminate.
+CONFIDENCE EXAMPLES:
+  HIGH: who="The sales team" what="A CRM integration that syncs contacts daily"
+  LOW:  who="users" what="improve the onboarding experience"
+  HIGH: who="My team lead" what="A deployment runbook with rollback steps"
+  LOW:  who="stakeholders" what="work on the infrastructure"
 
-CALL ONLY WHEN:
-- User has stated WHO benefits (specific person or group, not "someone", "people", "users")
-- User has stated WHAT must exist (a concrete artifact or deliverable, not an activity like "work on X" or vague like "improve Y")
-- User has confirmed both
+Backend rejects confidence="low" or "medium". Only call when WHO is specific (not "users"/"people") and WHAT is a concrete artifact (not an activity like "work on X").
 
-DO NOT CALL when WHO or WHAT are still vague, abstract, or unconfirmed. Ask clarifying questions first.
-
-FACILITATOR ROLE: Your job is to draw out clarity through questions. Never suggest what WHO or WHAT should be. Never give examples. Use the user's exact words."""
+FACILITATOR ROLE: Draw out clarity through questions. Never suggest WHO or WHAT. Use user's exact words."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -50,7 +49,13 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "Optional: So that the beneficiary benefits in what specific way? Used to test clarity of WHAT, not required.",
         },
+        "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "Your confidence that WHO and WHAT are specific, concrete, and user-confirmed. Must be 'high' to proceed.",
+        },
     },
+    "required": ["who", "what", "confidence"],
     "additionalProperties": False,
 }
 
@@ -65,6 +70,7 @@ class FrameIntentRequest(BaseModel):
     who: Optional[str] = None
     what: Optional[str] = None
     why: Optional[str] = None
+    confidence: Optional[Literal["high", "medium", "low"]] = None
 
 
 # ============================================================================
@@ -88,7 +94,26 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Structural validation only
+    # Reject low/medium confidence
+    if validated_request.confidence != "high":
+        logger.info("frame_initiative_intent.confidence_rejected",
+                   confidence=validated_request.confidence)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Confidence '{validated_request.confidence}' rejected. Only 'high' accepted.",
+            )],
+            structuredContent={
+                "error": "confidence_too_low",
+                "confidence_provided": validated_request.confidence,
+                "assistant_guidance": {
+                    "instruction": "Ask clarifying questions until WHO is specific and WHAT is a concrete artifact. Get user confirmation, then call with confidence='high'.",
+                },
+            },
+            isError=True,
+        )
+
+    # Structural validation
     result = validate_initiative_intent(
         who=validated_request.who,
         what=validated_request.what,
@@ -115,7 +140,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Valid — return confirmed framing
     intent = result["framing_intent"]
 
-    logger.info("frame_initiative_intent.complete", who=intent["who"], what=intent["what"])
+    logger.info("frame_initiative_intent.complete",
+               who=intent["who"], what=intent["what"], confidence="high")
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
@@ -125,6 +151,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         )],
         structuredContent={
             "framing_intent": intent,
+            "confidence": "high",
             "confirmed": True,
             "assistant_guidance": {
                 "instruction": "Present the confirmed intent to the user. Then proceed to capture constraints by calling frame_initiative_constraints. Do not suggest what constraints might be — ask the user.",
