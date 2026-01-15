@@ -33,3 +33,4 @@ class ToolDefinition:
     read_only_hint: bool = False  # Export tools produce artifacts
     destructive_hint: bool = False  # Doesn't modify/delete existing data
     open_world_hint: bool = False  # No external API calls
+    hidden: bool = False  # Hidden tools are not listed but can still be called

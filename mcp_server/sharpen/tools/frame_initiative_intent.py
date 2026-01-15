@@ -27,8 +27,6 @@ DESCRIPTION = """Records confirmed WHO and WHAT of an initiative. This help fram
 CONFIDENCE EXAMPLES:
   HIGH: who="The sales team" what="A CRM integration that syncs contacts daily". These are user confirmed.
   LOW:  who="users" what="improve the onboarding experience". 
-  HIGH: who="My team lead" what="A deployment runbook with rollback steps". These are user confirmed.
-  LOW:  who="stakeholders" what="work on the infrastructure"
 
 CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how to frame the initiative correctly. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next.
 

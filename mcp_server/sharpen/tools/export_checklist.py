@@ -166,4 +166,5 @@ register_tool(ToolDefinition(
     read_only_hint=False,  # Produces artifact for user (not read-only)
     destructive_hint=False,  # Doesn't modify/delete existing data
     open_world_hint=False,  # No external API calls
+    hidden=True,  # Hide from LLM to prevent premature planning bias
 ))

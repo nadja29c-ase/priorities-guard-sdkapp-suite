@@ -364,12 +364,12 @@ class TestToolRegistration:
         assert tool.destructive_hint is False
         assert tool.open_world_hint is False
 
-    def test_tool_description_includes_critical_role(self):
-        """Tool description includes CRITICAL role guidance."""
+    def test_tool_description_includes_example_conversation(self):
+        """Tool description includes EXAMPLE CONVERSATION."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_constraints"]
-        assert "CRITICAL" in tool.description
+        assert "EXAMPLE CONVERSATION" in tool.description
 
     def test_tool_description_includes_confidence_examples(self):
         """Tool description includes CONFIDENCE EXAMPLES."""

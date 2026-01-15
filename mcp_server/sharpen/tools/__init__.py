@@ -42,8 +42,9 @@ async def list_tools() -> List[mcp_types.Tool]:
     """
     tools = []
 
-    # Sort by name for deterministic output
-    for tool_def in sorted(TOOL_REGISTRY.values(), key=lambda t: t.name):
+    # Sort by name for deterministic output, exclude hidden tools
+    visible_tools = [t for t in TOOL_REGISTRY.values() if not t.hidden]
+    for tool_def in sorted(visible_tools, key=lambda t: t.name):
         # Build annotations from tool definition
         annotations = {
             "readOnlyHint": tool_def.read_only_hint,
