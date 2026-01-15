@@ -174,12 +174,12 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text="User claims no constraints. Ask for smallest concrete result worth continuing.",
+                text="User claims no constraints. Ask for first small win.",
             )],
             structuredContent={
                 "force_constraint": True,
                 "assistant_guidance": {
-                    "instruction": "Ask: 'What is the smallest concrete result that would make this initiative worth continuing?' Wait for their answer — do not suggest. Use their answer as constraint_type='forced_mvp' and constraint_value=their answer. Then call this tool again with confidence='high'.",
+                    "instruction": "Ask: 'What's the first small win that would prove this is working as intended?' Wait for their answer — do not suggest. Use their answer as constraint_type='forced_mvp' and constraint_value=their answer. Then call this tool again with confidence='high'.",
                 },
             },
         )
