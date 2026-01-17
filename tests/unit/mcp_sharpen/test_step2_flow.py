@@ -54,6 +54,19 @@ class TestToolAnnotations:
         assert tool.destructive_hint is False
         assert tool.open_world_hint is False
 
+    def test_step_2_tools_are_closed_world(self):
+        """Step 2 tools are closed-world (no external API calls).
+
+        Sharpen is a closed reasoning system. This invariant test
+        encodes that architectural intent and catches regressions.
+        """
+        from mcp_server.sharpen.tools import TOOL_REGISTRY
+
+        step_2_tools = ["identify_e2e_deliverables", "select_cutoff_deliverable"]
+        for name in step_2_tools:
+            tool = TOOL_REGISTRY[name]
+            assert tool.open_world_hint is False, f"{name} must be closed-world"
+
 
 # ============================================================================
 # Input Schema Tests
