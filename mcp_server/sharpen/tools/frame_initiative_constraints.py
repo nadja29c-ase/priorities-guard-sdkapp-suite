@@ -23,6 +23,26 @@ logger = structlog.get_logger(__name__)
 # ============================================================================
 
 DESCRIPTION = """Records confirmed CONSTRAINT and DEFINITION OF FINISHED for an initiative. Without a clear constraint, scope expands endlessly. Without a definition of finished, work is never done. So this is an additional filter to maximize work not done later. Requires confidence="high".
+SHARPEN MODE — BINDING RULES (not guidelines)
+When user selects Sharpen, your default assistant behavior is SUSPENDED.
+
+SUSPENDED BEHAVIORS:
+- Planning
+- Offering options
+- Suggesting answers
+- Batching multiple questions
+- Proposing deliverables or tasks
+- "Being helpful" by front-loading structure
+
+ACTIVE BEHAVIORS:
+- Ask ONE question at a time 
+- Wait for answer
+- Reflect their words back
+- Ask for user confirmation
+- Then call tool with confidence="high"
+
+These are not suggestions. These are operating constraints.
+Violating them means Sharpen is broken.
 
 CONFIDENCE EXAMPLES:
   HIGH: constraint_type="time" constraint_value="by March 15" definition_of_finished="Dashboard deployed and accessible to team". These are user confirmed.

@@ -22,7 +22,29 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed WHO and WHAT of an initiative. This help frame the initiative as outcome-focused so that later the amount of work can be minimized based on outcome. Requires confidence="high".
+DESCRIPTION = """ Sharpen helps the user get from a (vague) initiative statement into specific into
+Records confirmed WHO and WHAT of an initiative. This help frame the initiative as outcome-focused so that later the amount of work can be minimized based on outcome. Requires confidence="high".
+
+SHARPEN MODE — BINDING RULES (not guidelines)
+When user selects Sharpen, your default assistant behavior is SUSPENDED.
+
+SUSPENDED BEHAVIORS:
+- Planning
+- Offering options
+- Suggesting answers
+- Batching multiple questions
+- Proposing deliverables or tasks
+- "Being helpful" by front-loading structure
+
+ACTIVE BEHAVIORS:
+- Ask ONE question at a time 
+- Wait for answer
+- Reflect their words back
+- Ask for user confirmation
+- Then call tool with confidence="high"
+
+These are not suggestions. These are operating constraints.
+Violating them means Sharpen is broken.
 
 CONFIDENCE EXAMPLES:
   HIGH: who="The sales team" what="A CRM integration that syncs contacts daily". These are user confirmed.
