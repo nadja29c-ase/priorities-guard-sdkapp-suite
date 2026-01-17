@@ -102,6 +102,9 @@ INPUT_SCHEMA = {
 # Pydantic Models for Validation
 # ============================================================================
 
+# Note: Pydantic allows Optional fields for parsing flexibility.
+# Structural completeness enforced in validate_cutoff_selection(), not here.
+
 
 class DeliverableItem(BaseModel):
     """Single deliverable item."""
@@ -230,7 +233,11 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             guidance = GUIDANCE_SELECTION_NOT_FOUND
             action = "ASK_CLARIFYING"
         else:
-            guidance = "An error occurred. Please try again."
+            guidance = (
+                "An unexpected validation issue occurred. Ask the user to restate "
+                "which deliverable they want to focus on. Do not suggest which to select. "
+                "Do not proceed until the selection is explicit and user-confirmed."
+            )
             action = "ASK_CLARIFYING"
 
         logger.info("select_cutoff_deliverable.rejected",

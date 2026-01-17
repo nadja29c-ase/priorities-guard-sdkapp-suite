@@ -120,6 +120,9 @@ INPUT_SCHEMA = {
 # Pydantic Models for Validation
 # ============================================================================
 
+# Note: Pydantic allows Optional fields for parsing flexibility.
+# Structural completeness enforced in validate_e2e_deliverables(), not here.
+
 
 class DeliverableItem(BaseModel):
     """Single deliverable item."""
@@ -241,7 +244,11 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             guidance = GUIDANCE_INVALID_DELIVERABLE
             action = "ASK_CLARIFYING"
         else:
-            guidance = "An error occurred. Please try again."
+            guidance = (
+                "An unexpected validation issue occurred. Ask the user to restate "
+                "the deliverables one at a time. Do not suggest what they should be. "
+                "Do not proceed until each deliverable is concrete and user-confirmed."
+            )
             action = "ASK_CLARIFYING"
 
         logger.info("identify_e2e_deliverables.rejected",
