@@ -223,6 +223,24 @@ class TestValidateCutoffSelection:
         assert result["valid"] is True
         assert result["focus_deliverable"]["name"] == "Deployed REST API"
 
+    def test_duplicate_deliverable_names_rejects(self, valid_framing):
+        """Duplicate deliverable names are rejected to prevent data loss."""
+        duplicate_deliverables = [
+            {"name": "API", "description": "First API"},
+            {"name": "Docs", "description": "Documentation"},
+            {"name": "API", "description": "Second API"},  # Duplicate name
+        ]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=duplicate_deliverables,
+            selected_name="API",
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "duplicate_deliverable_names"
+
 
 # ============================================================================
 # Handler Tests (tools/select_cutoff_deliverable.py)
@@ -310,6 +328,25 @@ class TestSelectCutoffHandler:
 
         assert result.isError is True
         assert result.structuredContent["error"] == "missing_deliverables"
+        assert result.structuredContent["assistant_guidance"]["action"] == "REFUSE"
+
+    @pytest.mark.asyncio
+    async def test_duplicate_deliverable_names_returns_refuse_action(self, valid_framing):
+        """Duplicate deliverable names returns action='REFUSE'."""
+        arguments = {
+            "initiative_framing": valid_framing,
+            "confirmed_deliverables": [
+                {"name": "API", "description": "First"},
+                {"name": "API", "description": "Second"},
+            ],
+            "selected_deliverable_name": "API",
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "duplicate_deliverable_names"
         assert result.structuredContent["assistant_guidance"]["action"] == "REFUSE"
 
     @pytest.mark.asyncio

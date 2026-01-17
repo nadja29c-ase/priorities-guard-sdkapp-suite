@@ -147,9 +147,20 @@ GUIDANCE_SELECTION_NOT_FOUND = (
     "one by name. Do not suggest which to select."
 )
 
-GUIDANCE_MISSING_FRAMING_OR_DELIVERABLES = (
-    "Cannot select cutoff without confirmed framing and deliverables. "
-    "Complete Step 1 and Step 2.1 first."
+GUIDANCE_MISSING_FRAMING = (
+    "Cannot select cutoff without confirmed initiative framing. "
+    "Complete Step 1 first using frame_initiative_intent and frame_initiative_constraints."
+)
+
+GUIDANCE_MISSING_DELIVERABLES = (
+    "Cannot select cutoff without confirmed deliverables. "
+    "Complete Step 2.1 first using identify_e2e_deliverables."
+)
+
+GUIDANCE_DUPLICATE_NAMES = (
+    "The confirmed deliverables contain duplicate names. Each deliverable must have "
+    "a unique name. Ask the user to clarify which deliverables are distinct. "
+    "Do not suggest names — use the user's exact words."
 )
 
 GUIDANCE_EMPTY_SELECTION = (
@@ -221,10 +232,13 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             guidance = GUIDANCE_CONFIDENCE_REJECTED
             action = "ASK_CLARIFYING"
         elif error_type == "missing_framing":
-            guidance = GUIDANCE_MISSING_FRAMING_OR_DELIVERABLES
+            guidance = GUIDANCE_MISSING_FRAMING
             action = "REFUSE"
         elif error_type == "missing_deliverables":
-            guidance = GUIDANCE_MISSING_FRAMING_OR_DELIVERABLES
+            guidance = GUIDANCE_MISSING_DELIVERABLES
+            action = "REFUSE"
+        elif error_type == "duplicate_deliverable_names":
+            guidance = GUIDANCE_DUPLICATE_NAMES
             action = "REFUSE"
         elif error_type == "empty_selection":
             guidance = GUIDANCE_EMPTY_SELECTION
@@ -243,20 +257,24 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         logger.info("select_cutoff_deliverable.rejected",
                     error_type=error_type, action=action)
 
+        structured = {
+            "error": error_type,
+            "details": error_details,
+            "assistant_guidance": {
+                "action": action,
+                "instruction": guidance,
+            },
+        }
+        # Only include confidence_provided when relevant
+        if error_type == "confidence_too_low":
+            structured["confidence_provided"] = validated_request.confidence
+
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text=error_details or f"Validation failed: {error_type}",
+                text=error_details or f"Selection issue: {error_type}",
             )],
-            structuredContent={
-                "error": error_type,
-                "confidence_provided": validated_request.confidence if error_type == "confidence_too_low" else None,
-                "details": error_details,
-                "assistant_guidance": {
-                    "action": action,
-                    "instruction": guidance,
-                },
-            },
+            structuredContent=structured,
             isError=True,
         )
 

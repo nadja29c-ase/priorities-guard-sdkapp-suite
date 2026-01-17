@@ -254,20 +254,24 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         logger.info("identify_e2e_deliverables.rejected",
                     error_type=error_type, action=action)
 
+        structured = {
+            "error": error_type,
+            "details": error_details,
+            "assistant_guidance": {
+                "action": action,
+                "instruction": guidance,
+            },
+        }
+        # Only include confidence_provided when relevant
+        if error_type == "confidence_too_low":
+            structured["confidence_provided"] = validated_request.confidence
+
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text=error_details or f"Validation failed: {error_type}",
+                text=error_details or f"Deliverable issue: {error_type}",
             )],
-            structuredContent={
-                "error": error_type,
-                "confidence_provided": validated_request.confidence if error_type == "confidence_too_low" else None,
-                "details": error_details,
-                "assistant_guidance": {
-                    "action": action,
-                    "instruction": guidance,
-                },
-            },
+            structuredContent=structured,
             isError=True,
         )
 

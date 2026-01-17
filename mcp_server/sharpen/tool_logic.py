@@ -376,7 +376,18 @@ def validate_cutoff_selection(
             "deferred_deliverables": None,
         }
 
-    # 4. Selection validation
+    # 4. Duplicate name check (prevents silent data loss)
+    names = [d.get("name", "") for d in deliverables]
+    if len(names) != len(set(names)):
+        return {
+            "valid": False,
+            "error_type": "duplicate_deliverable_names",
+            "error_details": "Confirmed deliverables contain duplicate names. Each deliverable must have a unique name.",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+        }
+
+    # 5. Selection validation
     if selected_name is None or (isinstance(selected_name, str) and not selected_name.strip()):
         return {
             "valid": False,
@@ -388,7 +399,7 @@ def validate_cutoff_selection(
 
     selected_name = selected_name.strip() if isinstance(selected_name, str) else selected_name
 
-    # Find matching deliverable (case-sensitive)
+    # 6. Find matching deliverable (case-sensitive)
     focus = None
     deferred = []
     for d in deliverables:
