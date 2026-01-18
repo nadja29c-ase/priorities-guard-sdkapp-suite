@@ -108,13 +108,15 @@ class TestInputSchemaRequirements:
         required = tool.input_schema.get("required", [])
         assert "confirmed_deliverables" in required
 
-    def test_tool_2_2_input_schema_requires_selected_deliverable_name(self):
-        """select_cutoff_deliverable schema requires selected_deliverable_name."""
+    def test_tool_2_2_input_schema_has_selection_methods(self):
+        """select_cutoff_deliverable schema has both selection methods (optional, mutually exclusive)."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["select_cutoff_deliverable"]
-        required = tool.input_schema.get("required", [])
-        assert "selected_deliverable_name" in required
+        properties = tool.input_schema.get("properties", {})
+        # Both methods available but neither required (mutual exclusivity enforced at runtime)
+        assert "selected_deliverable_name" in properties
+        assert "sculpted_deliverable" in properties
 
     def test_tool_2_2_input_schema_requires_initiative_framing(self):
         """select_cutoff_deliverable schema requires initiative_framing."""

@@ -184,8 +184,7 @@ GUIDANCE_INVALID_DELIVERABLE = (
 GUIDANCE_CONFIRMED = (
     "Deliverables confirmed. Present them back to the user as an unordered list — "
     "no numbering, no priority implied. Then proceed to select the cutoff deliverable "
-    "by asking: 'If you could only complete one of these right now, which would still "
-    "make the initiative worth doing?' Do not suggest which to select. "
+    "by asking:'Which of these must exist first? Everything else is explicitly deferred for now.' Do not suggest which to select. "
     "Call select_cutoff_deliverable with the user's choice."
 )
 

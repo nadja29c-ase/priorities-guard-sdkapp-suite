@@ -319,21 +319,30 @@ def validate_cutoff_selection(
     framing: dict | None,
     deliverables: list[dict] | None,
     selected_name: str | None,
+    sculpted: dict | None,
     confidence: str | None,
 ) -> dict[str, Any]:
     """
     Validate cutoff selection for select_cutoff_deliverable tool.
 
+    Supports two paths:
+    - Selection: Pick existing deliverable by exact name
+    - Sculpting: Define new focus that replaces one or more confirmed deliverables
+
     Validation order:
     1. Confidence must be "high"
     2. Framing must be complete
-    3. Deliverables must exist
-    4. Selected name must match exactly one deliverable
+    3. Deliverables must exist and not be empty
+    4. Duplicate deliverable names check
+    5. Mutual exclusivity: exactly one of selected_name or sculpted
+    6. If selected_name: validate exact match
+    7. If sculpted: validate sculpt
 
     Args:
         framing: Combined initiative_framing from Step 1
         deliverables: Confirmed deliverables from Step 2.1
-        selected_name: Name of deliverable chosen as cutoff
+        selected_name: Name of deliverable chosen as cutoff (selection path)
+        sculpted: Dict with name, description, replaces (sculpt path)
         confidence: LLM's confidence level
 
     Returns:
@@ -343,6 +352,7 @@ def validate_cutoff_selection(
             "error_details": str | None,
             "focus_deliverable": dict | None,
             "deferred_deliverables": list[dict] | None,
+            "_internal_replaces": list[str] | None,  # Only for sculpt path, handler use only
         }
     """
     # 1. Confidence check first
@@ -377,8 +387,8 @@ def validate_cutoff_selection(
         }
 
     # 4. Duplicate name check (prevents silent data loss)
-    names = [d.get("name", "") for d in deliverables]
-    if len(names) != len(set(names)):
+    confirmed_names = [d.get("name", "") for d in deliverables]
+    if len(confirmed_names) != len(set(confirmed_names)):
         return {
             "valid": False,
             "error_type": "duplicate_deliverable_names",
@@ -387,42 +397,117 @@ def validate_cutoff_selection(
             "deferred_deliverables": None,
         }
 
-    # 5. Selection validation
-    if selected_name is None or (isinstance(selected_name, str) and not selected_name.strip()):
+    # 5. Mutual exclusivity check
+    has_selected = selected_name is not None and (
+        isinstance(selected_name, str) and selected_name.strip()
+    )
+    has_sculpted = sculpted is not None
+
+    if has_selected and has_sculpted:
         return {
             "valid": False,
-            "error_type": "empty_selection",
-            "error_details": "No deliverable selected.",
+            "error_type": "both_selection_methods",
+            "error_details": "Provide selected_deliverable_name OR sculpted_deliverable, not both.",
             "focus_deliverable": None,
             "deferred_deliverables": None,
         }
 
-    selected_name = selected_name.strip() if isinstance(selected_name, str) else selected_name
+    if not has_selected and not has_sculpted:
+        return {
+            "valid": False,
+            "error_type": "no_selection_method",
+            "error_details": "Provide selected_deliverable_name OR sculpted_deliverable.",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+        }
 
-    # 6. Find matching deliverable (case-sensitive)
-    focus = None
-    deferred = []
-    for d in deliverables:
-        d_name = d.get("name", "")
-        if d_name == selected_name:
-            focus = {
-                "name": d_name,
-                "description": d.get("description", ""),
+    # 6. Selection path
+    if has_selected:
+        selected_name = selected_name.strip()
+
+        # Find matching deliverable (case-sensitive)
+        focus = None
+        deferred = []
+        for d in deliverables:
+            d_name = d.get("name", "")
+            if d_name == selected_name:
+                focus = {
+                    "name": d_name,
+                    "description": d.get("description", ""),
+                }
+            else:
+                deferred.append({
+                    "name": d_name,
+                    "description": d.get("description", ""),
+                })
+
+        if focus is None:
+            return {
+                "valid": False,
+                "error_type": "selection_not_found",
+                "error_details": f"'{selected_name}' does not match any confirmed deliverable.",
+                "focus_deliverable": None,
+                "deferred_deliverables": None,
             }
-        else:
-            deferred.append({
-                "name": d_name,
-                "description": d.get("description", ""),
-            })
 
-    if focus is None:
+        return {
+            "valid": True,
+            "error_type": None,
+            "error_details": None,
+            "focus_deliverable": focus,
+            "deferred_deliverables": deferred,
+        }
+
+    # 7. Sculpt path
+    sculpt_name = (sculpted.get("name") or "").strip()
+    sculpt_description = (sculpted.get("description") or "").strip()
+    replaces = sculpted.get("replaces") or []
+
+    # Validate sculpt name not empty
+    if not sculpt_name:
         return {
             "valid": False,
-            "error_type": "selection_not_found",
-            "error_details": f"'{selected_name}' does not match any confirmed deliverable.",
+            "error_type": "empty_sculpt_name",
+            "error_details": "Sculpted deliverable must have a name.",
             "focus_deliverable": None,
             "deferred_deliverables": None,
         }
+
+    # Validate replaces not empty
+    if not replaces:
+        return {
+            "valid": False,
+            "error_type": "empty_replaces",
+            "error_details": "Sculpted deliverable must replace at least one confirmed deliverable.",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+        }
+
+    # Validate all replaces exist in confirmed_deliverables
+    confirmed_names_set = set(confirmed_names)
+    invalid_replaces = [r for r in replaces if r not in confirmed_names_set]
+    if invalid_replaces:
+        return {
+            "valid": False,
+            "error_type": "invalid_replaces",
+            "error_details": f"These names are not in confirmed deliverables: {', '.join(invalid_replaces)}",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+        }
+
+    # Build focus (clean output — no process metadata)
+    focus = {
+        "name": sculpt_name,
+        "description": sculpt_description,
+    }
+
+    # Compute deferred (confirmed minus replaced)
+    replaces_set = set(replaces)
+    deferred = [
+        {"name": d.get("name", ""), "description": d.get("description", "")}
+        for d in deliverables
+        if d.get("name", "") not in replaces_set
+    ]
 
     return {
         "valid": True,
@@ -430,4 +515,5 @@ def validate_cutoff_selection(
         "error_details": None,
         "focus_deliverable": focus,
         "deferred_deliverables": deferred,
+        "_internal_replaces": replaces,  # For handler guidance only, not in Step 3 contract
     }

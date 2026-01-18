@@ -2,6 +2,7 @@
 Select Cutoff Deliverable Tool.
 
 Forces selection of WHERE work intentionally stops.
+Supports selection (pick existing) or sculpting (combine/reshape).
 Requires confirmed deliverables from Step 2.1.
 Self-registers at import time.
 """
@@ -22,15 +23,15 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records the user's selected cutoff deliverable — the point where work intentionally stops for now. This defines the current scope boundary. No ordering, scheduling, or planning allowed. Requires confirmed deliverables from Step 2.1 and confidence="high".
+DESCRIPTION = """Records the user's focus deliverable — either by selecting an existing one OR sculpting a new one that combines/reshapes confirmed deliverables. This defines the current scope boundary. No ordering, scheduling, or planning allowed. Requires confirmed deliverables from Step 2.1 and confidence="high".
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.
 
 SUSPENDED BEHAVIORS:
 - Recommending which deliverable to select
-- Suggesting "you could also..."
-- Bundling multiple deliverables
+- Suggesting how to sculpt
+- Bundling without user direction
 - Offering to "do all of them"
 - Planning or sequencing
 
@@ -41,14 +42,33 @@ ACTIVE BEHAVIORS:
 - Ask for user confirmation
 - Then call tool with confidence="high"
 
-CRITICAL: Exactly ONE deliverable must be selected. No bundling. No "depends." No "not sure yet." If user resists choosing, ask: 'If you stopped after this deliverable, would the initiative still be worth doing?' Do not decide for them.
+TWO WAYS TO SET FOCUS:
 
-EXAMPLE CONVERSATION:
-  You: "If you could only complete one of these deliverables right now, which would still make the initiative worth doing?"
-  User: "I guess the API itself — without that, nothing else matters"
-  You: "So if you stopped after 'Deployed REST API with authentication', the initiative would still be worth doing. The documentation would be explicitly deferred. Is that correct?"
+1. SELECT EXISTING: User picks one deliverable by exact name.
+   → Use selected_deliverable_name
+
+2. SCULPT NEW: User combines or tightens multiple deliverables into one.
+   → Use sculpted_deliverable with name + replaces list
+
+SCULPTING INVARIANT: A sculpted deliverable may ONLY combine or reduce scope from the deliverables it replaces. It must not introduce new outcomes, audiences, or success criteria beyond what was already confirmed. If the user's sculpt adds scope, flag it: 'This seems to add scope beyond what [replaced deliverables] covered. Sculpting should tighten, not expand. What can we remove?'
+
+CRITICAL: Use exactly ONE method. If user says "API and Docs together", that's sculpting — create a new name that captures the combined scope. If user picks one as-is, that's selection.
+
+EXAMPLE CONVERSATION (Selection):
+  You: "Looking at these deliverables, what's the minimum shippable scope?"
+  User: "Just the API — docs can wait"
+  You: "So 'Deployed REST API' is the focus. Documentation is deferred. Correct?"
   User: "Yes"
-  → Now call select_cutoff_deliverable with selected_deliverable_name="Deployed REST API with authentication", confidence="high"
+  → Call with selected_deliverable_name="Deployed REST API", confidence="high"
+
+EXAMPLE CONVERSATION (Sculpting):
+  You: "Looking at these deliverables, what's the minimum shippable scope?"
+  User: "I can't ship API without at least basic docs"
+  You: "So API and Documentation are really one deliverable. What would you call this combined scope?"
+  User: "Deployed API with endpoint reference"
+  You: "So 'Deployed API with endpoint reference' replaces both 'REST API' and 'API Documentation'. The Admin Dashboard is deferred. Correct?"
+  User: "Yes"
+  → Call with sculpted_deliverable={name="Deployed API with endpoint reference", replaces=["REST API", "API Documentation"]}, confidence="high"
 """
 
 INPUT_SCHEMA = {
@@ -85,15 +105,36 @@ INPUT_SCHEMA = {
         },
         "selected_deliverable_name": {
             "type": "string",
-            "description": "Name of the deliverable chosen as the cutoff point. Must match exactly one name in confirmed_deliverables. ACCORDING TO THE USER.",
+            "description": "Select ONE existing deliverable by exact name. Use this OR sculpted_deliverable, not both. ACCORDING TO THE USER.",
+        },
+        "sculpted_deliverable": {
+            "type": "object",
+            "description": "Define a NEW focus deliverable that combines or reshapes existing ones. Use this OR selected_deliverable_name, not both. ACCORDING TO THE USER.",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the sculpted deliverable. Must be concrete, not activity-based.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "What this sculpted deliverable includes.",
+                },
+                "replaces": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of confirmed deliverables this replaces. All names must exist in confirmed_deliverables.",
+                    "minItems": 1,
+                },
+            },
+            "required": ["name", "replaces"],
         },
         "confidence": {
             "type": "string",
             "enum": ["high", "medium", "low"],
-            "description": "Your confidence that the selection is user-confirmed. Must be 'high' to proceed.",
+            "description": "Your confidence that the selection/sculpt is user-confirmed. Must be 'high' to proceed.",
         },
     },
-    "required": ["initiative_framing", "confirmed_deliverables", "selected_deliverable_name", "confidence"],
+    "required": ["initiative_framing", "confirmed_deliverables", "confidence"],
     "additionalProperties": False,
 }
 
@@ -122,11 +163,19 @@ class InitiativeFraming(BaseModel):
     definition_of_finished: Optional[str] = None
 
 
+class SculptedDeliverable(BaseModel):
+    """User-defined focus deliverable that replaces confirmed ones."""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    replaces: Optional[List[str]] = None
+
+
 class SelectCutoffRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     initiative_framing: Optional[InitiativeFraming] = None
     confirmed_deliverables: Optional[List[DeliverableItem]] = None
     selected_deliverable_name: Optional[str] = None
+    sculpted_deliverable: Optional[SculptedDeliverable] = None
     confidence: Optional[Literal["high", "medium", "low"]] = None
 
 
@@ -163,29 +212,70 @@ GUIDANCE_DUPLICATE_NAMES = (
     "Do not suggest names — use the user's exact words."
 )
 
-GUIDANCE_EMPTY_SELECTION = (
-    "No deliverable was selected. Ask: 'If you could only complete one of these "
-    "deliverables right now, which would still make the initiative worth doing?' "
-    "Wait for the user's answer. Do not suggest which to select."
+GUIDANCE_BOTH_METHODS = (
+    "Provide either selected_deliverable_name OR sculpted_deliverable, not both. "
+    "Ask the user: 'Are you selecting an existing deliverable as-is, or combining "
+    "multiple into a tighter scope?' Wait for clarification."
+)
+
+GUIDANCE_NO_METHOD = (
+    "No focus deliverable specified. Ask: 'Looking at these deliverables, what's "
+    "the minimum shippable scope? You can pick one as-is or combine multiple into "
+    "a tighter focus.' Wait for the user's answer. Do not suggest."
+)
+
+GUIDANCE_EMPTY_SCULPT_NAME = (
+    "Sculpted deliverable needs a name. Ask: 'What would you call this combined "
+    "scope?' Use the user's exact words. Do not suggest a name."
+)
+
+GUIDANCE_EMPTY_REPLACES = (
+    "Sculpted deliverable must replace at least one confirmed deliverable. "
+    "Ask: 'Which of the confirmed deliverables does this replace?' "
+    "Wait for the user's answer."
+)
+
+GUIDANCE_INVALID_REPLACES = (
+    "Some names in 'replaces' don't match confirmed deliverables. "
+    "Present the confirmed deliverable names and ask the user to clarify "
+    "which ones the sculpted deliverable replaces."
 )
 
 
-def build_confirmed_guidance(focus_name: str, deferred_names: list[str]) -> str:
-    """Build guidance for confirmed selection."""
+def build_confirmed_guidance(
+    focus_name: str,
+    deferred_names: list[str],
+    replaces: list[str] | None = None,
+) -> str:
+    """Build guidance for confirmed selection/sculpt.
+
+    Args:
+        focus_name: Name of the focus deliverable
+        deferred_names: Names of deferred deliverables
+        replaces: If sculpted, the names that were replaced (for guidance only)
+    """
+    if replaces:
+        replaces_str = ", ".join(replaces)
+        scope_intro = f"Sculpted focus: '{focus_name}' (replaces: {replaces_str})."
+    else:
+        scope_intro = f"Focus deliverable: '{focus_name}'."
+
     if deferred_names:
         deferred_str = ", ".join(deferred_names)
         return (
-            f"Scope boundary confirmed. Present: 'Focus deliverable: {focus_name}. "
-            f"Deferred for now: {deferred_str}.' Then proceed to Step 3: work breakdown "
-            f"for the focus deliverable only. Do not discuss deferred items. Do not suggest "
-            f"tasks. Ask: 'What work items must be completed to produce {focus_name}?'"
+            f"Scope boundary confirmed. {scope_intro} "
+            f"Deferred for now: {deferred_str}. "
+            f"Proceed to Step 3: work breakdown for '{focus_name}' only. "
+            f"Do not discuss deferred items. Do not suggest tasks. "
+            f"Ask: 'What work items must be completed to produce {focus_name}?'"
         )
     else:
         return (
-            f"Scope boundary confirmed. Present: 'Focus deliverable: {focus_name}.' "
-            f"Then proceed to Step 3: work breakdown for the focus deliverable only. "
-            f"Do not suggest tasks. Ask: 'What work items must be completed to produce "
-            f"{focus_name}?'"
+            f"Scope boundary confirmed. {scope_intro} "
+            f"Nothing deferred — all confirmed deliverables are replaced by this focus. "
+            f"Proceed to Step 3: work breakdown for '{focus_name}' only. "
+            f"Do not suggest tasks. "
+            f"Ask: 'What work items must be completed to produce {focus_name}?'"
         )
 
 
@@ -213,12 +303,14 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Convert Pydantic models to dicts for logic layer
     framing_dict = validated_request.initiative_framing.model_dump() if validated_request.initiative_framing else None
     deliverables_list = [d.model_dump() for d in validated_request.confirmed_deliverables] if validated_request.confirmed_deliverables else None
+    sculpted_dict = validated_request.sculpted_deliverable.model_dump() if validated_request.sculpted_deliverable else None
 
     # Business logic validation
     result = validate_cutoff_selection(
         framing=framing_dict,
         deliverables=deliverables_list,
         selected_name=validated_request.selected_deliverable_name,
+        sculpted=sculpted_dict,
         confidence=validated_request.confidence,
     )
 
@@ -240,11 +332,23 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         elif error_type == "duplicate_deliverable_names":
             guidance = GUIDANCE_DUPLICATE_NAMES
             action = "REFUSE"
-        elif error_type == "empty_selection":
-            guidance = GUIDANCE_EMPTY_SELECTION
+        elif error_type == "both_selection_methods":
+            guidance = GUIDANCE_BOTH_METHODS
+            action = "ASK_CLARIFYING"
+        elif error_type == "no_selection_method":
+            guidance = GUIDANCE_NO_METHOD
             action = "ASK_CLARIFYING"
         elif error_type == "selection_not_found":
             guidance = GUIDANCE_SELECTION_NOT_FOUND
+            action = "ASK_CLARIFYING"
+        elif error_type == "empty_sculpt_name":
+            guidance = GUIDANCE_EMPTY_SCULPT_NAME
+            action = "ASK_CLARIFYING"
+        elif error_type == "empty_replaces":
+            guidance = GUIDANCE_EMPTY_REPLACES
+            action = "ASK_CLARIFYING"
+        elif error_type == "invalid_replaces":
+            guidance = GUIDANCE_INVALID_REPLACES
             action = "ASK_CLARIFYING"
         else:
             guidance = (
@@ -281,15 +385,23 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Valid — return focus and deferred deliverables
     focus = result["focus_deliverable"]
     deferred = result["deferred_deliverables"]
+    deferred_names = [d["name"] for d in deferred]
+
+    # Get replaces from internal field (only present for sculpted path)
+    replaces = result.get("_internal_replaces")
 
     logger.info("select_cutoff_deliverable.complete",
                 focus_deliverable=focus["name"],
                 deferred_count=len(deferred),
+                sculpted=replaces is not None,
                 confidence="high")
 
     # Build dynamic guidance with actual deliverable names
-    deferred_names = [d["name"] for d in deferred]
-    guidance = build_confirmed_guidance(focus["name"], deferred_names)
+    guidance = build_confirmed_guidance(
+        focus_name=focus["name"],
+        deferred_names=deferred_names,
+        replaces=replaces,
+    )
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(

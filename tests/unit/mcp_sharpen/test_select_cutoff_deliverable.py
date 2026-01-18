@@ -53,6 +53,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="Deployed REST API",
+            sculpted=None,
             confidence="high",
         )
 
@@ -68,6 +69,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="Deployed REST API",
+            sculpted=None,
             confidence="low",
         )
 
@@ -80,6 +82,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="Deployed REST API",
+            sculpted=None,
             confidence="medium",
         )
 
@@ -92,6 +95,7 @@ class TestValidateCutoffSelection:
             framing=None,
             deliverables=valid_deliverables,
             selected_name="Deployed REST API",
+            sculpted=None,
             confidence="high",
         )
 
@@ -104,6 +108,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=None,
             selected_name="Deployed REST API",
+            sculpted=None,
             confidence="high",
         )
 
@@ -116,35 +121,38 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=[],
             selected_name="Deployed REST API",
+            sculpted=None,
             confidence="high",
         )
 
         assert result["valid"] is False
         assert result["error_type"] == "missing_deliverables"
 
-    def test_empty_selection_rejects(self, valid_framing, valid_deliverables):
-        """Empty selected_name is rejected."""
+    def test_no_selection_method_empty_string_rejects(self, valid_framing, valid_deliverables):
+        """Empty selected_name with no sculpt is rejected as no_selection_method."""
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="",
+            sculpted=None,
             confidence="high",
         )
 
         assert result["valid"] is False
-        assert result["error_type"] == "empty_selection"
+        assert result["error_type"] == "no_selection_method"
 
-    def test_none_selection_rejects(self, valid_framing, valid_deliverables):
-        """None selected_name is rejected."""
+    def test_no_selection_method_none_rejects(self, valid_framing, valid_deliverables):
+        """None selected_name with no sculpt is rejected as no_selection_method."""
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name=None,
+            sculpted=None,
             confidence="high",
         )
 
         assert result["valid"] is False
-        assert result["error_type"] == "empty_selection"
+        assert result["error_type"] == "no_selection_method"
 
     def test_selection_not_found_rejects(self, valid_framing, valid_deliverables):
         """Selection that doesn't match any deliverable is rejected."""
@@ -152,6 +160,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="Nonexistent Deliverable",
+            sculpted=None,
             confidence="high",
         )
 
@@ -164,6 +173,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="deployed rest api",  # lowercase
+            sculpted=None,
             confidence="high",
         )
 
@@ -178,6 +188,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=single_deliverable,
             selected_name="Only Deliverable",
+            sculpted=None,
             confidence="high",
         )
 
@@ -191,6 +202,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="OpenAPI spec",
+            sculpted=None,
             confidence="high",
         )
 
@@ -203,6 +215,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="Deployed REST API",
+            sculpted=None,
             confidence="high",
         )
 
@@ -217,6 +230,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=valid_deliverables,
             selected_name="  Deployed REST API  ",
+            sculpted=None,
             confidence="high",
         )
 
@@ -235,6 +249,7 @@ class TestValidateCutoffSelection:
             framing=valid_framing,
             deliverables=duplicate_deliverables,
             selected_name="API",
+            sculpted=None,
             confidence="high",
         )
 
@@ -384,3 +399,254 @@ class TestSelectCutoffHandler:
 
         instruction = result.structuredContent["assistant_guidance"]["instruction"]
         assert "Deployed REST API" in instruction
+
+
+# ============================================================================
+# Sculpt Path - Logic Tests (tool_logic.py)
+# ============================================================================
+
+
+class TestValidateCutoffSelectionSculptPath:
+    """Tests for validate_cutoff_selection sculpt path."""
+
+    def test_sculpted_deliverable_returns_focus_and_deferred(self, valid_framing, valid_deliverables):
+        """Valid sculpt returns focus_deliverable and deferred_deliverables."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name=None,
+            sculpted={
+                "name": "API with minimal docs",
+                "description": "REST API and endpoint reference only",
+                "replaces": ["Deployed REST API", "OpenAPI spec"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["error_type"] is None
+        assert result["focus_deliverable"]["name"] == "API with minimal docs"
+        assert result["focus_deliverable"]["description"] == "REST API and endpoint reference only"
+        # Integration tests should be deferred (not replaced)
+        assert len(result["deferred_deliverables"]) == 1
+        assert result["deferred_deliverables"][0]["name"] == "Integration tests"
+        # Internal replaces for handler guidance
+        assert result["_internal_replaces"] == ["Deployed REST API", "OpenAPI spec"]
+
+    def test_both_methods_rejects(self, valid_framing, valid_deliverables):
+        """Providing both selection and sculpt is rejected."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name="Deployed REST API",
+            sculpted={
+                "name": "Combined",
+                "replaces": ["OpenAPI spec"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "both_selection_methods"
+
+    def test_empty_sculpt_name_rejects(self, valid_framing, valid_deliverables):
+        """Sculpt with empty name is rejected."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name=None,
+            sculpted={
+                "name": "",
+                "replaces": ["Deployed REST API"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "empty_sculpt_name"
+
+    def test_empty_replaces_rejects(self, valid_framing, valid_deliverables):
+        """Sculpt with empty replaces list is rejected."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name=None,
+            sculpted={
+                "name": "New Focus",
+                "replaces": [],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "empty_replaces"
+
+    def test_invalid_replaces_rejects(self, valid_framing, valid_deliverables):
+        """Sculpt with non-existent names in replaces is rejected."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name=None,
+            sculpted={
+                "name": "New Focus",
+                "replaces": ["Deployed REST API", "Nonexistent"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "invalid_replaces"
+        assert "Nonexistent" in result["error_details"]
+
+    def test_sculpt_replaces_all_returns_empty_deferred(self, valid_framing, valid_deliverables):
+        """Sculpt that replaces all deliverables returns empty deferred list."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name=None,
+            sculpted={
+                "name": "Everything Bundle",
+                "replaces": ["Deployed REST API", "OpenAPI spec", "Integration tests"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["focus_deliverable"]["name"] == "Everything Bundle"
+        assert result["deferred_deliverables"] == []
+
+    def test_sculpt_description_optional(self, valid_framing, valid_deliverables):
+        """Sculpt description is optional."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name=None,
+            sculpted={
+                "name": "API with docs",
+                "replaces": ["Deployed REST API", "OpenAPI spec"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["focus_deliverable"]["description"] == ""
+
+    def test_sculpt_whitespace_name_trimmed(self, valid_framing, valid_deliverables):
+        """Sculpt name with whitespace is trimmed."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            selected_name=None,
+            sculpted={
+                "name": "  Combined Focus  ",
+                "replaces": ["Deployed REST API"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["focus_deliverable"]["name"] == "Combined Focus"
+
+
+# ============================================================================
+# Sculpt Path - Handler Tests
+# ============================================================================
+
+
+class TestSelectCutoffHandlerSculptPath:
+    """Tests for select_cutoff_deliverable handler with sculpting."""
+
+    @pytest.mark.asyncio
+    async def test_valid_sculpt_returns_proceed_to_step_3_action(self, valid_framing, valid_deliverables):
+        """Valid sculpt returns action='PROCEED_TO_STEP_3'."""
+        arguments = {
+            "initiative_framing": valid_framing,
+            "confirmed_deliverables": valid_deliverables,
+            "sculpted_deliverable": {
+                "name": "API with minimal docs",
+                "description": "Combined scope",
+                "replaces": ["Deployed REST API", "OpenAPI spec"],
+            },
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is not True
+        assert result.structuredContent["confirmed"] is True
+        assert result.structuredContent["assistant_guidance"]["action"] == "PROCEED_TO_STEP_3"
+        assert result.structuredContent["focus_deliverable"]["name"] == "API with minimal docs"
+
+    @pytest.mark.asyncio
+    async def test_sculpt_guidance_includes_replaces_info(self, valid_framing, valid_deliverables):
+        """Sculpt guidance includes information about replaced deliverables."""
+        arguments = {
+            "initiative_framing": valid_framing,
+            "confirmed_deliverables": valid_deliverables,
+            "sculpted_deliverable": {
+                "name": "API with minimal docs",
+                "replaces": ["Deployed REST API", "OpenAPI spec"],
+            },
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        instruction = result.structuredContent["assistant_guidance"]["instruction"]
+        assert "replaces" in instruction
+        assert "Deployed REST API" in instruction
+        assert "OpenAPI spec" in instruction
+
+    @pytest.mark.asyncio
+    async def test_both_methods_returns_clarifying_action(self, valid_framing, valid_deliverables):
+        """Both selection and sculpt returns action='ASK_CLARIFYING'."""
+        arguments = {
+            "initiative_framing": valid_framing,
+            "confirmed_deliverables": valid_deliverables,
+            "selected_deliverable_name": "Deployed REST API",
+            "sculpted_deliverable": {
+                "name": "Combined",
+                "replaces": ["OpenAPI spec"],
+            },
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "both_selection_methods"
+        assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
+
+    @pytest.mark.asyncio
+    async def test_no_method_returns_clarifying_action(self, valid_framing, valid_deliverables):
+        """Neither selection nor sculpt returns action='ASK_CLARIFYING'."""
+        arguments = {
+            "initiative_framing": valid_framing,
+            "confirmed_deliverables": valid_deliverables,
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "no_selection_method"
+        assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
+
+    @pytest.mark.asyncio
+    async def test_invalid_replaces_returns_clarifying_action(self, valid_framing, valid_deliverables):
+        """Invalid replaces names returns action='ASK_CLARIFYING'."""
+        arguments = {
+            "initiative_framing": valid_framing,
+            "confirmed_deliverables": valid_deliverables,
+            "sculpted_deliverable": {
+                "name": "Combined",
+                "replaces": ["Nonexistent Deliverable"],
+            },
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "invalid_replaces"
+        assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
