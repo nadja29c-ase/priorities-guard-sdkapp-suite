@@ -197,13 +197,15 @@ GUIDANCE_SELECTION_NOT_FOUND = (
 
 GUIDANCE_MISSING_FRAMING = (
     "SHARPEN MODE STILL BINDING. "
-    "Step 1 framing required. Ask: 'Before selecting focus, who benefits from this work?' "
+    "Initiative framing required first (frame_initiative_intent + frame_initiative_constraints). "
+    "Ask: 'Before selecting focus, who benefits from this work?' "
     "Then stop and wait."
 )
 
 GUIDANCE_MISSING_DELIVERABLES = (
     "SHARPEN MODE STILL BINDING. "
-    "Deliverables required first. Ask: 'What needs to exist for this initiative to be done?' "
+    "Deliverables required first (identify_e2e_deliverables). "
+    "Ask: 'What needs to exist for this initiative to be done?' "
     "Then stop and wait."
 )
 

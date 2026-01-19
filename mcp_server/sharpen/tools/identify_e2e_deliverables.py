@@ -10,7 +10,7 @@ from typing import Optional, Literal, List
 
 import structlog
 from mcp import types as mcp_types
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, ValidationError
 
 from .base import ToolDefinition
 from . import register_tool
@@ -177,7 +177,8 @@ GUIDANCE_CONFIDENCE_REJECTED = (
 
 GUIDANCE_FRAMING_MISSING = (
     "SHARPEN MODE STILL BINDING. "
-    "Step 1 framing required first. Ask: 'Before we identify deliverables, who benefits from this work?' "
+    "Initiative framing required first (frame_initiative_intent + frame_initiative_constraints). "
+    "Ask: 'Before we identify deliverables, who benefits from this work?' "
     "Then stop and wait. Do not explain the process."
 )
 
