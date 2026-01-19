@@ -200,11 +200,12 @@ GUIDANCE_INVALID_DELIVERABLE = (
 )
 
 GUIDANCE_CONFIRMED = (
+    "SHARPEN MODE STILL BINDING.\n"
     "Deliverables confirmed. Present them as an unordered list (no numbering). "
     "Then ask: 'Quick check — how big does this feel? XS / S / M / L / XL (gut feel only).' "
     "Stop and wait.\n\n"
     "If XS/S/M → proceed to CUTOFF QUESTION below.\n"
-    "If L/XL → ask: 'That size sometimes means there's room to subtract. "
+    "If L/XL → ask: 'That size sometimes means there's room to subtract. Or that the initiative might be delivered in phases, not all at once. "
     "If this had to be M or smaller, what could be removed?' Then stop and wait.\n"
     "  - If user removes items → reflect the updated list, then proceed to CUTOFF QUESTION below.\n"
     "  - If user says 'fine as is' → proceed to CUTOFF QUESTION below.\n\n"
@@ -212,7 +213,6 @@ GUIDANCE_CONFIRMED = (
     "Ask: 'If you could only complete one of these right now, which would it be?' "
     "Stop and wait. Do not suggest. Call select_cutoff_deliverable with the user's choice."
 )
-
 
 # ============================================================================
 # Tool Handler
