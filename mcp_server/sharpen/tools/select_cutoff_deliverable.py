@@ -256,19 +256,20 @@ def build_confirmed_guidance(
     else:
         scope_intro = f"Focus: '{focus_name}'."
 
+    # Step 3 tool not yet implemented - for now, ask about work items
+    next_step = (
+        f"Ask: 'What work items must exist to produce {focus_name}?' "
+        f"Then stop and wait. Do not suggest tasks."
+    )
+
     if deferred_names:
         deferred_str = ", ".join(deferred_names)
         return (
             f"Scope confirmed. {scope_intro} Deferred: {deferred_str}. "
-            f"Ask: 'What work items must exist to produce {focus_name}?' "
-            f"Then stop and wait. Do not suggest tasks. Do not discuss deferred items."
+            f"{next_step} Do not discuss deferred items."
         )
     else:
-        return (
-            f"Scope confirmed. {scope_intro} Nothing deferred. "
-            f"Ask: 'What work items must exist to produce {focus_name}?' "
-            f"Then stop and wait. Do not suggest tasks."
-        )
+        return f"Scope confirmed. {scope_intro} Nothing deferred. {next_step}"
 
 
 # ============================================================================

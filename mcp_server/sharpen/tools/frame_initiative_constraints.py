@@ -132,7 +132,7 @@ GUIDANCE_CONFIRMED = (
     "Present the complete framing using the user's exact words: "
     "WHO, WHAT, WHY (if any), CONSTRAINT, DEFINITION OF FINISHED. "
     "Then ask: 'Is this correct?' Stop and wait. Do not elaborate or add context.\n\n"
-    "If user confirms → proceed to identify_e2e_deliverables.\n"
+    "If user confirms → call identify_e2e_deliverables.\n"
     "If user corrects → update the framing and re-confirm."
 )
 

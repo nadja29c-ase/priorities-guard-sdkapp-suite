@@ -120,7 +120,8 @@ GUIDANCE_MISSING_FIELDS = (
 GUIDANCE_CONFIRMED = (
     "Intent confirmed. "
     "Ask ONE question: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' "
-    "Then stop and wait. Do not suggest constraints."
+    "Then stop and wait. Do not suggest constraints.\n\n"
+    "When user answers → call frame_initiative_constraints with their constraint."
 )
 
 
