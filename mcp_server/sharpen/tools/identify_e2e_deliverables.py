@@ -177,7 +177,7 @@ GUIDANCE_CONFIDENCE_REJECTED = (
 
 GUIDANCE_FRAMING_MISSING = (
     "SHARPEN MODE STILL BINDING. "
-    "initiative_framing parameter missing. If framing was already confirmed, include it in the tool call. "
+    "initiative_framing parameter missing. If framing of the initiative was already confirmed, include it in the tool call. "
     "If not yet confirmed, complete framing first via frame_initiative_intent + frame_initiative_constraints."
 )
 
@@ -203,9 +203,14 @@ GUIDANCE_CONFIRMED = (
     "Deliverables confirmed. Present them as an unordered list (no numbering). "
     "Then ask: 'Quick check — how big does this feel? XS / S / M / L / XL (gut feel only).' "
     "Stop and wait.\n\n"
-    "If XS/S/M → ask: 'If you could only complete one right now, which would it be?'\n"
-    "If L/XL → ask: 'That size sometimes means there's room to subtract. If this had to be M or smaller, what could be removed?'\n\n"
-    "Then stop and wait. Do not suggest. Do not plan."
+    "If XS/S/M → proceed to CUTOFF QUESTION below.\n"
+    "If L/XL → ask: 'That size sometimes means there's room to subtract. "
+    "If this had to be M or smaller, what could be removed?' Then stop and wait.\n"
+    "  - If user removes items → reflect the updated list, then proceed to CUTOFF QUESTION below.\n"
+    "  - If user says 'fine as is' → proceed to CUTOFF QUESTION below.\n\n"
+    "CUTOFF QUESTION:\n"
+    "Ask: 'If you could only complete one of these right now, which would it be?' "
+    "Stop and wait. Do not suggest. Call select_cutoff_deliverable with the user's choice."
 )
 
 
