@@ -121,7 +121,8 @@ GUIDANCE_CONFIRMED = (
     "Intent confirmed. "
     "Ask ONE question: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' "
     "Then stop and wait. Do not suggest constraints.\n\n"
-    "When user answers → call frame_initiative_constraints with their constraint."
+    "When user answers constraint → ask: 'How will you know this is truly finished?' Then stop and wait.\n"
+    "When user answers definition of finished → call frame_initiative_constraints with constraint + definition_of_finished."
 )
 
 
