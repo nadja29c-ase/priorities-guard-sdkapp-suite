@@ -102,6 +102,29 @@ class FrameIntentRequest(BaseModel):
 
 
 # ============================================================================
+# Assistant Guidance Messages
+# ============================================================================
+
+GUIDANCE_CONFIDENCE_REJECTED = (
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question about WHO or WHAT (whichever is vaguer). "
+    "Then stop and wait. Do not explain, suggest, or plan."
+)
+
+GUIDANCE_MISSING_FIELDS = (
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question about the missing field. "
+    "Then stop and wait. Do not explain, suggest, or plan."
+)
+
+GUIDANCE_CONFIRMED = (
+    "Intent confirmed. "
+    "Ask ONE question: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' "
+    "Then stop and wait. Do not suggest constraints."
+)
+
+
+# ============================================================================
 # Tool Handler
 # ============================================================================
 
@@ -136,7 +159,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "confidence_provided": validated_request.confidence,
                 "assistant_guidance": {
                     "action": "ASK_CLARIFYING",
-                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about WHO or WHAT (whichever is vaguer). Then stop and wait. Do not explain, suggest, or plan.",
+                    "instruction": GUIDANCE_CONFIDENCE_REJECTED,
                 },
             },
             isError=True,
@@ -161,7 +184,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "missing": result["missing"],
                 "assistant_guidance": {
                     "action": "ASK_CLARIFYING",
-                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about the missing field. Then stop and wait. Do not explain, suggest, or plan.",
+                    "instruction": GUIDANCE_MISSING_FIELDS,
                 },
             },
             isError=True,
@@ -185,7 +208,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             "confirmed": True,
             "assistant_guidance": {
                 "action": "PROCEED_TO_CONSTRAINTS",
-                "instruction": "Intent confirmed. Ask ONE question: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' Then stop and wait. Do not suggest constraints.",
+                "instruction": GUIDANCE_CONFIRMED,
             },
         },
     )

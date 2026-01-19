@@ -107,6 +107,35 @@ class FrameConstraintsRequest(BaseModel):
 
 
 # ============================================================================
+# Assistant Guidance Messages
+# ============================================================================
+
+GUIDANCE_CONFIDENCE_REJECTED = (
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question about CONSTRAINT or DEFINITION OF FINISHED (whichever is vaguer). "
+    "Then stop and wait. Do not explain, suggest, or plan."
+)
+
+GUIDANCE_FORCE_CONSTRAINT = (
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask exactly: 'What's the smallest result that would make this worth continuing?' "
+    "Then stop and wait. Do not suggest examples. Use their answer as forced_mvp."
+)
+
+GUIDANCE_MISSING_FIELDS = (
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question about the missing field. "
+    "Then stop and wait. Do not explain, suggest, or plan."
+)
+
+GUIDANCE_CONFIRMED = (
+    "Present the complete framing using the user's exact words: "
+    "WHO, WHAT, WHY (if any), CONSTRAINT, DEFINITION OF FINISHED. "
+    "Then ask: 'Is this correct?' Stop and wait. Do not elaborate or add context."
+)
+
+
+# ============================================================================
 # Tool Handler
 # ============================================================================
 
@@ -141,7 +170,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "confidence_provided": validated_request.confidence,
                 "assistant_guidance": {
                     "action": "ASK_CLARIFYING",
-                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about CONSTRAINT or DEFINITION OF FINISHED (whichever is vaguer). Then stop and wait. Do not explain, suggest, or plan.",
+                    "instruction": GUIDANCE_CONFIDENCE_REJECTED,
                 },
             },
             isError=True,
@@ -166,7 +195,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "force_constraint": True,
                 "assistant_guidance": {
                     "action": "ASK_CLARIFYING",
-                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask exactly: 'What's the smallest result that would make this worth continuing?' Then stop and wait. Do not suggest examples. Use their answer as forced_mvp.",
+                    "instruction": GUIDANCE_FORCE_CONSTRAINT,
                 },
             },
         )
@@ -184,7 +213,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "constraint_framing": result["constraint_framing"],
                 "assistant_guidance": {
                     "action": "ASK_CLARIFYING",
-                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about the missing field. Then stop and wait. Do not explain, suggest, or plan.",
+                    "instruction": GUIDANCE_MISSING_FIELDS,
                 },
             },
             isError=True,
@@ -210,7 +239,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             "confirmed": True,
             "assistant_guidance": {
                 "action": "CONFIRM_FRAMING",
-                "instruction": "Present the complete framing using the user's exact words: WHO, WHAT, WHY (if any), CONSTRAINT, DEFINITION OF FINISHED. Then ask: 'Is this correct?' Stop and wait. Do not elaborate or add context.",
+                "instruction": GUIDANCE_CONFIRMED,
             },
         },
     )
