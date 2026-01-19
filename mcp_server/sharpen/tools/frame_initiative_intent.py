@@ -106,13 +106,13 @@ class FrameIntentRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_CONFIDENCE_REJECTED = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question about WHO or WHAT (whichever is vaguer). "
     "Then stop and wait. Do not explain, suggest, or plan."
 )
 
 GUIDANCE_MISSING_FIELDS = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question about the missing field. "
     "Then stop and wait. Do not explain, suggest, or plan."
 )

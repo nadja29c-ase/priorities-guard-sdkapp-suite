@@ -175,31 +175,31 @@ class IdentifyDeliverablesRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_CONFIDENCE_REJECTED = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question to make the vaguest deliverable concrete: 'When [action] is done, what will exist?' "
     "Then stop and wait. Do not explain, suggest, or plan."
 )
 
 GUIDANCE_FRAMING_MISSING = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Step 1 framing required first. Ask: 'Before we identify deliverables, who benefits from this work?' "
     "Then stop and wait. Do not explain the process."
 )
 
 GUIDANCE_TOO_MANY_DELIVERABLES = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question: 'Which of these are truly essential for the initiative to be done?' "
     "Then stop and wait. Do not suggest which to remove."
 )
 
 GUIDANCE_EMPTY_DELIVERABLES = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question: 'What needs to exist for this initiative to be done?' "
     "Then stop and wait. Do not suggest deliverables."
 )
 
 GUIDANCE_INVALID_DELIVERABLE = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question about the empty deliverable name. "
     "Then stop and wait. Do not suggest what it should be."
 )

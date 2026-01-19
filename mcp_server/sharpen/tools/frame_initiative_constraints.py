@@ -111,19 +111,19 @@ class FrameConstraintsRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_CONFIDENCE_REJECTED = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question about CONSTRAINT or DEFINITION OF FINISHED (whichever is vaguer). "
     "Then stop and wait. Do not explain, suggest, or plan."
 )
 
 GUIDANCE_FORCE_CONSTRAINT = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask exactly: 'What's the smallest result that would make this worth continuing?' "
     "Then stop and wait. Do not suggest examples. Use their answer as forced_mvp."
 )
 
 GUIDANCE_MISSING_FIELDS = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question about the missing field. "
     "Then stop and wait. Do not explain, suggest, or plan."
 )

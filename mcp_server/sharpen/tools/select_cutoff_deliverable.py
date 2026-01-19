@@ -184,61 +184,61 @@ class SelectCutoffRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_CONFIDENCE_REJECTED = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question: 'Which one deliverable must exist first?' "
     "Then stop and wait. Do not suggest which to select."
 )
 
 GUIDANCE_SELECTION_NOT_FOUND = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Present the confirmed deliverable names. Ask: 'Which of these is the focus?' "
     "Then stop and wait. Do not suggest."
 )
 
 GUIDANCE_MISSING_FRAMING = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Step 1 framing required. Ask: 'Before selecting focus, who benefits from this work?' "
     "Then stop and wait."
 )
 
 GUIDANCE_MISSING_DELIVERABLES = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Deliverables required first. Ask: 'What needs to exist for this initiative to be done?' "
     "Then stop and wait."
 )
 
 GUIDANCE_DUPLICATE_NAMES = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask: 'Two deliverables have the same name. Which ones are actually distinct?' "
     "Then stop and wait. Do not suggest names."
 )
 
 GUIDANCE_BOTH_METHODS = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask: 'Are you selecting one deliverable as-is, or combining multiple into a tighter scope?' "
     "Then stop and wait."
 )
 
 GUIDANCE_NO_METHOD = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask: 'If you could only complete one of these right now, which would it be?' "
     "Then stop and wait. Do not suggest."
 )
 
 GUIDANCE_EMPTY_SCULPT_NAME = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask: 'What would you call this combined scope?' "
     "Then stop and wait. Do not suggest a name."
 )
 
 GUIDANCE_EMPTY_REPLACES = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask: 'Which confirmed deliverables does this replace?' "
     "Then stop and wait."
 )
 
 GUIDANCE_INVALID_REPLACES = (
-    "SHARPEN MODE STILL ACTIVE. "
+    "SHARPEN MODE STILL BINDING. "
     "Present the confirmed deliverable names. Ask: 'Which of these does the sculpted deliverable replace?' "
     "Then stop and wait."
 )

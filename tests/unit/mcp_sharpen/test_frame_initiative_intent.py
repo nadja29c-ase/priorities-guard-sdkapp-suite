@@ -269,7 +269,7 @@ class TestFrameInitiativeIntentHandler:
         result = await handle(arguments)
 
         instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "SHARPEN MODE STILL ACTIVE" in instruction
+        assert "SHARPEN MODE STILL BINDING" in instruction
         assert "ONE question" in instruction
         assert "stop and wait" in instruction
 
