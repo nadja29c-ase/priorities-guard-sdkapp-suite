@@ -197,16 +197,14 @@ GUIDANCE_SELECTION_NOT_FOUND = (
 
 GUIDANCE_MISSING_FRAMING = (
     "SHARPEN MODE STILL BINDING. "
-    "Initiative framing required first (frame_initiative_intent + frame_initiative_constraints). "
-    "Ask: 'Before selecting focus, who benefits from this work?' "
-    "Then stop and wait."
+    "initiative_framing parameter missing. If framing was already confirmed, include it in the tool call. "
+    "If not yet confirmed, complete framing first via frame_initiative_intent + frame_initiative_constraints."
 )
 
 GUIDANCE_MISSING_DELIVERABLES = (
     "SHARPEN MODE STILL BINDING. "
-    "Deliverables required first (identify_e2e_deliverables). "
-    "Ask: 'What needs to exist for this initiative to be done?' "
-    "Then stop and wait."
+    "confirmed_deliverables parameter missing. If deliverables were already confirmed, include them in the tool call. "
+    "If not yet confirmed, complete deliverables first via identify_e2e_deliverables."
 )
 
 GUIDANCE_DUPLICATE_NAMES = (
