@@ -201,17 +201,16 @@ GUIDANCE_INVALID_DELIVERABLE = (
 
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING.\n"
-    "Deliverables confirmed. Present them as an unordered list (no numbering). "
-    "Then ask: 'Quick check — how big does this feel? XS / S / M / L / XL (gut feel only).' "
-    "Stop and wait.\n\n"
-    "If XS/S/M → proceed to CUTOFF QUESTION below.\n"
-    "If L/XL → ask: 'That size sometimes means there's room to subtract. Or that the initiative might be delivered in phases, not all at once. "
-    "If this had to be M or smaller, what could be removed?' Then stop and wait.\n"
-    "  - If user removes items → reflect the updated list, then proceed to CUTOFF QUESTION below.\n"
-    "  - If user says 'fine as is' → proceed to CUTOFF QUESTION below.\n\n"
-    "CUTOFF QUESTION:\n"
-    "Ask: 'If you could only complete one of these right now, which would it be?' "
-    "Stop and wait. Do not suggest. Call select_cutoff_deliverable with the user's choice."
+    "Deliverables confirmed. Present them as an unordered list (no numbering).\n\n"
+    "Then ask the CONSTRAINT-DRIVEN CUTOFF QUESTION:\n"
+    "'Your constraint is [constraint_type]: [constraint_value]. "
+    "Which ONE of these can you realistically finish within that AND would still count as [definition_of_finished]?'\n\n"
+    "Stop and wait. Do not suggest.\n\n"
+    "ESCAPE HATCH (only if user says 'none of them fit'):\n"
+    "Ask: 'Is there a simpler approach to reach [definition_of_finished] within [constraint_value]?'\n"
+    "If user proposes simpler solution → elicit new deliverables for that approach.\n"
+    "If user picks one anyway → proceed with their choice.\n\n"
+    "When user selects → call select_cutoff_deliverable with their choice."
 )
 
 # ============================================================================

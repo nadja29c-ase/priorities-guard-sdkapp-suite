@@ -517,3 +517,99 @@ def validate_cutoff_selection(
         "deferred_deliverables": deferred,
         "_internal_replaces": replaces,  # For handler guidance only, not in Step 3 contract
     }
+
+
+# ============================================================================
+# Step 3: Commit Good Enough Logic (Structural Validation Only)
+# ============================================================================
+
+
+def validate_good_enough(
+    framing: dict | None,
+    focus: dict | None,
+    good_enough: str | None,
+    confidence: str | None,
+) -> dict[str, Any]:
+    """
+    Validate Step 3: good enough stopping line.
+
+    Args:
+        framing: Combined initiative_framing from Step 1
+        focus: Focus deliverable from Step 2.2
+        good_enough: User's definition of "good enough" to stop this week
+        confidence: LLM's confidence level
+
+    Returns:
+        dict with keys:
+        - valid: bool
+        - error_type: str | None
+        - error_details: str | None
+        - sharpened_scope: dict | None (if valid)
+    """
+    # Check confidence first
+    if confidence != "high":
+        return {
+            "valid": False,
+            "error_type": "confidence_too_low",
+            "error_details": f"Confidence '{confidence}' rejected. Only 'high' accepted.",
+            "sharpened_scope": None,
+        }
+
+    # Check framing exists
+    if not framing:
+        return {
+            "valid": False,
+            "error_type": "missing_framing",
+            "error_details": "Initiative framing required. Complete Step 1 first.",
+            "sharpened_scope": None,
+        }
+
+    # Check framing has required fields
+    required_framing = ["who", "what", "constraint_type", "constraint_value", "definition_of_finished"]
+    missing_framing = [f for f in required_framing if not framing.get(f)]
+    if missing_framing:
+        return {
+            "valid": False,
+            "error_type": "missing_framing",
+            "error_details": f"Initiative framing incomplete. Missing: {', '.join(missing_framing)}",
+            "sharpened_scope": None,
+        }
+
+    # Check focus exists
+    if not focus:
+        return {
+            "valid": False,
+            "error_type": "missing_focus",
+            "error_details": "Focus deliverable required. Complete Step 2 first.",
+            "sharpened_scope": None,
+        }
+
+    # Check focus has name
+    if not focus.get("name"):
+        return {
+            "valid": False,
+            "error_type": "missing_focus",
+            "error_details": "Focus deliverable name required.",
+            "sharpened_scope": None,
+        }
+
+    # Check good_enough exists and is non-empty
+    if not good_enough or not good_enough.strip():
+        return {
+            "valid": False,
+            "error_type": "empty_definition",
+            "error_details": "Good enough definition required.",
+            "sharpened_scope": None,
+        }
+
+    # All valid — build sharpened scope
+    return {
+        "valid": True,
+        "error_type": None,
+        "error_details": None,
+        "sharpened_scope": {
+            "initiative_framing": framing,
+            "focus_deliverable": focus,
+            "good_enough_definition": good_enough.strip(),
+        },
+    }

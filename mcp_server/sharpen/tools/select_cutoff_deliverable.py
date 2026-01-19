@@ -55,20 +55,20 @@ SCULPTING INVARIANT: A sculpted deliverable may ONLY combine or reduce scope fro
 CRITICAL: Use exactly ONE method. If user says "API and Docs together", that's sculpting — create a new name that captures the combined scope. If user picks one as-is, that's selection.
 
 EXAMPLE CONVERSATION (Selection):
-  You: "Looking at these deliverables, what's the minimum shippable scope?"
-  User: "Just the API — docs can wait"
-  You: "So 'Deployed REST API' is the focus. Documentation is deferred. Correct?"
+  You: "Your constraint is capacity: 3 hours per week. Which ONE of these can you realistically finish within that AND would still count as done?"
+  User: "Just the checklist — the RASCI doc can wait"
+  You: "So 'First-week checklist' is the focus, given your 3 hours/week. RASCI is deferred. Correct?"
   User: "Yes"
-  → Call with selected_deliverable_name="Deployed REST API", confidence="high"
+  → Call with selected_deliverable_name="First-week checklist", confidence="high"
 
-EXAMPLE CONVERSATION (Sculpting):
-  You: "Looking at these deliverables, what's the minimum shippable scope?"
-  User: "I can't ship API without at least basic docs"
-  You: "So API and Documentation are really one deliverable. What would you call this combined scope?"
-  User: "Deployed API with endpoint reference"
-  You: "So 'Deployed API with endpoint reference' replaces both 'REST API' and 'API Documentation'. The Admin Dashboard is deferred. Correct?"
-  User: "Yes"
-  → Call with sculpted_deliverable={name="Deployed API with endpoint reference", replaces=["REST API", "API Documentation"]}, confidence="high"
+EXAMPLE CONVERSATION (None fit — escape hatch):
+  You: "Your constraint is time: 2 weeks. Which ONE of these can you realistically finish within that?"
+  User: "Honestly, none of them fit in 2 weeks"
+  You: "Is there a simpler approach to reach 'new hire completes first week confidently' within 2 weeks?"
+  User: "Maybe just a Slack message with key contacts instead of a full checklist"
+  You: "That's a different solution. What deliverable would exist?"
+  User: "A pinned Slack message with 'who to ask for what'"
+  → Restart deliverables with this simpler approach
 """
 
 INPUT_SCHEMA = {
@@ -221,7 +221,8 @@ GUIDANCE_BOTH_METHODS = (
 
 GUIDANCE_NO_METHOD = (
     "SHARPEN MODE STILL BINDING. "
-    "Ask: 'If you could only complete one of these right now, which would it be?' "
+    "Ask: 'Given [constraint_type]: [constraint_value], which ONE of these can you realistically finish "
+    "AND would still count as [definition_of_finished]?' "
     "Then stop and wait. Do not suggest."
 )
 
@@ -256,20 +257,20 @@ def build_confirmed_guidance(
     else:
         scope_intro = f"Focus: '{focus_name}'."
 
-    # Step 3 tool not yet implemented - for now, ask about work items
-    next_step = (
-        f"Ask: 'What work items must exist to produce {focus_name}?' "
-        f"Then stop and wait. Do not suggest tasks."
+    # Step 3: Time-boxing question
+    step_3_question = (
+        f"Ask: 'What would be good enough that you could stop working on {focus_name} this week and still feel it was worth the time?' "
+        f"Then stop and wait. Do not suggest. When user answers → call commit_good_enough with their answer."
     )
 
     if deferred_names:
         deferred_str = ", ".join(deferred_names)
         return (
-            f"Scope confirmed. {scope_intro} Deferred: {deferred_str}. "
-            f"{next_step} Do not discuss deferred items."
+            f"Scope confirmed. {scope_intro} Deferred: {deferred_str}.\n\n"
+            f"{step_3_question}"
         )
     else:
-        return f"Scope confirmed. {scope_intro} Nothing deferred. {next_step}"
+        return f"Scope confirmed. {scope_intro} Nothing deferred.\n\n{step_3_question}"
 
 
 # ============================================================================
