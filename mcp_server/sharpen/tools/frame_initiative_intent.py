@@ -135,7 +135,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "error": "confidence_too_low",
                 "confidence_provided": validated_request.confidence,
                 "assistant_guidance": {
-                    "instruction": "STAY IN YOUR FACILITATOR ROLE and ask the user clarifying questions until WHO is specific and WHAT is a concrete artifact. Get user confirmation, then call with confidence='high'.",
+                    "action": "ASK_CLARIFYING",
+                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about WHO or WHAT (whichever is vaguer). Then stop and wait. Do not explain, suggest, or plan.",
                 },
             },
             isError=True,
@@ -159,7 +160,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "error": "missing_fields",
                 "missing": result["missing"],
                 "assistant_guidance": {
-                    "instruction": "Ask the user to provide the missing information. Do not suggest what it should be.",
+                    "action": "ASK_CLARIFYING",
+                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about the missing field. Then stop and wait. Do not explain, suggest, or plan.",
                 },
             },
             isError=True,
@@ -182,7 +184,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             "confidence": "high",
             "confirmed": True,
             "assistant_guidance": {
-                "instruction": "Proceed with further framing the initiative and capture the one most dominant initiative constraint by calling frame_initiative_constraints. NEVER suggest what constraints might be — ask the user.",
+                "action": "PROCEED_TO_CONSTRAINTS",
+                "instruction": "Intent confirmed. Ask ONE question: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' Then stop and wait. Do not suggest constraints.",
             },
         },
     )

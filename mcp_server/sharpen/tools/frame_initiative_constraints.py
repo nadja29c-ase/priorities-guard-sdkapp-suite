@@ -140,7 +140,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "error": "confidence_too_low",
                 "confidence_provided": validated_request.confidence,
                 "assistant_guidance": {
-                    "instruction": "Ask clarifying questions until CONSTRAINT is specific and DEFINITION OF FINISHED is verifiable. Get user confirmation, then call with confidence='high'.",
+                    "action": "ASK_CLARIFYING",
+                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about CONSTRAINT or DEFINITION OF FINISHED (whichever is vaguer). Then stop and wait. Do not explain, suggest, or plan.",
                 },
             },
             isError=True,
@@ -164,7 +165,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             structuredContent={
                 "force_constraint": True,
                 "assistant_guidance": {
-                    "instruction": "Ask: 'What's the first small win that would prove this is working as intended?' Wait for their answer — do not suggest. Use their answer as constraint_type='forced_mvp' and constraint_value=their answer. Then call this tool again with confidence='high'.",
+                    "action": "ASK_CLARIFYING",
+                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask exactly: 'What's the smallest result that would make this worth continuing?' Then stop and wait. Do not suggest examples. Use their answer as forced_mvp.",
                 },
             },
         )
@@ -181,7 +183,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "missing": result["missing"],
                 "constraint_framing": result["constraint_framing"],
                 "assistant_guidance": {
-                    "instruction": "Ask the user to provide the missing information. Do not suggest what it should be. Do not estimate for them.",
+                    "action": "ASK_CLARIFYING",
+                    "instruction": "SHARPEN MODE STILL ACTIVE. Ask ONE question about the missing field. Then stop and wait. Do not explain, suggest, or plan.",
                 },
             },
             isError=True,
@@ -206,7 +209,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             "confidence": "high",
             "confirmed": True,
             "assistant_guidance": {
-                "instruction": "Consolidate the outputs from frame_initiative_intent (WHO, WHAT, WHY) and frame_initiative_constraints (CONSTRAINT, DEFINITION OF FINISHED). Present the complete initiative framing to the user using their exact words and ask for final confirmation before proceeding.",
+                "action": "CONFIRM_FRAMING",
+                "instruction": "Present the complete framing using the user's exact words: WHO, WHAT, WHY (if any), CONSTRAINT, DEFINITION OF FINISHED. Then ask: 'Is this correct?' Stop and wait. Do not elaborate or add context.",
             },
         },
     )

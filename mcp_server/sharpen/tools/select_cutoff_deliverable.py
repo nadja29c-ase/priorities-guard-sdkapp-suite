@@ -184,61 +184,63 @@ class SelectCutoffRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_CONFIDENCE_REJECTED = (
-    "STAY IN YOUR FACILITATOR ROLE. The selection is not yet user-confirmed. "
-    "Ask: 'If you stopped after [their tentative choice], would the initiative "
-    "still be worth doing?' Wait for their answer. Do not suggest which to select. "
-    "Get explicit confirmation, then call with confidence='high'."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question: 'Which one deliverable must exist first?' "
+    "Then stop and wait. Do not suggest which to select."
 )
 
 GUIDANCE_SELECTION_NOT_FOUND = (
-    "The selected deliverable does not match any confirmed deliverable. "
-    "Present the list of confirmed deliverables and ask the user to select "
-    "one by name. Do not suggest which to select."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Present the confirmed deliverable names. Ask: 'Which of these is the focus?' "
+    "Then stop and wait. Do not suggest."
 )
 
 GUIDANCE_MISSING_FRAMING = (
-    "Cannot select cutoff without confirmed initiative framing. "
-    "Complete Step 1 first using frame_initiative_intent and frame_initiative_constraints."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Step 1 framing required. Ask: 'Before selecting focus, who benefits from this work?' "
+    "Then stop and wait."
 )
 
 GUIDANCE_MISSING_DELIVERABLES = (
-    "Cannot select cutoff without confirmed deliverables. "
-    "Complete Step 2.1 first using identify_e2e_deliverables."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Deliverables required first. Ask: 'What needs to exist for this initiative to be done?' "
+    "Then stop and wait."
 )
 
 GUIDANCE_DUPLICATE_NAMES = (
-    "The confirmed deliverables contain duplicate names. Each deliverable must have "
-    "a unique name. Ask the user to clarify which deliverables are distinct. "
-    "Do not suggest names — use the user's exact words."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask: 'Two deliverables have the same name. Which ones are actually distinct?' "
+    "Then stop and wait. Do not suggest names."
 )
 
 GUIDANCE_BOTH_METHODS = (
-    "Provide either selected_deliverable_name OR sculpted_deliverable, not both. "
-    "Ask the user: 'Are you selecting an existing deliverable as-is, or combining "
-    "multiple into a tighter scope?' Wait for clarification."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask: 'Are you selecting one deliverable as-is, or combining multiple into a tighter scope?' "
+    "Then stop and wait."
 )
 
 GUIDANCE_NO_METHOD = (
-    "No focus deliverable specified. Ask: 'Looking at these deliverables, what's "
-    "the minimum shippable scope? You can pick one as-is or combine multiple into "
-    "a tighter focus.' Wait for the user's answer. Do not suggest."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask: 'If you could only complete one of these right now, which would it be?' "
+    "Then stop and wait. Do not suggest."
 )
 
 GUIDANCE_EMPTY_SCULPT_NAME = (
-    "Sculpted deliverable needs a name. Ask: 'What would you call this combined "
-    "scope?' Use the user's exact words. Do not suggest a name."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask: 'What would you call this combined scope?' "
+    "Then stop and wait. Do not suggest a name."
 )
 
 GUIDANCE_EMPTY_REPLACES = (
-    "Sculpted deliverable must replace at least one confirmed deliverable. "
-    "Ask: 'Which of the confirmed deliverables does this replace?' "
-    "Wait for the user's answer."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask: 'Which confirmed deliverables does this replace?' "
+    "Then stop and wait."
 )
 
 GUIDANCE_INVALID_REPLACES = (
-    "Some names in 'replaces' don't match confirmed deliverables. "
-    "Present the confirmed deliverable names and ask the user to clarify "
-    "which ones the sculpted deliverable replaces."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Present the confirmed deliverable names. Ask: 'Which of these does the sculpted deliverable replace?' "
+    "Then stop and wait."
 )
 
 
@@ -247,35 +249,25 @@ def build_confirmed_guidance(
     deferred_names: list[str],
     replaces: list[str] | None = None,
 ) -> str:
-    """Build guidance for confirmed selection/sculpt.
-
-    Args:
-        focus_name: Name of the focus deliverable
-        deferred_names: Names of deferred deliverables
-        replaces: If sculpted, the names that were replaced (for guidance only)
-    """
+    """Build guidance for confirmed selection/sculpt."""
     if replaces:
         replaces_str = ", ".join(replaces)
         scope_intro = f"Sculpted focus: '{focus_name}' (replaces: {replaces_str})."
     else:
-        scope_intro = f"Focus deliverable: '{focus_name}'."
+        scope_intro = f"Focus: '{focus_name}'."
 
     if deferred_names:
         deferred_str = ", ".join(deferred_names)
         return (
-            f"Scope boundary confirmed. {scope_intro} "
-            f"Deferred for now: {deferred_str}. "
-            f"Proceed to Step 3: work breakdown for '{focus_name}' only. "
-            f"Do not discuss deferred items. Do not suggest tasks. "
-            f"Ask: 'What work items must be completed to produce {focus_name}?'"
+            f"Scope confirmed. {scope_intro} Deferred: {deferred_str}. "
+            f"Ask: 'What work items must exist to produce {focus_name}?' "
+            f"Then stop and wait. Do not suggest tasks. Do not discuss deferred items."
         )
     else:
         return (
-            f"Scope boundary confirmed. {scope_intro} "
-            f"Nothing deferred — all confirmed deliverables are replaced by this focus. "
-            f"Proceed to Step 3: work breakdown for '{focus_name}' only. "
-            f"Do not suggest tasks. "
-            f"Ask: 'What work items must be completed to produce {focus_name}?'"
+            f"Scope confirmed. {scope_intro} Nothing deferred. "
+            f"Ask: 'What work items must exist to produce {focus_name}?' "
+            f"Then stop and wait. Do not suggest tasks."
         )
 
 

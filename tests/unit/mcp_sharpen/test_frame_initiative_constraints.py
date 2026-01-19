@@ -292,7 +292,9 @@ class TestFrameInitiativeConstraintsHandler:
         result = await handle(arguments)
 
         instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "Do not suggest" in instruction
+        assert "SHARPEN MODE STILL ACTIVE" in instruction
+        assert "ONE question" in instruction
+        assert "stop and wait" in instruction
 
     @pytest.mark.asyncio
     async def test_text_content_for_valid_input(self):
@@ -324,8 +326,8 @@ class TestFrameInitiativeConstraintsHandler:
         assert result.structuredContent["confidence"] == "high"
 
     @pytest.mark.asyncio
-    async def test_success_guidance_mentions_consolidation(self):
-        """Success guidance instructs LLM to consolidate both tool outputs."""
+    async def test_success_guidance_presents_complete_framing(self):
+        """Success guidance instructs LLM to present complete framing."""
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by Friday",
@@ -336,9 +338,9 @@ class TestFrameInitiativeConstraintsHandler:
         result = await handle(arguments)
 
         instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "Consolidate" in instruction
-        assert "frame_initiative_intent" in instruction
-        assert "frame_initiative_constraints" in instruction
+        assert "Present the complete framing" in instruction
+        assert "Is this correct?" in instruction
+        assert "Stop and wait" in instruction
 
 
 # ============================================================================

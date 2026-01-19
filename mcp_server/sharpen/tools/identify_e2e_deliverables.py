@@ -175,56 +175,42 @@ class IdentifyDeliverablesRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_CONFIDENCE_REJECTED = (
-    "STAY IN YOUR FACILITATOR ROLE. Deliverables are not yet concrete or user-confirmed. "
-    "Ask clarifying questions to turn activities into outputs. For each vague item, ask: "
-    "'What will exist after this is done?' Do not suggest what the deliverable should be. "
-    "Get user confirmation, then call with confidence='high'."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question to make the vaguest deliverable concrete: 'When [action] is done, what will exist?' "
+    "Then stop and wait. Do not explain, suggest, or plan."
 )
 
 GUIDANCE_FRAMING_MISSING = (
-    "Initiative framing must be confirmed before identifying deliverables. "
-    "Complete Step 1 first using frame_initiative_intent and frame_initiative_constraints. "
-    "Do not proceed without confirmed framing."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Step 1 framing required first. Ask: 'Before we identify deliverables, who benefits from this work?' "
+    "Then stop and wait. Do not explain the process."
 )
 
 GUIDANCE_TOO_MANY_DELIVERABLES = (
-    "Maximum 10 deliverables allowed. This is a forcing function — if more exist, "
-    "the initiative may need decomposition. Ask: 'Which of these are truly essential "
-    "for the initiative to be considered done?' Do not suggest which to keep."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question: 'Which of these are truly essential for the initiative to be done?' "
+    "Then stop and wait. Do not suggest which to remove."
 )
 
 GUIDANCE_EMPTY_DELIVERABLES = (
-    "No deliverables provided. Ask: 'What needs to exist for this initiative "
-    "to be done? Don't filter — just name everything that comes to mind.' "
-    "If user states actions, reframe: 'When [action] is done, what will exist?' "
-    "Wait for their answer. Do not suggest deliverables."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question: 'What needs to exist for this initiative to be done?' "
+    "Then stop and wait. Do not suggest deliverables."
 )
 
 GUIDANCE_INVALID_DELIVERABLE = (
-    "One or more deliverables have empty names. Ask the user to clarify what "
-    "each deliverable is. Do not suggest what the deliverable should be."
+    "SHARPEN MODE STILL ACTIVE. "
+    "Ask ONE question about the empty deliverable name. "
+    "Then stop and wait. Do not suggest what it should be."
 )
 
 GUIDANCE_CONFIRMED = (
-    "Deliverables confirmed. Present them back to the user as an unordered list — "
-    "no numbering, no priority implied. "
-    "\n\n"
-    "SCOPE CHECK (do this before cutoff selection):\n"
-    "Ask: 'Quick check: looking at this set of deliverables as a whole, "
-    "how big does this initiative feel right now? XS / S / M / L / XL — gut feel only, no estimating.'\n"
-    "Wait for answer.\n"
-    "- If XS, S, or M → proceed to cutoff selection\n"
-    "- If L or XL → nudge ONCE: 'That size sometimes means there's room to subtract. "
-    "If this had to be M or smaller, what could be removed or merged?'\n"
-    "Then wait. Do not suggest what to remove. Do not loop.\n"
-    "If user removes or merges items → reflect the updated list back and proceed to cutoff selection.\n"
-    "If user says 'it's fine as is' → proceed to cutoff selection.\n"
-    "\n"
-    "CUTOFF SELECTION:\n"
-    "Ask: 'If you could only complete one of these right now, which would it be? "
-    "Everything else is explicitly deferred.'\n"
-    "Do not suggest which to select. "
-    "Call select_cutoff_deliverable with the user's choice."
+    "Deliverables confirmed. Present them as an unordered list (no numbering). "
+    "Then ask: 'Quick check — how big does this feel? XS / S / M / L / XL (gut feel only).' "
+    "Stop and wait.\n\n"
+    "If XS/S/M → ask: 'If you could only complete one right now, which would it be?'\n"
+    "If L/XL → ask: 'That size sometimes means there's room to subtract. If this had to be M or smaller, what could be removed?'\n\n"
+    "Then stop and wait. Do not suggest. Do not plan."
 )
 
 
