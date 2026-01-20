@@ -243,10 +243,9 @@ GUIDANCE_INVALID_REPLACES = (
 )
 
 GUIDANCE_CONFIRMED = (
+    "SHARPEN MODE STILL BINDING. "
     "Scope confirmed. Focus: [focus_name]. Deferred: [deferred_list].\n\n"
-    "Ask: 'What would be good enough that you could stop working on [focus_name] "
-    "this week and still feel it was worth the time?'\n"
-    "Then stop and wait. Do not suggest. When user answers → call commit_week_deliverable with their answer."
+    "Move on with breaking the scope even futher into a meaningful deliverable that can be accomplished within the next seven days can call commit_week_deliverable.\n"
 )
 
 

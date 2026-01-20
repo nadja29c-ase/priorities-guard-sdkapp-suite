@@ -56,7 +56,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus=valid_focus,
-            good_enough=valid_good_enough,
+            weeks_deliverable=valid_good_enough,
             confidence="high",
         )
 
@@ -64,14 +64,14 @@ class TestValidateGoodEnough:
         assert result["error_type"] is None
         assert result["sharpened_scope"]["initiative_framing"] == valid_framing
         assert result["sharpened_scope"]["focus_deliverable"] == valid_focus
-        assert result["sharpened_scope"]["good_enough_definition"] == valid_good_enough
+        assert result["sharpened_scope"]["weeks_deliverable"] == valid_good_enough
 
     def test_confidence_low_rejects(self, valid_framing, valid_focus, valid_good_enough):
         """Confidence='low' is rejected."""
         result = validate_good_enough(
             framing=valid_framing,
             focus=valid_focus,
-            good_enough=valid_good_enough,
+            weeks_deliverable=valid_good_enough,
             confidence="low",
         )
 
@@ -83,7 +83,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus=valid_focus,
-            good_enough=valid_good_enough,
+            weeks_deliverable=valid_good_enough,
             confidence="medium",
         )
 
@@ -95,7 +95,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=None,
             focus=valid_focus,
-            good_enough=valid_good_enough,
+            weeks_deliverable=valid_good_enough,
             confidence="high",
         )
 
@@ -112,7 +112,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=incomplete_framing,
             focus=valid_focus,
-            good_enough=valid_good_enough,
+            weeks_deliverable=valid_good_enough,
             confidence="high",
         )
 
@@ -125,7 +125,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus=None,
-            good_enough=valid_good_enough,
+            weeks_deliverable=valid_good_enough,
             confidence="high",
         )
 
@@ -137,7 +137,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus={"description": "Some desc"},
-            good_enough=valid_good_enough,
+            weeks_deliverable=valid_good_enough,
             confidence="high",
         )
 
@@ -149,7 +149,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus=valid_focus,
-            good_enough="",
+            weeks_deliverable="",
             confidence="high",
         )
 
@@ -161,7 +161,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus=valid_focus,
-            good_enough="   ",
+            weeks_deliverable="   ",
             confidence="high",
         )
 
@@ -173,7 +173,7 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus=valid_focus,
-            good_enough=None,
+            weeks_deliverable=None,
             confidence="high",
         )
 
@@ -185,12 +185,12 @@ class TestValidateGoodEnough:
         result = validate_good_enough(
             framing=valid_framing,
             focus=valid_focus,
-            good_enough="  Just the contacts  ",
+            weeks_deliverable="  Just the contacts  ",
             confidence="high",
         )
 
         assert result["valid"] is True
-        assert result["sharpened_scope"]["good_enough_definition"] == "Just the contacts"
+        assert result["sharpened_scope"]["weeks_deliverable"] == "Just the contacts"
 
 
 # ============================================================================
@@ -209,7 +209,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "high",
         }
 
@@ -227,7 +227,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "low",
         }
 
@@ -243,7 +243,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": None,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "high",
         }
 
@@ -259,7 +259,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": None,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "high",
         }
 
@@ -275,7 +275,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": "",
+            "weeks_deliverable": "",
             "confidence": "high",
         }
 
@@ -293,7 +293,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "high",
         }
 
@@ -315,7 +315,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "high",
         }
 
@@ -325,7 +325,7 @@ class TestCommitGoodEnoughHandler:
         sharpened = result.structuredContent["sharpened_scope"]
         assert "initiative_framing" in sharpened
         assert "focus_deliverable" in sharpened
-        assert "good_enough_definition" in sharpened
+        assert "weeks_deliverable" in sharpened
         assert sharpened["focus_deliverable"]["name"] == "First-week checklist"
 
     @pytest.mark.asyncio
@@ -336,7 +336,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "high",
         }
 
@@ -354,7 +354,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": valid_focus,
-            "good_enough_definition": valid_good_enough,
+            "weeks_deliverable": valid_good_enough,
             "confidence": "high",
         }
 
@@ -371,7 +371,7 @@ class TestCommitGoodEnoughHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "focus_deliverable": "not an object",  # Should be dict
-            "good_enough_definition": "valid definition",
+            "weeks_deliverable": "valid definition",
             "confidence": "high",
         }
 

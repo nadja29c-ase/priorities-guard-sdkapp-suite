@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-DESCRIPTION = """Records the user's "good enough" stopping line for this week. This defines when they can stop working on the focus deliverable and feel the week was successful. Requires confirmed focus deliverable from Step 2 and confidence="high".
+DESCRIPTION = """Records the user's deliverable (derived from focus deliverable) for the next seven days (week). This defines when they can stop working on the focus deliverable and feel the week was successful. Requires confirmed focus deliverable from select_cutoff_deliverable and confidence="high".
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.
@@ -42,7 +42,7 @@ ACTIVE BEHAVIORS:
 - Then call tool with confidence="high"
 
 THE ONLY QUESTION:
-"What would be good enough that you could stop working on [focus_deliverable] this week and still feel it was worth the time?"
+"What do you want to realitically deliver in the next 7 days, to make meaningful progress towards [focus deliverable]?"
 
 SCOPE REGRESSION GUARDRAIL:
 If the user's answer expands scope beyond the focus deliverable (adds new outcomes, audiences, or deliverables), ask: 'That sounds like it goes beyond [focus_deliverable]. What would be good enough within just that scope?'
@@ -67,7 +67,7 @@ EXAMPLE CONVERSATION:
   User: "When it has all 5 days listed with at least one task each"
   You: "So 'good enough' this week is: a draft checklist with all 5 days and at least one task per day. Correct?"
   User: "Yes"
-  → Call commit_week_deliverable with good_enough_definition="Draft checklist with all 5 days and at least one task per day", confidence="high"
+  → Call commit_week_deliverable with weeks_deliverable="Draft checklist with all 5 days and at least one task per day", confidence="high"
 """
 
 INPUT_SCHEMA = {
@@ -97,7 +97,7 @@ INPUT_SCHEMA = {
             },
             "required": ["name"],
         },
-        "good_enough_definition": {
+        "weeks_deliverable": {
             "type": "string",
             "description": "User's definition of 'good enough' to stop this week. Must be concrete and verifiable. ACCORDING TO THE USER.",
         },
@@ -107,7 +107,7 @@ INPUT_SCHEMA = {
             "description": "Your confidence that the stopping line is user-confirmed and concrete. Must be 'high' to proceed.",
         },
     },
-    "required": ["initiative_framing", "focus_deliverable", "good_enough_definition", "confidence"],
+    "required": ["initiative_framing", "focus_deliverable", "weeks_deliverable", "confidence"],
     "additionalProperties": False,
 }
 
@@ -136,7 +136,7 @@ class CommitWeekDeliverableRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     initiative_framing: Optional[InitiativeFraming] = None
     focus_deliverable: Optional[FocusDeliverable] = None
-    good_enough_definition: Optional[str] = None
+    weeks_deliverable: Optional[str] = None
     confidence: Optional[Literal["high", "medium", "low"]] = None
 
 
@@ -174,8 +174,8 @@ GUIDANCE_CONFIRMED = (
     "- WHY: [why]\n"
     "- CONSTRAINT: [constraint_type]: [constraint_value]\n"
     "- FOCUS DELIVERABLE: [focus_deliverable]\n"
-    "- THIS WEEK'S GOOD ENOUGH: [good_enough_definition]\n\n"
-    "Then say: 'You're sharpened. When you hit [good_enough_definition], you can stop for the week.'\n"
+    "- THIS WEEK'S GOOD ENOUGH: [weeks_deliverable]\n\n"
+    "Then say: 'Your initiative has been sharpened and we have set the guardrails for avoiding scope creep. When you hit [weeks_deliverable], you can stop for the week.'\n"
     "Do not add tasks. Do not suggest next steps. Do not offer to help plan."
 )
 
@@ -209,7 +209,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     result = validate_good_enough(
         framing=framing_dict,
         focus=focus_dict,
-        good_enough=validated_request.good_enough_definition,
+        weeks_deliverable=validated_request.weeks_deliverable,
         confidence=validated_request.confidence,
     )
 
@@ -265,14 +265,14 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     logger.info("commit_week_deliverable.complete",
                 focus=sharpened["focus_deliverable"]["name"],
-                good_enough=sharpened["good_enough_definition"][:50],
+                good_enough=sharpened["weeks_deliverable"][:50],
                 confidence="high")
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
             text=f"Sharpened. Focus: {sharpened['focus_deliverable']['name']}. "
-                 f"Good enough this week: {sharpened['good_enough_definition']}",
+                 f"Good enough this week: {sharpened['weeks_deliverable']}",
         )],
         structuredContent={
             "sharpened_scope": sharpened,

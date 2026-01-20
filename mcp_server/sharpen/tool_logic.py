@@ -522,16 +522,16 @@ def validate_cutoff_selection(
 def validate_good_enough(
     framing: dict | None,
     focus: dict | None,
-    good_enough: str | None,
+    weeks_deliverable: str | None,
     confidence: str | None,
 ) -> dict[str, Any]:
     """
-    Validate Step 3: good enough stopping line.
+    Validate Step 3: week's deliverable stopping line.
 
     Args:
         framing: Combined initiative_framing from Step 1
         focus: Focus deliverable from Step 2.2
-        good_enough: User's definition of "good enough" to stop this week
+        weeks_deliverable: User's concrete deliverable for this week
         confidence: LLM's confidence level
 
     Returns:
@@ -588,12 +588,12 @@ def validate_good_enough(
             "sharpened_scope": None,
         }
 
-    # Check good_enough exists and is non-empty
-    if not good_enough or not good_enough.strip():
+    # Check weeks_deliverable exists and is non-empty
+    if not weeks_deliverable or not weeks_deliverable.strip():
         return {
             "valid": False,
             "error_type": "empty_definition",
-            "error_details": "Good enough definition required.",
+            "error_details": "Week's deliverable required.",
             "sharpened_scope": None,
         }
 
@@ -605,6 +605,6 @@ def validate_good_enough(
         "sharpened_scope": {
             "initiative_framing": framing,
             "focus_deliverable": focus,
-            "good_enough_definition": good_enough.strip(),
+            "weeks_deliverable": weeks_deliverable.strip(),
         },
     }
