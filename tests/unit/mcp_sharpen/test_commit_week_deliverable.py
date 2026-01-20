@@ -1,14 +1,14 @@
 """
-Tests for commit_good_enough tool.
+Tests for commit_week_deliverable tool.
 
-Tests both pure logic (tool_logic.py) and handler (tools/commit_good_enough.py).
+Tests both pure logic (tool_logic.py) and handler (tools/commit_week_deliverable.py).
 Structural validation only — semantic quality is the LLM's job.
 """
 
 import pytest
 
 from mcp_server.sharpen.tool_logic import validate_good_enough
-from mcp_server.sharpen.tools.commit_good_enough import handle
+from mcp_server.sharpen.tools.commit_week_deliverable import handle
 
 
 # ============================================================================
@@ -22,10 +22,9 @@ def valid_framing():
     return {
         "who": "New engineering hires",
         "what": "A first-week onboarding checklist",
-        "why": "So they know what to do",
+        "why": "So they can start contributing without constant interruptions",
         "constraint_type": "capacity",
         "constraint_value": "3 hours per week",
-        "definition_of_finished": "One new hire has used it and said it was helpful",
     }
 
 
@@ -108,7 +107,7 @@ class TestValidateGoodEnough:
         incomplete_framing = {
             "who": "Someone",
             "what": "Something",
-            # Missing constraint_type, constraint_value, definition_of_finished
+            # Missing why, constraint_type, constraint_value
         }
         result = validate_good_enough(
             framing=incomplete_framing,

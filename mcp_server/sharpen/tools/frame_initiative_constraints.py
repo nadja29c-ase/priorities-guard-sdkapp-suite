@@ -1,7 +1,7 @@
 """
 Frame Initiative Constraints Tool.
 
-Captures the dominant constraint and definition of finished.
+Captures the dominant constraint (time, capacity, budget, or forced_mvp).
 Requires confirmed intent from frame_initiative_intent.
 Self-registers at import time.
 """
@@ -22,7 +22,8 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed CONSTRAINT and DEFINITION OF FINISHED for an initiative. Without a clear constraint, scope expands endlessly. Without a definition of finished, work is never done. So this is an additional filter to maximize work not done later. Requires confidence="high".
+DESCRIPTION = """Records confirmed CONSTRAINT for an initiative. Without a clear constraint, scope expands endlessly. The constraint becomes the reality filter for all subsequent scope decisions. Requires confidence="high".
+
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.
 
@@ -35,7 +36,7 @@ SUSPENDED BEHAVIORS:
 - "Being helpful" by front-loading structure
 
 ACTIVE BEHAVIORS:
-- Ask ONE question at a time 
+- Ask ONE question at a time
 - Wait for answer
 - Reflect their words back
 - Ask for user confirmation
@@ -45,21 +46,19 @@ These are not suggestions. These are operating constraints.
 Violating them means Sharpen is broken.
 
 CONFIDENCE EXAMPLES:
-  HIGH: constraint_type="time" constraint_value="by March 15" definition_of_finished="Dashboard deployed and accessible to team". These are user confirmed.
-  LOW:  constraint_type="time" constraint_value="soon" definition_of_finished="when it's done"
-  HIGH: constraint_type="capacity" constraint_value="4 hours per week" definition_of_finished="API returns valid responses for all endpoints". These are user confirmed.
-  LOW:  constraint_type="budget" constraint_value="flexible" definition_of_finished="ready to use"
+  HIGH: constraint_type="time" constraint_value="by March 15". User confirmed.
+  LOW:  constraint_type="time" constraint_value="soon". Too vague.
+  HIGH: constraint_type="capacity" constraint_value="4 hours per week". User confirmed.
+  LOW:  constraint_type="budget" constraint_value="flexible". Too vague.
 
 If user claims "no constraints", set user_claims_no_constraints=true — backend will guide next steps.
 
 EXAMPLE CONVERSATION:
   You: "What's the one constraint that limits this initiative most — a deadline, limited hours per week, or a budget cap?"
   User: "I only have about 3 hours a week to work on this"
-  You: "3 hours per week — got it. How will you know the checklist is truly finished?"
-  User: "When a new hire has used it and said it was helpful"
-  You: "So it's finished when at least one new hire has used the checklist and confirmed it was helpful. Is that right?"
+  You: "3 hours per week. Is that the main constraint?"
   User: "Yes"
-  → Now call frame_initiative_constraints with constraint_type="capacity", constraint_value="3 hours per week", definition_of_finished="At least one new hire has used the checklist and confirmed it was helpful", confidence="high"."""
+  → Now call frame_initiative_constraints with constraint_type="capacity", constraint_value="3 hours per week", confidence="high"."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -73,10 +72,6 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "The specific constraint in the user's own words (concrete, not vague like 'soon' or 'flexible').",
         },
-        "definition_of_finished": {
-            "type": "string",
-            "description": "How will you know the WHAT is finished? Concrete, verifiable condition (not 'done' or 'ready'). ACCORDING TO THE USER.",
-        },
         "user_claims_no_constraints": {
             "type": "boolean",
             "description": "Set true if user explicitly claims no constraints exist. Triggers forced_mvp flow to help the user define a minimal viable product.",
@@ -84,7 +79,7 @@ INPUT_SCHEMA = {
         "confidence": {
             "type": "string",
             "enum": ["high", "medium", "low"],
-            "description": "Your confidence that CONSTRAINT and DEFINITION OF FINISHED are concrete and user-confirmed. Must be 'high' to proceed.",
+            "description": "Your confidence that CONSTRAINT is concrete and user-confirmed. Must be 'high' to proceed.",
         },
     },
     "required": ["confidence"],
@@ -101,7 +96,6 @@ class FrameConstraintsRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     constraint_type: Optional[Literal["time", "capacity", "budget", "forced_mvp"]] = None
     constraint_value: Optional[str] = None
-    definition_of_finished: Optional[str] = None
     user_claims_no_constraints: bool = False
     confidence: Optional[Literal["high", "medium", "low"]] = None
 
@@ -112,7 +106,7 @@ class FrameConstraintsRequest(BaseModel):
 
 GUIDANCE_CONFIDENCE_REJECTED = (
     "SHARPEN MODE STILL BINDING. "
-    "Ask ONE question about CONSTRAINT or DEFINITION OF FINISHED (whichever is vaguer). "
+    "Ask ONE question about CONSTRAINT. "
     "Then stop and wait. Do not explain, suggest, or plan."
 )
 
@@ -130,7 +124,7 @@ GUIDANCE_MISSING_FIELDS = (
 
 GUIDANCE_CONFIRMED = (
     "Present the complete framing using the user's exact words: "
-    "WHO, WHAT, WHY (if any), CONSTRAINT, DEFINITION OF FINISHED. "
+    "WHO, WHAT, WHY, CONSTRAINT. "
     "Then ask: 'Is this correct?' Stop and wait. Do not elaborate or add context.\n\n"
     "If user confirms → ask: 'What needs to exist for this initiative to be done? Don't filter — just name everything.' "
     "Then stop and wait. When user answers → call identify_e2e_deliverables with framing + deliverables.\n"
@@ -183,7 +177,6 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     result = validate_initiative_constraints(
         constraint_type=validated_request.constraint_type,
         constraint_value=validated_request.constraint_value,
-        definition_of_finished=validated_request.definition_of_finished,
         user_claims_no_constraints=validated_request.user_claims_no_constraints,
     )
 
@@ -227,14 +220,13 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     logger.info("frame_initiative_constraints.complete",
                 constraint_type=framing["constraint_type"],
-                definition_of_finished=framing["definition_of_finished"][:50],
+                constraint_value=framing["constraint_value"][:50],
                 confidence="high")
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Constraints confirmed: {framing['constraint_type']} — {framing['constraint_value']}. "
-                 f"Finished when: {framing['definition_of_finished']}",
+            text=f"Constraint confirmed: {framing['constraint_type']} — {framing['constraint_value']}.",
         )],
         structuredContent={
             "constraint_framing": framing,

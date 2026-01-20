@@ -1,5 +1,5 @@
 """
-Commit Good Enough Tool (Step 3).
+Commit Week Deliverable Tool (Step 3).
 
 Captures the user's stopping line for this week's work on the focus deliverable.
 This is time-boxing, not scope-cutting.
@@ -67,7 +67,7 @@ EXAMPLE CONVERSATION:
   User: "When it has all 5 days listed with at least one task each"
   You: "So 'good enough' this week is: a draft checklist with all 5 days and at least one task per day. Correct?"
   User: "Yes"
-  → Call commit_good_enough with good_enough_definition="Draft checklist with all 5 days and at least one task per day", confidence="high"
+  → Call commit_week_deliverable with good_enough_definition="Draft checklist with all 5 days and at least one task per day", confidence="high"
 """
 
 INPUT_SCHEMA = {
@@ -85,9 +85,8 @@ INPUT_SCHEMA = {
                     "enum": ["time", "capacity", "budget", "forced_mvp"],
                 },
                 "constraint_value": {"type": "string"},
-                "definition_of_finished": {"type": "string"},
             },
-            "required": ["who", "what", "constraint_type", "constraint_value", "definition_of_finished"],
+            "required": ["who", "what", "why", "constraint_type", "constraint_value"],
         },
         "focus_deliverable": {
             "type": "object",
@@ -131,10 +130,9 @@ class InitiativeFraming(BaseModel):
     why: Optional[str] = None
     constraint_type: Optional[Literal["time", "capacity", "budget", "forced_mvp"]] = None
     constraint_value: Optional[str] = None
-    definition_of_finished: Optional[str] = None
 
 
-class CommitGoodEnoughRequest(BaseModel):
+class CommitWeekDeliverableRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     initiative_framing: Optional[InitiativeFraming] = None
     focus_deliverable: Optional[FocusDeliverable] = None
@@ -173,6 +171,7 @@ GUIDANCE_CONFIRMED = (
     "Present the full sharpened scope:\n"
     "- WHO: [who]\n"
     "- WHAT: [what]\n"
+    "- WHY: [why]\n"
     "- CONSTRAINT: [constraint_type]: [constraint_value]\n"
     "- FOCUS DELIVERABLE: [focus_deliverable]\n"
     "- THIS WEEK'S GOOD ENOUGH: [good_enough_definition]\n\n"
@@ -187,15 +186,15 @@ GUIDANCE_CONFIRMED = (
 
 
 async def handle(arguments: dict) -> mcp_types.CallToolResult:
-    """Handle commit_good_enough tool call."""
-    logger.debug("commit_good_enough.handle.start",
+    """Handle commit_week_deliverable tool call."""
+    logger.debug("commit_week_deliverable.handle.start",
                  argument_keys=list(arguments.keys()))
 
     # Pydantic validation
     try:
-        validated_request = CommitGoodEnoughRequest.model_validate(arguments)
+        validated_request = CommitWeekDeliverableRequest.model_validate(arguments)
     except ValidationError as e:
-        logger.warning("commit_good_enough.validation_failed", error=str(e.errors()))
+        logger.warning("commit_week_deliverable.validation_failed", error=str(e.errors()))
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(type="text", text="Invalid input format.")],
             structuredContent={"error": "validation_error", "details": e.errors()},
@@ -238,7 +237,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             )
             action = "ASK_CLARIFYING"
 
-        logger.info("commit_good_enough.rejected",
+        logger.info("commit_week_deliverable.rejected",
                     error_type=error_type, action=action)
 
         structured = {
@@ -264,7 +263,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Valid — return confirmed stopping line
     sharpened = result["sharpened_scope"]
 
-    logger.info("commit_good_enough.complete",
+    logger.info("commit_week_deliverable.complete",
                 focus=sharpened["focus_deliverable"]["name"],
                 good_enough=sharpened["good_enough_definition"][:50],
                 confidence="high")
@@ -292,7 +291,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 # ============================================================================
 
 register_tool(ToolDefinition(
-    name="commit_good_enough",
+    name="commit_week_deliverable",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     handle=handle,

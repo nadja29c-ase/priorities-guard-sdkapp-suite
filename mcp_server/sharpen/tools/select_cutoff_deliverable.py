@@ -64,7 +64,7 @@ EXAMPLE CONVERSATION (Selection):
 EXAMPLE CONVERSATION (None fit — escape hatch):
   You: "Your constraint is time: 2 weeks. Which ONE of these can you realistically finish within that?"
   User: "Honestly, none of them fit in 2 weeks"
-  You: "Is there a simpler approach to reach 'new hire completes first week confidently' within 2 weeks?"
+  You: "Is there a simpler approach to move toward [why] within 2 weeks?"
   User: "Maybe just a Slack message with key contacts instead of a full checklist"
   You: "That's a different solution. What deliverable would exist?"
   User: "A pinned Slack message with 'who to ask for what'"
@@ -86,9 +86,8 @@ INPUT_SCHEMA = {
                     "enum": ["time", "capacity", "budget", "forced_mvp"],
                 },
                 "constraint_value": {"type": "string"},
-                "definition_of_finished": {"type": "string"},
             },
-            "required": ["who", "what", "constraint_type", "constraint_value", "definition_of_finished"],
+            "required": ["who", "what", "why", "constraint_type", "constraint_value"],
         },
         "confirmed_deliverables": {
             "type": "array",
@@ -160,7 +159,6 @@ class InitiativeFraming(BaseModel):
     why: Optional[str] = None
     constraint_type: Optional[Literal["time", "capacity", "budget", "forced_mvp"]] = None
     constraint_value: Optional[str] = None
-    definition_of_finished: Optional[str] = None
 
 
 class SculptedDeliverable(BaseModel):
@@ -222,7 +220,7 @@ GUIDANCE_BOTH_METHODS = (
 GUIDANCE_NO_METHOD = (
     "SHARPEN MODE STILL BINDING. "
     "Ask: 'Given [constraint_type]: [constraint_value], which ONE of these can you realistically finish "
-    "AND would still count as [definition_of_finished]?' "
+    "AND would still move you toward [why]?' "
     "Then stop and wait. Do not suggest."
 )
 
@@ -260,7 +258,7 @@ def build_confirmed_guidance(
     # Step 3: Time-boxing question
     step_3_question = (
         f"Ask: 'What would be good enough that you could stop working on {focus_name} this week and still feel it was worth the time?' "
-        f"Then stop and wait. Do not suggest. When user answers → call commit_good_enough with their answer."
+        f"Then stop and wait. Do not suggest. When user answers → call commit_week_deliverable with their answer."
     )
 
     if deferred_names:

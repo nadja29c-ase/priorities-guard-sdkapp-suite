@@ -76,17 +76,17 @@ def export_checklist(project_name: str, items: list[dict]) -> dict[str, Any]:
 def validate_initiative_intent(
     who: str | None,
     what: str | None,
-    why: str | None = None,
+    why: str | None,
 ) -> dict[str, Any]:
     """
-    Validate structure of WHO and WHAT for initiative intent.
+    Validate structure of WHO, WHAT, and WHY for initiative intent.
 
     Structural validation only — semantic quality is LLM's job.
 
     Args:
         who: Who benefits from this work?
         what: What artifact/deliverable must exist?
-        why: Optional — so that the beneficiary benefits how?
+        why: Mandatory — so that the beneficiary benefits how?
 
     Returns:
         framing_intent dict + valid flag
@@ -94,16 +94,18 @@ def validate_initiative_intent(
     # Normalize inputs
     who = (who or "").strip()
     what = (what or "").strip()
-    why = (why or "").strip() if why else None
+    why = (why or "").strip()
 
-    # Structural validation only
-    valid = bool(who) and bool(what)
+    # Structural validation only — all three are required
+    valid = bool(who) and bool(what) and bool(why)
 
     missing = []
     if not who:
         missing.append("who")
     if not what:
         missing.append("what")
+    if not why:
+        missing.append("why")
 
     return {
         "framing_intent": {
@@ -119,18 +121,16 @@ def validate_initiative_intent(
 def validate_initiative_constraints(
     constraint_type: str | None = None,
     constraint_value: str | None = None,
-    definition_of_finished: str | None = None,
     user_claims_no_constraints: bool = False,
 ) -> dict[str, Any]:
     """
-    Validate structure of constraints and definition of finished.
+    Validate structure of constraints.
 
     Structural validation only — semantic quality is LLM's job.
 
     Args:
         constraint_type: time, capacity, budget, or forced_mvp
         constraint_value: The specific constraint in user's words
-        definition_of_finished: How will you know WHAT is finished?
         user_claims_no_constraints: True if user claims no constraints
 
     Returns:
@@ -148,25 +148,21 @@ def validate_initiative_constraints(
     # Normalize inputs
     constraint_type = (constraint_type or "").strip() or None
     constraint_value = (constraint_value or "").strip() or None
-    definition_of_finished = (definition_of_finished or "").strip() or None
 
     # Build constraint framing
     constraint_framing = {
         "constraint_type": constraint_type,
         "constraint_value": constraint_value,
-        "definition_of_finished": definition_of_finished,
     }
 
     # Structural validation
-    valid = bool(constraint_type) and bool(constraint_value) and bool(definition_of_finished)
+    valid = bool(constraint_type) and bool(constraint_value)
 
     missing = []
     if not constraint_type:
         missing.append("constraint_type")
     if not constraint_value:
         missing.append("constraint_value")
-    if not definition_of_finished:
-        missing.append("definition_of_finished")
 
     return {
         "constraint_framing": constraint_framing,
@@ -185,8 +181,7 @@ def validate_initiative_framing_complete(framing: dict | None) -> dict[str, Any]
     """
     Validate that initiative_framing from Step 1 is complete.
 
-    Required fields: who, what, constraint_type, constraint_value, definition_of_finished
-    Optional: why (can be None or empty)
+    Required fields: who, what, why, constraint_type, constraint_value
 
     Args:
         framing: Combined initiative_framing object from Step 1
@@ -203,9 +198,9 @@ def validate_initiative_framing_complete(framing: dict | None) -> dict[str, Any]
     required_fields = [
         "who",
         "what",
+        "why",
         "constraint_type",
         "constraint_value",
-        "definition_of_finished",
     ]
 
     missing = []
@@ -565,7 +560,7 @@ def validate_good_enough(
         }
 
     # Check framing has required fields
-    required_framing = ["who", "what", "constraint_type", "constraint_value", "definition_of_finished"]
+    required_framing = ["who", "what", "why", "constraint_type", "constraint_value"]
     missing_framing = [f for f in required_framing if not framing.get(f)]
     if missing_framing:
         return {

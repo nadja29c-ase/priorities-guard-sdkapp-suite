@@ -19,12 +19,11 @@ from mcp_server.sharpen.tools.frame_initiative_constraints import handle
 class TestValidateInitiativeConstraints:
     """Tests for validate_initiative_constraints function — structural validation only."""
 
-    def test_valid_constraint_and_finished_returns_valid_true(self):
-        """Valid constraint and definition of finished returns valid=True."""
+    def test_valid_constraint_returns_valid_true(self):
+        """Valid constraint returns valid=True."""
         result = validate_initiative_constraints(
             constraint_type="time",
             constraint_value="by end of Q1",
-            definition_of_finished="Dashboard deployed and team trained",
         )
 
         assert result["valid"] is True
@@ -46,7 +45,6 @@ class TestValidateInitiativeConstraints:
         result = validate_initiative_constraints(
             constraint_type=None,
             constraint_value="by Friday",
-            definition_of_finished="Dashboard deployed",
         )
 
         assert result["valid"] is False
@@ -57,55 +55,38 @@ class TestValidateInitiativeConstraints:
         result = validate_initiative_constraints(
             constraint_type="time",
             constraint_value="",
-            definition_of_finished="Dashboard live",
         )
 
         assert result["valid"] is False
         assert "constraint_value" in result["missing"]
-
-    def test_missing_definition_of_finished_returns_valid_false(self):
-        """Missing definition_of_finished returns valid=False."""
-        result = validate_initiative_constraints(
-            constraint_type="time",
-            constraint_value="by Friday",
-            definition_of_finished="",
-        )
-
-        assert result["valid"] is False
-        assert "definition_of_finished" in result["missing"]
 
     def test_all_fields_missing_returns_all_missing(self):
         """All constraint fields missing returns all in missing list."""
         result = validate_initiative_constraints(
             constraint_type=None,
             constraint_value=None,
-            definition_of_finished=None,
         )
 
         assert result["valid"] is False
         assert "constraint_type" in result["missing"]
         assert "constraint_value" in result["missing"]
-        assert "definition_of_finished" in result["missing"]
 
     def test_constraint_framing_contains_constraint_fields(self):
         """constraint_framing contains constraint fields."""
         result = validate_initiative_constraints(
             constraint_type="budget",
             constraint_value="$5000 max",
-            definition_of_finished="Tracker shows live campaign metrics",
         )
 
         framing = result["constraint_framing"]
         assert framing["constraint_type"] == "budget"
         assert framing["constraint_value"] == "$5000 max"
-        assert framing["definition_of_finished"] == "Tracker shows live campaign metrics"
 
     def test_forced_mvp_constraint_type_accepted(self):
         """forced_mvp is a valid constraint_type."""
         result = validate_initiative_constraints(
             constraint_type="forced_mvp",
             constraint_value="A single chart showing key metric",
-            definition_of_finished="Chart visible on homepage",
         )
 
         assert result["valid"] is True
@@ -116,20 +97,17 @@ class TestValidateInitiativeConstraints:
         result = validate_initiative_constraints(
             constraint_type="  time  ",
             constraint_value="  by Friday  ",
-            definition_of_finished="  Dashboard live  ",
         )
 
         assert result["valid"] is True
         assert result["constraint_framing"]["constraint_type"] == "time"
         assert result["constraint_framing"]["constraint_value"] == "by Friday"
-        assert result["constraint_framing"]["definition_of_finished"] == "Dashboard live"
 
     def test_whitespace_only_is_empty(self):
         """Whitespace-only inputs are treated as empty."""
         result = validate_initiative_constraints(
             constraint_type="time",
             constraint_value="   ",
-            definition_of_finished="Dashboard live",
         )
 
         assert result["valid"] is False
@@ -150,7 +128,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by end of Q1",
-            "definition_of_finished": "Dashboard deployed and team trained",
             "confidence": "high",
         }
 
@@ -165,7 +142,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "capacity",
             "constraint_value": "4 hours per week",
-            "definition_of_finished": "Dashboard shows key metrics",
             "confidence": "high",
         }
 
@@ -181,7 +157,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by Friday",
-            "definition_of_finished": "Dashboard live",
             "confidence": "low",
         }
 
@@ -197,7 +172,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by Friday",
-            "definition_of_finished": "Dashboard live",
             "confidence": "medium",
         }
 
@@ -225,7 +199,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "",
-            "definition_of_finished": "Done",
             "confidence": "high",
         }
 
@@ -240,8 +213,7 @@ class TestFrameInitiativeConstraintsHandler:
         """Missing fields response includes partial constraint_framing."""
         arguments = {
             "constraint_type": "time",
-            "constraint_value": "by Friday",
-            "definition_of_finished": "",
+            "constraint_value": "",
             "confidence": "high",
         }
 
@@ -257,7 +229,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by end of Q1",
-            "definition_of_finished": "Dashboard deployed",
             "confidence": "high",
         }
 
@@ -286,7 +257,6 @@ class TestFrameInitiativeConstraintsHandler:
             "constraint_type": "time",
             "constraint_value": "",
             "confidence": "high",
-            "definition_of_finished": "",
         }
 
         result = await handle(arguments)
@@ -302,14 +272,13 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by Friday",
-            "definition_of_finished": "Dashboard live",
             "confidence": "high",
         }
 
         result = await handle(arguments)
 
         assert len(result.content) == 1
-        assert "Constraints confirmed" in result.content[0].text
+        assert "Constraint confirmed" in result.content[0].text
 
     @pytest.mark.asyncio
     async def test_high_confidence_in_response(self):
@@ -317,7 +286,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by Friday",
-            "definition_of_finished": "Dashboard live",
             "confidence": "high",
         }
 
@@ -331,7 +299,6 @@ class TestFrameInitiativeConstraintsHandler:
         arguments = {
             "constraint_type": "time",
             "constraint_value": "by Friday",
-            "definition_of_finished": "Dashboard live",
             "confidence": "high",
         }
 

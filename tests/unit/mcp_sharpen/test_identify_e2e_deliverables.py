@@ -25,7 +25,6 @@ def valid_framing():
         "why": "To serve mobile clients",
         "constraint_type": "time",
         "constraint_value": "by March 15",
-        "definition_of_finished": "API deployed and accessible",
     }
 
 
@@ -98,7 +97,7 @@ class TestValidateE2EDeliverables:
         incomplete_framing = {
             "who": "Team",
             "what": "API",
-            # Missing: constraint_type, constraint_value, definition_of_finished
+            # Missing: why, constraint_type, constraint_value
         }
 
         result = validate_e2e_deliverables(

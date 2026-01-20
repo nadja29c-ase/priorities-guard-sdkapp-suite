@@ -89,7 +89,7 @@ INPUT_SCHEMA = {
     "properties": {
         "initiative_framing": {
             "type": "object",
-            "description": "Confirmed Step 1 framing (required). Must include who, what, constraint_type, constraint_value, definition_of_finished.",
+            "description": "Confirmed Step 1 framing (required). Must include who, what, why, constraint_type, constraint_value.",
             "properties": {
                 "who": {"type": "string"},
                 "what": {"type": "string"},
@@ -99,9 +99,8 @@ INPUT_SCHEMA = {
                     "enum": ["time", "capacity", "budget", "forced_mvp"],
                 },
                 "constraint_value": {"type": "string"},
-                "definition_of_finished": {"type": "string"},
             },
-            "required": ["who", "what", "constraint_type", "constraint_value", "definition_of_finished"],
+            "required": ["who", "what", "why", "constraint_type", "constraint_value"],
         },
         "candidate_deliverables": {
             "type": "array",
@@ -155,7 +154,6 @@ class InitiativeFraming(BaseModel):
     why: Optional[str] = None
     constraint_type: Optional[Literal["time", "capacity", "budget", "forced_mvp"]] = None
     constraint_value: Optional[str] = None
-    definition_of_finished: Optional[str] = None
 
 
 class IdentifyDeliverablesRequest(BaseModel):
@@ -202,14 +200,29 @@ GUIDANCE_INVALID_DELIVERABLE = (
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING.\n"
     "Deliverables confirmed. Present them as an unordered list (no numbering).\n\n"
-    "Then ask the CONSTRAINT-DRIVEN CUTOFF QUESTION:\n"
-    "'Your constraint is [constraint_type]: [constraint_value]. "
-    "Which ONE of these can you realistically finish within that AND would still count as [definition_of_finished]?'\n\n"
-    "Stop and wait. Do not suggest.\n\n"
-    "ESCAPE HATCH (only if user says 'none of them fit'):\n"
-    "Ask: 'Is there a simpler approach to reach [definition_of_finished] within [constraint_value]?'\n"
-    "If user proposes simpler solution → elicit new deliverables for that approach.\n"
-    "If user picks one anyway → proceed with their choice.\n\n"
+    "CRITICAL: THE KNIFE MUST BE USED HERE — RIGOROUSLY.\n"
+    "The E2E deliverables encode an implicit solution and scope size. Both must be challenged.\n"
+    "Goal: Cut until realistic AND until best scope-to-value ratio is achieved.\n"
+    "The knife has two edges:\n"
+    "  - CONSTRAINT edge: Does this fit within [constraint_value]?\n"
+    "  - VALUE edge: Is this the simplest scope that still delivers [why]?\n\n"
+    "REALITY CHECK:\n"
+    "Ask: 'You have [N] deliverables. Your constraint is [constraint_type]: [constraint_value]. How realistic does this feel?'\n"
+    "Stop and wait.\n\n"
+    "PATH A — SCOPE TOO BIG (user says 'ambitious', 'a lot', hesitates):\n"
+    "Ask: 'What could be removed and still move you toward [why]?'\n"
+    "When user removes items → reflect updated list → repeat reality check.\n"
+    "Loop until user confirms it feels realistic.\n\n"
+    "PATH B — SOLUTION MISMATCH (user says 'none of this fits', 'completely unrealistic', or you sense the whole approach is overengineered):\n"
+    "Challenge the solution itself: 'These deliverables assume a certain approach. Is there a simpler way to achieve [why] within [constraint_value]?'\n"
+    "If user proposes simpler solution → elicit new deliverables for that approach (restart Step 2).\n"
+    "If user insists current approach is right → proceed to cutoff.\n\n"
+    "PATH C — REALISTIC (user confirms 'doable', 'realistic'):\n"
+    "Proceed to cutoff question.\n\n"
+    "CUTOFF QUESTION (clean slice — no more cutting):\n"
+    "The list is already realistic. Now just sequence.\n"
+    "Ask: 'Which ONE of these would you start with?'\n"
+    "Stop and wait. Do not challenge. Do not re-cut.\n\n"
     "When user selects → call select_cutoff_deliverable with their choice."
 )
 

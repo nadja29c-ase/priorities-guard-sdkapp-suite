@@ -19,11 +19,12 @@ from mcp_server.sharpen.tools.frame_initiative_intent import handle
 class TestValidateInitiativeIntent:
     """Tests for validate_initiative_intent function — structural validation only."""
 
-    def test_valid_who_and_what_returns_valid_true(self):
-        """Valid WHO and WHAT returns valid=True."""
+    def test_valid_who_what_why_returns_valid_true(self):
+        """Valid WHO, WHAT, and WHY returns valid=True."""
         result = validate_initiative_intent(
             who="My team",
             what="A project dashboard",
+            why="So they can track progress",
         )
 
         assert result["valid"] is True
@@ -34,6 +35,7 @@ class TestValidateInitiativeIntent:
         result = validate_initiative_intent(
             who="",
             what="A dashboard",
+            why="To track progress",
         )
 
         assert result["valid"] is False
@@ -44,6 +46,7 @@ class TestValidateInitiativeIntent:
         result = validate_initiative_intent(
             who=None,
             what="A dashboard",
+            why="To track progress",
         )
 
         assert result["valid"] is False
@@ -54,6 +57,7 @@ class TestValidateInitiativeIntent:
         result = validate_initiative_intent(
             who="My team",
             what="",
+            why="To track progress",
         )
 
         assert result["valid"] is False
@@ -64,32 +68,35 @@ class TestValidateInitiativeIntent:
         result = validate_initiative_intent(
             who="My team",
             what=None,
+            why="To track progress",
         )
 
         assert result["valid"] is False
         assert "what" in result["missing"]
 
-    def test_both_empty_returns_both_missing(self):
-        """Both empty returns valid=False, missing=['who', 'what']."""
+    def test_all_empty_returns_all_missing(self):
+        """All empty returns valid=False, missing=['who', 'what', 'why']."""
         result = validate_initiative_intent(
             who="",
             what="",
+            why="",
         )
 
         assert result["valid"] is False
         assert "who" in result["missing"]
         assert "what" in result["missing"]
+        assert "why" in result["missing"]
 
-    def test_empty_why_does_not_affect_validity(self):
-        """Empty WHY does not affect validity (WHY is optional)."""
+    def test_empty_why_returns_valid_false(self):
+        """Empty WHY returns valid=False, missing=['why'] (WHY is mandatory)."""
         result = validate_initiative_intent(
             who="My team",
             what="A project dashboard",
             why="",
         )
 
-        assert result["valid"] is True
-        assert result["framing_intent"]["why"] is None
+        assert result["valid"] is False
+        assert "why" in result["missing"]
 
     def test_why_is_included_when_provided(self):
         """WHY is included in framing_intent when provided."""
@@ -119,10 +126,12 @@ class TestValidateInitiativeIntent:
         result = validate_initiative_intent(
             who="  My team  ",
             what="  A dashboard  ",
+            why="  To track progress  ",
         )
 
         assert result["framing_intent"]["who"] == "My team"
         assert result["framing_intent"]["what"] == "A dashboard"
+        assert result["framing_intent"]["why"] == "To track progress"
         assert result["valid"] is True
 
     def test_whitespace_only_is_empty(self):
@@ -130,6 +139,7 @@ class TestValidateInitiativeIntent:
         result = validate_initiative_intent(
             who="   ",
             what="A dashboard",
+            why="To track progress",
         )
 
         assert result["valid"] is False
@@ -150,6 +160,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A project dashboard",
+            "why": "So they can track progress",
             "confidence": "high",
         }
 
@@ -165,6 +176,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "why": "To track progress",
             "confidence": "high",
         }
 
@@ -173,6 +185,7 @@ class TestFrameInitiativeIntentHandler:
         assert "framing_intent" in result.structuredContent
         assert result.structuredContent["framing_intent"]["who"] == "My team"
         assert result.structuredContent["framing_intent"]["what"] == "A dashboard"
+        assert result.structuredContent["framing_intent"]["why"] == "To track progress"
 
     @pytest.mark.asyncio
     async def test_low_confidence_rejected(self):
@@ -180,6 +193,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "why": "To track progress",
             "confidence": "low",
         }
 
@@ -195,6 +209,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "why": "To track progress",
             "confidence": "medium",
         }
 
@@ -210,6 +225,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "why": "To track progress",
         }
 
         result = await handle(arguments)
@@ -223,6 +239,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "",
             "what": "A dashboard",
+            "why": "To track progress",
             "confidence": "high",
         }
 
@@ -238,6 +255,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "",
+            "why": "To track progress",
             "confidence": "high",
         }
 
@@ -248,11 +266,28 @@ class TestFrameInitiativeIntentHandler:
         assert "what" in result.structuredContent["missing"]
 
     @pytest.mark.asyncio
+    async def test_missing_why_returns_error(self):
+        """Missing WHY returns isError=True with missing fields."""
+        arguments = {
+            "who": "My team",
+            "what": "A dashboard",
+            "why": "",
+            "confidence": "high",
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "missing_fields"
+        assert "why" in result.structuredContent["missing"]
+
+    @pytest.mark.asyncio
     async def test_guidance_instruction_present(self):
         """assistant_guidance with instruction is always present."""
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "why": "To track progress",
             "confidence": "high",
         }
 
@@ -264,7 +299,7 @@ class TestFrameInitiativeIntentHandler:
     @pytest.mark.asyncio
     async def test_guidance_instruction_for_missing_fields(self):
         """Guidance instruction for missing fields enforces facilitator role."""
-        arguments = {"who": "", "what": "A dashboard", "confidence": "high"}
+        arguments = {"who": "", "what": "A dashboard", "why": "To track progress", "confidence": "high"}
 
         result = await handle(arguments)
 
@@ -274,39 +309,12 @@ class TestFrameInitiativeIntentHandler:
         assert "stop and wait" in instruction
 
     @pytest.mark.asyncio
-    async def test_why_optional_in_handler(self):
-        """WHY is optional — handler returns confirmed without it."""
-        arguments = {
-            "who": "My team",
-            "what": "A dashboard",
-            "confidence": "high",
-        }
-
-        result = await handle(arguments)
-
-        assert result.structuredContent["confirmed"] is True
-        assert result.structuredContent["framing_intent"]["why"] is None
-
-    @pytest.mark.asyncio
-    async def test_why_included_when_provided(self):
-        """WHY is included in framing_intent when provided."""
-        arguments = {
-            "who": "My team",
-            "what": "A dashboard",
-            "why": "to track progress",
-            "confidence": "high",
-        }
-
-        result = await handle(arguments)
-
-        assert result.structuredContent["framing_intent"]["why"] == "to track progress"
-
-    @pytest.mark.asyncio
     async def test_text_content_for_valid_input(self):
         """Valid input returns human-readable text content."""
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "why": "To track progress",
             "confidence": "high",
         }
 
@@ -323,6 +331,7 @@ class TestFrameInitiativeIntentHandler:
         arguments = {
             "who": "My team",
             "what": "A dashboard",
+            "why": "To track progress",
             "confidence": "high",
         }
 

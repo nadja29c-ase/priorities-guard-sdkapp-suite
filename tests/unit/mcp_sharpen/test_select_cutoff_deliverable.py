@@ -25,7 +25,6 @@ def valid_framing():
         "why": "To serve mobile clients",
         "constraint_type": "time",
         "constraint_value": "by March 15",
-        "definition_of_finished": "API deployed and accessible",
     }
 
 
