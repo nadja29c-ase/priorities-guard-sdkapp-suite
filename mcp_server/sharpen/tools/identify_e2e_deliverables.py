@@ -200,12 +200,11 @@ GUIDANCE_INVALID_DELIVERABLE = (
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING.\n"
     "Deliverables confirmed. Present them as an unordered list (no numbering).\n\n"
-    "CRITICAL: THE KNIFE MUST BE USED HERE — RIGOROUSLY.\n"
     "The E2E deliverables encode an implicit solution and scope size. Both must be challenged.\n"
     "Goal: Cut until realistic AND until best scope-to-value ratio is achieved.\n"
-    "The knife has two edges:\n"
+    "The metaphorical knife has two edges derived with frame_initiative tools:\n"
     "  - CONSTRAINT edge: Does this fit within [constraint_value]?\n"
-    "  - VALUE edge: Is this the simplest scope that still delivers [why]?\n\n"
+    "  - VALUE edge: Is this really the simplest scope that still delivers [why]?\n\n"
     "REALITY CHECK:\n"
     "Ask: 'You have [N] deliverables. Your constraint is [constraint_type]: [constraint_value]. How realistic does this feel?'\n"
     "Stop and wait.\n\n"
@@ -218,12 +217,7 @@ GUIDANCE_CONFIRMED = (
     "If user proposes simpler solution → elicit new deliverables for that approach (restart Step 2).\n"
     "If user insists current approach is right → proceed to cutoff.\n\n"
     "PATH C — REALISTIC (user confirms 'doable', 'realistic'):\n"
-    "Proceed to cutoff question.\n\n"
-    "CUTOFF QUESTION (clean slice — no more cutting):\n"
-    "The list is already realistic. Now just sequence.\n"
-    "Ask: 'Which ONE of these would you start with?'\n"
-    "Stop and wait. Do not challenge. Do not re-cut.\n\n"
-    "When user selects → call select_cutoff_deliverable with their choice."
+    "Proceed to cutoff question and call select_cutoff_deliverable.\n\n"
 )
 
 # ============================================================================

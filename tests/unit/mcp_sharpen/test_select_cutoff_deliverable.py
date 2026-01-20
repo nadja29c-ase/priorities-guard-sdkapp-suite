@@ -385,8 +385,8 @@ class TestSelectCutoffHandler:
         assert sc["confidence"] == "high"
 
     @pytest.mark.asyncio
-    async def test_guidance_includes_focus_deliverable_name(self, valid_framing, valid_deliverables):
-        """Guidance instruction includes the focus deliverable name."""
+    async def test_guidance_uses_placeholder_and_provides_value(self, valid_framing, valid_deliverables):
+        """Guidance uses [focus_name] placeholder; actual value in structuredContent."""
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
@@ -397,7 +397,10 @@ class TestSelectCutoffHandler:
         result = await handle(arguments)
 
         instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "Deployed REST API" in instruction
+        # Static template uses placeholder
+        assert "[focus_name]" in instruction
+        # Actual value available in structuredContent for LLM to substitute
+        assert result.structuredContent["focus_deliverable"]["name"] == "Deployed REST API"
 
 
 # ============================================================================
@@ -577,8 +580,8 @@ class TestSelectCutoffHandlerSculptPath:
         assert result.structuredContent["focus_deliverable"]["name"] == "API with minimal docs"
 
     @pytest.mark.asyncio
-    async def test_sculpt_guidance_includes_replaces_info(self, valid_framing, valid_deliverables):
-        """Sculpt guidance includes information about replaced deliverables."""
+    async def test_sculpt_provides_replaces_in_structured_content(self, valid_framing, valid_deliverables):
+        """Sculpt path includes replaces array in structuredContent for LLM."""
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
@@ -591,10 +594,10 @@ class TestSelectCutoffHandlerSculptPath:
 
         result = await handle(arguments)
 
-        instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "replaces" in instruction
-        assert "Deployed REST API" in instruction
-        assert "OpenAPI spec" in instruction
+        # Replaces info available in structuredContent for LLM to mention
+        assert "replaces" in result.structuredContent
+        assert "Deployed REST API" in result.structuredContent["replaces"]
+        assert "OpenAPI spec" in result.structuredContent["replaces"]
 
     @pytest.mark.asyncio
     async def test_both_methods_returns_clarifying_action(self, valid_framing, valid_deliverables):

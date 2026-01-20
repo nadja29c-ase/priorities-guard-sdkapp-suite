@@ -74,7 +74,7 @@ Replace with:
 ```python
 "why": {
     "type": "string",
-    "description": "So that WHO benefits HOW? Must be outcome-phrased (what changes), not motivation-phrased (why it matters). Do not restate WHAT — describe the change or benefit if this succeeds. ACCORDING TO THE USER.",
+    "description": "So that WHO benefits HOW? Must be outcome-phrased (what changes for the WHO/ what is the benefit for the WHO), not motivation-phrased (why it matters). Do not restate WHAT — describe the change or benefit if this succeeds. ACCORDING TO THE USER.",
 },
 ```
 

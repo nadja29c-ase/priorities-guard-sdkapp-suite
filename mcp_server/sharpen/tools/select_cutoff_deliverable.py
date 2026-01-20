@@ -64,7 +64,7 @@ EXAMPLE CONVERSATION (Selection):
 EXAMPLE CONVERSATION (None fit — escape hatch):
   You: "Your constraint is time: 2 weeks. Which ONE of these can you realistically finish within that?"
   User: "Honestly, none of them fit in 2 weeks"
-  You: "Is there a simpler approach to move toward [why] within 2 weeks?"
+  You: "What could maybe be some simpler approaches to move toward [why] within 2 weeks? Shall we brainstorm together?"
   User: "Maybe just a Slack message with key contacts instead of a full checklist"
   You: "That's a different solution. What deliverable would exist?"
   User: "A pinned Slack message with 'who to ask for what'"
@@ -242,33 +242,12 @@ GUIDANCE_INVALID_REPLACES = (
     "Then stop and wait."
 )
 
-
-def build_confirmed_guidance(
-    focus_name: str,
-    deferred_names: list[str],
-    replaces: list[str] | None = None,
-) -> str:
-    """Build guidance for confirmed selection/sculpt."""
-    if replaces:
-        replaces_str = ", ".join(replaces)
-        scope_intro = f"Sculpted focus: '{focus_name}' (replaces: {replaces_str})."
-    else:
-        scope_intro = f"Focus: '{focus_name}'."
-
-    # Step 3: Time-boxing question
-    step_3_question = (
-        f"Ask: 'What would be good enough that you could stop working on {focus_name} this week and still feel it was worth the time?' "
-        f"Then stop and wait. Do not suggest. When user answers → call commit_week_deliverable with their answer."
-    )
-
-    if deferred_names:
-        deferred_str = ", ".join(deferred_names)
-        return (
-            f"Scope confirmed. {scope_intro} Deferred: {deferred_str}.\n\n"
-            f"{step_3_question}"
-        )
-    else:
-        return f"Scope confirmed. {scope_intro} Nothing deferred.\n\n{step_3_question}"
+GUIDANCE_CONFIRMED = (
+    "Scope confirmed. Focus: [focus_name]. Deferred: [deferred_list].\n\n"
+    "Ask: 'What would be good enough that you could stop working on [focus_name] "
+    "this week and still feel it was worth the time?'\n"
+    "Then stop and wait. Do not suggest. When user answers → call commit_week_deliverable with their answer."
+)
 
 
 # ============================================================================
@@ -377,7 +356,6 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Valid — return focus and deferred deliverables
     focus = result["focus_deliverable"]
     deferred = result["deferred_deliverables"]
-    deferred_names = [d["name"] for d in deferred]
 
     # Get replaces from internal field (only present for sculpted path)
     replaces = result.get("_internal_replaces")
@@ -388,29 +366,28 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 sculpted=replaces is not None,
                 confidence="high")
 
-    # Build dynamic guidance with actual deliverable names
-    guidance = build_confirmed_guidance(
-        focus_name=focus["name"],
-        deferred_names=deferred_names,
-        replaces=replaces,
-    )
+    structured = {
+        "focus_deliverable": focus,
+        "scope_boundary": "explicit",
+        "deferred_deliverables": deferred,
+        "confidence": "high",
+        "confirmed": True,
+        "assistant_guidance": {
+            "action": "PROCEED_TO_STEP_3",
+            "instruction": GUIDANCE_CONFIRMED,
+        },
+    }
+
+    # Include replaces for sculpted path (LLM can mention in summary)
+    if replaces:
+        structured["replaces"] = replaces
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
             text=f"Scope boundary confirmed. Focus: {focus['name']}. Deferred: {len(deferred)} deliverable(s).",
         )],
-        structuredContent={
-            "focus_deliverable": focus,
-            "scope_boundary": "explicit",
-            "deferred_deliverables": deferred,
-            "confidence": "high",
-            "confirmed": True,
-            "assistant_guidance": {
-                "action": "PROCEED_TO_STEP_3",
-                "instruction": guidance,
-            },
-        },
+        structuredContent=structured,
     )
 
 
