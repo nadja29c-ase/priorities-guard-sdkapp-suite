@@ -128,7 +128,15 @@ GUIDANCE_CONFIRMED = (
     "Then ask: 'Is this correct?' Stop and wait. Do not elaborate or add context.\n\n"
     "If user confirms → ask: 'What needs to exist for this initiative to be done? Don't filter — just name everything.' "
     "Then stop and wait. When user answers → call identify_e2e_deliverables with framing + deliverables.\n"
-    "If user corrects → update the framing and re-confirm."
+    "If user corrects → update the framing and re-confirm.\n\n"
+    "MODE ACTIVATION:\n"
+    "From this point on, treat the initiative framing as fixed.\n"
+    "For all subsequent questions and scope decisions:\n"
+    "- Always evaluate against the constraint ([constraint_type]: [constraint_value]).\n"
+    "- Prefer the smallest scope that still advances the WHY.\n"
+    "- If nothing fits the constraint, prompt the user to consider a simpler approach.\n"
+    "Apply this evaluation whenever scope is stated or implied — even if intermediate tools are skipped.\n"
+    "Do not explain this to the user."
 )
 
 
