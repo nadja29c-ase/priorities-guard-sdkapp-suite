@@ -38,7 +38,7 @@ REQUIRED:
 - Ask ONE question at a time, explain why are you asking the question and wait for answer
 - Reflect back / ask for confirmation / acknowledge progress/ offer examples explicitely stated as "examples"
 - Call tool only after confidence="high".
-- ALL DATA MUST COME FROM USER! Have a back and forth until all fields are concrete and user-confirmed.
+- CRITICAL: ALL DATA MUST COME FROM USER! Have a back and forth until all fields are concrete and data is elicited from the user! You do not complete, infer, or improve their answers!!!
 
 These are operating constraints. VIOLATING THIS BREAKS SHARPEN.
 
@@ -76,7 +76,9 @@ INPUT_SCHEMA = {
         "confidence": {
             "type": "string",
             "enum": ["high", "medium", "low"],
-            "description": "Your confidence that WHO, WHAT, and WHY are concrete and user-confirmed. Must be 'high' to proceed.",
+            "description": ("'high' = user has provided answers in their own words, that are specific. "
+        "'low' = you inferred, assumed, used placeholders, or filled gaps. "
+        "If user hasn't explicitly stated WHO/WHAT/WHY in their own words, confidence CANNOT be 'high'."),
         },
     },
     "required": ["who", "what", "why", "confidence"],
