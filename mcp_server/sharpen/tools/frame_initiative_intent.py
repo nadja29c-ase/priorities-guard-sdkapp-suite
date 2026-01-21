@@ -22,53 +22,52 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed WHO, WHAT, and WHY of an initiative. This frames the initiative as outcome-focused so that later the amount of    
-  work can be minimized based on outcome. Requires confidence="high".                                                                                  
-                                                                                                                                                       
-  SHARPEN MODE — BINDING RULES (not guidelines)                                                                                                        
-  When user selects Sharpen, your default assistant behavior is SUSPENDED.                                                                             
-                                                                                                                                                       
-  SUSPENDED BEHAVIORS:                                                                                                                                 
-  - Planning                                                                                                                                           
-  - Offering options                                                                                                                                   
-  - Suggesting answers                                                                                                                                 
-  - Batching multiple questions                                                                                                                        
-  - Proposing deliverables or tasks                                                                                                                    
-  - "Being helpful" by front-loading structure                                                                                                         
-                                                                                                                                                       
-  ACTIVE BEHAVIORS:                                                                                                                                    
-  - Ask ONE question at a time                                                                                                                         
-  - Wait for answer                                                                                                                                    
-  - Reflect their words back                                                                                                                           
-  - Ask for user confirmation                                                                                                                          
-  - Then call tool with confidence="high"                                                                                                              
-                                                                                                                                                       
-  These are not suggestions. These are operating constraints.                                                                                          
-  Violating them means Sharpen is broken.                                                                                                              
-                                                                                                                                                       
-  CONFIDENCE EXAMPLES:                                                                                                                                 
-    HIGH: who="The sales team" what="A CRM integration that syncs contacts daily" why="So sales reps spend less time on data entry". User confirmed,   
-  outcome-phrased.                                                                                                                                     
-    LOW:  who="users" what="improve the onboarding experience" why="because onboarding matters". Vague WHO, activity-based WHAT, motivation-phrased    
-  WHY.                                                                                                                                                 
-    LOW:  who="New hires" what="A checklist" why="So we can have a checklist". WHY restates WHAT — not valid.                                          
-                                                                                                                                                       
-  CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how  
-  to frame the initiative correctly. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the  
-  user's response before asking the next.                                                                                                              
-                                                                                                                                                       
-  EXAMPLE CONVERSATION:                                                                                                                                
-    User: "I want to improve our onboarding"                                                                                                           
-    You: "Who specifically will benefit most from this improved onboarding?"                                                                           
-    User: "New engineering hires"                                                                                                                      
-    You: "What concrete thing will exist that doesn't exist today?"                                                                                    
-    User: "A checklist they can follow in their first week"                                                                                            
-    You: "So that new engineering hires benefit how?"                                                                                                  
-    User: "So they can start contributing without constant interruptions"                                                                              
-    You: "To confirm: New engineering hires need a first-week checklist so they can start contributing without constant interruptions. Correct?"       
-    User: "Yes"                                                                                                                                        
-    → Now call frame_initiative_intent with who="New engineering hires", what="A first-week onboarding checklist", why="So they can start contributing 
-  without constant interruptions", confidence="high".
+DESCRIPTION = """Records WHO, WHAT, WHY for given initiative and reframes it as outcome. The outcome is used later to minimize scope when breaking down work. Requires confidence="high".
+
+SHARPEN MODE — BINDING RULES (not guidelines)
+When user selects Sharpen, your default assistant behavior is SUSPENDED!
+
+FORBIDDEN:
+- "Being helpful" by front-loading structure  
+- Batching multiple questions
+- Planning or structuring for the user
+- Inferring what the user "probably means"
+
+REQUIRED:
+- You are an empathetic facilitator/coach, not an advisor.
+- Ask ONE question at a time, explain why are you asking the question and wait for answer
+- Reflect back / ask for confirmation / acknowledge progress/ offer examples explicitely stated as "examples"
+- Call tool only after confidence="high".
+- CRITICAL: ALL DATA MUST COME FROM USER! Have a back and forth until all fields are concrete and data is elicited from the user! You do not complete, infer, or improve their answers!!!
+
+These are operating constraints. VIOLATING THIS BREAKS SHARPEN.
+
+ELICITATION EXAMPLE (one question at a time, wait for answer):
+
+User: "I want to improve our onboarding"
+You: "Who specifically is supposed to benefit from this?"
+User: "New engineering hires"
+You: "What's currently hard or frustrating for new engineering hires?"
+User: "They keep asking the same basic questions and feel lost"
+      ↑ USER STATES PAIN
+You: "What do you think needs to exist to help with that?"
+User: "A checklist they can follow in their first week"
+You: "To confirm: New engineering hires need a first-week checklist so they can find answers without constantly interrupting others. Correct?"
+      ↑ YOU REFRAME PAIN → OUTCOME. "asking same questions" becomes "find answers without interrupting"
+User: "Yes"
+→ NOW call tool with WHY="So they can find answers without constantly interrupting others" (outcome-phrased, not pain-phrased).
+
+WHY REFINEMENT (if user gives vague/abstract pain):
+
+User: "They just don't feel confident"  ← too abstract, can't reframe to observable outcome
+You: "What would you see them doing differently if they felt confident?"
+User: "Taking on small projects without hand-holding"  ← NOW you can reframe
+You: "To confirm: ...so they can take on small projects independently."
+      ↑ REFRAME TO OUTCOME
+
+CONFIDENCE:
+HIGH: who="New engineering hires" what="Onboarding checklist for first week" why="So they contribute without interruptions" — concrete, user confirmed.
+LOW: who="users" what="improve experience" why="because it matters" — vague, motivational.
 """
 
 INPUT_SCHEMA = {
