@@ -145,6 +145,66 @@ class TestValidateInitiativeIntent:
         assert result["valid"] is False
         assert "who" in result["missing"]
 
+    def test_multiple_stakeholders_and_pattern(self):
+        """WHO with 'and' returns multiple_stakeholders=True."""
+        result = validate_initiative_intent(
+            who="The team and the client",
+            what="A dashboard",
+            why="To track progress",
+        )
+        assert result["valid"] is False
+        assert result["multiple_stakeholders"] is True
+
+    def test_multiple_stakeholders_comma_pattern(self):
+        """WHO with comma list returns multiple_stakeholders=True."""
+        result = validate_initiative_intent(
+            who="Engineers, designers, PMs",
+            what="A dashboard",
+            why="To track progress",
+        )
+        assert result["valid"] is False
+        assert result["multiple_stakeholders"] is True
+
+    def test_multiple_stakeholders_or_pattern(self):
+        """WHO with 'or' returns multiple_stakeholders=True."""
+        result = validate_initiative_intent(
+            who="The client or leadership",
+            what="A report",
+            why="To show progress",
+        )
+        assert result["valid"] is False
+        assert result["multiple_stakeholders"] is True
+
+    def test_composite_audience_sales_and_marketing(self):
+        """Known composite 'Sales and Marketing' is valid."""
+        result = validate_initiative_intent(
+            who="Sales and Marketing team",
+            what="A dashboard",
+            why="To track leads",
+        )
+        assert result["valid"] is True
+        assert result.get("multiple_stakeholders") is False
+
+    def test_composite_audience_r_and_d(self):
+        """Known composite 'Research and Development' is valid."""
+        result = validate_initiative_intent(
+            who="Research and Development",
+            what="A tool",
+            why="To speed up experiments",
+        )
+        assert result["valid"] is True
+        assert result.get("multiple_stakeholders") is False
+
+    def test_single_stakeholder_valid(self):
+        """WHO with single stakeholder is valid."""
+        result = validate_initiative_intent(
+            who="New engineering hires",
+            what="A checklist",
+            why="To onboard faster",
+        )
+        assert result["valid"] is True
+        assert result.get("multiple_stakeholders") is False
+
 
 # ============================================================================
 # Handler Tests (tools/frame_initiative_intent.py)
@@ -232,6 +292,21 @@ class TestFrameInitiativeIntentHandler:
 
         assert result.isError is True
         assert result.structuredContent["error"] == "confidence_too_low"
+
+    @pytest.mark.asyncio
+    async def test_multiple_stakeholders_returns_error(self):
+        """Multiple stakeholders WHO returns error with recovery hint."""
+        arguments = {
+            "who": "The team and the client",
+            "what": "A dashboard",
+            "why": "To track progress",
+            "confidence": "high",
+        }
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "multiple_stakeholders"
+        assert "recovery_hint" in result.structuredContent
 
     @pytest.mark.asyncio
     async def test_missing_who_returns_error(self):

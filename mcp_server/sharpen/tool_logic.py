@@ -72,6 +72,41 @@ def export_checklist(project_name: str, items: list[dict]) -> dict[str, Any]:
 # Step 1: Initiative Framing Logic (Structural Validation Only)
 # ============================================================================
 
+# Known composite terms that represent single audiences
+_COMPOSITE_AUDIENCES = [
+    "sales and marketing",
+    "research and development",
+    "r&d",
+    "product and engineering",
+    "product and design",
+    "design and engineering",
+    "ops and support",
+    "hr and recruiting",
+    "finance and accounting",
+    "parents and caregivers",
+    "customers and prospects",
+]
+
+
+def _has_multiple_stakeholders(who: str) -> bool:
+    """Detect if WHO contains multiple distinct stakeholders."""
+    who_lower = who.lower()
+
+    # Allow known composite audiences
+    for phrase in _COMPOSITE_AUDIENCES:
+        if phrase in who_lower:
+            return False
+
+    # Detect multiple stakeholder patterns
+    if " and " in who_lower:
+        return True
+    if " or " in who_lower:
+        return True
+    if ", " in who_lower:
+        return True
+
+    return False
+
 
 def validate_initiative_intent(
     who: str | None,
@@ -97,8 +132,6 @@ def validate_initiative_intent(
     why = (why or "").strip()
 
     # Structural validation only — all three are required
-    valid = bool(who) and bool(what) and bool(why)
-
     missing = []
     if not who:
         missing.append("who")
@@ -107,14 +140,36 @@ def validate_initiative_intent(
     if not why:
         missing.append("why")
 
+    # If any fields missing, return early
+    if missing:
+        return {
+            "framing_intent": {
+                "who": who,
+                "what": what,
+                "why": why,
+            },
+            "valid": False,
+            "missing": missing,
+        }
+
+    # Check for multiple stakeholders
+    if _has_multiple_stakeholders(who):
+        return {
+            "framing_intent": {"who": who, "what": what, "why": why},
+            "valid": False,
+            "missing": [],
+            "multiple_stakeholders": True,
+        }
+
     return {
         "framing_intent": {
             "who": who,
             "what": what,
             "why": why,
         },
-        "valid": valid,
-        "missing": missing,
+        "valid": True,
+        "missing": [],
+        "multiple_stakeholders": False,
     }
 
 

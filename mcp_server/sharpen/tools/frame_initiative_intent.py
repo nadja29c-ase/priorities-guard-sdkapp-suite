@@ -119,7 +119,7 @@ INPUT_SCHEMA = {
     "properties": {
         "who": {
             "type": "string",
-            "description": "WHO is supposed to benefit from this work getting done first and foremost? ACCORDING TO THE USER.",
+            "description": "ONE primary beneficiary. Who benefits first and foremost? Not multiple audiences. ACCORDING TO THE USER.",
         },
         "what": {
             "type": "string",
@@ -173,6 +173,12 @@ GUIDANCE_MISSING_FIELDS = (
     "- Missing WHY: 'What's currently hard or frustrating for them?'\n"
     "- Missing WHAT: 'What do you think needs to exist to help with that?'\n"
     "Then stop and wait. Do not explain, suggest, or plan."
+)
+
+GUIDANCE_MULTIPLE_STAKEHOLDERS = (
+    "SHARPEN MODE STILL BINDING. "
+    "Multiple stakeholders detected. Ask: 'Who benefits first and foremost?' "
+    "Then stop and wait. Frame confirmation as '[WHO] primarily benefits from this.'"
 )
 
 GUIDANCE_CONFIRMED = (
@@ -233,6 +239,25 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     # If structurally invalid, return error
     if not result["valid"]:
+        # Check for multiple stakeholders
+        if result.get("multiple_stakeholders"):
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(
+                    type="text",
+                    text="Multiple stakeholders detected. Need primary beneficiary.",
+                )],
+                structuredContent={
+                    "error": "multiple_stakeholders",
+                    "who_provided": result["framing_intent"]["who"],
+                    "recovery_hint": "Ask user to name ONE primary beneficiary",
+                    "assistant_guidance": {
+                        "action": "ASK_CLARIFYING",
+                        "instruction": GUIDANCE_MULTIPLE_STAKEHOLDERS,
+                    },
+                },
+                isError=True,
+            )
+
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
