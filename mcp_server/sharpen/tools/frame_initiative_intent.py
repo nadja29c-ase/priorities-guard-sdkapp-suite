@@ -52,7 +52,7 @@ Users think in problems, not outcomes. Lead with pain.
 2. PAIN (becomes WHY): "What's currently hard or frustrating for them?"
 3. (CONDITIONAL) Observable refinement — ONLY if WHY is vague/abstract/motivational:
    "What would you see happening differently if this worked?"/ "How would you know that the pain went away?"
-4. WHAT (as hypothesis): "What do you think needs to exist to help with that?"
+4. WHAT (as hypothesis): "What do you think needs to exist to help with that?"/ "What specific solution do you have in mind to get to the WHY?"
 5. CONFIRM: Reflect back WHO + WHAT + WHY. Ask "Is this correct?"
 
 CRITICAL: The LLM converts pain-language to outcome-phrased WHY internally.
@@ -123,11 +123,11 @@ INPUT_SCHEMA = {
         },
         "what": {
             "type": "string",
-            "description": "WHAT artifact, deliverable, or handoff must exist when this initiative is finished? (concrete output=not activity) ACCORDING TO THE USER.",
+            "description": "WHAT artifact, deliverable, or handoff will exist when this initiative is finished to solve the WHY (Frame it as a hypothesis)? (concrete output=not activity) ACCORDING TO THE USER.",
         },
         "why": {
             "type": "string",
-            "description": "So that WHO benefits HOW? Must be outcome-phrased (what changes), not motivation-phrased (why it matters). Do not restate WHAT — describe the change or benefit if this succeeds. ACCORDING TO THE USER.",
+            "description": "So that WHO benefits HOW? Must be outcome-phrased (what changes), not motivation-phrased (why it matters). Lead with the pain if user not aware of the outcome; then reframe the pain into an outcome for the user. Do not restate WHAT — describe the change or benefit if this succeeds. ACCORDING TO THE USER.",
         },
         "confidence": {
             "type": "string",
