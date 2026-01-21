@@ -22,97 +22,25 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed WHO, WHAT, and WHY of an initiative. This frames the initiative as outcome-focused so that later the amount of work can be minimized based on outcome. Requires confidence="high".
+DESCRIPTION = """Records WHO, WHAT, WHY for given initiative and reframes it as outcome. The outcome is used later to minimize scope when breaking down work. Requires confidence="high".
 
-SHARPEN MODE — BINDING RULES (not guidelines)
-When user selects Sharpen, your default assistant behavior is SUSPENDED.
+SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
 
-SUSPENDED BEHAVIORS:
-- Planning
-- Offering options
-- Suggesting answers
-- Batching multiple questions
-- Proposing deliverables or tasks
-- "Being helpful" by front-loading structure
-
-ACTIVE BEHAVIORS:
-- Ask ONE question at a time
-- Wait for answer
-- Reflect their words back
-- Ask for user confirmation
-- Then call tool with confidence="high"
-
-These are not suggestions. These are operating constraints.
-Violating them means Sharpen is broken.
-
-ELICITATION ORDER — PAIN-FIRST (not outcome-first)
-Users think in problems, not outcomes. Lead with pain.
-
+ELICITATION Example:
 1. WHO: "Who specifically is affected by this?"/ "Who is supposed to benefit from this initiative?".
-2. PAIN (becomes WHY): "What's currently hard or frustrating for them?"
-3. (CONDITIONAL) Observable refinement — ONLY if WHY is vague/abstract/motivational:
-   "What would you see happening differently if this worked?"/ "How would you know that the pain went away?"
-4. WHAT (as hypothesis): "What do you think needs to exist to help with that?"/ "What specific solution do you have in mind to get to the WHY?"
-5. CONFIRM: Reflect back WHO + WHAT + WHY. Ask "Is this correct?"
+2. WHY via pain: "What's hard or frustrating for [WHO]?". You transform pain into outcome-phrased WHY internally.
+3. (If WHY vague -> WHY Refinement) Observable change: "What would you see happening differently?"
+4. WHAT (hypothesis): "What specific solution do you have in mind to get to the WHY?"
 
-CRITICAL: The LLM converts pain-language to outcome-phrased WHY internally.
-User says: "They keep asking the same questions"
-WHY becomes: "So they can find answers without interrupting others"
+WHY REFINEMENT — trigger only if WHY is:
+- Abstract ("feel confident", "work better")
+- Restates WHAT ("so we have a checklist")
+- Motivational ("because it matters")
 
-CONDITIONAL WHY REFINEMENT — Only trigger when WHY is:
-- Abstract: "feel confident", "be happier", "work better"
-- Restates WHAT: "so we have a checklist", "so the API exists"
-- Motivational: "because onboarding matters", "because it's important"
-
-If WHY is already concrete and observable, skip refinement and proceed to WHAT.
-
-CONFIDENCE EXAMPLES:
-  HIGH: who="New engineering hires" what="A first-week onboarding checklist" why="So they can start contributing without constant interruptions". Pain-derived, observable outcome, user confirmed.
-  LOW:  who="users" what="improve the onboarding experience" why="because onboarding matters". Vague WHO, activity-based WHAT, motivational WHY.
-  LOW:  who="New hires" what="A checklist" why="So we can have a checklist". WHY restates WHAT — not valid.
-  LOW:  who="The team" what="A dashboard" why="So they feel more confident". Abstract WHY — needs refinement.
-
-CRITICAL: Your role is to facilitate and find the answers by asking the user questions. NEVER suggest answers for the user. NEVER tell the user how to frame the initiative correctly. Elicit the input data iteratively in a back-and-forth conversation — ask ONE question at a time and wait for the user's response before asking the next.
-
-EXAMPLE CONVERSATION (pain-first flow):
-  User: "I want to improve our onboarding"
-  You: "Who specifically is affected by this?"
-  User: "New engineering hires"
-  You: "What's currently hard or frustrating for them?"
-  User: "They keep asking the same basic questions and feel lost"
-  You: "What do you think needs to exist to help with that?"
-  User: "A checklist they can follow in their first week"
-  You: "To confirm: New engineering hires need a first-week checklist so they can find answers without constantly interrupting others. Correct?"
-  User: "Yes"
-  → Call frame_initiative_intent with who="New engineering hires", what="A first-week onboarding checklist", why="So they can find answers without constantly interrupting others", confidence="high".
-
-EXAMPLE CONVERSATION (with WHY refinement):
-  User: "I want to improve our onboarding"
-  You: "Who specifically is affected by this?"
-  User: "New engineering hires"
-  You: "What's currently hard or frustrating for them?"
-  User: "They just don't feel confident"
-  You: "What would you see them doing differently if they felt confident?"
-  User: "They'd take on small projects without needing hand-holding"
-  You: "What do you think needs to exist to help with that?"
-  User: "Maybe a checklist or guide for their first week"
-  You: "To confirm: New engineering hires need a first-week guide so they can take on small projects independently. Correct?"
-  User: "Yes"
-  → Call frame_initiative_intent with who="New engineering hires", what="A first-week guide", why="So they can take on small projects independently", confidence="high".
-
-EXAMPLE CONVERSATION (WHY restates WHAT — needs refinement):
-  User: "I want a better dashboard"
-  You: "Who specifically is affected by this?"
-  User: "The product team"
-  You: "What's currently hard or frustrating for them?"
-  User: "They need a dashboard"
-  You: "What would change for the product team if they had this dashboard?"
-  User: "They could see project status without asking around"
-  You: "What do you think the dashboard needs to show to help with that?"
-  User: "Project status and blockers"
-  You: "To confirm: The product team needs a dashboard showing project status and blockers so they can check progress without asking around. Correct?"
-  User: "Yes"
-  → Call frame_initiative_intent with who="The product team", what="A dashboard showing project status and blockers", why="So they can check progress without asking around", confidence="high"."""
+CONFIDENCE:
+HIGH: who="New engineering hires" what="Onboarding checklist for first week" why="So they contribute without interruptions" — concrete, user confirmed.
+LOW: who="users" what="improve experience" why="because it matters" — vague, motivational.
+"""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -182,12 +110,11 @@ GUIDANCE_MULTIPLE_STAKEHOLDERS = (
 )
 
 GUIDANCE_CONFIRMED = (
-    "Intent confirmed. "
+    "SHARPEN MODE STILL BINDING. "
     "Ask ONE question: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' "
     "Then stop and wait. Do not suggest constraints.\n\n"
-    "When user answers constraint → call frame_initiative_constraints with constraint_type + constraint_value."
+    "When user answers constraint → explain why all the questions were necessary and acknowledge the process then call frame_initiative_constraints with constraint_type + constraint_value."
 )
-
 
 # ============================================================================
 # Tool Handler

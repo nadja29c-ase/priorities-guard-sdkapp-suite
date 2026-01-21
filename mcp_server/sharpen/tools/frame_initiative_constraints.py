@@ -22,43 +22,17 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed CONSTRAINT for an initiative. Without a clear constraint, scope expands endlessly. The constraint becomes the reality filter for all subsequent scope decisions. Requires confidence="high".
+DESCRIPTION = """Records dominant CONSTRAINT. Without constraint, scope expands endlessly - use it to help the user reduce scope when necessary. Requires confidence="high".
 
-SHARPEN MODE — BINDING RULES (not guidelines)
-When user selects Sharpen, your default assistant behavior is SUSPENDED.
+SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
 
-SUSPENDED BEHAVIORS:
-- Planning
-- Offering options
-- Suggesting answers
-- Batching multiple questions
-- Proposing deliverables or tasks
-- "Being helpful" by front-loading structure
+CONSTRAINT TYPES: time (deadline), capacity (hours/week), budget, forced_mvp.
 
-ACTIVE BEHAVIORS:
-- Ask ONE question at a time
-- Wait for answer
-- Reflect their words back
-- Ask for user confirmation
-- Then call tool with confidence="high"
+CONFIDENCE:
+HIGH: type="capacity" value="4 hours per week" — concrete, confirmed.
+LOW: type="time" value="soon" — vague.
 
-These are not suggestions. These are operating constraints.
-Violating them means Sharpen is broken.
-
-CONFIDENCE EXAMPLES:
-  HIGH: constraint_type="time" constraint_value="by March 15". User confirmed.
-  LOW:  constraint_type="time" constraint_value="soon". Too vague.
-  HIGH: constraint_type="capacity" constraint_value="4 hours per week". User confirmed.
-  LOW:  constraint_type="budget" constraint_value="flexible". Too vague.
-
-If user claims "no constraints", set user_claims_no_constraints=true — backend will guide next steps.
-
-EXAMPLE CONVERSATION:
-  You: "What's the one constraint that limits this initiative most — a deadline, limited hours per week, or a budget cap?"
-  User: "I only have about 3 hours a week to work on this"
-  You: "3 hours per week. Is that the main constraint?"
-  User: "Yes"
-  → Now call frame_initiative_constraints with constraint_type="capacity", constraint_value="3 hours per week", confidence="high"."""
+If user claims no constraints → set user_claims_no_constraints=true."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -66,7 +40,7 @@ INPUT_SCHEMA = {
         "constraint_type": {
             "type": "string",
             "enum": ["time", "capacity", "budget", "forced_mvp"],
-            "description": "Which ONE constraint dominates: time (deadline), capacity (hours/sessions per week), budget, or forced_mvp (smallest result worth continuing). ACCORDING TO THE USER.",
+            "description": "Which ONE constraint dominates: time (deadline), capacity (hours/sessions per week), budget, or forced_mvp (smallest result delivering WHY). ACCORDING TO THE USER.",
         },
         "constraint_value": {
             "type": "string",
@@ -123,9 +97,9 @@ GUIDANCE_MISSING_FIELDS = (
 )
 
 GUIDANCE_CONFIRMED = (
-    "Present the complete framing using the user's exact words: "
-    "WHO, WHAT, WHY, CONSTRAINT. "
-    "Then ask: 'Is this correct?' Stop and wait. Do not elaborate or add context.\n\n"
+    "SHARPEN MODE STILL BINDING. "
+    "Present the complete framing using the user's exact words and ask for confirmation:"
+    "Explain what was achieved so far and how is this useful. "
     "If user confirms → ask: 'What needs to exist for this initiative to be done? Don't filter — just name everything.' "
     "Then stop and wait. When user answers → call identify_e2e_deliverables with framing + deliverables.\n"
     "If user corrects → update the framing and re-confirm.\n\n"
@@ -134,9 +108,8 @@ GUIDANCE_CONFIRMED = (
     "For all subsequent questions and scope decisions:\n"
     "- Always evaluate against the constraint ([constraint_type]: [constraint_value]).\n"
     "- Prefer the smallest scope that still advances the WHY.\n"
-    "- If nothing fits the constraint, prompt the user to consider a simpler approach.\n"
+    "- If nothing fits the constraint, prompt the user to consider a simpler approach/ solution that fulfills the WHY.\n"
     "Apply this evaluation whenever scope is stated or implied — even if intermediate tools are skipped.\n"
-    "Do not explain this to the user."
 )
 
 
