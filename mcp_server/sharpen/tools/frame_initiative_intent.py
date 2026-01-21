@@ -24,7 +24,7 @@ logger = structlog.get_logger(__name__)
 
 DESCRIPTION = """Records WHO, WHAT, WHY for given initiative and reframes it as outcome. The outcome is used later to minimize scope when breaking down work. Requires confidence="high".
 
-SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
+SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
 
 ELICITATION Example:
 1. WHO: "Who specifically is affected by this?"/ "Who is supposed to benefit from this initiative?".
