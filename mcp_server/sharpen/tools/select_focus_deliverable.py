@@ -23,7 +23,7 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records the user's focus deliverable — either by selecting an existing one OR sculpting a new one that combines/reshapes confirmed deliverables. This defines the current scope boundary. No ordering, scheduling, or planning allowed. Requires confirmed deliverables from Step 2.1 and confidence="high".
+DESCRIPTION = """Records the user's focus deliverable after the realism/value evaluation loop has run. Requires deferred_deliverables (output of the loop) + either selection or sculpting from remaining deliverables. Requires confidence="high".
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.
@@ -34,6 +34,7 @@ SUSPENDED BEHAVIORS:
 - Bundling without user direction
 - Offering to "do all of them"
 - Planning or sequencing
+- Asking what to REMOVE/cut during focus selection (use KEEP/FOCUS language instead)
 
 ACTIVE BEHAVIORS:
 - Ask ONE question at a time
@@ -42,33 +43,60 @@ ACTIVE BEHAVIORS:
 - Ask for user confirmation
 - Then call tool with confidence="high"
 
+REALISM/VALUE LOOP (runs BEFORE this tool):
+After identify_e2e_deliverables confirms the deliverable list, evaluate each against constraints:
+1. "Given [constraint_type]: [constraint_value], can [deliverable] realistically be completed?"
+2. "Does [deliverable] directly deliver value to [who] for [why]?"
+
+Deliverables that fail either check are DEFERRED by the user. This produces:
+- deferred_deliverables: what didn't survive the loop
+- remaining: what survived (confirmed minus deferred)
+
+CRITICAL: The loop must run. If user claims "all are realistic", confirm explicitly:
+"You're saying all [N] deliverables can be completed within [constraint]? None need to be deferred?"
+
+FOCUS SELECTION (this tool):
+After loop completes, select focus from REMAINING deliverables (not from full confirmed list).
+
 TWO WAYS TO SET FOCUS:
 
-1. SELECT EXISTING: User picks one deliverable by exact name.
+1. SELECT EXISTING: User picks one remaining deliverable by exact name.
    → Use selected_deliverable_name
 
-2. SCULPT NEW: User combines or tightens multiple deliverables into one.
+2. SCULPT NEW: User combines or tightens multiple remaining deliverables into one.
    → Use sculpted_deliverable with name + replaces list
 
-SCULPTING INVARIANT: A sculpted deliverable may ONLY combine or reduce scope from the deliverables it replaces. It must not introduce new outcomes, audiences, or success criteria beyond what was already confirmed. If the user's sculpt adds scope, flag it: 'This seems to add scope beyond what [replaced deliverables] covered. Sculpting should tighten, not expand. What can we remove?'
+AUTO-SELECT: If only ONE deliverable remains after deferrals, it automatically becomes focus.
 
-CRITICAL: Use exactly ONE method. If user says "API and Docs together", that's sculpting — create a new name that captures the combined scope. If user picks one as-is, that's selection.
+OVER-CUTTING: If ZERO deliverables remain, error — user deferred too much. Re-evaluate.
 
-EXAMPLE CONVERSATION (Selection):
-  You: "Your constraint is capacity: 3 hours per week. Which ONE of these can you realistically finish within that AND would still count as done?"
-  User: "Just the checklist — the RASCI doc can wait"
-  You: "So 'First-week checklist' is the focus, given your 3 hours/week. RASCI is deferred. Correct?"
+SCULPTING INVARIANT: A sculpted deliverable may ONLY combine or reduce scope from the deliverables it replaces. It must not introduce new outcomes, audiences, or success criteria beyond what was already confirmed.
+
+EXAMPLE CONVERSATION (with deferrals):
+  [After identify_e2e_deliverables confirmed: "API", "Docs", "Tests"]
+  You: "Given your constraint of 2 weeks, can all three realistically be completed?"
+  User: "No, tests would take too long"
+  You: "So 'Tests' is deferred. Between 'API' and 'Docs', which ONE must exist first to deliver value to [who]?"
+  User: "API — docs can come later"
+  You: "Focus is 'API'. Deferred: 'Tests', 'Docs'. Correct?"
   User: "Yes"
-  → Call with selected_deliverable_name="First-week checklist", confidence="high"
+  → Call with deferred_deliverables=["Tests", "Docs"], selected_deliverable_name="API", confidence="high"
 
-EXAMPLE CONVERSATION (None fit — escape hatch):
-  You: "Your constraint is time: 2 weeks. Which ONE of these can you realistically finish within that?"
-  User: "Honestly, none of them fit in 2 weeks"
-  You: "What could maybe be some simpler approaches to move toward [why] within 2 weeks? Shall we brainstorm together?"
-  User: "Maybe just a Slack message with key contacts instead of a full checklist"
-  You: "That's a different solution. What deliverable would exist?"
-  User: "A pinned Slack message with 'who to ask for what'"
-  → Restart deliverables with this simpler approach
+EXAMPLE CONVERSATION (auto-select after deferrals):
+  [After identify_e2e_deliverables confirmed: "Checklist", "RASCI doc", "Buddy program"]
+  You: "Given 3 hours/week, can all three realistically be completed?"
+  User: "No way — just the checklist maybe"
+  You: "So 'RASCI doc' and 'Buddy program' are deferred. That leaves 'Checklist' as the only remaining deliverable — it becomes the focus. Correct?"
+  User: "Yes"
+  → Call with deferred_deliverables=["RASCI doc", "Buddy program"], selected_deliverable_name="Checklist", confidence="high"
+
+EXAMPLE CONVERSATION (all realistic — explicit confirmation):
+  [After identify_e2e_deliverables confirmed: "Landing page", "Contact form"]
+  You: "Given your constraint of 1 month, can both realistically be completed?"
+  User: "Yes, both are doable"
+  You: "Confirming: no deferrals needed — both 'Landing page' and 'Contact form' fit within 1 month. Which ONE is the focus?"
+  User: "Landing page"
+  → Call with deferred_deliverables=[], selected_deliverable_name="Landing page", confidence="high"
 """
 
 INPUT_SCHEMA = {
@@ -102,6 +130,11 @@ INPUT_SCHEMA = {
             },
             "minItems": 1,
         },
+        "deferred_deliverables": {
+            "type": "array",
+            "description": "Deliverables explicitly deferred during realism/value evaluation. Names must match confirmed_deliverables. Can be empty ONLY after explicit confirmation that all deliverables are realistic within the constraint. ACCORDING TO THE USER — never infer deferrals.",
+            "items": {"type": "string"},
+        },
         "selected_deliverable_name": {
             "type": "string",
             "description": "Select ONE existing deliverable by exact name. Use this OR sculpted_deliverable, not both. ACCORDING TO THE USER.",
@@ -133,7 +166,7 @@ INPUT_SCHEMA = {
             "description": "Your confidence that the selection/sculpt is user-confirmed. Must be 'high' to proceed.",
         },
     },
-    "required": ["initiative_framing", "confirmed_deliverables", "confidence"],
+    "required": ["initiative_framing", "confirmed_deliverables", "deferred_deliverables", "confidence"],
     "additionalProperties": False,
 }
 
@@ -168,10 +201,11 @@ class SculptedDeliverable(BaseModel):
     replaces: Optional[List[str]] = None
 
 
-class SelectCutoffRequest(BaseModel):
+class SelectFocusRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     initiative_framing: Optional[InitiativeFraming] = None
     confirmed_deliverables: Optional[List[DeliverableItem]] = None
+    deferred_deliverables: Optional[List[str]] = None
     selected_deliverable_name: Optional[str] = None
     sculpted_deliverable: Optional[SculptedDeliverable] = None
     confidence: Optional[Literal["high", "medium", "low"]] = None
@@ -242,6 +276,48 @@ GUIDANCE_INVALID_REPLACES = (
     "Then stop and wait."
 )
 
+GUIDANCE_MISSING_DEFERRED = (
+    "SHARPEN MODE STILL BINDING. "
+    "deferred_deliverables parameter missing. Run the realism/value loop first: "
+    "For each confirmed deliverable, ask 'Given [constraint], can this realistically be completed?' "
+    "Collect deferrals, then call this tool with the list (can be empty if all survived)."
+)
+
+GUIDANCE_INVALID_DEFERRED = (
+    "SHARPEN MODE STILL BINDING. "
+    "Some deferred names don't match confirmed deliverables. "
+    "Present the confirmed deliverable names. Ask: 'Which of these should be deferred?' "
+    "Then stop and wait."
+)
+
+GUIDANCE_OVER_CUTTING = (
+    "SHARPEN MODE STILL BINDING. "
+    "All deliverables were deferred — nothing remains to focus on. "
+    "Ask: 'You've deferred everything. Which ONE deliverable should we keep in scope?' "
+    "Then stop and wait."
+)
+
+GUIDANCE_AUTO_SELECTED = (
+    "SHARPEN MODE STILL BINDING. "
+    "Only one deliverable remained after deferrals — auto-selected as focus. "
+    "Scope confirmed. Focus: [focus_name]. Deferred: [deferred_list].\n\n"
+    "Proceed to Step 3: commit_week_deliverable."
+)
+
+GUIDANCE_AMBIGUOUS_REMAINING = (
+    "SHARPEN MODE STILL BINDING. "
+    "Multiple deliverables remain after deferrals. "
+    "Ask: 'Between [remaining], which ONE must exist first to deliver value to [who]?' "
+    "Then stop and wait. Do not suggest."
+)
+
+GUIDANCE_SELECTION_WAS_DEFERRED = (
+    "SHARPEN MODE STILL BINDING. "
+    "The selected deliverable was already deferred. "
+    "Present the remaining deliverable names. Ask: 'Which of these remaining deliverables is the focus?' "
+    "Then stop and wait."
+)
+
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING. "
     "Scope confirmed. Focus: [focus_name]. Deferred: [deferred_list].\n\n"
@@ -261,7 +337,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     # Pydantic validation
     try:
-        validated_request = SelectCutoffRequest.model_validate(arguments)
+        validated_request = SelectFocusRequest.model_validate(arguments)
     except ValidationError as e:
         logger.warning("select_focus_deliverable.validation_failed", error=str(e.errors()))
         return mcp_types.CallToolResult(
@@ -273,12 +349,14 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Convert Pydantic models to dicts for logic layer
     framing_dict = validated_request.initiative_framing.model_dump() if validated_request.initiative_framing else None
     deliverables_list = [d.model_dump() for d in validated_request.confirmed_deliverables] if validated_request.confirmed_deliverables else None
+    deferred_list = validated_request.deferred_deliverables
     sculpted_dict = validated_request.sculpted_deliverable.model_dump() if validated_request.sculpted_deliverable else None
 
     # Business logic validation
     result = validate_cutoff_selection(
         framing=framing_dict,
         deliverables=deliverables_list,
+        deferred=deferred_list,
         selected_name=validated_request.selected_deliverable_name,
         sculpted=sculpted_dict,
         confidence=validated_request.confidence,
@@ -320,6 +398,24 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         elif error_type == "invalid_replaces":
             guidance = GUIDANCE_INVALID_REPLACES
             action = "ASK_CLARIFYING"
+        elif error_type == "missing_deferred":
+            guidance = GUIDANCE_MISSING_DEFERRED
+            action = "REFUSE"
+        elif error_type == "invalid_deferred":
+            guidance = GUIDANCE_INVALID_DEFERRED
+            action = "ASK_CLARIFYING"
+        elif error_type == "over_cutting":
+            guidance = GUIDANCE_OVER_CUTTING
+            action = "ASK_CLARIFYING"
+        elif error_type == "ambiguous_remaining":
+            guidance = GUIDANCE_AMBIGUOUS_REMAINING
+            action = "ASK_CLARIFYING"
+        elif error_type == "selection_was_deferred":
+            guidance = GUIDANCE_SELECTION_WAS_DEFERRED
+            action = "ASK_CLARIFYING"
+        elif error_type == "replaces_includes_deferred":
+            guidance = GUIDANCE_INVALID_REPLACES
+            action = "ASK_CLARIFYING"
         else:
             guidance = (
                 "An unexpected validation issue occurred. Ask the user to restate "
@@ -358,12 +454,20 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     # Get replaces from internal field (only present for sculpted path)
     replaces = result.get("_internal_replaces")
+    auto_selected = result.get("auto_selected", False)
 
     logger.info("select_focus_deliverable.complete",
                 focus_deliverable=focus["name"],
                 deferred_count=len(deferred),
                 sculpted=replaces is not None,
+                auto_selected=auto_selected,
                 confidence="high")
+
+    # Determine guidance based on auto-select
+    if auto_selected:
+        guidance_instruction = GUIDANCE_AUTO_SELECTED
+    else:
+        guidance_instruction = GUIDANCE_CONFIRMED
 
     structured = {
         "focus_deliverable": focus,
@@ -373,9 +477,13 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         "confirmed": True,
         "assistant_guidance": {
             "action": "PROCEED_TO_STEP_3",
-            "instruction": GUIDANCE_CONFIRMED,
+            "instruction": guidance_instruction,
         },
     }
+
+    # Include auto_selected flag if applicable
+    if auto_selected:
+        structured["auto_selected"] = True
 
     # Include replaces for sculpted path (LLM can mention in summary)
     if replaces:

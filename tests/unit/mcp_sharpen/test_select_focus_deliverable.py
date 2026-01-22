@@ -51,6 +51,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted=None,
             confidence="high",
@@ -67,6 +68,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted=None,
             confidence="low",
@@ -80,6 +82,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted=None,
             confidence="medium",
@@ -93,6 +96,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=None,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted=None,
             confidence="high",
@@ -106,6 +110,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=None,
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted=None,
             confidence="high",
@@ -119,6 +124,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=[],
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted=None,
             confidence="high",
@@ -127,37 +133,40 @@ class TestValidateCutoffSelection:
         assert result["valid"] is False
         assert result["error_type"] == "missing_deliverables"
 
-    def test_no_selection_method_empty_string_rejects(self, valid_framing, valid_deliverables):
-        """Empty selected_name with no sculpt is rejected as no_selection_method."""
+    def test_ambiguous_remaining_empty_string_rejects(self, valid_framing, valid_deliverables):
+        """Empty selected_name with no sculpt and multiple remaining is rejected as ambiguous_remaining."""
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="",
             sculpted=None,
             confidence="high",
         )
 
         assert result["valid"] is False
-        assert result["error_type"] == "no_selection_method"
+        assert result["error_type"] == "ambiguous_remaining"
 
-    def test_no_selection_method_none_rejects(self, valid_framing, valid_deliverables):
-        """None selected_name with no sculpt is rejected as no_selection_method."""
+    def test_ambiguous_remaining_none_rejects(self, valid_framing, valid_deliverables):
+        """None selected_name with no sculpt and multiple remaining is rejected as ambiguous_remaining."""
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted=None,
             confidence="high",
         )
 
         assert result["valid"] is False
-        assert result["error_type"] == "no_selection_method"
+        assert result["error_type"] == "ambiguous_remaining"
 
     def test_selection_not_found_rejects(self, valid_framing, valid_deliverables):
         """Selection that doesn't match any deliverable is rejected."""
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="Nonexistent Deliverable",
             sculpted=None,
             confidence="high",
@@ -171,6 +180,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="deployed rest api",  # lowercase
             sculpted=None,
             confidence="high",
@@ -186,6 +196,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=single_deliverable,
+            deferred=[],
             selected_name="Only Deliverable",
             sculpted=None,
             confidence="high",
@@ -200,6 +211,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="OpenAPI spec",
             sculpted=None,
             confidence="high",
@@ -213,6 +225,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted=None,
             confidence="high",
@@ -228,6 +241,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="  Deployed REST API  ",
             sculpted=None,
             confidence="high",
@@ -247,6 +261,7 @@ class TestValidateCutoffSelection:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=duplicate_deliverables,
+            deferred=[],
             selected_name="API",
             sculpted=None,
             confidence="high",
@@ -270,6 +285,7 @@ class TestSelectCutoffHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Deployed REST API",
             "confidence": "high",
         }
@@ -302,6 +318,7 @@ class TestSelectCutoffHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Nonexistent",
             "confidence": "high",
         }
@@ -318,6 +335,7 @@ class TestSelectCutoffHandler:
         arguments = {
             "initiative_framing": None,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Deployed REST API",
             "confidence": "high",
         }
@@ -334,6 +352,7 @@ class TestSelectCutoffHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": None,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Deployed REST API",
             "confidence": "high",
         }
@@ -353,6 +372,7 @@ class TestSelectCutoffHandler:
                 {"name": "API", "description": "First"},
                 {"name": "API", "description": "Second"},
             ],
+            "deferred_deliverables": [],
             "selected_deliverable_name": "API",
             "confidence": "high",
         }
@@ -369,6 +389,7 @@ class TestSelectCutoffHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Deployed REST API",
             "confidence": "high",
         }
@@ -390,6 +411,7 @@ class TestSelectCutoffHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Deployed REST API",
             "confidence": "high",
         }
@@ -416,6 +438,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted={
                 "name": "API with minimal docs",
@@ -440,6 +463,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name="Deployed REST API",
             sculpted={
                 "name": "Combined",
@@ -456,6 +480,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted={
                 "name": "",
@@ -472,6 +497,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted={
                 "name": "New Focus",
@@ -488,6 +514,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted={
                 "name": "New Focus",
@@ -505,6 +532,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted={
                 "name": "Everything Bundle",
@@ -522,6 +550,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted={
                 "name": "API with docs",
@@ -538,6 +567,7 @@ class TestValidateCutoffSelectionSculptPath:
         result = validate_cutoff_selection(
             framing=valid_framing,
             deliverables=valid_deliverables,
+            deferred=[],
             selected_name=None,
             sculpted={
                 "name": "  Combined Focus  ",
@@ -564,6 +594,7 @@ class TestSelectCutoffHandlerSculptPath:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "sculpted_deliverable": {
                 "name": "API with minimal docs",
                 "description": "Combined scope",
@@ -585,6 +616,7 @@ class TestSelectCutoffHandlerSculptPath:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "sculpted_deliverable": {
                 "name": "API with minimal docs",
                 "replaces": ["Deployed REST API", "OpenAPI spec"],
@@ -605,6 +637,7 @@ class TestSelectCutoffHandlerSculptPath:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Deployed REST API",
             "sculpted_deliverable": {
                 "name": "Combined",
@@ -620,18 +653,19 @@ class TestSelectCutoffHandlerSculptPath:
         assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
 
     @pytest.mark.asyncio
-    async def test_no_method_returns_clarifying_action(self, valid_framing, valid_deliverables):
-        """Neither selection nor sculpt returns action='ASK_CLARIFYING'."""
+    async def test_ambiguous_remaining_returns_clarifying_action(self, valid_framing, valid_deliverables):
+        """Neither selection nor sculpt with multiple remaining returns action='ASK_CLARIFYING'."""
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "confidence": "high",
         }
 
         result = await handle(arguments)
 
         assert result.isError is True
-        assert result.structuredContent["error"] == "no_selection_method"
+        assert result.structuredContent["error"] == "ambiguous_remaining"
         assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
 
     @pytest.mark.asyncio
@@ -640,6 +674,7 @@ class TestSelectCutoffHandlerSculptPath:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "sculpted_deliverable": {
                 "name": "Combined",
                 "replaces": ["Nonexistent Deliverable"],
@@ -652,3 +687,227 @@ class TestSelectCutoffHandlerSculptPath:
         assert result.isError is True
         assert result.structuredContent["error"] == "invalid_replaces"
         assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
+
+
+# ============================================================================
+# Deferred Deliverables Validation Tests
+# ============================================================================
+
+
+class TestDeferredDeliverablesValidation:
+    """Tests for deferred_deliverables parameter validation."""
+
+    def test_missing_deferred_rejects(self, valid_framing, valid_deliverables):
+        """Missing deferred_deliverables is rejected."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=None,
+            selected_name="Deployed REST API",
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "missing_deferred"
+
+    def test_empty_deferred_allowed(self, valid_framing, valid_deliverables):
+        """Empty deferred list is allowed (all deliverables survived loop)."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=[],
+            selected_name="Deployed REST API",
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["focus_deliverable"]["name"] == "Deployed REST API"
+
+    def test_invalid_deferred_name_rejects(self, valid_framing, valid_deliverables):
+        """Deferred name not in confirmed deliverables is rejected."""
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=["Nonexistent Deliverable"],
+            selected_name="Deployed REST API",
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "invalid_deferred"
+        assert "Nonexistent" in result["error_details"]
+
+    def test_over_cutting_all_deferred_rejects(self, valid_framing, valid_deliverables):
+        """Deferring all deliverables is rejected."""
+        all_names = [d["name"] for d in valid_deliverables]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=all_names,
+            selected_name=None,
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "over_cutting"
+
+    def test_auto_select_single_remaining(self, valid_framing, valid_deliverables):
+        """Single remaining deliverable is auto-selected."""
+        # Defer all but one
+        deferred = ["OpenAPI spec", "Integration tests"]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name=None,
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["auto_selected"] is True
+        assert result["focus_deliverable"]["name"] == "Deployed REST API"
+
+    def test_ambiguous_remaining_without_selection_rejects(self, valid_framing, valid_deliverables):
+        """Multiple remaining without selection is rejected."""
+        # Defer only one, leaving two
+        deferred = ["Integration tests"]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name=None,
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "ambiguous_remaining"
+        assert "Deployed REST API" in result["remaining_names"]
+        assert "OpenAPI spec" in result["remaining_names"]
+
+    def test_selection_from_remaining_succeeds(self, valid_framing, valid_deliverables):
+        """Selection from remaining deliverables succeeds."""
+        deferred = ["Integration tests"]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name="OpenAPI spec",
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["focus_deliverable"]["name"] == "OpenAPI spec"
+
+    def test_selection_of_deferred_deliverable_rejects(self, valid_framing, valid_deliverables):
+        """Selecting a deferred deliverable is rejected."""
+        deferred = ["Deployed REST API"]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name="Deployed REST API",
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "selection_was_deferred"
+
+    def test_deferred_output_includes_all_non_focus(self, valid_framing, valid_deliverables):
+        """Deferred output includes explicit deferrals + remaining non-focus."""
+        deferred = ["Integration tests"]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name="Deployed REST API",
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        deferred_names = [d["name"] for d in result["deferred_deliverables"]]
+        assert "Integration tests" in deferred_names
+        assert "OpenAPI spec" in deferred_names
+        assert "Deployed REST API" not in deferred_names
+
+
+class TestRemainingInvariant:
+    """Tests for confirmed - deferred = remaining invariant."""
+
+    def test_remaining_equals_confirmed_minus_deferred(self, valid_framing, valid_deliverables):
+        """Verify remaining = confirmed - deferred invariant."""
+        deferred = ["Integration tests"]
+        confirmed_names = {d["name"] for d in valid_deliverables}
+        expected_remaining = confirmed_names - set(deferred)
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name="Deployed REST API",
+            sculpted=None,
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        # Focus + implicit deferrals = remaining
+        focus_name = result["focus_deliverable"]["name"]
+        deferred_names = {d["name"] for d in result["deferred_deliverables"]}
+        actual_remaining = {focus_name} | (expected_remaining - {focus_name})
+        assert actual_remaining == expected_remaining
+
+
+class TestDeferredWithSculptPath:
+    """Tests for deferred_deliverables with sculpt path."""
+
+    def test_sculpt_from_remaining_succeeds(self, valid_framing, valid_deliverables):
+        """Sculpting from remaining deliverables succeeds."""
+        deferred = ["Integration tests"]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name=None,
+            sculpted={
+                "name": "API with docs",
+                "replaces": ["Deployed REST API", "OpenAPI spec"],
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is True
+        assert result["focus_deliverable"]["name"] == "API with docs"
+
+    def test_sculpt_including_deferred_rejects(self, valid_framing, valid_deliverables):
+        """Sculpting that includes deferred deliverables is rejected."""
+        deferred = ["Integration tests"]
+
+        result = validate_cutoff_selection(
+            framing=valid_framing,
+            deliverables=valid_deliverables,
+            deferred=deferred,
+            selected_name=None,
+            sculpted={
+                "name": "Everything",
+                "replaces": ["Deployed REST API", "Integration tests"],  # Includes deferred
+            },
+            confidence="high",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "replaces_includes_deferred"

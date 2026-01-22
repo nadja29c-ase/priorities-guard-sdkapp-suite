@@ -368,6 +368,7 @@ def validate_e2e_deliverables(
 def validate_cutoff_selection(
     framing: dict | None,
     deliverables: list[dict] | None,
+    deferred: list[str] | None,
     selected_name: str | None,
     sculpted: dict | None,
     confidence: str | None,
@@ -376,22 +377,26 @@ def validate_cutoff_selection(
     Validate cutoff selection for select_focus_deliverable tool.
 
     Supports two paths:
-    - Selection: Pick existing deliverable by exact name
-    - Sculpting: Define new focus that replaces one or more confirmed deliverables
+    - Selection: Pick existing deliverable by exact name from remaining
+    - Sculpting: Define new focus that replaces one or more remaining deliverables
 
     Validation order:
     1. Confidence must be "high"
     2. Framing must be complete
     3. Deliverables must exist and not be empty
     4. Duplicate deliverable names check
-    5. Mutual exclusivity: exactly one of selected_name or sculpted
-    6. If selected_name: validate exact match
-    7. If sculpted: validate sculpt
+    5. Deferred validation (required, all names must exist in confirmed)
+    6. Compute remaining = confirmed - deferred
+    7. Over-cutting check (at least one must remain)
+    8. Auto-select if only one remains
+    9. Ambiguity check if multiple remain without selection
+    10. Selection/sculpt validates against remaining (not confirmed)
 
     Args:
         framing: Combined initiative_framing from Step 1
         deliverables: Confirmed deliverables from Step 2.1
-        selected_name: Name of deliverable chosen as cutoff (selection path)
+        deferred: List of deliverable names explicitly deferred during realism/value loop
+        selected_name: Name of deliverable chosen as focus (selection path)
         sculpted: Dict with name, description, replaces (sculpt path)
         confidence: LLM's confidence level
 
@@ -402,6 +407,8 @@ def validate_cutoff_selection(
             "error_details": str | None,
             "focus_deliverable": dict | None,
             "deferred_deliverables": list[dict] | None,
+            "auto_selected": bool | None,  # True if single remaining was auto-selected
+            "remaining_names": list[str] | None,  # For ambiguous_remaining error
             "_internal_replaces": list[str] | None,  # Only for sculpt path, handler use only
         }
     """
@@ -438,7 +445,8 @@ def validate_cutoff_selection(
 
     # 4. Duplicate name check (prevents silent data loss)
     confirmed_names = [d.get("name", "") for d in deliverables]
-    if len(confirmed_names) != len(set(confirmed_names)):
+    confirmed_names_set = set(confirmed_names)
+    if len(confirmed_names) != len(confirmed_names_set):
         return {
             "valid": False,
             "error_type": "duplicate_deliverable_names",
@@ -447,12 +455,49 @@ def validate_cutoff_selection(
             "deferred_deliverables": None,
         }
 
-    # 5. Mutual exclusivity check
+    # 5. Deferred validation
+    if deferred is None:
+        return {
+            "valid": False,
+            "error_type": "missing_deferred",
+            "error_details": "deferred_deliverables parameter required. Run realism/value loop first.",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+        }
+
+    # Validate all deferred names exist in confirmed
+    invalid_deferred = [name for name in deferred if name not in confirmed_names_set]
+    if invalid_deferred:
+        return {
+            "valid": False,
+            "error_type": "invalid_deferred",
+            "error_details": f"These deferred names are not in confirmed deliverables: {', '.join(invalid_deferred)}",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+        }
+
+    # 6. Compute remaining deliverables
+    deferred_set = set(deferred)
+    remaining = [d for d in deliverables if d.get("name", "") not in deferred_set]
+    remaining_names_set = set(d.get("name", "") for d in remaining)
+
+    # 7. Over-cutting check
+    if len(remaining) == 0:
+        return {
+            "valid": False,
+            "error_type": "over_cutting",
+            "error_details": "All deliverables were deferred. At least one must remain.",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+        }
+
+    # Check selection method presence
     has_selected = selected_name is not None and (
         isinstance(selected_name, str) and selected_name.strip()
     )
     has_sculpted = sculpted is not None
 
+    # Both methods provided
     if has_selected and has_sculpted:
         return {
             "valid": False,
@@ -462,53 +507,90 @@ def validate_cutoff_selection(
             "deferred_deliverables": None,
         }
 
-    if not has_selected and not has_sculpted:
+    # 8. Auto-select if only one remains and no explicit selection
+    if len(remaining) == 1 and not has_selected and not has_sculpted:
+        focus = {
+            "name": remaining[0].get("name", ""),
+            "description": remaining[0].get("description", ""),
+        }
+        # Deferred output includes all explicit deferrals
+        deferred_output = [
+            {"name": d.get("name", ""), "description": d.get("description", "")}
+            for d in deliverables
+            if d.get("name", "") in deferred_set
+        ]
         return {
-            "valid": False,
-            "error_type": "no_selection_method",
-            "error_details": "Provide selected_deliverable_name OR sculpted_deliverable.",
-            "focus_deliverable": None,
-            "deferred_deliverables": None,
+            "valid": True,
+            "error_type": None,
+            "error_details": None,
+            "focus_deliverable": focus,
+            "deferred_deliverables": deferred_output,
+            "auto_selected": True,
         }
 
-    # 6. Selection path
+    # 9. Ambiguity check — multiple remaining but no selection
+    if not has_selected and not has_sculpted:
+        remaining_names = [d.get("name", "") for d in remaining]
+        return {
+            "valid": False,
+            "error_type": "ambiguous_remaining",
+            "error_details": f"Multiple deliverables remain: {', '.join(remaining_names)}. Select one.",
+            "focus_deliverable": None,
+            "deferred_deliverables": None,
+            "remaining_names": remaining_names,
+        }
+
+    # 10. Selection path — validate against remaining
     if has_selected:
         selected_name = selected_name.strip()
 
-        # Find matching deliverable (case-sensitive)
+        if selected_name not in remaining_names_set:
+            # Check if it was deferred
+            if selected_name in deferred_set:
+                return {
+                    "valid": False,
+                    "error_type": "selection_was_deferred",
+                    "error_details": f"'{selected_name}' was deferred. Select from remaining: {', '.join(remaining_names_set)}",
+                    "focus_deliverable": None,
+                    "deferred_deliverables": None,
+                }
+            # Check if it exists at all
+            if selected_name not in confirmed_names_set:
+                return {
+                    "valid": False,
+                    "error_type": "selection_not_found",
+                    "error_details": f"'{selected_name}' does not match any confirmed deliverable.",
+                    "focus_deliverable": None,
+                    "deferred_deliverables": None,
+                }
+
+        # Find the selected deliverable
         focus = None
-        deferred = []
-        for d in deliverables:
-            d_name = d.get("name", "")
-            if d_name == selected_name:
+        for d in remaining:
+            if d.get("name", "") == selected_name:
                 focus = {
-                    "name": d_name,
+                    "name": d.get("name", ""),
                     "description": d.get("description", ""),
                 }
-            else:
-                deferred.append({
-                    "name": d_name,
-                    "description": d.get("description", ""),
-                })
+                break
 
-        if focus is None:
-            return {
-                "valid": False,
-                "error_type": "selection_not_found",
-                "error_details": f"'{selected_name}' does not match any confirmed deliverable.",
-                "focus_deliverable": None,
-                "deferred_deliverables": None,
-            }
+        # Compute deferred output: explicit deferrals + implicit deferrals (remaining but not selected)
+        deferred_output = [
+            {"name": d.get("name", ""), "description": d.get("description", "")}
+            for d in deliverables
+            if d.get("name", "") in deferred_set
+               or (d.get("name", "") in remaining_names_set and d.get("name", "") != selected_name)
+        ]
 
         return {
             "valid": True,
             "error_type": None,
             "error_details": None,
             "focus_deliverable": focus,
-            "deferred_deliverables": deferred,
+            "deferred_deliverables": deferred_output,
         }
 
-    # 7. Sculpt path
+    # 11. Sculpt path — validate replaces against remaining
     sculpt_name = (sculpted.get("name") or "").strip()
     sculpt_description = (sculpted.get("description") or "").strip()
     replaces = sculpted.get("replaces") or []
@@ -533,14 +615,23 @@ def validate_cutoff_selection(
             "deferred_deliverables": None,
         }
 
-    # Validate all replaces exist in confirmed_deliverables
-    confirmed_names_set = set(confirmed_names)
-    invalid_replaces = [r for r in replaces if r not in confirmed_names_set]
+    # Validate all replaces exist in REMAINING (not just confirmed)
+    invalid_replaces = [r for r in replaces if r not in remaining_names_set]
     if invalid_replaces:
+        # Check if any were deferred
+        deferred_in_replaces = [r for r in invalid_replaces if r in deferred_set]
+        if deferred_in_replaces:
+            return {
+                "valid": False,
+                "error_type": "replaces_includes_deferred",
+                "error_details": f"Cannot sculpt from deferred deliverables: {', '.join(deferred_in_replaces)}",
+                "focus_deliverable": None,
+                "deferred_deliverables": None,
+            }
         return {
             "valid": False,
             "error_type": "invalid_replaces",
-            "error_details": f"These names are not in confirmed deliverables: {', '.join(invalid_replaces)}",
+            "error_details": f"These names are not in remaining deliverables: {', '.join(invalid_replaces)}",
             "focus_deliverable": None,
             "deferred_deliverables": None,
         }
@@ -551,12 +642,13 @@ def validate_cutoff_selection(
         "description": sculpt_description,
     }
 
-    # Compute deferred (confirmed minus replaced)
+    # Deferred = explicit deferrals + (remaining minus replaced)
     replaces_set = set(replaces)
-    deferred = [
+    deferred_output = [
         {"name": d.get("name", ""), "description": d.get("description", "")}
         for d in deliverables
-        if d.get("name", "") not in replaces_set
+        if d.get("name", "") in deferred_set
+           or (d.get("name", "") in remaining_names_set and d.get("name", "") not in replaces_set)
     ]
 
     return {
@@ -564,7 +656,7 @@ def validate_cutoff_selection(
         "error_type": None,
         "error_details": None,
         "focus_deliverable": focus,
-        "deferred_deliverables": deferred,
+        "deferred_deliverables": deferred_output,
         "_internal_replaces": replaces,  # For handler guidance only, not in Step 3 contract
     }
 
