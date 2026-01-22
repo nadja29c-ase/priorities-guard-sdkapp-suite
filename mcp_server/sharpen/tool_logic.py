@@ -166,6 +166,64 @@ def validate_initiative_intent(
     }
 
 
+def validate_intent_provenance(
+    who_stated_by_user: bool,
+    why_reframed_from_pain: bool,
+    user_confirmed_framing: bool,
+    user_pain_verbatim: str,
+) -> dict[str, Any]:
+    """
+    Validate provenance evidence for frame_initiative_intent.
+
+    All three booleans must be True AND verbatim must be non-empty.
+    pain_stated is derived from verbatim presence (not a separate field).
+
+    Args:
+        who_stated_by_user: Did user explicitly state WHO?
+        why_reframed_from_pain: Is WHY derived from the stated pain?
+        user_confirmed_framing: Did user explicitly confirm the framing?
+        user_pain_verbatim: User's exact words (defensive normalization applied)
+
+    Returns:
+        {"valid": bool, "error_type": str | None, "error_details": str | None, "failed_checks": list}
+    """
+    # Defensive normalization
+    user_pain_verbatim = (user_pain_verbatim or "").strip()
+
+    failed_checks = []
+
+    # Verbatim is required — pain must exist before calling this tool
+    if not user_pain_verbatim:
+        return {
+            "valid": False,
+            "error_type": "empty_verbatim",
+            "error_details": "user_pain_verbatim is empty. Do not call this tool until user has stated a pain.",
+            "failed_checks": ["user_pain_verbatim"],
+        }
+
+    if not who_stated_by_user:
+        failed_checks.append("who_stated_by_user")
+    if not why_reframed_from_pain:
+        failed_checks.append("why_reframed_from_pain")
+    if not user_confirmed_framing:
+        failed_checks.append("user_confirmed_framing")
+
+    if failed_checks:
+        return {
+            "valid": False,
+            "error_type": "provenance_failed",
+            "error_details": f"Provenance checks failed: {', '.join(failed_checks)}. Get evidence from user first.",
+            "failed_checks": failed_checks,
+        }
+
+    return {
+        "valid": True,
+        "error_type": None,
+        "error_details": None,
+        "failed_checks": [],
+    }
+
+
 def validate_initiative_hypothesis(
     who: str | None,
     why: str | None,
