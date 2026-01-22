@@ -86,6 +86,7 @@ async def list_tools() -> List[mcp_types.Tool]:
 
 from . import export_checklist  # noqa: F401, E402
 from . import frame_initiative_intent  # noqa: F401, E402
+from . import frame_initiative_hypothesis  # noqa: F401, E402
 from . import frame_initiative_constraints  # noqa: F401, E402
 from . import identify_e2e_deliverables  # noqa: F401, E402
 from . import select_focus_deliverable  # noqa: F401, E402

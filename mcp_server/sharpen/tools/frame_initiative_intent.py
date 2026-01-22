@@ -1,8 +1,8 @@
 """
 Frame Initiative Intent Tool.
 
-Captures WHO benefits, WHAT must exist, and WHY (the outcome).
-All three are mandatory. Structural validation only — semantic quality is the LLM's job.
+Captures WHO benefits and WHY (the outcome). WHAT comes later via frame_initiative_hypothesis.
+Structural validation only — semantic quality is the LLM's job.
 Self-registers at import time.
 """
 
@@ -22,52 +22,54 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records WHO, WHAT, WHY for given initiative and reframes it as outcome. The outcome is used later to minimize scope when breaking down work. Requires confidence="high".
+DESCRIPTION = """Records WHO benefits and WHY (outcome) for given initiative. Requires confidence="high".
 
 SHARPEN MODE — BINDING RULES (not guidelines)
-When user selects Sharpen, your default assistant behavior is SUSPENDED!
+When user selects Sharpen, your default assistant behavior is SUSPENDED.
 
-FORBIDDEN:
-- "Being helpful" by front-loading structure  
+SUSPENDED BEHAVIORS:
+- Asking about solutions/WHAT before understanding the problem
 - Batching multiple questions
-- Planning or structuring for the user
 - Inferring what the user "probably means"
+- Planning or structuring for the user
 
-REQUIRED:
-- You are an empathetic facilitator/coach, not an advisor.
-- Ask ONE question at a time, explain why are you asking the question and wait for answer
-- Reflect back / ask for confirmation / acknowledge progress/ offer examples explicitely stated as "examples"
-- Call tool only after confidence="high".
-- CRITICAL: ALL DATA MUST COME FROM USER! Have a back and forth until all fields are concrete and data is elicited from the user! You do not complete, infer, or improve their answers!!!
+ACTIVE BEHAVIORS:
+- Ask ONE question at a time
+- Wait for answer
+- Reflect back and confirm
+- Call tool only after confidence="high"
 
-These are operating constraints. VIOLATING THIS BREAKS SHARPEN.
+ELICITATION ORDER:
+1. WHO: "Who specifically is supposed to benefit from this?"
+2. PAIN: "What's currently hard or frustrating for them?"
+3. (If pain is abstract) OBSERVABLE: "What would you see happening differently if this worked?"
+4. REFRAME: Convert pain → outcome-phrased WHY 
+5. CONFIRM: "To confirm: [WHO] needs something so that [WHY]. Correct?"
 
-ELICITATION EXAMPLE (one question at a time, wait for answer):
+CRITICAL: Do NOT ask about WHAT/solution yet. Problem and outcome understanding comes first.
 
-User: "I want to improve our onboarding"
-You: "Who specifically is supposed to benefit from this?"
-User: "New engineering hires"
-You: "What's currently hard or frustrating for new engineering hires?"
-User: "They keep asking the same basic questions and feel lost"
-      ↑ USER STATES PAIN
-You: "What do you think needs to exist to help with that?"
-User: "A checklist they can follow in their first week"
-You: "To confirm: New engineering hires need a first-week checklist so they can find answers without constantly interrupting others. Correct?"
-      ↑ YOU REFRAME PAIN → OUTCOME. "asking same questions" becomes "find answers without interrupting"
-User: "Yes"
-→ NOW call tool with WHY="So they can find answers without constantly interrupting others" (outcome-phrased, not pain-phrased).
+PAIN → OUTCOME REFRAMING:
+- User says: "They keep asking the same questions" (pain)
+- You reframe: "So they can find answers without interrupting others" (outcome)
+- User says: "They feel lost" (abstract pain)
+- You probe: "What would you see them doing differently?"
+- User says: "Taking on tasks independently"
+- You reframe: "So they can work independently without hand-holding" (outcome)
 
-WHY REFINEMENT (if user gives vague/abstract pain):
-
-User: "They just don't feel confident"  ← too abstract, can't reframe to observable outcome
-You: "What would you see them doing differently if they felt confident?"
-User: "Taking on small projects without hand-holding"  ← NOW you can reframe
-You: "To confirm: ...so they can take on small projects independently."
-      ↑ REFRAME TO OUTCOME
+EXAMPLE CONVERSATION:
+  User: "I want to improve our onboarding"
+  You: "Who specifically is supposed to benefit from this?"
+  User: "New engineering hires"
+  You: "What's currently hard or frustrating for new engineering hires?"
+  User: "They keep asking the same basic questions and feel lost"
+  You: "To confirm: New engineering hires need something so they can find answers without constantly interrupting others. Correct?"
+  User: "Yes"
+  → Call with who="New engineering hires", why="So they can find answers without constantly interrupting others", confidence="high"
+  → Tool returns guidance to proceed to frame_initiative_hypothesis
 
 CONFIDENCE:
-HIGH: who="New engineering hires" what="Onboarding checklist for first week" why="So they contribute without interruptions" — concrete, user confirmed.
-LOW: who="users" what="improve experience" why="because it matters" — vague, motivational.
+HIGH: who="New engineering hires" why="So they can contribute without constant interruptions" — concrete, user-confirmed, outcome-phrased.
+LOW: who="users" why="because onboarding matters" — vague, motivational, not outcome-phrased.
 """
 
 INPUT_SCHEMA = {
@@ -77,23 +79,17 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "ONE primary beneficiary. Who benefits first and foremost? Not multiple audiences. ACCORDING TO THE USER.",
         },
-        "what": {
-            "type": "string",
-            "description": "WHAT artifact, deliverable, or handoff will exist when this initiative is finished to solve the WHY (Frame it as a hypothesis)? (concrete output=not activity) ACCORDING TO THE USER.",
-        },
         "why": {
             "type": "string",
-            "description": "So that WHO benefits HOW? Must be outcome-phrased (what changes), not motivation-phrased (why it matters). Lead with the pain if user not aware of the outcome; then reframe the pain into an outcome for the user. Do not restate WHAT — describe the change or benefit if this succeeds. ACCORDING TO THE USER.",
+            "description": "So that WHO benefits HOW? Must be outcome-phrased (what changes), not pain-phrased. Elicit pain first, then reframe to outcome. ACCORDING TO THE USER.",
         },
         "confidence": {
             "type": "string",
             "enum": ["high", "medium", "low"],
-            "description": ("'high' = user has provided answers in their own words, that are specific. "
-        "'low' = you inferred, assumed, used placeholders, or filled gaps. "
-        "If user hasn't explicitly stated WHO/WHAT/WHY in their own words, confidence CANNOT be 'high'."),
+            "description": "'high' = user stated WHO and WHY in their own words. 'low' = you inferred or filled gaps.",
         },
     },
-    "required": ["who", "what", "why", "confidence"],
+    "required": ["who", "why", "confidence"],
     "additionalProperties": False,
 }
 
@@ -106,7 +102,6 @@ INPUT_SCHEMA = {
 class FrameIntentRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     who: Optional[str] = None
-    what: Optional[str] = None
     why: Optional[str] = None
     confidence: Optional[Literal["high", "medium", "low"]] = None
 
@@ -120,17 +115,15 @@ GUIDANCE_CONFIDENCE_REJECTED = (
     "Check which field is vague:\n"
     "- Vague WHO: Ask 'Who specifically is affected?'\n"
     "- Vague/abstract WHY: Ask 'What would you see happening differently if this worked?'\n"
-    "- Vague WHAT: Ask 'What concrete thing would exist that doesn't exist today?'\n"
-    "Ask ONE question. Then stop and wait. Do not explain, suggest, or plan."
+    "Ask ONE question. Then stop and wait. Do not ask about solutions yet."
 )
 
 GUIDANCE_MISSING_FIELDS = (
     "SHARPEN MODE STILL BINDING. "
-    "Ask ONE question about the missing field using pain-first language:\n"
-    "- Missing WHO: 'Who specifically is affected by this?'\n"
+    "Ask ONE question about the missing field:\n"
+    "- Missing WHO: 'Who specifically is supposed to benefit from this?'\n"
     "- Missing WHY: 'What's currently hard or frustrating for them?'\n"
-    "- Missing WHAT: 'What do you think needs to exist to help with that?'\n"
-    "Then stop and wait. Do not explain, suggest, or plan."
+    "Then stop and wait. Do not ask about solutions yet."
 )
 
 GUIDANCE_MULTIPLE_STAKEHOLDERS = (
@@ -141,9 +134,10 @@ GUIDANCE_MULTIPLE_STAKEHOLDERS = (
 
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING. "
-    "Ask ONE question: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' "
-    "Then stop and wait. Do not suggest constraints.\n\n"
-    "When user answers constraint → explain why all the questions were necessary and acknowledge the process then call frame_initiative_constraints with constraint_type + constraint_value."
+    "Problem and outcome understanding confirmed. Now ask about the hypothesized solution:\n"
+    "'What do you think needs to exist to help with that?'\n"
+    "Then stop and wait. Do not suggest solutions.\n\n"
+    "When user answers → call frame_initiative_hypothesis with the WHAT."
 )
 
 # ============================================================================
@@ -190,7 +184,6 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Structural validation
     result = validate_initiative_intent(
         who=validated_request.who,
-        what=validated_request.what,
         why=validated_request.why,
     )
 
@@ -235,19 +228,19 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     intent = result["framing_intent"]
 
     logger.info("frame_initiative_intent.complete",
-               who=intent["who"], what=intent["what"], confidence="high")
+               who=intent["who"], why=intent["why"], confidence="high")
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Intent confirmed: {intent['who']} needs {intent['what']} so that {intent['why']}",
+            text=f"Problem framing confirmed: {intent['who']} needs something so that {intent['why']}",
         )],
         structuredContent={
-            "framing_intent": intent,
+            "framing_intent": intent,  # Now only contains who + why
             "confidence": "high",
             "confirmed": True,
             "assistant_guidance": {
-                "action": "PROCEED_TO_CONSTRAINTS",
+                "action": "PROCEED_TO_HYPOTHESIS",
                 "instruction": GUIDANCE_CONFIRMED,
             },
         },

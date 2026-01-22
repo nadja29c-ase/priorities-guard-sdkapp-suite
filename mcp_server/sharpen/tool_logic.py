@@ -110,33 +110,28 @@ def _has_multiple_stakeholders(who: str) -> bool:
 
 def validate_initiative_intent(
     who: str | None,
-    what: str | None,
     why: str | None,
 ) -> dict[str, Any]:
     """
-    Validate structure of WHO, WHAT, and WHY for initiative intent.
+    Validate structure of WHO and WHY for initiative intent.
 
     Structural validation only — semantic quality is LLM's job.
 
     Args:
         who: Who benefits from this work?
-        what: What artifact/deliverable must exist?
-        why: Mandatory — so that the beneficiary benefits how?
+        why: So that the beneficiary benefits how? (outcome-phrased)
 
     Returns:
         framing_intent dict + valid flag
     """
     # Normalize inputs
     who = (who or "").strip()
-    what = (what or "").strip()
     why = (why or "").strip()
 
-    # Structural validation only — all three are required
+    # Structural validation only — both are required
     missing = []
     if not who:
         missing.append("who")
-    if not what:
-        missing.append("what")
     if not why:
         missing.append("why")
 
@@ -145,7 +140,6 @@ def validate_initiative_intent(
         return {
             "framing_intent": {
                 "who": who,
-                "what": what,
                 "why": why,
             },
             "valid": False,
@@ -155,7 +149,7 @@ def validate_initiative_intent(
     # Check for multiple stakeholders
     if _has_multiple_stakeholders(who):
         return {
-            "framing_intent": {"who": who, "what": what, "why": why},
+            "framing_intent": {"who": who, "why": why},
             "valid": False,
             "missing": [],
             "multiple_stakeholders": True,
@@ -164,12 +158,70 @@ def validate_initiative_intent(
     return {
         "framing_intent": {
             "who": who,
-            "what": what,
             "why": why,
         },
         "valid": True,
         "missing": [],
         "multiple_stakeholders": False,
+    }
+
+
+def validate_initiative_hypothesis(
+    who: str | None,
+    why: str | None,
+    what: str | None,
+) -> dict[str, Any]:
+    """
+    Validate structure of WHAT hypothesis given confirmed WHO + WHY.
+
+    Structural validation only — semantic quality is LLM's job.
+
+    Args:
+        who: Confirmed WHO from frame_initiative_intent
+        why: Confirmed WHY from frame_initiative_intent
+        what: User's hypothesized solution
+
+    Returns:
+        framing dict + valid flag
+    """
+    # Normalize inputs
+    who = (who or "").strip()
+    why = (why or "").strip()
+    what = (what or "").strip()
+
+    # Check prior step completed
+    missing_prior = []
+    if not who:
+        missing_prior.append("who")
+    if not why:
+        missing_prior.append("why")
+
+    if missing_prior:
+        return {
+            "framing": None,
+            "valid": False,
+            "error_type": "missing_prior_step",
+            "error_details": f"frame_initiative_intent must be completed first. Missing: {', '.join(missing_prior)}",
+        }
+
+    # Check WHAT provided
+    if not what:
+        return {
+            "framing": None,
+            "valid": False,
+            "error_type": "missing_what",
+            "error_details": "WHAT hypothesis required.",
+        }
+
+    return {
+        "framing": {
+            "who": who,
+            "why": why,
+            "what": what,
+        },
+        "valid": True,
+        "error_type": None,
+        "error_details": None,
     }
 
 
