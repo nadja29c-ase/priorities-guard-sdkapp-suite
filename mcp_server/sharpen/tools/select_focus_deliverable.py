@@ -205,7 +205,7 @@ class SelectFocusRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     initiative_framing: Optional[InitiativeFraming] = None
     confirmed_deliverables: Optional[List[DeliverableItem]] = None
-    deferred_deliverables: Optional[List[str]] = None
+    deferred_deliverables: List[str]
     selected_deliverable_name: Optional[str] = None
     sculpted_deliverable: Optional[SculptedDeliverable] = None
     confidence: Optional[Literal["high", "medium", "low"]] = None

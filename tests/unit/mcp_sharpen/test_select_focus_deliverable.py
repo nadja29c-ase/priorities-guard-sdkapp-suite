@@ -302,6 +302,7 @@ class TestSelectCutoffHandler:
         arguments = {
             "initiative_framing": valid_framing,
             "confirmed_deliverables": valid_deliverables,
+            "deferred_deliverables": [],
             "selected_deliverable_name": "Deployed REST API",
             "confidence": "low",
         }
