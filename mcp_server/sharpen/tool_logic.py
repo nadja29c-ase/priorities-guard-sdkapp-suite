@@ -224,6 +224,61 @@ def validate_intent_provenance(
     }
 
 
+def validate_hypothesis_provenance(
+    what_stated_by_user: bool,
+    user_confirmed_hypothesis: bool,
+    user_what_verbatim: str,
+) -> dict[str, Any]:
+    """
+    Validate provenance evidence for frame_initiative_hypothesis.
+
+    Both booleans must be True AND verbatim must be non-empty.
+
+    Applies defensive normalization to user_what_verbatim (strips whitespace).
+
+    Args:
+        what_stated_by_user: Did user explicitly state WHAT?
+        user_confirmed_hypothesis: Did user explicitly confirm the hypothesis?
+        user_what_verbatim: User's exact words describing the hypothesis
+
+    Returns:
+        {"valid": bool, "error_type": str | None, "error_details": str | None, "failed_checks": list}
+    """
+    # Defensive normalization
+    user_what_verbatim = (user_what_verbatim or "").strip()
+
+    failed_checks = []
+
+    # Verbatim is required — WHAT must exist before calling this tool
+    if not user_what_verbatim:
+        return {
+            "valid": False,
+            "error_type": "empty_verbatim",
+            "error_details": "user_what_verbatim is empty. Do not call this tool until user has stated a WHAT.",
+            "failed_checks": ["user_what_verbatim"],
+        }
+
+    if not what_stated_by_user:
+        failed_checks.append("what_stated_by_user")
+    if not user_confirmed_hypothesis:
+        failed_checks.append("user_confirmed_hypothesis")
+
+    if failed_checks:
+        return {
+            "valid": False,
+            "error_type": "provenance_failed",
+            "error_details": f"Provenance checks failed: {', '.join(failed_checks)}. Get evidence from user first.",
+            "failed_checks": failed_checks,
+        }
+
+    return {
+        "valid": True,
+        "error_type": None,
+        "error_details": None,
+        "failed_checks": [],
+    }
+
+
 def validate_initiative_hypothesis(
     who: str | None,
     why: str | None,

@@ -99,6 +99,221 @@ class TestValidateInitiativeHypothesis:
         assert result["error_type"] == "missing_prior_step"
 
 
+# ============================================================================
+# Provenance Validation Tests (tool_logic.py)
+# ============================================================================
+
+
+class TestValidateHypothesisProvenance:
+    """Tests for validate_hypothesis_provenance function."""
+
+    def test_all_true_with_verbatim_valid(self):
+        """All provenance flags True with verbatim is valid."""
+        from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
+
+        result = validate_hypothesis_provenance(
+            what_stated_by_user=True,
+            user_confirmed_hypothesis=True,
+            user_what_verbatim="A checklist they can follow",
+        )
+
+        assert result["valid"] is True
+        assert result["failed_checks"] == []
+
+    def test_empty_verbatim_rejects(self):
+        """Empty verbatim is rejected — WHAT must exist."""
+        from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
+
+        result = validate_hypothesis_provenance(
+            what_stated_by_user=True,
+            user_confirmed_hypothesis=True,
+            user_what_verbatim="",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "empty_verbatim"
+
+    def test_what_not_stated_rejects(self):
+        """what_stated_by_user=False is rejected."""
+        from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
+
+        result = validate_hypothesis_provenance(
+            what_stated_by_user=False,
+            user_confirmed_hypothesis=True,
+            user_what_verbatim="Some what",
+        )
+
+        assert result["valid"] is False
+        assert "what_stated_by_user" in result["failed_checks"]
+
+    def test_not_confirmed_rejects(self):
+        """user_confirmed_hypothesis=False is rejected."""
+        from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
+
+        result = validate_hypothesis_provenance(
+            what_stated_by_user=True,
+            user_confirmed_hypothesis=False,
+            user_what_verbatim="Some what",
+        )
+
+        assert result["valid"] is False
+        assert "user_confirmed_hypothesis" in result["failed_checks"]
+
+    def test_multiple_failures_lists_all(self):
+        """Multiple failed checks are all listed."""
+        from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
+
+        result = validate_hypothesis_provenance(
+            what_stated_by_user=False,
+            user_confirmed_hypothesis=False,
+            user_what_verbatim="Some what",
+        )
+
+        assert result["valid"] is False
+        assert len(result["failed_checks"]) == 2
+
+    def test_whitespace_only_verbatim_rejects(self):
+        """Whitespace-only verbatim is treated as empty."""
+        from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
+
+        result = validate_hypothesis_provenance(
+            what_stated_by_user=True,
+            user_confirmed_hypothesis=True,
+            user_what_verbatim="   ",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "empty_verbatim"
+
+
+class TestFrameHypothesisHandlerProvenance:
+    """Tests for handler provenance validation."""
+
+    @pytest.mark.asyncio
+    async def test_all_provenance_true_succeeds(self):
+        """All provenance flags True with verbatim succeeds."""
+        arguments = {
+            "who": "New engineering hires",
+            "why": "So they can find answers without interrupting others",
+            "user_what_verbatim": "A checklist they can follow in their first week",
+            "what_derived_from_verbatim": "A first-week checklist",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is not True
+        assert result.structuredContent["confirmed"] is True
+        assert "provenance" in result.structuredContent
+
+    @pytest.mark.asyncio
+    async def test_provenance_false_rejects(self):
+        """Any provenance flag False is rejected."""
+        arguments = {
+            "who": "New engineering hires",
+            "why": "So they can contribute",
+            "user_what_verbatim": "Some solution",
+            "what_derived_from_verbatim": "A solution",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": False,
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "provenance_failed"
+
+    @pytest.mark.asyncio
+    async def test_empty_verbatim_rejects(self):
+        """Empty verbatim is rejected."""
+        arguments = {
+            "who": "New engineering hires",
+            "why": "So they can contribute",
+            "user_what_verbatim": "",
+            "what_derived_from_verbatim": "A solution",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "empty_verbatim"
+
+    @pytest.mark.asyncio
+    async def test_provenance_failure_returns_guidance(self):
+        """Provenance failure returns actionable guidance."""
+        arguments = {
+            "who": "Someone",
+            "why": "For reasons",
+            "user_what_verbatim": "Something",
+            "what_derived_from_verbatim": "A thing",
+            "what_stated_by_user": False,
+            "user_confirmed_hypothesis": False,
+        }
+
+        result = await handle(arguments)
+
+        assert "assistant_guidance" in result.structuredContent
+        instruction = result.structuredContent["assistant_guidance"]["instruction"]
+        assert "SHARPEN MODE STILL BINDING" in instruction
+
+    @pytest.mark.asyncio
+    async def test_empty_verbatim_returns_specific_guidance(self):
+        """Empty verbatim returns specific guidance about getting WHAT."""
+        arguments = {
+            "who": "Team",
+            "why": "Some reason",
+            "user_what_verbatim": "",
+            "what_derived_from_verbatim": "Something",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
+        }
+
+        result = await handle(arguments)
+
+        instruction = result.structuredContent["assistant_guidance"]["instruction"]
+        assert "user_what_verbatim is empty" in instruction
+
+    @pytest.mark.asyncio
+    async def test_failed_checks_listed_in_response(self):
+        """Failed provenance checks are listed in response."""
+        arguments = {
+            "who": "Team",
+            "why": "Reason",
+            "user_what_verbatim": "What",
+            "what_derived_from_verbatim": "Thing",
+            "what_stated_by_user": False,
+            "user_confirmed_hypothesis": True,
+        }
+
+        result = await handle(arguments)
+
+        assert "failed_checks" in result.structuredContent
+        assert "what_stated_by_user" in result.structuredContent["failed_checks"]
+
+    @pytest.mark.asyncio
+    async def test_valid_input_includes_provenance(self):
+        """Valid input includes provenance object in response."""
+        arguments = {
+            "who": "New hires",
+            "why": "So they can navigate independently",
+            "user_what_verbatim": "An onboarding guide",
+            "what_derived_from_verbatim": "An onboarding guide",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
+        }
+
+        result = await handle(arguments)
+
+        assert "provenance" in result.structuredContent
+        provenance = result.structuredContent["provenance"]
+        assert provenance["user_what_verbatim"] == "An onboarding guide"
+        assert provenance["what_stated_by_user"] is True
+        assert provenance["user_confirmed_hypothesis"] is True
+
+
 class TestFrameHypothesisHandler:
     """Tests for frame_initiative_hypothesis handler."""
 
@@ -108,8 +323,10 @@ class TestFrameHypothesisHandler:
         arguments = {
             "who": "New engineering hires",
             "why": "So they can contribute without interruptions",
-            "what": "A first-week checklist",
-            "confidence": "high",
+            "user_what_verbatim": "A first-week checklist",
+            "what_derived_from_verbatim": "A first-week checklist",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -119,45 +336,15 @@ class TestFrameHypothesisHandler:
         assert result.structuredContent["assistant_guidance"]["action"] == "PROCEED_TO_CONSTRAINTS"
 
     @pytest.mark.asyncio
-    async def test_low_confidence_returns_clarifying_action(self):
-        """Low confidence returns action='ASK_CLARIFYING'."""
-        arguments = {
-            "who": "New hires",
-            "why": "So they contribute",
-            "what": "something",
-            "confidence": "low",
-        }
-
-        result = await handle(arguments)
-
-        assert result.isError is True
-        assert result.structuredContent["error"] == "confidence_too_low"
-        assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
-
-    @pytest.mark.asyncio
-    async def test_medium_confidence_returns_clarifying_action(self):
-        """Medium confidence returns action='ASK_CLARIFYING'."""
-        arguments = {
-            "who": "New hires",
-            "why": "So they contribute",
-            "what": "something helpful",
-            "confidence": "medium",
-        }
-
-        result = await handle(arguments)
-
-        assert result.isError is True
-        assert result.structuredContent["error"] == "confidence_too_low"
-        assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
-
-    @pytest.mark.asyncio
     async def test_missing_prior_step_returns_refuse_action(self):
         """Missing prior step returns action='REFUSE'."""
         arguments = {
             "who": "",
             "why": "",
-            "what": "A checklist",
-            "confidence": "high",
+            "user_what_verbatim": "A checklist",
+            "what_derived_from_verbatim": "A checklist",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -172,8 +359,10 @@ class TestFrameHypothesisHandler:
         arguments = {
             "who": "New hires",
             "why": "So they contribute",
-            "what": "",
-            "confidence": "high",
+            "user_what_verbatim": "Something",
+            "what_derived_from_verbatim": "",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -188,8 +377,10 @@ class TestFrameHypothesisHandler:
         arguments = {
             "who": "New engineering hires",
             "why": "So they can find answers without interrupting",
-            "what": "A first-week checklist",
-            "confidence": "high",
+            "user_what_verbatim": "A first-week checklist",
+            "what_derived_from_verbatim": "A first-week checklist",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -205,8 +396,10 @@ class TestFrameHypothesisHandler:
         arguments = {
             "who": "New engineering hires",
             "why": "So they can contribute",
-            "what": "A checklist",
-            "confidence": "high",
+            "user_what_verbatim": "A checklist",
+            "what_derived_from_verbatim": "A checklist",
+            "what_stated_by_user": True,
+            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -215,22 +408,6 @@ class TestFrameHypothesisHandler:
         assert "Hypothesis confirmed" in result.content[0].text
         assert "New engineering hires" in result.content[0].text
         assert "A checklist" in result.content[0].text
-
-    @pytest.mark.asyncio
-    async def test_guidance_instruction_for_missing_what(self):
-        """Guidance instruction for missing WHAT enforces facilitator role."""
-        arguments = {
-            "who": "New hires",
-            "why": "So they contribute",
-            "what": "",
-            "confidence": "high",
-        }
-
-        result = await handle(arguments)
-
-        instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "SHARPEN MODE STILL BINDING" in instruction
-        assert "Do not suggest solutions" in instruction
 
 
 class TestFrameHypothesisToolRegistration:

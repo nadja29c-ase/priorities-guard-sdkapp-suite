@@ -6,7 +6,7 @@ Requires prior step output as input to enforce sequence.
 Self-registers at import time.
 """
 
-from typing import Optional, Literal
+from typing import Optional
 
 import structlog
 from mcp import types as mcp_types
@@ -14,7 +14,7 @@ from pydantic import BaseModel, ValidationError
 
 from .base import ToolDefinition
 from . import register_tool
-from ..tool_logic import validate_initiative_hypothesis
+from ..tool_logic import validate_initiative_hypothesis, validate_hypothesis_provenance
 
 logger = structlog.get_logger(__name__)
 
@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records WHAT (the hypothesized solution) after problem and outcome is understood. Requires confirmed WHO + WHY from frame_initiative_intent. Requires confidence="high".
+DESCRIPTION = """Records WHAT (the hypothesized solution) after problem is understood. Requires confirmed WHO + WHY from frame_initiative_intent.
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.
@@ -32,33 +32,46 @@ SUSPENDED BEHAVIORS:
 - Improving or "fixing" user's hypothesis
 - Offering alternatives unprompted
 - Jumping to planning or breakdown
+- Claiming user said something they didn't say
 
 ACTIVE BEHAVIORS:
 - Ask ONE question: "What do you think needs to exist to help with that?"
 - Wait for answer
+- Quote user's exact words back to them
 - Reflect back as hypothesis
 - Confirm with user
-- Call tool with confidence="high"
+- Call tool only after provenance evidence is available and user confirms
 
 WHAT AS HYPOTHESIS:
-The user's WHAT is a hypothesis, not necessarily a commitment yet. Frame it that way:
+The user's WHAT is a hypothesis, not a commitment. Frame it that way:
 - "You think [WHAT] might help [WHO] so that [WHY]."
 - "This is your current hypothesis — we'll pressure-test it against constraints."
 
 Do NOT evaluate whether it's a good solution. That comes later via constraints.
 
+PROVENANCE EVIDENCE REQUIRED:
+This tool requires proof that WHAT came from the user:
+- user_what_verbatim: Copy-paste the user's exact words. Must be non-empty — do not call until WHAT is stated.
+- what_stated_by_user: Did user say WHAT? If false, tool rejects.
+- user_confirmed_hypothesis: Did user confirm? If false, tool rejects.
+
+If you cannot honestly set ALL booleans to true AND provide a non-empty verbatim quote, do NOT call the tool. Ask the user first.
+
 EXAMPLE CONVERSATION:
   [After frame_initiative_intent confirmed: who="New engineering hires", why="So they can find answers without interrupting others"]
   You: "What do you think needs to exist to help with that?"
   User: "A checklist they can follow in their first week"
+       ↑ THIS IS user_what_verbatim — store exactly
   You: "Your hypothesis: A first-week checklist for new engineering hires so they can find answers without interrupting others. Correct?"
   User: "Yes"
-  → Call with who="New engineering hires", why="So they can find answers without interrupting others", what="A first-week checklist", confidence="high"
-
-CONFIDENCE:
-HIGH: what="A first-week onboarding checklist" — concrete artifact, user-stated.
-LOW: what="improve the onboarding experience" — activity, not artifact.
-LOW: what="something to help them" — vague placeholder.
+       ↑ NOW user_confirmed_hypothesis = true
+  → Call tool with:
+    who="New engineering hires"
+    why="So they can find answers without interrupting others"
+    user_what_verbatim="A checklist they can follow in their first week"
+    what_derived_from_verbatim="A first-week checklist"
+    what_stated_by_user=true
+    user_confirmed_hypothesis=true
 """
 
 INPUT_SCHEMA = {
@@ -72,17 +85,31 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "Confirmed WHY from frame_initiative_intent. Must match prior step output.",
         },
-        "what": {
+        "user_what_verbatim": {
             "type": "string",
-            "description": "User's HYPOTHESIZED solution — what they THINK needs to exist. Must be a concrete artifact, not an activity. ACCORDING TO THE USER.",
+            "description": "User's EXACT words describing their hypothesized solution. Copy-paste from their message. Must be non-empty — do not call this tool until user has stated a WHAT.",
         },
-        "confidence": {
+        "what_derived_from_verbatim": {
             "type": "string",
-            "enum": ["high", "medium", "low"],
-            "description": "'high' = user stated WHAT in their own words as concrete artifact. 'low' = vague, activity-based, or inferred/ pre-filled by you.",
+            "description": "The WHAT, optionally condensed for clarity but semantically equivalent to user_what_verbatim. Do not invent — derive from the verbatim.",
+        },
+        "what_stated_by_user": {
+            "type": "boolean",
+            "description": "True ONLY if user explicitly stated WHAT in their own words. False if you inferred, generalized, or suggested it.",
+        },
+        "user_confirmed_hypothesis": {
+            "type": "boolean",
+            "description": "True ONLY if you reflected the hypothesis back and user explicitly confirmed (e.g. 'yes', 'correct', 'that's right').",
         },
     },
-    "required": ["who", "why", "what", "confidence"],
+    "required": [
+        "who",
+        "why",
+        "user_what_verbatim",
+        "what_derived_from_verbatim",
+        "what_stated_by_user",
+        "user_confirmed_hypothesis",
+    ],
     "additionalProperties": False,
 }
 
@@ -96,19 +123,29 @@ class FrameHypothesisRequest(BaseModel):
     """Expected input structure from ChatGPT."""
     who: Optional[str] = None
     why: Optional[str] = None
-    what: Optional[str] = None
-    confidence: Optional[Literal["high", "medium", "low"]] = None
+    user_what_verbatim: Optional[str] = None
+    what_derived_from_verbatim: Optional[str] = None
+    what_stated_by_user: Optional[bool] = None
+    user_confirmed_hypothesis: Optional[bool] = None
 
 
 # ============================================================================
 # Assistant Guidance Messages
 # ============================================================================
 
-GUIDANCE_CONFIDENCE_REJECTED = (
+GUIDANCE_PROVENANCE_FAILED = (
     "SHARPEN MODE STILL BINDING. "
-    "WHAT must be a concrete artifact, not an activity or vague goal. "
-    "Ask: 'What specific thing would exist that doesn't exist today?' "
-    "Then stop and wait. Do not suggest solutions."
+    "Provenance check failed. You must have evidence from the user before calling this tool.\n"
+    "- If WHAT not stated: Ask 'What do you think needs to exist to help with that?'\n"
+    "- If not confirmed: Reflect the hypothesis back and ask 'Correct?'\n"
+    "Ask ONE question. Then stop and wait. Do not suggest solutions."
+)
+
+GUIDANCE_EMPTY_VERBATIM = (
+    "SHARPEN MODE STILL BINDING. "
+    "user_what_verbatim is empty. Do not call this tool until user has stated a WHAT. "
+    "Ask: 'What do you think needs to exist to help with that?' "
+    "Then store their exact answer in user_what_verbatim."
 )
 
 GUIDANCE_MISSING_PRIOR_STEP = (
@@ -153,31 +190,51 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Reject low/medium confidence
-    if validated_request.confidence != "high":
-        logger.info("frame_initiative_hypothesis.confidence_rejected",
-                    confidence=validated_request.confidence)
+    # Extract provenance flags (default to False if None)
+    what_stated = validated_request.what_stated_by_user or False
+    user_confirmed = validated_request.user_confirmed_hypothesis or False
+    what_verbatim = (validated_request.user_what_verbatim or "").strip()
+
+    # Provenance validation
+    provenance_result = validate_hypothesis_provenance(
+        what_stated_by_user=what_stated,
+        user_confirmed_hypothesis=user_confirmed,
+        user_what_verbatim=what_verbatim,
+    )
+
+    if not provenance_result["valid"]:
+        error_type = provenance_result["error_type"]
+
+        if error_type == "empty_verbatim":
+            guidance = GUIDANCE_EMPTY_VERBATIM
+        else:
+            guidance = GUIDANCE_PROVENANCE_FAILED
+
+        logger.info("frame_initiative_hypothesis.provenance_rejected",
+                    error_type=error_type,
+                    failed_checks=provenance_result.get("failed_checks", []))
+
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text=f"Confidence '{validated_request.confidence}' rejected. Only 'high' accepted.",
+                text=provenance_result["error_details"],
             )],
             structuredContent={
-                "error": "confidence_too_low",
-                "confidence_provided": validated_request.confidence,
+                "error": error_type,
+                "failed_checks": provenance_result.get("failed_checks", []),
                 "assistant_guidance": {
                     "action": "ASK_CLARIFYING",
-                    "instruction": GUIDANCE_CONFIDENCE_REJECTED,
+                    "instruction": guidance,
                 },
             },
             isError=True,
         )
 
-    # Structural validation
+    # Structural validation (maps input field to internal 'what')
     result = validate_initiative_hypothesis(
         who=validated_request.who,
         why=validated_request.why,
-        what=validated_request.what,
+        what=validated_request.what_derived_from_verbatim,
     )
 
     # Handle validation failures
@@ -213,11 +270,12 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Valid — return confirmed framing
+    # Valid — return confirmed framing with provenance evidence
     framing = result["framing"]
 
     logger.info("frame_initiative_hypothesis.complete",
-                who=framing["who"], what=framing["what"], confidence="high")
+                who=framing["who"], what=framing["what"],
+                has_verbatim=bool(what_verbatim))
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
@@ -226,7 +284,11 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
         )],
         structuredContent={
             "framing_intent": framing,
-            "confidence": "high",
+            "provenance": {
+                "user_what_verbatim": what_verbatim,
+                "what_stated_by_user": True,
+                "user_confirmed_hypothesis": True,
+            },
             "confirmed": True,
             "assistant_guidance": {
                 "action": "PROCEED_TO_CONSTRAINTS",
