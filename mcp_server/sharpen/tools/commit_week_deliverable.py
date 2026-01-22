@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-DESCRIPTION = """Records the user's deliverable (derived from focus deliverable) for the next seven days (week). This defines when they can stop working on the focus deliverable and feel the week was successful. Requires confirmed focus deliverable from select_cutoff_deliverable and confidence="high".
+DESCRIPTION = """Records the user's deliverable (derived from focus deliverable) for the next seven days (week). This defines when they can stop working on the focus deliverable and feel the week was successful. Requires confirmed focus deliverable from select_focus_deliverable and confidence="high".
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.
@@ -157,7 +157,7 @@ GUIDANCE_MISSING_FRAMING = (
 
 GUIDANCE_MISSING_FOCUS = (
     "SHARPEN MODE STILL BINDING. "
-    "focus_deliverable parameter missing. Complete Step 2 first via identify_e2e_deliverables + select_cutoff_deliverable."
+    "focus_deliverable parameter missing. Complete Step 2 first via identify_e2e_deliverables + select_focus_deliverable."
 )
 
 GUIDANCE_EMPTY_DEFINITION = (

@@ -22,10 +22,10 @@ class TestToolRegistration:
         assert "identify_e2e_deliverables" in TOOL_REGISTRY
 
     def test_tool_2_2_listed_in_registry(self):
-        """select_cutoff_deliverable is registered in tool registry."""
+        """select_focus_deliverable is registered in tool registry."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        assert "select_cutoff_deliverable" in TOOL_REGISTRY
+        assert "select_focus_deliverable" in TOOL_REGISTRY
 
 
 # ============================================================================
@@ -46,10 +46,10 @@ class TestToolAnnotations:
         assert tool.open_world_hint is False
 
     def test_tool_2_2_has_correct_annotations(self):
-        """select_cutoff_deliverable has correct compliance annotations."""
+        """select_focus_deliverable has correct compliance annotations."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         assert tool.read_only_hint is False
         assert tool.destructive_hint is False
         assert tool.open_world_hint is False
@@ -62,7 +62,7 @@ class TestToolAnnotations:
         """
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        step_2_tools = ["identify_e2e_deliverables", "select_cutoff_deliverable"]
+        step_2_tools = ["identify_e2e_deliverables", "select_focus_deliverable"]
         for name in step_2_tools:
             tool = TOOL_REGISTRY[name]
             assert tool.open_world_hint is False, f"{name} must be closed-world"
@@ -101,36 +101,36 @@ class TestInputSchemaRequirements:
         assert "candidate_deliverables" in required
 
     def test_tool_2_2_input_schema_requires_confirmed_deliverables(self):
-        """select_cutoff_deliverable schema requires confirmed_deliverables."""
+        """select_focus_deliverable schema requires confirmed_deliverables."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         required = tool.input_schema.get("required", [])
         assert "confirmed_deliverables" in required
 
     def test_tool_2_2_input_schema_has_selection_methods(self):
-        """select_cutoff_deliverable schema has both selection methods (optional, mutually exclusive)."""
+        """select_focus_deliverable schema has both selection methods (optional, mutually exclusive)."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         properties = tool.input_schema.get("properties", {})
         # Both methods available but neither required (mutual exclusivity enforced at runtime)
         assert "selected_deliverable_name" in properties
         assert "sculpted_deliverable" in properties
 
     def test_tool_2_2_input_schema_requires_initiative_framing(self):
-        """select_cutoff_deliverable schema requires initiative_framing."""
+        """select_focus_deliverable schema requires initiative_framing."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         required = tool.input_schema.get("required", [])
         assert "initiative_framing" in required
 
     def test_tool_2_2_input_schema_requires_confidence(self):
-        """select_cutoff_deliverable schema requires confidence."""
+        """select_focus_deliverable schema requires confidence."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         required = tool.input_schema.get("required", [])
         assert "confidence" in required
 
@@ -165,22 +165,22 @@ class TestToolDescriptions:
         assert "SHARPEN MODE" in tool.description
 
     def test_tool_2_2_description_includes_critical_role(self):
-        """select_cutoff_deliverable description includes CRITICAL role guidance."""
+        """select_focus_deliverable description includes CRITICAL role guidance."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         assert "CRITICAL" in tool.description
 
     def test_tool_2_2_description_includes_sharpen_mode(self):
-        """select_cutoff_deliverable description includes SHARPEN MODE rules."""
+        """select_focus_deliverable description includes SHARPEN MODE rules."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         assert "SHARPEN MODE" in tool.description
 
     def test_tool_2_2_description_includes_example_conversation(self):
-        """select_cutoff_deliverable description includes EXAMPLE CONVERSATION."""
+        """select_focus_deliverable description includes EXAMPLE CONVERSATION."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
-        tool = TOOL_REGISTRY["select_cutoff_deliverable"]
+        tool = TOOL_REGISTRY["select_focus_deliverable"]
         assert "EXAMPLE CONVERSATION" in tool.description

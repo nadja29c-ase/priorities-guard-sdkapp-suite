@@ -217,7 +217,7 @@ GUIDANCE_CONFIRMED = (
     "If user proposes simpler solution → elicit new deliverables for that approach (restart Step 2).\n"
     "If user insists current approach is right → proceed to cutoff.\n\n"
     "PATH C — REALISTIC (user confirms 'doable', 'realistic'):\n"
-    "Proceed to cutoff question and call select_cutoff_deliverable.\n\n"
+    "Proceed to cutoff question and call select_focus_deliverable.\n\n"
 )
 
 # ============================================================================

@@ -373,7 +373,7 @@ def validate_cutoff_selection(
     confidence: str | None,
 ) -> dict[str, Any]:
     """
-    Validate cutoff selection for select_cutoff_deliverable tool.
+    Validate cutoff selection for select_focus_deliverable tool.
 
     Supports two paths:
     - Selection: Pick existing deliverable by exact name

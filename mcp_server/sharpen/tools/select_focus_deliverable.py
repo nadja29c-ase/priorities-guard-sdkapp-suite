@@ -1,5 +1,5 @@
 """
-Select Cutoff Deliverable Tool.
+Select Focus Deliverable Tool.
 
 Forces selection of WHERE work intentionally stops.
 Supports selection (pick existing) or sculpting (combine/reshape).
@@ -255,15 +255,15 @@ GUIDANCE_CONFIRMED = (
 
 
 async def handle(arguments: dict) -> mcp_types.CallToolResult:
-    """Handle select_cutoff_deliverable tool call."""
-    logger.debug("select_cutoff_deliverable.handle.start",
+    """Handle select_focus_deliverable tool call."""
+    logger.debug("select_focus_deliverable.handle.start",
                  argument_keys=list(arguments.keys()))
 
     # Pydantic validation
     try:
         validated_request = SelectCutoffRequest.model_validate(arguments)
     except ValidationError as e:
-        logger.warning("select_cutoff_deliverable.validation_failed", error=str(e.errors()))
+        logger.warning("select_focus_deliverable.validation_failed", error=str(e.errors()))
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(type="text", text="Invalid input format.")],
             structuredContent={"error": "validation_error", "details": e.errors()},
@@ -328,7 +328,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             )
             action = "ASK_CLARIFYING"
 
-        logger.info("select_cutoff_deliverable.rejected",
+        logger.info("select_focus_deliverable.rejected",
                     error_type=error_type, action=action)
 
         structured = {
@@ -359,7 +359,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Get replaces from internal field (only present for sculpted path)
     replaces = result.get("_internal_replaces")
 
-    logger.info("select_cutoff_deliverable.complete",
+    logger.info("select_focus_deliverable.complete",
                 focus_deliverable=focus["name"],
                 deferred_count=len(deferred),
                 sculpted=replaces is not None,
@@ -395,7 +395,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 # ============================================================================
 
 register_tool(ToolDefinition(
-    name="select_cutoff_deliverable",
+    name="select_focus_deliverable",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     handle=handle,

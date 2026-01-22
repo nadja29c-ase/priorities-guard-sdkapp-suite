@@ -1,14 +1,14 @@
 """
-Tests for select_cutoff_deliverable tool.
+Tests for select_focus_deliverable tool.
 
-Tests both pure logic (tool_logic.py) and handler (tools/select_cutoff_deliverable.py).
+Tests both pure logic (tool_logic.py) and handler (tools/select_focus_deliverable.py).
 Structural validation only — semantic quality is the LLM's job.
 """
 
 import pytest
 
 from mcp_server.sharpen.tool_logic import validate_cutoff_selection
-from mcp_server.sharpen.tools.select_cutoff_deliverable import handle
+from mcp_server.sharpen.tools.select_focus_deliverable import handle
 
 
 # ============================================================================
@@ -257,12 +257,12 @@ class TestValidateCutoffSelection:
 
 
 # ============================================================================
-# Handler Tests (tools/select_cutoff_deliverable.py)
+# Handler Tests (tools/select_focus_deliverable.py)
 # ============================================================================
 
 
 class TestSelectCutoffHandler:
-    """Tests for select_cutoff_deliverable handler."""
+    """Tests for select_focus_deliverable handler."""
 
     @pytest.mark.asyncio
     async def test_valid_input_returns_proceed_to_step_3_action(self, valid_framing, valid_deliverables):
@@ -556,7 +556,7 @@ class TestValidateCutoffSelectionSculptPath:
 
 
 class TestSelectCutoffHandlerSculptPath:
-    """Tests for select_cutoff_deliverable handler with sculpting."""
+    """Tests for select_focus_deliverable handler with sculpting."""
 
     @pytest.mark.asyncio
     async def test_valid_sculpt_returns_proceed_to_step_3_action(self, valid_framing, valid_deliverables):
