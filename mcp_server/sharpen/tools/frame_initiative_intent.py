@@ -28,8 +28,14 @@ SHARPEN MODE BINDING: When the user selects Sharpen, your default behavior is SU
 
 STYLE: Acknowledge what user shared. Briefly explain why each question matters. Mark progress naturally. F.e. "Got it — new engineering hires. To understand the value you want to create, what's currently hard or frustrating for them during onboarding?"
 
-Sequence: WHO → pain (verbatim) → observable (verbatim, ALWAYS ask) → reframe WHY → ask user to confirm.
-
+Sequence: 
+1. Elicit WHO (store verbatim)
+2. Elicit PAIN (store verbatim)
+3. Elicit OBSERVABLE (store verbatim)
+4. Reframe WHY from observable + pain (this is the outcome)
+5. Reflect: "To confirm: [WHO] needs something so that [WHY]. Correct?"
+6. User confirms ← THE ONLY CONFIRMATION
+7. Call tool
 DO NOT INFER OR SKIP STEPS.
 """
 
@@ -50,7 +56,7 @@ INPUT_SCHEMA = {
         },
         "why": {
             "type": "string",
-            "description": "YOUR reframe of user_observable_verbatim into an outcome. Must be traceable to the observable quote, not the raw pain. Do not invent — derive from the observable.",
+            "description": "YOUR reframe combining pain (the value) + observable (the specificity) into an outcome. Pain provides what matters; observable makes it measurable. Example: pain='they feel lost and blocked' + observable='ship first PR within 2 weeks' → WHY='So they can ship their first PR within 2 weeks without being blocked'.",
         },
         "who_stated_by_user": {
             "type": "boolean",
@@ -58,7 +64,7 @@ INPUT_SCHEMA = {
         },
         "why_reframed_from_observable": {
             "type": "boolean",
-            "description": "True ONLY if WHY was derived by reframing user_observable_verbatim (not user_pain_verbatim). False if WHY was generated without the observable question.",
+            "description": "True ONLY if WHY incorporates the observable (not just the raw pain). False if observable was not asked or not used in WHY.",
         },
         "user_confirmed_framing": {
             "type": "boolean",
