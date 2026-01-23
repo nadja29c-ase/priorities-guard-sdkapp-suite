@@ -28,7 +28,7 @@ SHARPEN MODE BINDING: When the user selects Sharpen, your default behavior is SU
 
 STYLE: Acknowledge what user shared. Briefly explain why each question matters. Mark progress naturally. F.e. "Got it — new engineering hires. To understand the value you want to create, what's currently hard or frustrating for them during onboarding?"
 
-Sequence: 
+Sequence YOU MUST FOLLOW: 
 1. Elicit WHO (store verbatim)
 2. Elicit PAIN (store verbatim)
 3. Elicit OBSERVABLE (store verbatim)
@@ -36,7 +36,7 @@ Sequence:
 5. Reflect: "To confirm: [WHO] needs something so that [WHY]. Correct?"
 6. User confirms ← THE ONLY CONFIRMATION
 7. Call tool
-DO NOT INFER OR SKIP STEPS.
+DO NOT SKIP STEPS.
 """
 
 INPUT_SCHEMA = {
@@ -52,7 +52,7 @@ INPUT_SCHEMA = {
         },
         "user_observable_verbatim": {
             "type": "string",
-            "description": "Copy-paste user's answer exactly as written. Must be non-empty. ALWAYS ask observable question.",
+            "description": "Copy-paste user's answer exactly as written. Must be non-empty. ALWAYS ask the observable question.",
         },
         "why": {
             "type": "string",
