@@ -168,43 +168,56 @@ def validate_initiative_intent(
 
 def validate_intent_provenance(
     who_stated_by_user: bool,
-    why_reframed_from_pain: bool,
+    why_reframed_from_observable: bool,
     user_confirmed_framing: bool,
     user_pain_verbatim: str,
+    user_observable_verbatim: str,
 ) -> dict[str, Any]:
     """
     Validate provenance evidence for frame_initiative_intent.
 
-    All three booleans must be True AND verbatim must be non-empty.
-    pain_stated is derived from verbatim presence (not a separate field).
+    All three booleans must be True AND both verbatim fields must be non-empty.
+
+    Applies defensive normalization to verbatim fields (strips whitespace).
 
     Args:
         who_stated_by_user: Did user explicitly state WHO?
-        why_reframed_from_pain: Is WHY derived from the stated pain?
+        why_reframed_from_observable: Is WHY derived from the observable (not raw pain)?
         user_confirmed_framing: Did user explicitly confirm the framing?
-        user_pain_verbatim: User's exact words (defensive normalization applied)
+        user_pain_verbatim: User's exact words describing the pain
+        user_observable_verbatim: User's exact words describing what would be different
 
     Returns:
         {"valid": bool, "error_type": str | None, "error_details": str | None, "failed_checks": list}
     """
     # Defensive normalization
     user_pain_verbatim = (user_pain_verbatim or "").strip()
+    user_observable_verbatim = (user_observable_verbatim or "").strip()
 
-    failed_checks = []
-
-    # Verbatim is required — pain must exist before calling this tool
+    # Pain verbatim is required first
     if not user_pain_verbatim:
         return {
             "valid": False,
-            "error_type": "empty_verbatim",
+            "error_type": "empty_pain_verbatim",
             "error_details": "user_pain_verbatim is empty. Do not call this tool until user has stated a pain.",
             "failed_checks": ["user_pain_verbatim"],
         }
 
+    # Observable verbatim is required — ALWAYS ask
+    if not user_observable_verbatim:
+        return {
+            "valid": False,
+            "error_type": "empty_observable_verbatim",
+            "error_details": "user_observable_verbatim is empty. Do not call this tool until user has answered the observable question.",
+            "failed_checks": ["user_observable_verbatim"],
+        }
+
+    failed_checks = []
+
     if not who_stated_by_user:
         failed_checks.append("who_stated_by_user")
-    if not why_reframed_from_pain:
-        failed_checks.append("why_reframed_from_pain")
+    if not why_reframed_from_observable:
+        failed_checks.append("why_reframed_from_observable")
     if not user_confirmed_framing:
         failed_checks.append("user_confirmed_framing")
 
