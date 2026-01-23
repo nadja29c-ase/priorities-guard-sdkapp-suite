@@ -48,11 +48,11 @@ INPUT_SCHEMA = {
         },
         "user_pain_verbatim": {
             "type": "string",
-            "description": "User's EXACT words describing their pain, frustration, or problem. Copy-paste from their message. Must be non-empty.",
+            "description": "Copy-paste user's answer exactly as written. Must be non-empty.",
         },
         "user_observable_verbatim": {
             "type": "string",
-            "description": "User's EXACT words describing what would be different if this worked. Must be non-empty — ALWAYS ask 'What would you see happening differently?' even if pain seems concrete.",
+            "description": "Copy-paste user's answer exactly as written. Must be non-empty. ALWAYS ask observable question.",
         },
         "why": {
             "type": "string",
