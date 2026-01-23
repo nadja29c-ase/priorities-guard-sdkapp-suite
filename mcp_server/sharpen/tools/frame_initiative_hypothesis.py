@@ -46,7 +46,7 @@ INPUT_SCHEMA = {
         },
         "user_what_verbatim": {
             "type": "string",
-            "description": "User's EXACT words describing their hypothesized solution. Copy-paste from their message. Must be non-empty — do not call this tool until user has stated a WHAT.",
+            "description": "Copy-paste user's answer exactly as written. Must be non-empty.",
         },
         "what_derived_from_verbatim": {
             "type": "string",
