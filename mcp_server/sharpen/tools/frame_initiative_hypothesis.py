@@ -22,56 +22,15 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records WHAT (the hypothesized solution) after problem is understood. Requires confirmed WHO + WHY from frame_initiative_intent.
+DESCRIPTION = """Captures user's solution idea as testable hypothesis — preventing premature commitment. Frames WHAT as something to validate and minimize in scope, not a final decision.
 
-SHARPEN MODE — BINDING RULES (not guidelines)
-When user selects Sharpen, your default assistant behavior is SUSPENDED.
+SHARPEN BINDING: SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
+STYLE: Acknowledge the confirmed framing. Explain hypothesis framing helps test before committing.
 
-SUSPENDED BEHAVIORS:
-- Suggesting solutions
-- Improving or "fixing" user's hypothesis
-- Offering alternatives unprompted
-- Jumping to planning or breakdown
-- Claiming user said something they didn't say
+ASK "What do you think needs to exist to deliver [WHY to WHO]?" NEVER suggest.
+Frame back: "You think [WHAT] might help [WHO] so that [WHY]. Correct?"
 
-ACTIVE BEHAVIORS:
-- Ask ONE question: "What do you think needs to exist to help with that?"
-- Wait for answer
-- Quote user's exact words back to them
-- Reflect back as hypothesis
-- Confirm with user
-- Call tool only after provenance evidence is available and user confirms
-
-WHAT AS HYPOTHESIS:
-The user's WHAT is a hypothesis, not a commitment. Frame it that way:
-- "You think [WHAT] might help [WHO] so that [WHY]."
-- "This is your current hypothesis — we'll pressure-test it against constraints."
-
-Do NOT evaluate whether it's a good solution. That comes later via constraints.
-
-PROVENANCE EVIDENCE REQUIRED:
-This tool requires proof that WHAT came from the user:
-- user_what_verbatim: Copy-paste the user's exact words. Must be non-empty — do not call until WHAT is stated.
-- what_stated_by_user: Did user say WHAT? If false, tool rejects.
-- user_confirmed_hypothesis: Did user confirm? If false, tool rejects.
-
-If you cannot honestly set ALL booleans to true AND provide a non-empty verbatim quote, do NOT call the tool. Ask the user first.
-
-EXAMPLE CONVERSATION:
-  [After frame_initiative_intent confirmed: who="New engineering hires", why="So they can find answers without interrupting others"]
-  You: "What do you think needs to exist to help with that?"
-  User: "A checklist they can follow in their first week"
-       ↑ THIS IS user_what_verbatim — store exactly
-  You: "Your hypothesis: A first-week checklist for new engineering hires so they can find answers without interrupting others. Correct?"
-  User: "Yes"
-       ↑ NOW user_confirmed_hypothesis = true
-  → Call tool with:
-    who="New engineering hires"
-    why="So they can find answers without interrupting others"
-    user_what_verbatim="A checklist they can follow in their first week"
-    what_derived_from_verbatim="A first-week checklist"
-    what_stated_by_user=true
-    user_confirmed_hypothesis=true
+DO NOT CALL until user stated WHAT and confirmed. DO NOT infer or suggest.
 """
 
 INPUT_SCHEMA = {

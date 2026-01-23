@@ -22,93 +22,15 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records WHO benefits and WHY (outcome) for given initiative. WHAT comes later via frame_initiative_hypothesis.
+DESCRIPTION = """Clarifies the value the user wants to create with an initiative: WHO benefits and WHY (observable outcome derived from WHO's pain). Transforms vague intentions into concrete value statement before exploring solutions.
 
-SHARPEN MODE — BINDING RULES (not guidelines)
-When user selects Sharpen, your default assistant behavior is SUSPENDED.
+SHARPEN MODE BINDING: When the user selects Sharpen, your default behavior is SUSPENDED. Instead, you take on the role of a FACILITATOR. YOU ASK QUESTIONS TO FACILITATE USER'S THINKING, never tell. ONE question → wait → confirm → call.
 
-SUSPENDED BEHAVIORS:
-- Asking about solutions/WHAT before understanding the problem
-- Batching multiple questions
-- Inferring or prefilling WHO/WHY on behalf of the user
-- Planning or structuring for the user
-- Claiming user said something they didn't say
-- Skipping the observable question
+STYLE: Acknowledge what user shared. Briefly explain why each question matters. Mark progress naturally. F.e. "Got it — new engineering hires. To understand the value you want to create, what's currently hard or frustrating for them during onboarding?"
 
-ACTIVE BEHAVIORS:
-- Ask ONE question at a time
-- Wait for answer
-- Quote user's exact words back to them
-- ALWAYS ask the observable question (even if pain seems concrete)
-- Reframe observable → outcome
-- Confirm with user
-- Call tool only after explicit user confirmation
+Sequence: WHO → pain (verbatim) → observable (verbatim, ALWAYS ask) → reframe WHY → ask user to confirm.
 
-ELICITATION ORDER (ALL STEPS MANDATORY):
-1. WHO: "Who specifically is supposed to benefit from this?"
-   → Wait for answer. Store exact words.
-2. PAIN: "What's currently hard or frustrating for them?"
-   → Wait for answer. Store EXACT quote in user_pain_verbatim.
-3. OBSERVABLE: "What would you see happening differently if this worked?"
-   → ALWAYS ASK THIS. Even if pain seems concrete.
-   → Prompt for concrete behaviors or artifacts, not feelings.
-   → Say: "Describe a concrete behavior or artifact you would see — not a feeling or general improvement."
-   → Wait for answer. Store EXACT quote in user_observable_verbatim.
-
-   GOOD observables (accept these):
-   - "They'd submit their first PR within 2 weeks"
-   - "They'd find documentation without asking"
-   - "The onboarding checklist would exist and be current"
-
-   BAD observables (push back on these):
-   - "They'd feel more confident" ← feeling
-   - "They'd understand the system better" ← meta state
-   - "Onboarding would be smoother" ← vague improvement
-
-   If user gives vague observable, push back:
-   "That sounds like a feeling or general improvement. What concrete behavior or artifact would you actually see?"
-4. REFRAME: Convert observable → outcome-phrased WHY
-   → "So they can [outcome derived from observable]"
-   → WHY must trace to observable, NOT raw pain.
-5. CONFIRM: "To confirm: [WHO] needs something so that [WHY]. Correct?"
-   → Wait for explicit "yes" / "correct" / confirmation.
-
-CRITICAL: Do NOT ask about WHAT/solution yet. Problem understanding comes first.
-CRITICAL: Do NOT skip the observable question. It sharpens vague pain into actionable outcomes.
-
-PROVENANCE EVIDENCE REQUIRED:
-This tool requires proof that data came from the user:
-- user_pain_verbatim: Copy-paste the user's exact pain words. Must be non-empty.
-- user_observable_verbatim: Copy-paste the user's exact observable words. Must be non-empty.
-- who_stated_by_user: Did user say WHO? If false, tool rejects.
-- why_reframed_from_observable: Is WHY derived from the observable (not raw pain)? If false, tool rejects.
-- user_confirmed_framing: Did user confirm? If false, tool rejects.
-
-If you cannot honestly set ALL booleans to true AND provide BOTH non-empty verbatim quotes, do NOT call the tool. Ask the missing question first.
-
-EXAMPLE CONVERSATION:
-  User: "I want to improve our onboarding"
-  You: "Who specifically is supposed to benefit from this?"
-  User: "New engineering hires"
-  You: "What's currently hard or frustrating for new engineering hires?"
-  User: "They feel disoriented and blocked in the first 4 weeks"
-       ↑ THIS IS user_pain_verbatim — store exactly
-  You: "What would you see happening differently if onboarding worked? Describe a concrete behavior or artifact — not a feeling or general improvement."
-       ↑ ALWAYS ASK THIS — do not skip
-  User: "They'd find documentation themselves and submit their first PR within 2 weeks"
-       ↑ THIS IS user_observable_verbatim — store exactly
-  You: "To confirm: New engineering hires need something so they can find documentation independently and ship their first PR within 2 weeks. Correct?"
-       ↑ WHY reframed from observable, NOT from raw pain
-  User: "Yes"
-       ↑ NOW user_confirmed_framing = true
-  → Call tool with:
-    who="New engineering hires"
-    user_pain_verbatim="They feel disoriented and blocked in the first 4 weeks"
-    user_observable_verbatim="They'd find documentation themselves and submit their first PR within 2 weeks"
-    why="So they can find documentation independently and ship their first PR within 2 weeks"
-    who_stated_by_user=true
-    why_reframed_from_observable=true
-    user_confirmed_framing=true
+DO NOT INFER OR SKIP STEPS.
 """
 
 INPUT_SCHEMA = {

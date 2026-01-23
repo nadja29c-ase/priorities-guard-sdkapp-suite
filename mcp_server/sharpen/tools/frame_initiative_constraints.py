@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records dominant CONSTRAINT. Without constraint, scope expands endlessly - use it to help the user reduce scope when necessary. Requires confidence="high".
+DESCRIPTION = """Records dominant CONSTRAINT. Without constraint, scope expands endlessly - together with outcome, enables meaningful work breakdown and minimization of scope. Requires confidence="high".
 
 SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
 
