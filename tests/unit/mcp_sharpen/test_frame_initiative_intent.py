@@ -380,8 +380,8 @@ class TestFrameInitiativeIntentHandler:
         assert provenance["user_confirmed_framing"] is True
 
     @pytest.mark.asyncio
-    async def test_multiple_stakeholders_returns_error(self):
-        """Multiple stakeholders WHO returns error with recovery hint."""
+    async def test_multiple_stakeholders_returns_incomplete(self):
+        """Multiple stakeholders WHO returns zero-info error."""
         arguments = {
             "who": "The team and the client",
             "user_pain_verbatim": "Communication is broken",
@@ -394,12 +394,11 @@ class TestFrameInitiativeIntentHandler:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert result.structuredContent["error"] == "multiple_stakeholders"
-        assert "recovery_hint" in result.structuredContent
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
-    async def test_missing_who_returns_error(self):
-        """Missing WHO returns isError=True with missing fields."""
+    async def test_missing_who_returns_incomplete(self):
+        """Missing WHO returns zero-info error."""
         arguments = {
             "who": "",
             "user_pain_verbatim": "Things are slow",
@@ -413,12 +412,11 @@ class TestFrameInitiativeIntentHandler:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert result.structuredContent["error"] == "missing_fields"
-        assert "who" in result.structuredContent["missing"]
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
-    async def test_missing_why_returns_error(self):
-        """Missing WHY returns isError=True with missing fields."""
+    async def test_missing_why_returns_incomplete(self):
+        """Missing WHY returns zero-info error."""
         arguments = {
             "who": "My team",
             "user_pain_verbatim": "Things are frustrating",
@@ -432,12 +430,11 @@ class TestFrameInitiativeIntentHandler:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert result.structuredContent["error"] == "missing_fields"
-        assert "why" in result.structuredContent["missing"]
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
-    async def test_guidance_instruction_present(self):
-        """assistant_guidance with instruction is always present."""
+    async def test_success_has_guidance(self):
+        """Success response still includes assistant_guidance."""
         arguments = {
             "who": "My team",
             "user_pain_verbatim": "They struggle",
@@ -450,12 +447,13 @@ class TestFrameInitiativeIntentHandler:
 
         result = await handle(arguments)
 
+        assert result.isError is not True
         assert "assistant_guidance" in result.structuredContent
         assert "instruction" in result.structuredContent["assistant_guidance"]
 
     @pytest.mark.asyncio
-    async def test_guidance_instruction_for_missing_fields(self):
-        """Guidance instruction for missing fields enforces facilitator role."""
+    async def test_error_has_no_guidance(self):
+        """Error responses have no guidance (zero-info pattern)."""
         arguments = {
             "who": "",
             "user_pain_verbatim": "Pain exists",
@@ -468,10 +466,10 @@ class TestFrameInitiativeIntentHandler:
 
         result = await handle(arguments)
 
-        instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "SHARPEN MODE STILL BINDING" in instruction
-        assert "ONE question" in instruction
-        assert "stop and wait" in instruction
+        assert result.isError is True
+        assert "assistant_guidance" not in result.structuredContent
+        assert "error" not in result.structuredContent
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
     async def test_text_content_for_valid_input(self):
@@ -534,8 +532,8 @@ class TestFrameIntentHandlerProvenance:
         assert "provenance" in result.structuredContent
 
     @pytest.mark.asyncio
-    async def test_empty_observable_verbatim_rejects(self):
-        """Empty observable verbatim is rejected."""
+    async def test_empty_observable_verbatim_returns_incomplete(self):
+        """Empty observable verbatim returns zero-info error."""
         arguments = {
             "who": "New engineering hires",
             "user_pain_verbatim": "They feel blocked",
@@ -549,26 +547,7 @@ class TestFrameIntentHandlerProvenance:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert result.structuredContent["error"] == "empty_observable_verbatim"
-
-    @pytest.mark.asyncio
-    async def test_empty_observable_returns_specific_guidance(self):
-        """Empty observable returns specific guidance about asking observable question."""
-        arguments = {
-            "who": "Team",
-            "user_pain_verbatim": "They struggle",
-            "user_observable_verbatim": "",
-            "why": "To succeed",
-            "who_stated_by_user": True,
-            "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
-        }
-
-        result = await handle(arguments)
-
-        instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "user_observable_verbatim is empty" in instruction
-        assert "What would you see happening differently" in instruction
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
     async def test_valid_input_includes_both_verbatims_in_provenance(self):
@@ -592,8 +571,8 @@ class TestFrameIntentHandlerProvenance:
         assert provenance["why_reframed_from_observable"] is True
 
     @pytest.mark.asyncio
-    async def test_why_reframed_from_observable_false_rejects(self):
-        """why_reframed_from_observable=False is rejected."""
+    async def test_why_reframed_from_observable_false_returns_incomplete(self):
+        """why_reframed_from_observable=False returns zero-info error."""
         arguments = {
             "who": "New hires",
             "user_pain_verbatim": "They feel blocked",
@@ -607,11 +586,11 @@ class TestFrameIntentHandlerProvenance:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert "why_reframed_from_observable" in result.structuredContent["failed_checks"]
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
-    async def test_provenance_false_rejects(self):
-        """Any provenance flag False is rejected."""
+    async def test_provenance_false_returns_incomplete(self):
+        """Any provenance flag False returns zero-info error."""
         arguments = {
             "who": "New engineering hires",
             "user_pain_verbatim": "Some pain",
@@ -625,11 +604,11 @@ class TestFrameIntentHandlerProvenance:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert result.structuredContent["error"] == "provenance_failed"
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
-    async def test_empty_pain_verbatim_rejects(self):
-        """Empty pain verbatim is rejected."""
+    async def test_empty_pain_verbatim_returns_incomplete(self):
+        """Empty pain verbatim returns zero-info error."""
         arguments = {
             "who": "New engineering hires",
             "user_pain_verbatim": "",  # Empty!
@@ -643,11 +622,11 @@ class TestFrameIntentHandlerProvenance:
         result = await handle(arguments)
 
         assert result.isError is True
-        assert result.structuredContent["error"] == "empty_pain_verbatim"
+        assert result.structuredContent == {"status": "incomplete"}
 
     @pytest.mark.asyncio
-    async def test_provenance_failure_returns_guidance(self):
-        """Provenance failure returns actionable guidance."""
+    async def test_all_errors_return_zero_info(self):
+        """All error paths return only status:incomplete (no guidance)."""
         arguments = {
             "who": "Someone",
             "user_pain_verbatim": "Some pain",
@@ -660,46 +639,11 @@ class TestFrameIntentHandlerProvenance:
 
         result = await handle(arguments)
 
-        assert "assistant_guidance" in result.structuredContent
-        instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "SHARPEN MODE STILL BINDING" in instruction
-
-    @pytest.mark.asyncio
-    async def test_empty_pain_verbatim_returns_specific_guidance(self):
-        """Empty pain verbatim returns specific guidance about getting pain."""
-        arguments = {
-            "who": "Team",
-            "user_pain_verbatim": "",
-            "user_observable_verbatim": "Some observable",
-            "why": "Some reason",
-            "who_stated_by_user": True,
-            "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
-        }
-
-        result = await handle(arguments)
-
-        instruction = result.structuredContent["assistant_guidance"]["instruction"]
-        assert "user_pain_verbatim is empty" in instruction
-
-    @pytest.mark.asyncio
-    async def test_failed_checks_listed_in_response(self):
-        """Failed provenance checks are listed in response."""
-        arguments = {
-            "who": "Team",
-            "user_pain_verbatim": "Pain",
-            "user_observable_verbatim": "Observable",
-            "why": "Reason",
-            "who_stated_by_user": False,
-            "why_reframed_from_observable": True,
-            "user_confirmed_framing": False,
-        }
-
-        result = await handle(arguments)
-
-        assert "failed_checks" in result.structuredContent
-        assert "who_stated_by_user" in result.structuredContent["failed_checks"]
-        assert "user_confirmed_framing" in result.structuredContent["failed_checks"]
+        assert result.isError is True
+        assert result.structuredContent == {"status": "incomplete"}
+        assert "assistant_guidance" not in result.structuredContent
+        assert "error" not in result.structuredContent
+        assert "failed_checks" not in result.structuredContent
 
 
 # ============================================================================
@@ -725,19 +669,23 @@ class TestToolRegistration:
         assert tool.destructive_hint is False
         assert tool.open_world_hint is False
 
-    def test_tool_description_includes_provenance(self):
-        """Tool description includes PROVENANCE guidance."""
+    def test_tool_description_includes_preconditions(self):
+        """Tool description includes CALL PRECONDITIONS."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_intent"]
-        assert "PROVENANCE" in tool.description
+        assert "CALL PRECONDITIONS" in tool.description
 
-    def test_tool_description_mentions_hypothesis_tool(self):
-        """Tool description mentions frame_initiative_hypothesis."""
-        from mcp_server.sharpen.tools import TOOL_REGISTRY
+    def test_legacy_guidance_dict_exists(self):
+        """_LEGACY_GUIDANCE dict exists for rollback."""
+        from mcp_server.sharpen.tools.frame_initiative_intent import _LEGACY_GUIDANCE
 
-        tool = TOOL_REGISTRY["frame_initiative_intent"]
-        assert "frame_initiative_hypothesis" in tool.description
+        assert isinstance(_LEGACY_GUIDANCE, dict)
+        assert "provenance_failed" in _LEGACY_GUIDANCE
+        assert "empty_pain_verbatim" in _LEGACY_GUIDANCE
+        assert "empty_observable_verbatim" in _LEGACY_GUIDANCE
+        assert "missing_fields" in _LEGACY_GUIDANCE
+        assert "multiple_stakeholders" in _LEGACY_GUIDANCE
 
     def test_tool_schema_has_provenance_fields(self):
         """Tool schema includes all provenance fields."""

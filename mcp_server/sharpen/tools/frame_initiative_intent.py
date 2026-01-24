@@ -22,21 +22,20 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Clarifies the value the user wants to create with an initiative: WHO benefits and WHY (observable outcome derived from WHO's pain). Transforms vague intentions into concrete value statement before exploring solutions.
+DESCRIPTION = """Records confirmed problem framing: WHO benefits and WHY (outcome derived from pain + observable).
 
-SHARPEN MODE BINDING: When the user selects Sharpen, your default behavior is SUSPENDED. Instead, you take on the role of a FACILITATOR. YOU ASK QUESTIONS TO FACILITATE USER'S THINKING, never tell. ONE question at a time -> wait for answer -> call tool. Violating this breaks Sharpen.
+CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- who_stated_by_user: user explicitly stated WHO
+- user_pain_verbatim: non-empty, user's exact words
+- user_observable_verbatim: non-empty, user's exact words
+- why_reframed_from_observable: WHY incorporates observable
+- user_confirmed_framing: user explicitly confirmed
 
-STYLE: Briefly explain why each question matters. Acknowledge user's progress naturally. F.e. "Got it — new engineering hires. To understand the value you want to create, what's currently hard or frustrating for them during onboarding?"
+FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim. Reflect and confirm before calling.
 
-Sequence YOU MUST FOLLOW: 
-1. Elicit WHO (store verbatim)
-2. Elicit PAIN (store verbatim)
-3. Elicit OBSERVABLE (store verbatim)
-4. Reframe WHY from observable + pain (this is the outcome)
-5. Reflect: "To confirm: [WHO] needs something so that [WHY]. Correct?"
-6. User confirms ← THE ONLY CONFIRMATION
-7. Call this tool
-DO NOT SKIP STEPS.
+Sequence: WHO → PAIN → OBSERVABLE → reframe WHY → reflect and confirm → call tool.
+
+STYLE: Briefly explain why each question matters. Acknowledge user's progress naturally.
 """
 
 INPUT_SCHEMA = {
@@ -104,46 +103,46 @@ class FrameIntentRequest(BaseModel):
 # Assistant Guidance Messages
 # ============================================================================
 
-GUIDANCE_PROVENANCE_FAILED = (
-    "SHARPEN MODE STILL BINDING. "
-    "Provenance check failed. You must have evidence from the user before calling this tool.\n"
-    "- If WHO not stated: Ask 'Who specifically is supposed to benefit from this?'\n"
-    "- If pain not stated: Ask 'What's currently hard or frustrating for them?'\n"
-    "- If observable not stated: Ask 'What would you see happening differently if this worked? Describe a concrete behavior or artifact — not a feeling or general improvement.'\n"
-    "- If WHY not derived from observable: Reframe the user's observable into an outcome first.\n"
-    "- If not confirmed: Reflect WHO + WHY back and ask 'Correct?'\n"
-    "Ask ONE question. Then stop and wait."
-)
+# Preserved for rollback if zero-info experiment fails.
+_LEGACY_GUIDANCE = {
+    "provenance_failed": (
+        "SHARPEN MODE STILL BINDING. "
+        "Provenance check failed. You must have evidence from the user before calling this tool.\n"
+        "- If WHO not stated: Ask 'Who specifically is supposed to benefit from this?'\n"
+        "- If pain not stated: Ask 'What's currently hard or frustrating for them?'\n"
+        "- If observable not stated: Ask 'What would you see happening differently if this worked? Describe a concrete behavior or artifact — not a feeling or general improvement.'\n"
+        "- If WHY not derived from observable: Reframe the user's observable into an outcome first.\n"
+        "- If not confirmed: Reflect WHO + WHY back and ask 'Correct?'\n"
+        "Ask ONE question. Then stop and wait."
+    ),
+    "empty_pain_verbatim": (
+        "SHARPEN MODE STILL BINDING. "
+        "user_pain_verbatim is empty. Do not call this tool until user has stated a pain. "
+        "Ask: 'What's currently hard or frustrating for [WHO]?' "
+        "Then store their exact answer in user_pain_verbatim."
+    ),
+    "empty_observable_verbatim": (
+        "SHARPEN MODE STILL BINDING. "
+        "user_observable_verbatim is empty. Do not call this tool until user has answered the observable question. "
+        "Ask: 'What would you see happening differently if this worked? Describe a concrete behavior or artifact — not a feeling or general improvement.' "
+        "Then store their exact answer in user_observable_verbatim. "
+        "ALWAYS ask this question — even if pain seems concrete."
+    ),
+    "missing_fields": (
+        "SHARPEN MODE STILL BINDING. "
+        "Ask ONE question about the missing field:\n"
+        "- Missing WHO: 'Who specifically is supposed to benefit from this?'\n"
+        "- Missing WHY: First get pain, then observable, then reframe to outcome.\n"
+        "Then stop and wait. Do not ask about solutions yet."
+    ),
+    "multiple_stakeholders": (
+        "SHARPEN MODE STILL BINDING. "
+        "Multiple stakeholders detected. Ask: 'Who benefits first and foremost?' "
+        "Then stop and wait. Frame confirmation as '[WHO] primarily benefits from this.'"
+    ),
+}
 
-GUIDANCE_EMPTY_PAIN_VERBATIM = (
-    "SHARPEN MODE STILL BINDING. "
-    "user_pain_verbatim is empty. Do not call this tool until user has stated a pain. "
-    "Ask: 'What's currently hard or frustrating for [WHO]?' "
-    "Then store their exact answer in user_pain_verbatim."
-)
-
-GUIDANCE_EMPTY_OBSERVABLE_VERBATIM = (
-    "SHARPEN MODE STILL BINDING. "
-    "user_observable_verbatim is empty. Do not call this tool until user has answered the observable question. "
-    "Ask: 'What would you see happening differently if this worked? Describe a concrete behavior or artifact — not a feeling or general improvement.' "
-    "Then store their exact answer in user_observable_verbatim. "
-    "ALWAYS ask this question — even if pain seems concrete."
-)
-
-GUIDANCE_MISSING_FIELDS = (
-    "SHARPEN MODE STILL BINDING. "
-    "Ask ONE question about the missing field:\n"
-    "- Missing WHO: 'Who specifically is supposed to benefit from this?'\n"
-    "- Missing WHY: First get pain, then observable, then reframe to outcome.\n"
-    "Then stop and wait. Do not ask about solutions yet."
-)
-
-GUIDANCE_MULTIPLE_STAKEHOLDERS = (
-    "SHARPEN MODE STILL BINDING. "
-    "Multiple stakeholders detected. Ask: 'Who benefits first and foremost?' "
-    "Then stop and wait. Frame confirmation as '[WHO] primarily benefits from this.'"
-)
-
+# Success guidance (still used — guidance on success is appropriate)
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING. "
     "Problem understanding confirmed with evidence. Now ask about the hypothesized solution:\n"
@@ -167,10 +166,15 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     try:
         validated_request = FrameIntentRequest.model_validate(arguments)
     except ValidationError as e:
-        logger.warning("frame_initiative_intent.validation_failed", error=str(e.errors()))
+        logger.info(
+            "frame_initiative_intent.rejected",
+            error_type="validation_error",
+            failed_checks=["pydantic_validation"],
+            input_snapshot={"raw_keys": list(arguments.keys())},
+        )
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(type="text", text="Invalid input format.")],
-            structuredContent={"error": "validation_error", "details": e.errors()},
+            content=[],
+            structuredContent={"status": "incomplete"},
             isError=True,
         )
 
@@ -191,32 +195,23 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     )
 
     if not provenance_result["valid"]:
-        error_type = provenance_result["error_type"]
-
-        if error_type == "empty_pain_verbatim":
-            guidance = GUIDANCE_EMPTY_PAIN_VERBATIM
-        elif error_type == "empty_observable_verbatim":
-            guidance = GUIDANCE_EMPTY_OBSERVABLE_VERBATIM
-        else:
-            guidance = GUIDANCE_PROVENANCE_FAILED
-
-        logger.info("frame_initiative_intent.provenance_rejected",
-                   error_type=error_type,
-                   failed_checks=provenance_result.get("failed_checks", []))
-
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text=provenance_result["error_details"],
-            )],
-            structuredContent={
-                "error": error_type,
-                "failed_checks": provenance_result.get("failed_checks", []),
-                "assistant_guidance": {
-                    "action": "ASK_CLARIFYING",
-                    "instruction": guidance,
-                },
+        logger.info(
+            "frame_initiative_intent.rejected",
+            error_type=provenance_result["error_type"],
+            failed_checks=provenance_result.get("failed_checks", []),
+            input_snapshot={
+                "who": validated_request.who,
+                "user_pain_verbatim": bool(pain_verbatim),
+                "user_observable_verbatim": bool(observable_verbatim),
+                "why": validated_request.why,
+                "who_stated_by_user": who_stated,
+                "why_reframed_from_observable": why_reframed,
+                "user_confirmed_framing": user_confirmed,
             },
+        )
+        return mcp_types.CallToolResult(
+            content=[],
+            structuredContent={"status": "incomplete"},
             isError=True,
         )
 
@@ -228,38 +223,24 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     # If structurally invalid, return error
     if not result["valid"]:
-        # Check for multiple stakeholders
-        if result.get("multiple_stakeholders"):
-            return mcp_types.CallToolResult(
-                content=[mcp_types.TextContent(
-                    type="text",
-                    text="Multiple stakeholders detected. Need primary beneficiary.",
-                )],
-                structuredContent={
-                    "error": "multiple_stakeholders",
-                    "who_provided": result["framing_intent"]["who"],
-                    "recovery_hint": "Ask user to name ONE primary beneficiary",
-                    "assistant_guidance": {
-                        "action": "ASK_CLARIFYING",
-                        "instruction": GUIDANCE_MULTIPLE_STAKEHOLDERS,
-                    },
-                },
-                isError=True,
-            )
-
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text=f"Missing required fields: {', '.join(result['missing'])}",
-            )],
-            structuredContent={
-                "error": "missing_fields",
-                "missing": result["missing"],
-                "assistant_guidance": {
-                    "action": "ASK_CLARIFYING",
-                    "instruction": GUIDANCE_MISSING_FIELDS,
-                },
+        error_type = "multiple_stakeholders" if result.get("multiple_stakeholders") else "missing_fields"
+        logger.info(
+            "frame_initiative_intent.rejected",
+            error_type=error_type,
+            failed_checks=result.get("missing", []),
+            input_snapshot={
+                "who": validated_request.who,
+                "user_pain_verbatim": bool(pain_verbatim),
+                "user_observable_verbatim": bool(observable_verbatim),
+                "why": validated_request.why,
+                "who_stated_by_user": who_stated,
+                "why_reframed_from_observable": why_reframed,
+                "user_confirmed_framing": user_confirmed,
             },
+        )
+        return mcp_types.CallToolResult(
+            content=[],
+            structuredContent={"status": "incomplete"},
             isError=True,
         )
 
