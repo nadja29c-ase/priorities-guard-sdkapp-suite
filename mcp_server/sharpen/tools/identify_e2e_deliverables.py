@@ -22,7 +22,12 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed end-to-end deliverables for an initiative. Deliverables must be concrete outputs (things that exist), not activities. Returns an unordered set with no prioritization or sequencing. Requires confirmed initiative framing from Step 1 and confidence="high".
+DESCRIPTION = """Records confirmed end-to-end deliverables for an initiative. Deliverables must be concrete outputs (things that exist), not activities. Returns an unordered set with no prioritization or sequencing.
+
+CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- initiative_framing: confirmed WHO/WHAT/WHY/CONSTRAINT from prior steps
+- candidate_deliverables: 1-10 items, each with name (concrete output, not activity)
+- confidence: high (user confirmed all deliverables)
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.

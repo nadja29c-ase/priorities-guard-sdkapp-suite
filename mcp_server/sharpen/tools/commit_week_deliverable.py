@@ -22,7 +22,13 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-DESCRIPTION = """Records the user's deliverable (derived from focus deliverable) for the next seven days (week). This defines when they can stop working on the focus deliverable and feel the week was successful. Requires confirmed focus deliverable from select_focus_deliverable and confidence="high".
+DESCRIPTION = """Records the user's deliverable (derived from focus deliverable) for the next seven days (week). This defines when they can stop working on the focus deliverable and feel the week was successful.
+
+CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- initiative_framing: confirmed from prior steps
+- focus_deliverable: from select_focus_deliverable
+- weeks_deliverable: concrete, verifiable stopping line (user's exact words)
+- confidence: high (user confirmed the stopping line)
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.

@@ -23,7 +23,15 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records the user's focus deliverable after the realism/value evaluation loop has run. Requires deferred_deliverables (output of the loop) + either selection or sculpting from remaining deliverables. Requires confidence="high".
+DESCRIPTION = """Records the user's focus deliverable after the realism/value evaluation loop has run.
+
+CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- initiative_framing: confirmed from prior steps
+- confirmed_deliverables: from identify_e2e_deliverables
+- deferred_deliverables: list of deferred names (can be empty after explicit confirmation)
+- EITHER selected_deliverable_name (exact match from remaining)
+  OR sculpted_deliverable (with name + replaces list)
+- confidence: high (user confirmed focus selection)
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.

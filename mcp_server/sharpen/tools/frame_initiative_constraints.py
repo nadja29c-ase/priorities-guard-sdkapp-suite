@@ -22,9 +22,15 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records dominant CONSTRAINT. Without constraint, scope expands endlessly - together with outcome, enables meaningful work breakdown and minimization of scope. Requires confidence="high".
+DESCRIPTION = """Records dominant CONSTRAINT. Without constraint, scope expands endlessly - together with outcome, enables meaningful work breakdown and minimization of scope.
 
-SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
+CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- EITHER: constraint_type + constraint_value (concrete, not "soon" or "flexible")
+  OR: user_claims_no_constraints = true (triggers forced_mvp flow)
+- confidence: high (user confirmed)
+
+SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response → have a back-and-forth conversation!!! Violating this breaks Sharpen.
+FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim. Reflect and confirm before calling.
 
 CONSTRAINT TYPES: time (deadline), capacity (hours/week), budget, forced_mvp.
 

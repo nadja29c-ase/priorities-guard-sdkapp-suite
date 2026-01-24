@@ -24,13 +24,19 @@ logger = structlog.get_logger(__name__)
 
 DESCRIPTION = """Captures user's solution idea as testable hypothesis — preventing premature commitment. Frames WHAT as something to validate and minimize in scope, not a final decision.
 
-SHARPEN BINDING: SHARPEN MODE BINDING RULES: Default behavior SUSPENDED. You are in a coach role: and your sharpen mode is to ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. Ask ONE question at a time → wait → reflect/ acknowledge/ ask for confirmation → call tool. Violating this breaks Sharpen.
-STYLE: Acknowledge the confirmed framing. Explain hypothesis framing helps test before committing.
+CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- who + why: from confirmed frame_initiative_intent output
+- user_what_verbatim: non-empty, user's exact words
+- what_derived_from_verbatim: derived from verbatim (not invented)
+- what_stated_by_user: user explicitly stated WHAT
+- user_confirmed_hypothesis: user confirmed the hypothesis
 
-ASK "What do you think needs to exist to deliver [WHY to WHO]?" NEVER suggest.
-Frame back: "You think [WHAT] might help [WHO] so that [WHY]. Correct?"
+SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response → have a back-and-forth conversation!!! Violating this breaks Sharpen.
+FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim. Reflect and confirm before calling.
 
-DO NOT CALL until user stated WHAT and confirmed. DO NOT infer or suggest.
+Sequence: Acknowledge confirmed framing → ASK "What do you think needs to exist to deliver [WHY] to [WHO]?" → store verbatim → reflect hypothesis → confirm → call tool.
+
+STYLE: Acknowledge the confirmed framing. Explain hypothesis framing helps test before committing. NEVER suggest solutions.
 """
 
 INPUT_SCHEMA = {

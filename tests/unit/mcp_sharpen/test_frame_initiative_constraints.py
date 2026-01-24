@@ -306,8 +306,8 @@ class TestFrameInitiativeConstraintsHandler:
 
         instruction = result.structuredContent["assistant_guidance"]["instruction"]
         assert "Present the complete framing" in instruction
-        assert "Is this correct?" in instruction
-        assert "Stop and wait" in instruction
+        assert "confirm" in instruction.lower()  # asks for user confirmation
+        assert "stop and wait" in instruction.lower()
 
 
 # ============================================================================
@@ -333,19 +333,21 @@ class TestToolRegistration:
         assert tool.destructive_hint is False
         assert tool.open_world_hint is False
 
-    def test_tool_description_includes_example_conversation(self):
-        """Tool description includes EXAMPLE CONVERSATION."""
+    def test_tool_description_includes_call_preconditions(self):
+        """Tool description includes CALL PRECONDITIONS."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_constraints"]
-        assert "EXAMPLE CONVERSATION" in tool.description
+        assert "CALL PRECONDITIONS" in tool.description
 
-    def test_tool_description_includes_confidence_examples(self):
-        """Tool description includes CONFIDENCE EXAMPLES."""
+    def test_tool_description_includes_confidence_section(self):
+        """Tool description includes CONFIDENCE section with examples."""
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_constraints"]
-        assert "CONFIDENCE EXAMPLES" in tool.description
+        assert "CONFIDENCE:" in tool.description
+        assert "HIGH:" in tool.description
+        assert "LOW:" in tool.description
 
     def test_tool_description_includes_no_constraints_case(self):
         """Tool description mentions user_claims_no_constraints."""
