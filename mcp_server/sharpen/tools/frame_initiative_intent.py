@@ -22,21 +22,22 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records confirmed problem framing: WHO benefits and WHY (outcome derived from pain + observable).
+DESCRIPTION = """Records problem framing: WHO benefits and WHY (outcome derived from pain + observable).
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - who_stated_by_user: user explicitly stated WHO
 - user_pain_verbatim: non-empty, user's exact words
 - user_observable_verbatim: non-empty, user's exact words
 - why_reframed_from_observable: WHY incorporates observable
-- user_confirmed_framing: user explicitly confirmed
 
-SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. CRITICAL:Ask ONE question at a time → wait for user's response -> have a back-and-forth conversation!!! Violating this breaks Sharpen.
-FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim. Reflect and confirm before calling.
+NO CONFIRMATION YET — Do not ask "Correct?" after this step. Confirmation happens after constraints are captured (full framing confirmation).
 
-Sequence: WHO → PAIN → OBSERVABLE → reframe WHY → reflect and confirm → call tool.
+SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response → have a back-and-forth conversation!!! Violating this breaks Sharpen.
+FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim.
 
-STYLE: Briefly explain why each question matters. Acknowledge user's progress naturally.
+Sequence: WHO → PAIN → OBSERVABLE → reframe WHY → call tool → proceed to hypothesis (no confirmation).
+
+STYLE: Briefly explain why each question matters. Acknowledge user's progress naturally. Do NOT ask for confirmation yet.
 """
 
 INPUT_SCHEMA = {
@@ -66,10 +67,6 @@ INPUT_SCHEMA = {
             "type": "boolean",
             "description": "True ONLY if WHY incorporates the observable (not just the raw pain). False if observable was not asked or not used in WHY.",
         },
-        "user_confirmed_framing": {
-            "type": "boolean",
-            "description": "True ONLY if you reflected WHO + WHY back and user explicitly confirmed (e.g. 'yes', 'correct', 'that's right').",
-        },
     },
     "required": [
         "who",
@@ -78,7 +75,6 @@ INPUT_SCHEMA = {
         "why",
         "who_stated_by_user",
         "why_reframed_from_observable",
-        "user_confirmed_framing",
     ],
     "additionalProperties": False,
 }
@@ -97,7 +93,6 @@ class FrameIntentRequest(BaseModel):
     why: Optional[str] = None
     who_stated_by_user: Optional[bool] = None
     why_reframed_from_observable: Optional[bool] = None
-    user_confirmed_framing: Optional[bool] = None
 
 
 # ============================================================================
@@ -113,7 +108,6 @@ _LEGACY_GUIDANCE = {
         "- If pain not stated: Ask 'What's currently hard or frustrating for them?'\n"
         "- If observable not stated: Ask 'What would you see happening differently if this worked? Describe a concrete behavior or artifact — not a feeling or general improvement.'\n"
         "- If WHY not derived from observable: Reframe the user's observable into an outcome first.\n"
-        "- If not confirmed: Reflect WHO + WHY back and ask 'Correct?'\n"
         "Ask ONE question. Then stop and wait."
     ),
     "empty_pain_verbatim": (
@@ -139,15 +133,15 @@ _LEGACY_GUIDANCE = {
     "multiple_stakeholders": (
         "SHARPEN MODE STILL BINDING. "
         "Multiple stakeholders detected. Ask: 'Who benefits first and foremost?' "
-        "Then stop and wait. Frame confirmation as '[WHO] primarily benefits from this.'"
+        "Then stop and wait."
     ),
 }
 
-# Success guidance (still used — guidance on success is appropriate)
+# Success guidance — proceed to hypothesis without confirmation
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING. "
-    "Problem understanding confirmed with evidence. Now ask about the hypothesized solution:\n"
-    "'What do you think needs to exist to help with that?'\n"
+    "Problem framing captured. Proceed to hypothesis — do NOT ask for confirmation yet.\n"
+    "Ask: 'What do you think needs to exist to help with that?'\n"
     "Then stop and wait. Do not suggest solutions.\n\n"
     "When user answers → call frame_initiative_hypothesis with the WHAT."
 )
@@ -182,15 +176,13 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Extract provenance flags (default to False if None)
     who_stated = validated_request.who_stated_by_user or False
     why_reframed = validated_request.why_reframed_from_observable or False
-    user_confirmed = validated_request.user_confirmed_framing or False
     pain_verbatim = (validated_request.user_pain_verbatim or "").strip()
     observable_verbatim = (validated_request.user_observable_verbatim or "").strip()
 
-    # Provenance validation
+    # Provenance validation (no confirmation check — happens at constraints step)
     provenance_result = validate_intent_provenance(
         who_stated_by_user=who_stated,
         why_reframed_from_observable=why_reframed,
-        user_confirmed_framing=user_confirmed,
         user_pain_verbatim=pain_verbatim,
         user_observable_verbatim=observable_verbatim,
     )
@@ -207,7 +199,6 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "why": validated_request.why,
                 "who_stated_by_user": who_stated,
                 "why_reframed_from_observable": why_reframed,
-                "user_confirmed_framing": user_confirmed,
             },
         )
         return mcp_types.CallToolResult(
@@ -236,7 +227,6 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "why": validated_request.why,
                 "who_stated_by_user": who_stated,
                 "why_reframed_from_observable": why_reframed,
-                "user_confirmed_framing": user_confirmed,
             },
         )
         return mcp_types.CallToolResult(
@@ -256,7 +246,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Problem framing confirmed: {intent['who']} needs something so that {intent['why']}",
+            text=f"Problem framing captured: {intent['who']} needs something so that {intent['why']}",
         )],
         structuredContent={
             "framing_intent": intent,
@@ -265,9 +255,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "user_observable_verbatim": observable_verbatim,
                 "who_stated_by_user": True,
                 "why_reframed_from_observable": True,
-                "user_confirmed_framing": True,
             },
-            "confirmed": True,
+            "captured": True,  # Changed from "confirmed" — confirmation happens at constraints
             "assistant_guidance": {
                 "action": "PROCEED_TO_HYPOTHESIS",
                 "instruction": GUIDANCE_CONFIRMED,

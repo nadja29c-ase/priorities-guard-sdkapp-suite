@@ -22,20 +22,23 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records dominant CONSTRAINT. Without constraint, scope expands endlessly - together with outcome, enables meaningful work breakdown and minimization of scope.
+DESCRIPTION = """Records dominant CONSTRAINT and triggers FULL FRAMING CONFIRMATION (WHO + WHY + WHAT + CONSTRAINT).
+
+This is the FIRST confirmation point in Sharpen. After capturing constraint, reflect the complete framing back and ask: "Is this the right problem and direction?"
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- who, why, what: from prior steps (frame_initiative_intent + frame_initiative_hypothesis)
 - EITHER: constraint_type + constraint_value (concrete, not "soon" or "flexible")
   OR: user_claims_no_constraints = true (triggers forced_mvp flow)
-- confidence: high (user confirmed)
+- confidence: high
 
 SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response → have a back-and-forth conversation!!! Violating this breaks Sharpen.
-FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim. Reflect and confirm before calling.
+FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim.
 
 CONSTRAINT TYPES: time (deadline), capacity (hours/week), budget, forced_mvp.
 
 CONFIDENCE:
-HIGH: type="capacity" value="4 hours per week" — concrete, confirmed.
+HIGH: type="capacity" value="4 hours per week" — concrete.
 LOW: type="time" value="soon" — vague.
 
 If user claims no constraints → set user_claims_no_constraints=true."""
@@ -43,6 +46,18 @@ If user claims no constraints → set user_claims_no_constraints=true."""
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        "who": {
+            "type": "string",
+            "description": "WHO from frame_initiative_intent. Must match prior step output.",
+        },
+        "why": {
+            "type": "string",
+            "description": "WHY from frame_initiative_intent. Must match prior step output.",
+        },
+        "what": {
+            "type": "string",
+            "description": "WHAT from frame_initiative_hypothesis. Must match prior step output.",
+        },
         "constraint_type": {
             "type": "string",
             "enum": ["time", "capacity", "budget", "forced_mvp"],
@@ -59,10 +74,10 @@ INPUT_SCHEMA = {
         "confidence": {
             "type": "string",
             "enum": ["high", "medium", "low"],
-            "description": "Your confidence that CONSTRAINT is concrete and user-confirmed. Must be 'high' to proceed.",
+            "description": "Your confidence that CONSTRAINT is concrete. Must be 'high' to proceed.",
         },
     },
-    "required": ["confidence"],
+    "required": ["who", "why", "what", "confidence"],
     "additionalProperties": False,
 }
 
@@ -74,6 +89,9 @@ INPUT_SCHEMA = {
 
 class FrameConstraintsRequest(BaseModel):
     """Expected input structure from ChatGPT."""
+    who: Optional[str] = None
+    why: Optional[str] = None
+    what: Optional[str] = None
     constraint_type: Optional[Literal["time", "capacity", "budget", "forced_mvp"]] = None
     constraint_value: Optional[str] = None
     user_claims_no_constraints: bool = False
@@ -104,18 +122,23 @@ GUIDANCE_MISSING_FIELDS = (
 
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING. "
-    "Present the complete framing using the user's exact words and ask for confirmation:"
-    "Explain what was achieved so far and how is this useful. "
-    "If user confirms → ask: 'What needs to exist for this initiative to be done? Don't filter — just name everything.' "
+    "FULL FRAMING CONFIRMATION — This is the first of 3 confirmations.\n\n"
+    "Present the complete framing back to user:\n"
+    "\"Here's what we've established:\n"
+    "- WHO: [who]\n"
+    "- WHY: [why]\n"
+    "- WHAT: [what]\n"
+    "- CONSTRAINT: [constraint_type] — [constraint_value]\n\n"
+    "Is this the right problem and direction?\"\n\n"
+    "If user confirms → ask: 'What needs to exist for this initiative to be done? Don't filter — just name everything.'\n"
     "Then stop and wait. When user answers → call identify_e2e_deliverables with framing + deliverables.\n"
-    "If user corrects → update the framing and re-confirm.\n\n"
+    "If user corrects → update the specific field and re-confirm.\n\n"
     "MODE ACTIVATION:\n"
     "From this point on, treat the initiative framing as fixed.\n"
     "For all subsequent questions and scope decisions:\n"
     "- Always evaluate against the constraint ([constraint_type]: [constraint_value]).\n"
     "- Prefer the smallest scope that still advances the WHY.\n"
-    "- If nothing fits the constraint, prompt the user to consider a simpler approach/ solution that fulfills the WHY.\n"
-    "Apply this evaluation whenever scope is stated or implied — even if intermediate tools are skipped.\n"
+    "- If nothing fits the constraint, prompt the user to consider a simpler approach that fulfills the WHY.\n"
 )
 
 
@@ -202,25 +225,36 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Valid — return confirmed constraint framing
-    framing = result["constraint_framing"]
+    # Valid — return complete initiative framing for confirmation
+    constraint_framing = result["constraint_framing"]
+
+    # Build complete initiative framing
+    initiative_framing = {
+        "who": (validated_request.who or "").strip(),
+        "why": (validated_request.why or "").strip(),
+        "what": (validated_request.what or "").strip(),
+        "constraint_type": constraint_framing["constraint_type"],
+        "constraint_value": constraint_framing["constraint_value"],
+    }
 
     logger.info("frame_initiative_constraints.complete",
-                constraint_type=framing["constraint_type"],
-                constraint_value=framing["constraint_value"][:50],
+                who=initiative_framing["who"][:30],
+                what=initiative_framing["what"][:30],
+                constraint_type=initiative_framing["constraint_type"],
+                constraint_value=initiative_framing["constraint_value"][:50],
                 confidence="high")
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Constraint confirmed: {framing['constraint_type']} — {framing['constraint_value']}.",
+            text=f"Framing complete. Now confirm with user: WHO={initiative_framing['who']}, WHAT={initiative_framing['what']}, CONSTRAINT={initiative_framing['constraint_type']}.",
         )],
         structuredContent={
-            "constraint_framing": framing,
+            "initiative_framing": initiative_framing,
             "confidence": "high",
-            "confirmed": True,
+            "ready_for_confirmation": True,  # Signals this needs user confirmation
             "assistant_guidance": {
-                "action": "CONFIRM_FRAMING",
+                "action": "CONFIRM_FULL_FRAMING",
                 "instruction": GUIDANCE_CONFIRMED,
             },
         },

@@ -183,7 +183,6 @@ class TestValidateIntentProvenance:
         result = validate_intent_provenance(
             who_stated_by_user=True,
             why_reframed_from_observable=True,
-            user_confirmed_framing=True,
             user_pain_verbatim="They feel disoriented and blocked",
             user_observable_verbatim="They'd find docs and submit first PR within 2 weeks",
         )
@@ -196,7 +195,6 @@ class TestValidateIntentProvenance:
         result = validate_intent_provenance(
             who_stated_by_user=True,
             why_reframed_from_observable=True,
-            user_confirmed_framing=True,
             user_pain_verbatim="",
             user_observable_verbatim="They'd find docs",
         )
@@ -209,7 +207,6 @@ class TestValidateIntentProvenance:
         result = validate_intent_provenance(
             who_stated_by_user=True,
             why_reframed_from_observable=True,
-            user_confirmed_framing=True,
             user_pain_verbatim="They feel blocked",
             user_observable_verbatim="",
         )
@@ -222,7 +219,6 @@ class TestValidateIntentProvenance:
         result = validate_intent_provenance(
             who_stated_by_user=False,
             why_reframed_from_observable=True,
-            user_confirmed_framing=True,
             user_pain_verbatim="Some pain",
             user_observable_verbatim="Some observable",
         )
@@ -235,7 +231,6 @@ class TestValidateIntentProvenance:
         result = validate_intent_provenance(
             who_stated_by_user=True,
             why_reframed_from_observable=False,
-            user_confirmed_framing=True,
             user_pain_verbatim="Some pain",
             user_observable_verbatim="Some observable",
         )
@@ -243,38 +238,23 @@ class TestValidateIntentProvenance:
         assert result["valid"] is False
         assert "why_reframed_from_observable" in result["failed_checks"]
 
-    def test_not_confirmed_rejects(self):
-        """user_confirmed_framing=False is rejected."""
-        result = validate_intent_provenance(
-            who_stated_by_user=True,
-            why_reframed_from_observable=True,
-            user_confirmed_framing=False,
-            user_pain_verbatim="Some pain",
-            user_observable_verbatim="Some observable",
-        )
-
-        assert result["valid"] is False
-        assert "user_confirmed_framing" in result["failed_checks"]
-
     def test_multiple_failures_lists_all(self):
         """Multiple failed checks are all listed."""
         result = validate_intent_provenance(
             who_stated_by_user=False,
             why_reframed_from_observable=False,
-            user_confirmed_framing=False,
             user_pain_verbatim="Some pain",
             user_observable_verbatim="Some observable",
         )
 
         assert result["valid"] is False
-        assert len(result["failed_checks"]) == 3
+        assert len(result["failed_checks"]) == 2
 
     def test_whitespace_only_pain_verbatim_rejects(self):
         """Whitespace-only pain verbatim is treated as empty."""
         result = validate_intent_provenance(
             who_stated_by_user=True,
             why_reframed_from_observable=True,
-            user_confirmed_framing=True,
             user_pain_verbatim="   ",
             user_observable_verbatim="Some observable",
         )
@@ -287,7 +267,6 @@ class TestValidateIntentProvenance:
         result = validate_intent_provenance(
             who_stated_by_user=True,
             why_reframed_from_observable=True,
-            user_confirmed_framing=True,
             user_pain_verbatim="Some pain",
             user_observable_verbatim="   ",
         )
@@ -300,7 +279,6 @@ class TestValidateIntentProvenance:
         result = validate_intent_provenance(
             who_stated_by_user=True,
             why_reframed_from_observable=True,
-            user_confirmed_framing=True,
             user_pain_verbatim="",
             user_observable_verbatim="",
         )
@@ -318,8 +296,8 @@ class TestFrameInitiativeIntentHandler:
     """Tests for the MCP tool handler with provenance."""
 
     @pytest.mark.asyncio
-    async def test_valid_input_returns_confirmed_true(self):
-        """Valid input with provenance returns confirmed=True."""
+    async def test_valid_input_returns_captured_true(self):
+        """Valid input with provenance returns captured=True."""
         arguments = {
             "who": "My team",
             "user_pain_verbatim": "They waste time searching for info",
@@ -327,14 +305,13 @@ class TestFrameInitiativeIntentHandler:
             "why": "So they can find information quickly",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
 
         assert result.isError is not True
         assert result.structuredContent is not None
-        assert result.structuredContent["confirmed"] is True
+        assert result.structuredContent["captured"] is True
 
     @pytest.mark.asyncio
     async def test_valid_input_includes_framing_intent(self):
@@ -346,7 +323,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "To find docs easily",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -366,7 +342,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "So they can navigate independently",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -377,7 +352,6 @@ class TestFrameInitiativeIntentHandler:
         assert provenance["user_observable_verbatim"] == "They'd navigate independently"
         assert provenance["who_stated_by_user"] is True
         assert provenance["why_reframed_from_observable"] is True
-        assert provenance["user_confirmed_framing"] is True
 
     @pytest.mark.asyncio
     async def test_multiple_stakeholders_returns_incomplete(self):
@@ -389,7 +363,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "To communicate better",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
         result = await handle(arguments)
 
@@ -406,7 +379,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "To be faster",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -424,7 +396,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -442,7 +413,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "To succeed",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -461,7 +431,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "To fix it",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -481,13 +450,12 @@ class TestFrameInitiativeIntentHandler:
             "why": "To save time",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
 
         assert len(result.content) == 1
-        assert "Problem framing confirmed" in result.content[0].text
+        assert "Problem framing captured" in result.content[0].text
         assert "My team" in result.content[0].text
 
     @pytest.mark.asyncio
@@ -500,7 +468,6 @@ class TestFrameInitiativeIntentHandler:
             "why": "So they can find answers without interrupting others",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -522,13 +489,12 @@ class TestFrameIntentHandlerProvenance:
             "why": "So they can find documentation independently and ship their first PR within 2 weeks",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
 
         assert result.isError is not True
-        assert result.structuredContent["confirmed"] is True
+        assert result.structuredContent["captured"] is True
         assert "provenance" in result.structuredContent
 
     @pytest.mark.asyncio
@@ -541,7 +507,6 @@ class TestFrameIntentHandlerProvenance:
             "why": "So they can work independently",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -559,7 +524,6 @@ class TestFrameIntentHandlerProvenance:
             "why": "So they can navigate independently",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -580,25 +544,6 @@ class TestFrameIntentHandlerProvenance:
             "why": "So they feel unblocked",  # This is from pain, not observable
             "who_stated_by_user": True,
             "why_reframed_from_observable": False,
-            "user_confirmed_framing": True,
-        }
-
-        result = await handle(arguments)
-
-        assert result.isError is True
-        assert result.structuredContent == {"status": "incomplete"}
-
-    @pytest.mark.asyncio
-    async def test_provenance_false_returns_incomplete(self):
-        """Any provenance flag False returns zero-info error."""
-        arguments = {
-            "who": "New engineering hires",
-            "user_pain_verbatim": "Some pain",
-            "user_observable_verbatim": "Some observable",
-            "why": "So they can do something",
-            "who_stated_by_user": True,
-            "why_reframed_from_observable": True,
-            "user_confirmed_framing": False,  # Not confirmed!
         }
 
         result = await handle(arguments)
@@ -616,7 +561,6 @@ class TestFrameIntentHandlerProvenance:
             "why": "So they can do something",
             "who_stated_by_user": True,
             "why_reframed_from_observable": True,
-            "user_confirmed_framing": True,
         }
 
         result = await handle(arguments)
@@ -634,7 +578,6 @@ class TestFrameIntentHandlerProvenance:
             "why": "For reasons",
             "who_stated_by_user": False,
             "why_reframed_from_observable": False,
-            "user_confirmed_framing": False,
         }
 
         result = await handle(arguments)
@@ -698,6 +641,6 @@ class TestToolRegistration:
         assert "user_observable_verbatim" in schema["properties"]
         assert "who_stated_by_user" in schema["properties"]
         assert "why_reframed_from_observable" in schema["properties"]
-        assert "user_confirmed_framing" in schema["properties"]
+        assert "user_confirmed_framing" not in schema["properties"]  # Removed in confirmation consolidation!
         assert "confidence" not in schema["properties"]  # Removed!
         assert "why_reframed_from_pain" not in schema["properties"]  # Renamed!

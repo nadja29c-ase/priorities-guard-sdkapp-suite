@@ -25,20 +25,21 @@ logger = structlog.get_logger(__name__)
 DESCRIPTION = """Captures user's solution idea as testable hypothesis — preventing premature commitment. Frames WHAT as something to validate and minimize in scope, not a final decision.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- who + why: from confirmed frame_initiative_intent output
+- who + why: from frame_initiative_intent output
 - user_what_verbatim: non-empty, user's exact words
 - what_derived_from_verbatim: derived from verbatim (not invented)
 - what_stated_by_user: user explicitly stated WHAT
-- user_confirmed_hypothesis: user confirmed the hypothesis
+
+NO CONFIRMATION YET — Do not ask "Correct?" after this step. Confirmation happens after constraints are captured (full framing confirmation).
 
 SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response → have a back-and-forth conversation!!! Violating this breaks Sharpen.
-FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim. Reflect and confirm before calling.
+FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim.
 
-Sequence: Acknowledge confirmed framing → ASK "What do you think needs to exist to deliver [WHY] to [WHO]?" → store verbatim → reflect hypothesis → confirm → call tool.
+Sequence: ASK "What do you think needs to exist to deliver [WHY] to [WHO]?" → store verbatim → call tool → proceed to constraints (no confirmation).
 
 CATEGORY PUSHBACK: If user's WHAT is a category (e.g., "a system," "a platform," "an app," "an AI system") rather than a specific solution, push back: "That's a category. What's the first concrete thing that would need to exist?"
 
-STYLE: Acknowledge the confirmed framing. Explain hypothesis framing helps test before committing. NEVER suggest solutions.
+STYLE: Acknowledge progress naturally. NEVER suggest solutions. Do NOT ask for confirmation yet.
 """
 
 INPUT_SCHEMA = {
@@ -64,10 +65,6 @@ INPUT_SCHEMA = {
             "type": "boolean",
             "description": "True ONLY if user explicitly stated WHAT in their own words. False if you inferred, generalized, or suggested it.",
         },
-        "user_confirmed_hypothesis": {
-            "type": "boolean",
-            "description": "True ONLY if you reflected the hypothesis back and user explicitly confirmed (e.g. 'yes', 'correct', 'that's right').",
-        },
     },
     "required": [
         "who",
@@ -75,7 +72,6 @@ INPUT_SCHEMA = {
         "user_what_verbatim",
         "what_derived_from_verbatim",
         "what_stated_by_user",
-        "user_confirmed_hypothesis",
     ],
     "additionalProperties": False,
 }
@@ -93,7 +89,6 @@ class FrameHypothesisRequest(BaseModel):
     user_what_verbatim: Optional[str] = None
     what_derived_from_verbatim: Optional[str] = None
     what_stated_by_user: Optional[bool] = None
-    user_confirmed_hypothesis: Optional[bool] = None
 
 
 # ============================================================================
@@ -104,7 +99,6 @@ GUIDANCE_PROVENANCE_FAILED = (
     "SHARPEN MODE STILL BINDING. "
     "Provenance check failed. You must have evidence from the user before calling this tool.\n"
     "- If WHAT not stated: Ask 'What do you think needs to exist to help with that?'\n"
-    "- If not confirmed: Reflect the hypothesis back and ask 'Correct?'\n"
     "Ask ONE question. Then stop and wait. Do not suggest solutions."
 )
 
@@ -117,7 +111,7 @@ GUIDANCE_EMPTY_VERBATIM = (
 
 GUIDANCE_MISSING_PRIOR_STEP = (
     "SHARPEN MODE STILL BINDING. "
-    "Cannot record hypothesis without confirmed problem understanding. "
+    "Cannot record hypothesis without problem framing. "
     "Complete frame_initiative_intent first to establish WHO + WHY."
 )
 
@@ -127,12 +121,13 @@ GUIDANCE_MISSING_WHAT = (
     "Then stop and wait. Do not suggest solutions."
 )
 
+# Success guidance — proceed to constraints without confirmation
 GUIDANCE_CONFIRMED = (
     "SHARPEN MODE STILL BINDING. "
-    "Hypothesis recorded. Now establish constraints.\n"
-    "Ask: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?' "
+    "Hypothesis captured. Proceed to constraints — do NOT ask for confirmation yet.\n"
+    "Ask: 'What's the one constraint that limits this most — a deadline, limited hours, or a budget cap?'\n"
     "Then stop and wait. Do not suggest constraints.\n\n"
-    "When user answers → call frame_initiative_constraints."
+    "When user answers → call frame_initiative_constraints with WHO, WHY, WHAT, and constraint."
 )
 
 
@@ -159,13 +154,11 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     # Extract provenance flags (default to False if None)
     what_stated = validated_request.what_stated_by_user or False
-    user_confirmed = validated_request.user_confirmed_hypothesis or False
     what_verbatim = (validated_request.user_what_verbatim or "").strip()
 
-    # Provenance validation
+    # Provenance validation (no confirmation check — happens at constraints step)
     provenance_result = validate_hypothesis_provenance(
         what_stated_by_user=what_stated,
-        user_confirmed_hypothesis=user_confirmed,
         user_what_verbatim=what_verbatim,
     )
 
@@ -247,16 +240,15 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Hypothesis confirmed: {framing['who']} needs {framing['what']} so that {framing['why']}",
+            text=f"Hypothesis captured: {framing['who']} needs {framing['what']} so that {framing['why']}",
         )],
         structuredContent={
             "framing_intent": framing,
             "provenance": {
                 "user_what_verbatim": what_verbatim,
                 "what_stated_by_user": True,
-                "user_confirmed_hypothesis": True,
             },
-            "confirmed": True,
+            "captured": True,  # Changed from "confirmed" — confirmation happens at constraints
             "assistant_guidance": {
                 "action": "PROCEED_TO_CONSTRAINTS",
                 "instruction": GUIDANCE_CONFIRMED,

@@ -76,17 +76,17 @@ CONFIDENCE EXAMPLES:
 
 CRITICAL: Your role is to facilitate and find the deliverables by asking the user questions. NEVER suggest deliverables. NEVER tell the user what should exist. Elicit the list iteratively — ask ONE question at a time and wait for the user's response.
 
+COMPLETENESS CONFIRMATION — This is the SECOND of 3 confirmations.
+After user lists deliverables, ask ONCE: "Anything else that needs to exist?"
+If no → proceed. Do NOT re-confirm the list with "Correct?"
+
 EXAMPLE CONVERSATION:
-  User: [Step 1 framing confirmed]
-  You: "What needs to exist for this initiative to be done? Don't filter — just name everything that comes to mind."
+  User: [Full framing already confirmed]
+  You: "What needs to exist for this initiative to be done? Don't filter — just name everything."
   User: "I need to build an API, write docs, and set up authentication"
-  You: "So we have: Deployed API, API documentation, Authentication system. Correct?"
-  User: "Yes"
-  You: "Anything else that needs to exist?"
-  User: "No, that's the core"
-  You: "To confirm: these three deliverables must exist for the initiative to be done. Correct?"
-  User: "Yes"
-  → Now call identify_e2e_deliverables with candidate_deliverables=[...], confidence="high"
+  You: "So we have: Deployed API, API documentation, Authentication system. Anything else?"
+  User: "No, that's it"
+  → Call identify_e2e_deliverables with candidate_deliverables=[...], confidence="high"
 """
 
 INPUT_SCHEMA = {

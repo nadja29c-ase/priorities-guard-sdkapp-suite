@@ -113,7 +113,6 @@ class TestValidateHypothesisProvenance:
 
         result = validate_hypothesis_provenance(
             what_stated_by_user=True,
-            user_confirmed_hypothesis=True,
             user_what_verbatim="A checklist they can follow",
         )
 
@@ -126,7 +125,6 @@ class TestValidateHypothesisProvenance:
 
         result = validate_hypothesis_provenance(
             what_stated_by_user=True,
-            user_confirmed_hypothesis=True,
             user_what_verbatim="",
         )
 
@@ -139,38 +137,23 @@ class TestValidateHypothesisProvenance:
 
         result = validate_hypothesis_provenance(
             what_stated_by_user=False,
-            user_confirmed_hypothesis=True,
             user_what_verbatim="Some what",
         )
 
         assert result["valid"] is False
         assert "what_stated_by_user" in result["failed_checks"]
 
-    def test_not_confirmed_rejects(self):
-        """user_confirmed_hypothesis=False is rejected."""
-        from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
-
-        result = validate_hypothesis_provenance(
-            what_stated_by_user=True,
-            user_confirmed_hypothesis=False,
-            user_what_verbatim="Some what",
-        )
-
-        assert result["valid"] is False
-        assert "user_confirmed_hypothesis" in result["failed_checks"]
-
-    def test_multiple_failures_lists_all(self):
-        """Multiple failed checks are all listed."""
+    def test_what_not_stated_rejected(self):
+        """what_stated_by_user=False is rejected."""
         from mcp_server.sharpen.tool_logic import validate_hypothesis_provenance
 
         result = validate_hypothesis_provenance(
             what_stated_by_user=False,
-            user_confirmed_hypothesis=False,
             user_what_verbatim="Some what",
         )
 
         assert result["valid"] is False
-        assert len(result["failed_checks"]) == 2
+        assert "what_stated_by_user" in result["failed_checks"]
 
     def test_whitespace_only_verbatim_rejects(self):
         """Whitespace-only verbatim is treated as empty."""
@@ -178,7 +161,6 @@ class TestValidateHypothesisProvenance:
 
         result = validate_hypothesis_provenance(
             what_stated_by_user=True,
-            user_confirmed_hypothesis=True,
             user_what_verbatim="   ",
         )
 
@@ -198,25 +180,23 @@ class TestFrameHypothesisHandlerProvenance:
             "user_what_verbatim": "A checklist they can follow in their first week",
             "what_derived_from_verbatim": "A first-week checklist",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
 
         assert result.isError is not True
-        assert result.structuredContent["confirmed"] is True
+        assert result.structuredContent["captured"] is True
         assert "provenance" in result.structuredContent
 
     @pytest.mark.asyncio
     async def test_provenance_false_rejects(self):
-        """Any provenance flag False is rejected."""
+        """what_stated_by_user=False is rejected."""
         arguments = {
             "who": "New engineering hires",
             "why": "So they can contribute",
             "user_what_verbatim": "Some solution",
             "what_derived_from_verbatim": "A solution",
-            "what_stated_by_user": True,
-            "user_confirmed_hypothesis": False,
+            "what_stated_by_user": False,
         }
 
         result = await handle(arguments)
@@ -233,7 +213,6 @@ class TestFrameHypothesisHandlerProvenance:
             "user_what_verbatim": "",
             "what_derived_from_verbatim": "A solution",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -250,7 +229,6 @@ class TestFrameHypothesisHandlerProvenance:
             "user_what_verbatim": "Something",
             "what_derived_from_verbatim": "A thing",
             "what_stated_by_user": False,
-            "user_confirmed_hypothesis": False,
         }
 
         result = await handle(arguments)
@@ -268,7 +246,6 @@ class TestFrameHypothesisHandlerProvenance:
             "user_what_verbatim": "",
             "what_derived_from_verbatim": "Something",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -285,7 +262,6 @@ class TestFrameHypothesisHandlerProvenance:
             "user_what_verbatim": "What",
             "what_derived_from_verbatim": "Thing",
             "what_stated_by_user": False,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -302,7 +278,6 @@ class TestFrameHypothesisHandlerProvenance:
             "user_what_verbatim": "An onboarding guide",
             "what_derived_from_verbatim": "An onboarding guide",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -311,7 +286,6 @@ class TestFrameHypothesisHandlerProvenance:
         provenance = result.structuredContent["provenance"]
         assert provenance["user_what_verbatim"] == "An onboarding guide"
         assert provenance["what_stated_by_user"] is True
-        assert provenance["user_confirmed_hypothesis"] is True
 
 
 class TestFrameHypothesisHandler:
@@ -326,13 +300,12 @@ class TestFrameHypothesisHandler:
             "user_what_verbatim": "A first-week checklist",
             "what_derived_from_verbatim": "A first-week checklist",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
 
         assert result.isError is not True
-        assert result.structuredContent["confirmed"] is True
+        assert result.structuredContent["captured"] is True
         assert result.structuredContent["assistant_guidance"]["action"] == "PROCEED_TO_CONSTRAINTS"
 
     @pytest.mark.asyncio
@@ -344,7 +317,6 @@ class TestFrameHypothesisHandler:
             "user_what_verbatim": "A checklist",
             "what_derived_from_verbatim": "A checklist",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -362,7 +334,6 @@ class TestFrameHypothesisHandler:
             "user_what_verbatim": "Something",
             "what_derived_from_verbatim": "",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -380,7 +351,6 @@ class TestFrameHypothesisHandler:
             "user_what_verbatim": "A first-week checklist",
             "what_derived_from_verbatim": "A first-week checklist",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
@@ -399,13 +369,12 @@ class TestFrameHypothesisHandler:
             "user_what_verbatim": "A checklist",
             "what_derived_from_verbatim": "A checklist",
             "what_stated_by_user": True,
-            "user_confirmed_hypothesis": True,
         }
 
         result = await handle(arguments)
 
         assert len(result.content) == 1
-        assert "Hypothesis confirmed" in result.content[0].text
+        assert "Hypothesis captured" in result.content[0].text
         assert "New engineering hires" in result.content[0].text
         assert "A checklist" in result.content[0].text
 

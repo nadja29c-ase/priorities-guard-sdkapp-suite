@@ -28,10 +28,12 @@ DESCRIPTION = """Records the user's focus deliverable after the realism/value ev
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - initiative_framing: confirmed from prior steps
 - confirmed_deliverables: from identify_e2e_deliverables
-- deferred_deliverables: list of deferred names (can be empty after explicit confirmation)
+- deferred_deliverables: list of deferred names (can be empty if user confirms none need deferring)
 - EITHER selected_deliverable_name (exact match from remaining)
   OR sculpted_deliverable (with name + replaces list)
-- confidence: high (user confirmed focus selection)
+- confidence: high
+
+NO CONFIRMATION — Do not ask "Correct?" after selection. Just proceed to commit_week_deliverable.
 
 SHARPEN MODE — BINDING RULES (not guidelines)
 When user selects Sharpen, your default assistant behavior is SUSPENDED.
@@ -86,16 +88,13 @@ EXAMPLE CONVERSATION (with deferrals):
   User: "No, tests would take too long"
   You: "So 'Tests' is deferred. Between 'API' and 'Docs', which ONE must exist first to deliver value to [who]?"
   User: "API — docs can come later"
-  You: "Focus is 'API'. Deferred: 'Tests', 'Docs'. Correct?"
-  User: "Yes"
   → Call with deferred_deliverables=["Tests", "Docs"], selected_deliverable_name="API", confidence="high"
 
 EXAMPLE CONVERSATION (auto-select after deferrals):
   [After identify_e2e_deliverables confirmed: "Checklist", "RASCI doc", "Buddy program"]
   You: "Given 3 hours/week, can all three realistically be completed?"
   User: "No way — just the checklist maybe"
-  You: "So 'RASCI doc' and 'Buddy program' are deferred. That leaves 'Checklist' as the only remaining deliverable — it becomes the focus. Correct?"
-  User: "Yes"
+  You: "So 'RASCI doc' and 'Buddy program' are deferred. 'Checklist' is the focus."
   → Call with deferred_deliverables=["RASCI doc", "Buddy program"], selected_deliverable_name="Checklist", confidence="high"
 
 EXAMPLE CONVERSATION (all realistic — explicit confirmation):

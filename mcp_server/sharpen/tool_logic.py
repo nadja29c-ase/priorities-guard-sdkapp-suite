@@ -169,21 +169,20 @@ def validate_initiative_intent(
 def validate_intent_provenance(
     who_stated_by_user: bool,
     why_reframed_from_observable: bool,
-    user_confirmed_framing: bool,
     user_pain_verbatim: str,
     user_observable_verbatim: str,
 ) -> dict[str, Any]:
     """
     Validate provenance evidence for frame_initiative_intent.
 
-    All three booleans must be True AND both verbatim fields must be non-empty.
+    Both booleans must be True AND both verbatim fields must be non-empty.
+    No confirmation check — confirmation happens later at constraints step.
 
     Applies defensive normalization to verbatim fields (strips whitespace).
 
     Args:
         who_stated_by_user: Did user explicitly state WHO?
         why_reframed_from_observable: Is WHY derived from the observable (not raw pain)?
-        user_confirmed_framing: Did user explicitly confirm the framing?
         user_pain_verbatim: User's exact words describing the pain
         user_observable_verbatim: User's exact words describing what would be different
 
@@ -218,8 +217,6 @@ def validate_intent_provenance(
         failed_checks.append("who_stated_by_user")
     if not why_reframed_from_observable:
         failed_checks.append("why_reframed_from_observable")
-    if not user_confirmed_framing:
-        failed_checks.append("user_confirmed_framing")
 
     if failed_checks:
         return {
@@ -239,19 +236,18 @@ def validate_intent_provenance(
 
 def validate_hypothesis_provenance(
     what_stated_by_user: bool,
-    user_confirmed_hypothesis: bool,
     user_what_verbatim: str,
 ) -> dict[str, Any]:
     """
     Validate provenance evidence for frame_initiative_hypothesis.
 
-    Both booleans must be True AND verbatim must be non-empty.
+    Boolean must be True AND verbatim must be non-empty.
+    No confirmation check — confirmation happens later at constraints step.
 
     Applies defensive normalization to user_what_verbatim (strips whitespace).
 
     Args:
         what_stated_by_user: Did user explicitly state WHAT?
-        user_confirmed_hypothesis: Did user explicitly confirm the hypothesis?
         user_what_verbatim: User's exact words describing the hypothesis
 
     Returns:
@@ -259,8 +255,6 @@ def validate_hypothesis_provenance(
     """
     # Defensive normalization
     user_what_verbatim = (user_what_verbatim or "").strip()
-
-    failed_checks = []
 
     # Verbatim is required — WHAT must exist before calling this tool
     if not user_what_verbatim:
@@ -272,16 +266,11 @@ def validate_hypothesis_provenance(
         }
 
     if not what_stated_by_user:
-        failed_checks.append("what_stated_by_user")
-    if not user_confirmed_hypothesis:
-        failed_checks.append("user_confirmed_hypothesis")
-
-    if failed_checks:
         return {
             "valid": False,
             "error_type": "provenance_failed",
-            "error_details": f"Provenance checks failed: {', '.join(failed_checks)}. Get evidence from user first.",
-            "failed_checks": failed_checks,
+            "error_details": "Provenance check failed: what_stated_by_user. Get evidence from user first.",
+            "failed_checks": ["what_stated_by_user"],
         }
 
     return {

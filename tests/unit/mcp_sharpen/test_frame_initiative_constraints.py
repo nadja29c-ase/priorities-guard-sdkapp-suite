@@ -123,9 +123,12 @@ class TestFrameInitiativeConstraintsHandler:
     """Tests for the MCP tool handler."""
 
     @pytest.mark.asyncio
-    async def test_valid_input_returns_confirmed_true(self):
-        """Valid input with high confidence returns confirmed=True."""
+    async def test_valid_input_returns_ready_for_confirmation(self):
+        """Valid input with high confidence returns ready_for_confirmation=True."""
         arguments = {
+            "who": "new hires",
+            "why": "onboard faster",
+            "what": "onboarding checklist",
             "constraint_type": "time",
             "constraint_value": "by end of Q1",
             "confidence": "high",
@@ -134,12 +137,15 @@ class TestFrameInitiativeConstraintsHandler:
         result = await handle(arguments)
 
         assert result.isError is not True
-        assert result.structuredContent["confirmed"] is True
+        assert result.structuredContent["ready_for_confirmation"] is True
 
     @pytest.mark.asyncio
-    async def test_valid_input_includes_constraint_framing(self):
-        """Valid input includes constraint_framing in structuredContent."""
+    async def test_valid_input_includes_initiative_framing(self):
+        """Valid input includes initiative_framing in structuredContent."""
         arguments = {
+            "who": "new hires",
+            "why": "onboard faster",
+            "what": "onboarding checklist",
             "constraint_type": "capacity",
             "constraint_value": "4 hours per week",
             "confidence": "high",
@@ -147,14 +153,19 @@ class TestFrameInitiativeConstraintsHandler:
 
         result = await handle(arguments)
 
-        assert "constraint_framing" in result.structuredContent
-        framing = result.structuredContent["constraint_framing"]
+        assert "initiative_framing" in result.structuredContent
+        framing = result.structuredContent["initiative_framing"]
         assert framing["constraint_type"] == "capacity"
+        assert framing["who"] == "new hires"
+        assert framing["what"] == "onboarding checklist"
 
     @pytest.mark.asyncio
     async def test_low_confidence_rejected(self):
         """Low confidence is rejected with error."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "confidence": "low",
@@ -170,6 +181,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_medium_confidence_rejected(self):
         """Medium confidence is rejected with error."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "confidence": "medium",
@@ -184,6 +198,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_force_constraint_bypasses_confidence_check(self):
         """user_claims_no_constraints bypasses confidence check."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "user_claims_no_constraints": True,
             "confidence": "low",  # Even with low confidence, force_constraint works
         }
@@ -197,6 +214,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_missing_constraint_fields_returns_error(self):
         """Missing constraint fields returns isError=True with missing list."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "",
             "confidence": "high",
@@ -212,6 +232,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_missing_fields_includes_partial_framing(self):
         """Missing fields response includes partial constraint_framing."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "",
             "confidence": "high",
@@ -227,6 +250,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_guidance_instruction_present(self):
         """assistant_guidance with instruction is always present."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "by end of Q1",
             "confidence": "high",
@@ -241,7 +267,11 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_guidance_instruction_for_force_constraint(self):
         """Guidance instruction for force_constraint enforces facilitator role."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "user_claims_no_constraints": True,
+            "confidence": "high",
         }
 
         result = await handle(arguments)
@@ -254,6 +284,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_guidance_instruction_for_missing_fields(self):
         """Guidance instruction for missing fields enforces facilitator role."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "",
             "confidence": "high",
@@ -270,6 +303,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_text_content_for_valid_input(self):
         """Valid input returns human-readable text content."""
         arguments = {
+            "who": "new hires",
+            "why": "onboard faster",
+            "what": "onboarding checklist",
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "confidence": "high",
@@ -278,12 +314,15 @@ class TestFrameInitiativeConstraintsHandler:
         result = await handle(arguments)
 
         assert len(result.content) == 1
-        assert "Constraint confirmed" in result.content[0].text
+        assert "Framing complete" in result.content[0].text
 
     @pytest.mark.asyncio
     async def test_high_confidence_in_response(self):
         """High confidence is included in response structuredContent."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "confidence": "high",
@@ -297,6 +336,9 @@ class TestFrameInitiativeConstraintsHandler:
     async def test_success_guidance_presents_complete_framing(self):
         """Success guidance instructs LLM to present complete framing."""
         arguments = {
+            "who": "team",
+            "why": "efficiency",
+            "what": "system",
             "constraint_type": "time",
             "constraint_value": "by Friday",
             "confidence": "high",
