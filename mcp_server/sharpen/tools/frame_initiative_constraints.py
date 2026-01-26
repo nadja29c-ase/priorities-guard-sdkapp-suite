@@ -89,9 +89,9 @@ INPUT_SCHEMA = {
 
 class FrameConstraintsRequest(BaseModel):
     """Expected input structure from ChatGPT."""
-    who: Optional[str] = None
-    why: Optional[str] = None
-    what: Optional[str] = None
+    who: str
+    why: str
+    what: str
     constraint_type: Optional[Literal["time", "capacity", "budget", "forced_mvp"]] = None
     constraint_value: Optional[str] = None
     user_claims_no_constraints: bool = False
@@ -163,6 +163,31 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
+    # Validate prior step outputs are non-empty
+    prior_step_fields = {
+        "who": validated_request.who.strip(),
+        "why": validated_request.why.strip(),
+        "what": validated_request.what.strip(),
+    }
+    empty_fields = [k for k, v in prior_step_fields.items() if not v]
+    if empty_fields:
+        logger.warning("frame_initiative_constraints.empty_prior_steps", empty_fields=empty_fields)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Prior step outputs cannot be empty: {', '.join(empty_fields)}",
+            )],
+            structuredContent={
+                "error": "empty_prior_steps",
+                "empty_fields": empty_fields,
+                "assistant_guidance": {
+                    "action": "BACKTRACK",
+                    "instruction": "Prior steps incomplete. Go back and complete frame_initiative_intent (for who/why) or frame_initiative_hypothesis (for what) before calling this tool.",
+                },
+            },
+            isError=True,
+        )
+
     # Reject low/medium confidence (except for user_claims_no_constraints flow)
     if not validated_request.user_claims_no_constraints and validated_request.confidence != "high":
         logger.info("frame_initiative_constraints.confidence_rejected",
@@ -228,11 +253,11 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
     # Valid — return complete initiative framing for confirmation
     constraint_framing = result["constraint_framing"]
 
-    # Build complete initiative framing
+    # Build complete initiative framing (prior_step_fields already validated non-empty)
     initiative_framing = {
-        "who": (validated_request.who or "").strip(),
-        "why": (validated_request.why or "").strip(),
-        "what": (validated_request.what or "").strip(),
+        "who": prior_step_fields["who"],
+        "why": prior_step_fields["why"],
+        "what": prior_step_fields["what"],
         "constraint_type": constraint_framing["constraint_type"],
         "constraint_value": constraint_framing["constraint_value"],
     }
