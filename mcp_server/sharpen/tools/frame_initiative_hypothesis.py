@@ -36,6 +36,8 @@ FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. W
 
 Sequence: Acknowledge confirmed framing → ASK "What do you think needs to exist to deliver [WHY] to [WHO]?" → store verbatim → reflect hypothesis → confirm → call tool.
 
+CATEGORY PUSHBACK: If user's WHAT is a category (e.g., "a system," "a platform," "an app," "an AI system") rather than a specific solution, push back: "That's a category. What's the first concrete thing that would need to exist?"
+
 STYLE: Acknowledge the confirmed framing. Explain hypothesis framing helps test before committing. NEVER suggest solutions.
 """
 
@@ -52,7 +54,7 @@ INPUT_SCHEMA = {
         },
         "user_what_verbatim": {
             "type": "string",
-            "description": "Copy-paste user's answer exactly as written. Must be non-empty.",
+            "description": "Copy-paste user's answer exactly as written. Must be non-empty. Must be specific enough to decompose into deliverables. If user states a category ('an AI system', 'a platform'), ask them to narrow it first.",
         },
         "what_derived_from_verbatim": {
             "type": "string",
