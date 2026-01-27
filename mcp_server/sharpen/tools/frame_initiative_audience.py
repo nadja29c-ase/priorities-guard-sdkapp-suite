@@ -44,9 +44,13 @@ SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        "user_who_verbatim": {
+            "type": "string",
+            "description": "Copy-paste user's answer exactly as written. Must be non-empty.",
+        },
         "who": {
             "type": "string",
-            "description": "ONE primary beneficiary. Who benefits first and foremost? Not multiple distinct audiences. ACCORDING TO THE USER.",
+            "description": "WHO derived from verbatim — normalized for clarity but semantically equivalent. Do not invent specificity.",
         },
         "deferred_stakeholders": {
             "type": "array",
@@ -54,7 +58,7 @@ INPUT_SCHEMA = {
             "description": "Other stakeholders user mentioned but are not the primary focus. Optional. These are noted but deferred for now.",
         },
     },
-    "required": ["who"],
+    "required": ["user_who_verbatim", "who"],
     "additionalProperties": False,
 }
 
@@ -66,6 +70,7 @@ INPUT_SCHEMA = {
 
 class FrameAudienceRequest(BaseModel):
     """Expected input structure from ChatGPT."""
+    user_who_verbatim: Optional[str] = None
     who: Optional[str] = None
     deferred_stakeholders: Optional[list[str]] = None
 
@@ -74,10 +79,16 @@ class FrameAudienceRequest(BaseModel):
 # Assistant Guidance Messages
 # ============================================================================
 
+GUIDANCE_EMPTY_VERBATIM = (
+    "SHARPEN MODE STILL BINDING. "
+    "user_who_verbatim is empty. Do not call this tool until user has stated WHO. "
+    "Ask: 'Who specifically is supposed to benefit from this?' "
+    "Then store their exact answer in user_who_verbatim."
+)
+
 GUIDANCE_EMPTY_WHO = (
     "SHARPEN MODE STILL BINDING. "
-    "Ask: 'Who specifically is supposed to benefit from this?' "
-    "Then stop and wait."
+    "WHO is empty. Derive from user_who_verbatim — normalize for clarity but do not invent specificity."
 )
 
 GUIDANCE_MULTIPLE_STAKEHOLDERS = (
@@ -116,22 +127,28 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Structural validation (who non-empty, not multiple stakeholders)
-    result = validate_initiative_audience(who=validated_request.who)
+    # Structural validation (verbatim non-empty, who non-empty, not multiple stakeholders)
+    result = validate_initiative_audience(
+        who=validated_request.who,
+        user_who_verbatim=validated_request.user_who_verbatim,
+    )
 
     if not result["valid"]:
         error_type = result["error_type"]
 
-        if error_type == "empty_who":
+        if error_type == "empty_verbatim":
+            guidance = GUIDANCE_EMPTY_VERBATIM
+        elif error_type == "empty_who":
             guidance = GUIDANCE_EMPTY_WHO
         elif error_type == "multiple_stakeholders":
             guidance = GUIDANCE_MULTIPLE_STAKEHOLDERS
         else:
-            guidance = GUIDANCE_EMPTY_WHO  # Default fallback
+            guidance = GUIDANCE_EMPTY_VERBATIM  # Default fallback
 
         logger.info("frame_initiative_audience.rejected",
                     error_type=error_type,
-                    who_provided=bool(validated_request.who))
+                    who_provided=bool(validated_request.who),
+                    verbatim_provided=bool(validated_request.user_who_verbatim))
 
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(type="text", text=result["error_details"])],
@@ -145,12 +162,14 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             isError=True,
         )
 
-    # Valid — return captured audience
+    # Valid — return captured audience with provenance
     who = result["who"]
+    user_who_verbatim = result["user_who_verbatim"]
     deferred = validated_request.deferred_stakeholders or []
 
     logger.info("frame_initiative_audience.complete",
                 who=who,
+                has_verbatim=bool(user_who_verbatim),
                 deferred_count=len(deferred))
 
     return mcp_types.CallToolResult(
@@ -162,6 +181,9 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             "audience": {
                 "who": who,
                 "deferred_stakeholders": deferred,
+            },
+            "provenance": {
+                "user_who_verbatim": user_who_verbatim,
             },
             "captured": True,
             "assistant_guidance": {

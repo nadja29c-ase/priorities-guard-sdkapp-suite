@@ -128,29 +128,41 @@ def _has_multiple_stakeholders(who: str) -> bool:
 
 def validate_initiative_audience(
     who: str | None,
+    user_who_verbatim: str | None,
 ) -> dict[str, Any]:
     """
     Validate WHO for frame_initiative_audience.
 
-    Checks:
+    Checks (in order):
+    - user_who_verbatim is non-empty (must have user's exact words first)
     - WHO is non-empty
     - WHO does not contain multiple distinct stakeholders
 
     Args:
-        who: Primary beneficiary
+        who: Primary beneficiary (derived from verbatim, normalized for clarity)
+        user_who_verbatim: User's exact words — copy-paste, no embellishment
 
     Returns:
         {"valid": bool, "error_type": str | None, "error_details": str | None}
     """
-    # Normalize input
+    # Normalize inputs
+    user_who_verbatim = (user_who_verbatim or "").strip()
     who = (who or "").strip()
 
-    # Check non-empty
+    # Check verbatim non-empty first
+    if not user_who_verbatim:
+        return {
+            "valid": False,
+            "error_type": "empty_verbatim",
+            "error_details": "user_who_verbatim is empty. Do not call this tool until user has stated WHO.",
+        }
+
+    # Check WHO non-empty
     if not who:
         return {
             "valid": False,
             "error_type": "empty_who",
-            "error_details": "WHO is empty. Ask who specifically benefits from this.",
+            "error_details": "WHO is empty. Derive from user_who_verbatim.",
         }
 
     # Check for multiple stakeholders
@@ -166,6 +178,7 @@ def validate_initiative_audience(
         "error_type": None,
         "error_details": None,
         "who": who,
+        "user_who_verbatim": user_who_verbatim,
     }
 
 

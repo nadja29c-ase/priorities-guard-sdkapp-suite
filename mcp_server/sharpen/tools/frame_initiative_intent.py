@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 DESCRIPTION = """Records problem OUTCOME: PAIN + OBSERVABLE + WHY for the primary beneficiary.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- who: from frame_initiative_audience output (non-empty)
+- who: from frame_initiative_audience output (non-empty and provided by the user)
 - user_pain_verbatim: non-empty, user's exact words
 - user_observable_verbatim: non-empty, user's exact words
 - why_reframed_from_observable: WHY incorporates observable
