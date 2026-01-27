@@ -30,18 +30,19 @@ logger = structlog.get_logger(__name__)
 DESCRIPTION = """Records problem OUTCOME: PAIN + OBSERVABLE + WHY for the primary beneficiary.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- who: from frame_initiative_audience output (non-empty and provided by the user)
+- who: from frame_initiative_audience output (non-empty)
 - user_pain_verbatim: non-empty, user's exact words
 - user_observable_verbatim: non-empty, user's exact words
 - why_reframed_from_observable: WHY incorporates observable
+- user_confirmed_why: user confirmed your WHY reframe captures their intent
 
 VAGUENESS CHECK: If PAIN is abstract ("things are hard") or OBSERVABLE is vague ("it would be better"), push back before calling. Ask for concrete specifics.
 
-NO CONFIRMATION YET — proceed to hypothesis after capturing outcome.
+REFRAME CONFIRMATION: After you combine PAIN + OBSERVABLE into WHY, reflect it back to user: "So the outcome you're after is: [WHY]. Does that capture it?" Only call this tool AFTER user confirms the reframe is accurate. If user corrects → adjust WHY → confirm again → then call tool.
 
 SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response. Violating this breaks Sharpen.
 
-Sequence: PAIN → OBSERVABLE → reframe WHY → call tool → proceed to hypothesis.
+Sequence: PAIN → OBSERVABLE → reframe WHY → CONFIRM REFRAME → call tool → proceed to hypothesis.
 """
 
 INPUT_SCHEMA = {
@@ -67,6 +68,10 @@ INPUT_SCHEMA = {
             "type": "boolean",
             "description": "True ONLY if WHY incorporates the observable (not just the raw pain).",
         },
+        "user_confirmed_why": {
+            "type": "boolean",
+            "description": "True ONLY if you reflected your WHY reframe back to user and they confirmed it captures their intent. Do not set true without explicit user confirmation of the synthesis.",
+        },
     },
     "required": [
         "who",
@@ -74,6 +79,7 @@ INPUT_SCHEMA = {
         "user_observable_verbatim",
         "why",
         "why_reframed_from_observable",
+        "user_confirmed_why",
     ],
     "additionalProperties": False,
 }
@@ -91,6 +97,7 @@ class FrameOutcomeRequest(BaseModel):
     user_observable_verbatim: Optional[str] = None
     why: Optional[str] = None
     why_reframed_from_observable: Optional[bool] = None
+    user_confirmed_why: Optional[bool] = None
 
 
 # ============================================================================
@@ -121,6 +128,13 @@ GUIDANCE_PROVENANCE_FAILED = (
     "SHARPEN MODE STILL BINDING. "
     "Provenance check failed. WHY must incorporate the observable.\n"
     "Reframe the user's observable into an outcome first, then call tool."
+)
+
+GUIDANCE_WHY_NOT_CONFIRMED = (
+    "SHARPEN MODE STILL BINDING. "
+    "User has not confirmed the WHY reframe. Reflect it back: "
+    "'So the outcome you're after is: [WHY]. Does that capture it?' "
+    "Only call this tool after user confirms."
 )
 
 # Success guidance — proceed to hypothesis without confirmation
@@ -194,12 +208,14 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 
     # Extract fields
     why_reframed = validated_request.why_reframed_from_observable or False
+    user_confirmed_why = validated_request.user_confirmed_why or False
     pain_verbatim = (validated_request.user_pain_verbatim or "").strip()
     observable_verbatim = (validated_request.user_observable_verbatim or "").strip()
 
-    # Provenance validation (no confirmation check — happens at constraints step)
+    # Provenance validation (includes reframe confirmation check)
     provenance_result = validate_outcome_provenance(
         why_reframed_from_observable=why_reframed,
+        user_confirmed_why=user_confirmed_why,
         user_pain_verbatim=pain_verbatim,
         user_observable_verbatim=observable_verbatim,
     )
@@ -211,6 +227,8 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
             guidance = GUIDANCE_EMPTY_PAIN_VERBATIM
         elif error_type == "empty_observable_verbatim":
             guidance = GUIDANCE_EMPTY_OBSERVABLE_VERBATIM
+        elif error_type == "why_not_confirmed":
+            guidance = GUIDANCE_WHY_NOT_CONFIRMED
         else:
             guidance = GUIDANCE_PROVENANCE_FAILED
 
@@ -289,6 +307,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "user_pain_verbatim": pain_verbatim,
                 "user_observable_verbatim": observable_verbatim,
                 "why_reframed_from_observable": True,
+                "user_confirmed_why": True,
             },
             "captured": True,
             "assistant_guidance": {

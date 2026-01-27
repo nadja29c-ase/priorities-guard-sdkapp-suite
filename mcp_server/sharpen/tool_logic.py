@@ -240,20 +240,26 @@ def validate_initiative_outcome(
 
 def validate_outcome_provenance(
     why_reframed_from_observable: bool,
+    user_confirmed_why: bool,
     user_pain_verbatim: str,
     user_observable_verbatim: str,
 ) -> dict[str, Any]:
     """
     Validate provenance evidence for frame_initiative_outcome.
 
-    why_reframed_from_observable must be True AND both verbatim fields must be non-empty.
-    No confirmation check — confirmation happens later at constraints step.
+    Checks (in order):
+    - user_pain_verbatim is non-empty
+    - user_observable_verbatim is non-empty
+    - why_reframed_from_observable is True
+    - user_confirmed_why is True (user confirmed the LLM's WHY synthesis)
+
     WHO provenance is validated in frame_initiative_audience step (removed from here).
 
     Applies defensive normalization to verbatim fields (strips whitespace).
 
     Args:
         why_reframed_from_observable: Is WHY derived from the observable (not raw pain)?
+        user_confirmed_why: Did user confirm the LLM's WHY reframe captures their intent?
         user_pain_verbatim: User's exact words describing the pain
         user_observable_verbatim: User's exact words describing what would be different
 
@@ -288,6 +294,14 @@ def validate_outcome_provenance(
             "error_type": "provenance_failed",
             "error_details": "Provenance check failed: why_reframed_from_observable. WHY must incorporate the observable.",
             "failed_checks": ["why_reframed_from_observable"],
+        }
+
+    if not user_confirmed_why:
+        return {
+            "valid": False,
+            "error_type": "why_not_confirmed",
+            "error_details": "User must confirm the WHY reframe before recording.",
+            "failed_checks": ["user_confirmed_why"],
         }
 
     return {

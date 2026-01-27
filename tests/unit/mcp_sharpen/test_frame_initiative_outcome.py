@@ -120,6 +120,7 @@ class TestValidateOutcomeProvenance:
         """All provenance flags True with both verbatims is valid."""
         result = validate_outcome_provenance(
             why_reframed_from_observable=True,
+            user_confirmed_why=True,
             user_pain_verbatim="They feel disoriented and blocked",
             user_observable_verbatim="They'd find docs and submit first PR within 2 weeks",
         )
@@ -131,6 +132,7 @@ class TestValidateOutcomeProvenance:
         """Empty pain verbatim is rejected."""
         result = validate_outcome_provenance(
             why_reframed_from_observable=True,
+            user_confirmed_why=True,
             user_pain_verbatim="",
             user_observable_verbatim="They'd find docs",
         )
@@ -142,6 +144,7 @@ class TestValidateOutcomeProvenance:
         """Empty observable verbatim is rejected — observable is mandatory."""
         result = validate_outcome_provenance(
             why_reframed_from_observable=True,
+            user_confirmed_why=True,
             user_pain_verbatim="They feel blocked",
             user_observable_verbatim="",
         )
@@ -153,6 +156,7 @@ class TestValidateOutcomeProvenance:
         """why_reframed_from_observable=False is rejected."""
         result = validate_outcome_provenance(
             why_reframed_from_observable=False,
+            user_confirmed_why=True,
             user_pain_verbatim="Some pain",
             user_observable_verbatim="Some observable",
         )
@@ -160,10 +164,24 @@ class TestValidateOutcomeProvenance:
         assert result["valid"] is False
         assert "why_reframed_from_observable" in result["failed_checks"]
 
+    def test_user_confirmed_why_false_rejects(self):
+        """user_confirmed_why=False is rejected."""
+        result = validate_outcome_provenance(
+            why_reframed_from_observable=True,
+            user_confirmed_why=False,
+            user_pain_verbatim="Some pain",
+            user_observable_verbatim="Some observable",
+        )
+
+        assert result["valid"] is False
+        assert result["error_type"] == "why_not_confirmed"
+        assert "user_confirmed_why" in result["failed_checks"]
+
     def test_whitespace_only_pain_verbatim_rejects(self):
         """Whitespace-only pain verbatim is treated as empty."""
         result = validate_outcome_provenance(
             why_reframed_from_observable=True,
+            user_confirmed_why=True,
             user_pain_verbatim="   ",
             user_observable_verbatim="Some observable",
         )
@@ -175,6 +193,7 @@ class TestValidateOutcomeProvenance:
         """Whitespace-only observable verbatim is treated as empty."""
         result = validate_outcome_provenance(
             why_reframed_from_observable=True,
+            user_confirmed_why=True,
             user_pain_verbatim="Some pain",
             user_observable_verbatim="   ",
         )
@@ -186,6 +205,7 @@ class TestValidateOutcomeProvenance:
         """Pain verbatim is checked before observable verbatim."""
         result = validate_outcome_provenance(
             why_reframed_from_observable=True,
+            user_confirmed_why=True,
             user_pain_verbatim="",
             user_observable_verbatim="",
         )
@@ -211,6 +231,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "They'd find information in under 5 minutes",
             "why": "So they can find information quickly",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -228,6 +249,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "They'd find docs in under 5 minutes",
             "why": "To find docs easily",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -245,6 +267,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "They'd navigate independently",
             "why": "So they can navigate independently",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -264,6 +287,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "Things would be fast",
             "why": "To be faster",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -281,6 +305,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "Some observable",
             "why": "So they can do something",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -298,6 +323,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "",
             "why": "So they can work independently",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -315,12 +341,31 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "They'd find docs",
             "why": "So they feel unblocked",  # This is from pain, not observable
             "why_reframed_from_observable": False,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
 
         assert result.isError is True
         assert result.structuredContent["error"] == "provenance_failed"
+        assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
+
+    @pytest.mark.asyncio
+    async def test_user_confirmed_why_false_returns_error(self):
+        """user_confirmed_why=False returns error with ASK_CLARIFYING guidance."""
+        arguments = {
+            "who": "New hires",
+            "user_pain_verbatim": "They feel blocked",
+            "user_observable_verbatim": "They'd find docs",
+            "why": "So they can find docs independently",
+            "why_reframed_from_observable": True,
+            "user_confirmed_why": False,
+        }
+
+        result = await handle(arguments)
+
+        assert result.isError is True
+        assert result.structuredContent["error"] == "why_not_confirmed"
         assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
 
     @pytest.mark.asyncio
@@ -332,6 +377,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "They'd succeed",
             "why": "To succeed",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -349,6 +395,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "They'd save time",
             "why": "To save time",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -366,6 +413,7 @@ class TestFrameInitiativeOutcomeHandler:
             "user_observable_verbatim": "They'd find answers without asking",
             "why": "So they can find answers without interrupting others",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -386,6 +434,7 @@ class TestFrameOutcomeHandlerProvenance:
             "user_observable_verbatim": "They'd find documentation themselves and submit their first PR within 2 weeks",
             "why": "So they can find documentation independently and ship their first PR within 2 weeks",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -403,6 +452,7 @@ class TestFrameOutcomeHandlerProvenance:
             "user_observable_verbatim": "They'd navigate independently",
             "why": "So they can navigate independently",
             "why_reframed_from_observable": True,
+            "user_confirmed_why": True,
         }
 
         result = await handle(arguments)
@@ -481,3 +531,14 @@ class TestToolRegistration:
 
         assert "who" in schema["properties"]
         assert "who" in schema["required"]
+
+    def test_tool_schema_has_user_confirmed_why(self):
+        """Tool schema has user_confirmed_why as required."""
+        from mcp_server.sharpen.tools import TOOL_REGISTRY
+
+        tool = TOOL_REGISTRY["frame_initiative_outcome"]
+        schema = tool.input_schema
+
+        assert "user_confirmed_why" in schema["properties"]
+        assert "user_confirmed_why" in schema["required"]
+        assert schema["properties"]["user_confirmed_why"]["type"] == "boolean"
