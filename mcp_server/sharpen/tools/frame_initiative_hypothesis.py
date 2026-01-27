@@ -2,7 +2,7 @@
 Frame Initiative Hypothesis Tool.
 
 Captures WHAT (the hypothesized solution) after WHO + WHY are confirmed.
-Requires prior step output as input to enforce sequence.
+Requires prior step output (frame_initiative_audience + frame_initiative_outcome) as input.
 Self-registers at import time.
 """
 
@@ -25,7 +25,7 @@ logger = structlog.get_logger(__name__)
 DESCRIPTION = """Captures user's solution idea as testable hypothesis — preventing premature commitment. Frames WHAT as something to validate and minimize in scope, not a final decision.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- who + why: from frame_initiative_intent output
+- who + why: from frame_initiative_outcome output
 - user_what_verbatim: non-empty, user's exact words
 - what_derived_from_verbatim: derived from verbatim (not invented)
 - what_stated_by_user: user explicitly stated WHAT
@@ -47,11 +47,11 @@ INPUT_SCHEMA = {
     "properties": {
         "who": {
             "type": "string",
-            "description": "Confirmed WHO from frame_initiative_intent. Must match prior step output.",
+            "description": "Confirmed WHO from frame_initiative_audience → frame_initiative_outcome. Must match prior step output.",
         },
         "why": {
             "type": "string",
-            "description": "Confirmed WHY from frame_initiative_intent. Must match prior step output.",
+            "description": "Confirmed WHY from frame_initiative_outcome. Must match prior step output.",
         },
         "user_what_verbatim": {
             "type": "string",
@@ -112,7 +112,7 @@ GUIDANCE_EMPTY_VERBATIM = (
 GUIDANCE_MISSING_PRIOR_STEP = (
     "SHARPEN MODE STILL BINDING. "
     "Cannot record hypothesis without problem framing. "
-    "Complete frame_initiative_intent first to establish WHO + WHY."
+    "Complete frame_initiative_audience and frame_initiative_outcome first to establish WHO + WHY."
 )
 
 GUIDANCE_MISSING_WHAT = (

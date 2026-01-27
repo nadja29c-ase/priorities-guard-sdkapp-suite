@@ -2,7 +2,7 @@
 Frame Initiative Constraints Tool.
 
 Captures the dominant constraint (time, capacity, budget, or forced_mvp).
-Requires confirmed intent from frame_initiative_intent.
+Requires confirmed intent from frame_initiative_audience + frame_initiative_outcome + frame_initiative_hypothesis.
 Self-registers at import time.
 """
 
@@ -27,7 +27,7 @@ DESCRIPTION = """Records dominant CONSTRAINT and triggers FULL FRAMING CONFIRMAT
 This is the FIRST confirmation point in Sharpen. After capturing constraint, reflect the complete framing back and ask: "Is this the right problem and direction?"
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- who, why, what: from prior steps (frame_initiative_intent + frame_initiative_hypothesis)
+- who, why, what: from prior steps (frame_initiative_audience + frame_initiative_outcome + frame_initiative_hypothesis)
 - EITHER: constraint_type + constraint_value (concrete, not "soon" or "flexible")
   OR: user_claims_no_constraints = true (triggers forced_mvp flow)
 - confidence: high
@@ -48,11 +48,11 @@ INPUT_SCHEMA = {
     "properties": {
         "who": {
             "type": "string",
-            "description": "WHO from frame_initiative_intent. Must match prior step output.",
+            "description": "WHO from frame_initiative_audience → frame_initiative_outcome. Must match prior step output.",
         },
         "why": {
             "type": "string",
-            "description": "WHY from frame_initiative_intent. Must match prior step output.",
+            "description": "WHY from frame_initiative_outcome. Must match prior step output.",
         },
         "what": {
             "type": "string",
@@ -182,7 +182,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
                 "empty_fields": empty_fields,
                 "assistant_guidance": {
                     "action": "BACKTRACK",
-                    "instruction": "Prior steps incomplete. Go back and complete frame_initiative_intent (for who/why) or frame_initiative_hypothesis (for what) before calling this tool.",
+                    "instruction": "Prior steps incomplete. Go back and complete frame_initiative_audience (for who), frame_initiative_outcome (for why), or frame_initiative_hypothesis (for what) before calling this tool.",
                 },
             },
             isError=True,

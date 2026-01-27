@@ -80,6 +80,8 @@ _COMPOSITE_AUDIENCES = [
     "product and engineering",
     "product and design",
     "design and engineering",
+    "product & engineering",  # ampersand variant
+    "design & engineering",
     "ops and support",
     "hr and recruiting",
     "finance and accounting",
@@ -89,13 +91,29 @@ _COMPOSITE_AUDIENCES = [
 
 
 def _has_multiple_stakeholders(who: str) -> bool:
-    """Detect if WHO contains multiple distinct stakeholders."""
+    """Detect if WHO contains multiple distinct stakeholders.
+
+    Treats slash "/" and ampersand "&" as compound role indicators (valid).
+    Treats "and", "or", comma patterns as multiple stakeholders (invalid)
+    unless they match a known composite audience.
+    """
     who_lower = who.lower()
 
-    # Allow known composite audiences
+    # Allow known composite audiences (includes ampersand variants)
     for phrase in _COMPOSITE_AUDIENCES:
         if phrase in who_lower:
             return False
+
+    # Slash patterns are compound roles (same group) — valid
+    # e.g., "Designers/Developers" is one audience
+    if "/" in who_lower and " and " not in who_lower and " or " not in who_lower:
+        return False
+
+    # Standalone ampersand (not in composite list) is also compound role — valid
+    # e.g., "Product & Design" would be caught by composite list,
+    # but "Ops & Legal" (not in list) should still be valid
+    if " & " in who_lower and " and " not in who_lower and " or " not in who_lower:
+        return False
 
     # Detect multiple stakeholder patterns
     if " and " in who_lower:
@@ -108,80 +126,120 @@ def _has_multiple_stakeholders(who: str) -> bool:
     return False
 
 
-def validate_initiative_intent(
+def validate_initiative_audience(
     who: str | None,
-    why: str | None,
 ) -> dict[str, Any]:
     """
-    Validate structure of WHO and WHY for initiative intent.
+    Validate WHO for frame_initiative_audience.
 
-    Structural validation only — semantic quality is LLM's job.
+    Checks:
+    - WHO is non-empty
+    - WHO does not contain multiple distinct stakeholders
 
     Args:
-        who: Who benefits from this work?
-        why: So that the beneficiary benefits how? (outcome-phrased)
+        who: Primary beneficiary
 
     Returns:
-        framing_intent dict + valid flag
+        {"valid": bool, "error_type": str | None, "error_details": str | None}
     """
-    # Normalize inputs
+    # Normalize input
     who = (who or "").strip()
-    why = (why or "").strip()
 
-    # Structural validation only — both are required
-    missing = []
+    # Check non-empty
     if not who:
-        missing.append("who")
-    if not why:
-        missing.append("why")
-
-    # If any fields missing, return early
-    if missing:
         return {
-            "framing_intent": {
-                "who": who,
-                "why": why,
-            },
             "valid": False,
-            "missing": missing,
+            "error_type": "empty_who",
+            "error_details": "WHO is empty. Ask who specifically benefits from this.",
         }
 
     # Check for multiple stakeholders
     if _has_multiple_stakeholders(who):
         return {
-            "framing_intent": {"who": who, "why": why},
             "valid": False,
-            "missing": [],
-            "multiple_stakeholders": True,
+            "error_type": "multiple_stakeholders",
+            "error_details": "Multiple stakeholders detected. Ask who benefits first and foremost.",
         }
 
     return {
-        "framing_intent": {
+        "valid": True,
+        "error_type": None,
+        "error_details": None,
+        "who": who,
+    }
+
+
+def validate_initiative_outcome(
+    who: str | None,
+    why: str | None,
+) -> dict[str, Any]:
+    """
+    Validate structure of WHO (from prior step) and WHY for initiative outcome.
+
+    WHO is validated as a prior step dependency (must be non-empty).
+    WHY is validated as required field.
+    No multiple stakeholder check — that's done in audience step.
+
+    Structural validation only — semantic quality is LLM's job.
+
+    Args:
+        who: WHO from frame_initiative_audience (prior step)
+        why: So that the beneficiary benefits how? (outcome-phrased)
+
+    Returns:
+        framing_outcome dict + valid flag + error_type if invalid
+    """
+    # Normalize inputs
+    who = (who or "").strip()
+    why = (why or "").strip()
+
+    # Check prior step dependency (WHO from audience step)
+    if not who:
+        return {
+            "framing_outcome": None,
+            "valid": False,
+            "error_type": "missing_prior_step",
+            "error_details": "WHO required from frame_initiative_audience. Complete that step first.",
+        }
+
+    # WHY is required
+    if not why:
+        return {
+            "framing_outcome": {
+                "who": who,
+                "why": why,
+            },
+            "valid": False,
+            "error_type": "missing_why",
+            "error_details": "WHY is required.",
+        }
+
+    return {
+        "framing_outcome": {
             "who": who,
             "why": why,
         },
         "valid": True,
-        "missing": [],
-        "multiple_stakeholders": False,
+        "error_type": None,
+        "error_details": None,
     }
 
 
-def validate_intent_provenance(
-    who_stated_by_user: bool,
+def validate_outcome_provenance(
     why_reframed_from_observable: bool,
     user_pain_verbatim: str,
     user_observable_verbatim: str,
 ) -> dict[str, Any]:
     """
-    Validate provenance evidence for frame_initiative_intent.
+    Validate provenance evidence for frame_initiative_outcome.
 
-    Both booleans must be True AND both verbatim fields must be non-empty.
+    why_reframed_from_observable must be True AND both verbatim fields must be non-empty.
     No confirmation check — confirmation happens later at constraints step.
+    WHO provenance is validated in frame_initiative_audience step (removed from here).
 
     Applies defensive normalization to verbatim fields (strips whitespace).
 
     Args:
-        who_stated_by_user: Did user explicitly state WHO?
         why_reframed_from_observable: Is WHY derived from the observable (not raw pain)?
         user_pain_verbatim: User's exact words describing the pain
         user_observable_verbatim: User's exact words describing what would be different
@@ -211,19 +269,12 @@ def validate_intent_provenance(
             "failed_checks": ["user_observable_verbatim"],
         }
 
-    failed_checks = []
-
-    if not who_stated_by_user:
-        failed_checks.append("who_stated_by_user")
     if not why_reframed_from_observable:
-        failed_checks.append("why_reframed_from_observable")
-
-    if failed_checks:
         return {
             "valid": False,
             "error_type": "provenance_failed",
-            "error_details": f"Provenance checks failed: {', '.join(failed_checks)}. Get evidence from user first.",
-            "failed_checks": failed_checks,
+            "error_details": "Provenance check failed: why_reframed_from_observable. WHY must incorporate the observable.",
+            "failed_checks": ["why_reframed_from_observable"],
         }
 
     return {
@@ -292,8 +343,8 @@ def validate_initiative_hypothesis(
     Structural validation only — semantic quality is LLM's job.
 
     Args:
-        who: Confirmed WHO from frame_initiative_intent
-        why: Confirmed WHY from frame_initiative_intent
+        who: Confirmed WHO from frame_initiative_audience → frame_initiative_outcome
+        why: Confirmed WHY from frame_initiative_outcome
         what: User's hypothesized solution
 
     Returns:
@@ -316,7 +367,7 @@ def validate_initiative_hypothesis(
             "framing": None,
             "valid": False,
             "error_type": "missing_prior_step",
-            "error_details": f"frame_initiative_intent must be completed first. Missing: {', '.join(missing_prior)}",
+            "error_details": f"frame_initiative_outcome must be completed first. Missing: {', '.join(missing_prior)}",
         }
 
     # Check WHAT provided

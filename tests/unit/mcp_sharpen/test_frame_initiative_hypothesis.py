@@ -409,4 +409,4 @@ class TestFrameHypothesisToolRegistration:
         from mcp_server.sharpen.tools import TOOL_REGISTRY
 
         tool = TOOL_REGISTRY["frame_initiative_hypothesis"]
-        assert "frame_initiative_intent" in tool.description
+        assert "frame_initiative_outcome" in tool.description

@@ -1,9 +1,14 @@
 """
-Frame Initiative Intent Tool.
+Frame Initiative Outcome Tool.
 
-Captures WHO benefits and WHY (the outcome). WHAT comes later via frame_initiative_hypothesis.
+Captures problem OUTCOME: PAIN + OBSERVABLE + WHY for the primary beneficiary.
+WHO comes from prior step (frame_initiative_audience).
+WHAT comes later via frame_initiative_hypothesis.
 Structural validation only — semantic quality is the LLM's job.
 Self-registers at import time.
+
+NOTE: File kept as frame_initiative_intent.py for rollback safety.
+Tool is registered as frame_initiative_outcome.
 """
 
 from typing import Optional
@@ -14,7 +19,7 @@ from pydantic import BaseModel, ValidationError
 
 from .base import ToolDefinition
 from . import register_tool
-from ..tool_logic import validate_initiative_intent, validate_intent_provenance
+from ..tool_logic import validate_initiative_outcome, validate_outcome_provenance
 
 logger = structlog.get_logger(__name__)
 
@@ -22,22 +27,21 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata (Goal-Oriented Description)
 # ============================================================================
 
-DESCRIPTION = """Records problem framing: WHO benefits and WHY (outcome derived from pain + observable).
+DESCRIPTION = """Records problem OUTCOME: PAIN + OBSERVABLE + WHY for the primary beneficiary.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- who_stated_by_user: user explicitly stated WHO
+- who: from frame_initiative_audience output (non-empty)
 - user_pain_verbatim: non-empty, user's exact words
 - user_observable_verbatim: non-empty, user's exact words
 - why_reframed_from_observable: WHY incorporates observable
 
-NO CONFIRMATION YET — Do not ask "Correct?" after this step. Confirmation happens after constraints are captured (full framing confirmation).
+VAGUENESS CHECK: If PAIN is abstract ("things are hard") or OBSERVABLE is vague ("it would be better"), push back before calling. Ask for concrete specifics.
 
-SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER to tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response → have a back-and-forth conversation!!! Violating this breaks Sharpen.
-FACILITATOR MODE: You are a facilitator, not a teller. ONE question at a time. Wait for answer. Store verbatim.
+NO CONFIRMATION YET — proceed to hypothesis after capturing outcome.
 
-Sequence: WHO → PAIN → OBSERVABLE → reframe WHY → call tool → proceed to hypothesis (no confirmation).
+SHARPEN MODE BINDING RULES: When user selects Sharpen, your default behavior is SUSPENDED. You are a Coach now: ask questions to facilitate user's thinking and NEVER tell the user what to do or infer their answers. CRITICAL: Ask ONE question at a time → wait for user's response. Violating this breaks Sharpen.
 
-STYLE: Briefly explain why each question matters. Acknowledge user's progress naturally. Do NOT ask for confirmation yet.
+Sequence: PAIN → OBSERVABLE → reframe WHY → call tool → proceed to hypothesis.
 """
 
 INPUT_SCHEMA = {
@@ -45,7 +49,7 @@ INPUT_SCHEMA = {
     "properties": {
         "who": {
             "type": "string",
-            "description": "ONE primary beneficiary. Who benefits first and foremost? Not multiple audiences. ACCORDING TO THE USER.",
+            "description": "WHO from frame_initiative_audience. Must match prior step output.",
         },
         "user_pain_verbatim": {
             "type": "string",
@@ -57,15 +61,11 @@ INPUT_SCHEMA = {
         },
         "why": {
             "type": "string",
-            "description": "YOUR reframe combining pain (the value) + observable (the specificity) into an outcome. Pain provides what matters; observable makes it measurable. Example: pain='they feel lost and blocked' + observable='ship first PR within 2 weeks' → WHY='So they can ship their first PR within 2 weeks without being blocked'.",
-        },
-        "who_stated_by_user": {
-            "type": "boolean",
-            "description": "True ONLY if user explicitly stated WHO in their own words. False if you inferred, generalized, or suggested it.",
+            "description": "YOUR reframe combining pain (the value) + observable (the specificity) into an outcome.",
         },
         "why_reframed_from_observable": {
             "type": "boolean",
-            "description": "True ONLY if WHY incorporates the observable (not just the raw pain). False if observable was not asked or not used in WHY.",
+            "description": "True ONLY if WHY incorporates the observable (not just the raw pain).",
         },
     },
     "required": [
@@ -73,7 +73,6 @@ INPUT_SCHEMA = {
         "user_pain_verbatim",
         "user_observable_verbatim",
         "why",
-        "who_stated_by_user",
         "why_reframed_from_observable",
     ],
     "additionalProperties": False,
@@ -85,13 +84,12 @@ INPUT_SCHEMA = {
 # ============================================================================
 
 
-class FrameIntentRequest(BaseModel):
+class FrameOutcomeRequest(BaseModel):
     """Expected input structure from ChatGPT."""
-    who: Optional[str] = None
+    who: Optional[str] = None  # From frame_initiative_audience
     user_pain_verbatim: Optional[str] = None
     user_observable_verbatim: Optional[str] = None
     why: Optional[str] = None
-    who_stated_by_user: Optional[bool] = None
     why_reframed_from_observable: Optional[bool] = None
 
 
@@ -99,7 +97,42 @@ class FrameIntentRequest(BaseModel):
 # Assistant Guidance Messages
 # ============================================================================
 
-# Preserved for rollback if zero-info experiment fails.
+# Re-activated educational error messages (moved from _LEGACY_GUIDANCE)
+GUIDANCE_MISSING_PRIOR_STEP = (
+    "SHARPEN MODE STILL BINDING. "
+    "WHO required from frame_initiative_audience. Complete that step first."
+)
+
+GUIDANCE_EMPTY_PAIN_VERBATIM = (
+    "SHARPEN MODE STILL BINDING. "
+    "user_pain_verbatim is empty. Do not call this tool until user has stated a pain. "
+    "Ask: 'What's currently hard or frustrating for [WHO]?' "
+    "Then store their exact answer in user_pain_verbatim."
+)
+
+GUIDANCE_EMPTY_OBSERVABLE_VERBATIM = (
+    "SHARPEN MODE STILL BINDING. "
+    "user_observable_verbatim is empty. Do not call this tool until user has answered the observable question. "
+    "Ask: 'What would you see happening differently if this worked? Describe a concrete behavior or artifact — not a feeling or general improvement.' "
+    "Then store their exact answer in user_observable_verbatim."
+)
+
+GUIDANCE_PROVENANCE_FAILED = (
+    "SHARPEN MODE STILL BINDING. "
+    "Provenance check failed. WHY must incorporate the observable.\n"
+    "Reframe the user's observable into an outcome first, then call tool."
+)
+
+# Success guidance — proceed to hypothesis without confirmation
+GUIDANCE_CAPTURED = (
+    "SHARPEN MODE STILL BINDING. "
+    "Problem outcome captured. Proceed to hypothesis — do NOT ask for confirmation yet.\n"
+    "Ask: 'What do you think needs to exist to help with that?'\n"
+    "Then stop and wait. Do not suggest solutions.\n\n"
+    "When user answers → call frame_initiative_hypothesis with WHO, WHY, and WHAT."
+)
+
+# Preserved for rollback if needed.
 _LEGACY_GUIDANCE = {
     "provenance_failed": (
         "SHARPEN MODE STILL BINDING. "
@@ -137,15 +170,6 @@ _LEGACY_GUIDANCE = {
     ),
 }
 
-# Success guidance — proceed to hypothesis without confirmation
-GUIDANCE_CONFIRMED = (
-    "SHARPEN MODE STILL BINDING. "
-    "Problem framing captured. Proceed to hypothesis — do NOT ask for confirmation yet.\n"
-    "Ask: 'What do you think needs to exist to help with that?'\n"
-    "Then stop and wait. Do not suggest solutions.\n\n"
-    "When user answers → call frame_initiative_hypothesis with the WHAT."
-)
-
 
 # ============================================================================
 # Tool Handler
@@ -153,113 +177,123 @@ GUIDANCE_CONFIRMED = (
 
 
 async def handle(arguments: dict) -> mcp_types.CallToolResult:
-    """Handle frame_initiative_intent tool call."""
-    logger.debug("frame_initiative_intent.handle.start",
+    """Handle frame_initiative_outcome tool call."""
+    logger.debug("frame_initiative_outcome.handle.start",
                 argument_keys=list(arguments.keys()))
 
     # Pydantic validation
     try:
-        validated_request = FrameIntentRequest.model_validate(arguments)
+        validated_request = FrameOutcomeRequest.model_validate(arguments)
     except ValidationError as e:
-        logger.info(
-            "frame_initiative_intent.rejected",
-            error_type="validation_error",
-            failed_checks=["pydantic_validation"],
-            input_snapshot={"raw_keys": list(arguments.keys())},
-        )
+        logger.warning("frame_initiative_outcome.validation_failed", error=str(e.errors()))
         return mcp_types.CallToolResult(
-            content=[],
-            structuredContent={"status": "incomplete"},
+            content=[mcp_types.TextContent(type="text", text="Invalid input format.")],
+            structuredContent={"error": "validation_error", "details": e.errors()},
             isError=True,
         )
 
-    # Extract provenance flags (default to False if None)
-    who_stated = validated_request.who_stated_by_user or False
+    # Extract fields
     why_reframed = validated_request.why_reframed_from_observable or False
     pain_verbatim = (validated_request.user_pain_verbatim or "").strip()
     observable_verbatim = (validated_request.user_observable_verbatim or "").strip()
 
     # Provenance validation (no confirmation check — happens at constraints step)
-    provenance_result = validate_intent_provenance(
-        who_stated_by_user=who_stated,
+    provenance_result = validate_outcome_provenance(
         why_reframed_from_observable=why_reframed,
         user_pain_verbatim=pain_verbatim,
         user_observable_verbatim=observable_verbatim,
     )
 
     if not provenance_result["valid"]:
-        logger.info(
-            "frame_initiative_intent.rejected",
-            error_type=provenance_result["error_type"],
-            failed_checks=provenance_result.get("failed_checks", []),
-            input_snapshot={
-                "who": validated_request.who,
-                "user_pain_verbatim": bool(pain_verbatim),
-                "user_observable_verbatim": bool(observable_verbatim),
-                "why": validated_request.why,
-                "who_stated_by_user": who_stated,
-                "why_reframed_from_observable": why_reframed,
-            },
-        )
+        error_type = provenance_result["error_type"]
+
+        if error_type == "empty_pain_verbatim":
+            guidance = GUIDANCE_EMPTY_PAIN_VERBATIM
+        elif error_type == "empty_observable_verbatim":
+            guidance = GUIDANCE_EMPTY_OBSERVABLE_VERBATIM
+        else:
+            guidance = GUIDANCE_PROVENANCE_FAILED
+
+        logger.info("frame_initiative_outcome.provenance_rejected",
+                    error_type=error_type,
+                    failed_checks=provenance_result.get("failed_checks", []))
+
         return mcp_types.CallToolResult(
-            content=[],
-            structuredContent={"status": "incomplete"},
+            content=[mcp_types.TextContent(
+                type="text",
+                text=provenance_result["error_details"],
+            )],
+            structuredContent={
+                "error": error_type,
+                "failed_checks": provenance_result.get("failed_checks", []),
+                "assistant_guidance": {
+                    "action": "ASK_CLARIFYING",
+                    "instruction": guidance,
+                },
+            },
             isError=True,
         )
 
-    # Structural validation (who, why content)
-    result = validate_initiative_intent(
+    # Structural validation (who from prior step, why content)
+    result = validate_initiative_outcome(
         who=validated_request.who,
         why=validated_request.why,
     )
 
-    # If structurally invalid, return error
+    # If structurally invalid, return error with guidance
     if not result["valid"]:
-        error_type = "multiple_stakeholders" if result.get("multiple_stakeholders") else "missing_fields"
-        logger.info(
-            "frame_initiative_intent.rejected",
-            error_type=error_type,
-            failed_checks=result.get("missing", []),
-            input_snapshot={
-                "who": validated_request.who,
-                "user_pain_verbatim": bool(pain_verbatim),
-                "user_observable_verbatim": bool(observable_verbatim),
-                "why": validated_request.why,
-                "who_stated_by_user": who_stated,
-                "why_reframed_from_observable": why_reframed,
-            },
-        )
+        error_type = result["error_type"]
+
+        if error_type == "missing_prior_step":
+            guidance = GUIDANCE_MISSING_PRIOR_STEP
+            action = "BACKTRACK"
+        else:
+            guidance = GUIDANCE_PROVENANCE_FAILED
+            action = "ASK_CLARIFYING"
+
+        logger.info("frame_initiative_outcome.rejected",
+                    error_type=error_type,
+                    who_provided=bool(validated_request.who))
+
         return mcp_types.CallToolResult(
-            content=[],
-            structuredContent={"status": "incomplete"},
+            content=[mcp_types.TextContent(
+                type="text",
+                text=result["error_details"],
+            )],
+            structuredContent={
+                "error": error_type,
+                "assistant_guidance": {
+                    "action": action,
+                    "instruction": guidance,
+                },
+            },
             isError=True,
         )
 
-    # Valid — return confirmed framing with provenance evidence
-    intent = result["framing_intent"]
+    # Valid — return captured outcome with provenance evidence
+    outcome = result["framing_outcome"]
 
-    logger.info("frame_initiative_intent.complete",
-               who=intent["who"], why=intent["why"],
+    logger.info("frame_initiative_outcome.complete",
+               who=outcome["who"], why=outcome["why"],
                has_pain_verbatim=bool(pain_verbatim),
                has_observable_verbatim=bool(observable_verbatim))
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Problem framing captured: {intent['who']} needs something so that {intent['why']}",
+            text=f"Problem outcome captured: {outcome['who']} needs something so that {outcome['why']}",
         )],
         structuredContent={
-            "framing_intent": intent,
+            "framing_outcome": outcome,
             "provenance": {
                 "user_pain_verbatim": pain_verbatim,
                 "user_observable_verbatim": observable_verbatim,
-                "who_stated_by_user": True,
                 "why_reframed_from_observable": True,
             },
-            "captured": True,  # Changed from "confirmed" — confirmation happens at constraints
+            "captured": True,
             "assistant_guidance": {
                 "action": "PROCEED_TO_HYPOTHESIS",
-                "instruction": GUIDANCE_CONFIRMED,
+                "instruction": GUIDANCE_CAPTURED,
             },
         },
     )
@@ -270,7 +304,7 @@ async def handle(arguments: dict) -> mcp_types.CallToolResult:
 # ============================================================================
 
 register_tool(ToolDefinition(
-    name="frame_initiative_intent",
+    name="frame_initiative_outcome",  # Changed from frame_initiative_intent
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     handle=handle,
