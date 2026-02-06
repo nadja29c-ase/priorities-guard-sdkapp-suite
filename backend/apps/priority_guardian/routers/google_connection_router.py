@@ -13,6 +13,8 @@ They return JSON responses for MCP tool consumption.
 """
 
 import structlog
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,10 +55,13 @@ async def get_connection_status(
     Note:
         Returns 200 even when not connected (not an error condition).
     """
+    # Fail fast on malformed user_id (defensive)
+    user_id = UUID(x_user_id)
+
     # Query for active Google connection (not revoked)
     result = await session.execute(
         select(CoreConnection).where(
-            CoreConnection.user_id == x_user_id,
+            CoreConnection.user_id == user_id,
             CoreConnection.provider == "google",
             CoreConnection.connection_type == "google",
             CoreConnection.revoked_at.is_(None),  # Must not be revoked

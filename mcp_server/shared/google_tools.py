@@ -40,6 +40,7 @@ CONNECT_GOOGLE_CALENDAR_DESCRIPTION = (
 
 DISCONNECT_GOOGLE_CALENDAR_DESCRIPTION = (
     "Disconnect Google Calendar and revoke access tokens. "
+    "No data is deleted — you can reconnect anytime. "
     "Requires confirmation to proceed."
 )
 
