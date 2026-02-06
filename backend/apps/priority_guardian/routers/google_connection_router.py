@@ -56,7 +56,10 @@ async def get_connection_status(
         Returns 200 even when not connected (not an error condition).
     """
     # Fail fast on malformed user_id (defensive)
-    user_id = UUID(x_user_id)
+    try:
+        user_id = UUID(x_user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
 
     # Query for active Google connection (not revoked)
     result = await session.execute(
@@ -108,12 +111,18 @@ async def initiate_connection(
         }
         500: If Redis is unavailable
     """
+    # Fail fast on malformed user_id (defensive)
+    try:
+        user_id = UUID(x_user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
     # Get correlation_id from request state (set by middleware)
     correlation_id = getattr(request.state, "correlation_id", None)
 
     try:
         # Generate and store opaque connection token
-        token = await store_connection_token(x_user_id, correlation_id=correlation_id)
+        token = await store_connection_token(str(user_id), correlation_id=correlation_id)
 
         # Construct the connect URL using the public backend URL
         connect_url = f"{settings.BACKEND_PUBLIC_URL}/auth/google/start?token={token}"
@@ -127,7 +136,7 @@ async def initiate_connection(
         logger.error(
             "connection_token_generation_failed",
             error=str(e),
-            user_id=x_user_id,
+            user_id=str(user_id),
             correlation_id=correlation_id,
         )
         raise HTTPException(

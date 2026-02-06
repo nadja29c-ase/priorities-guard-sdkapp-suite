@@ -202,7 +202,7 @@ async def disconnect_google_calendar_logic(
             "success": False,
             "error": {
                 "code": "CONFIRMATION_REQUIRED",
-                "message": "Please confirm disconnection by setting confirm=true. This will revoke access and delete cached calendar data."
+                "message": "Please confirm disconnection by setting confirm=true. This will revoke Google Calendar access. No user data is deleted."
             }
         })
 
@@ -245,6 +245,6 @@ async def disconnect_google_calendar_logic(
         "success": True,
         "data": {
             "status": "disconnected",
-            "message": "Google Calendar has been disconnected. Your calendar data has been removed."
+            "message": "Google Calendar has been disconnected. You can reconnect anytime."
         }
     })
