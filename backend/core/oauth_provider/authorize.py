@@ -41,6 +41,7 @@ SCOPE_DESCRIPTIONS_EN = {
     "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
     "focused.notify": "Send notifications related to your focus schedule.",
     "clarity.write": "Save and organize your boards.",
+    "pg.access": "Allow Priority Guardian to connect your Google Calendar and read events to track time on your priorities.",
 }
 
 SCOPE_DESCRIPTIONS_DE = {
@@ -48,6 +49,7 @@ SCOPE_DESCRIPTIONS_DE = {
     "focused.write": "Apple Fokus (den integrierten \"Nicht stören\"-Modus) auf deinem iPhone waehrend deiner Fokus-Zeiten ein- und ausschalten.",
     "focused.notify": "Relevante Benachrichtigungen senden",
     "clarity.write": "Deine Boards speichern und organisieren.",
+    "pg.access": "Priority Guardian erlauben, deinen Google Kalender zu verbinden und Termine zu lesen, um die Zeit für deine Prioritäten zu erfassen.",
 }
 
 # Initialize Jinja2 templates
@@ -401,6 +403,62 @@ async def authorize_endpoint(
     )
 
     # =========================================================================
+    # SECURITY: VALIDATE CLIENT + REDIRECT_URI BEFORE ANY REDIRECTS
+    # This prevents open redirect attacks - we must verify the redirect_uri
+    # is registered for the client BEFORE redirecting anywhere.
+    # =========================================================================
+
+    # Validate client exists (OAuth provider connection)
+    result = await db.execute(
+        select(CoreConnection).where(
+            CoreConnection.client_id == client_id,
+            CoreConnection.connection_type == "oauth_provider"
+        )
+    )
+    client = result.scalar_one_or_none()
+
+    if not client:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_client",
+            client_id=mask_client_id(client_id)
+        )
+        # Cannot redirect - client doesn't exist, redirect_uri unverified
+        raise HTTPException(status_code=400, detail="Unknown client_id")
+
+    # Validate redirect_uri per RFC 3986 (case-insensitive scheme/host, case-sensitive path)
+    # Normalize the incoming redirect URI
+    normalized_redirect = _normalize_redirect_uri(redirect_uri)
+    if not normalized_redirect:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_redirect_uri",
+            client_id=mask_client_id(client_id),
+            message="Invalid redirect_uri format (query/fragment not allowed)"
+        )
+        # Cannot redirect - invalid URI format
+        raise HTTPException(status_code=400, detail="Invalid redirect_uri format")
+
+    # Normalize all registered URIs and compare (filter out any malformed)
+    normalized_registered = {
+        u for u in (_normalize_redirect_uri(uri) for uri in client.redirect_uris) if u is not None
+    }
+
+    if normalized_redirect not in normalized_registered:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_redirect_uri",
+            client_id=mask_client_id(client_id)
+        )
+        # Cannot redirect - URI not registered for this client (open redirect prevention)
+        raise HTTPException(status_code=400, detail="redirect_uri not registered for this client")
+
+    # =========================================================================
+    # CLIENT + REDIRECT_URI VERIFIED - Now safe to use _error_redirect()
+    # All remaining validation errors can redirect back to the verified client
+    # =========================================================================
+
+    # =========================================================================
     # VALIDATE PKCE PARAMETERS (OAuth 2.1 REQUIRED)
     # =========================================================================
     if not code_challenge:
@@ -427,6 +485,15 @@ async def authorize_endpoint(
             state,
             error="invalid_request",
             description="code_challenge_method is required"
+        )
+
+    # Validate code_challenge_method (must be S256)
+    if not validate_code_challenge_method(code_challenge_method):
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_request",
+            description="code_challenge_method must be S256"
         )
 
     # =========================================================================
@@ -479,72 +546,6 @@ async def authorize_endpoint(
             state,
             error="unsupported_response_type",
             description="Only response_type=code is supported"
-        )
-
-    # Validate code_challenge_method (must be S256)
-    if not validate_code_challenge_method(code_challenge_method):
-        return _error_redirect(
-            redirect_uri,
-            state,
-            error="invalid_request",
-            description="code_challenge_method must be S256"
-        )
-
-    # Validate client exists (OAuth provider connection)
-    result = await db.execute(
-        select(CoreConnection).where(
-            CoreConnection.client_id == client_id,
-            CoreConnection.connection_type == "oauth_provider"
-        )
-    )
-    client = result.scalar_one_or_none()
-
-    if not client:
-        request_logger.warning(
-            "oauth.authorize.error",
-            error="invalid_client",
-            client_id=mask_client_id(client_id)
-        )
-        return _error_redirect(
-            redirect_uri,
-            state,
-            error="invalid_client",
-            description="Unknown client_id"
-        )
-
-    # Validate redirect_uri per RFC 3986 (case-insensitive scheme/host, case-sensitive path)
-    # Normalize the incoming redirect URI
-    normalized_redirect = _normalize_redirect_uri(redirect_uri)
-    if not normalized_redirect:
-        request_logger.warning(
-            "oauth.authorize.error",
-            error="invalid_redirect_uri",
-            client_id=mask_client_id(client_id),
-            message="Invalid redirect_uri format (query/fragment not allowed)"
-        )
-        return _error_redirect(
-            redirect_uri,
-            state,
-            error="invalid_request",
-            description="Invalid redirect_uri"
-        )
-
-    # Normalize all registered URIs and compare
-    normalized_registered = {
-        _normalize_redirect_uri(uri) for uri in client.redirect_uris
-    }
-
-    if normalized_redirect not in normalized_registered:
-        request_logger.warning(
-            "oauth.authorize.error",
-            error="invalid_redirect_uri",
-            client_id=mask_client_id(client_id)
-        )
-        return _error_redirect(
-            redirect_uri,
-            state,
-            error="invalid_request",
-            description="redirect_uri not registered for this client"
         )
 
     # Validate scopes against client's registered scopes (NOT hardcoded)
@@ -602,6 +603,11 @@ async def authorize_endpoint(
         client_name = "Clarity"  # App name, not OAuth client name
         # Only show clarity.* scopes on Clarity consent page
         display_scopes = {s for s in requested_scopes if s.startswith("clarity.")}
+    elif any(s.startswith("pg.") for s in requested_scopes):
+        template_name = f"oauth_consent_pg_{language}.html"
+        client_name = "Priority Guardian"  # App name, not OAuth client name
+        # Only show pg.* scopes on Priority Guardian consent page
+        display_scopes = {s for s in requested_scopes if s.startswith("pg.")}
     else:
         template_name = f"oauth_consent_{language}.html"  # Focused (existing)
         display_scopes = requested_scopes

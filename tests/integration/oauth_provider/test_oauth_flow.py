@@ -284,17 +284,11 @@ class TestAuthorizationCodeGrant:
             follow_redirects=False
         )
 
-        # OAuth 2.1 allows either:
-        # - 302 redirect with error query params
-        # - 400/401 JSON error response
-        assert response.status_code in [302, 400, 401]
-
-        if response.status_code == 302:
-            location = response.headers.get("location", "")
-            assert "error=invalid_client" in location
-        elif response.status_code == 400:
-            data = response.json()
-            assert data.get("error") == "invalid_client"
+        # Security: Invalid client must return 400, NOT redirect
+        # Redirecting to unverified redirect_uri is an open redirect vulnerability
+        assert response.status_code == 400
+        data = response.json()
+        assert "Unknown client_id" in data.get("detail", "")
 
 
 # ============================================================================

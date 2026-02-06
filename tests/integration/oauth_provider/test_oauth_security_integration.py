@@ -606,12 +606,6 @@ class TestRedirectUriSecurity:
         assert "redirect" in error_msg.lower() or "https" in error_msg.lower()
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason="SECURITY: Backend redirects to unregistered URI with error. "
-               "Per OAuth 2.0 spec 4.1.2.1, server SHOULD NOT redirect when "
-               "redirect_uri is invalid. Implementation needs fix.",
-        strict=True
-    )
     async def test_http_redirect_rejected_in_authorize(
         self,
         client: AsyncClient,
@@ -625,6 +619,8 @@ class TestRedirectUriSecurity:
 
         Per OAuth 2.0 spec section 4.1.2.1, when redirect_uri is invalid,
         the server SHOULD NOT redirect to the client at all.
+
+        SECURITY FIX: Now returns 400 instead of redirecting to unverified URI.
         """
         # Create a client with HTTPS redirect for registration
         client_id = f"focused-client-https-test-{uuid4().hex[:8]}"
@@ -659,21 +655,11 @@ class TestRedirectUriSecurity:
             follow_redirects=False
         )
 
-        # SECURITY: Must NOT redirect to the unregistered http:// URL
-        if response.status_code == 302:
-            location = response.headers.get("location", "")
-            # Must NOT redirect to the unregistered http:// URL
-            assert not location.startswith("http://example.com"), (
-                "SECURITY VULNERABILITY: Redirected to unregistered http:// URL!"
-            )
-            # If redirecting, must go to the registered https:// URL with error
-            assert location.startswith("https://example.com/callback"), (
-                f"Expected redirect to registered URL, got: {location}"
-            )
-            assert "error=" in location
-        else:
-            # 400 is the correct response per OAuth spec
-            assert response.status_code == 400
+        # SECURITY: Must NOT redirect to unregistered URI - return 400 instead
+        # This prevents open redirect attacks
+        assert response.status_code == 400
+        data = response.json()
+        assert "Invalid redirect_uri" in data.get("detail", "")
 
     @pytest.mark.asyncio
     async def test_localhost_http_allowed_for_development(

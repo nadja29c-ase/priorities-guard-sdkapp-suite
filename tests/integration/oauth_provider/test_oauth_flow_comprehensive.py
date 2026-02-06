@@ -236,9 +236,11 @@ async def test_authorize_requires_authentication(client):
         follow_redirects=False
     )
 
-    # OAuth spec: authorize endpoint returns 302 with error params for invalid requests
-    assert response.status_code == 302
-    assert "error=" in response.headers.get("location", "")
+    # Security: Invalid/unknown client must return 400, NOT redirect
+    # Redirecting to unverified redirect_uri is an open redirect vulnerability
+    assert response.status_code == 400
+    data = response.json()
+    assert "Unknown client_id" in data.get("detail", "")
 
 
 @pytest.mark.asyncio
@@ -259,11 +261,11 @@ async def test_authorize_validates_client_id(client, oauth_client, pkce_verifier
         follow_redirects=False
     )
 
-    # OAuth spec: authorize endpoint returns 302 with error params for invalid client
-    assert response.status_code == 302
-    location = response.headers.get("location", "")
-    assert "error=" in location
-    assert "invalid_client" in location
+    # Security: Invalid client must return 400, NOT redirect
+    # Redirecting to unverified redirect_uri is an open redirect vulnerability
+    assert response.status_code == 400
+    data = response.json()
+    assert "Unknown client_id" in data.get("detail", "")
 
 
 @pytest.mark.asyncio
@@ -284,11 +286,11 @@ async def test_authorize_validates_redirect_uri(client, oauth_client, pkce_verif
         follow_redirects=False
     )
 
-    # OAuth spec: authorize endpoint returns 302 with error params for invalid redirect_uri
-    # Note: It redirects to the provided redirect_uri with the error
-    assert response.status_code == 302
-    location = response.headers.get("location", "")
-    assert "error=" in location
+    # Security: Unregistered redirect_uri must return 400, NOT redirect
+    # Redirecting to unverified redirect_uri is an open redirect vulnerability
+    assert response.status_code == 400
+    data = response.json()
+    assert "redirect_uri not registered" in data.get("detail", "")
 
 
 @pytest.mark.asyncio
