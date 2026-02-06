@@ -366,9 +366,9 @@ async def backend_post(
     name="connect_google_calendar",
     description=CONNECT_GOOGLE_CALENDAR_DESCRIPTION,
     annotations={
-        "readOnlyHint": True,   # Only reads connection status, generates URLs
+        "readOnlyHint": False,   # Initiates OAuth flow, modifies connection state
         "destructiveHint": False,
-        "openWorldHint": False,  # Talks to our backend, not external systems directly
+        "openWorldHint": True,   # Initiates external Google OAuth flow
     }
 )
 @handle_mcp_errors("connect_google_calendar")
@@ -454,7 +454,7 @@ async def connect_google_calendar(
     annotations={
         "readOnlyHint": False,   # Revokes tokens, modifies state
         "destructiveHint": True,  # Irreversible - revokes access
-        "openWorldHint": False,   # Talks to our backend, not external systems directly
+        "openWorldHint": True,    # Revokes external Google OAuth tokens
     }
 )
 @handle_mcp_errors("disconnect_google_calendar")
