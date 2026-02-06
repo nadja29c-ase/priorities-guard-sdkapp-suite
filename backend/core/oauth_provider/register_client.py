@@ -58,13 +58,13 @@ async def register_endpoint(
 
     Routes:
         /oauth/focused/register: Focused app clients (defaults to focused.* scopes)
-        /oauth/pg/register: Priority Guardian clients (scope REQUIRED, no default)
+        /oauth/pg/register: Priority Guardian clients (defaults to pg.access)
 
     Request Body:
         client_name: Human-readable client name
         redirect_uris: Array of allowed redirect URIs (must use HTTPS)
         grant_types: Optional array of allowed grant types (default: authorization_code, refresh_token)
-        scope: Space-separated scopes (REQUIRED for /oauth/pg/register)
+        scope: Optional space-separated scopes (defaults per route if omitted)
 
     Returns:
         client_id: Generated client identifier (pg-client-{uuid})
@@ -77,7 +77,7 @@ async def register_endpoint(
         - Client must store client_secret securely
         - All redirect_uris must use HTTPS
         - Rate limited to prevent abuse
-        - Least privilege: /oauth/pg/register requires explicit scope
+        - Least privilege: each route has minimal default scopes
 
     Example Response:
         {
@@ -137,19 +137,13 @@ async def register_endpoint(
             requested_scope=scope_str[:200],  # Truncate to prevent log spam
             parsed_scopes=sorted(scopes)  # Log in sorted order for readability
         )
-    elif default_scopes is not None:
-        # Use route-specific defaults (only for /oauth/focused/register)
+    else:
+        # No scope provided - use route-specific defaults
         scopes = default_scopes.copy()
         request_logger.info(
             "oauth.register.scopes_default",
             route=route_path,
             default_scopes=scopes
-        )
-    else:
-        # /oauth/pg/register requires explicit scope
-        raise HTTPException(
-            status_code=400,
-            detail="scope is required for /oauth/pg/register"
         )
 
     # Sort scopes once for deterministic storage and response
