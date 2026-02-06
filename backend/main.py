@@ -31,6 +31,11 @@ from backend.apps.focused.routers.offboarding_router import router as offboardin
 from backend.apps.focused.routers.google_connection_router import router as google_connection_router
 from backend.apps.clarity import clusters_router
 
+# Priority Guardian app routers (Increment 01)
+from backend.apps.priority_guardian.routers.health_router import router as pg_health_router
+from backend.apps.priority_guardian.routers.google_connection_router import router as pg_google_connection_router
+from backend.apps.priority_guardian.routers.offboarding_router import router as pg_offboarding_router
+
 # Initialize logging first
 configure_logging()
 
@@ -271,3 +276,8 @@ app.include_router(google_connection_router, prefix="/api/focused/google")
 
 # Clarity SDK app router (Increment 05)
 app.include_router(clusters_router, prefix="/api/clarity")
+
+# Priority Guardian SDK app routers (Increment 01)
+app.include_router(pg_health_router, prefix="/api/priority-guardian")
+app.include_router(pg_google_connection_router, prefix="/api/priority-guardian/google")
+app.include_router(pg_offboarding_router, prefix="/api/priority-guardian")

@@ -1,0 +1,138 @@
+"""
+Offboarding Router — User disconnect endpoint for Priority Guardian.
+
+Endpoints:
+- POST /disconnect: Revoke access without deleting data
+
+Increment 01: Minimal disconnect only. No DELETE /delete-data yet (later increment).
+
+Both endpoints require valid ChatGPT OAuth JWT for authentication.
+User ID is extracted from the JWT sub claim via X-User-ID header.
+"""
+
+import logging
+from datetime import datetime, timezone
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy import select, update, any_
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.core.database import get_db
+from backend.core.models import CoreConnection, CoreUser
+from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizationCode
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["priority-guardian-offboarding"])
+
+
+@router.post("/disconnect")
+async def disconnect(
+    x_user_id: str = Header(..., alias="X-User-ID"),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Disconnect user from Priority Guardian app.
+
+    PG disconnect is simpler than Focused's:
+    - No webhook channel to stop (PG has no webhooks in Inc 01)
+    - No focus sessions to clean up
+    - No app-specific Redis cache to clear
+
+    Just:
+    1. Revoke Google connection from core_connections
+    2. Mark PG OAuth tokens as revoked
+
+    Idempotent: calling twice returns 200 (already disconnected).
+
+    Returns:
+        200: {"status": "disconnected", "revoked_at": "<timestamp>"}
+        422: Missing X-User-ID header (FastAPI validation)
+        404: User not found
+        500: Internal error
+    """
+    try:
+        # X-User-ID extracted via Header() - FastAPI validates presence
+        # Offboarding endpoints MUST be authenticated
+        user_id = UUID(x_user_id)
+
+        # Validate user exists in database
+        user = await session.get(CoreUser, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        now = datetime.now(timezone.utc)
+        details = {
+            "google_connection_revoked": False,
+            "pg_tokens_revoked": 0,
+        }
+
+        # 1. Load Google connection
+        stmt = select(CoreConnection).where(
+            CoreConnection.user_id == user_id,
+            CoreConnection.provider == "google",
+        )
+        result = await session.execute(stmt)
+        connection = result.scalar_one_or_none()
+
+        if connection is None:
+            logger.info(f"[pg-offboarding] No Google connection found for user {user_id}")
+            # Still mark tokens as revoked even if no connection
+        elif connection.revoked_at is not None:
+            logger.info(f"[pg-offboarding] User {user_id} already disconnected at {connection.revoked_at}")
+            return {
+                "status": "disconnected",
+                "revoked_at": connection.revoked_at.isoformat(),
+                "already_disconnected": True,
+                "details": details,
+            }
+        else:
+            # Mark connection as revoked
+            connection.revoked_at = now
+            details["google_connection_revoked"] = True
+            await session.flush()
+
+        # 2. Mark PG OAuth tokens as revoked (pg.* scoped tokens only)
+        try:
+            stmt = (
+                update(OAuthAccessToken)
+                .where(
+                    OAuthAccessToken.user_id == user_id,
+                    OAuthAccessToken.revoked == False,  # noqa: E712
+                    "pg.access" == any_(OAuthAccessToken.scope),  # PG-scoped
+                )
+                .values(revoked=True, revoked_at=now)
+            )
+            result = await session.execute(stmt)
+            details["pg_tokens_revoked"] = result.rowcount
+
+        except Exception as e:
+            logger.error(f"[pg-offboarding] OAuth token revocation error for user {user_id}: {e}")
+            # Continue - non-blocking
+
+        await session.commit()
+
+        logger.info(
+            f"[pg-offboarding] Disconnect completed for user {user_id}: "
+            f"google_revoked={details['google_connection_revoked']}, "
+            f"pg_tokens={details['pg_tokens_revoked']}"
+        )
+
+        return {
+            "status": "disconnected",
+            "revoked_at": now.isoformat(),
+            "already_disconnected": False,
+            "details": details,
+        }
+
+    except ValueError as e:
+        logger.error(f"[pg-offboarding] Invalid user_id: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid user ID: {e}")
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error(f"[pg-offboarding] Disconnect error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

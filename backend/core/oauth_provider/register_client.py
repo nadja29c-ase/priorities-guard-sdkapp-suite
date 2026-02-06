@@ -39,9 +39,9 @@ SUPPORTED_SCOPES = set(SCOPES_SUPPORTED)
 
 # Route-specific defaults (least privilege principle)
 # - /oauth/focused/register: Focused app scopes only (backward compatibility)
-# - /oauth/pg/register: Clarity scopes (TODO: refactor to route-aware defaults when adding second app)
+# - /oauth/pg/register: PG suite scopes (each MCP server advertises only its own scopes)
 DEFAULT_SCOPES_FOCUSED = ["focused.read", "focused.write", "focused.notify"]
-DEFAULT_SCOPES_PG = ["clarity.write"]  # Default for Clarity (refactor when adding second app)
+DEFAULT_SCOPES_PG = ["pg.access"]  # Default for Priority Guardian suite
 
 
 @router.post("/oauth/focused/register")
@@ -84,7 +84,7 @@ async def register_endpoint(
             "client_id": "pg-client-12345678-1234-1234-1234-123456789abc",
             "client_secret": "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
             "redirect_uris": ["https://chat.openai.com/aip/callback"],
-            "scope": "clarity.write"
+            "scope": "pg.access"
         }
     """
     # Get correlation_id for logging
@@ -117,7 +117,7 @@ async def register_endpoint(
     if route_path == "/oauth/focused/register":
         default_scopes = DEFAULT_SCOPES_FOCUSED
     else:
-        # /oauth/pg/register: Clarity defaults (ChatGPT doesn't send scope param)
+        # /oauth/pg/register: PG suite defaults (ChatGPT doesn't send scope param)
         default_scopes = DEFAULT_SCOPES_PG
 
     # Parse and validate requested scopes

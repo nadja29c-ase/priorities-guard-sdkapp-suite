@@ -27,6 +27,7 @@ SCOPES_SUPPORTED = sorted([
     "focused.notify",
     "focused.read",
     "focused.write",
+    "pg.access",
 ])
 
 
