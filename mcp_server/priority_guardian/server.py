@@ -4,14 +4,6 @@ Priority Guardian MCP Server - Thin wrapper around backend REST API (Increment 0
 """
 
 import os
-print("=" * 50)
-print("PRIORITY GUARDIAN MCP SERVER VERSION: INC_01_V1")
-print("SERVER FILE:", os.path.abspath(__file__))
-print("ENV PG_BACKEND_URL:", os.getenv("PG_BACKEND_URL"))
-print("ENV PG_OAUTH_ISSUER_URL:", os.getenv("PG_OAUTH_ISSUER_URL"))
-print("ENV PG_MCP_SERVER_URL:", os.getenv("PG_MCP_SERVER_URL"))
-print("ENV PORT:", os.getenv("PORT"))
-print("=" * 50)
 
 """
 
@@ -124,12 +116,15 @@ http_client: httpx.AsyncClient | None = None
 # Startup Configuration Validation
 # ============================================================================
 
-# Log resolved OAuth config (helps debug Railway env var issues)
+# Log resolved config at startup (helps debug Railway env var issues)
 logger.info(
-    "oauth.config.resolved",
+    "mcp.server.startup",
+    version="INC_01_V1",
+    server_file=os.path.abspath(__file__),
     BACKEND_URL=BACKEND_URL,
     OAUTH_ISSUER_URL=OAUTH_ISSUER_URL,
     MCP_SERVER_URL=MCP_SERVER_URL,
+    PORT=os.getenv("PORT"),
 )
 
 # Warn if localhost URLs are used (will break ChatGPT OAuth in production)
@@ -572,12 +567,13 @@ def create_app():
     # Mount discovery routes onto FastMCP app
     fastmcp_app.mount("/.well-known", discovery_app)
 
-    # Debug: dump FastMCP config
-    print("FASTMCP NAME:", mcp.name)
-    print("\n================ MCP ROUTES ================")
-    print("FastMCP root app with /.well-known mounted")
-    print("MCP endpoint at /mcp (handled by FastMCP)")
-    print("===========================================\n")
+    # Log FastMCP configuration
+    logger.info(
+        "mcp.app.created",
+        fastmcp_name=mcp.name,
+        mcp_endpoint="/mcp",
+        discovery_mount="/.well-known",
+    )
 
     # Wrap with header-fix middleware
     return MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
