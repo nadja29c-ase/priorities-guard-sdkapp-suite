@@ -262,7 +262,21 @@ class TestExceptionClasses:
 # =============================================================================
 
 class TestJWKSCacheBasics:
-    """Test JWKS cache logic without async complexity."""
+    """
+    Test JWKS cache time-based logic without async complexity.
+
+    IMPORTANT: These tests verify time math (TTL, max-stale), NOT security behavior.
+
+    Gap (future increment):
+        These tests do NOT cover:
+        - Interaction between is_cache_valid() and fetch_jwks()
+        - "Stale but usable" fallback path when fetch fails
+        - Fail-closed behavior when cache > max-stale AND fetch fails
+
+    TODO: Add async tests that simulate:
+        1. Cached JWKS + forced fetch failure + cache age < max-stale → succeeds
+        2. Cached JWKS + forced fetch failure + cache age > max-stale → raises
+    """
 
     def test_cache_empty_initially(self):
         """Test cache starts empty."""
