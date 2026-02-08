@@ -33,6 +33,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from backend.core.models import Base
 from backend.apps.focused import db_models  # noqa: F401 - Import models so they're registered with Base
 from backend.apps.clarity import db_models as clarity_db_models  # noqa: F401 - Import Clarity models
+from backend.apps.priority_guardian import db_models as pg_db_models  # noqa: F401 - Import PG models
 from backend.core.oauth_provider import models as oauth_models  # noqa: F401 - Import OAuth models
 
 # Test database URL
@@ -135,9 +136,10 @@ async def cleanup_db(async_engine):
         await conn.execute(
             text(
                 "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
-                "focused_scheduled_jobs, clarity_clusters, core_connections, core_users, "
-                "core_tool_audit_log, core_consents, oauth_authorization_codes, "
-                "oauth_access_tokens, oauth_state RESTART IDENTITY CASCADE"
+                "focused_scheduled_jobs, clarity_clusters, pg_deliverables, pg_priorities, "
+                "core_connections, core_users, core_tool_audit_log, core_consents, "
+                "oauth_authorization_codes, oauth_access_tokens, oauth_state "
+                "RESTART IDENTITY CASCADE"
             )
         )
 

@@ -50,8 +50,38 @@ from mcp_server.focused.discovery import (
 
 
 # ============================================================================
-# MCPContentTypeFixMiddleware - Fix ChatGPT octet-stream Content-Type
+# ASGI Middlewares
 # ============================================================================
+
+class LifespanMiddleware:
+    """
+    ASGI middleware to handle cleanup on server shutdown.
+
+    Intercepts ASGI lifespan events to run cleanup when the server shuts down.
+    This ensures the HTTP client is closed properly to prevent connection leaks.
+    """
+
+    def __init__(self, app, cleanup_func):
+        self.app = app
+        self.cleanup_func = cleanup_func
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "lifespan":
+            # Intercept lifespan protocol to add cleanup
+            async def receive_wrapper():
+                message = await receive()
+                return message
+
+            async def send_wrapper(message):
+                if message["type"] == "lifespan.shutdown.complete":
+                    # Run cleanup before signaling shutdown complete
+                    await self.cleanup_func()
+                await send(message)
+
+            await self.app(scope, receive_wrapper, send_wrapper)
+        else:
+            await self.app(scope, receive, send)
+
 
 class MCPContentTypeAndAcceptFixMiddleware:
     """
@@ -120,6 +150,15 @@ mcp = FastMCP("focused-mcp", streamable_http_path="/mcp")
 
 # Shared HTTP client for calling backend API (lazily initialized)
 http_client: httpx.AsyncClient | None = None
+
+
+async def cleanup_http_client() -> None:
+    """Close the HTTP client on shutdown to prevent connection leaks."""
+    global http_client
+    if http_client is not None:
+        await http_client.aclose()
+        http_client = None
+        logger.info("mcp.http_client.closed")
 
 
 # ============================================================================
@@ -701,8 +740,11 @@ def create_app():
     print("MCP endpoint at /mcp (handled by FastMCP)")
     print("===========================================\n")
 
-    # Wrap with header-fix middleware
-    return MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
+    # Wrap with middlewares:
+    # 1. LifespanMiddleware (outermost) - handles cleanup on shutdown
+    # 2. MCPContentTypeAndAcceptFixMiddleware - fixes ChatGPT header issues
+    wrapped_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
+    return LifespanMiddleware(wrapped_app, cleanup_http_client)
 
 
 # --------------------------------------------------------------------

@@ -35,6 +35,8 @@ from backend.apps.clarity import clusters_router
 from backend.apps.priority_guardian.routers.health_router import router as pg_health_router
 from backend.apps.priority_guardian.routers.google_connection_router import router as pg_google_connection_router
 from backend.apps.priority_guardian.routers.offboarding_router import router as pg_offboarding_router
+# Priority Guardian app routers (Increment 02)
+from backend.apps.priority_guardian.routers.priorities_router import router as pg_priorities_router
 
 # Initialize logging first
 configure_logging()
@@ -281,3 +283,5 @@ app.include_router(clusters_router, prefix="/api/clarity")
 app.include_router(pg_health_router, prefix="/api/priority-guardian")
 app.include_router(pg_google_connection_router, prefix="/api/priority-guardian/google")
 app.include_router(pg_offboarding_router, prefix="/api/priority-guardian")
+# Priority Guardian SDK app routers (Increment 02)
+app.include_router(pg_priorities_router, prefix="/api/priority-guardian")

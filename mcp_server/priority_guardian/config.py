@@ -153,6 +153,7 @@ SCOPES_SUPPORTED = ["pg.access"]
 TOOL_SCOPES = {
     "connect_google_calendar": ["pg.access"],
     "disconnect_google_calendar": ["pg.access"],
+    "create_priority": ["pg.access"],
 }
 
 
