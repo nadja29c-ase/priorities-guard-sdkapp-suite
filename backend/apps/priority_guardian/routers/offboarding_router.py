@@ -14,11 +14,13 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select, update, any_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
+from backend.core.encryption import decrypt_token
+from backend.core.google_oauth import revoke_google_token
 from backend.core.models import CoreConnection, CoreUser
 from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizationCode
 
@@ -29,6 +31,7 @@ router = APIRouter(tags=["priority-guardian-offboarding"])
 
 @router.post("/disconnect")
 async def disconnect(
+    request: Request,
     x_user_id: str = Header(..., alias="X-User-ID"),
     session: AsyncSession = Depends(get_db),
 ):
@@ -41,8 +44,9 @@ async def disconnect(
     - No app-specific Redis cache to clear
 
     Just:
-    1. Revoke Google connection from core_connections
-    2. Mark PG OAuth tokens as revoked
+    1. Revoke Google OAuth token at Google (best-effort)
+    2. Mark Google connection as revoked in core_connections
+    3. Mark PG OAuth tokens as revoked
 
     Idempotent: calling twice returns 200 (already disconnected).
 
@@ -64,6 +68,7 @@ async def disconnect(
 
         now = datetime.now(timezone.utc)
         details = {
+            "google_token_revoked": False,
             "google_connection_revoked": False,
             "pg_tokens_revoked": 0,
         }
@@ -88,6 +93,30 @@ async def disconnect(
                 "details": details,
             }
         else:
+            # Revoke Google OAuth token (best-effort, before marking revoked in DB)
+            if connection.encrypted_refresh_token:
+                try:
+                    refresh_token = decrypt_token(connection.encrypted_refresh_token)
+                    http_client = request.app.state.http_client
+                    revoke_result = await revoke_google_token(
+                        refresh_token=refresh_token,
+                        http_client=http_client,
+                    )
+                    details["google_token_revoked"] = revoke_result.get("success", False)
+                    if not revoke_result["success"]:
+                        logger.warning(
+                            f"[pg-offboarding] Google token revoke failed for user {user_id}: "
+                            f"{revoke_result.get('error')}"
+                        )
+                except Exception as e:
+                    logger.warning(f"[pg-offboarding] Google token revoke error for user {user_id}: {e}")
+                    # Continue - non-blocking
+            else:
+                logger.info(
+                    f"[pg-offboarding] No refresh token to revoke for user {user_id}, "
+                    f"access token will expire naturally (max 1 hour)"
+                )
+
             # Mark connection as revoked
             connection.revoked_at = now
             details["google_connection_revoked"] = True
@@ -115,7 +144,8 @@ async def disconnect(
 
         logger.info(
             f"[pg-offboarding] Disconnect completed for user {user_id}: "
-            f"google_revoked={details['google_connection_revoked']}, "
+            f"google_token_revoked={details['google_token_revoked']}, "
+            f"google_connection_revoked={details['google_connection_revoked']}, "
             f"pg_tokens={details['pg_tokens_revoked']}"
         )
 
