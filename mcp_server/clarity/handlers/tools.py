@@ -14,8 +14,8 @@ from ..mcp_auth import (
     authenticate_request,
     UnauthorizedError,
     InsufficientScopeError,
-    build_unauthorized_error,
-    build_forbidden_error,
+    build_unauthorized_meta,
+    build_forbidden_meta,
 )
 
 logger = structlog.get_logger(__name__)
@@ -76,7 +76,7 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
                 type="text",
                 text="Authentication required. Please connect your account."
             )],
-            _meta=build_unauthorized_error(),
+            _meta=build_unauthorized_meta(),
             isError=True,
         )
     except InsufficientScopeError as e:
@@ -90,7 +90,7 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
                 type="text",
                 text="Insufficient permissions. Please reconnect your account."
             )],
-            _meta=build_forbidden_error(required_scopes=e.required_scopes),
+            _meta=build_forbidden_meta(),
             isError=True,
         )
     auth_ms = (time.perf_counter() - start_auth) * 1000

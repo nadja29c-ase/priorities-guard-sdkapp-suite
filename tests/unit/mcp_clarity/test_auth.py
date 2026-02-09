@@ -15,8 +15,8 @@ from mcp_server.clarity.mcp_auth import (
     extract_or_generate_correlation_id,
     UnauthorizedError,
     InsufficientScopeError,
-    build_unauthorized_error,
-    build_forbidden_error,
+    build_unauthorized_meta,
+    build_forbidden_meta,
 )
 from mcp_server.clarity.discovery import oauth_protected_resource
 from mcp_server.clarity.config import MCP_SERVER_URL, OAUTH_ISSUER_URL, SCOPES_SUPPORTED, TOOL_SCOPES
@@ -483,90 +483,65 @@ class TestOAuthResourceDiscovery:
         assert isinstance(result["scopes_supported"], list)
 
 
-class TestErrorBuilderStructure:
-    """Test JSON-RPC error builder structure (prevents protocol drift)."""
+class TestMetaBuilders:
+    """Test _meta builders for CallToolResult responses.
 
-    def test_unauthorized_error_structure(self):
-        """build_unauthorized_error returns correct JSON-RPC structure."""
-        error = build_unauthorized_error()
+    Per OpenAI MCP Authentication spec, _meta["mcp/www_authenticate"] must contain
+    RFC 7235 challenge strings, not JSON objects.
+    """
 
-        # Must have error object
-        assert "error" in error
-        assert isinstance(error["error"], dict)
+    def test_unauthorized_meta_structure(self):
+        """Test 401 meta has correct flat structure for CallToolResult._meta."""
+        result = build_unauthorized_meta()
 
-        # Error must have code, message, data
-        assert error["error"]["code"] == -32001
-        assert error["error"]["message"] == "Unauthorized"
-        assert "data" in error["error"]
+        # Should be flat dict, not nested error envelope
+        assert "mcp/www_authenticate" in result
+        assert "error" not in result  # No JSON-RPC envelope
 
-        # Data must have _meta with mcp/www_authenticate
-        assert "_meta" in error["error"]["data"]
-        assert "mcp/www_authenticate" in error["error"]["data"]["_meta"]
+    def test_unauthorized_meta_rfc7235_format(self):
+        """Test WWW-Authenticate is RFC 7235 challenge string."""
+        result = build_unauthorized_meta()
 
-        # www_authenticate must be list with oauth2 type
-        www_auth = error["error"]["data"]["_meta"]["mcp/www_authenticate"]
-        assert isinstance(www_auth, list)
+        www_auth = result["mcp/www_authenticate"]
         assert len(www_auth) == 1
-        assert www_auth[0]["type"] == "oauth2"
-        assert "resource_metadata" in www_auth[0]
+        assert isinstance(www_auth[0], str)  # String, not dict
+        assert www_auth[0].startswith("Bearer ")
+        assert "resource_metadata=" in www_auth[0]
+        assert "oauth-protected-resource" in www_auth[0]
+        assert 'error="invalid_token"' in www_auth[0]
 
-    def test_forbidden_error_structure(self):
-        """build_forbidden_error returns correct JSON-RPC structure."""
-        error = build_forbidden_error()
+    def test_unauthorized_meta_resource_metadata_url(self):
+        """Unauthorized meta points to correct discovery URL."""
+        result = build_unauthorized_meta()
 
-        # Must have error object
-        assert "error" in error
-        assert isinstance(error["error"], dict)
+        www_auth = result["mcp/www_authenticate"][0]
+        assert f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource" in www_auth
 
-        # Error must have code, message, data
-        assert error["error"]["code"] == -32003
-        assert error["error"]["message"] == "Forbidden"
-        assert "data" in error["error"]
+    def test_forbidden_meta_structure(self):
+        """Test 403 meta has correct flat structure for CallToolResult._meta."""
+        result = build_forbidden_meta()
 
-        # Data must have _meta with mcp/www_authenticate
-        assert "_meta" in error["error"]["data"]
-        assert "mcp/www_authenticate" in error["error"]["data"]["_meta"]
+        # Should be flat dict, not nested error envelope
+        assert "mcp/www_authenticate" in result
+        assert "error" not in result  # No JSON-RPC envelope
 
-    def test_forbidden_error_includes_required_scope(self):
-        """build_forbidden_error includes required_scope when provided."""
-        error = build_forbidden_error(required_scopes=["clarity.write"])
+    def test_forbidden_meta_rfc7235_format(self):
+        """Test 403 WWW-Authenticate is RFC 7235 challenge string."""
+        result = build_forbidden_meta()
 
-        assert "required_scope" in error["error"]["data"]
-        assert error["error"]["data"]["required_scope"] == "clarity.write"
+        www_auth = result["mcp/www_authenticate"]
+        assert len(www_auth) == 1
+        assert isinstance(www_auth[0], str)  # String, not dict
+        assert www_auth[0].startswith("Bearer ")
+        assert "oauth-protected-resource" in www_auth[0]
+        assert 'error="insufficient_scope"' in www_auth[0]
 
-    def test_forbidden_error_joins_multiple_scopes(self):
-        """build_forbidden_error joins multiple required scopes with space."""
-        error = build_forbidden_error(required_scopes=["clarity.write", "clarity.admin"])
+    def test_forbidden_meta_resource_metadata_url(self):
+        """Forbidden meta points to correct discovery URL."""
+        result = build_forbidden_meta()
 
-        assert error["error"]["data"]["required_scope"] == "clarity.write clarity.admin"
-
-    def test_forbidden_error_does_not_include_actual_scopes(self):
-        """build_forbidden_error does NOT surface actual_scopes (security)."""
-        error = build_forbidden_error(
-            required_scopes=["clarity.write"],
-            actual_scopes=["focused.read", "focused.write"]  # Should NOT appear
-        )
-
-        # actual_scopes should never appear in output
-        assert "actual_scope" not in error["error"]["data"]
-        assert "actual_scopes" not in error["error"]["data"]
-        error_str = str(error)
-        assert "focused.read" not in error_str
-        assert "focused.write" not in error_str
-
-    def test_unauthorized_error_resource_metadata_url(self):
-        """Unauthorized error points to correct discovery URL."""
-        error = build_unauthorized_error()
-
-        resource_metadata = error["error"]["data"]["_meta"]["mcp/www_authenticate"][0]["resource_metadata"]
-        assert resource_metadata == f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource"
-
-    def test_forbidden_error_resource_metadata_url(self):
-        """Forbidden error points to correct discovery URL."""
-        error = build_forbidden_error()
-
-        resource_metadata = error["error"]["data"]["_meta"]["mcp/www_authenticate"][0]["resource_metadata"]
-        assert resource_metadata == f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource"
+        www_auth = result["mcp/www_authenticate"][0]
+        assert f"{MCP_SERVER_URL}/.well-known/oauth-protected-resource" in www_auth
 
     def test_invalid_params_error_structure(self):
         """build_invalid_params_error returns correct JSON-RPC structure."""

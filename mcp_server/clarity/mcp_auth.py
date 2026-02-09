@@ -484,46 +484,44 @@ class InsufficientScopeError(OAuthError):
         super().__init__(self.description)
 
 
-def build_unauthorized_error() -> Dict[str, Any]:
+def build_unauthorized_meta() -> Dict[str, Any]:
     """
-    Build RFC 6750 WWW-Authenticate header for 401 Unauthorized.
+    Build _meta dict for 401 Unauthorized responses.
 
-    Returns dict with mcp/www_authenticate containing RFC 6750 Bearer challenge string.
-    This format is required by ChatGPT Apps SDK to trigger OAuth linking UI.
+    Returns dict to assign to CallToolResult._meta with mcp/www_authenticate
+    containing RFC 7235 challenge string for ChatGPT OAuth re-auth flow.
+
+    Format per OpenAI MCP Authentication spec:
+    _meta["mcp/www_authenticate"] = ['Bearer resource_metadata="...", error="...", error_description="..."']
 
     Returns:
-        Dict with mcp/www_authenticate list containing RFC 6750 header string
+        Dict with mcp/www_authenticate key for CallToolResult._meta
     """
     return {
         "mcp/www_authenticate": [
             f'Bearer resource_metadata="{MCP_SERVER_URL}/.well-known/oauth-protected-resource", '
-            f'error="invalid_token", error_description="No access token provided"'
+            f'error="invalid_token", error_description="Authentication required"'
         ]
     }
 
 
-def build_forbidden_error(
-    required_scopes: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+def build_forbidden_meta() -> Dict[str, Any]:
     """
-    Build RFC 6750 WWW-Authenticate header for 403 Forbidden (insufficient scope).
+    Build _meta dict for 403 Forbidden responses.
 
-    Returns dict with mcp/www_authenticate containing RFC 6750 Bearer challenge string.
-    This format is required by ChatGPT Apps SDK to trigger OAuth linking UI.
+    Returns dict to assign to CallToolResult._meta with mcp/www_authenticate
+    containing RFC 7235 challenge string for ChatGPT OAuth re-auth flow.
 
-    Args:
-        required_scopes: Required scopes for the tool
+    Format per OpenAI MCP Authentication spec:
+    _meta["mcp/www_authenticate"] = ['Bearer resource_metadata="...", error="...", error_description="..."']
 
     Returns:
-        Dict with mcp/www_authenticate list containing RFC 6750 header string
+        Dict with mcp/www_authenticate key for CallToolResult._meta
     """
-    scope_str = " ".join(required_scopes) if required_scopes else "clarity.write"
-
     return {
         "mcp/www_authenticate": [
             f'Bearer resource_metadata="{MCP_SERVER_URL}/.well-known/oauth-protected-resource", '
-            f'error="insufficient_scope", error_description="Required scope: {scope_str}", '
-            f'scope="{scope_str}"'
+            f'error="insufficient_scope", error_description="Insufficient permissions"'
         ]
     }
 

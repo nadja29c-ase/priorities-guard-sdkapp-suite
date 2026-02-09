@@ -17,8 +17,8 @@ from mcp_server.priority_guardian.mcp_auth import (
     extract_bearer_token,
     check_scopes,
     extract_or_generate_correlation_id,
-    build_unauthorized_error,
-    build_forbidden_error,
+    build_unauthorized_meta,
+    build_forbidden_meta,
     UnauthorizedError,
     InsufficientScopeError,
 )
@@ -179,54 +179,51 @@ class TestCorrelationID:
 # Test: Error Builders
 # =============================================================================
 
-class TestErrorBuilders:
-    """Test MCP-compliant error response builders."""
+class TestMetaBuilders:
+    """Test _meta builders for CallToolResult responses.
 
-    def test_unauthorized_error_structure(self):
-        """Test 401 error has correct JSON-RPC structure."""
-        result = build_unauthorized_error("invalid_token", "Token expired")
+    Per OpenAI MCP Authentication spec, _meta["mcp/www_authenticate"] must contain
+    RFC 7235 challenge strings, not JSON objects.
+    """
 
-        assert "error" in result
-        assert result["error"]["code"] == -32001
-        assert result["error"]["message"] == "Unauthorized"
+    def test_unauthorized_meta_structure(self):
+        """Test 401 meta has correct flat structure for CallToolResult._meta."""
+        result = build_unauthorized_meta()
 
-        data = result["error"]["data"]
-        assert "_meta" in data
-        assert "mcp/www_authenticate" in data["_meta"]
+        # Should be flat dict, not nested error envelope
+        assert "mcp/www_authenticate" in result
+        assert "error" not in result  # No JSON-RPC envelope
 
-    def test_unauthorized_error_oauth_discovery(self):
-        """Test WWW-Authenticate includes OAuth discovery URL."""
-        result = build_unauthorized_error("invalid_token", "Missing token")
+    def test_unauthorized_meta_rfc7235_format(self):
+        """Test WWW-Authenticate is RFC 7235 challenge string."""
+        result = build_unauthorized_meta()
 
-        www_auth = result["error"]["data"]["_meta"]["mcp/www_authenticate"]
+        www_auth = result["mcp/www_authenticate"]
         assert len(www_auth) == 1
-        assert www_auth[0]["type"] == "oauth2"
-        assert "oauth-protected-resource" in www_auth[0]["resource_metadata"]
+        assert isinstance(www_auth[0], str)  # String, not dict
+        assert www_auth[0].startswith("Bearer ")
+        assert "resource_metadata=" in www_auth[0]
+        assert "oauth-protected-resource" in www_auth[0]
+        assert 'error="invalid_token"' in www_auth[0]
 
-    def test_forbidden_error_structure(self):
-        """Test 403 error has correct JSON-RPC structure."""
-        result = build_forbidden_error(
-            required_scopes=["pg.access"],
-            actual_scopes=["other.scope"]
-        )
+    def test_forbidden_meta_structure(self):
+        """Test 403 meta has correct flat structure for CallToolResult._meta."""
+        result = build_forbidden_meta()
 
-        assert result["error"]["code"] == -32003
-        assert result["error"]["message"] == "Forbidden"
+        # Should be flat dict, not nested error envelope
+        assert "mcp/www_authenticate" in result
+        assert "error" not in result  # No JSON-RPC envelope
 
-        data = result["error"]["data"]
-        assert "_meta" in data
-        assert "mcp/www_authenticate" in data["_meta"]
+    def test_forbidden_meta_rfc7235_format(self):
+        """Test 403 WWW-Authenticate is RFC 7235 challenge string."""
+        result = build_forbidden_meta()
 
-    def test_forbidden_error_oauth_discovery(self):
-        """Test 403 includes OAuth discovery URL."""
-        result = build_forbidden_error(
-            required_scopes=["pg.access"],
-            actual_scopes=[]
-        )
-
-        www_auth = result["error"]["data"]["_meta"]["mcp/www_authenticate"]
-        assert www_auth[0]["type"] == "oauth2"
-        assert "oauth-protected-resource" in www_auth[0]["resource_metadata"]
+        www_auth = result["mcp/www_authenticate"]
+        assert len(www_auth) == 1
+        assert isinstance(www_auth[0], str)  # String, not dict
+        assert www_auth[0].startswith("Bearer ")
+        assert "oauth-protected-resource" in www_auth[0]
+        assert 'error="insufficient_scope"' in www_auth[0]
 
 
 # =============================================================================
