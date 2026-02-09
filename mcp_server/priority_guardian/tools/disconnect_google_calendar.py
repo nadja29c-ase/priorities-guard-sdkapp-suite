@@ -1,0 +1,156 @@
+"""
+disconnect_google_calendar tool for Priority Guardian MCP.
+
+Disconnect Google Calendar and revoke tokens.
+"""
+
+import structlog
+from mcp import types as mcp_types
+
+from mcp_server.priority_guardian.http_client import backend_get, backend_post
+from .base import ToolDefinition
+
+logger = structlog.get_logger(__name__)
+
+# ============================================================================
+# Tool Metadata
+# ============================================================================
+
+NAME = "disconnect_google_calendar"
+
+DESCRIPTION = "Disconnect Google Calendar and revoke access tokens. No data is deleted — you can reconnect anytime. Requires confirmation to proceed."
+
+INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "confirm": {
+            "type": "boolean",
+            "description": "Must be true to confirm disconnection",
+        },
+    },
+    "required": [],
+}
+
+REQUIRED_SCOPES = ["pg.access"]
+
+
+# ============================================================================
+# Handler
+# ============================================================================
+
+async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_types.CallToolResult:
+    """
+    Disconnect Google Calendar and revoke tokens.
+
+    PG-specific implementation using PG backend paths.
+
+    Args:
+        user_id: Validated user ID from JWT token
+        correlation_id: Request correlation ID
+        arguments: Tool arguments (confirm: bool)
+
+    Returns:
+        CallToolResult with disconnection status
+    """
+    confirm = arguments.get("confirm", False)
+
+    logger.info(
+        "tool.disconnect_google_calendar.start",
+        correlation_id=correlation_id,
+        user_id=user_id,
+        confirm=confirm
+    )
+
+    # Require explicit confirmation
+    if not confirm:
+        logger.info(
+            "tool.disconnect_google_calendar.confirmation_required",
+            correlation_id=correlation_id,
+            user_id=user_id
+        )
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Please confirm disconnection by setting confirm=true. This will revoke Google Calendar access. No user data is deleted."
+            )],
+            structuredContent={
+                "success": False,
+                "error": {
+                    "code": "CONFIRMATION_REQUIRED",
+                    "message": "Please confirm disconnection by setting confirm=true. This will revoke Google Calendar access. No user data is deleted."
+                }
+            },
+            isError=True,
+        )
+
+    # Check if connected first (PG backend path)
+    status_response = await backend_get(
+        "/api/priority-guardian/google/connection-status",
+        user_id,
+        correlation_id
+    )
+
+    if not status_response.get("connected"):
+        logger.info(
+            "tool.disconnect_google_calendar.not_connected",
+            correlation_id=correlation_id,
+            user_id=user_id
+        )
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Google Calendar is not connected."
+            )],
+            structuredContent={
+                "success": True,
+                "data": {
+                    "status": "not_connected",
+                    "message": "Google Calendar is not connected."
+                }
+            },
+        )
+
+    # Call disconnect endpoint (PG backend path)
+    await backend_post(
+        "/api/priority-guardian/disconnect",
+        {},
+        user_id,
+        correlation_id
+    )
+
+    logger.info(
+        "tool.disconnect_google_calendar.success",
+        correlation_id=correlation_id,
+        user_id=user_id
+    )
+
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(
+            type="text",
+            text="Google Calendar has been disconnected. You can reconnect anytime."
+        )],
+        structuredContent={
+            "success": True,
+            "data": {
+                "status": "disconnected",
+                "message": "Google Calendar has been disconnected. You can reconnect anytime."
+            }
+        },
+    )
+
+
+# ============================================================================
+# Tool Definition
+# ============================================================================
+
+DISCONNECT_GOOGLE_CALENDAR = ToolDefinition(
+    name=NAME,
+    description=DESCRIPTION,
+    input_schema=INPUT_SCHEMA,
+    required_scopes=REQUIRED_SCOPES,
+    widget_uri=None,
+    handle=handle,
+    read_only_hint=False,   # Revokes tokens, modifies state
+    destructive_hint=True,   # Irreversible - revokes access
+    open_world_hint=True,    # Revokes external Google OAuth tokens
+)

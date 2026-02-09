@@ -1,0 +1,178 @@
+"""
+Unit tests for Priority Guardian tool registry.
+
+Tests the explicit TOOL_REGISTRY pattern:
+- All expected tools are registered
+- No duplicate names
+- Each tool has required ToolDefinition fields
+- list_tools returns proper MCP Tool format
+"""
+
+import pytest
+from mcp import types as mcp_types
+
+
+class TestToolRegistry:
+    """Tests for TOOL_REGISTRY."""
+
+    def test_all_expected_tools_present(self):
+        """All 3 tools are present in TOOL_REGISTRY."""
+        from mcp_server.priority_guardian.tools import TOOL_REGISTRY
+
+        expected_tools = {
+            "connect_google_calendar",
+            "disconnect_google_calendar",
+            "create_priority",
+        }
+
+        assert set(TOOL_REGISTRY.keys()) == expected_tools
+
+    def test_no_duplicate_names(self):
+        """Registry keys match tool definition names."""
+        from mcp_server.priority_guardian.tools import TOOL_REGISTRY
+
+        for key, tool in TOOL_REGISTRY.items():
+            assert key == tool.name, f"Key '{key}' doesn't match tool.name '{tool.name}'"
+
+    def test_tool_definitions_have_required_fields(self):
+        """Each tool has all required ToolDefinition fields."""
+        from mcp_server.priority_guardian.tools import TOOL_REGISTRY
+
+        for name, tool in TOOL_REGISTRY.items():
+            # Required fields
+            assert isinstance(tool.name, str), f"{name}: name must be str"
+            assert len(tool.name) > 0, f"{name}: name must be non-empty"
+
+            assert isinstance(tool.description, str), f"{name}: description must be str"
+            assert len(tool.description) > 0, f"{name}: description must be non-empty"
+
+            assert isinstance(tool.input_schema, dict), f"{name}: input_schema must be dict"
+
+            assert isinstance(tool.required_scopes, list), f"{name}: required_scopes must be list"
+
+            assert tool.widget_uri is None or isinstance(tool.widget_uri, str), \
+                f"{name}: widget_uri must be str or None"
+
+            assert callable(tool.handle), f"{name}: handle must be callable"
+
+            # Annotation fields
+            assert isinstance(tool.read_only_hint, bool), f"{name}: read_only_hint must be bool"
+            assert isinstance(tool.destructive_hint, bool), f"{name}: destructive_hint must be bool"
+            assert isinstance(tool.open_world_hint, bool), f"{name}: open_world_hint must be bool"
+
+    def test_get_tool_returns_correct_tool(self):
+        """get_tool returns the correct tool definition."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("create_priority")
+        assert tool is not None
+        assert tool.name == "create_priority"
+
+    def test_get_tool_returns_none_for_unknown(self):
+        """get_tool returns None for unknown tool names."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("nonexistent_tool")
+        assert tool is None
+
+
+class TestListTools:
+    """Tests for list_tools function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_list_of_mcp_tools(self):
+        """list_tools returns list of mcp_types.Tool."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+
+        assert isinstance(tools, list)
+        assert len(tools) == 3
+
+        for tool in tools:
+            assert isinstance(tool, mcp_types.Tool)
+
+    @pytest.mark.asyncio
+    async def test_tools_sorted_by_name(self):
+        """list_tools returns tools sorted alphabetically by name."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+
+        names = [t.name for t in tools]
+        assert names == sorted(names)
+
+    @pytest.mark.asyncio
+    async def test_tools_have_meta_with_annotations(self):
+        """Each tool has meta with annotations."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+
+        for tool in tools:
+            # MCP library stores _meta dict in the 'meta' attribute
+            meta = getattr(tool, 'meta', None) or getattr(tool, '_meta', None)
+            assert meta is not None, f"Tool {tool.name} has no meta"
+            assert "annotations" in meta
+            annotations = meta["annotations"]
+            assert "readOnlyHint" in annotations
+            assert "destructiveHint" in annotations
+            assert "openWorldHint" in annotations
+
+    @pytest.mark.asyncio
+    async def test_tools_have_security_schemes(self):
+        """Each tool has meta with securitySchemes."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+
+        for tool in tools:
+            meta = getattr(tool, 'meta', None) or getattr(tool, '_meta', None)
+            assert "securitySchemes" in meta
+            schemes = meta["securitySchemes"]
+            assert len(schemes) > 0
+            # PG tools require oauth2
+            assert schemes[0]["type"] == "oauth2"
+            assert "scopes" in schemes[0]
+
+    @pytest.mark.asyncio
+    async def test_tools_have_input_schema(self):
+        """Each tool has an inputSchema."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+
+        for tool in tools:
+            assert tool.inputSchema is not None
+            assert isinstance(tool.inputSchema, dict)
+
+
+class TestToolAnnotations:
+    """Tests for specific tool annotation values."""
+
+    def test_connect_google_calendar_annotations(self):
+        """connect_google_calendar has correct annotations."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("connect_google_calendar")
+        assert tool.read_only_hint is False  # Initiates OAuth
+        assert tool.destructive_hint is False
+        assert tool.open_world_hint is True  # External Google OAuth
+
+    def test_disconnect_google_calendar_annotations(self):
+        """disconnect_google_calendar has correct annotations."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("disconnect_google_calendar")
+        assert tool.read_only_hint is False  # Revokes tokens
+        assert tool.destructive_hint is True  # Irreversible
+        assert tool.open_world_hint is True  # External Google OAuth
+
+    def test_create_priority_annotations(self):
+        """create_priority has correct annotations."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("create_priority")
+        assert tool.read_only_hint is False  # Creates data
+        assert tool.destructive_hint is False
+        assert tool.open_world_hint is False  # No external systems

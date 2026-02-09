@@ -36,6 +36,7 @@ from mcp_server.priority_guardian.config import (
     TOOL_SCOPES,
     MCP_SERVER_URL,
 )
+from mcp_server.priority_guardian.request_context import auth_header_var
 
 logger = structlog.get_logger(__name__)
 
@@ -578,9 +579,11 @@ async def authenticate_request(
     correlation_id = extract_or_generate_correlation_id(meta)
 
     try:
-        # Step 2: Extract Authorization header
-        headers = meta.get("headers", {}) if meta else {}
-        auth_header = extract_authorization_header(headers)
+        # Step 2: Extract Authorization header from ContextVar (set by middleware)
+        # NOTE: After refactoring to manual registry, FastMCP no longer injects
+        # headers into meta. The middleware captures the Authorization header
+        # from HTTP scope and sets it in auth_header_var.
+        auth_header = auth_header_var.get(None)
 
         if not auth_header:
             logger.warning("auth.missing_header", correlation_id=correlation_id, tool=tool_name)

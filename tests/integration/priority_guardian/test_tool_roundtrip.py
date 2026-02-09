@@ -1,0 +1,245 @@
+"""
+Integration tests for Priority Guardian tool roundtrip.
+
+Tests full dispatcher flow with mocked auth and backend:
+- CallToolRequest → dispatcher → handler → CallToolResult
+- Verifies response structure matches expectations
+"""
+
+import pytest
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
+
+from mcp import types as mcp_types
+
+
+class TestCreatePriorityRoundtrip:
+    """Full roundtrip tests for create_priority tool."""
+
+    @pytest.fixture
+    def mock_auth_context(self):
+        """Auth context returned by authenticate_request."""
+        return {
+            "user_id": str(uuid4()),
+            "correlation_id": "test-correlation-id",
+        }
+
+    @pytest.fixture
+    def mock_backend_success(self):
+        """Successful backend response for create_priority."""
+        return {
+            "success": True,
+            "data": {
+                "priority": {
+                    "id": str(uuid4()),
+                    "name": "Ship MVP",
+                    "type": "deadline",
+                    "calendar_keyword": "P1",
+                    "status": "active",
+                    "deadline": "2026-03-15",
+                    "weekly_hour_target": None,
+                    "checkpoint_date": None,
+                    "desired_result": None,
+                    "deliverables": [],
+                    "created_at": "2026-02-09T12:00:00Z",
+                },
+                "active_priority_count": 1,
+                "available_keywords": ["P2", "P3"],
+            },
+        }
+
+    @pytest.mark.asyncio
+    async def test_create_priority_returns_structured_content(
+        self, mock_auth_context, mock_backend_success
+    ):
+        """create_priority returns CallToolResult with structuredContent and assistant_guidance."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="create_priority",
+                arguments={
+                    "name": "Ship MVP",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
+            ),
+        )
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
+            new_callable=AsyncMock,
+            return_value=mock_backend_success,
+        ):
+            result = await call_tool_request(request)
+
+        # Verify structure
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.isError is None or result.isError is False
+
+        # Verify structuredContent
+        sc = result.structuredContent
+        assert sc is not None
+        assert "priority" in sc
+        assert "assistant_guidance" in sc
+        assert sc["priority"]["calendar_keyword"] == "P1"
+
+        # Verify content text
+        assert len(result.content) == 1
+        assert "Ship MVP" in result.content[0].text
+
+
+class TestConnectGoogleCalendarRoundtrip:
+    """Full roundtrip tests for connect_google_calendar tool."""
+
+    @pytest.fixture
+    def mock_auth_context(self):
+        return {
+            "user_id": str(uuid4()),
+            "correlation_id": "test-correlation-id",
+        }
+
+    @pytest.mark.asyncio
+    async def test_returns_connect_url_when_not_connected(self, mock_auth_context):
+        """connect_google_calendar returns connect_url when not connected."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="connect_google_calendar",
+                arguments={},
+            ),
+        )
+
+        # Mock: not connected, return connect URL
+        status_response = {"connected": False}
+        initiate_response = {
+            "connect_url": "https://example.com/oauth/connect?token=abc123",
+            "token": "abc123",
+            "expires_in": 600,
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ), patch(
+            "mcp_server.priority_guardian.tools.connect_google_calendar.backend_get",
+            new_callable=AsyncMock,
+            return_value=status_response,
+        ), patch(
+            "mcp_server.priority_guardian.tools.connect_google_calendar.backend_post",
+            new_callable=AsyncMock,
+            return_value=initiate_response,
+        ):
+            result = await call_tool_request(request)
+
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.structuredContent["data"]["connect_url"] == initiate_response["connect_url"]
+
+    @pytest.mark.asyncio
+    async def test_returns_already_connected_when_connected(self, mock_auth_context):
+        """connect_google_calendar returns already connected message."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="connect_google_calendar",
+                arguments={},
+            ),
+        )
+
+        # Mock: already connected
+        status_response = {"connected": True, "connected_at": "2026-01-01T00:00:00Z"}
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ), patch(
+            "mcp_server.priority_guardian.tools.connect_google_calendar.backend_get",
+            new_callable=AsyncMock,
+            return_value=status_response,
+        ):
+            result = await call_tool_request(request)
+
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.structuredContent["data"]["status"] == "connected"
+
+
+class TestDisconnectGoogleCalendarRoundtrip:
+    """Full roundtrip tests for disconnect_google_calendar tool."""
+
+    @pytest.fixture
+    def mock_auth_context(self):
+        return {
+            "user_id": str(uuid4()),
+            "correlation_id": "test-correlation-id",
+        }
+
+    @pytest.mark.asyncio
+    async def test_requires_confirmation(self, mock_auth_context):
+        """disconnect_google_calendar requires confirm=true."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="disconnect_google_calendar",
+                arguments={"confirm": False},
+            ),
+        )
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ):
+            result = await call_tool_request(request)
+
+        assert isinstance(result, mcp_types.CallToolResult)
+        # Should return error asking for confirmation
+        assert result.isError is True
+        assert result.structuredContent["error"]["code"] == "CONFIRMATION_REQUIRED"
+
+    @pytest.mark.asyncio
+    async def test_disconnects_when_confirmed(self, mock_auth_context):
+        """disconnect_google_calendar disconnects when confirmed."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="disconnect_google_calendar",
+                arguments={"confirm": True},
+            ),
+        )
+
+        # Mock: connected, then disconnect succeeds
+        status_response = {"connected": True}
+        disconnect_response = {"success": True}
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ), patch(
+            "mcp_server.priority_guardian.tools.disconnect_google_calendar.backend_get",
+            new_callable=AsyncMock,
+            return_value=status_response,
+        ), patch(
+            "mcp_server.priority_guardian.tools.disconnect_google_calendar.backend_post",
+            new_callable=AsyncMock,
+            return_value=disconnect_response,
+        ):
+            result = await call_tool_request(request)
+
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.structuredContent["data"]["status"] == "disconnected"

@@ -1,7 +1,7 @@
 """
 Unit tests for Priority Guardian MCP tool response transformation.
 
-Tests the create_priority MCP tool in isolation — mocks backend_post and authenticate_request
+Tests the create_priority tool handler in isolation — mocks backend_post
 to verify:
 - Success response has correct structuredContent shape with assistant_guidance
 - Guidance differs when active_priority_count < 3 vs == 3
@@ -9,24 +9,25 @@ to verify:
 """
 
 import pytest
-import json
 from unittest.mock import AsyncMock, patch, MagicMock
 from uuid import uuid4
 
 import httpx
+from mcp import types as mcp_types
 
 
 class TestCreatePriorityMCPTool:
     """Tests for create_priority MCP tool response transformation."""
 
     @pytest.fixture
-    def mock_auth_context(self):
-        """Standard auth context returned by authenticate_request."""
-        return {
-            "user_id": str(uuid4()),
-            "correlation_id": "test-correlation-id",
-            "scopes": ["pg.access"],
-        }
+    def user_id(self):
+        """Test user ID."""
+        return str(uuid4())
+
+    @pytest.fixture
+    def correlation_id(self):
+        """Test correlation ID."""
+        return "test-correlation-id"
 
     @pytest.fixture
     def mock_priority_response(self):
@@ -58,34 +59,34 @@ class TestCreatePriorityMCPTool:
 
     @pytest.mark.asyncio
     async def test_success_response_has_correct_structure(
-        self, mock_auth_context, mock_priority_response
+        self, user_id, correlation_id, mock_priority_response
     ):
         """Success response includes structuredContent with priority, count, keywords, and guidance."""
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         backend_response = mock_priority_response(keyword="P1", active_count=1)
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             return_value=backend_response,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        parsed = json.loads(result)
+        # Result should be a CallToolResult
+        assert isinstance(result, mcp_types.CallToolResult)
 
         # Verify structuredContent shape
-        assert "structuredContent" in parsed
-        sc = parsed["structuredContent"]
+        sc = result.structuredContent
+        assert sc is not None
         assert "priority" in sc
         assert "active_priority_count" in sc
         assert "available_keywords" in sc
@@ -109,39 +110,37 @@ class TestCreatePriorityMCPTool:
         )
 
         # Verify content array
-        assert "content" in parsed
-        assert len(parsed["content"]) == 1
-        assert parsed["content"][0]["type"] == "text"
-        assert "Test Priority" in parsed["content"][0]["text"]
-        assert "P1" in parsed["content"][0]["text"]
+        assert result.content is not None
+        assert len(result.content) == 1
+        assert result.content[0].type == "text"
+        assert "Test Priority" in result.content[0].text
+        assert "P1" in result.content[0].text
 
     @pytest.mark.asyncio
     async def test_guidance_when_under_3_priorities(
-        self, mock_auth_context, mock_priority_response
+        self, user_id, correlation_id, mock_priority_response
     ):
         """When active_priority_count < 3, guidance asks about additional priorities."""
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         backend_response = mock_priority_response(keyword="P2", active_count=2)
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             return_value=backend_response,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        parsed = json.loads(result)
-        guidance = parsed["structuredContent"]["assistant_guidance"]
+        guidance = result.structuredContent["assistant_guidance"]
 
         # Should ask about additional priorities
         assert "another priority" in guidance.lower()
@@ -149,31 +148,29 @@ class TestCreatePriorityMCPTool:
 
     @pytest.mark.asyncio
     async def test_guidance_when_at_3_priorities(
-        self, mock_auth_context, mock_priority_response
+        self, user_id, correlation_id, mock_priority_response
     ):
         """When active_priority_count == 3, guidance mentions dashboard."""
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         backend_response = mock_priority_response(keyword="P3", active_count=3, available=[])
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             return_value=backend_response,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        parsed = json.loads(result)
-        guidance = parsed["structuredContent"]["assistant_guidance"]
+        guidance = result.structuredContent["assistant_guidance"]
 
         # Should mention all 3 set up and dashboard
         assert "all 3 priorities" in guidance.lower()
@@ -181,9 +178,9 @@ class TestCreatePriorityMCPTool:
         assert "get_priorities" in guidance
 
     @pytest.mark.asyncio
-    async def test_error_max_priorities_reached_guidance(self, mock_auth_context):
+    async def test_error_max_priorities_reached_guidance(self, user_id, correlation_id):
         """409 MAX_PRIORITIES_REACHED returns correct error-specific guidance."""
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         # Create mock HTTP error response
         mock_response = MagicMock()
@@ -203,26 +200,24 @@ class TestCreatePriorityMCPTool:
         )
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             side_effect=http_error,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        parsed = json.loads(result)
-
         # Verify error structure
-        assert "structuredContent" in parsed
-        sc = parsed["structuredContent"]
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.isError is True
+        sc = result.structuredContent
         assert "error" in sc
         assert sc["error"]["code"] == "MAX_PRIORITIES_REACHED"
 
@@ -232,9 +227,9 @@ class TestCreatePriorityMCPTool:
         assert "retire" in guidance.lower() or "delete" in guidance.lower()
 
     @pytest.mark.asyncio
-    async def test_error_keyword_conflict_guidance(self, mock_auth_context):
+    async def test_error_keyword_conflict_guidance(self, user_id, correlation_id):
         """409 KEYWORD_CONFLICT returns retry guidance."""
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         mock_response = MagicMock()
         mock_response.status_code = 409
@@ -253,32 +248,30 @@ class TestCreatePriorityMCPTool:
         )
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             side_effect=http_error,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        parsed = json.loads(result)
-        guidance = parsed["structuredContent"]["assistant_guidance"]
+        guidance = result.structuredContent["assistant_guidance"]
 
         # Should mention retry
         assert "retry" in guidance.lower()
         assert "race condition" in guidance.lower()
 
     @pytest.mark.asyncio
-    async def test_error_validation_error_guidance(self, mock_auth_context):
+    async def test_error_validation_error_guidance(self, user_id, correlation_id):
         """422 VALIDATION_ERROR returns guidance to ask user for correct info."""
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         mock_response = MagicMock()
         mock_response.status_code = 422
@@ -297,23 +290,21 @@ class TestCreatePriorityMCPTool:
         )
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             side_effect=http_error,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                # Missing deadline
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    # Missing deadline
+                },
             )
 
-        parsed = json.loads(result)
-        guidance = parsed["structuredContent"]["assistant_guidance"]
+        guidance = result.structuredContent["assistant_guidance"]
 
         # Should tell LLM to ask user for correct info
         assert "ask" in guidance.lower() or "provide" in guidance.lower()
@@ -321,31 +312,29 @@ class TestCreatePriorityMCPTool:
 
     @pytest.mark.asyncio
     async def test_guidance_includes_calendar_keyword_tagging_reminder(
-        self, mock_auth_context, mock_priority_response
+        self, user_id, correlation_id, mock_priority_response
     ):
         """Success guidance includes reminder to tag calendar events with keyword."""
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         backend_response = mock_priority_response(keyword="P1", active_count=1)
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             return_value=backend_response,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        parsed = json.loads(result)
-        guidance = parsed["structuredContent"]["assistant_guidance"]
+        guidance = result.structuredContent["assistant_guidance"]
 
         # Should remind about tagging calendar events
         assert "tag" in guidance.lower()
@@ -353,14 +342,14 @@ class TestCreatePriorityMCPTool:
         assert "P1" in guidance
 
     @pytest.mark.asyncio
-    async def test_malformed_backend_error_handled_gracefully(self, mock_auth_context):
+    async def test_malformed_backend_error_handled_gracefully(self, user_id, correlation_id):
         """
         HTTPStatusError with malformed response (missing error.code) doesn't crash.
 
         Covers the fallback branch in the inner except httpx.HTTPStatusError handler
         when the backend returns unexpected JSON structure.
         """
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
 
         # Create mock HTTP error with response missing the expected error.code field
         mock_response = MagicMock()
@@ -378,27 +367,26 @@ class TestCreatePriorityMCPTool:
         )
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             side_effect=http_error,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        # Should return valid JSON, not crash
-        parsed = json.loads(result)
+        # Should return valid CallToolResult, not crash
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.isError is True
 
         # Verify error structure exists
-        assert "structuredContent" in parsed
-        sc = parsed["structuredContent"]
+        sc = result.structuredContent
         assert "error" in sc
         assert "assistant_guidance" in sc
 
@@ -406,18 +394,19 @@ class TestCreatePriorityMCPTool:
         assert len(sc["assistant_guidance"]) > 0
 
     @pytest.mark.asyncio
-    async def test_backend_error_with_invalid_json_handled(self, mock_auth_context):
+    async def test_backend_error_with_invalid_json_handled(self, user_id, correlation_id):
         """
         HTTPStatusError with non-JSON response doesn't crash.
 
         Covers edge case where backend returns HTML error page or malformed content.
         """
-        from mcp_server.priority_guardian.server import create_priority
+        from mcp_server.priority_guardian.tools.create_priority import handle
+        import json as json_module
 
         # Create mock HTTP error where json() raises an exception
         mock_response = MagicMock()
         mock_response.status_code = 502
-        mock_response.json.side_effect = json.JSONDecodeError("Expecting value", "", 0)
+        mock_response.json.side_effect = json_module.JSONDecodeError("Expecting value", "", 0)
         mock_response.text = "<html>Bad Gateway</html>"
 
         http_error = httpx.HTTPStatusError(
@@ -427,26 +416,25 @@ class TestCreatePriorityMCPTool:
         )
 
         with patch(
-            "mcp_server.priority_guardian.server.authenticate_request",
-            new_callable=AsyncMock,
-            return_value=mock_auth_context,
-        ), patch(
-            "mcp_server.priority_guardian.server.backend_post",
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             side_effect=http_error,
         ):
-            result = await create_priority(
-                name="Test Priority",
-                type="deadline",
-                deadline="2026-03-15",
-                meta={"headers": {"authorization": "Bearer test"}},
+            result = await handle(
+                user_id=user_id,
+                correlation_id=correlation_id,
+                arguments={
+                    "name": "Test Priority",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
             )
 
-        # Should return valid JSON, not crash
-        parsed = json.loads(result)
+        # Should return valid CallToolResult, not crash
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert result.isError is True
 
         # Verify error structure exists
-        assert "structuredContent" in parsed
-        sc = parsed["structuredContent"]
+        sc = result.structuredContent
         assert "error" in sc
         assert "assistant_guidance" in sc
