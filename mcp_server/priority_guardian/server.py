@@ -33,7 +33,7 @@ from mcp_server.priority_guardian.discovery import (
     oauth_protected_resource,
 )
 from mcp_server.priority_guardian.http_client import cleanup_http_client
-from mcp_server.priority_guardian.mcp_auth import _jwks_cache
+from mcp_server.priority_guardian.mcp_auth import cleanup_jwks_cache
 from mcp_server.priority_guardian.request_context import auth_header_var
 from mcp_server.priority_guardian.handlers.tools import call_tool_request
 from mcp_server.priority_guardian.tools import list_tools
@@ -216,7 +216,7 @@ async def wellknown_oauth_protected_resource(request):  # noqa: ARG001
 async def _cleanup_on_shutdown():
     """Clean up HTTP clients and caches on shutdown."""
     logger.info("mcp.server.shutdown")
-    await _jwks_cache.aclose()
+    await cleanup_jwks_cache()
     await cleanup_http_client()
 
 

@@ -47,6 +47,7 @@ from mcp_server.focused.discovery import (
     oauth_authorization_server,
     oauth_protected_resource,
 )
+from mcp_server.focused.mcp_auth import cleanup_jwks_cache
 
 
 # ============================================================================
@@ -159,6 +160,13 @@ async def cleanup_http_client() -> None:
         await http_client.aclose()
         http_client = None
         logger.info("mcp.http_client.closed")
+
+
+async def _cleanup_on_shutdown() -> None:
+    """Clean up HTTP clients and caches on shutdown."""
+    logger.info("mcp.server.shutdown")
+    await cleanup_jwks_cache()
+    await cleanup_http_client()
 
 
 # ============================================================================
@@ -744,7 +752,7 @@ def create_app():
     # 1. LifespanMiddleware (outermost) - handles cleanup on shutdown
     # 2. MCPContentTypeAndAcceptFixMiddleware - fixes ChatGPT header issues
     wrapped_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
-    return LifespanMiddleware(wrapped_app, cleanup_http_client)
+    return LifespanMiddleware(wrapped_app, _cleanup_on_shutdown)
 
 
 # --------------------------------------------------------------------

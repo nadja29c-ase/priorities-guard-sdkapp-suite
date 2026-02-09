@@ -163,6 +163,16 @@ class JWKSCache:
 _jwks_cache = JWKSCache()
 
 
+async def cleanup_jwks_cache() -> None:
+    """
+    Close the JWKS cache HTTP client.
+
+    Should be called on application shutdown to prevent connection leaks.
+    """
+    await _jwks_cache.aclose()
+    logger.info("jwks.cache.closed")
+
+
 # ============================================================================
 # Header Extraction
 # ============================================================================
