@@ -14,6 +14,7 @@ Security:
 - Enforces expiry grace period to prevent race conditions
 """
 
+import asyncio
 import time
 from typing import Optional, Dict, List, Any, Set
 from uuid import uuid4
@@ -59,6 +60,7 @@ class JWKSCache:
         self._jwks: Optional[Dict[str, Any]] = None
         self._fetched_at: Optional[float] = None
         self._http_client = httpx.AsyncClient(timeout=JWKS_FETCH_TIMEOUT_SECONDS)
+        self._lock = asyncio.Lock()  # Prevents thundering herd on cold start
 
     def is_cache_valid(self) -> bool:
         """Check if cache is still valid (within TTL)."""
@@ -89,42 +91,49 @@ class JWKSCache:
         Raises:
             Exception: If fetch fails and cache is invalid/too old
         """
-        # Use cache if valid and not forcing refresh
+        # Fast path: use cache if valid and not forcing refresh (no lock needed)
         if not force and self.is_cache_valid():
             logger.debug("jwks.cache.hit")
             return self._jwks
 
-        # Check if cache is too old
-        if self.is_cache_too_old():
-            logger.warning("jwks.cache.too_old", age_days=int((time.time() - self._fetched_at) / 86400) if self._fetched_at else None)
-
-        # Fetch fresh JWKS
-        try:
-            logger.info("jwks.fetch.start", url=FOCUSED_JWKS_URL)
-
-            response = await self._http_client.get(FOCUSED_JWKS_URL)
-            response.raise_for_status()
-
-            jwks = response.json()
-
-            # Update cache
-            self._jwks = jwks
-            self._fetched_at = time.time()
-
-            logger.info("jwks.fetch.success", keys_count=len(jwks.get("keys", [])))
-
-            return jwks
-
-        except Exception as e:
-            logger.error("jwks.fetch.error", error=str(e))
-
-            # If cache exists and not too old, use it despite fetch failure
-            if self._jwks is not None and not self.is_cache_too_old():
-                logger.warning("jwks.fetch.failed_using_stale_cache")
+        # Slow path: acquire lock to prevent thundering herd
+        async with self._lock:
+            # Double-check: another coroutine may have populated cache while we waited
+            if not force and self.is_cache_valid():
+                logger.debug("jwks.cache.hit_after_lock")
                 return self._jwks
 
-            # Fail closed: no valid cache available
-            raise Exception(f"JWKS fetch failed and no valid cache available: {e}")
+            # Check if cache is too old
+            if self.is_cache_too_old():
+                logger.warning("jwks.cache.too_old", age_days=int((time.time() - self._fetched_at) / 86400) if self._fetched_at else None)
+
+            # Fetch fresh JWKS
+            try:
+                logger.info("jwks.fetch.start", url=FOCUSED_JWKS_URL)
+
+                response = await self._http_client.get(FOCUSED_JWKS_URL)
+                response.raise_for_status()
+
+                jwks = response.json()
+
+                # Update cache
+                self._jwks = jwks
+                self._fetched_at = time.time()
+
+                logger.info("jwks.fetch.success", keys_count=len(jwks.get("keys", [])))
+
+                return jwks
+
+            except Exception as e:
+                logger.error("jwks.fetch.error", error=str(e))
+
+                # If cache exists and not too old, use it despite fetch failure
+                if self._jwks is not None and not self.is_cache_too_old():
+                    logger.warning("jwks.fetch.failed_using_stale_cache")
+                    return self._jwks
+
+                # Fail closed: no valid cache available
+                raise Exception(f"JWKS fetch failed and no valid cache available: {e}")
 
     def get_signing_key(self, kid: str) -> Optional[PyJWK]:
         """
