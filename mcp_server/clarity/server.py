@@ -102,8 +102,14 @@ class MCPContentTypeAndAcceptFixMiddleware:
                     scope["headers"] = new_headers
 
                 # Set Authorization header in context for tool handlers
+                # Use token pattern to ensure cleanup after request completes
                 if auth_header:
-                    auth_header_var.set(auth_header)
+                    token = auth_header_var.set(auth_header)
+                    try:
+                        await self.app(scope, receive, send)
+                    finally:
+                        auth_header_var.reset(token)
+                    return
 
         await self.app(scope, receive, send)
 
