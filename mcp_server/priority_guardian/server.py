@@ -261,6 +261,10 @@ def create_app():
     # Wrap with middlewares:
     # 1. LifespanMiddleware (outermost) - handles cleanup on shutdown
     # 2. MCPContentTypeAndAcceptFixMiddleware - fixes ChatGPT header issues + auth capture
+    #
+    # IMPORTANT: MCPContentTypeAndAcceptFixMiddleware must run before FastMCP
+    # request handling so auth_header_var is set. Do not insert middleware between
+    # MCPContentTypeAndAcceptFixMiddleware and fastmcp_app.
     wrapped_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
     return LifespanMiddleware(wrapped_app, _cleanup_on_shutdown)
 

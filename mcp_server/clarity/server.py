@@ -246,6 +246,10 @@ def create_app():
     fastmcp_app.mount("/.well-known", discovery_app)
 
     # Wrap with header-fix middleware
+    #
+    # IMPORTANT: MCPContentTypeAndAcceptFixMiddleware must run before FastMCP
+    # request handling so auth_header_var is set. Do not insert middleware between
+    # MCPContentTypeAndAcceptFixMiddleware and fastmcp_app.
     return MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
 
 
