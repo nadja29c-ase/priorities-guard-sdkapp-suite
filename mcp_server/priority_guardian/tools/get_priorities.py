@@ -104,6 +104,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     data = response.get("data", {})
     raw_priorities = data.get("priorities", [])
     google_connection = data.get("google_connection", {"connected": False})
+    available_keywords = data.get("available_keywords", [])
 
     # Normalize priority fields to camelCase (spec requirement)
     priorities = [_normalize_priority(p) for p in raw_priorities]
@@ -133,6 +134,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "google_connected": google_connection.get("connected", False),
             "google_connected_at": google_connection.get("connected_at"),
             "priorities": priorities,
+            "available_keywords": available_keywords,
         },
         "_meta": {
             "openai/outputTemplate": WIDGET_URI,

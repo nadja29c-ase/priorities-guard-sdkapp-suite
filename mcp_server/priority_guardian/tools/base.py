@@ -31,6 +31,8 @@ class ToolDefinition:
         read_only_hint: If True, tool has no side effects
         destructive_hint: If True, tool may overwrite/delete data
         open_world_hint: If True, tool interacts with external systems
+        widget_accessible: If True, widget can call this tool via callTool
+        visibility: Tool visibility - "public" (LLM can see/call), "private" (widget-only)
     """
     name: str
     description: str
@@ -41,8 +43,8 @@ class ToolDefinition:
     read_only_hint: bool = False
     destructive_hint: bool = False
     open_world_hint: bool = False
-    # Optional fields
     widget_accessible: bool = False
+    visibility: str = "public"  # "public" or "private"
 
 
 class ToolUsageError(Exception):

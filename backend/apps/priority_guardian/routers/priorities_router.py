@@ -33,7 +33,12 @@ from sqlalchemy.orm import selectinload
 from backend.core.database import get_db
 from backend.core.models import CoreConnection
 from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable
-from backend.apps.priority_guardian.models.requests import CreatePriorityRequest
+from backend.apps.priority_guardian.models.requests import (
+    CreatePriorityRequest,
+    UpdatePriorityRequest,
+    CreateDeliverableRequest,
+    UpdateDeliverableRequest,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -95,31 +100,26 @@ def compute_available_keywords(used_keywords: List[str]) -> List[str]:
     return [kw for kw in AVAILABLE_KEYWORDS if kw not in used_keywords]
 
 
-@router.get("/priorities")
-async def get_priorities(
-    user_id: UUID = Depends(validate_user_id_header),
-    session: AsyncSession = Depends(get_db),
-):
+async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dict:
     """
-    Get user's priorities with Google connection status.
+    Build the standard priorities response with Google connection status.
 
-    Returns priorities (active first, then retired) along with Google Calendar
-    connection status for the widget to display.
+    This is the canonical response builder used by GET /priorities and all mutation
+    endpoints. Every mutation returns the full priority list so the widget can
+    replace its entire state without diffing.
 
     Args:
-        user_id: User ID from validated JWT (via X-User-ID header)
         session: Database session
+        user_id: User ID (UUID)
 
     Returns:
-        200: {
-            "success": true,
+        Response dict with shape:
+        {
+            "success": True,
             "data": {
                 "priorities": [...],
-                "google_connection": {
-                    "connected": true,
-                    "scopes": ["..."]
-                },
-                "available_keywords": ["P2", "P3"]
+                "google_connection": {...},
+                "available_keywords": [...]
             }
         }
     """
@@ -189,13 +189,6 @@ async def get_priorities(
             "updated_at": p.updated_at.isoformat() if p.updated_at else None,
         })
 
-    logger.info(
-        "priorities.get.success",
-        user_id=str(user_id),
-        priority_count=len(priorities_data),
-        google_connected=google_connection["connected"],
-    )
-
     return {
         "success": True,
         "data": {
@@ -204,6 +197,46 @@ async def get_priorities(
             "available_keywords": available_keywords,
         },
     }
+
+
+@router.get("/priorities")
+async def get_priorities(
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Get user's priorities with Google connection status.
+
+    Returns priorities (active first, then retired) along with Google Calendar
+    connection status for the widget to display.
+
+    Args:
+        user_id: User ID from validated JWT (via X-User-ID header)
+        session: Database session
+
+    Returns:
+        200: {
+            "success": true,
+            "data": {
+                "priorities": [...],
+                "google_connection": {
+                    "connected": true,
+                    "scopes": ["..."]
+                },
+                "available_keywords": ["P2", "P3"]
+            }
+        }
+    """
+    response = await build_priorities_response(session, user_id)
+
+    logger.info(
+        "priorities.get.success",
+        user_id=str(user_id),
+        priority_count=len(response["data"]["priorities"]),
+        google_connected=response["data"]["google_connection"]["connected"],
+    )
+
+    return response
 
 
 @router.post("/priorities", status_code=status.HTTP_201_CREATED)
@@ -439,3 +472,370 @@ async def create_priority(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again.",
         )
+
+
+# ============================================================================
+# Priority Mutation Endpoints (Widget CRUD - Inc B)
+# ============================================================================
+
+
+@router.put("/priorities/{priority_id}")
+async def update_priority(
+    priority_id: str,
+    request: UpdatePriorityRequest,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Update a priority's editable fields.
+
+    Accepts partial updates - only fields present in body are updated.
+    Type and calendar_keyword are immutable after creation.
+
+    For deadline priorities: name, deadline
+    For flexible priorities: name, weekly_hour_target, checkpoint_date, desired_result
+
+    Args:
+        priority_id: Priority ID (UUID string)
+        request: Partial update fields
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Full priorities response (same shape as GET /priorities)
+        404: Priority not found or wrong user
+        422: Validation error (cross-type field, etc.)
+    """
+    # Validate priority_id format
+    try:
+        pid = UUID(priority_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Fetch priority
+    result = await session.execute(
+        select(PgPriority).where(
+            PgPriority.id == pid,
+            PgPriority.user_id == user_id,
+        )
+    )
+    priority = result.scalar_one_or_none()
+
+    if not priority:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Check if any updates provided
+    if not request.has_updates():
+        # No-op, just return current state
+        return await build_priorities_response(session, user_id)
+
+    # Validate cross-type fields
+    if priority.type == "deadline":
+        if request.weekly_hour_target is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "VALIDATION_ERROR", "message": "weekly_hour_target is not valid for deadline priorities"},
+            )
+        if request.checkpoint_date is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "VALIDATION_ERROR", "message": "checkpoint_date is not valid for deadline priorities"},
+            )
+        if request.desired_result is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "VALIDATION_ERROR", "message": "desired_result is not valid for deadline priorities"},
+            )
+    elif priority.type == "flexible":
+        if request.deadline is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "VALIDATION_ERROR", "message": "deadline is not valid for flexible priorities"},
+            )
+
+    # Apply updates
+    if request.name is not None:
+        priority.name = request.name
+    if request.deadline is not None:
+        priority.deadline = request.deadline
+    if request.weekly_hour_target is not None:
+        priority.weekly_hour_target = request.weekly_hour_target
+    if request.checkpoint_date is not None:
+        priority.checkpoint_date = request.checkpoint_date
+    if request.desired_result is not None:
+        priority.desired_result = request.desired_result
+
+    await session.commit()
+
+    logger.info(
+        "priority.update.success",
+        user_id=str(user_id),
+        priority_id=str(priority.id),
+    )
+
+    return await build_priorities_response(session, user_id)
+
+
+@router.delete("/priorities/{priority_id}")
+async def delete_priority(
+    priority_id: str,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a priority and its associated deliverables.
+
+    Cascade delete handles deliverables automatically via relationship config.
+    After deletion, the freed keyword becomes available again.
+
+    Args:
+        priority_id: Priority ID (UUID string)
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Full priorities response (without deleted priority)
+        404: Priority not found or wrong user
+    """
+    # Validate priority_id format
+    try:
+        pid = UUID(priority_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Fetch priority
+    result = await session.execute(
+        select(PgPriority).where(
+            PgPriority.id == pid,
+            PgPriority.user_id == user_id,
+        )
+    )
+    priority = result.scalar_one_or_none()
+
+    if not priority:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    keyword = priority.calendar_keyword
+
+    # Delete (cascade handles deliverables)
+    await session.delete(priority)
+    await session.commit()
+
+    logger.info(
+        "priority.delete.success",
+        user_id=str(user_id),
+        priority_id=str(pid),
+        freed_keyword=keyword,
+    )
+
+    return await build_priorities_response(session, user_id)
+
+
+# ============================================================================
+# Deliverable Endpoints (Widget CRUD - Inc B)
+# ============================================================================
+
+
+@router.post("/priorities/{priority_id}/deliverables", status_code=status.HTTP_201_CREATED)
+async def create_deliverable(
+    priority_id: str,
+    request: CreateDeliverableRequest,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Add a deliverable to a priority.
+
+    Args:
+        priority_id: Parent priority ID (UUID string)
+        request: Deliverable creation request
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        201: Full priorities response with new deliverable
+        404: Parent priority not found or wrong user
+        422: Validation error
+    """
+    # Validate priority_id format
+    try:
+        pid = UUID(priority_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Fetch parent priority
+    result = await session.execute(
+        select(PgPriority).where(
+            PgPriority.id == pid,
+            PgPriority.user_id == user_id,
+        )
+    )
+    priority = result.scalar_one_or_none()
+
+    if not priority:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Create deliverable
+    deliverable = PgDeliverable(
+        priority_id=priority.id,
+        name=request.name,
+    )
+    session.add(deliverable)
+    await session.commit()
+
+    logger.info(
+        "deliverable.create.success",
+        user_id=str(user_id),
+        priority_id=str(priority.id),
+        deliverable_id=str(deliverable.id),
+    )
+
+    # Expire cached objects so the next query gets fresh data with new deliverable
+    session.expire_all()
+
+    return await build_priorities_response(session, user_id)
+
+
+@router.put("/deliverables/{deliverable_id}")
+async def update_deliverable(
+    deliverable_id: str,
+    request: UpdateDeliverableRequest,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Update a deliverable (toggle done or rename).
+
+    Args:
+        deliverable_id: Deliverable ID (UUID string)
+        request: Partial update fields
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Full priorities response
+        404: Deliverable not found or parent priority belongs to different user
+    """
+    # Validate deliverable_id format
+    try:
+        did = UUID(deliverable_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Deliverable not found"},
+        )
+
+    # Fetch deliverable with parent priority for user validation
+    result = await session.execute(
+        select(PgDeliverable)
+        .join(PgPriority)
+        .where(
+            PgDeliverable.id == did,
+            PgPriority.user_id == user_id,
+        )
+    )
+    deliverable = result.scalar_one_or_none()
+
+    if not deliverable:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Deliverable not found"},
+        )
+
+    # Check if any updates provided
+    if not request.has_updates():
+        return await build_priorities_response(session, user_id)
+
+    # Apply updates
+    if request.name is not None:
+        deliverable.name = request.name
+    if request.done is not None:
+        deliverable.done = request.done
+
+    await session.commit()
+
+    logger.info(
+        "deliverable.update.success",
+        user_id=str(user_id),
+        deliverable_id=str(deliverable.id),
+        done=deliverable.done,
+    )
+
+    return await build_priorities_response(session, user_id)
+
+
+@router.delete("/deliverables/{deliverable_id}")
+async def delete_deliverable(
+    deliverable_id: str,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a deliverable.
+
+    Args:
+        deliverable_id: Deliverable ID (UUID string)
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Full priorities response (without deleted deliverable)
+        404: Deliverable not found or parent priority belongs to different user
+    """
+    # Validate deliverable_id format
+    try:
+        did = UUID(deliverable_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Deliverable not found"},
+        )
+
+    # Fetch deliverable with parent priority for user validation
+    result = await session.execute(
+        select(PgDeliverable)
+        .join(PgPriority)
+        .where(
+            PgDeliverable.id == did,
+            PgPriority.user_id == user_id,
+        )
+    )
+    deliverable = result.scalar_one_or_none()
+
+    if not deliverable:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Deliverable not found"},
+        )
+
+    priority_id = deliverable.priority_id
+
+    await session.delete(deliverable)
+    await session.commit()
+
+    logger.info(
+        "deliverable.delete.success",
+        user_id=str(user_id),
+        deliverable_id=str(did),
+        priority_id=str(priority_id),
+    )
+
+    return await build_priorities_response(session, user_id)

@@ -4,6 +4,8 @@ Unit tests for Priority Guardian HTTP client.
 Tests http_client.py:
 - backend_get adds correct headers
 - backend_post adds correct headers
+- backend_put adds correct headers
+- backend_delete adds correct headers
 - cleanup_http_client closes the client
 """
 
@@ -127,6 +129,174 @@ class TestBackendPost:
         json_body = call_kwargs.kwargs.get("json", {})
         assert json_body["name"] == "Test Priority"
         assert json_body["type"] == "deadline"
+
+
+class TestBackendPut:
+    """Tests for backend_put function."""
+
+    @pytest.mark.asyncio
+    async def test_backend_put_adds_headers(self):
+        """backend_put adds X-User-ID and X-Correlation-ID headers."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.put.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_put
+
+            await backend_put(
+                "/api/test/123",
+                {"name": "Updated"},
+                user_id="user-123",
+                correlation_id="corr-456",
+            )
+
+        # Verify headers were passed
+        call_kwargs = mock_client.put.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert headers["X-User-ID"] == "user-123"
+        assert headers["X-Correlation-ID"] == "corr-456"
+
+    @pytest.mark.asyncio
+    async def test_backend_put_sends_json_body(self):
+        """backend_put sends JSON body."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.put.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_put
+
+            await backend_put(
+                "/api/priorities/123",
+                {"name": "Updated Name", "deadline": "2026-04-01"},
+                user_id="user-123",
+                correlation_id="corr-456",
+            )
+
+        # Verify JSON body was passed
+        call_kwargs = mock_client.put.call_args
+        json_body = call_kwargs.kwargs.get("json", {})
+        assert json_body["name"] == "Updated Name"
+        assert json_body["deadline"] == "2026-04-01"
+
+    @pytest.mark.asyncio
+    async def test_backend_put_raises_on_error_status(self):
+        """backend_put raises HTTPStatusError on error status."""
+        import httpx
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=MagicMock(),
+            response=mock_response,
+        )
+        mock_client.put.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_put
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await backend_put(
+                    "/api/priorities/nonexistent",
+                    {"name": "Updated"},
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                )
+
+
+class TestBackendDelete:
+    """Tests for backend_delete function."""
+
+    @pytest.mark.asyncio
+    async def test_backend_delete_adds_headers(self):
+        """backend_delete adds X-User-ID and X-Correlation-ID headers."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.delete.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_delete
+
+            await backend_delete(
+                "/api/test/123",
+                user_id="user-123",
+                correlation_id="corr-456",
+            )
+
+        # Verify headers were passed
+        call_kwargs = mock_client.delete.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert headers["X-User-ID"] == "user-123"
+        assert headers["X-Correlation-ID"] == "corr-456"
+
+    @pytest.mark.asyncio
+    async def test_backend_delete_raises_on_error_status(self):
+        """backend_delete raises HTTPStatusError on error status."""
+        import httpx
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=MagicMock(),
+            response=mock_response,
+        )
+        mock_client.delete.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_delete
+
+            with pytest.raises(httpx.HTTPStatusError):
+                await backend_delete(
+                    "/api/priorities/nonexistent",
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                )
+
+    @pytest.mark.asyncio
+    async def test_backend_delete_returns_json_response(self):
+        """backend_delete returns JSON response from backend."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "data": {"deleted": True}}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.delete.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_delete
+
+            result = await backend_delete(
+                "/api/priorities/123",
+                user_id="user-123",
+                correlation_id="corr-456",
+            )
+
+        assert result["success"] is True
+        assert result["data"]["deleted"] is True
 
 
 class TestCleanupHttpClient:

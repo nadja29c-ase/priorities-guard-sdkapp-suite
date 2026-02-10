@@ -148,3 +148,135 @@ class CreatePriorityRequest(BaseModel):
             ]
         }
     }
+
+
+class UpdatePriorityRequest(BaseModel):
+    """
+    Request model for updating a priority.
+
+    All fields are optional (partial update). Only provided fields are updated.
+    Type and calendar_keyword are immutable after creation.
+
+    For deadline priorities: name, deadline
+    For flexible priorities: name, weekly_hour_target, checkpoint_date, desired_result
+    """
+
+    name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="Priority name. Max 100 chars.",
+    )
+
+    deadline: Optional[date] = Field(
+        default=None,
+        description="Hard end date. Only valid for deadline-type priorities.",
+    )
+
+    weekly_hour_target: Optional[Decimal] = Field(
+        default=None,
+        gt=0,
+        description="Hours per week target. Only valid for flexible-type priorities.",
+    )
+
+    checkpoint_date: Optional[date] = Field(
+        default=None,
+        description="Evaluation checkpoint. Only valid for flexible-type priorities.",
+    )
+
+    desired_result: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Concrete outcome. Only valid for flexible-type priorities.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v: Optional[str]) -> Optional[str]:
+        """Validate name is not empty or whitespace-only if provided."""
+        if v is not None and not v.strip():
+            raise ValueError("name cannot be empty or whitespace-only")
+        return v.strip() if v else v
+
+    @field_validator("desired_result")
+    @classmethod
+    def validate_desired_result_not_empty(cls, v: Optional[str]) -> Optional[str]:
+        """Validate desired_result is not empty if provided."""
+        if v is not None and not v.strip():
+            raise ValueError("desired_result cannot be empty or whitespace-only")
+        return v.strip() if v else v
+
+    @field_validator("deadline", "checkpoint_date")
+    @classmethod
+    def validate_date_in_future(cls, v: Optional[date]) -> Optional[date]:
+        """Validate dates are in the future if provided."""
+        if v is not None:
+            from datetime import date as date_type
+            if v <= date_type.today():
+                raise ValueError("date must be in the future")
+        return v
+
+    def has_updates(self) -> bool:
+        """Check if any fields are provided for update."""
+        return any([
+            self.name is not None,
+            self.deadline is not None,
+            self.weekly_hour_target is not None,
+            self.checkpoint_date is not None,
+            self.desired_result is not None,
+        ])
+
+
+class CreateDeliverableRequest(BaseModel):
+    """
+    Request model for creating a deliverable.
+
+    Deliverables are associated with a parent priority.
+    """
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Deliverable name. Max 200 chars.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v: str) -> str:
+        """Validate name is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError("name cannot be empty or whitespace-only")
+        return v.strip()
+
+
+class UpdateDeliverableRequest(BaseModel):
+    """
+    Request model for updating a deliverable.
+
+    All fields are optional (partial update). Only provided fields are updated.
+    """
+
+    name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description="Deliverable name. Max 200 chars.",
+    )
+
+    done: Optional[bool] = Field(
+        default=None,
+        description="Whether the deliverable is completed.",
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v: Optional[str]) -> Optional[str]:
+        """Validate name is not empty or whitespace-only if provided."""
+        if v is not None and not v.strip():
+            raise ValueError("name cannot be empty or whitespace-only")
+        return v.strip() if v else v
+
+    def has_updates(self) -> bool:
+        """Check if any fields are provided for update."""
+        return self.name is not None or self.done is not None

@@ -71,7 +71,7 @@ class TestDispatcherAuth:
         # Should have meta with www_authenticate for OAuth discovery
         meta = getattr(result, 'meta', None) or getattr(result, '_meta', None)
         assert meta is not None
-        assert "error" in meta
+        assert "mcp/www_authenticate" in meta
 
     @pytest.mark.asyncio
     async def test_insufficient_scope_error_returns_403_style(self):

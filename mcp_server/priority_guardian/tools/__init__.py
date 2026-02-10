@@ -16,6 +16,13 @@ from .connect_google_calendar import CONNECT_GOOGLE_CALENDAR
 from .disconnect_google_calendar import DISCONNECT_GOOGLE_CALENDAR
 from .create_priority import CREATE_PRIORITY
 from .get_priorities import GET_PRIORITIES
+# Private widget-only CRUD tools (Inc B)
+from .add_priority import ADD_PRIORITY
+from .update_priority import UPDATE_PRIORITY
+from .delete_priority import DELETE_PRIORITY
+from .add_deliverable import ADD_DELIVERABLE
+from .update_deliverable import UPDATE_DELIVERABLE
+from .delete_deliverable import DELETE_DELIVERABLE
 
 logger = structlog.get_logger(__name__)
 
@@ -41,10 +48,18 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
 
 # Explicit tool registry
 TOOL_REGISTRY: dict[str, ToolDefinition] = {
+    # Public tools (LLM can see and call)
     CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,
     CREATE_PRIORITY.name: CREATE_PRIORITY,
     GET_PRIORITIES.name: GET_PRIORITIES,
+    # Private widget-only tools (widget can call, LLM cannot see)
+    ADD_PRIORITY.name: ADD_PRIORITY,
+    UPDATE_PRIORITY.name: UPDATE_PRIORITY,
+    DELETE_PRIORITY.name: DELETE_PRIORITY,
+    ADD_DELIVERABLE.name: ADD_DELIVERABLE,
+    UPDATE_DELIVERABLE.name: UPDATE_DELIVERABLE,
+    DELETE_DELIVERABLE.name: DELETE_DELIVERABLE,
 }
 
 
@@ -87,8 +102,17 @@ async def list_tools() -> List[mcp_types.Tool]:
         )
 
         # Build _meta based on tool capabilities
-        if tool_def.widget_uri:
-            # Widget-producing tools get full metadata
+        if tool_def.visibility == "private":
+            # Private tools: widget-accessible but LLM cannot see or call them
+            # NO resultCanProduceWidget (they mutate data in existing widget)
+            meta = {
+                "openai/widgetAccessible": True,
+                "openai/visibility": "private",
+                "annotations": annotations,
+                "securitySchemes": security_schemes,
+            }
+        elif tool_def.widget_uri:
+            # Widget-producing public tools get full metadata
             meta = {
                 "openai/outputTemplate": tool_def.widget_uri,
                 "openai/toolInvocation/invoking": invoking_msg,
@@ -99,7 +123,7 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_accessible:
-            # Widget-callable tools need widgetAccessible
+            # Widget-callable public tools need widgetAccessible
             meta = {
                 "openai/widgetAccessible": True,
                 "annotations": annotations,

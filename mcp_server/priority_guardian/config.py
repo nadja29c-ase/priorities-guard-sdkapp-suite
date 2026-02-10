@@ -151,10 +151,18 @@ SCOPES_SUPPORTED = ["pg.access"]
 
 # Tool → Required scopes mapping
 TOOL_SCOPES = {
+    # Public tools
     "connect_google_calendar": ["pg.access"],
     "disconnect_google_calendar": ["pg.access"],
     "create_priority": ["pg.access"],
     "get_priorities": ["pg.access"],
+    # Private widget-only tools (Inc B)
+    "add_priority": ["pg.access"],
+    "update_priority": ["pg.access"],
+    "delete_priority": ["pg.access"],
+    "add_deliverable": ["pg.access"],
+    "update_deliverable": ["pg.access"],
+    "delete_deliverable": ["pg.access"],
 }
 
 

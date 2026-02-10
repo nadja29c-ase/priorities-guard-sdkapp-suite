@@ -149,9 +149,21 @@ class TestAnnotationValues:
         tool = get_tool("create_priority")
         assert tool.read_only_hint is False
 
-    def test_all_tools_have_no_widget_uri(self):
-        """All current PG tools have no widget_uri (no widget yet)."""
+    def test_widget_producing_tools_have_widget_uri(self):
+        """Tools that produce widgets have correct widget_uri."""
         from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 
+        # Tools that produce the dashboard widget (used for initial render)
+        widget_producing_tools = {
+            "connect_google_calendar",
+            "disconnect_google_calendar",
+            "get_priorities",
+        }
+
         for name, tool in TOOL_REGISTRY.items():
-            assert tool.widget_uri is None, f"{name} should have no widget_uri"
+            if name in widget_producing_tools:
+                assert tool.widget_uri == "ui://widget/pg-dashboard.html", \
+                    f"{name} should have pg-dashboard.html widget_uri"
+            else:
+                # create_priority and private CRUD tools don't produce widgets
+                assert tool.widget_uri is None, f"{name} should have no widget_uri"

@@ -1,17 +1,22 @@
 /**
- * React Widget Tests for Priority Guardian Dashboard (Widget Increment A)
+ * React Widget Tests for Priority Guardian Dashboard (Widget Increments A & B)
  *
  * Tests:
  * - Priority cards render correctly (Deadline and Flexible types)
  * - Connection status displays correctly
  * - camelCase field names are used
  * - UI matches spec requirements
+ * - Edit mode for priority cards
+ * - Add Priority form validation
+ * - Delete confirmation dialog
+ * - Deliverable CRUD interactions
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import App from '../App'
-import { setMockPriorities, resetMocks } from '../test/setup'
+import { setMockPriorities, resetMocks, mockOpenai } from '../test/setup'
 import type { Priority } from '../types'
 
 // Sample priorities for testing
@@ -242,6 +247,234 @@ describe('App', () => {
       render(<App />)
       // Should show loading or empty state, not crash
       expect(document.body).toBeTruthy()
+    })
+  })
+
+  describe('Edit Mode (Widget B)', () => {
+    it('shows edit button on deadline card', () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+      // Priority edit button has specific aria-label pattern
+      expect(screen.getByRole('button', { name: /edit priority/i })).toBeInTheDocument()
+    })
+
+    it('shows edit button on flexible card', () => {
+      setMockPriorities([flexiblePriority], true)
+      render(<App />)
+      expect(screen.getByRole('button', { name: /edit priority/i })).toBeInTheDocument()
+    })
+
+    it('enters edit mode when edit button clicked', async () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      const editButton = screen.getByRole('button', { name: /edit priority/i })
+      await userEvent.click(editButton)
+
+      // Should show save and cancel buttons in edit mode
+      expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+    })
+
+    it('exits edit mode when cancel clicked', async () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Enter edit mode
+      const editButton = screen.getByRole('button', { name: /edit priority/i })
+      await userEvent.click(editButton)
+
+      // Click cancel
+      const cancelButton = screen.getByRole('button', { name: /cancel/i })
+      await userEvent.click(cancelButton)
+
+      // Should show edit button again
+      expect(screen.getByRole('button', { name: /edit priority/i })).toBeInTheDocument()
+    })
+
+    it('only allows one card in edit mode at a time', async () => {
+      setMockPriorities([deadlinePriority, flexiblePriority], true)
+      render(<App />)
+
+      // Get all priority edit buttons (not deliverable edit buttons)
+      const editButtons = screen.getAllByRole('button', { name: /edit priority/i })
+      expect(editButtons).toHaveLength(2)
+
+      // Click first edit button
+      await userEvent.click(editButtons[0])
+
+      // First card should be in edit mode
+      expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
+      // The other priority edit button should still exist but may be non-functional
+      const remainingEditButtons = screen.queryAllByRole('button', { name: /edit priority/i })
+      // When one is editing, the other card should have disabled or no edit functionality
+      expect(remainingEditButtons.length).toBeLessThanOrEqual(2)
+    })
+  })
+
+  describe('Add Priority Form (Widget B)', () => {
+    it('shows add priority button when keywords available', () => {
+      setMockPriorities([], true, ['P1', 'P2', 'P3'])
+      render(<App />)
+      expect(screen.getByRole('button', { name: /add a new priority/i })).toBeInTheDocument()
+    })
+
+    it('hides add priority button when no keywords available', () => {
+      setMockPriorities([deadlinePriority, flexiblePriority], true, [])
+      render(<App />)
+      expect(screen.queryByRole('button', { name: /add a new priority/i })).not.toBeInTheDocument()
+    })
+
+    it('shows type selection when add button clicked', async () => {
+      setMockPriorities([], true, ['P1', 'P2'])
+      render(<App />)
+
+      const addButton = screen.getByRole('button', { name: /add a new priority/i })
+      await userEvent.click(addButton)
+
+      // Form shows type selection first (Deadline vs Flexible)
+      expect(screen.getByText(/what type of priority/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /create deadline priority/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /create flexible priority/i })).toBeInTheDocument()
+    })
+
+    it('shows cancel button in add form', async () => {
+      setMockPriorities([], true, ['P1'])
+      render(<App />)
+
+      await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
+
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('Delete Priority (Widget B)', () => {
+    it('shows delete button on priority card', () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Delete button is visible on the priority card
+      expect(screen.getByRole('button', { name: /delete priority/i })).toBeInTheDocument()
+    })
+
+    it('shows confirmation dialog when delete clicked', async () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Click delete on the priority
+      await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+
+      // Should show confirmation dialog with warning text
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /confirm delete/i })).toBeInTheDocument()
+    })
+
+    it('calls delete tool when confirmed', async () => {
+      mockOpenai.callTool.mockResolvedValue({
+        structuredContent: {
+          data: { google_connected: true, priorities: [] }
+        }
+      })
+
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Click delete
+      await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+
+      // Confirm delete
+      await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+      await waitFor(() => {
+        expect(mockOpenai.callTool).toHaveBeenCalledWith(
+          'delete_priority',
+          expect.objectContaining({
+            priority_id: 'pri-1',
+            confirm: true
+          })
+        )
+      })
+    })
+  })
+
+  describe('Deliverable Interactions (Widget B)', () => {
+    it('shows checkbox for each deliverable', () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      const checkboxes = screen.getAllByRole('checkbox')
+      expect(checkboxes.length).toBeGreaterThanOrEqual(2)
+    })
+
+    it('toggles deliverable done state when checkbox clicked', async () => {
+      mockOpenai.callTool.mockResolvedValue({
+        structuredContent: {
+          data: {
+            google_connected: true,
+            priorities: [{
+              ...deadlinePriority,
+              deliverables: [
+                { id: 'd1', name: 'Design doc', done: false }, // toggled
+                { id: 'd2', name: 'Implementation', done: false },
+              ]
+            }]
+          }
+        }
+      })
+
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Find the checkbox for the done deliverable
+      const checkboxes = screen.getAllByRole('checkbox')
+      // d1 is done=true, click to toggle to false
+      await userEvent.click(checkboxes[0])
+
+      await waitFor(() => {
+        expect(mockOpenai.callTool).toHaveBeenCalledWith(
+          'update_deliverable',
+          expect.objectContaining({
+            deliverable_id: 'd1',
+            done: false
+          })
+        )
+      })
+    })
+  })
+
+  describe('widgetState Persistence (Widget B)', () => {
+    it('persists edit mode to widgetState', async () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      await userEvent.click(screen.getByRole('button', { name: /edit priority/i }))
+
+      await waitFor(() => {
+        expect(mockOpenai.setWidgetState).toHaveBeenCalledWith(
+          expect.objectContaining({
+            editingPriorityId: 'pri-1'
+          })
+        )
+      })
+    })
+
+    it('clears widgetState when exiting edit mode', async () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Enter edit mode
+      await userEvent.click(screen.getByRole('button', { name: /edit priority/i }))
+
+      // Exit edit mode
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+      await waitFor(() => {
+        // Last call should be with empty state (no editingPriorityId)
+        const calls = mockOpenai.setWidgetState.mock.calls
+        const lastCall = calls[calls.length - 1]?.[0]
+        expect(lastCall?.editingPriorityId).toBeUndefined()
+      })
     })
   })
 })

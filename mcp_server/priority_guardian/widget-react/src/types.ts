@@ -36,6 +36,14 @@ export interface ToolOutputData {
   google_connected: boolean
   google_connected_at?: string
   priorities: Priority[]
+  available_keywords?: string[]
+}
+
+// Widget state for edit mode persistence
+export interface WidgetState {
+  editingPriorityId?: string
+  addFormOpen?: boolean
+  [key: string]: unknown  // Allow any additional keys for Record<string, unknown> compatibility
 }
 
 // window.openai API types

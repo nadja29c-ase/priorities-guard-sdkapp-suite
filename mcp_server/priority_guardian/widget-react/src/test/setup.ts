@@ -24,12 +24,17 @@ Object.defineProperty(window, 'openai', {
 })
 
 // Helper to set mock priorities
-export function setMockPriorities(priorities: Priority[], googleConnected = false) {
+export function setMockPriorities(
+  priorities: Priority[],
+  googleConnected = false,
+  availableKeywords: string[] = []
+) {
   mockOpenai.toolOutput = {
     structuredContent: {
       data: {
         google_connected: googleConnected,
         priorities,
+        available_keywords: availableKeywords,
       },
     },
   }
