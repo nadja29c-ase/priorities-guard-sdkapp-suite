@@ -23,7 +23,7 @@ import json
 import logging
 import os
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlencode
 
@@ -105,9 +105,10 @@ async def store_oauth_state(
     user_id: str,
     code_verifier: str,
     correlation_id: str | None = None,
+    scope: str | None = None,
 ) -> bool:
     """
-    Store OAuth state in Redis with user_id and code_verifier.
+    Store OAuth state in Redis with user_id, code_verifier, and scope.
 
     State is bound to user_id server-side to prevent tampering.
     TTL is 10 minutes.
@@ -117,16 +118,20 @@ async def store_oauth_state(
         user_id: User ID initiating the OAuth flow
         code_verifier: PKCE code verifier for this flow
         correlation_id: Optional request correlation ID for tracing
+        scope: Optional Google OAuth scope (for validation in callback)
 
     Returns:
         True if stored successfully, False otherwise
     """
     key = f"oauth:google:state:{state}"
-    value = json.dumps({
+    state_data = {
         "user_id": user_id,
         "code_verifier": code_verifier,
         "created_at": datetime.now(timezone.utc).isoformat(),
-    })
+    }
+    if scope:
+        state_data["scope"] = scope
+    value = json.dumps(state_data)
 
     result = await redis_client.set(key, value, ex=OAUTH_STATE_TTL)
 
@@ -156,7 +161,7 @@ async def verify_and_get_oauth_state(
         correlation_id: Optional request correlation ID for tracing
 
     Returns:
-        Dictionary with user_id and code_verifier if valid, None otherwise
+        Dictionary with user_id, code_verifier, and scope if valid, None otherwise
     """
     key = f"oauth:google:state:{state}"
 
@@ -181,6 +186,7 @@ async def verify_and_get_oauth_state(
         return {
             "user_id": data["user_id"],
             "code_verifier": data["code_verifier"],
+            "scope": data.get("scope"),
         }
     except (json.JSONDecodeError, KeyError) as e:
         logger.error(f"[oauth] Failed to parse state data: {e}", extra=log_extra)
@@ -192,7 +198,7 @@ async def verify_and_get_oauth_state(
 # ============================================================================
 
 
-def generate_auth_url_with_pkce(code_challenge: str, state: str) -> str:
+def generate_auth_url_with_pkce(code_challenge: str, state: str, scope: str) -> str:
     """
     Generate Google OAuth authorization URL with PKCE.
 
@@ -202,6 +208,7 @@ def generate_auth_url_with_pkce(code_challenge: str, state: str) -> str:
     Args:
         code_challenge: The S256 code challenge
         state: The state token for CSRF protection
+        scope: The Google OAuth scope to request (e.g., calendar.readonly)
 
     Returns:
         Full authorization URL with all parameters
@@ -212,7 +219,7 @@ def generate_auth_url_with_pkce(code_challenge: str, state: str) -> str:
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_REDIRECT_URI,
         "response_type": "code",
-        "scope": "https://www.googleapis.com/auth/calendar.readonly",
+        "scope": scope,
         "access_type": "offline",
         "prompt": "consent",
         "include_granted_scopes": "true",
@@ -229,6 +236,7 @@ async def exchange_code(
     http_client: httpx.AsyncClient,
     code_verifier: str | None = None,
     correlation_id: str | None = None,
+    required_scope: str | None = None,
 ) -> dict[str, Any]:
     """
     Exchange authorization code for access and refresh tokens.
@@ -245,6 +253,7 @@ async def exchange_code(
         http_client: Shared httpx AsyncClient from app state
         code_verifier: PKCE code verifier (required for PKCE flows)
         correlation_id: Optional request correlation ID for tracing
+        required_scope: The scope that must be granted (app-specific)
 
     Returns:
         Dictionary containing:
@@ -254,7 +263,7 @@ async def exchange_code(
         - scopes: list[str]
 
     Raises:
-        ValueError: If token exchange fails after retries
+        ValueError: If token exchange fails after retries or required scope not granted
     """
     token_url = "https://oauth2.googleapis.com/token"
     payload = {
@@ -289,15 +298,16 @@ async def exchange_code(
 
             # Validate required scope was granted
             # Google can return fewer scopes than requested - this breaks the app silently
-            required_scope = "https://www.googleapis.com/auth/calendar.readonly"
-            if required_scope not in scopes:
+            if required_scope and required_scope not in scopes:
                 logger.error(
                     f"Missing required Google scope: {required_scope}. "
                     f"Granted scopes: {scopes}",
                     extra=log_extra
                 )
+                # Extract short scope name for user-friendly message
+                scope_short = required_scope.split("/")[-1] if "/" in required_scope else required_scope
                 raise ValueError(
-                    f"Missing required Google scope: calendar.readonly. "
+                    f"Missing required Google scope: {scope_short}. "
                     f"User must grant calendar access to use this app."
                 )
 
@@ -322,6 +332,10 @@ async def exchange_code(
             logger.info(f"Retrying in {delay:.2f} seconds...", extra=log_extra)
             await asyncio.sleep(delay)
 
+        except ValueError:
+            # Re-raise ValueError (e.g., missing required scope) without wrapping
+            raise
+
         except Exception as e:
             logger.error(f"Token exchange failed unexpectedly: {e}", extra=log_extra)
             raise ValueError(f"Token exchange failed: {str(e)}")
@@ -337,12 +351,14 @@ async def exchange_code(
 async def store_connection_token(
     user_id: str,
     correlation_id: str | None = None,
+    scope: str | None = None,
 ) -> str:
     """
     Generate and store an opaque token for Google OAuth initiation.
 
-    The token maps to user_id in Redis and expires after 10 minutes.
-    Used to securely initiate Google OAuth without exposing user_id in URL.
+    The token maps to user_id (and optionally scope) in Redis and expires
+    after 10 minutes. Used to securely initiate Google OAuth without
+    exposing user_id in URL.
 
     Security:
         - Token is cryptographically random (secrets.token_urlsafe)
@@ -353,6 +369,7 @@ async def store_connection_token(
     Args:
         user_id: The user's internal ID (UUID string)
         correlation_id: Optional request correlation ID for tracing
+        scope: Optional Google OAuth scope to request (app-specific)
 
     Returns:
         Opaque token string (43 characters, URL-safe)
@@ -369,7 +386,14 @@ async def store_connection_token(
     token = secrets.token_urlsafe(32)
     redis_key = f"google_connect:{token}"
 
-    result = await redis_client.set(redis_key, user_id, ex=CONNECTION_TOKEN_TTL)
+    # Store user_id and scope as JSON if scope provided, otherwise just user_id
+    # for backwards compatibility
+    if scope:
+        value = json.dumps({"user_id": user_id, "scope": scope})
+    else:
+        value = user_id
+
+    result = await redis_client.set(redis_key, value, ex=CONNECTION_TOKEN_TTL)
 
     log_extra = {"user_id": user_id}
     if correlation_id:
@@ -387,12 +411,12 @@ async def store_connection_token(
 async def verify_connection_token(
     token: str,
     correlation_id: str | None = None,
-) -> str | None:
+) -> dict[str, Any] | None:
     """
     Verify and consume a connection token.
 
-    Retrieves the user_id associated with the token and deletes the token
-    (single-use). Returns None if token is invalid or expired.
+    Retrieves the user_id and scope associated with the token and deletes
+    the token (single-use). Returns None if token is invalid or expired.
 
     Security:
         - Single-use: token is deleted after retrieval
@@ -404,7 +428,7 @@ async def verify_connection_token(
         correlation_id: Optional request correlation ID for tracing
 
     Returns:
-        user_id if valid, None if invalid/expired
+        Dictionary with user_id and scope if valid, None if invalid/expired
     """
     log_extra = {}
     if correlation_id:
@@ -431,9 +455,9 @@ async def verify_connection_token(
     redis_key = f"google_connect:{token}"
 
     # Get token data
-    user_id = await redis_client.get(redis_key)
+    value = await redis_client.get(redis_key)
 
-    if user_id is None:
+    if value is None:
         log_extra["token_prefix"] = token[:8] if token else "none"
         logger.warning(
             "[oauth] Connection token verification failed: invalid or expired",
@@ -454,13 +478,23 @@ async def verify_connection_token(
         )
 
     # Redis returns bytes, decode if necessary
-    if isinstance(user_id, bytes):
-        user_id = user_id.decode("utf-8")
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+
+    # Parse value - could be plain user_id (legacy) or JSON with user_id and scope
+    try:
+        data = json.loads(value)
+        user_id = data["user_id"]
+        scope = data.get("scope")
+    except (json.JSONDecodeError, KeyError, TypeError):
+        # Legacy format: value is just user_id string
+        user_id = value
+        scope = None
 
     log_extra["user_id"] = user_id
     logger.info("[oauth] Connection token verified", extra=log_extra)
 
-    return user_id
+    return {"user_id": user_id, "scope": scope}
 
 
 # ============================================================================

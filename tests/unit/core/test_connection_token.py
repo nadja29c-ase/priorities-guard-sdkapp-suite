@@ -145,7 +145,7 @@ class TestVerifyConnectionToken:
 
     @pytest.mark.asyncio
     async def test_valid_token_returns_user_id(self):
-        """Test valid token returns the associated user_id."""
+        """Test valid token returns dict with user_id."""
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value="user-123")
         mock_redis.delete = AsyncMock()
@@ -153,7 +153,9 @@ class TestVerifyConnectionToken:
         with patch("backend.core.google_oauth.redis_client", mock_redis):
             result = await verify_connection_token("valid_token_abc")
 
-        assert result == "user-123"
+        assert result is not None
+        assert result["user_id"] == "user-123"
+        assert result["scope"] is None  # Legacy format has no scope
 
     @pytest.mark.asyncio
     async def test_valid_token_bytes_decoded(self):
@@ -165,8 +167,9 @@ class TestVerifyConnectionToken:
         with patch("backend.core.google_oauth.redis_client", mock_redis):
             result = await verify_connection_token("token_bytes")
 
-        assert result == "user-456"
-        assert isinstance(result, str)
+        assert result is not None
+        assert result["user_id"] == "user-456"
+        assert isinstance(result["user_id"], str)
 
     @pytest.mark.asyncio
     async def test_invalid_token_returns_none(self):
@@ -240,7 +243,7 @@ class TestVerifyConnectionToken:
             result1 = await verify_connection_token("one_time_token")
             result2 = await verify_connection_token("one_time_token")
 
-        assert result1 == "user-123", "First use should succeed"
+        assert result1 is not None and result1["user_id"] == "user-123", "First use should succeed"
         assert result2 is None, "Second use should fail (token deleted)"
 
 
@@ -312,7 +315,7 @@ class TestRedisFailureHandling:
             # Should still return user_id despite delete failure
             result = await verify_connection_token("some_token")
 
-        assert result == "user-123", "Verification should succeed even if cleanup fails"
+        assert result is not None and result["user_id"] == "user-123", "Verification should succeed even if cleanup fails"
 
     @pytest.mark.asyncio
     async def test_verify_logs_delete_failure(self):
@@ -419,7 +422,7 @@ class TestTokenCollisionHandling:
                 # Verify returns user-second (last write wins)
                 result = await verify_connection_token("same_token")
 
-        assert result == "user-second", "Last write should win in collision"
+        assert result is not None and result["user_id"] == "user-second", "Last write should win in collision"
 
 
 # =============================================================================
@@ -808,7 +811,7 @@ class TestTokenTTLExpiration:
         with patch("backend.core.google_oauth.redis_client", mock_redis):
             result = await verify_connection_token("almost_expired_token")
 
-        assert result == "user-123"
+        assert result is not None and result["user_id"] == "user-123"
 
     @pytest.mark.asyncio
     async def test_ttl_not_refreshed_on_verify(self):
@@ -906,7 +909,7 @@ class TestTokenTTLExpiration:
 
             # Immediately after storage, token should be valid
             result = await verify_connection_token(token)
-            assert result == "user-123"
+            assert result is not None and result["user_id"] == "user-123"
             # Note: verify deletes token, so we need to store again for time test
 
         # Store another token for time simulation
@@ -955,7 +958,7 @@ class TestConcurrencySafety:
             result1 = await verify_connection_token("token")
             result2 = await verify_connection_token("token")
 
-        assert result1 == "user-123", "First verify should succeed"
+        assert result1 is not None and result1["user_id"] == "user-123", "First verify should succeed"
         assert result2 is None, "Second verify should fail (token consumed)"
 
     @pytest.mark.asyncio
@@ -979,8 +982,8 @@ class TestConcurrencySafety:
 
         # CURRENT BEHAVIOR: Both succeed (race condition!)
         # This test documents the vulnerability
-        assert result1 == "user-123"
-        assert result2 == "user-123", "Race condition: both callers got the token"
+        assert result1 is not None and result1["user_id"] == "user-123"
+        assert result2 is not None and result2["user_id"] == "user-123", "Race condition: both callers got the token"
 
         # At least verify delete was called twice
         assert mock_redis.delete.call_count == 2
@@ -1023,11 +1026,12 @@ class TestConcurrencySafety:
             )
 
         # Document current behavior: both may succeed (race condition)
-        # At least one should succeed
-        assert "user-123" in results, "At least one verification should succeed"
+        # At least one should succeed - check for dict with user_id
+        successful_results = [r for r in results if r is not None and r.get("user_id") == "user-123"]
+        assert len(successful_results) >= 1, "At least one verification should succeed"
 
         # Count successes
-        successes = [r for r in results if r == "user-123"]
+        successes = successful_results
 
         # With current implementation, both likely succeed (bad)
         # This test will need updating when atomicity is added
@@ -1094,7 +1098,7 @@ class TestConcurrencySafety:
                 verify_connection_token("token") for _ in range(10)
             ])
 
-        successes = [r for r in results if r == "user-123"]
+        successes = [r for r in results if r is not None and r.get("user_id") == "user-123"]
 
         # Document: with current implementation, all 10 might succeed
         # This is the race condition we need to fix
@@ -1121,9 +1125,9 @@ class TestConcurrencySafety:
             # Second call also succeeds because delete didn't work
             result2 = await verify_connection_token("token")
 
-        assert result1 == "user-123"
+        assert result1 is not None and result1["user_id"] == "user-123"
         # This documents that delete failure allows reuse (mitigated by TTL)
-        assert result2 == "user-123", "Delete failure allows reuse until TTL"
+        assert result2 is not None and result2["user_id"] == "user-123", "Delete failure allows reuse until TTL"
 
 
 # =============================================================================

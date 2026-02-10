@@ -300,37 +300,282 @@ class TestAuthURLGeneration:
         """Test generated URL contains code_challenge parameter."""
         challenge = "test_challenge_value"
         state = "test_state"
+        scope = "https://www.googleapis.com/auth/calendar.readonly"
 
-        url = generate_auth_url_with_pkce(challenge, state)
+        url = generate_auth_url_with_pkce(challenge, state, scope)
 
         assert "code_challenge=test_challenge_value" in url
 
     def test_auth_url_contains_s256_method(self):
         """Test generated URL specifies S256 challenge method."""
-        url = generate_auth_url_with_pkce("challenge", "state")
+        scope = "https://www.googleapis.com/auth/calendar.readonly"
+        url = generate_auth_url_with_pkce("challenge", "state", scope)
 
         assert "code_challenge_method=S256" in url
 
     def test_auth_url_contains_state(self):
         """Test generated URL contains state parameter."""
-        url = generate_auth_url_with_pkce("challenge", "my_state_token")
+        scope = "https://www.googleapis.com/auth/calendar.readonly"
+        url = generate_auth_url_with_pkce("challenge", "my_state_token", scope)
 
         assert "state=my_state_token" in url
 
     def test_auth_url_uses_google_endpoint(self):
         """Test URL points to Google OAuth2 authorize endpoint."""
-        url = generate_auth_url_with_pkce("challenge", "state")
+        scope = "https://www.googleapis.com/auth/calendar.readonly"
+        url = generate_auth_url_with_pkce("challenge", "state", scope)
 
         assert url.startswith("https://accounts.google.com/o/oauth2/v2/auth")
 
-    def test_auth_url_requests_calendar_readonly_scope(self):
-        """Test URL requests calendar.readonly scope."""
-        url = generate_auth_url_with_pkce("challenge", "state")
+    def test_auth_url_includes_passed_scope(self):
+        """Test URL includes the exact scope passed as parameter."""
+        scope = "https://www.googleapis.com/auth/calendar.events.readonly"
+        url = generate_auth_url_with_pkce("challenge", "state", scope)
+
+        assert "calendar.events.readonly" in url
+        # Should NOT contain the old hardcoded scope
+        assert "calendar.readonly" not in url or "events.readonly" in url
+
+    def test_auth_url_includes_calendar_readonly_scope(self):
+        """Test URL includes calendar.readonly scope when passed."""
+        scope = "https://www.googleapis.com/auth/calendar.readonly"
+        url = generate_auth_url_with_pkce("challenge", "state", scope)
 
         assert "calendar.readonly" in url
 
     def test_auth_url_requests_offline_access(self):
         """Test URL requests offline access for refresh token."""
-        url = generate_auth_url_with_pkce("challenge", "state")
+        scope = "https://www.googleapis.com/auth/calendar.readonly"
+        url = generate_auth_url_with_pkce("challenge", "state", scope)
 
         assert "access_type=offline" in url
+
+    def test_auth_url_scope_is_url_encoded(self):
+        """Test scope is properly URL-encoded in the auth URL."""
+        from urllib.parse import urlparse, parse_qs
+
+        scope = "https://www.googleapis.com/auth/calendar.events.readonly"
+        url = generate_auth_url_with_pkce("challenge", "state", scope)
+
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+
+        assert "scope" in params
+        assert params["scope"][0] == scope
+
+
+# =============================================================================
+# Token Exchange Scope Validation Tests
+# =============================================================================
+
+class TestExchangeCodeScopeValidation:
+    """Tests for exchange_code scope validation."""
+
+    @pytest.mark.asyncio
+    async def test_exchange_code_validates_passed_scope(self):
+        """Test exchange_code validates the scope passed as parameter."""
+        from backend.core.google_oauth import exchange_code
+        import httpx
+
+        # Mock successful token response with the requested scope
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "access123",
+            "refresh_token": "refresh456",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/calendar.events.readonly",
+        }
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        result = await exchange_code(
+            code="auth_code",
+            http_client=mock_client,
+            code_verifier="verifier",
+            required_scope="https://www.googleapis.com/auth/calendar.events.readonly",
+        )
+
+        assert result["access_token"] == "access123"
+        assert "https://www.googleapis.com/auth/calendar.events.readonly" in result["scopes"]
+
+    @pytest.mark.asyncio
+    async def test_exchange_code_raises_on_wrong_scope(self):
+        """Test exchange_code raises ValueError when required scope not granted."""
+        from backend.core.google_oauth import exchange_code
+        import httpx
+
+        # Mock response with different scope than requested
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "access123",
+            "refresh_token": "refresh456",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/calendar.readonly",  # Different scope
+        }
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(ValueError) as exc_info:
+            await exchange_code(
+                code="auth_code",
+                http_client=mock_client,
+                code_verifier="verifier",
+                required_scope="https://www.googleapis.com/auth/calendar.events.readonly",
+            )
+
+        assert "calendar.events.readonly" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_exchange_code_succeeds_without_required_scope(self):
+        """Test exchange_code succeeds when no required_scope is specified."""
+        from backend.core.google_oauth import exchange_code
+        import httpx
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "access123",
+            "refresh_token": "refresh456",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/calendar.readonly",
+        }
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        # No required_scope - should succeed regardless of what Google returns
+        result = await exchange_code(
+            code="auth_code",
+            http_client=mock_client,
+            code_verifier="verifier",
+            required_scope=None,
+        )
+
+        assert result["access_token"] == "access123"
+
+    @pytest.mark.asyncio
+    async def test_exchange_code_validates_calendar_readonly_scope(self):
+        """Test exchange_code validates calendar.readonly scope correctly."""
+        from backend.core.google_oauth import exchange_code
+        import httpx
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "access123",
+            "refresh_token": "refresh456",
+            "expires_in": 3600,
+            "scope": "https://www.googleapis.com/auth/calendar.readonly openid",
+        }
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        result = await exchange_code(
+            code="auth_code",
+            http_client=mock_client,
+            code_verifier="verifier",
+            required_scope="https://www.googleapis.com/auth/calendar.readonly",
+        )
+
+        assert result["access_token"] == "access123"
+        assert "https://www.googleapis.com/auth/calendar.readonly" in result["scopes"]
+
+
+# =============================================================================
+# OAuth State Scope Storage Tests
+# =============================================================================
+
+class TestOAuthStateScopeStorage:
+    """Tests for scope storage in OAuth state."""
+
+    @pytest.mark.asyncio
+    async def test_store_oauth_state_with_scope(self):
+        """Test store_oauth_state stores scope when provided."""
+        mock_redis = AsyncMock()
+        stored_value = None
+
+        async def capture_value(key, value, ex=None):
+            nonlocal stored_value
+            stored_value = value
+            return True
+
+        mock_redis.set = capture_value
+
+        with patch("backend.core.google_oauth.redis_client", mock_redis):
+            await store_oauth_state(
+                state="test_state",
+                user_id="user-uuid",
+                code_verifier="verifier",
+                scope="https://www.googleapis.com/auth/calendar.events.readonly",
+            )
+
+        data = json.loads(stored_value)
+        assert data["scope"] == "https://www.googleapis.com/auth/calendar.events.readonly"
+
+    @pytest.mark.asyncio
+    async def test_store_oauth_state_without_scope(self):
+        """Test store_oauth_state works without scope (backwards compat)."""
+        mock_redis = AsyncMock()
+        stored_value = None
+
+        async def capture_value(key, value, ex=None):
+            nonlocal stored_value
+            stored_value = value
+            return True
+
+        mock_redis.set = capture_value
+
+        with patch("backend.core.google_oauth.redis_client", mock_redis):
+            await store_oauth_state(
+                state="test_state",
+                user_id="user-uuid",
+                code_verifier="verifier",
+            )
+
+        data = json.loads(stored_value)
+        assert "scope" not in data
+
+    @pytest.mark.asyncio
+    async def test_verify_oauth_state_returns_scope(self):
+        """Test verify_and_get_oauth_state returns scope when present."""
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=json.dumps({
+            "user_id": "user-123",
+            "code_verifier": "verifier-456",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "scope": "https://www.googleapis.com/auth/calendar.events.readonly",
+        }))
+        mock_redis.delete = AsyncMock()
+
+        with patch("backend.core.google_oauth.redis_client", mock_redis):
+            result = await verify_and_get_oauth_state("valid_state")
+
+        assert result is not None
+        assert result["scope"] == "https://www.googleapis.com/auth/calendar.events.readonly"
+
+    @pytest.mark.asyncio
+    async def test_verify_oauth_state_returns_none_scope_when_missing(self):
+        """Test verify_and_get_oauth_state returns None scope for legacy state."""
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value=json.dumps({
+            "user_id": "user-123",
+            "code_verifier": "verifier-456",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            # No scope field
+        }))
+        mock_redis.delete = AsyncMock()
+
+        with patch("backend.core.google_oauth.redis_client", mock_redis):
+            result = await verify_and_get_oauth_state("legacy_state")
+
+        assert result is not None
+        assert result["scope"] is None

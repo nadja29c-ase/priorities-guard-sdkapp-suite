@@ -23,6 +23,7 @@ from backend.core.database import get_db
 from backend.core.models import CoreConnection
 from backend.core.google_oauth import store_connection_token
 from backend.core.config import settings
+from backend.apps.priority_guardian.pg_config import GOOGLE_CALENDAR_SCOPE
 
 logger = structlog.get_logger(__name__)
 
@@ -121,8 +122,12 @@ async def initiate_connection(
     correlation_id = getattr(request.state, "correlation_id", None)
 
     try:
-        # Generate and store opaque connection token
-        token = await store_connection_token(str(user_id), correlation_id=correlation_id)
+        # Generate and store opaque connection token with PG's scope
+        token = await store_connection_token(
+            str(user_id),
+            correlation_id=correlation_id,
+            scope=GOOGLE_CALENDAR_SCOPE,
+        )
 
         # Construct the connect URL using the public backend URL
         connect_url = f"{settings.BACKEND_PUBLIC_URL}/auth/google/start?token={token}"

@@ -14,3 +14,10 @@ Increment 01: Foundation only - no business logic constants yet.
 
 PG_APP_NAME = "priority-guardian"
 PG_APP_DISPLAY_NAME = "Priority Guardian"
+
+# -----------------------------------------------------------
+# GOOGLE OAUTH SCOPE
+# -----------------------------------------------------------
+
+# PG uses the narrower events.readonly scope (not full calendar.readonly)
+GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly"

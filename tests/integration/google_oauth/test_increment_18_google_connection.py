@@ -714,7 +714,8 @@ class TestStartWithTokenParameter:
         assert stored_state_ttl == 600, f"OAuth state TTL must be 600, got {stored_state_ttl}"
 
         # Verify no unexpected fields (defense against accidental data leakage)
-        expected_fields = {"user_id", "code_verifier", "created_at"}
+        # scope is optional - added in scope parameterization to support per-app scopes
+        expected_fields = {"user_id", "code_verifier", "created_at", "scope"}
         actual_fields = set(stored_state_data.keys())
         unexpected = actual_fields - expected_fields
         assert not unexpected, f"Unexpected fields in OAuth state: {unexpected}"
