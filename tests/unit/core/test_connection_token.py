@@ -328,11 +328,13 @@ class TestRedisFailureHandling:
             with patch("backend.core.google_oauth.logger") as mock_logger:
                 await verify_connection_token("some_token")
 
-                # Should log the error
+                # Should log the error with structured event name and error details
                 mock_logger.error.assert_called()
-                error_call = mock_logger.error.call_args[0][0]
-                assert "Failed to delete" in error_call
-                assert "Redis down" in error_call
+                error_call = mock_logger.error.call_args
+                # Check event name (first positional arg)
+                assert error_call[0][0] == "google_oauth.connection_token_delete_failed"
+                # Check error is passed as keyword arg
+                assert "Redis down" in error_call[1].get("error", "")
 
     @pytest.mark.asyncio
     async def test_store_no_silent_failure_on_redis_error(self):

@@ -20,7 +20,6 @@ import asyncio  # needed for retry sleeps
 import base64
 import hashlib
 import json
-import logging
 import os
 import random
 from datetime import datetime, timezone
@@ -30,9 +29,10 @@ from urllib.parse import urlencode
 import httpx  # for async HTTP calls
 
 from backend.core.config import settings  # my config, holds Google keys
+from backend.core.logging import get_logger
 from backend.core.redis_client import redis_client
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # OAuth state TTL in seconds (10 minutes)
 OAUTH_STATE_TTL = 600
@@ -135,15 +135,11 @@ async def store_oauth_state(
 
     result = await redis_client.set(key, value, ex=OAUTH_STATE_TTL)
 
-    log_extra = {"user_id": user_id}
-    if correlation_id:
-        log_extra["correlation_id"] = correlation_id
-
     if result:
-        logger.info("[oauth] Stored state", extra=log_extra)
+        logger.info("google_oauth.state_stored", user_id=user_id, correlation_id=correlation_id)
         return True
     else:
-        logger.error("[oauth] Failed to store state", extra=log_extra)
+        logger.error("google_oauth.state_storage_failed", user_id=user_id, correlation_id=correlation_id)
         return False
 
 
@@ -168,12 +164,12 @@ async def verify_and_get_oauth_state(
     # Get state data
     value = await redis_client.get(key)
 
-    log_extra = {}
-    if correlation_id:
-        log_extra["correlation_id"] = correlation_id
-
     if value is None:
-        logger.warning("[oauth] State verification failed: invalid or expired state", extra=log_extra)
+        logger.warning(
+            "google_oauth.state_verification_failed",
+            reason="invalid_or_expired",
+            correlation_id=correlation_id
+        )
         return None
 
     # Delete state (single-use)
@@ -181,15 +177,19 @@ async def verify_and_get_oauth_state(
 
     try:
         data = json.loads(value)
-        log_extra["user_id"] = data.get("user_id")
-        logger.info("[oauth] State verified", extra=log_extra)
+        user_id = data["user_id"]
+        logger.info("google_oauth.state_verified", user_id=user_id, correlation_id=correlation_id)
         return {
-            "user_id": data["user_id"],
+            "user_id": user_id,
             "code_verifier": data["code_verifier"],
             "scope": data.get("scope"),
         }
     except (json.JSONDecodeError, KeyError) as e:
-        logger.error(f"[oauth] Failed to parse state data: {e}", extra=log_extra)
+        logger.error(
+            "google_oauth.state_parse_failed",
+            error=str(e),
+            correlation_id=correlation_id
+        )
         return None
 
 
@@ -278,10 +278,6 @@ async def exchange_code(
     if code_verifier:
         payload["code_verifier"] = code_verifier
 
-    log_extra = {}
-    if correlation_id:
-        log_extra["correlation_id"] = correlation_id
-
     max_retries = 3
     base_delay = 1.0
 
@@ -300,9 +296,10 @@ async def exchange_code(
             # Google can return fewer scopes than requested - this breaks the app silently
             if required_scope and required_scope not in scopes:
                 logger.error(
-                    f"Missing required Google scope: {required_scope}. "
-                    f"Granted scopes: {scopes}",
-                    extra=log_extra
+                    "google_oauth.token_exchange_missing_scope",
+                    required_scope=required_scope,
+                    granted_scopes=scopes,
+                    correlation_id=correlation_id
                 )
                 # Extract short scope name for user-friendly message
                 scope_short = required_scope.split("/")[-1] if "/" in required_scope else required_scope
@@ -310,6 +307,12 @@ async def exchange_code(
                     f"Missing required Google scope: {scope_short}. "
                     f"User must grant calendar access to use this app."
                 )
+
+            logger.info(
+                "google_oauth.token_exchange_success",
+                scopes=scopes,
+                correlation_id=correlation_id
+            )
 
             return {
                 "access_token": token_data["access_token"],
@@ -319,17 +322,74 @@ async def exchange_code(
             }
 
         except httpx.HTTPStatusError as e:
-            logger.warning(
-                f"Token exchange failed (attempt {attempt + 1}/{max_retries}): "
-                f"HTTP {e.response.status_code}",
-                extra=log_extra
-            )
+            # Parse Google's error response for better diagnostics
+            error_type = "unknown"
+            error_desc = ""
+            try:
+                error_data = e.response.json()
+                error_type = error_data.get("error", "unknown")
+                error_desc = error_data.get("error_description", "")
+            except Exception:
+                pass
+
+            # Provide actionable guidance for common errors
+            if error_type == "invalid_client":
+                logger.error(
+                    "google_oauth.token_exchange_failed",
+                    google_error=error_type,
+                    google_error_description=error_desc,
+                    http_status=e.response.status_code,
+                    attempt=attempt + 1,
+                    max_attempts=max_retries,
+                    action="Check GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables",
+                    correlation_id=correlation_id
+                )
+            elif error_type == "invalid_grant":
+                logger.warning(
+                    "google_oauth.token_exchange_failed",
+                    google_error=error_type,
+                    google_error_description=error_desc,
+                    http_status=e.response.status_code,
+                    attempt=attempt + 1,
+                    max_attempts=max_retries,
+                    action="Authorization code expired or already used",
+                    correlation_id=correlation_id
+                )
+            elif error_type == "redirect_uri_mismatch":
+                logger.error(
+                    "google_oauth.token_exchange_failed",
+                    google_error=error_type,
+                    google_error_description=error_desc,
+                    http_status=e.response.status_code,
+                    attempt=attempt + 1,
+                    max_attempts=max_retries,
+                    action="Check GOOGLE_REDIRECT_URI matches Google Cloud Console exactly",
+                    correlation_id=correlation_id
+                )
+            else:
+                logger.warning(
+                    "google_oauth.token_exchange_failed",
+                    google_error=error_type,
+                    google_error_description=error_desc,
+                    http_status=e.response.status_code,
+                    attempt=attempt + 1,
+                    max_attempts=max_retries,
+                    correlation_id=correlation_id
+                )
+
             if attempt == max_retries - 1:
-                raise ValueError(f"Token exchange failed: {e.response.text}")
+                raise ValueError(
+                    f"Token exchange failed: {error_type} - {error_desc}"
+                )
 
             # Exponential backoff with jitter
             delay = base_delay * (2**attempt) + random.uniform(0, 1)
-            logger.info(f"Retrying in {delay:.2f} seconds...", extra=log_extra)
+            logger.info(
+                "google_oauth.token_exchange_retry",
+                delay_seconds=round(delay, 2),
+                attempt=attempt + 1,
+                correlation_id=correlation_id
+            )
             await asyncio.sleep(delay)
 
         except ValueError:
@@ -337,7 +397,11 @@ async def exchange_code(
             raise
 
         except Exception as e:
-            logger.error(f"Token exchange failed unexpectedly: {e}", extra=log_extra)
+            logger.error(
+                "google_oauth.token_exchange_unexpected_error",
+                error=str(e),
+                correlation_id=correlation_id
+            )
             raise ValueError(f"Token exchange failed: {str(e)}")
 
     raise ValueError("Token exchange failed after maximum retries")
@@ -395,15 +459,20 @@ async def store_connection_token(
 
     result = await redis_client.set(redis_key, value, ex=CONNECTION_TOKEN_TTL)
 
-    log_extra = {"user_id": user_id}
-    if correlation_id:
-        log_extra["correlation_id"] = correlation_id
-
     if not result:
-        logger.error("[oauth] Failed to store connection token in Redis", extra=log_extra)
+        logger.error(
+            "google_oauth.connection_token_storage_failed",
+            user_id=user_id,
+            correlation_id=correlation_id
+        )
         raise RuntimeError("Failed to store connection token in Redis")
 
-    logger.info("[oauth] Stored connection token", extra=log_extra)
+    logger.info(
+        "google_oauth.connection_token_stored",
+        user_id=user_id,
+        has_scope=scope is not None,
+        correlation_id=correlation_id
+    )
 
     return token
 
@@ -430,16 +499,13 @@ async def verify_connection_token(
     Returns:
         Dictionary with user_id and scope if valid, None if invalid/expired
     """
-    log_extra = {}
-    if correlation_id:
-        log_extra["correlation_id"] = correlation_id
-
     # Validate token format before Redis lookup
     # Reject: None, non-string, empty, whitespace, or tokens with leading/trailing whitespace
     if not token or not isinstance(token, str) or token.strip() != token:
         logger.warning(
-            "[oauth] Connection token verification failed: malformed token",
-            extra=log_extra
+            "google_oauth.connection_token_verification_failed",
+            reason="malformed_token",
+            correlation_id=correlation_id
         )
         return None
 
@@ -447,8 +513,9 @@ async def verify_connection_token(
     # Valid tokens from secrets.token_urlsafe only contain: A-Za-z0-9-_
     if any(c.isspace() or ord(c) < 32 for c in token):
         logger.warning(
-            "[oauth] Connection token verification failed: invalid characters",
-            extra=log_extra
+            "google_oauth.connection_token_verification_failed",
+            reason="invalid_characters",
+            correlation_id=correlation_id
         )
         return None
 
@@ -458,10 +525,12 @@ async def verify_connection_token(
     value = await redis_client.get(redis_key)
 
     if value is None:
-        log_extra["token_prefix"] = token[:8] if token else "none"
+        token_prefix = token[:8] if token else "none"
         logger.warning(
-            "[oauth] Connection token verification failed: invalid or expired",
-            extra=log_extra
+            "google_oauth.connection_token_verification_failed",
+            reason="invalid_or_expired",
+            token_prefix=token_prefix,
+            correlation_id=correlation_id
         )
         return None
 
@@ -471,10 +540,11 @@ async def verify_connection_token(
     except Exception as e:
         # Log but don't fail - verification succeeded, cleanup is secondary
         # Token will expire via TTL anyway
-        log_extra["token_prefix"] = token[:8]
         logger.error(
-            f"[oauth] Failed to delete connection token after verification: {e}",
-            extra=log_extra
+            "google_oauth.connection_token_delete_failed",
+            error=str(e),
+            token_prefix=token[:8],
+            correlation_id=correlation_id
         )
 
     # Redis returns bytes, decode if necessary
@@ -491,8 +561,12 @@ async def verify_connection_token(
         user_id = value
         scope = None
 
-    log_extra["user_id"] = user_id
-    logger.info("[oauth] Connection token verified", extra=log_extra)
+    logger.info(
+        "google_oauth.connection_token_verified",
+        user_id=user_id,
+        has_scope=scope is not None,
+        correlation_id=correlation_id
+    )
 
     return {"user_id": user_id, "scope": scope}
 
@@ -532,10 +606,6 @@ async def revoke_google_token(
     """
     revoke_url = "https://oauth2.googleapis.com/revoke"
 
-    log_extra = {}
-    if correlation_id:
-        log_extra["correlation_id"] = correlation_id
-
     try:
         response = await http_client.post(
             revoke_url,
@@ -544,7 +614,7 @@ async def revoke_google_token(
         )
 
         if response.status_code == 200:
-            logger.info("Google OAuth token revoked successfully", extra=log_extra)
+            logger.info("google_oauth.token_revoked", correlation_id=correlation_id)
             return {"success": True, "error": None}
 
         # Token may already be revoked or invalid - still considered success
@@ -554,18 +624,31 @@ async def revoke_google_token(
 
             # "invalid_token" means token was already revoked or expired
             if error_type == "invalid_token":
-                logger.info("Google OAuth token already revoked or expired", extra=log_extra)
+                logger.info(
+                    "google_oauth.token_already_revoked",
+                    correlation_id=correlation_id
+                )
                 return {"success": True, "error": None}
 
-            logger.warning(f"Google token revocation failed: {error_type}", extra=log_extra)
+            logger.warning(
+                "google_oauth.token_revocation_failed",
+                google_error=error_type,
+                http_status=response.status_code,
+                correlation_id=correlation_id
+            )
             return {"success": False, "error": error_type}
 
         logger.warning(
-            f"Google token revocation unexpected status: {response.status_code}",
-            extra=log_extra
+            "google_oauth.token_revocation_failed",
+            http_status=response.status_code,
+            correlation_id=correlation_id
         )
         return {"success": False, "error": f"HTTP {response.status_code}"}
 
     except Exception as e:
-        logger.error(f"Google token revocation error: {e}", extra=log_extra)
+        logger.error(
+            "google_oauth.token_revocation_error",
+            error=str(e),
+            correlation_id=correlation_id
+        )
         return {"success": False, "error": str(e)}
