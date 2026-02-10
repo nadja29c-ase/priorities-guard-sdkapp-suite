@@ -199,7 +199,7 @@ class TestVerifyConnectionToken:
         """Test token is deleted from Redis after use (single-use)."""
         mock_redis = AsyncMock()
         mock_redis.get = AsyncMock(return_value="user-123")
-        mock_redis.delete = AsyncMock()
+        mock_redis.delete = AsyncMock(return_value=1)  # 1 = deleted successfully
 
         with patch("backend.core.google_oauth.redis_client", mock_redis):
             await verify_connection_token("single_use_token")
@@ -237,7 +237,7 @@ class TestVerifyConnectionToken:
         # First call: token exists
         # Second call: token was deleted, returns None
         mock_redis.get = AsyncMock(side_effect=["user-123", None])
-        mock_redis.delete = AsyncMock()
+        mock_redis.delete = AsyncMock(return_value=1)  # 1 = deleted successfully
 
         with patch("backend.core.google_oauth.redis_client", mock_redis):
             result1 = await verify_connection_token("one_time_token")
@@ -335,6 +335,41 @@ class TestRedisFailureHandling:
                 assert error_call[0][0] == "google_oauth.connection_token_delete_failed"
                 # Check error is passed as keyword arg
                 assert "Redis down" in error_call[1].get("error", "")
+
+    @pytest.mark.asyncio
+    async def test_verify_logs_delete_success(self):
+        """Test that successful deletion is logged explicitly."""
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value="user-123")
+        mock_redis.delete = AsyncMock(return_value=1)  # 1 = deleted successfully
+
+        with patch("backend.core.google_oauth.redis_client", mock_redis):
+            with patch("backend.core.google_oauth.logger") as mock_logger:
+                await verify_connection_token("some_token")
+
+                # Should log successful deletion
+                info_calls = [call for call in mock_logger.info.call_args_list]
+                event_names = [call[0][0] for call in info_calls]
+                assert "google_oauth.connection_token_deleted" in event_names
+
+    @pytest.mark.asyncio
+    async def test_verify_logs_already_gone(self):
+        """Test that already-deleted token is logged as warning."""
+        mock_redis = AsyncMock()
+        mock_redis.get = AsyncMock(return_value="user-123")
+        mock_redis.delete = AsyncMock(return_value=0)  # 0 = key didn't exist
+
+        with patch("backend.core.google_oauth.redis_client", mock_redis):
+            with patch("backend.core.google_oauth.logger") as mock_logger:
+                result = await verify_connection_token("some_token")
+
+                # Should still return user_id (token was valid when read)
+                assert result is not None and result["user_id"] == "user-123"
+
+                # Should log warning about token already gone
+                warning_calls = [call for call in mock_logger.warning.call_args_list]
+                event_names = [call[0][0] for call in warning_calls]
+                assert "google_oauth.connection_token_already_gone" in event_names
 
     @pytest.mark.asyncio
     async def test_store_no_silent_failure_on_redis_error(self):

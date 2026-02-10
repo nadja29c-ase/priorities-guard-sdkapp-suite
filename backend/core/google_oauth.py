@@ -173,7 +173,28 @@ async def verify_and_get_oauth_state(
         return None
 
     # Delete state (single-use)
-    await redis_client.delete(key)
+    try:
+        deleted_count = await redis_client.delete(key)
+        if deleted_count > 0:
+            logger.info(
+                "google_oauth.state_deleted",
+                state_prefix=state[:8] if state else "none",
+                correlation_id=correlation_id
+            )
+        else:
+            logger.warning(
+                "google_oauth.state_already_gone",
+                state_prefix=state[:8] if state else "none",
+                correlation_id=correlation_id
+            )
+    except Exception as e:
+        # Log but don't fail - state retrieval succeeded, cleanup is secondary
+        logger.error(
+            "google_oauth.state_delete_failed",
+            error=str(e),
+            state_prefix=state[:8] if state else "none",
+            correlation_id=correlation_id
+        )
 
     try:
         data = json.loads(value)
@@ -536,7 +557,20 @@ async def verify_connection_token(
 
     # Delete token (single-use) - best effort, don't fail verification if delete fails
     try:
-        await redis_client.delete(redis_key)
+        deleted_count = await redis_client.delete(redis_key)
+        if deleted_count > 0:
+            logger.info(
+                "google_oauth.connection_token_deleted",
+                token_prefix=token[:8],
+                correlation_id=correlation_id
+            )
+        else:
+            # Token was already deleted (race condition or TTL expiry)
+            logger.warning(
+                "google_oauth.connection_token_already_gone",
+                token_prefix=token[:8],
+                correlation_id=correlation_id
+            )
     except Exception as e:
         # Log but don't fail - verification succeeded, cleanup is secondary
         # Token will expire via TTL anyway
