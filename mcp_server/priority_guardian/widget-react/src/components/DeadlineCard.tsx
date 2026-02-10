@@ -69,13 +69,13 @@ export function DeadlineCard({ priority }: DeadlineCardProps) {
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
                     d.done
-                      ? 'bg-[#5B8DEF] border-[#5B8DEF]'
+                      ? 'bg-tertiary border-tertiary'
                       : 'border-default'
                   }`}
                   aria-hidden="true"
                 >
                   {d.done && (
-                    <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                    <svg className="w-2.5 h-2.5 text-surface" viewBox="0 0 12 12" fill="none">
                       <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   )}

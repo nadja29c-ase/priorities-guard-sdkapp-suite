@@ -315,47 +315,63 @@ class TestNameStripping:
         assert request.desired_result == "3 new meetings"
 
 
-class TestCrossTypeFields:
+class TestCrossTypeFieldRejection:
     """
-    Tests for cross-type field acceptance.
+    Tests for cross-type field rejection.
 
-    By design, the validation model accepts extra fields from the "other" type.
-    A flexible priority can include a deadline, and a deadline priority can include
-    flexible fields (weekly_hour_target, checkpoint_date, desired_result).
+    The validator rejects fields that belong to the "other" type:
+    - Flexible priorities reject `deadline`
+    - Deadline priorities reject `weekly_hour_target`, `checkpoint_date`, `desired_result`
 
-    This is intentional: the backend simply ignores irrelevant fields, which
-    allows LLMs to over-specify without causing validation errors.
+    This prevents data inconsistency and ensures LLMs provide the correct fields.
     """
 
-    def test_flexible_with_deadline_field_allowed(self):
-        """Flexible priority with deadline field passes validation."""
+    def test_flexible_with_deadline_field_rejected(self):
+        """Flexible priority with deadline field raises ValidationError."""
         future_date = date.today() + timedelta(days=30)
-        request = CreatePriorityRequest(
-            name="Client outreach",
-            type="flexible",
-            weekly_hour_target=Decimal("10.0"),
-            checkpoint_date=future_date,
-            desired_result="3 new client meetings",
-            # Extra cross-type field - silently accepted
-            deadline=future_date,
-        )
-        assert request.type == "flexible"
-        assert request.deadline == future_date  # Field is stored, just not enforced
+        with pytest.raises(ValidationError) as exc_info:
+            CreatePriorityRequest(
+                name="Client outreach",
+                type="flexible",
+                weekly_hour_target=Decimal("10.0"),
+                checkpoint_date=future_date,
+                desired_result="3 new client meetings",
+                deadline=future_date,  # Cross-type field - rejected
+            )
+        assert "deadline is not valid for flexible priorities" in str(exc_info.value)
 
-    def test_deadline_with_flexible_fields_allowed(self):
-        """Deadline priority with flexible-type fields passes validation."""
+    def test_deadline_with_weekly_hour_target_rejected(self):
+        """Deadline priority with weekly_hour_target raises ValidationError."""
         future_date = date.today() + timedelta(days=30)
-        request = CreatePriorityRequest(
-            name="Launch marketing site",
-            type="deadline",
-            deadline=future_date,
-            # Extra cross-type fields - silently accepted
-            weekly_hour_target=Decimal("5.0"),
-            checkpoint_date=future_date,
-            desired_result="Site live and receiving traffic",
-        )
-        assert request.type == "deadline"
-        # Fields are stored, just not enforced for this type
-        assert request.weekly_hour_target == Decimal("5.0")
-        assert request.checkpoint_date == future_date
-        assert request.desired_result == "Site live and receiving traffic"
+        with pytest.raises(ValidationError) as exc_info:
+            CreatePriorityRequest(
+                name="Launch marketing site",
+                type="deadline",
+                deadline=future_date,
+                weekly_hour_target=Decimal("5.0"),  # Cross-type field - rejected
+            )
+        assert "weekly_hour_target is not valid for deadline priorities" in str(exc_info.value)
+
+    def test_deadline_with_checkpoint_date_rejected(self):
+        """Deadline priority with checkpoint_date raises ValidationError."""
+        future_date = date.today() + timedelta(days=30)
+        with pytest.raises(ValidationError) as exc_info:
+            CreatePriorityRequest(
+                name="Launch marketing site",
+                type="deadline",
+                deadline=future_date,
+                checkpoint_date=future_date,  # Cross-type field - rejected
+            )
+        assert "checkpoint_date is not valid for deadline priorities" in str(exc_info.value)
+
+    def test_deadline_with_desired_result_rejected(self):
+        """Deadline priority with desired_result raises ValidationError."""
+        future_date = date.today() + timedelta(days=30)
+        with pytest.raises(ValidationError) as exc_info:
+            CreatePriorityRequest(
+                name="Launch marketing site",
+                type="deadline",
+                deadline=future_date,
+                desired_result="Site live",  # Cross-type field - rejected
+            )
+        assert "desired_result is not valid for deadline priorities" in str(exc_info.value)
