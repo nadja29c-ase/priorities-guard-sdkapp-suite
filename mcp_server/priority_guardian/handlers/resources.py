@@ -10,6 +10,8 @@ from typing import List
 import structlog
 from mcp import types as mcp_types
 
+from mcp_server.priority_guardian.config import MCP_SERVER_URL
+
 logger = structlog.get_logger(__name__)
 
 # Widget configuration
@@ -65,7 +67,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
                 "openai/widgetPrefersBorder": True,
-                "openai/widgetDomain": "https://chatgpt.com",
+                "openai/widgetDomain": MCP_SERVER_URL,
                 "openai/widgetCSP": WIDGET_CSP,
                 "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
             },
@@ -87,7 +89,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
                 "openai/widgetPrefersBorder": True,
-                "openai/widgetDomain": "https://chatgpt.com",
+                "openai/widgetDomain": MCP_SERVER_URL,
                 "openai/widgetCSP": WIDGET_CSP,
                 "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
             },
@@ -122,7 +124,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
             "openai/widgetAccessible": True,
             "openai/resultCanProduceWidget": True,
             "openai/widgetPrefersBorder": True,
-            "openai/widgetDomain": "https://chatgpt.com",
+            "openai/widgetDomain": MCP_SERVER_URL,
             "openai/widgetCSP": WIDGET_CSP,
             "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
         }
