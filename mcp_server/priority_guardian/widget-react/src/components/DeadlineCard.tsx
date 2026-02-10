@@ -100,6 +100,7 @@ export function DeadlineCard({
         setSaveStatus('idle')
       }, 1500)
     } catch (e) {
+      console.error('callTool error:', e)
       setSaveStatus('error')
       setError('Failed to save')
       // Revert to original value
