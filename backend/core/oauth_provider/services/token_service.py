@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
 from backend.core.encryption import encrypt_token, decrypt_token, hash_refresh_token
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.oauth_provider.jwt.utils import create_refresh_token, calculate_refresh_token_expiry
 from backend.core.oauth_provider.models import OAuthAuthorizationCode, OAuthAccessToken
 from backend.core.oauth_provider.jwt.jwt_signer import create_access_token
@@ -151,13 +151,13 @@ async def exchange_authorization_code(
     db.add(access_token_record)
     await db.commit()
 
-    # Log success
+    # Log success (mask client_id for privacy)
     request_logger.info(
         "oauth.token.success",
         grant_type="authorization_code",
         jti=jti,
         user_id=str(auth_code.user_id),
-        client_id=auth_code.client_id,
+        client_id=mask_client_id(auth_code.client_id),
         scope=auth_code.scope
     )
 
@@ -280,14 +280,14 @@ async def exchange_refresh_token(
     db.add(new_access_token_record)
     await db.commit()
 
-    # Log success
+    # Log success (mask client_id for privacy)
     request_logger.info(
         "oauth.token.success",
         grant_type="refresh_token",
         old_jti=matching_token.jti,
         new_jti=new_jti,
         user_id=str(matching_token.user_id),
-        client_id=matching_token.client_id,
+        client_id=mask_client_id(matching_token.client_id),
         scope=matching_token.scope
     )
 
