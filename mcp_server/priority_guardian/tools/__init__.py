@@ -15,14 +15,36 @@ from .base import ToolDefinition
 from .connect_google_calendar import CONNECT_GOOGLE_CALENDAR
 from .disconnect_google_calendar import DISCONNECT_GOOGLE_CALENDAR
 from .create_priority import CREATE_PRIORITY
+from .get_priorities import GET_PRIORITIES
 
 logger = structlog.get_logger(__name__)
+
+# Tool-specific invocation messages for better UX
+TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
+    "get_priorities": (
+        "Loading your priorities...",
+        "Here's your Priority Guardian dashboard.",
+    ),
+    "connect_google_calendar": (
+        "Checking Google Calendar connection...",
+        "Connection status retrieved.",
+    ),
+    "disconnect_google_calendar": (
+        "Disconnecting Google Calendar...",
+        "Google Calendar disconnected.",
+    ),
+    "create_priority": (
+        "Creating your new priority...",
+        "Priority created successfully.",
+    ),
+}
 
 # Explicit tool registry
 TOOL_REGISTRY: dict[str, ToolDefinition] = {
     CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,
     CREATE_PRIORITY.name: CREATE_PRIORITY,
+    GET_PRIORITIES.name: GET_PRIORITIES,
 }
 
 
@@ -59,13 +81,18 @@ async def list_tools() -> List[mcp_types.Tool]:
         else:
             security_schemes = [{"type": "noauth"}]
 
+        # Get tool-specific invocation messages (fallback to generic)
+        invoking_msg, invoked_msg = TOOL_INVOCATION_MESSAGES.get(
+            tool_def.name, ("Processing...", "Done.")
+        )
+
         # Build _meta based on tool capabilities
         if tool_def.widget_uri:
             # Widget-producing tools get full metadata
             meta = {
                 "openai/outputTemplate": tool_def.widget_uri,
-                "openai/toolInvocation/invoking": "Processing...",
-                "openai/toolInvocation/invoked": "Done.",
+                "openai/toolInvocation/invoking": invoking_msg,
+                "openai/toolInvocation/invoked": invoked_msg,
                 "openai/widgetAccessible": True,
                 "openai/resultCanProduceWidget": True,
                 "annotations": annotations,

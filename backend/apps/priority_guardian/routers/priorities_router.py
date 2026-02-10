@@ -1,9 +1,10 @@
 """
-Priority Creation Router - MCP-facing endpoint for creating priorities.
+Priority Router - MCP-facing endpoints for priority operations.
 
-Priority Guardian Increment 02: Provides MCP tools with priority creation.
+Priority Guardian Increment 02+: Provides MCP tools with priority CRUD.
 
 Endpoints:
+    GET /priorities: List user's priorities with Google connection status
     POST /priorities: Create a new priority with auto-assigned calendar keyword
 
 Trust Boundary (CRITICAL - see Trust Boundary section in Inc 02 briefing):
@@ -27,9 +28,11 @@ from pydantic import ValidationError
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.core.database import get_db
-from backend.apps.priority_guardian.db_models import PgPriority
+from backend.core.models import CoreConnection
+from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable
 from backend.apps.priority_guardian.models.requests import CreatePriorityRequest
 
 logger = structlog.get_logger(__name__)
@@ -90,6 +93,117 @@ def compute_available_keywords(used_keywords: List[str]) -> List[str]:
         List of available keywords in order (P1, P2, P3)
     """
     return [kw for kw in AVAILABLE_KEYWORDS if kw not in used_keywords]
+
+
+@router.get("/priorities")
+async def get_priorities(
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Get user's priorities with Google connection status.
+
+    Returns priorities (active first, then retired) along with Google Calendar
+    connection status for the widget to display.
+
+    Args:
+        user_id: User ID from validated JWT (via X-User-ID header)
+        session: Database session
+
+    Returns:
+        200: {
+            "success": true,
+            "data": {
+                "priorities": [...],
+                "google_connection": {
+                    "connected": true,
+                    "scopes": ["..."]
+                },
+                "available_keywords": ["P2", "P3"]
+            }
+        }
+    """
+    # Query priorities ordered by status (active first), then created_at
+    # Use selectinload to eagerly load deliverables (avoids N+1 queries)
+    result = await session.execute(
+        select(PgPriority)
+        .where(PgPriority.user_id == user_id)
+        .options(selectinload(PgPriority.deliverables))
+        .order_by(
+            # Active first (active < retired alphabetically works, but explicit is clearer)
+            PgPriority.status.desc(),  # 'retired' > 'active' so desc puts active first
+            PgPriority.created_at.asc(),
+        )
+    )
+    priorities = result.scalars().all()
+
+    # Query Google connection status
+    conn_result = await session.execute(
+        select(CoreConnection).where(
+            CoreConnection.user_id == user_id,
+            CoreConnection.provider == "google",
+            CoreConnection.connection_type == "google",
+            CoreConnection.revoked_at.is_(None),
+        )
+    )
+    connection = conn_result.scalar_one_or_none()
+
+    # Build connection status
+    if connection:
+        google_connection = {
+            "connected": True,
+            "connected_at": connection.created_at.isoformat() if connection.created_at else None,
+            "scopes": connection.scopes,
+        }
+    else:
+        google_connection = {"connected": False}
+
+    # Compute available keywords from active priorities
+    active_keywords = [p.calendar_keyword for p in priorities if p.status == "active"]
+    available_keywords = compute_available_keywords(active_keywords)
+
+    # Build priority list with deliverables
+    priorities_data = []
+    for p in priorities:
+        deliverables_data = [
+            {
+                "id": str(d.id),
+                "name": d.name,
+                "done": d.done,
+            }
+            for d in p.deliverables
+        ]
+
+        priorities_data.append({
+            "id": str(p.id),
+            "name": p.name,
+            "type": p.type,
+            "calendar_keyword": p.calendar_keyword,
+            "status": p.status,
+            "deadline": p.deadline.isoformat() if p.deadline else None,
+            "weekly_hour_target": float(p.weekly_hour_target) if p.weekly_hour_target else None,
+            "checkpoint_date": p.checkpoint_date.isoformat() if p.checkpoint_date else None,
+            "desired_result": p.desired_result,
+            "deliverables": deliverables_data,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+        })
+
+    logger.info(
+        "priorities.get.success",
+        user_id=str(user_id),
+        priority_count=len(priorities_data),
+        google_connected=google_connection["connected"],
+    )
+
+    return {
+        "success": True,
+        "data": {
+            "priorities": priorities_data,
+            "google_connection": google_connection,
+            "available_keywords": available_keywords,
+        },
+    }
 
 
 @router.post("/priorities", status_code=status.HTTP_201_CREATED)

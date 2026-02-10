@@ -36,6 +36,11 @@ from mcp_server.priority_guardian.http_client import cleanup_http_client
 from mcp_server.priority_guardian.mcp_auth import cleanup_jwks_cache
 from mcp_server.priority_guardian.request_context import auth_header_var
 from mcp_server.priority_guardian.handlers.tools import call_tool_request
+from mcp_server.priority_guardian.handlers.resources import (
+    list_resources,
+    list_resource_templates,
+    handle_read_resource,
+)
 from mcp_server.priority_guardian.tools import list_tools
 
 logger = structlog.get_logger(__name__)
@@ -85,6 +90,23 @@ mcp = FastMCP("priority-guardian-mcp", streamable_http_path="/mcp")
 # Register MCP Handlers
 # ============================================================================
 
+# Resource handlers (widget discovery and serving)
+@mcp._mcp_server.list_resources()
+async def _list_resources():
+    """Return available resources (widgets)."""
+    return await list_resources()
+
+
+@mcp._mcp_server.list_resource_templates()
+async def _list_resource_templates():
+    """Return resource templates for widget discovery."""
+    return await list_resource_templates()
+
+
+mcp._mcp_server.request_handlers[mcp_types.ReadResourceRequest] = handle_read_resource
+
+
+# Tool handlers
 @mcp._mcp_server.list_tools()
 async def _list_tools():
     """Return tools from registry."""

@@ -28,6 +28,8 @@ INPUT_SCHEMA = {
 
 REQUIRED_SCOPES = ["pg.access"]
 
+WIDGET_URI = "ui://widget/pg-dashboard.html"
+
 
 # ============================================================================
 # Handler
@@ -77,7 +79,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     "status": "connected",
                     "connected_at": status_response.get("connected_at"),
                     "message": "Google Calendar is already connected."
-                }
+                },
+                "_meta": {
+                    "openai/outputTemplate": WIDGET_URI,
+                },
             },
         )
 
@@ -112,7 +117,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 "connect_url": initiate_response["connect_url"],
                 "expires_in": initiate_response["expires_in"],
                 "message": "Click the link to connect your Google Calendar. The link expires in 10 minutes."
-            }
+            },
+            "_meta": {
+                "openai/outputTemplate": WIDGET_URI,
+            },
         },
     )
 
@@ -126,9 +134,10 @@ CONNECT_GOOGLE_CALENDAR = ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,
+    widget_uri=WIDGET_URI,
     handle=handle,
     read_only_hint=False,   # Initiates OAuth flow, modifies connection state
     destructive_hint=False,
     open_world_hint=True,   # Initiates external Google OAuth flow
+    widget_accessible=True, # Widget can call this tool
 )

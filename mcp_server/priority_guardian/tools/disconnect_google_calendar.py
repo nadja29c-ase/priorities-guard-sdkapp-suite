@@ -33,6 +33,8 @@ INPUT_SCHEMA = {
 
 REQUIRED_SCOPES = ["pg.access"]
 
+WIDGET_URI = "ui://widget/pg-dashboard.html"
+
 
 # ============================================================================
 # Handler
@@ -78,7 +80,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 "error": {
                     "code": "CONFIRMATION_REQUIRED",
                     "message": "Please confirm disconnection by setting confirm=true. This will revoke Google Calendar access. No user data is deleted."
-                }
+                },
+                "_meta": {
+                    "openai/outputTemplate": WIDGET_URI,
+                },
             },
             isError=True,
         )
@@ -106,7 +111,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 "data": {
                     "status": "not_connected",
                     "message": "Google Calendar is not connected."
-                }
+                },
+                "_meta": {
+                    "openai/outputTemplate": WIDGET_URI,
+                },
             },
         )
 
@@ -134,7 +142,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "data": {
                 "status": "disconnected",
                 "message": "Google Calendar has been disconnected. You can reconnect anytime."
-            }
+            },
+            "_meta": {
+                "openai/outputTemplate": WIDGET_URI,
+            },
         },
     )
 
@@ -148,9 +159,10 @@ DISCONNECT_GOOGLE_CALENDAR = ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,
+    widget_uri=WIDGET_URI,
     handle=handle,
     read_only_hint=False,   # Revokes tokens, modifies state
     destructive_hint=True,   # Irreversible - revokes access
     open_world_hint=True,    # Revokes external Google OAuth tokens
+    widget_accessible=True,  # Widget can call this tool
 )
