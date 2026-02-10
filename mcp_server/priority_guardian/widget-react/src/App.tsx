@@ -106,7 +106,7 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className="bg-surface-secondary rounded-2xl px-6 py-5"
+      className="bg-surface-secondary rounded-2xl px-6 py-5 -m-4"
     >
       {loadError && (
         <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
