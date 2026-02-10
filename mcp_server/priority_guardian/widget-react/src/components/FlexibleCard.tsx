@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Button } from '@openai/apps-sdk-ui/components/Button'
+import { useState, useRef, useEffect } from 'react'
 import type { Priority } from '../types'
 import { daysUntil, formatDate } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
@@ -44,7 +43,9 @@ export function FlexibleCard({
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const checkpointDays = priority.checkpointDate ? daysUntil(priority.checkpointDate) : null
   const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
@@ -54,62 +55,113 @@ export function FlexibleCard({
   tomorrow.setDate(tomorrow.getDate() + 1)
   const minDate = tomorrow.toISOString().split('T')[0]
 
-  const handleSave = async () => {
-    if (isSaving) return
-    setError(null)
+  // Reset local state when priority changes from parent
+  useEffect(() => {
+    setEditName(priority.name)
+    setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
+    setEditCheckpointDate(priority.checkpointDate || '')
+    setEditDesiredResult(priority.desiredResult || '')
+  }, [priority.name, priority.weeklyHourTarget, priority.checkpointDate, priority.desiredResult])
 
-    const updates: {
-      name?: string
-      weekly_hour_target?: number
-      checkpoint_date?: string
-      desired_result?: string
-    } = {}
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [])
 
-    if (editName.trim() !== priority.name) {
-      if (!editName.trim()) {
-        setError('Name is required')
+  const autoSave = async (
+    field: 'name' | 'weekly_hour_target' | 'checkpoint_date' | 'desired_result',
+    value: string
+  ) => {
+    // Validate based on field
+    if (field === 'name' && !value.trim()) {
+      setError('Name is required')
+      setEditName(priority.name)
+      return
+    }
+    if (field === 'weekly_hour_target') {
+      const numVal = parseFloat(value)
+      if (!value || isNaN(numVal) || numVal <= 0) {
+        setError('Weekly hours must be > 0')
+        setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
         return
       }
-      updates.name = editName.trim()
     }
 
-    const newHourTarget = editHourTarget ? parseFloat(editHourTarget) : null
-    if (newHourTarget !== priority.weeklyHourTarget) {
-      if (!editHourTarget || newHourTarget === null || newHourTarget <= 0) {
-        setError('Weekly hour target must be greater than 0')
-        return
-      }
-      updates.weekly_hour_target = newHourTarget
-    }
+    // Check if value actually changed
+    let originalValue: string | number | null = null
+    if (field === 'name') originalValue = priority.name
+    else if (field === 'weekly_hour_target') originalValue = priority.weeklyHourTarget?.toString() || ''
+    else if (field === 'checkpoint_date') originalValue = priority.checkpointDate || ''
+    else if (field === 'desired_result') originalValue = priority.desiredResult || ''
 
-    if (editCheckpointDate !== priority.checkpointDate) {
-      if (!editCheckpointDate) {
-        setError('Checkpoint date is required')
-        return
-      }
-      updates.checkpoint_date = editCheckpointDate
-    }
-
-    if (editDesiredResult.trim() !== (priority.desiredResult || '')) {
-      if (!editDesiredResult.trim()) {
-        setError('Desired result is required')
-        return
-      }
-      updates.desired_result = editDesiredResult.trim()
-    }
-
-    if (Object.keys(updates).length === 0) {
-      onCancelEdit()
+    if (value === originalValue) {
       return
     }
 
+    setError(null)
+    setSaveStatus('saving')
     setIsSaving(true)
+
     try {
+      const updates: Record<string, string | number> = {}
+      if (field === 'name') {
+        updates.name = value.trim()
+      } else if (field === 'weekly_hour_target') {
+        updates.weekly_hour_target = parseFloat(value)
+      } else if (field === 'checkpoint_date') {
+        updates.checkpoint_date = value
+      } else if (field === 'desired_result') {
+        updates.desired_result = value.trim()
+      }
+
       await onSave(priority.id, updates)
+      setSaveStatus('saved')
+      saveTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle')
+      }, 1500)
     } catch (e) {
-      setError('Failed to save changes')
+      setSaveStatus('error')
+      setError('Failed to save')
+      // Revert to original value
+      if (field === 'name') setEditName(priority.name)
+      else if (field === 'weekly_hour_target') setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
+      else if (field === 'checkpoint_date') setEditCheckpointDate(priority.checkpointDate || '')
+      else if (field === 'desired_result') setEditDesiredResult(priority.desiredResult || '')
+
+      saveTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle')
+        setError(null)
+      }, 3000)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleNameBlur = () => {
+    if (editName.trim() !== priority.name) {
+      autoSave('name', editName)
+    }
+  }
+
+  const handleHourTargetBlur = () => {
+    if (editHourTarget !== (priority.weeklyHourTarget?.toString() || '')) {
+      autoSave('weekly_hour_target', editHourTarget)
+    }
+  }
+
+  const handleCheckpointBlur = () => {
+    if (editCheckpointDate !== (priority.checkpointDate || '')) {
+      autoSave('checkpoint_date', editCheckpointDate)
+    }
+  }
+
+  const handleDesiredResultBlur = () => {
+    if (editDesiredResult.trim() !== (priority.desiredResult || '')) {
+      autoSave('desired_result', editDesiredResult)
     }
   }
 
@@ -122,13 +174,11 @@ export function FlexibleCard({
     }
   }
 
-  const handleCancelEdit = () => {
-    setEditName(priority.name)
-    setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
-    setEditCheckpointDate(priority.checkpointDate || '')
-    setEditDesiredResult(priority.desiredResult || '')
-    setError(null)
-    onCancelEdit()
+  // Click outside to exit edit mode
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget && isEditing && !isSaving) {
+      onCancelEdit()
+    }
   }
 
   if (showDeleteConfirm) {
@@ -149,6 +199,7 @@ export function FlexibleCard({
     <article
       className="bg-surface rounded-xl border border-default p-4"
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
+      onClick={handleCardClick}
     >
       {/* Header: Badge + title + actions */}
       <div className="flex items-start gap-2 mb-2">
@@ -161,43 +212,48 @@ export function FlexibleCard({
             type="text"
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleNameBlur}
             disabled={isSaving}
             maxLength={100}
+            autoFocus
             className="flex-1 text-base font-semibold text-default bg-surface border border-default rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-info"
             aria-label="Priority name"
           />
         ) : (
-          <h3 className="flex-1 text-base font-semibold text-default truncate">
+          <h3
+            className="flex-1 text-base font-semibold text-default truncate cursor-pointer hover:text-info"
+            onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+            title="Click to edit"
+          >
             {priority.name}
           </h3>
         )}
 
-        {/* Edit/Delete buttons */}
-        {!isEditing && (
-          <div className="flex gap-1 flex-shrink-0">
-            <button
-              type="button"
-              onClick={onStartEdit}
-              className="p-1.5 text-tertiary hover:text-default rounded"
-              aria-label={`Edit priority: ${priority.name}`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="p-1.5 text-tertiary hover:text-danger rounded"
-              aria-label={`Delete priority: ${priority.name}`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M13 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4"/>
-              </svg>
-            </button>
-          </div>
+        {/* Save status indicator */}
+        {saveStatus === 'saving' && (
+          <span className="text-xs text-secondary animate-pulse">Saving...</span>
         )}
+        {saveStatus === 'saved' && (
+          <span className="text-xs text-success">Saved</span>
+        )}
+
+        {/* Delete button (always visible) */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+          className="p-1.5 text-tertiary hover:text-danger rounded flex-shrink-0"
+          aria-label={`Delete priority: ${priority.name}`}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M13 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4"/>
+          </svg>
+        </button>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <p className="text-xs text-danger mb-2" role="alert">{error}</p>
+      )}
 
       {/* Type badge and checkpoint */}
       <div className="flex items-center gap-2 mb-3">
@@ -209,7 +265,7 @@ export function FlexibleCard({
         )}
       </div>
 
-      {/* Edit mode: All flexible fields */}
+      {/* Edit mode: All flexible fields with auto-save on blur */}
       {isEditing ? (
         <div className="space-y-3 mb-3">
           <div>
@@ -221,6 +277,7 @@ export function FlexibleCard({
               type="number"
               value={editHourTarget}
               onChange={(e) => setEditHourTarget(e.target.value)}
+              onBlur={handleHourTargetBlur}
               disabled={isSaving}
               min="0.5"
               step="0.5"
@@ -237,6 +294,7 @@ export function FlexibleCard({
               type="date"
               value={editCheckpointDate}
               onChange={(e) => setEditCheckpointDate(e.target.value)}
+              onBlur={handleCheckpointBlur}
               disabled={isSaving}
               min={minDate}
               className="w-full text-sm text-default bg-surface border border-default rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-info"
@@ -251,6 +309,7 @@ export function FlexibleCard({
               id={`result-${priority.id}`}
               value={editDesiredResult}
               onChange={(e) => setEditDesiredResult(e.target.value)}
+              onBlur={handleDesiredResultBlur}
               disabled={isSaving}
               maxLength={200}
               rows={2}
@@ -260,14 +319,17 @@ export function FlexibleCard({
         </div>
       ) : (
         <>
-          {/* Weekly hours target - only show if weeklyHourTarget exists */}
+          {/* Weekly hours target - clickable to edit */}
           {priority.weeklyHourTarget != null && (
-            <div className="mb-3">
+            <div
+              className="mb-3 cursor-pointer hover:text-info"
+              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+              title="Click to edit"
+            >
               <div className="flex items-center gap-2">
                 <span className="text-sm text-secondary">
                   {priority.weeklyHourTarget}h/week target
                 </span>
-                {/* Only show actual hours if value exists and is > 0 */}
                 {priority.weeklyHourActual != null && priority.weeklyHourActual > 0 && (
                   <span className="text-sm text-tertiary">
                     ({priority.weeklyHourActual}h actual)
@@ -286,9 +348,13 @@ export function FlexibleCard({
         </p>
       </div>
 
-      {/* 1-Month Goal section (read-only display) */}
+      {/* 1-Month Goal section - clickable to edit */}
       {!isEditing && priority.desiredResult && (
-        <div className="border-t border-subtle pt-3">
+        <div
+          className="border-t border-subtle pt-3 cursor-pointer hover:bg-surface-secondary rounded-lg -mx-2 px-2"
+          onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+          title="Click to edit"
+        >
           <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide mb-1">
             1-Month Goal
           </h4>
@@ -304,63 +370,37 @@ export function FlexibleCard({
       )}
 
       {/* Deliverables */}
-      {(priority.deliverables.length > 0 || !isEditing) && (
-        <div className={`border-t border-subtle pt-3 ${!isEditing && priority.desiredResult ? 'mt-3' : ''}`}>
-          <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide mb-2">
-            Deliverables
-          </h4>
-          {priority.deliverables.length > 0 ? (
-            <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
-              {priority.deliverables.map((d) => (
-                <DeliverableItem
-                  key={d.id}
-                  deliverable={d}
-                  onToggle={onToggleDeliverable}
-                  onRename={onRenameDeliverable}
-                  onDelete={onDeleteDeliverable}
-                  disabled={isEditing}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
-          )}
-          {!isEditing && (
-            <AddDeliverableInput
-              priorityId={priority.id}
-              onAdd={onAddDeliverable}
-            />
-          )}
-        </div>
-      )}
+      <div className={`border-t border-subtle pt-3 ${!isEditing && priority.desiredResult ? 'mt-3' : ''}`}>
+        <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide mb-2">
+          Deliverables
+        </h4>
+        {priority.deliverables.length > 0 ? (
+          <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
+            {priority.deliverables.map((d) => (
+              <DeliverableItem
+                key={d.id}
+                deliverable={d}
+                onToggle={onToggleDeliverable}
+                onRename={onRenameDeliverable}
+                onDelete={onDeleteDeliverable}
+                disabled={false}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
+        )}
+        <AddDeliverableInput
+          priorityId={priority.id}
+          onAdd={onAddDeliverable}
+        />
+      </div>
 
-      {/* Edit mode: error and actions */}
+      {/* Edit mode hint */}
       {isEditing && (
-        <div className="border-t border-subtle pt-3 mt-3">
-          {error && (
-            <p className="text-xs text-danger mb-2" role="alert">{error}</p>
-          )}
-          <div className="flex gap-2">
-            <Button
-              color="primary"
-              variant="solid"
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : 'Save'}
-            </Button>
-            <Button
-              color="secondary"
-              variant="ghost"
-              size="sm"
-              onClick={handleCancelEdit}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <p className="text-xs text-tertiary mt-3 text-center">
+          Changes save automatically. Click outside to close.
+        </p>
       )}
     </article>
   )

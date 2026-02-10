@@ -251,64 +251,91 @@ describe('App', () => {
   })
 
   describe('Edit Mode (Widget B)', () => {
-    it('shows edit button on deadline card', () => {
+    it('enters edit mode when clicking priority name', async () => {
       setMockPriorities([deadlinePriority], true)
       render(<App />)
-      // Priority edit button has specific aria-label pattern
-      expect(screen.getByRole('button', { name: /edit priority/i })).toBeInTheDocument()
+
+      // Click on the priority name to enter edit mode
+      const priorityName = screen.getByText('Launch Feature X')
+      await userEvent.click(priorityName)
+
+      // Should show an input field for editing the name
+      expect(screen.getByRole('textbox', { name: /priority name/i })).toBeInTheDocument()
+      // Should show auto-save hint
+      expect(screen.getByText(/changes save automatically/i)).toBeInTheDocument()
     })
 
-    it('shows edit button on flexible card', () => {
+    it('shows input field when clicking priority name on flexible card', async () => {
       setMockPriorities([flexiblePriority], true)
       render(<App />)
-      expect(screen.getByRole('button', { name: /edit priority/i })).toBeInTheDocument()
+
+      const priorityName = screen.getByText('Learn Rust')
+      await userEvent.click(priorityName)
+
+      expect(screen.getByRole('textbox', { name: /priority name/i })).toBeInTheDocument()
     })
 
-    it('enters edit mode when edit button clicked', async () => {
+    it('auto-saves on blur when name changes', async () => {
+      mockOpenai.callTool.mockResolvedValue({
+        structuredContent: {
+          data: {
+            google_connected: true,
+            priorities: [{
+              ...deadlinePriority,
+              name: 'Updated Name'
+            }]
+          }
+        }
+      })
+
       setMockPriorities([deadlinePriority], true)
       render(<App />)
 
-      const editButton = screen.getByRole('button', { name: /edit priority/i })
-      await userEvent.click(editButton)
+      // Click to edit
+      const priorityName = screen.getByText('Launch Feature X')
+      await userEvent.click(priorityName)
 
-      // Should show save and cancel buttons in edit mode
-      expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument()
+      // Change the name
+      const input = screen.getByRole('textbox', { name: /priority name/i })
+      await userEvent.clear(input)
+      await userEvent.type(input, 'Updated Name')
+
+      // Blur to trigger auto-save
+      fireEvent.blur(input)
+
+      await waitFor(() => {
+        expect(mockOpenai.callTool).toHaveBeenCalledWith(
+          'update_priority',
+          expect.objectContaining({
+            priority_id: 'pri-1',
+            name: 'Updated Name'
+          })
+        )
+      })
     })
 
-    it('exits edit mode when cancel clicked', async () => {
+    it('shows saving indicator during auto-save', async () => {
+      // Make the callTool return slowly
+      mockOpenai.callTool.mockImplementation(() => new Promise(resolve => {
+        setTimeout(() => resolve({
+          structuredContent: {
+            data: { google_connected: true, priorities: [deadlinePriority] }
+          }
+        }), 100)
+      }))
+
       setMockPriorities([deadlinePriority], true)
       render(<App />)
 
-      // Enter edit mode
-      const editButton = screen.getByRole('button', { name: /edit priority/i })
-      await userEvent.click(editButton)
+      // Enter edit mode and change name
+      await userEvent.click(screen.getByText('Launch Feature X'))
+      const input = screen.getByRole('textbox', { name: /priority name/i })
+      await userEvent.clear(input)
+      await userEvent.type(input, 'New Name')
+      fireEvent.blur(input)
 
-      // Click cancel
-      const cancelButton = screen.getByRole('button', { name: /cancel/i })
-      await userEvent.click(cancelButton)
-
-      // Should show edit button again
-      expect(screen.getByRole('button', { name: /edit priority/i })).toBeInTheDocument()
-    })
-
-    it('only allows one card in edit mode at a time', async () => {
-      setMockPriorities([deadlinePriority, flexiblePriority], true)
-      render(<App />)
-
-      // Get all priority edit buttons (not deliverable edit buttons)
-      const editButtons = screen.getAllByRole('button', { name: /edit priority/i })
-      expect(editButtons).toHaveLength(2)
-
-      // Click first edit button
-      await userEvent.click(editButtons[0])
-
-      // First card should be in edit mode
-      expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
-      // The other priority edit button should still exist but may be non-functional
-      const remainingEditButtons = screen.queryAllByRole('button', { name: /edit priority/i })
-      // When one is editing, the other card should have disabled or no edit functionality
-      expect(remainingEditButtons.length).toBeLessThanOrEqual(2)
+      // Should show "Saving..." indicator
+      expect(screen.getByText(/saving/i)).toBeInTheDocument()
     })
   })
 
@@ -448,7 +475,8 @@ describe('App', () => {
       setMockPriorities([deadlinePriority], true)
       render(<App />)
 
-      await userEvent.click(screen.getByRole('button', { name: /edit priority/i }))
+      // Click on priority name to enter edit mode
+      await userEvent.click(screen.getByText('Launch Feature X'))
 
       await waitFor(() => {
         expect(mockOpenai.setWidgetState).toHaveBeenCalledWith(
@@ -459,21 +487,23 @@ describe('App', () => {
       })
     })
 
-    it('clears widgetState when exiting edit mode', async () => {
+    it('clears widgetState when clicking outside edit area', async () => {
       setMockPriorities([deadlinePriority], true)
       render(<App />)
 
       // Enter edit mode
-      await userEvent.click(screen.getByRole('button', { name: /edit priority/i }))
+      await userEvent.click(screen.getByText('Launch Feature X'))
 
-      // Exit edit mode
-      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      // Verify we're in edit mode
+      expect(screen.getByRole('textbox', { name: /priority name/i })).toBeInTheDocument()
 
+      // The widgetState should have been set with editingPriorityId
       await waitFor(() => {
-        // Last call should be with empty state (no editingPriorityId)
-        const calls = mockOpenai.setWidgetState.mock.calls
-        const lastCall = calls[calls.length - 1]?.[0]
-        expect(lastCall?.editingPriorityId).toBeUndefined()
+        expect(mockOpenai.setWidgetState).toHaveBeenCalledWith(
+          expect.objectContaining({
+            editingPriorityId: 'pri-1'
+          })
+        )
       })
     })
   })

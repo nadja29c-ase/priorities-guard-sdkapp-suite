@@ -1,5 +1,4 @@
-import { useState } from 'react'
-import { Button } from '@openai/apps-sdk-ui/components/Button'
+import { useState, useRef, useEffect } from 'react'
 import type { Priority } from '../types'
 import { daysUntil, formatDate } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
@@ -37,7 +36,9 @@ export function DeadlineCard({
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const days = priority.deadline ? daysUntil(priority.deadline) : null
   const doneCount = priority.deliverables.filter(d => d.done).length
@@ -50,38 +51,82 @@ export function DeadlineCard({
   tomorrow.setDate(tomorrow.getDate() + 1)
   const minDate = tomorrow.toISOString().split('T')[0]
 
-  const handleSave = async () => {
-    if (isSaving) return
-    setError(null)
+  // Reset local state when priority changes from parent
+  useEffect(() => {
+    setEditName(priority.name)
+    setEditDeadline(priority.deadline || '')
+  }, [priority.name, priority.deadline])
 
-    const updates: { name?: string; deadline?: string } = {}
-    if (editName.trim() !== priority.name) {
-      if (!editName.trim()) {
-        setError('Name is required')
-        return
+  // Clear timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
       }
-      updates.name = editName.trim()
     }
-    if (editDeadline !== priority.deadline) {
-      if (!editDeadline) {
-        setError('Deadline is required')
-        return
-      }
-      updates.deadline = editDeadline
-    }
+  }, [])
 
-    if (Object.keys(updates).length === 0) {
-      onCancelEdit()
+  const autoSave = async (field: 'name' | 'deadline', value: string) => {
+    // Validate
+    if (field === 'name' && !value.trim()) {
+      setError('Name is required')
+      setEditName(priority.name) // Revert
+      return
+    }
+    if (field === 'deadline' && !value) {
+      setError('Deadline is required')
+      setEditDeadline(priority.deadline || '') // Revert
       return
     }
 
+    // Check if value actually changed
+    const originalValue = field === 'name' ? priority.name : priority.deadline
+    if (value === originalValue) {
+      return
+    }
+
+    setError(null)
+    setSaveStatus('saving')
     setIsSaving(true)
+
     try {
+      const updates = field === 'name'
+        ? { name: value.trim() }
+        : { deadline: value }
       await onSave(priority.id, updates)
+      setSaveStatus('saved')
+      // Clear "saved" status after 1.5s
+      saveTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle')
+      }, 1500)
     } catch (e) {
-      setError('Failed to save changes')
+      setSaveStatus('error')
+      setError('Failed to save')
+      // Revert to original value
+      if (field === 'name') {
+        setEditName(priority.name)
+      } else {
+        setEditDeadline(priority.deadline || '')
+      }
+      // Clear error after 3s
+      saveTimeoutRef.current = setTimeout(() => {
+        setSaveStatus('idle')
+        setError(null)
+      }, 3000)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleNameBlur = () => {
+    if (editName.trim() !== priority.name) {
+      autoSave('name', editName)
+    }
+  }
+
+  const handleDeadlineBlur = () => {
+    if (editDeadline !== priority.deadline) {
+      autoSave('deadline', editDeadline)
     }
   }
 
@@ -94,11 +139,12 @@ export function DeadlineCard({
     }
   }
 
-  const handleCancelEdit = () => {
-    setEditName(priority.name)
-    setEditDeadline(priority.deadline || '')
-    setError(null)
-    onCancelEdit()
+  // Click outside to exit edit mode
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Only exit if clicking the card background, not inputs/buttons
+    if (e.target === e.currentTarget && isEditing && !isSaving) {
+      onCancelEdit()
+    }
   }
 
   if (showDeleteConfirm) {
@@ -119,6 +165,7 @@ export function DeadlineCard({
     <article
       className="bg-surface rounded-xl border border-default p-4"
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
+      onClick={handleCardClick}
     >
       {/* Header: Badge + title + actions */}
       <div className="flex items-start gap-2 mb-2">
@@ -131,43 +178,48 @@ export function DeadlineCard({
             type="text"
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleNameBlur}
             disabled={isSaving}
             maxLength={100}
+            autoFocus
             className="flex-1 text-base font-semibold text-default bg-surface border border-default rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-info"
             aria-label="Priority name"
           />
         ) : (
-          <h3 className="flex-1 text-base font-semibold text-default truncate">
+          <h3
+            className="flex-1 text-base font-semibold text-default truncate cursor-pointer hover:text-info"
+            onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+            title="Click to edit"
+          >
             {priority.name}
           </h3>
         )}
 
-        {/* Edit/Delete buttons */}
-        {!isEditing && (
-          <div className="flex gap-1 flex-shrink-0">
-            <button
-              type="button"
-              onClick={onStartEdit}
-              className="p-1.5 text-tertiary hover:text-default rounded"
-              aria-label={`Edit priority: ${priority.name}`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="p-1.5 text-tertiary hover:text-danger rounded"
-              aria-label={`Delete priority: ${priority.name}`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M13 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4"/>
-              </svg>
-            </button>
-          </div>
+        {/* Save status indicator */}
+        {saveStatus === 'saving' && (
+          <span className="text-xs text-secondary animate-pulse">Saving...</span>
         )}
+        {saveStatus === 'saved' && (
+          <span className="text-xs text-success">Saved</span>
+        )}
+
+        {/* Delete button (always visible) */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+          className="p-1.5 text-tertiary hover:text-danger rounded flex-shrink-0"
+          aria-label={`Delete priority: ${priority.name}`}
+        >
+          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M13 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4"/>
+          </svg>
+        </button>
       </div>
+
+      {/* Error message */}
+      {error && (
+        <p className="text-xs text-danger mb-2" role="alert">{error}</p>
+      )}
 
       {/* Type badge and progress */}
       <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -185,8 +237,8 @@ export function DeadlineCard({
         )}
       </div>
 
-      {/* Edit mode: deadline field */}
-      {isEditing && (
+      {/* Deadline field - inline editable */}
+      {isEditing ? (
         <div className="mb-3">
           <label htmlFor={`deadline-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
             Deadline
@@ -196,11 +248,22 @@ export function DeadlineCard({
             type="date"
             value={editDeadline}
             onChange={(e) => setEditDeadline(e.target.value)}
+            onBlur={handleDeadlineBlur}
             disabled={isSaving}
             min={minDate}
             className="w-full text-sm text-default bg-surface border border-default rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-info"
           />
         </div>
+      ) : (
+        priority.deadline && (
+          <div
+            className="mb-3 text-xs text-tertiary cursor-pointer hover:text-info"
+            onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+            title="Click to edit"
+          >
+            Due: {formatDate(priority.deadline)}
+          </div>
+        )
       )}
 
       {/* Calendar keyword reminder */}
@@ -211,70 +274,37 @@ export function DeadlineCard({
       </div>
 
       {/* Deliverables */}
-      {(priority.deliverables.length > 0 || !isEditing) && (
-        <div className="border-t border-subtle pt-3">
-          <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide mb-2">
-            Deliverables
-          </h4>
-          {priority.deliverables.length > 0 ? (
-            <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
-              {priority.deliverables.map((d) => (
-                <DeliverableItem
-                  key={d.id}
-                  deliverable={d}
-                  onToggle={onToggleDeliverable}
-                  onRename={onRenameDeliverable}
-                  onDelete={onDeleteDeliverable}
-                  disabled={isEditing}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
-          )}
-          {!isEditing && (
-            <AddDeliverableInput
-              priorityId={priority.id}
-              onAdd={onAddDeliverable}
-            />
-          )}
-        </div>
-      )}
+      <div className="border-t border-subtle pt-3">
+        <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide mb-2">
+          Deliverables
+        </h4>
+        {priority.deliverables.length > 0 ? (
+          <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
+            {priority.deliverables.map((d) => (
+              <DeliverableItem
+                key={d.id}
+                deliverable={d}
+                onToggle={onToggleDeliverable}
+                onRename={onRenameDeliverable}
+                onDelete={onDeleteDeliverable}
+                disabled={false}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
+        )}
+        <AddDeliverableInput
+          priorityId={priority.id}
+          onAdd={onAddDeliverable}
+        />
+      </div>
 
-      {/* Edit mode: error and actions */}
+      {/* Edit mode hint */}
       {isEditing && (
-        <div className="border-t border-subtle pt-3 mt-3">
-          {error && (
-            <p className="text-xs text-danger mb-2" role="alert">{error}</p>
-          )}
-          <div className="flex gap-2">
-            <Button
-              color="primary"
-              variant="solid"
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : 'Save'}
-            </Button>
-            <Button
-              color="secondary"
-              variant="ghost"
-              size="sm"
-              onClick={handleCancelEdit}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Deadline date (read-only display) */}
-      {!isEditing && priority.deadline && (
-        <div className="mt-3 text-xs text-tertiary">
-          Due: {formatDate(priority.deadline)}
-        </div>
+        <p className="text-xs text-tertiary mt-3 text-center">
+          Changes save automatically. Click outside to close.
+        </p>
       )}
     </article>
   )
