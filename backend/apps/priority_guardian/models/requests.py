@@ -81,10 +81,12 @@ class CreatePriorityRequest(BaseModel):
     @model_validator(mode="after")
     def validate_type_conditional_fields(self) -> "CreatePriorityRequest":
         """
-        Validate type-conditional required fields.
+        Validate type-conditional required fields and reject cross-type fields.
 
         - deadline type: requires `deadline` field, must be future date
+          REJECTS: weekly_hour_target, checkpoint_date, desired_result
         - flexible type: requires `weekly_hour_target`, `checkpoint_date`, `desired_result`
+          REJECTS: deadline
         """
         from datetime import date as date_type
 
@@ -98,6 +100,14 @@ class CreatePriorityRequest(BaseModel):
             # Deadline must be in the future
             if self.deadline <= today:
                 raise ValueError("deadline must be in the future")
+
+            # Reject flexible-only fields on deadline priorities
+            if self.weekly_hour_target is not None:
+                raise ValueError("weekly_hour_target is not valid for deadline priorities")
+            if self.checkpoint_date is not None:
+                raise ValueError("checkpoint_date is not valid for deadline priorities")
+            if self.desired_result is not None:
+                raise ValueError("desired_result is not valid for deadline priorities")
 
         elif self.type == "flexible":
             # Flexible type requires all three fields
@@ -113,6 +123,10 @@ class CreatePriorityRequest(BaseModel):
             # Checkpoint date must be in the future
             if self.checkpoint_date <= today:
                 raise ValueError("checkpoint_date must be in the future")
+
+            # Reject deadline-only fields on flexible priorities
+            if self.deadline is not None:
+                raise ValueError("deadline is not valid for flexible priorities")
 
         return self
 

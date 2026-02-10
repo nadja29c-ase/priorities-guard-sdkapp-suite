@@ -1,34 +1,35 @@
 import type { Priority } from '../types'
 import { daysUntil, formatDate } from '../utils'
-import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 
 interface FlexibleCardProps {
   priority: Priority
 }
 
+// Neutral badge colors per spec (no success/danger/warning connotation)
+const BADGE_COLORS: Record<string, string> = {
+  P1: 'bg-[#5B8DEF] text-white',  // muted blue
+  P2: 'bg-[#9B7FD4] text-white',  // muted purple
+  P3: 'bg-[#4DB6AC] text-white',  // muted teal
+}
+
 export function FlexibleCard({ priority }: FlexibleCardProps) {
   const checkpointDays = priority.checkpointDate ? daysUntil(priority.checkpointDate) : null
 
-  // Badge color based on keyword
-  const badgeColor = priority.calendarKeyword === 'P1' ? 'success'
-    : priority.calendarKeyword === 'P2' ? 'warning'
-    : 'danger'
+  const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
 
   return (
     <article
       className="bg-surface rounded-xl border border-default p-4"
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-default truncate">
-            {priority.name}
-          </h3>
-        </div>
-        <Badge color={badgeColor} variant="solid" size="sm">
+      {/* Header: Badge BEFORE title */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`px-2 py-0.5 text-xs font-medium rounded ${badgeColorClass}`}>
           {priority.calendarKeyword}
-        </Badge>
+        </span>
+        <h3 className="text-base font-semibold text-default truncate">
+          {priority.name}
+        </h3>
       </div>
 
       {/* Type badge and checkpoint */}
@@ -41,14 +42,15 @@ export function FlexibleCard({ priority }: FlexibleCardProps) {
         )}
       </div>
 
-      {/* Weekly hours target */}
-      {priority.weeklyHourTarget && (
+      {/* Weekly hours target - only show if weeklyHourTarget exists */}
+      {priority.weeklyHourTarget != null && (
         <div className="mb-3">
           <div className="flex items-center gap-2">
             <span className="text-sm text-secondary">
               {priority.weeklyHourTarget}h/week target
             </span>
-            {priority.weeklyHourActual !== undefined && (
+            {/* Only show actual hours if value exists and is > 0 */}
+            {priority.weeklyHourActual != null && priority.weeklyHourActual > 0 && (
               <span className="text-sm text-tertiary">
                 ({priority.weeklyHourActual}h actual)
               </span>

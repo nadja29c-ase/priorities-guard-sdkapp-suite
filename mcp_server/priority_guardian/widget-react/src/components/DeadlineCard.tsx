@@ -1,9 +1,15 @@
 import type { Priority } from '../types'
 import { daysUntil, formatDate } from '../utils'
-import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 
 interface DeadlineCardProps {
   priority: Priority
+}
+
+// Neutral badge colors per spec (no success/danger/warning connotation)
+const BADGE_COLORS: Record<string, string> = {
+  P1: 'bg-[#5B8DEF] text-white',  // muted blue
+  P2: 'bg-[#9B7FD4] text-white',  // muted purple
+  P3: 'bg-[#4DB6AC] text-white',  // muted teal
 }
 
 export function DeadlineCard({ priority }: DeadlineCardProps) {
@@ -11,26 +17,21 @@ export function DeadlineCard({ priority }: DeadlineCardProps) {
   const doneCount = priority.deliverables.filter(d => d.done).length
   const totalCount = priority.deliverables.length
 
-  // Badge color based on keyword
-  const badgeColor = priority.calendarKeyword === 'P1' ? 'success'
-    : priority.calendarKeyword === 'P2' ? 'warning'
-    : 'danger'
+  const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
 
   return (
     <article
       className="bg-surface rounded-xl border border-default p-4"
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-base font-semibold text-default truncate">
-            {priority.name}
-          </h3>
-        </div>
-        <Badge color={badgeColor} variant="solid" size="sm">
+      {/* Header: Badge BEFORE title */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`px-2 py-0.5 text-xs font-medium rounded ${badgeColorClass}`}>
           {priority.calendarKeyword}
-        </Badge>
+        </span>
+        <h3 className="text-base font-semibold text-default truncate">
+          {priority.name}
+        </h3>
       </div>
 
       {/* Type badge and progress */}
@@ -68,7 +69,7 @@ export function DeadlineCard({ priority }: DeadlineCardProps) {
                 <div
                   className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
                     d.done
-                      ? 'bg-success border-success'
+                      ? 'bg-[#5B8DEF] border-[#5B8DEF]'
                       : 'border-default'
                   }`}
                   aria-hidden="true"

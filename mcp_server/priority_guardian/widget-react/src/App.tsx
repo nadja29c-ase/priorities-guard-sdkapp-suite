@@ -106,23 +106,15 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className="bg-surface-secondary rounded-2xl px-6 py-5 -m-4"
+      className="bg-surface-secondary rounded-2xl px-6 py-5"
     >
-      {/* Connection Status Header */}
-      <ConnectionStatus
-        connected={data?.google_connected ?? false}
-        connectedAt={data?.google_connected_at}
-        onRefresh={refreshData}
-        isRefreshing={isRefreshing}
-      />
-
       {loadError && (
         <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
           {loadError}
         </div>
       )}
 
-      {/* Priority Cards */}
+      {/* Priority Cards (primary content) */}
       {sortedPriorities.length > 0 ? (
         <div className="flex flex-col gap-4">
           {sortedPriorities.map((priority) => (
@@ -132,6 +124,16 @@ function App() {
       ) : (
         <EmptyState />
       )}
+
+      {/* Connection Status (settings-level control, at bottom) */}
+      <div className="mt-6">
+        <ConnectionStatus
+          connected={data?.google_connected ?? false}
+          connectedAt={data?.google_connected_at}
+          onRefresh={refreshData}
+          isRefreshing={isRefreshing}
+        />
+      </div>
     </main>
   )
 }
