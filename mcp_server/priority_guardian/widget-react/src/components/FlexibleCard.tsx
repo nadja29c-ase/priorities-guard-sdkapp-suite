@@ -240,19 +240,36 @@ export function FlexibleCard({
           </p>
         </div>
 
-        {/* Delete button (always visible) */}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-          className="p-1.5 text-tertiary hover:text-danger rounded flex-shrink-0"
-          aria-label={`Delete priority: ${priority.name}`}
-        >
-          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
-            <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
-            <path d="M6.5 7v5M8 7v5M9.5 7v5"/>
-          </svg>
-        </button>
+        {/* Action buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Edit button (hidden when editing) */}
+          {!isEditing && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+              className="p-1.5 text-tertiary hover:text-info rounded"
+              aria-label={`Edit priority: ${priority.name}`}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
+              </svg>
+            </button>
+          )}
+
+          {/* Delete button */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+            className="p-1.5 text-tertiary hover:text-danger rounded"
+            aria-label={`Delete priority: ${priority.name}`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
+              <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
+              <path d="M6.5 7v5M8 7v5M9.5 7v5"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Error message */}
