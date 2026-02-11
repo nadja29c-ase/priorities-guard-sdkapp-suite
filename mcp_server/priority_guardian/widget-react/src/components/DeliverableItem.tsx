@@ -104,13 +104,13 @@ export function DeliverableItem({
   }
 
   return (
-    <li className="flex items-center gap-2 group">
+    <li className="flex items-center gap-2 group pb-2 border-b border-subtle last:border-b-0 last:pb-0">
       {/* Checkbox */}
       <button
         type="button"
         onClick={handleToggle}
         disabled={isLoading || disabled}
-        className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+        className={`w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 ${
           deliverable.done
             ? 'bg-tertiary border-tertiary'
             : 'border-default hover:border-strong'
