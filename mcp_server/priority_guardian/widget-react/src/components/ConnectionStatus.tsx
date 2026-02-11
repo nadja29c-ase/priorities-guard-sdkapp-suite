@@ -123,7 +123,7 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
           ) : (
             <Button
               color="primary"
-              variant="outline"
+              variant="solid"
               size="sm"
               onClick={() => setShowDisconnectConfirm(true)}
               disabled={isRefreshing}
