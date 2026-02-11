@@ -214,7 +214,7 @@ export function DeadlineCard({
 
           {/* Type tag and calendar info below name */}
           <div className="flex items-center gap-2 mt-1">
-            <Badge color="secondary" variant="soft" size="sm">Deadline-driven</Badge>
+            <Badge color="warning" variant="soft" size="sm">Deadline-driven</Badge>
           </div>
           <div className="mt-2 p-2 bg-surface-secondary rounded-lg">
             <p className="text-xs text-secondary">
