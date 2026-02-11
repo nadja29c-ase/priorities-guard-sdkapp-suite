@@ -182,13 +182,24 @@ export function DeadlineCard({
               aria-label="Priority name"
             />
           ) : (
-            <h3
-              className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
-              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-              title="Click to edit"
-            >
-              {priority.name}
-            </h3>
+            <div className="flex items-baseline justify-between gap-2">
+              <h3
+                className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
+                onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+                title="Click to edit"
+              >
+                {priority.name}
+              </h3>
+              {priority.deadline && (
+                <span
+                  className="text-base font-semibold text-secondary flex-shrink-0 cursor-pointer hover:text-info"
+                  onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+                  title="Click to edit deadline"
+                >
+                  {formatDate(priority.deadline)}
+                </span>
+              )}
+            </div>
           )}
 
           {/* Type tag and calendar info below name */}
@@ -254,8 +265,8 @@ export function DeadlineCard({
         )}
       </div>
 
-      {/* Deadline field - inline editable */}
-      {isEditing ? (
+      {/* Deadline field - editable in edit mode */}
+      {isEditing && (
         <div className="mb-3">
           <label htmlFor={`deadline-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
             Deadline
@@ -271,16 +282,6 @@ export function DeadlineCard({
             className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
           />
         </div>
-      ) : (
-        priority.deadline && (
-          <div
-            className="mb-3 text-xs text-tertiary cursor-pointer hover:text-info"
-            onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-            title="Click to edit"
-          >
-            Due: {formatDate(priority.deadline)}
-          </div>
-        )
       )}
 
       {/* E2E Deliverables */}
