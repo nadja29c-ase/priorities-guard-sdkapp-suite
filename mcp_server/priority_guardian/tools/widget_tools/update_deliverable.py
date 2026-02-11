@@ -1,16 +1,15 @@
 """
-delete_priority tool for Priority Guardian MCP.
+update_deliverable tool for Priority Guardian MCP.
 
-Private widget-only tool for deleting priorities.
-Requires confirm=true to prevent accidental deletion.
+Private widget-only tool for updating deliverables (toggle done, rename).
 """
 
 import structlog
 from mcp import types as mcp_types
 
-from mcp_server.priority_guardian.http_client import backend_delete
-from .base import ToolDefinition, ToolUsageError
-from .get_priorities import _normalize_priority
+from mcp_server.priority_guardian.http_client import backend_put
+from ..base import ToolDefinition, ToolUsageError
+from ..get_priorities import _normalize_priority
 
 logger = structlog.get_logger(__name__)
 
@@ -18,23 +17,28 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-NAME = "delete_priority"
+NAME = "update_deliverable"
 
-DESCRIPTION = "Delete a priority and its deliverables (widget-only, requires confirmation)."
+DESCRIPTION = "Update a deliverable (toggle done or rename, widget-only)."
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "priority_id": {
+        "deliverable_id": {
             "type": "string",
-            "description": "Priority ID (UUID)",
+            "description": "Deliverable ID (UUID)",
         },
-        "confirm": {
+        "name": {
+            "type": "string",
+            "description": "New deliverable name (max 200 chars)",
+            "maxLength": 200,
+        },
+        "done": {
             "type": "boolean",
-            "description": "Must be true to confirm deletion",
+            "description": "New completion status",
         },
     },
-    "required": ["priority_id", "confirm"],
+    "required": ["deliverable_id"],
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -48,49 +52,53 @@ WIDGET_URI = "ui://widget/pg-dashboard.html"
 
 async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_types.CallToolResult:
     """
-    Delete a priority.
+    Update a deliverable.
 
     Args:
         user_id: Validated user ID from JWT token
         correlation_id: Request correlation ID
-        arguments: Tool arguments (priority_id, confirm)
+        arguments: Tool arguments (deliverable_id, optional name/done)
 
     Returns:
         CallToolResult with fresh priority list
     """
     logger.info(
-        "tool.delete_priority.start",
+        "tool.update_deliverable.start",
         correlation_id=correlation_id,
         user_id=user_id,
     )
 
     # Validate required fields
-    priority_id = arguments.get("priority_id")
-    confirm = arguments.get("confirm")
+    deliverable_id = arguments.get("deliverable_id")
+    if not deliverable_id:
+        raise ToolUsageError("deliverable_id is required")
 
-    if not priority_id:
-        raise ToolUsageError("priority_id is required")
-    if confirm is not True:
-        raise ToolUsageError("confirm must be true to delete a priority")
+    # Build update payload
+    payload = {}
+    if "name" in arguments and arguments["name"] is not None:
+        payload["name"] = arguments["name"]
+    if "done" in arguments and arguments["done"] is not None:
+        payload["done"] = arguments["done"]
 
     # Call backend - mutation endpoints return full priority list
     try:
         import httpx
-        response = await backend_delete(
-            f"/api/priority-guardian/priorities/{priority_id}",
+        response = await backend_put(
+            f"/api/priority-guardian/deliverables/{deliverable_id}",
+            payload,
             user_id,
             correlation_id
         )
     except Exception as e:
         logger.error(
-            "tool.delete_priority.backend_error",
+            "tool.update_deliverable.backend_error",
             correlation_id=correlation_id,
             error=str(e),
         )
         if isinstance(e, httpx.HTTPStatusError):
             if e.response.status_code == 404:
-                raise ToolUsageError("Priority not found.")
-        raise ToolUsageError("Failed to delete priority. Please try again.")
+                raise ToolUsageError("Deliverable not found.")
+        raise ToolUsageError("Failed to update deliverable. Please try again.")
 
     # Use response directly - backend returns full priority list
     data = response.get("data", {})
@@ -101,10 +109,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     priorities = [_normalize_priority(p) for p in raw_priorities]
 
     logger.info(
-        "tool.delete_priority.success",
+        "tool.update_deliverable.success",
         correlation_id=correlation_id,
         user_id=user_id,
-        priority_id=priority_id,
+        deliverable_id=deliverable_id,
     )
 
     structured_content = {
@@ -118,13 +126,13 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         "_meta": {
             "openai/outputTemplate": WIDGET_URI,
         },
-        "assistant_guidance": "Priority deleted. The dashboard shows the updated list.",
+        "assistant_guidance": "Deliverable updated. The dashboard reflects the changes.",
     }
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text="Priority deleted."
+            text="Deliverable updated."
         )],
         structuredContent=structured_content,
     )
@@ -134,7 +142,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 # Tool Definition
 # ============================================================================
 
-DELETE_PRIORITY = ToolDefinition(
+UPDATE_DELIVERABLE = ToolDefinition(
     name=NAME,
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
@@ -142,7 +150,7 @@ DELETE_PRIORITY = ToolDefinition(
     widget_uri=None,
     handle=handle,
     read_only_hint=False,
-    destructive_hint=True,  # This is a destructive operation
+    destructive_hint=False,
     open_world_hint=False,
     widget_accessible=True,
     visibility="private",

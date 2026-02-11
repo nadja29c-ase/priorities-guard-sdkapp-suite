@@ -12,17 +12,20 @@ import structlog
 from mcp import types as mcp_types
 
 from .base import ToolDefinition
+# Public tools (LLM can see and call)
 from .connect_google_calendar import CONNECT_GOOGLE_CALENDAR
 from .disconnect_google_calendar import DISCONNECT_GOOGLE_CALENDAR
 from .create_priority import CREATE_PRIORITY
 from .get_priorities import GET_PRIORITIES
 # Private widget-only CRUD tools (Inc B)
-from .add_priority import ADD_PRIORITY
-from .update_priority import UPDATE_PRIORITY
-from .delete_priority import DELETE_PRIORITY
-from .add_deliverable import ADD_DELIVERABLE
-from .update_deliverable import UPDATE_DELIVERABLE
-from .delete_deliverable import DELETE_DELIVERABLE
+from .widget_tools import (
+    ADD_PRIORITY,
+    UPDATE_PRIORITY,
+    DELETE_PRIORITY,
+    ADD_DELIVERABLE,
+    UPDATE_DELIVERABLE,
+    DELETE_DELIVERABLE,
+)
 
 logger = structlog.get_logger(__name__)
 

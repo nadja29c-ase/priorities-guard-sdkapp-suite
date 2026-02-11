@@ -1,15 +1,16 @@
 """
-add_deliverable tool for Priority Guardian MCP.
+delete_deliverable tool for Priority Guardian MCP.
 
-Private widget-only tool for adding deliverables to a priority.
+Private widget-only tool for deleting deliverables.
+Requires confirm=true to prevent accidental deletion.
 """
 
 import structlog
 from mcp import types as mcp_types
 
-from mcp_server.priority_guardian.http_client import backend_post
-from .base import ToolDefinition, ToolUsageError
-from .get_priorities import _normalize_priority
+from mcp_server.priority_guardian.http_client import backend_delete
+from ..base import ToolDefinition, ToolUsageError
+from ..get_priorities import _normalize_priority
 
 logger = structlog.get_logger(__name__)
 
@@ -17,24 +18,23 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-NAME = "add_deliverable"
+NAME = "delete_deliverable"
 
-DESCRIPTION = "Add a deliverable to a deadline-driven priority (widget-only). Flexible priorities do not have deliverables."
+DESCRIPTION = "Delete a deliverable (widget-only, requires confirmation)."
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "priority_id": {
+        "deliverable_id": {
             "type": "string",
-            "description": "Parent priority ID (UUID)",
+            "description": "Deliverable ID (UUID)",
         },
-        "name": {
-            "type": "string",
-            "description": "Deliverable name (max 200 chars)",
-            "maxLength": 200,
+        "confirm": {
+            "type": "boolean",
+            "description": "Must be true to confirm deletion",
         },
     },
-    "required": ["priority_id", "name"],
+    "required": ["deliverable_id", "confirm"],
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -48,50 +48,49 @@ WIDGET_URI = "ui://widget/pg-dashboard.html"
 
 async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_types.CallToolResult:
     """
-    Add a deliverable to a priority.
+    Delete a deliverable.
 
     Args:
         user_id: Validated user ID from JWT token
         correlation_id: Request correlation ID
-        arguments: Tool arguments (priority_id, name)
+        arguments: Tool arguments (deliverable_id, confirm)
 
     Returns:
         CallToolResult with fresh priority list
     """
     logger.info(
-        "tool.add_deliverable.start",
+        "tool.delete_deliverable.start",
         correlation_id=correlation_id,
         user_id=user_id,
     )
 
     # Validate required fields
-    priority_id = arguments.get("priority_id")
-    name = arguments.get("name")
+    deliverable_id = arguments.get("deliverable_id")
+    confirm = arguments.get("confirm")
 
-    if not priority_id:
-        raise ToolUsageError("priority_id is required")
-    if not name:
-        raise ToolUsageError("name is required")
+    if not deliverable_id:
+        raise ToolUsageError("deliverable_id is required")
+    if confirm is not True:
+        raise ToolUsageError("confirm must be true to delete a deliverable")
 
     # Call backend - mutation endpoints return full priority list
     try:
         import httpx
-        response = await backend_post(
-            f"/api/priority-guardian/priorities/{priority_id}/deliverables",
-            {"name": name},
+        response = await backend_delete(
+            f"/api/priority-guardian/deliverables/{deliverable_id}",
             user_id,
             correlation_id
         )
     except Exception as e:
         logger.error(
-            "tool.add_deliverable.backend_error",
+            "tool.delete_deliverable.backend_error",
             correlation_id=correlation_id,
             error=str(e),
         )
         if isinstance(e, httpx.HTTPStatusError):
             if e.response.status_code == 404:
-                raise ToolUsageError("Priority not found.")
-        raise ToolUsageError("Failed to add deliverable. Please try again.")
+                raise ToolUsageError("Deliverable not found.")
+        raise ToolUsageError("Failed to delete deliverable. Please try again.")
 
     # Use response directly - backend returns full priority list
     data = response.get("data", {})
@@ -102,10 +101,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     priorities = [_normalize_priority(p) for p in raw_priorities]
 
     logger.info(
-        "tool.add_deliverable.success",
+        "tool.delete_deliverable.success",
         correlation_id=correlation_id,
         user_id=user_id,
-        priority_id=priority_id,
+        deliverable_id=deliverable_id,
     )
 
     structured_content = {
@@ -119,13 +118,13 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         "_meta": {
             "openai/outputTemplate": WIDGET_URI,
         },
-        "assistant_guidance": "Deliverable added. The dashboard shows the updated list.",
+        "assistant_guidance": "Deliverable deleted. The dashboard shows the updated list.",
     }
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text="Deliverable added."
+            text="Deliverable deleted."
         )],
         structuredContent=structured_content,
     )
@@ -135,7 +134,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 # Tool Definition
 # ============================================================================
 
-ADD_DELIVERABLE = ToolDefinition(
+DELETE_DELIVERABLE = ToolDefinition(
     name=NAME,
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
@@ -143,7 +142,7 @@ ADD_DELIVERABLE = ToolDefinition(
     widget_uri=None,
     handle=handle,
     read_only_hint=False,
-    destructive_hint=False,
+    destructive_hint=True,  # This is a destructive operation
     open_world_hint=False,
     widget_accessible=True,
     visibility="private",
