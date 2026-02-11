@@ -4,15 +4,15 @@ Reusable async client for Google Calendar API calls using httpx.
 """
 
 import asyncio
-import logging
 import random
 from typing import Any
 
 import httpx
+import structlog
 
 from backend.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Canonical User-Agent for all Google API calls
 # Google recommends including UA string for API requests
