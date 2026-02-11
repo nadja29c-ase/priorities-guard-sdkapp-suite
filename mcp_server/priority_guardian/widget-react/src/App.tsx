@@ -256,7 +256,7 @@ function App() {
 
       {/* Priority Cards (primary content) */}
       {sortedPriorities.length > 0 ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-5">
           {sortedPriorities.map((priority) => (
             <PriorityCardWrapper
               key={priority.id}
