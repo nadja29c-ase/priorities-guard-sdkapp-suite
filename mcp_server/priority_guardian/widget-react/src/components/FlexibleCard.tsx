@@ -235,9 +235,11 @@ export function FlexibleCard({
               </span>
             )}
           </div>
-          <p className="text-xs text-tertiary mt-1">
-            Use {priority.calendarKeyword} in the calendar event title to track time
-          </p>
+          <div className="mt-2 p-2 bg-surface-secondary rounded-lg">
+            <p className="text-xs text-secondary">
+              📅 Use <strong className="text-default">{priority.calendarKeyword}</strong> in the calendar event title to track time
+            </p>
+          </div>
         </div>
 
         {/* Action buttons */}

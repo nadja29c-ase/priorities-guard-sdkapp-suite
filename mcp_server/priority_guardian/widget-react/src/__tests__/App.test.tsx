@@ -129,7 +129,8 @@ describe('App', () => {
 
     it('shows calendar keyword reminder', () => {
       render(<App />)
-      expect(screen.getByText(/use .* in the calendar event title/i)).toBeInTheDocument()
+      // Text is split by <strong> element, so check for partial match
+      expect(screen.getByText(/in the calendar event title to track time/i)).toBeInTheDocument()
     })
   })
 
