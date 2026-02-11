@@ -6,7 +6,7 @@ This is the core business logic for the time tracking pipeline.
 """
 
 import re
-import logging
+import structlog
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Any
@@ -21,7 +21,7 @@ from backend.core.google_calendar import fetch_events, get_user_timezone, list_e
 from backend.core.google_token_management import ensure_valid_access_token
 from backend.apps.priority_guardian.pg_config import PG_KEYWORDS
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Word-boundary regex for P1/P2/P3 matching
 # Matches "P1", "P2", "P3" as standalone tokens

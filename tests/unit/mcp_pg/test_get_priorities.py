@@ -529,9 +529,9 @@ class TestToolDefinition:
         """Test widget_accessible is True (widget can call this tool)."""
         assert GET_PRIORITIES.widget_accessible is True
 
-    def test_open_world_hint_is_false(self):
-        """Test open_world_hint is False (backend-only)."""
-        assert GET_PRIORITIES.open_world_hint is False
+    def test_open_world_hint_is_true(self):
+        """Test open_world_hint is True (calls Google Calendar API via backend)."""
+        assert GET_PRIORITIES.open_world_hint is True
 
 
 # =============================================================================

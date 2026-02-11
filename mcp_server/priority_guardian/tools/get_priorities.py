@@ -217,41 +217,52 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         cal_data = calendar_result.get("data", {})
         keywords_data = cal_data.get("keywords", {})
 
-        # Build calendar_hours mapping for priority enrichment
-        calendar_hours = {
-            "P1": keywords_data.get("P1", {}).get("hours"),
-            "P2": keywords_data.get("P2", {}).get("hours"),
-            "P3": keywords_data.get("P3", {}).get("hours"),
-        }
+        # Check for valid week dates (None means no Google connection)
+        week_start = cal_data.get("week_start")
+        week_end = cal_data.get("week_end")
 
-        # Build timeAllocation block for widget
-        time_allocation = {
-            "weekStart": cal_data.get("week_start"),
-            "weekEnd": cal_data.get("week_end"),
-            "totalTrackedHours": cal_data.get("total_tracked_hours"),
-            "keywords": {
-                "P1": {
-                    "hours": keywords_data.get("P1", {}).get("hours", 0.0),
-                    "eventCount": keywords_data.get("P1", {}).get("event_count", 0),
-                },
-                "P2": {
-                    "hours": keywords_data.get("P2", {}).get("hours", 0.0),
-                    "eventCount": keywords_data.get("P2", {}).get("event_count", 0),
-                },
-                "P3": {
-                    "hours": keywords_data.get("P3", {}).get("hours", 0.0),
-                    "eventCount": keywords_data.get("P3", {}).get("event_count", 0),
-                },
-            },
-            "otherHours": cal_data.get("other_hours", 0.0),
-            "barSegments": cal_data.get("bar_segments", {}),
-        }
+        if week_start is not None and week_end is not None:
+            # Valid calendar data - build calendar_hours mapping for priority enrichment
+            calendar_hours = {
+                "P1": keywords_data.get("P1", {}).get("hours"),
+                "P2": keywords_data.get("P2", {}).get("hours"),
+                "P3": keywords_data.get("P3", {}).get("hours"),
+            }
 
-        logger.info(
-            "tool.get_priorities.calendar_merged",
-            correlation_id=correlation_id,
-            total_hours=cal_data.get("total_tracked_hours", 0),
-        )
+            # Build timeAllocation block for widget
+            time_allocation = {
+                "weekStart": week_start,
+                "weekEnd": week_end,
+                "totalTrackedHours": cal_data.get("total_tracked_hours"),
+                "keywords": {
+                    "P1": {
+                        "hours": keywords_data.get("P1", {}).get("hours", 0.0),
+                        "eventCount": keywords_data.get("P1", {}).get("event_count", 0),
+                    },
+                    "P2": {
+                        "hours": keywords_data.get("P2", {}).get("hours", 0.0),
+                        "eventCount": keywords_data.get("P2", {}).get("event_count", 0),
+                    },
+                    "P3": {
+                        "hours": keywords_data.get("P3", {}).get("hours", 0.0),
+                        "eventCount": keywords_data.get("P3", {}).get("event_count", 0),
+                    },
+                },
+                "otherHours": cal_data.get("other_hours", 0.0),
+                "barSegments": cal_data.get("bar_segments", {}),
+            }
+
+            logger.info(
+                "tool.get_priorities.calendar_merged",
+                correlation_id=correlation_id,
+                total_hours=cal_data.get("total_tracked_hours", 0),
+            )
+        else:
+            # week_start/week_end are None - no Google connection, skip timeAllocation
+            logger.info(
+                "tool.get_priorities.calendar_no_connection",
+                correlation_id=correlation_id,
+            )
     else:
         logger.warning(
             "tool.get_priorities.calendar_unsuccessful",
@@ -328,6 +339,6 @@ GET_PRIORITIES = ToolDefinition(
     handle=handle,
     read_only_hint=True,    # Pure data fetch, no side effects
     destructive_hint=False,
-    open_world_hint=False,  # Backend-only, no external calls
+    open_world_hint=True,   # Calls Google Calendar API via backend
     widget_accessible=True, # Widget can call this tool
 )

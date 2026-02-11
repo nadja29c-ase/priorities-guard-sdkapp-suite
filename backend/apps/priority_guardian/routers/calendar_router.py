@@ -12,40 +12,17 @@ Trust Boundary: Same as priorities_router - X-User-ID header trusted from MCP se
 import structlog
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
+from backend.apps.priority_guardian.dependencies import validate_user_id_header
 from backend.apps.priority_guardian.services.calendar_service import compute_time_allocation
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["Priority Guardian Calendar"])
-
-
-def validate_user_id_header(
-    x_user_id: str | None = Header(None, alias="X-User-ID")
-) -> UUID:
-    """
-    Validate X-User-ID header as UUID.
-
-    Same trust boundary as priorities_router - header comes from MCP server
-    after JWT validation.
-    """
-    if not x_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "UNAUTHORIZED", "message": "Missing X-User-ID header"},
-        )
-
-    try:
-        return UUID(x_user_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "UNAUTHORIZED", "message": "Invalid X-User-ID header (must be UUID)"},
-        )
 
 
 @router.get("/calendar/time-allocation")
