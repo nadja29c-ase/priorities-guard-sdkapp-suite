@@ -170,11 +170,11 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         correlation_id
     )
 
-    # Use gather with return_exceptions=True so one failure doesn't crash both
+    # _fetch_with_timeout already catches exceptions and returns them as values,
+    # so we don't need return_exceptions=True on gather
     results = await asyncio.gather(
         _fetch_with_timeout(priorities_coro, BACKEND_TIMEOUT, "priorities", correlation_id),
         _fetch_with_timeout(calendar_coro, BACKEND_TIMEOUT, "calendar", correlation_id),
-        return_exceptions=True,
     )
 
     priorities_result = results[0]

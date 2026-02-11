@@ -11,7 +11,8 @@ from uuid import uuid4, UUID
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from backend.apps.priority_guardian.routers.calendar_router import router, validate_user_id_header
+from backend.apps.priority_guardian.routers.calendar_router import router
+from backend.apps.priority_guardian.dependencies import validate_user_id_header
 
 
 # =============================================================================

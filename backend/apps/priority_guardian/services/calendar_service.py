@@ -52,7 +52,7 @@ def compute_week_boundaries(timezone_str: str) -> tuple[datetime, datetime]:
     try:
         tz = ZoneInfo(timezone_str)
     except Exception:
-        logger.warning(f"Invalid timezone '{timezone_str}', using UTC")
+        logger.warning("calendar.invalid_timezone", timezone=timezone_str, fallback="UTC")
         tz = ZoneInfo("UTC")
 
     # Get current time in user's timezone
@@ -343,7 +343,7 @@ async def compute_time_allocation(
 
     if "error" in token_result:
         error_code = token_result["error"]
-        logger.warning(f"Token error: {error_code}", **log_context)
+        logger.warning("calendar.token_error", error_code=error_code, **log_context)
 
         if error_code == "REFRESH_TOKEN_INVALID":
             # User needs to reconnect - return zeros gracefully
@@ -369,7 +369,10 @@ async def compute_time_allocation(
     time_max = to_rfc3339(week_end)
 
     logger.info(
-        f"Fetching events for week: {time_min} to {time_max} ({timezone_str})",
+        "calendar.fetching_events",
+        time_min=time_min,
+        time_max=time_max,
+        timezone=timezone_str,
         **log_context
     )
 
@@ -388,11 +391,11 @@ async def compute_time_allocation(
         )
 
         if pages_failed > 0:
-            logger.warning(f"{pages_failed} page(s) failed during event fetch", **log_context)
+            logger.warning("calendar.pages_failed", pages_failed=pages_failed, **log_context)
 
     except ValueError as e:
         # API errors (401, 403, etc.)
-        logger.error(f"Failed to fetch events: {e}", **log_context)
+        logger.error("calendar.fetch_events_failed", error=str(e), **log_context)
         raise
 
     # -------------------------------------------------------------------------
@@ -406,7 +409,7 @@ async def compute_time_allocation(
     allocation["timezone"] = timezone_str
 
     logger.info(
-        "Time allocation computed",
+        "calendar.allocation_computed",
         total_events=allocation["total_events_scanned"],
         total_hours=allocation["total_tracked_hours"],
         p1_hours=allocation["keywords"]["P1"]["hours"],
