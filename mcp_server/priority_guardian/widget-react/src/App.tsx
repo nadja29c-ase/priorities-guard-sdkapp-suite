@@ -351,6 +351,7 @@ function PriorityCardWrapper({
       />
     )
   }
+  // Flexible priorities don't have deliverables
   return (
     <FlexibleCard
       priority={priority}
@@ -359,10 +360,6 @@ function PriorityCardWrapper({
       onCancelEdit={onCancelEdit}
       onSave={onSavePriority}
       onDelete={onDeletePriority}
-      onToggleDeliverable={onToggleDeliverable}
-      onRenameDeliverable={onRenameDeliverable}
-      onDeleteDeliverable={onDeleteDeliverable}
-      onAddDeliverable={onAddDeliverable}
     />
   )
 }

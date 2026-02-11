@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Priority } from '../types'
 import { daysUntil, formatDate } from '../utils'
-import { DeliverableItem } from './DeliverableItem'
-import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
@@ -19,10 +17,6 @@ interface FlexibleCardProps {
     desired_result?: string
   }) => Promise<void>
   onDelete: (priorityId: string) => Promise<void>
-  onToggleDeliverable: (deliverableId: string, done: boolean) => Promise<void>
-  onRenameDeliverable: (deliverableId: string, name: string) => Promise<void>
-  onDeleteDeliverable: (deliverableId: string) => Promise<void>
-  onAddDeliverable: (priorityId: string, name: string) => Promise<void>
 }
 
 export function FlexibleCard({
@@ -32,10 +26,6 @@ export function FlexibleCard({
   onCancelEdit,
   onSave,
   onDelete,
-  onToggleDeliverable,
-  onRenameDeliverable,
-  onDeleteDeliverable,
-  onAddDeliverable,
 }: FlexibleCardProps) {
   const [editName, setEditName] = useState(priority.name)
   const [editHourTarget, setEditHourTarget] = useState(priority.weeklyHourTarget?.toString() || '')
@@ -193,7 +183,7 @@ export function FlexibleCard({
 
   return (
     <article
-      className="bg-surface rounded-xl border border-default p-4"
+      className="bg-surface rounded-xl border border-default px-6 py-5"
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
       onClick={handleCardClick}
     >
@@ -372,33 +362,6 @@ export function FlexibleCard({
           </p>
         </div>
       )}
-
-      {/* E2E Deliverables */}
-      <div className={`border-t border-subtle pt-3 ${!isEditing && priority.desiredResult ? 'mt-3' : ''}`}>
-        <h4 className="text-sm font-semibold text-default mb-2">
-          E2E Deliverables
-        </h4>
-        {priority.deliverables.length > 0 ? (
-          <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
-            {priority.deliverables.map((d) => (
-              <DeliverableItem
-                key={d.id}
-                deliverable={d}
-                onToggle={onToggleDeliverable}
-                onRename={onRenameDeliverable}
-                onDelete={onDeleteDeliverable}
-                disabled={false}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
-        )}
-        <AddDeliverableInput
-          priorityId={priority.id}
-          onAdd={onAddDeliverable}
-        />
-      </div>
 
       {/* Edit mode hint */}
       {isEditing && (

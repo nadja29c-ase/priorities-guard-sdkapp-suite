@@ -19,7 +19,7 @@ logger = structlog.get_logger(__name__)
 
 NAME = "add_deliverable"
 
-DESCRIPTION = "Add a deliverable to a priority (widget-only)."
+DESCRIPTION = "Add a deliverable to a deadline-driven priority (widget-only). Flexible priorities do not have deliverables."
 
 INPUT_SCHEMA = {
     "type": "object",

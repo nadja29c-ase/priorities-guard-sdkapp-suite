@@ -158,7 +158,7 @@ export function DeadlineCard({
 
   return (
     <article
-      className="bg-surface rounded-xl border border-default p-4"
+      className="bg-surface rounded-xl border border-default px-6 py-5"
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
       onClick={handleCardClick}
     >
