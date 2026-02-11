@@ -18,11 +18,13 @@ export function DeleteConfirmation({
   onCancel,
   isDeleting,
 }: DeleteConfirmationProps) {
-  const cancelButtonRef = useRef<HTMLButtonElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   // Auto-focus Cancel button on open (safe default)
   useEffect(() => {
-    cancelButtonRef.current?.focus()
+    // Find the Cancel button within the modal and focus it
+    const cancelButton = modalRef.current?.querySelector<HTMLButtonElement>('[data-color="secondary"]')
+    cancelButton?.focus()
   }, [])
 
   // ESC key closes modal
@@ -60,7 +62,7 @@ export function DeleteConfirmation({
       aria-modal="true"
       aria-labelledby="delete-dialog-title"
     >
-      <div className="bg-surface rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4">
+      <div ref={modalRef} className="bg-surface rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4">
         <h2 id="delete-dialog-title" className="text-lg font-semibold text-default mb-2">
           {title}
         </h2>
@@ -69,7 +71,6 @@ export function DeleteConfirmation({
         </p>
         <div className="flex gap-3 justify-end">
           <Button
-            ref={cancelButtonRef}
             color="secondary"
             variant="ghost"
             size="sm"

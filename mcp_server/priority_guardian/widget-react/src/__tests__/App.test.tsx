@@ -129,7 +129,7 @@ describe('App', () => {
 
     it('shows calendar keyword reminder', () => {
       render(<App />)
-      expect(screen.getByText(/tag calendar events with/i)).toBeInTheDocument()
+      expect(screen.getByText(/use .* in the calendar event title/i)).toBeInTheDocument()
     })
   })
 
@@ -314,7 +314,7 @@ describe('App', () => {
       })
     })
 
-    it('shows saving indicator during auto-save', async () => {
+    it('does not show saving indicator during auto-save (silence = success)', async () => {
       // Make the callTool return slowly
       mockOpenai.callTool.mockImplementation(() => new Promise(resolve => {
         setTimeout(() => resolve({
@@ -334,8 +334,8 @@ describe('App', () => {
       await userEvent.type(input, 'New Name')
       fireEvent.blur(input)
 
-      // Should show "Saving..." indicator
-      expect(screen.getByText(/saving/i)).toBeInTheDocument()
+      // Should NOT show "Saving..." indicator (silence = success per spec)
+      expect(screen.queryByText(/saving/i)).not.toBeInTheDocument()
     })
   })
 
@@ -392,7 +392,7 @@ describe('App', () => {
       await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
 
       // Should show confirmation dialog with warning text
-      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
       expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /confirm delete/i })).toBeInTheDocument()
     })
