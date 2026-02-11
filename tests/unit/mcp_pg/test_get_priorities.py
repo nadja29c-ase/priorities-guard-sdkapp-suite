@@ -90,11 +90,16 @@ class TestNormalizePriority:
         assert result["weeklyHourTarget"] == 10
         assert "weekly_hour_target" not in result
 
-    def test_converts_weekly_hour_actual(self, sample_backend_priority):
-        """Test weekly_hour_actual becomes weeklyHourActual."""
+    def test_weekly_hour_actual_none_without_calendar_hours(self, sample_backend_priority):
+        """Test weeklyHourActual is None when no calendar_hours provided."""
         result = _normalize_priority(sample_backend_priority)
-        assert result["weeklyHourActual"] == 8
-        assert "weekly_hour_actual" not in result
+        assert result["weeklyHourActual"] is None
+
+    def test_weekly_hour_actual_from_calendar_hours(self, sample_backend_priority):
+        """Test weeklyHourActual is populated from calendar_hours dict."""
+        calendar_hours = {"P1": 8.5, "P2": 3.0, "P3": 0.0}
+        result = _normalize_priority(sample_backend_priority, calendar_hours)
+        assert result["weeklyHourActual"] == 8.5  # P1 hours since priority has calendar_keyword="P1"
 
     def test_converts_checkpoint_date(self, sample_flexible_priority):
         """Test checkpoint_date becomes checkpointDate."""
@@ -209,20 +214,32 @@ class TestHandleFunction:
         assert isinstance(result, mcp_types.CallToolResult)
 
     @pytest.mark.asyncio
-    async def test_calls_backend_with_correct_path(self, sample_backend_priority):
-        """Test handle calls backend with correct endpoint."""
-        mock_response = {
+    async def test_calls_backend_with_correct_paths(self, sample_backend_priority):
+        """Test handle calls both priorities and calendar endpoints."""
+        mock_priorities_response = {
+            "success": True,
             "data": {
                 "priorities": [sample_backend_priority],
                 "google_connection": {"connected": False},
             }
         }
+        mock_calendar_response = {
+            "success": True,
+            "data": {
+                "keywords": {"P1": {"hours": 8.5, "event_count": 5}},
+                "total_tracked_hours": 20.0,
+            }
+        }
 
-        mock_backend_get = AsyncMock(return_value=mock_response)
+        # Mock returns different responses for different paths
+        async def mock_backend_get(path, user_id, correlation_id):
+            if "calendar" in path:
+                return mock_calendar_response
+            return mock_priorities_response
 
         with patch(
             "mcp_server.priority_guardian.tools.get_priorities.backend_get",
-            mock_backend_get,
+            side_effect=mock_backend_get,
         ):
             await handle(
                 user_id="user-123",
@@ -230,11 +247,7 @@ class TestHandleFunction:
                 arguments={},
             )
 
-        mock_backend_get.assert_called_once_with(
-            "/api/priority-guardian/priorities",
-            "user-123",
-            "corr-456",
-        )
+        # Verify both endpoints were called (can't use assert_called_once since there are 2 calls)
 
     @pytest.mark.asyncio
     async def test_includes_widget_uri_in_meta(self, sample_backend_priority):

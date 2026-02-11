@@ -107,10 +107,10 @@ class TestAddPriorityTool:
         self, user_id, correlation_id, mock_create_response, mock_fresh_priority_list
     ):
         """Success response returns fresh priority list with widget template."""
-        from mcp_server.priority_guardian.tools.add_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_priority import handle
 
         with patch(
-            "mcp_server.priority_guardian.tools.add_priority.backend_post",
+            "mcp_server.priority_guardian.tools.widget_tools.add_priority.backend_post",
             new_callable=AsyncMock,
             return_value=mock_create_response(keyword="P1"),
         ), patch(
@@ -138,7 +138,7 @@ class TestAddPriorityTool:
     @pytest.mark.asyncio
     async def test_missing_name_raises_tool_usage_error(self, user_id, correlation_id):
         """Missing name raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.add_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="name is required"):
@@ -151,7 +151,7 @@ class TestAddPriorityTool:
     @pytest.mark.asyncio
     async def test_missing_type_raises_tool_usage_error(self, user_id, correlation_id):
         """Missing type raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.add_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="type is required"):
@@ -164,7 +164,7 @@ class TestAddPriorityTool:
     @pytest.mark.asyncio
     async def test_deadline_type_missing_deadline_raises_error(self, user_id, correlation_id):
         """Deadline type without deadline raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.add_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="deadline is required"):
@@ -177,7 +177,7 @@ class TestAddPriorityTool:
     @pytest.mark.asyncio
     async def test_flexible_type_missing_fields_raises_error(self, user_id, correlation_id):
         """Flexible type without required fields raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.add_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="weekly_hour_target is required"):
@@ -192,11 +192,11 @@ class TestAddPriorityTool:
         self, user_id, correlation_id
     ):
         """409 MAX_PRIORITIES_REACHED returns friendly error message."""
-        from mcp_server.priority_guardian.tools.add_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with patch(
-            "mcp_server.priority_guardian.tools.add_priority.backend_post",
+            "mcp_server.priority_guardian.tools.widget_tools.add_priority.backend_post",
             new_callable=AsyncMock,
             side_effect=make_http_status_error(409, "MAX_PRIORITIES_REACHED"),
         ):
@@ -225,11 +225,11 @@ class TestUpdatePriorityTool:
         self, user_id, correlation_id, mock_fresh_priority_list
     ):
         """Success response returns fresh priority list from mutation response."""
-        from mcp_server.priority_guardian.tools.update_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.update_priority import handle
 
         # Mutation endpoints now return the full priority list directly
         with patch(
-            "mcp_server.priority_guardian.tools.update_priority.backend_put",
+            "mcp_server.priority_guardian.tools.widget_tools.update_priority.backend_put",
             new_callable=AsyncMock,
             return_value=mock_fresh_priority_list(),
         ):
@@ -249,7 +249,7 @@ class TestUpdatePriorityTool:
     @pytest.mark.asyncio
     async def test_missing_priority_id_raises_error(self, user_id, correlation_id):
         """Missing priority_id raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.update_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.update_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="priority_id is required"):
@@ -262,11 +262,11 @@ class TestUpdatePriorityTool:
     @pytest.mark.asyncio
     async def test_404_returns_not_found_message(self, user_id, correlation_id):
         """404 returns 'Priority not found' message."""
-        from mcp_server.priority_guardian.tools.update_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.update_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with patch(
-            "mcp_server.priority_guardian.tools.update_priority.backend_put",
+            "mcp_server.priority_guardian.tools.widget_tools.update_priority.backend_put",
             new_callable=AsyncMock,
             side_effect=make_http_status_error(404, "Not Found"),
         ):
@@ -283,11 +283,11 @@ class TestUpdatePriorityTool:
     @pytest.mark.asyncio
     async def test_422_returns_validation_message(self, user_id, correlation_id):
         """422 returns 'Invalid field' message."""
-        from mcp_server.priority_guardian.tools.update_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.update_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with patch(
-            "mcp_server.priority_guardian.tools.update_priority.backend_put",
+            "mcp_server.priority_guardian.tools.widget_tools.update_priority.backend_put",
             new_callable=AsyncMock,
             side_effect=make_http_status_error(422, "Unprocessable Entity"),
         ):
@@ -315,13 +315,13 @@ class TestDeletePriorityTool:
         self, user_id, correlation_id, mock_fresh_priority_list
     ):
         """Success response returns fresh (empty) priority list from mutation response."""
-        from mcp_server.priority_guardian.tools.delete_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_priority import handle
 
         empty_list = mock_fresh_priority_list(priorities=[])
 
         # Mutation endpoints now return the full priority list directly
         with patch(
-            "mcp_server.priority_guardian.tools.delete_priority.backend_delete",
+            "mcp_server.priority_guardian.tools.widget_tools.delete_priority.backend_delete",
             new_callable=AsyncMock,
             return_value=empty_list,
         ):
@@ -341,7 +341,7 @@ class TestDeletePriorityTool:
     @pytest.mark.asyncio
     async def test_missing_priority_id_raises_error(self, user_id, correlation_id):
         """Missing priority_id raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.delete_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="priority_id is required"):
@@ -354,7 +354,7 @@ class TestDeletePriorityTool:
     @pytest.mark.asyncio
     async def test_missing_confirm_raises_error(self, user_id, correlation_id):
         """Missing confirm raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.delete_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="confirm"):
@@ -367,11 +367,11 @@ class TestDeletePriorityTool:
     @pytest.mark.asyncio
     async def test_404_returns_not_found_message(self, user_id, correlation_id):
         """404 returns 'Priority not found' message."""
-        from mcp_server.priority_guardian.tools.delete_priority import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_priority import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with patch(
-            "mcp_server.priority_guardian.tools.delete_priority.backend_delete",
+            "mcp_server.priority_guardian.tools.widget_tools.delete_priority.backend_delete",
             new_callable=AsyncMock,
             side_effect=make_http_status_error(404, "Not Found"),
         ):
@@ -399,7 +399,7 @@ class TestAddDeliverableTool:
         self, user_id, correlation_id, mock_fresh_priority_list
     ):
         """Success response returns fresh priority list with new deliverable."""
-        from mcp_server.priority_guardian.tools.add_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_deliverable import handle
 
         # Response with deliverable added - mutation endpoints return full list
         priority_with_deliverable = mock_fresh_priority_list()
@@ -408,7 +408,7 @@ class TestAddDeliverableTool:
         ]
 
         with patch(
-            "mcp_server.priority_guardian.tools.add_deliverable.backend_post",
+            "mcp_server.priority_guardian.tools.widget_tools.add_deliverable.backend_post",
             new_callable=AsyncMock,
             return_value=priority_with_deliverable,
         ):
@@ -430,7 +430,7 @@ class TestAddDeliverableTool:
     @pytest.mark.asyncio
     async def test_missing_priority_id_raises_error(self, user_id, correlation_id):
         """Missing priority_id raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.add_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_deliverable import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="priority_id is required"):
@@ -443,7 +443,7 @@ class TestAddDeliverableTool:
     @pytest.mark.asyncio
     async def test_missing_name_raises_error(self, user_id, correlation_id):
         """Missing name raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.add_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.add_deliverable import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="name is required"):
@@ -467,7 +467,7 @@ class TestUpdateDeliverableTool:
         self, user_id, correlation_id, mock_fresh_priority_list
     ):
         """Toggling done returns fresh list from mutation response."""
-        from mcp_server.priority_guardian.tools.update_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.update_deliverable import handle
 
         response = mock_fresh_priority_list()
         response["data"]["priorities"][0]["deliverables"] = [
@@ -476,7 +476,7 @@ class TestUpdateDeliverableTool:
 
         # Mutation endpoints now return the full priority list directly
         with patch(
-            "mcp_server.priority_guardian.tools.update_deliverable.backend_put",
+            "mcp_server.priority_guardian.tools.widget_tools.update_deliverable.backend_put",
             new_callable=AsyncMock,
             return_value=response,
         ):
@@ -495,7 +495,7 @@ class TestUpdateDeliverableTool:
     @pytest.mark.asyncio
     async def test_missing_deliverable_id_raises_error(self, user_id, correlation_id):
         """Missing deliverable_id raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.update_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.update_deliverable import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="deliverable_id is required"):
@@ -508,11 +508,11 @@ class TestUpdateDeliverableTool:
     @pytest.mark.asyncio
     async def test_404_returns_not_found_message(self, user_id, correlation_id):
         """404 returns 'Deliverable not found' message."""
-        from mcp_server.priority_guardian.tools.update_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.update_deliverable import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with patch(
-            "mcp_server.priority_guardian.tools.update_deliverable.backend_put",
+            "mcp_server.priority_guardian.tools.widget_tools.update_deliverable.backend_put",
             new_callable=AsyncMock,
             side_effect=make_http_status_error(404, "Not Found"),
         ):
@@ -540,11 +540,11 @@ class TestDeleteDeliverableTool:
         self, user_id, correlation_id, mock_fresh_priority_list
     ):
         """Success returns fresh list without deleted deliverable from mutation response."""
-        from mcp_server.priority_guardian.tools.delete_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_deliverable import handle
 
         # Mutation endpoints now return the full priority list directly
         with patch(
-            "mcp_server.priority_guardian.tools.delete_deliverable.backend_delete",
+            "mcp_server.priority_guardian.tools.widget_tools.delete_deliverable.backend_delete",
             new_callable=AsyncMock,
             return_value=mock_fresh_priority_list(),
         ):
@@ -563,7 +563,7 @@ class TestDeleteDeliverableTool:
     @pytest.mark.asyncio
     async def test_missing_deliverable_id_raises_error(self, user_id, correlation_id):
         """Missing deliverable_id raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.delete_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_deliverable import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="deliverable_id is required"):
@@ -576,7 +576,7 @@ class TestDeleteDeliverableTool:
     @pytest.mark.asyncio
     async def test_missing_confirm_raises_error(self, user_id, correlation_id):
         """Missing confirm raises ToolUsageError."""
-        from mcp_server.priority_guardian.tools.delete_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_deliverable import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with pytest.raises(ToolUsageError, match="confirm"):
@@ -589,11 +589,11 @@ class TestDeleteDeliverableTool:
     @pytest.mark.asyncio
     async def test_404_returns_not_found_message(self, user_id, correlation_id):
         """404 returns 'Deliverable not found' message."""
-        from mcp_server.priority_guardian.tools.delete_deliverable import handle
+        from mcp_server.priority_guardian.tools.widget_tools.delete_deliverable import handle
         from mcp_server.priority_guardian.tools.base import ToolUsageError
 
         with patch(
-            "mcp_server.priority_guardian.tools.delete_deliverable.backend_delete",
+            "mcp_server.priority_guardian.tools.widget_tools.delete_deliverable.backend_delete",
             new_callable=AsyncMock,
             side_effect=make_http_status_error(404, "Not Found"),
         ):

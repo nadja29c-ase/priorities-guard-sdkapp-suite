@@ -638,3 +638,102 @@ async def stop_webhook_channel(
     except Exception as e:
         logger.error(f"Error stopping webhook channel: channel_id={channel_id}, error={e}")
         return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# Calendar Settings (Increment 05 - Time Allocation Pipeline)
+# ============================================================================
+
+
+async def get_user_timezone(
+    http_client: httpx.AsyncClient,
+    access_token: str,
+    correlation_id: str | None = None,
+) -> str:
+    """
+    Fetch user's timezone from Google Calendar Settings API.
+
+    Args:
+        http_client: Shared httpx AsyncClient
+        access_token: Decrypted Google access token
+        correlation_id: Optional correlation ID for logging
+
+    Returns:
+        IANA timezone string (e.g., "Europe/Berlin", "America/New_York")
+        Falls back to "UTC" on any error
+
+    Note:
+        This function never raises. On any failure (401, 403, network error,
+        timeout, unexpected response), it logs a warning and returns "UTC".
+        The calendar endpoint continues with UTC rather than failing entirely.
+    """
+    url = "https://www.googleapis.com/calendar/v3/users/me/settings/timezone"
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": GOOGLE_USER_AGENT,
+    }
+
+    log_context = {"correlation_id": correlation_id} if correlation_id else {}
+
+    try:
+        response = await http_client.get(url, headers=headers, timeout=10.0)
+
+        if response.status_code == 200:
+            data = response.json()
+            timezone_value = data.get("value")
+
+            if timezone_value and isinstance(timezone_value, str):
+                logger.info(
+                    f"User timezone fetched: {timezone_value}",
+                    **log_context
+                )
+                return timezone_value
+            else:
+                logger.warning(
+                    f"Unexpected timezone response shape: {data}. Falling back to UTC.",
+                    **log_context
+                )
+                return "UTC"
+
+        elif response.status_code == 401:
+            logger.warning(
+                f"Invalid access token (401) fetching timezone. Falling back to UTC.",
+                **log_context
+            )
+            return "UTC"
+
+        elif response.status_code == 403:
+            logger.warning(
+                f"Insufficient scopes (403) fetching timezone. Falling back to UTC.",
+                **log_context
+            )
+            return "UTC"
+
+        else:
+            logger.warning(
+                f"HTTP {response.status_code} fetching timezone. Falling back to UTC.",
+                **log_context
+            )
+            return "UTC"
+
+    except httpx.TimeoutException:
+        logger.warning(
+            "Timeout fetching user timezone. Falling back to UTC.",
+            **log_context
+        )
+        return "UTC"
+
+    except httpx.NetworkError as e:
+        logger.warning(
+            f"Network error fetching timezone: {type(e).__name__}. Falling back to UTC.",
+            **log_context
+        )
+        return "UTC"
+
+    except Exception as e:
+        logger.error(
+            f"Unexpected error fetching timezone: {e}. Falling back to UTC.",
+            **log_context
+        )
+        return "UTC"
