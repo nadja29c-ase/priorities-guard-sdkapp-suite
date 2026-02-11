@@ -12,7 +12,7 @@
  * - Deliverable CRUD interactions
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../App'
@@ -29,8 +29,8 @@ const deadlinePriority: Priority = {
   deadline: '2025-02-15',
   weeklyHourTarget: 10,
   weeklyHourActual: 8,
-  checkpointDate: null,
-  desiredResult: null,
+  checkpointDate: undefined,
+  desiredResult: undefined,
   deliverables: [
     { id: 'd1', name: 'Design doc', done: true },
     { id: 'd2', name: 'Implementation', done: false },
@@ -45,7 +45,7 @@ const flexiblePriority: Priority = {
   type: 'flexible',
   calendarKeyword: 'P2',
   status: 'active',
-  deadline: null,
+  deadline: undefined,
   weeklyHourTarget: 5,
   weeklyHourActual: 3,
   checkpointDate: '2025-02-28',
