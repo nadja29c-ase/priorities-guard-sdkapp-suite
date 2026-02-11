@@ -188,7 +188,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                 disabled={isSubmitting}
                 maxLength={100}
                 placeholder="e.g., Ship v1.0"
-                className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+                className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
               />
             </div>
 
@@ -208,7 +208,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                   }}
                   disabled={isSubmitting}
                   min={minDate}
-                  className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+                  className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
                 />
               </div>
             )}
@@ -232,7 +232,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                     min="0.5"
                     step="0.5"
                     placeholder="e.g., 10"
-                    className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+                    className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
                   />
                 </div>
 
@@ -250,7 +250,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                     }}
                     disabled={isSubmitting}
                     min={minDate}
-                    className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+                    className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
                   />
                 </div>
 
@@ -269,7 +269,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                     maxLength={200}
                     rows={2}
                     placeholder="What do you want to achieve in ~1 month?"
-                    className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info resize-none"
+                    className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary resize-none"
                   />
                 </div>
               </>

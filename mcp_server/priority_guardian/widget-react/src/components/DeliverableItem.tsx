@@ -136,7 +136,7 @@ export function DeliverableItem({
           onBlur={handleSaveEdit}
           onKeyDown={handleKeyDown}
           disabled={isLoading}
-          className="flex-1 text-sm text-default bg-surface border border-default rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+          className="flex-1 text-sm text-default bg-surface border border-default rounded-lg px-3 py-2 focus:outline-none focus:border-tertiary"
           aria-label="Edit deliverable name"
         />
       ) : (

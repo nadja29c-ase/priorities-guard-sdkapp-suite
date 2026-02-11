@@ -89,7 +89,7 @@ export function AddDeliverableInput({
           onKeyDown={handleKeyDown}
           disabled={isAdding}
           placeholder="Deliverable name"
-          className="flex-1 text-sm text-default bg-surface border border-default rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+          className="flex-1 text-sm text-default bg-surface border border-default rounded-lg px-3 py-2 focus:outline-none focus:border-tertiary"
           aria-label="New deliverable name"
           aria-describedby={error ? 'deliverable-error' : undefined}
         />

@@ -178,7 +178,7 @@ export function DeadlineCard({
               disabled={isSaving}
               maxLength={100}
               autoFocus
-              className="w-full text-base font-semibold text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+              className="w-full text-base text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
               aria-label="Priority name"
             />
           ) : (
@@ -274,7 +274,7 @@ export function DeadlineCard({
             onBlur={handleDeadlineBlur}
             disabled={isSaving}
             min={minDate}
-            className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+            className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
           />
         </div>
       )}
