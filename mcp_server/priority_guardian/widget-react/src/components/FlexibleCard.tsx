@@ -249,7 +249,7 @@ export function FlexibleCard({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-            className="p-1.5 text-tertiary hover:text-danger rounded"
+            className="p-1 text-tertiary hover:text-danger rounded"
             aria-label={`Delete priority: ${priority.name}`}
           >
             <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
