@@ -228,7 +228,7 @@ export function FlexibleCard({
 
           {/* Type tag and calendar info below name */}
           <div className="flex items-center gap-2 mt-1">
-            <Badge color="info" variant="soft" size="sm">Flexible</Badge>
+            <Badge color="secondary" variant="soft" size="sm">Flexible</Badge>
             {!isEditing && checkpointDays !== null && (
               <span className="text-xs text-secondary">
                 {checkpointDays > 0 ? `${checkpointDays}d until check-in` : checkpointDays === 0 ? 'Check-in today' : 'Check-in overdue'}
