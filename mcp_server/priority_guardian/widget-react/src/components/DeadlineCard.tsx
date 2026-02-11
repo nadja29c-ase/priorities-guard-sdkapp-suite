@@ -182,7 +182,7 @@ export function DeadlineCard({
               aria-label="Priority name"
             />
           ) : (
-            <div className="flex items-baseline justify-between gap-2">
+            <div className="flex items-baseline gap-2">
               <h3
                 className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
                 onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
@@ -199,6 +199,16 @@ export function DeadlineCard({
                   {formatDate(priority.deadline)}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+                className="p-1 text-tertiary hover:text-info rounded flex-shrink-0"
+                aria-label={`Edit priority: ${priority.name}`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
+                </svg>
+              </button>
             </div>
           )}
 
@@ -213,23 +223,8 @@ export function DeadlineCard({
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Edit button (hidden when editing) */}
-          {!isEditing && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-              className="p-1.5 text-tertiary hover:text-info rounded"
-              aria-label={`Edit priority: ${priority.name}`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
-              </svg>
-            </button>
-          )}
-
-          {/* Delete button */}
+        {/* Delete button */}
+        <div className="flex-shrink-0">
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
