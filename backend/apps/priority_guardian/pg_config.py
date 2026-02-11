@@ -16,11 +16,13 @@ PG_APP_NAME = "priority-guardian"
 PG_APP_DISPLAY_NAME = "Priority Guardian"
 
 # -----------------------------------------------------------
-# GOOGLE OAUTH SCOPE
+# GOOGLE OAUTH SCOPES
 # -----------------------------------------------------------
 
-# PG uses the narrower events.readonly scope (not full calendar.readonly)
-GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly"
+# PG requests two scopes (space-separated):
+# - events.readonly: Read calendar events for time tracking
+# - settings.readonly: Read user timezone for accurate week boundaries
+GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.settings.readonly"
 
 # -----------------------------------------------------------
 # CALENDAR KEYWORDS (Increment 05)
