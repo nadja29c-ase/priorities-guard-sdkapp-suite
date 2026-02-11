@@ -4,7 +4,8 @@ import { daysUntil, formatDate } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
 import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
-import { BADGE_COLORS } from '../constants'
+import { Badge } from '@openai/apps-sdk-ui/components/Badge'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 
 interface FlexibleCardProps {
   priority: Priority
@@ -43,9 +44,8 @@ export function FlexibleCard({
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [error, setError] = useState<string | null>(null)
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const checkpointDays = priority.checkpointDate ? daysUntil(priority.checkpointDate) : null
   const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
@@ -66,8 +66,8 @@ export function FlexibleCard({
   // Clear timeout on unmount
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current)
       }
     }
   }, [])
@@ -103,7 +103,6 @@ export function FlexibleCard({
     }
 
     setError(null)
-    setSaveStatus('saving')
     setIsSaving(true)
 
     try {
@@ -119,22 +118,19 @@ export function FlexibleCard({
       }
 
       await onSave(priority.id, updates)
-      setSaveStatus('saved')
-      saveTimeoutRef.current = setTimeout(() => {
-        setSaveStatus('idle')
-      }, 1500)
+      // Silence means success - no indicator needed
     } catch (e) {
       console.error('callTool error:', e)
-      setSaveStatus('error')
-      setError('Failed to save')
+      // Show error message from tool if available, otherwise generic
+      const errorMsg = e instanceof Error ? e.message : 'Failed to save'
+      setError(errorMsg)
       // Revert to original value
       if (field === 'name') setEditName(priority.name)
       else if (field === 'weekly_hour_target') setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
       else if (field === 'checkpoint_date') setEditCheckpointDate(priority.checkpointDate || '')
       else if (field === 'desired_result') setEditDesiredResult(priority.desiredResult || '')
 
-      saveTimeoutRef.current = setTimeout(() => {
-        setSaveStatus('idle')
+      errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
     } finally {
@@ -184,15 +180,14 @@ export function FlexibleCard({
 
   if (showDeleteConfirm) {
     return (
-      <article className="bg-surface rounded-xl border border-default p-4">
-        <DeleteConfirmation
-          itemName={priority.name}
-          itemType="priority"
-          onConfirm={handleDelete}
-          onCancel={() => setShowDeleteConfirm(false)}
-          isDeleting={isDeleting}
-        />
-      </article>
+      <DeleteConfirmation
+        itemName={priority.name}
+        itemType="priority"
+        calendarKeyword={priority.calendarKeyword}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+        isDeleting={isDeleting}
+      />
     )
   }
 
@@ -203,40 +198,47 @@ export function FlexibleCard({
       onClick={handleCardClick}
     >
       {/* Header: Badge + title + actions */}
-      <div className="flex items-start gap-2 mb-2">
-        <span className={`px-2 py-0.5 text-xs font-medium rounded flex-shrink-0 ${badgeColorClass}`}>
+      <div className="flex items-start gap-3 mb-2">
+        <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
           {priority.calendarKeyword}
         </span>
 
-        {isEditing ? (
-          <input
-            type="text"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            onBlur={handleNameBlur}
-            disabled={isSaving}
-            maxLength={100}
-            autoFocus
-            className="flex-1 text-base font-semibold text-default bg-surface border border-default rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-info"
-            aria-label="Priority name"
-          />
-        ) : (
-          <h3
-            className="flex-1 text-base font-semibold text-default truncate cursor-pointer hover:text-info"
-            onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-            title="Click to edit"
-          >
-            {priority.name}
-          </h3>
-        )}
+        <div className="flex-1 min-w-0">
+          {isEditing ? (
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleNameBlur}
+              disabled={isSaving}
+              maxLength={100}
+              autoFocus
+              className="w-full text-base font-semibold text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
+              aria-label="Priority name"
+            />
+          ) : (
+            <h3
+              className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
+              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+              title="Click to edit"
+            >
+              {priority.name}
+            </h3>
+          )}
 
-        {/* Save status indicator */}
-        {saveStatus === 'saving' && (
-          <span className="text-xs text-secondary animate-pulse">Saving...</span>
-        )}
-        {saveStatus === 'saved' && (
-          <span className="text-xs text-success">Saved</span>
-        )}
+          {/* Type tag and calendar info below name */}
+          <div className="flex items-center gap-2 mt-1">
+            <Badge color="info" variant="soft" size="sm">Flexible</Badge>
+            {!isEditing && checkpointDays !== null && (
+              <span className="text-xs text-secondary">
+                {checkpointDays > 0 ? `${checkpointDays}d until check-in` : checkpointDays === 0 ? 'Check-in today' : 'Check-in overdue'}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-tertiary mt-1">
+            Use {priority.calendarKeyword} in the calendar event title to track time
+          </p>
+        </div>
 
         {/* Delete button (always visible) */}
         <button
@@ -258,16 +260,6 @@ export function FlexibleCard({
         <p className="text-xs text-danger mb-2" role="alert">{error}</p>
       )}
 
-      {/* Type badge and checkpoint */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-xs text-secondary">{'\u21BB'} Flexible</span>
-        {!isEditing && checkpointDays !== null && (
-          <span className="text-xs text-secondary">
-            {checkpointDays > 0 ? `${checkpointDays}d until check-in` : checkpointDays === 0 ? 'Check-in today' : 'Check-in overdue'}
-          </span>
-        )}
-      </div>
-
       {/* Edit mode: All flexible fields with auto-save on blur */}
       {isEditing ? (
         <div className="space-y-3 mb-3">
@@ -284,7 +276,7 @@ export function FlexibleCard({
               disabled={isSaving}
               min="0.5"
               step="0.5"
-              className="w-full text-sm text-default bg-surface border border-default rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-info"
+              className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
             />
           </div>
 
@@ -300,7 +292,7 @@ export function FlexibleCard({
               onBlur={handleCheckpointBlur}
               disabled={isSaving}
               min={minDate}
-              className="w-full text-sm text-default bg-surface border border-default rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-info"
+              className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info"
             />
           </div>
 
@@ -316,7 +308,7 @@ export function FlexibleCard({
               disabled={isSaving}
               maxLength={200}
               rows={2}
-              className="w-full text-sm text-default bg-surface border border-default rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-info resize-none"
+              className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-info resize-none"
             />
           </div>
         </div>
@@ -344,13 +336,6 @@ export function FlexibleCard({
         </>
       )}
 
-      {/* Calendar keyword reminder */}
-      <div className="mb-3 p-2 bg-surface-secondary rounded-lg">
-        <p className="text-xs text-secondary">
-          {'\uD83D\uDCC5'} Tag calendar events with <strong className="text-default">{priority.calendarKeyword}</strong> to track time
-        </p>
-      </div>
-
       {/* 1-Month Goal section - clickable to edit */}
       {!isEditing && priority.desiredResult && (
         <div
@@ -372,10 +357,10 @@ export function FlexibleCard({
         </div>
       )}
 
-      {/* Deliverables */}
+      {/* E2E Deliverables */}
       <div className={`border-t border-subtle pt-3 ${!isEditing && priority.desiredResult ? 'mt-3' : ''}`}>
-        <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide mb-2">
-          Deliverables
+        <h4 className="text-sm font-semibold text-default mb-2">
+          E2E Deliverables
         </h4>
         {priority.deliverables.length > 0 ? (
           <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
