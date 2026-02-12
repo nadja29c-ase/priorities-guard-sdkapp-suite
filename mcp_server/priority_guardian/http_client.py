@@ -62,6 +62,15 @@ async def backend_get(
     )
 
     resp = await http_client.get(url, headers=headers)
+
+    # For 4xx errors, try to return structured error JSON so callers can
+    # extract the user-friendly message. Only raise for 5xx or unparseable responses.
+    if resp.status_code >= 400 and resp.status_code < 500:
+        try:
+            return resp.json()
+        except Exception:
+            resp.raise_for_status()
+
     resp.raise_for_status()
     return resp.json()
 
@@ -107,6 +116,15 @@ async def backend_post(
     )
 
     resp = await http_client.post(url, json=json_data, headers=headers)
+
+    # For 4xx errors, try to return structured error JSON so callers can
+    # extract the user-friendly message. Only raise for 5xx or unparseable responses.
+    if resp.status_code >= 400 and resp.status_code < 500:
+        try:
+            return resp.json()
+        except Exception:
+            resp.raise_for_status()
+
     resp.raise_for_status()
     return resp.json()
 
@@ -151,6 +169,15 @@ async def backend_put(
     )
 
     resp = await http_client.put(url, json=json_data, headers=headers)
+
+    # For 4xx errors, try to return structured error JSON so callers can
+    # extract the user-friendly message. Only raise for 5xx or unparseable responses.
+    if resp.status_code >= 400 and resp.status_code < 500:
+        try:
+            return resp.json()
+        except Exception:
+            resp.raise_for_status()
+
     resp.raise_for_status()
     return resp.json()
 
@@ -193,5 +220,14 @@ async def backend_delete(
     )
 
     resp = await http_client.delete(url, headers=headers)
+
+    # For 4xx errors, try to return structured error JSON so callers can
+    # extract the user-friendly message. Only raise for 5xx or unparseable responses.
+    if resp.status_code >= 400 and resp.status_code < 500:
+        try:
+            return resp.json()
+        except Exception:
+            resp.raise_for_status()
+
     resp.raise_for_status()
     return resp.json()

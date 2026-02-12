@@ -25,6 +25,7 @@ class TestBackendGet:
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"data": "test"}
         mock_response.raise_for_status = MagicMock()
         mock_client.get.return_value = mock_response
@@ -45,16 +46,44 @@ class TestBackendGet:
         assert headers["X-Correlation-ID"] == "corr-456"
 
     @pytest.mark.asyncio
-    async def test_backend_get_raises_on_error_status(self):
-        """backend_get raises HTTPStatusError on error status."""
+    async def test_backend_get_returns_json_on_4xx_error(self):
+        """backend_get returns JSON body on 4xx errors (for structured error messages)."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.json.return_value = {
+            "success": False,
+            "error": {"code": "NOT_FOUND", "message": "Resource not found"}
+        }
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_get
+
+            result = await backend_get(
+                "/api/test",
+                user_id="user-123",
+                correlation_id="corr-456",
+            )
+
+        assert result["success"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_backend_get_raises_on_5xx_error(self):
+        """backend_get raises HTTPStatusError on 5xx errors."""
         import httpx
         import mcp_server.priority_guardian.http_client as http_client_module
         http_client_module.http_client = None
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 500
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found",
+            "500 Internal Server Error",
             request=MagicMock(),
             response=mock_response,
         )
@@ -82,6 +111,7 @@ class TestBackendPost:
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"data": "test"}
         mock_response.raise_for_status = MagicMock()
         mock_client.post.return_value = mock_response
@@ -110,6 +140,7 @@ class TestBackendPost:
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"data": "test"}
         mock_response.raise_for_status = MagicMock()
         mock_client.post.return_value = mock_response
@@ -142,6 +173,7 @@ class TestBackendPut:
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"data": "test"}
         mock_response.raise_for_status = MagicMock()
         mock_client.put.return_value = mock_response
@@ -170,6 +202,7 @@ class TestBackendPut:
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"data": "test"}
         mock_response.raise_for_status = MagicMock()
         mock_client.put.return_value = mock_response
@@ -191,16 +224,45 @@ class TestBackendPut:
         assert json_body["deadline"] == "2026-04-01"
 
     @pytest.mark.asyncio
-    async def test_backend_put_raises_on_error_status(self):
-        """backend_put raises HTTPStatusError on error status."""
+    async def test_backend_put_returns_json_on_4xx_error(self):
+        """backend_put returns JSON body on 4xx errors (for structured error messages)."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.json.return_value = {
+            "success": False,
+            "error": {"code": "NOT_FOUND", "message": "Priority not found"}
+        }
+        mock_client.put.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_put
+
+            result = await backend_put(
+                "/api/priorities/nonexistent",
+                {"name": "Updated"},
+                user_id="user-123",
+                correlation_id="corr-456",
+            )
+
+        assert result["success"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_backend_put_raises_on_5xx_error(self):
+        """backend_put raises HTTPStatusError on 5xx errors."""
         import httpx
         import mcp_server.priority_guardian.http_client as http_client_module
         http_client_module.http_client = None
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 500
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found",
+            "500 Internal Server Error",
             request=MagicMock(),
             response=mock_response,
         )
@@ -211,7 +273,7 @@ class TestBackendPut:
 
             with pytest.raises(httpx.HTTPStatusError):
                 await backend_put(
-                    "/api/priorities/nonexistent",
+                    "/api/priorities/123",
                     {"name": "Updated"},
                     user_id="user-123",
                     correlation_id="corr-456",
@@ -229,6 +291,7 @@ class TestBackendDelete:
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"success": True}
         mock_response.raise_for_status = MagicMock()
         mock_client.delete.return_value = mock_response
@@ -249,16 +312,44 @@ class TestBackendDelete:
         assert headers["X-Correlation-ID"] == "corr-456"
 
     @pytest.mark.asyncio
-    async def test_backend_delete_raises_on_error_status(self):
-        """backend_delete raises HTTPStatusError on error status."""
+    async def test_backend_delete_returns_json_on_4xx_error(self):
+        """backend_delete returns JSON body on 4xx errors (for structured error messages)."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.json.return_value = {
+            "success": False,
+            "error": {"code": "NOT_FOUND", "message": "Priority not found"}
+        }
+        mock_client.delete.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            from mcp_server.priority_guardian.http_client import backend_delete
+
+            result = await backend_delete(
+                "/api/priorities/nonexistent",
+                user_id="user-123",
+                correlation_id="corr-456",
+            )
+
+        assert result["success"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_backend_delete_raises_on_5xx_error(self):
+        """backend_delete raises HTTPStatusError on 5xx errors."""
         import httpx
         import mcp_server.priority_guardian.http_client as http_client_module
         http_client_module.http_client = None
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 500
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "404 Not Found",
+            "500 Internal Server Error",
             request=MagicMock(),
             response=mock_response,
         )
@@ -269,7 +360,7 @@ class TestBackendDelete:
 
             with pytest.raises(httpx.HTTPStatusError):
                 await backend_delete(
-                    "/api/priorities/nonexistent",
+                    "/api/priorities/123",
                     user_id="user-123",
                     correlation_id="corr-456",
                 )
@@ -282,6 +373,7 @@ class TestBackendDelete:
 
         mock_client = AsyncMock()
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"success": True, "data": {"deleted": True}}
         mock_response.raise_for_status = MagicMock()
         mock_client.delete.return_value = mock_response
