@@ -22,6 +22,11 @@ body {
   margin: 0 auto;
 }
 
+/* Main container padding - uses selector specificity to override SDK styles */
+main[role="main"] {
+  padding: 2rem 1.75rem;  /* 32px top/bottom, 28px sides */
+}
+
 /* Screen reader only */
 .sr-only {
   position: absolute;

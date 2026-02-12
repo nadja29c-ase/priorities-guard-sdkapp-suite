@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom'
 import { vi, afterEach } from 'vitest'
-import type { Priority, ToolOutputData } from '../types'
+import type { Priority, ToolOutputData, TimeAllocation } from '../types'
 
 // Typed toolOutput structure (loose but structural)
 type ToolOutput = {
@@ -27,7 +27,8 @@ Object.defineProperty(window, 'openai', {
 export function setMockPriorities(
   priorities: Priority[],
   googleConnected = false,
-  availableKeywords: string[] = []
+  availableKeywords: string[] = [],
+  timeAllocation?: TimeAllocation
 ) {
   mockOpenai.toolOutput = {
     structuredContent: {
@@ -35,6 +36,7 @@ export function setMockPriorities(
         google_connected: googleConnected,
         priorities,
         available_keywords: availableKeywords,
+        timeAllocation,
       },
     },
   }

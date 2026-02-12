@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { Priority, ToolOutputData, WidgetState } from './types'
+import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { DeadlineCard } from './components/DeadlineCard'
 import { FlexibleCard } from './components/FlexibleCard'
 import { AddPriorityForm, AddPriorityButton } from './components/AddPriorityForm'
+import { TimeAllocationBar } from './components/TimeAllocationBar'
 
 function App() {
   // Theme is handled automatically by SDK CSS via data-theme attribute
@@ -13,6 +14,10 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // TimeAllocation is stored separately so CRUD operations don't clear it
+  // (CRUD responses don't include timeAllocation, only get_priorities does)
+  const [timeAllocation, setTimeAllocation] = useState<TimeAllocation | undefined>(undefined)
 
   // Edit state: only one priority can be edited at a time
   // Initialize from widgetState if available (survives widget re-renders)
@@ -54,6 +59,12 @@ function App() {
     }
 
     setData(parsed)
+
+    // Set timeAllocation if present (from get_priorities response)
+    if (parsed?.timeAllocation) {
+      setTimeAllocation(parsed.timeAllocation)
+    }
+
     setIsInitialized(true)
     isInitializedRef.current = true
 
@@ -62,10 +73,18 @@ function App() {
   }, [notifyHeight])
 
   // Update data from tool response
+  // Note: CRUD responses don't include timeAllocation, only get_priorities does
+  // So we only update timeAllocation when it's present in the response
   const updateDataFromResponse = useCallback((content: { data?: ToolOutputData } | null | undefined) => {
     if (content?.data) {
       setData(content.data)
       setLoadError(null)
+
+      // Only update timeAllocation if present (get_priorities includes it, CRUD doesn't)
+      if (content.data.timeAllocation) {
+        setTimeAllocation(content.data.timeAllocation)
+      }
+
       notifyHeight()
     }
   }, [notifyHeight])
@@ -239,6 +258,15 @@ function App() {
   const sortedPriorities = sortPrioritiesByKeyword(activePriorities)
   const availableKeywords = data?.available_keywords ?? []
 
+  // Extract active keywords for TimeAllocationBar legend
+  // Only show keywords that have active priorities (e.g., if no P2 priority exists, don't show P2)
+  const activeKeywords: CalendarKeyword[] = []
+  const keywordSet = new Set(activePriorities.map(p => p.calendarKeyword))
+  // Maintain P1 > P2 > P3 order
+  if (keywordSet.has('P1')) activeKeywords.push('P1')
+  if (keywordSet.has('P2')) activeKeywords.push('P2')
+  if (keywordSet.has('P3')) activeKeywords.push('P3')
+
   // When editing or adding, don't allow starting another edit
   const canEdit = !editingPriorityId && !isAddingPriority
 
@@ -246,13 +274,19 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className="bg-surface-secondary rounded-2xl px-6 py-5 -m-4"
+      className="bg-surface-secondary rounded-2xl -m-4"
     >
       {loadError && (
         <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
           {loadError}
         </div>
       )}
+
+      {/* Time Allocation Bar (shows calendar hours breakdown) */}
+      <TimeAllocationBar
+        timeAllocation={timeAllocation}
+        activeKeywords={activeKeywords}
+      />
 
       {/* Priority Cards (primary content) */}
       {sortedPriorities.length > 0 ? (

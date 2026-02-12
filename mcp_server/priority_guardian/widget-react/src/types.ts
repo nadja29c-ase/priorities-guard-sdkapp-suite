@@ -32,11 +32,36 @@ export interface GoogleConnection {
   scopes?: string[]
 }
 
+// Time allocation from calendar (Increment 05 / Widget C)
+export interface TimeAllocationKeyword {
+  hours: number
+  eventCount: number
+}
+
+export interface TimeAllocation {
+  weekStart: string    // ISO datetime
+  weekEnd: string      // ISO datetime (exclusive — next Monday 00:00)
+  totalTrackedHours: number
+  keywords: {
+    P1: TimeAllocationKeyword
+    P2: TimeAllocationKeyword
+    P3: TimeAllocationKeyword
+  }
+  otherHours: number
+  barSegments: {
+    P1: number
+    P2: number
+    P3: number
+    other: number
+  }
+}
+
 export interface ToolOutputData {
   google_connected: boolean
   google_connected_at?: string
   priorities: Priority[]
   available_keywords?: string[]
+  timeAllocation?: TimeAllocation
 }
 
 // Widget state for edit mode persistence

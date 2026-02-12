@@ -164,7 +164,7 @@ export function DeadlineCard({
     >
       {/* Header: Badge + title + actions */}
       <div className="flex items-start gap-3 mb-2">
-        <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
+        <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} mt-0.5`}>
           {priority.calendarKeyword}
         </span>
 

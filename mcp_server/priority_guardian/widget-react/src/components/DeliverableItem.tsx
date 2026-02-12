@@ -110,7 +110,7 @@ export function DeliverableItem({
         type="button"
         onClick={handleToggle}
         disabled={isLoading || disabled}
-        className={`w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 ${
+        className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
           deliverable.done
             ? 'bg-tertiary border-tertiary'
             : 'border-default hover:border-strong'
@@ -151,7 +151,7 @@ export function DeliverableItem({
 
       {/* Actions (visible on hover) */}
       {!isEditing && !disabled && (
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             type="button"
             onClick={() => setIsEditing(true)}
