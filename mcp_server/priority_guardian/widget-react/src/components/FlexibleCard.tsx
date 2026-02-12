@@ -4,6 +4,7 @@ import { daysUntil, formatDate } from '../utils'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
+import { HourRing } from './HourRing'
 
 interface FlexibleCardProps {
   priority: Priority
@@ -320,23 +321,19 @@ export function FlexibleCard({
         </div>
       ) : (
         <>
-          {/* Weekly hours target - clickable to edit */}
+          {/* Weekly hours progress ring - clickable to edit */}
           {priority.weeklyHourTarget != null && (
             <div
-              className="mb-3 cursor-pointer hover:text-info"
+              className="flex items-center gap-3 mb-3 cursor-pointer"
               onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
               title="Click to edit"
             >
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-secondary">
-                  {priority.weeklyHourTarget}h/week target
-                </span>
-                {priority.weeklyHourActual != null && priority.weeklyHourActual > 0 && (
-                  <span className="text-sm text-tertiary">
-                    ({priority.weeklyHourActual}h actual)
-                  </span>
-                )}
-              </div>
+              <HourRing
+                actual={priority.weeklyHourActual ?? 0}
+                target={priority.weeklyHourTarget}
+                keyword={priority.calendarKeyword}
+              />
+              <span className="text-xs text-secondary">per week</span>
             </div>
           )}
         </>

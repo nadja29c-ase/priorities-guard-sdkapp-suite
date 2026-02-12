@@ -1,5 +1,6 @@
 import type { TimeAllocation, CalendarKeyword } from '../types'
 import { BAR_COLORS } from '../constants'
+import { formatHours } from '../utils'
 
 interface TimeAllocationBarProps {
   timeAllocation: TimeAllocation | undefined
@@ -7,21 +8,36 @@ interface TimeAllocationBarProps {
 }
 
 /**
+ * Parse date components from ISO string directly (timezone-safe).
+ * Avoids Date object local-timezone conversion issues.
+ */
+function parseDateParts(isoString: string): { year: number; month: number; day: number } {
+  const [datePart] = isoString.split('T')
+  const [year, month, day] = datePart.split('-').map(Number)
+  return { year, month, day }
+}
+
+/**
  * Format date range for display.
  * Shows "Feb 9 – Feb 15" (month abbreviated, no year if same year as now).
  * weekEnd is exclusive (next Monday 00:00), so we subtract 1 day for display.
+ *
+ * Uses string parsing instead of Date arithmetic to avoid timezone issues:
+ * the backend sends dates in user's timezone, and we want to display those
+ * dates regardless of the browser's current timezone.
  */
 function formatDateRange(weekStart: string, weekEnd: string): string {
   const locale = window.openai?.locale ?? 'en-US'
 
-  const startDate = new Date(weekStart)
-  const endDate = new Date(weekEnd)
-  // Subtract 1 day from end (it's exclusive - Monday 00:00, we want Sunday)
-  endDate.setDate(endDate.getDate() - 1)
+  const start = parseDateParts(weekStart)
+  const end = parseDateParts(weekEnd)
+
+  // Subtract 1 day from end date (it's exclusive - Monday 00:00, we want Sunday)
+  // Create Date with year, month-1, day-1 to get the previous day
+  const startDate = new Date(start.year, start.month - 1, start.day)
+  const endDate = new Date(end.year, end.month - 1, end.day - 1)
 
   const currentYear = new Date().getFullYear()
-  const startYear = startDate.getFullYear()
-  const endYear = endDate.getFullYear()
 
   const formatOptions: Intl.DateTimeFormatOptions = {
     month: 'short',
@@ -29,7 +45,7 @@ function formatDateRange(weekStart: string, weekEnd: string): string {
   }
 
   // Add year if different from current year
-  if (startYear !== currentYear) {
+  if (start.year !== currentYear) {
     formatOptions.year = 'numeric'
   }
 
@@ -40,24 +56,12 @@ function formatDateRange(weekStart: string, weekEnd: string): string {
     month: 'short',
     day: 'numeric',
   }
-  if (endYear !== currentYear) {
+  if (endDate.getFullYear() !== currentYear) {
     endFormatOptions.year = 'numeric'
   }
   const endFormatted = endDate.toLocaleDateString(locale, endFormatOptions)
 
   return `${startFormatted} – ${endFormatted}`
-}
-
-/**
- * Format hours for display (e.g., "10.5h", "0h").
- * Removes unnecessary decimal places.
- */
-function formatHours(hours: number): string {
-  if (hours === 0) return '0h'
-  // Round to 1 decimal place, remove trailing .0
-  const rounded = Math.round(hours * 10) / 10
-  const formatted = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)
-  return `${formatted}h`
 }
 
 /**
@@ -168,7 +172,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
       {/* Header */}
       <div className="flex justify-between items-baseline mb-1">
         <h2 id="time-allocation-heading" className="text-sm font-medium text-default">
-          Your time this week
+          Your time allocation this week
         </h2>
         <span className="text-sm font-semibold text-default">
           {formatHours(totalTrackedHours)}

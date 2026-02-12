@@ -156,9 +156,11 @@ describe('App', () => {
       expect(screen.getByText(/flexible/i)).toBeInTheDocument()
     })
 
-    it('renders weekly hour target', () => {
+    it('renders weekly hour target in HourRing', () => {
       render(<App />)
-      expect(screen.getByText(/5h\/week target/i)).toBeInTheDocument()
+      // HourRing shows "/ 5h" for target and "per week" label
+      expect(screen.getByText(/\/ 5h/)).toBeInTheDocument()
+      expect(screen.getByText(/per week/i)).toBeInTheDocument()
     })
 
     it('renders desired result (1-Month Goal)', () => {
@@ -217,7 +219,8 @@ describe('App', () => {
       }
       setMockPriorities([priority], true)
       render(<App />)
-      expect(screen.getByText(/15h\/week target/i)).toBeInTheDocument()
+      // HourRing shows "/ 15h" for target
+      expect(screen.getByText(/\/ 15h/)).toBeInTheDocument()
     })
 
     it('uses checkpointDate (not checkpoint_date)', () => {

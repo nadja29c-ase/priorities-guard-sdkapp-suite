@@ -109,3 +109,15 @@ export function formatDate(dateStr: string): string {
     year: 'numeric',
   })
 }
+
+/**
+ * Format hours for display (e.g., "10.5h", "0h").
+ * Removes unnecessary decimal places.
+ */
+export function formatHours(hours: number): string {
+  if (hours === 0) return '0h'
+  // Round to 1 decimal place, remove trailing .0
+  const rounded = Math.round(hours * 10) / 10
+  const formatted = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)
+  return `${formatted}h`
+}

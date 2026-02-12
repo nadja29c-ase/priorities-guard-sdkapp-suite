@@ -58,7 +58,7 @@ describe('TimeAllocationBar', () => {
           activeKeywords={allActiveKeywords}
         />
       )
-      expect(screen.getByText('Your time this week')).toBeInTheDocument()
+      expect(screen.getByText('Your time allocation this week')).toBeInTheDocument()
     })
   })
 
@@ -74,14 +74,14 @@ describe('TimeAllocationBar', () => {
       expect(screen.getByText('31.8h')).toBeInTheDocument()
     })
 
-    it('renders "Your time this week" heading', () => {
+    it('renders "Your time allocation this week" heading', () => {
       render(
         <TimeAllocationBar
           timeAllocation={sampleTimeAllocation}
           activeKeywords={allActiveKeywords}
         />
       )
-      expect(screen.getByRole('heading', { name: /your time this week/i })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /your time allocation this week/i })).toBeInTheDocument()
     })
   })
 
@@ -345,6 +345,11 @@ describe('TimeAllocationBar', () => {
       const wholeNumberAllocation: TimeAllocation = {
         ...sampleTimeAllocation,
         totalTrackedHours: 10,
+        keywords: {
+          P1: { hours: 5, eventCount: 3 },
+          P2: { hours: 3, eventCount: 2 },
+          P3: { hours: 0, eventCount: 0 },
+        },
         barSegments: { P1: 5, P2: 3, P3: 0, other: 2 },
       }
 
@@ -356,7 +361,8 @@ describe('TimeAllocationBar', () => {
       )
 
       expect(screen.getByText('10h')).toBeInTheDocument()
-      expect(screen.getByText(/P1.*5h/)).toBeInTheDocument()
+      // Use exact match to avoid false positives (e.g., "10.5h" containing "5h")
+      expect(screen.getByText(/P1 5h/)).toBeInTheDocument()
     })
 
     it('formats decimals with one decimal place', () => {
