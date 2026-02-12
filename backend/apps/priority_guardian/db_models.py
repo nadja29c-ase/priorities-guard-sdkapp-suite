@@ -501,6 +501,14 @@ class PgWeeklyOverview(Base):
         comment="Monday of the reporting week",
     )
 
+    # Cached other_hours from calendar fetch (set during weekly report generation)
+    # Used by save_semantic_grouping to avoid duplicate Google Calendar API call
+    other_hours: Mapped[Decimal | None] = mapped_column(
+        Numeric(6, 2),
+        nullable=True,
+        comment="Non-priority hours from calendar (cached during report generation)",
+    )
+
     # Semantic grouping (populated by Inc 07's save_semantic_grouping tool)
     semantic_grouping: Mapped[list | None] = mapped_column(
         JSONB,

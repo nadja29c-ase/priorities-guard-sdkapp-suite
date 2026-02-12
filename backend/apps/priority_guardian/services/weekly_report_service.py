@@ -620,6 +620,29 @@ async def generate_weekly_report(
                 session, p, actual_week_start, actual_week_end, hours, count
             )
 
+        # Cache other_hours on pg_weekly_overview for save_semantic_grouping
+        # This avoids a duplicate Google Calendar API fetch
+        other_hours_decimal = Decimal(str(round(allocation["other_hours"], 2)))
+        overview_result = await session.execute(
+            select(PgWeeklyOverview).where(
+                PgWeeklyOverview.user_id == user_id,
+                PgWeeklyOverview.week_start == actual_week_start,
+            )
+        )
+        overview = overview_result.scalar_one_or_none()
+
+        if overview:
+            # Update existing row
+            overview.other_hours = other_hours_decimal
+        else:
+            # Create new row with other_hours (semantic_grouping stays null)
+            overview = PgWeeklyOverview(
+                user_id=user_id,
+                week_start=actual_week_start,
+                other_hours=other_hours_decimal,
+            )
+            session.add(overview)
+
         await session.commit()
         snapshot_saved = True
 
@@ -627,6 +650,7 @@ async def generate_weekly_report(
             "weekly_report.saved",
             priorities_count=len(priorities),
             weeks_backfilled=weeks_backfilled,
+            other_hours_cached=float(other_hours_decimal),
             **log
         )
 
@@ -960,54 +984,78 @@ async def save_semantic_grouping(
     )
 
     # -------------------------------------------------------------------------
-    # Step 4: Fetch calendar data to compute other_hours for validation
+    # Step 4: Get other_hours from cache (or fall back to calendar fetch)
     # -------------------------------------------------------------------------
-    # Get Google connection
-    conn_result = await session.execute(
-        select(CoreConnection).where(
-            CoreConnection.user_id == user_id,
-            CoreConnection.provider == "google",
-            CoreConnection.connection_type == "google",
-            CoreConnection.revoked_at.is_(None),
+    # Check if overview row exists with cached other_hours
+    overview_result = await session.execute(
+        select(PgWeeklyOverview).where(
+            PgWeeklyOverview.user_id == user_id,
+            PgWeeklyOverview.week_start == week_start,
         )
     )
-    connection = conn_result.scalar_one_or_none()
+    existing_overview = overview_result.scalar_one_or_none()
 
-    if not connection:
-        raise SemanticGroupingError(
-            "GOOGLE_NOT_CONNECTED",
-            "Google Calendar is not connected"
+    if existing_overview and existing_overview.other_hours is not None:
+        # Use cached value (set during generate_weekly_report)
+        other_hours = float(existing_overview.other_hours)
+        logger.info(
+            "semantic_grouping.using_cached_other_hours",
+            other_hours=other_hours,
+            **log
+        )
+    else:
+        # Fall back to calendar fetch (shouldn't happen if report was run first)
+        logger.info(
+            "semantic_grouping.cache_miss_fetching_calendar",
+            **log
         )
 
-    # Get valid access token
-    token_result = await ensure_valid_access_token(connection, session, http_client)
-    if "error" in token_result:
-        raise SemanticGroupingError(
-            "TOKEN_ERROR",
-            "Unable to access Google Calendar. Please reconnect."
+        # Get Google connection
+        conn_result = await session.execute(
+            select(CoreConnection).where(
+                CoreConnection.user_id == user_id,
+                CoreConnection.provider == "google",
+                CoreConnection.connection_type == "google",
+                CoreConnection.revoked_at.is_(None),
+            )
+        )
+        connection = conn_result.scalar_one_or_none()
+
+        if not connection:
+            raise SemanticGroupingError(
+                "GOOGLE_NOT_CONNECTED",
+                "Google Calendar is not connected"
+            )
+
+        # Get valid access token
+        token_result = await ensure_valid_access_token(connection, session, http_client)
+        if "error" in token_result:
+            raise SemanticGroupingError(
+                "TOKEN_ERROR",
+                "Unable to access Google Calendar. Please reconnect."
+            )
+
+        access_token = token_result["access_token"]
+        timezone_str = await get_user_timezone(http_client, access_token, correlation_id)
+
+        # Compute week boundaries
+        week_start_dt, week_end_dt = compute_week_boundaries(timezone_str, week_start)
+        time_min = to_rfc3339(week_start_dt)
+        time_max = to_rfc3339(week_end_dt)
+
+        # Fetch events
+        events, _ = await list_events(
+            http_client,
+            access_token,
+            time_min,
+            time_max,
+            max_results_per_page=250,
+            max_pages=10,
         )
 
-    access_token = token_result["access_token"]
-    timezone_str = await get_user_timezone(http_client, access_token, correlation_id)
-
-    # Compute week boundaries
-    week_start_dt, week_end_dt = compute_week_boundaries(timezone_str, week_start)
-    time_min = to_rfc3339(week_start_dt)
-    time_max = to_rfc3339(week_end_dt)
-
-    # Fetch events
-    events, _ = await list_events(
-        http_client,
-        access_token,
-        time_min,
-        time_max,
-        max_results_per_page=250,
-        max_pages=10,
-    )
-
-    # Compute allocation
-    allocation = compute_allocation_from_events(events)
-    other_hours = allocation["other_hours"]
+        # Compute allocation
+        allocation = compute_allocation_from_events(events)
+        other_hours = allocation["other_hours"]
 
     # -------------------------------------------------------------------------
     # Step 5: Validate groupings don't exceed other_hours
@@ -1037,21 +1085,14 @@ async def save_semantic_grouping(
     # -------------------------------------------------------------------------
     # Step 6: UPSERT into pg_weekly_overview
     # -------------------------------------------------------------------------
-    # Check if overview row exists
-    overview_result = await session.execute(
-        select(PgWeeklyOverview).where(
-            PgWeeklyOverview.user_id == user_id,
-            PgWeeklyOverview.week_start == week_start,
-        )
-    )
-    overview = overview_result.scalar_one_or_none()
-
-    if overview:
+    # Use the overview row we already fetched in Step 4 (if it exists)
+    if existing_overview:
         # Update existing row
-        overview.semantic_grouping = validated_groupings
+        existing_overview.semantic_grouping = validated_groupings
+        overview = existing_overview
         # updated_at is handled by onupdate
     else:
-        # Insert new row
+        # Insert new row (shouldn't happen if report was run first)
         overview = PgWeeklyOverview(
             user_id=user_id,
             week_start=week_start,

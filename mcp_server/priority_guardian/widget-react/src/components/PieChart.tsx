@@ -17,12 +17,17 @@ const PRIORITY_COLORS: Record<CalendarKeyword, string> = {
 }
 
 // Neutral colors for semantic slices (non-priority categories)
-// Using muted grays that contrast with the vibrant priority colors
+// 8 distinguishable muted tones to handle users with many categories
+// Mix of cool and warm grays to maximize visual distinction
 const SEMANTIC_COLORS = [
-  'var(--color-text-secondary, #6b7280)',   // medium gray
-  'var(--color-text-tertiary, #9ca3af)',    // lighter gray
-  'var(--color-border-default, #d1d5db)',   // very light gray
-  'var(--color-outline-default, #e5e7eb)',  // subtle gray
+  '#6b7280',  // slate gray (medium)
+  '#78716c',  // warm stone
+  '#9ca3af',  // cool gray (lighter)
+  '#a8a29e',  // warm gray
+  '#64748b',  // slate blue-gray
+  '#737373',  // neutral gray
+  '#94a3b8',  // cool blue-gray
+  '#a1a1aa',  // zinc gray
 ]
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartProps) {
