@@ -18,9 +18,10 @@ export interface Priority {
   status: PriorityStatus
   deadline?: string // ISO date for deadline type
   weeklyHourTarget?: number // For flexible type
-  weeklyHourActual?: number // For flexible type (future)
+  weeklyHourActual?: number // For flexible type (current week hours)
   checkpointDate?: string // ISO date for flexible type
   desiredResult?: string // For flexible type
+  streakCount?: number // For flexible type: consecutive weeks meeting target
   deliverables: Deliverable[]
   createdAt: string
   updatedAt?: string

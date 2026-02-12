@@ -257,9 +257,8 @@ describe('FlexibleCard + HourRing Integration', () => {
 
     // HourRing should be present with target hours
     expect(screen.getByText(/\/ 10h/)).toBeInTheDocument()
-    expect(screen.getByText(/per week/i)).toBeInTheDocument()
 
-    // SVG ring should be present
+    // SVG ring should be present in header right column
     const svg = document.querySelector('svg[role="img"]')
     expect(svg).toBeInTheDocument()
   })
@@ -278,10 +277,7 @@ describe('FlexibleCard + HourRing Integration', () => {
       />
     )
 
-    // No ring, no "per week" label
-    expect(screen.queryByText(/per week/i)).not.toBeInTheDocument()
-
-    // No SVG ring
+    // No SVG ring (only delete button in right column)
     const svg = document.querySelector('svg[role="img"]')
     expect(svg).not.toBeInTheDocument()
   })
@@ -340,9 +336,10 @@ describe('FlexibleCard + HourRing Integration', () => {
       />
     )
 
-    // Click on the ring area (the container div with "per week")
-    const ringArea = screen.getByText(/per week/i).closest('div')
-    expect(ringArea).toHaveAttribute('title', 'Click to edit')
+    // Find the ring's clickable container (parent div with title="Click to edit")
+    const svg = document.querySelector('svg[role="img"]')
+    const ringArea = svg?.closest('div[title="Click to edit"]')
+    expect(ringArea).toBeInTheDocument()
 
     fireEvent.click(ringArea!)
     expect(mockHandlers.onStartEdit).toHaveBeenCalled()
@@ -366,9 +363,6 @@ describe('FlexibleCard + HourRing Integration', () => {
     // Ring should not be visible
     const svg = document.querySelector('svg[role="img"]')
     expect(svg).not.toBeInTheDocument()
-
-    // "per week" label should not be visible
-    expect(screen.queryByText(/per week/i)).not.toBeInTheDocument()
 
     // Instead, edit fields should be visible
     expect(screen.getByLabelText(/weekly hour target/i)).toBeInTheDocument()

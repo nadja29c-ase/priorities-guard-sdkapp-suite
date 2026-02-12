@@ -162,27 +162,31 @@ export function DeadlineCard({
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
       onClick={handleCardClick}
     >
-      {/* Header: Badge + title + actions */}
+      {/* Header: Title row + actions (2-column layout) */}
       <div className="flex items-start gap-3 mb-2">
-        <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} mt-0.5`}>
-          {priority.calendarKeyword}
-        </span>
-
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={handleNameBlur}
-              disabled={isSaving}
-              maxLength={100}
-              autoFocus
-              className="w-full text-base text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
-              aria-label="Priority name"
-            />
+            <div className="flex items-center gap-2">
+              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
+                {priority.calendarKeyword}
+              </span>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleNameBlur}
+                disabled={isSaving}
+                maxLength={100}
+                autoFocus
+                className="flex-1 text-base text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
+                aria-label="Priority name"
+              />
+            </div>
           ) : (
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
+                {priority.calendarKeyword}
+              </span>
               <h3
                 className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
                 onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
@@ -216,7 +220,7 @@ export function DeadlineCard({
           <div className="flex items-center gap-2 mt-1">
             <Badge color="warning" variant="soft" size="sm">⏰ Deadline-driven</Badge>
           </div>
-          <div className="mt-2 p-2 bg-surface-secondary rounded-lg">
+          <div className="mt-2 p-2 bg-surface-secondary rounded-lg w-fit">
             <p className="text-xs text-secondary">
               📅 Use <strong className="text-default">{priority.calendarKeyword}</strong> in the calendar event title to track time
             </p>

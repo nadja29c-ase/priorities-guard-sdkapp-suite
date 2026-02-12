@@ -8,7 +8,7 @@ import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get, backend_post
-from .base import ToolDefinition
+from ..base import ToolDefinition
 
 logger = structlog.get_logger(__name__)
 
@@ -165,4 +165,5 @@ DISCONNECT_GOOGLE_CALENDAR = ToolDefinition(
     destructive_hint=True,   # Irreversible - revokes access
     open_world_hint=True,    # Revokes external Google OAuth tokens
     widget_accessible=True,  # Widget can call this tool
+    visibility="private",    # Widget-only, LLM cannot see or call
 )

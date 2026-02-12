@@ -137,7 +137,7 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
             for d in p.deliverables
         ]
 
-        priorities_data.append({
+        priority_data = {
             "id": str(p.id),
             "name": p.name,
             "type": p.type,
@@ -150,7 +150,13 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
             "deliverables": deliverables_data,
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "updated_at": p.updated_at.isoformat() if p.updated_at else None,
-        })
+        }
+
+        # Include streak_count for flexible priorities (Inc 06)
+        if p.type == "flexible":
+            priority_data["streak_count"] = p.streak_count
+
+        priorities_data.append(priority_data)
 
     return {
         "success": True,

@@ -7,7 +7,7 @@ This is the core business logic for the time tracking pipeline.
 
 import re
 import structlog
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 from typing import Any
 from uuid import UUID
@@ -35,7 +35,10 @@ KEYWORD_PATTERN = re.compile(r"\bP[123]\b", re.IGNORECASE)
 # ============================================================================
 
 
-def compute_week_boundaries(timezone_str: str) -> tuple[datetime, datetime]:
+def compute_week_boundaries(
+    timezone_str: str,
+    target_date: date | None = None,
+) -> tuple[datetime, datetime]:
     """
     Compute Monday 00:00 to next Monday 00:00 in the given timezone.
 
@@ -44,10 +47,17 @@ def compute_week_boundaries(timezone_str: str) -> tuple[datetime, datetime]:
 
     Args:
         timezone_str: IANA timezone string (e.g., "Europe/Berlin")
+        target_date: Optional date within the target week. If provided,
+            computes boundaries for the week containing that date.
+            If the date is a Monday, returns that week's boundaries.
+            If None, computes boundaries for the current week.
 
     Returns:
         Tuple of (week_start, week_end) as timezone-aware datetimes
         Both are in the specified timezone, suitable for conversion to UTC
+
+    Raises:
+        ValueError: If target_date is provided but is not a Monday
     """
     try:
         tz = ZoneInfo(timezone_str)
@@ -55,13 +65,27 @@ def compute_week_boundaries(timezone_str: str) -> tuple[datetime, datetime]:
         logger.warning("calendar.invalid_timezone", timezone=timezone_str, fallback="UTC")
         tz = ZoneInfo("UTC")
 
-    # Get current time in user's timezone
-    now = datetime.now(tz)
+    if target_date is not None:
+        # Validate target_date is a Monday (weekday() == 0)
+        if target_date.weekday() != 0:
+            raise ValueError(f"target_date must be a Monday, got {target_date} (weekday={target_date.weekday()})")
 
-    # Find Monday 00:00 of current week
-    # weekday() returns 0 for Monday
-    days_since_monday = now.weekday()
-    monday_this_week = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_since_monday)
+        # Create Monday 00:00 from the target date
+        monday_this_week = datetime(
+            target_date.year,
+            target_date.month,
+            target_date.day,
+            hour=0, minute=0, second=0, microsecond=0,
+            tzinfo=tz,
+        )
+    else:
+        # Get current time in user's timezone
+        now = datetime.now(tz)
+
+        # Find Monday 00:00 of current week
+        # weekday() returns 0 for Monday
+        days_since_monday = now.weekday()
+        monday_this_week = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_since_monday)
 
     # Next Monday 00:00 (exclusive end for timeMax)
     monday_next_week = monday_this_week + timedelta(days=7)

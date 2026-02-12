@@ -75,7 +75,7 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
         if keyword and keyword in calendar_hours:
             weekly_hour_actual = calendar_hours[keyword]
 
-    return {
+    result = {
         "id": p.get("id"),
         "name": p.get("name"),
         "type": p.get("type"),
@@ -90,6 +90,12 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
         "createdAt": p.get("created_at"),
         "updatedAt": p.get("updated_at"),
     }
+
+    # Include streakCount for flexible priorities (Inc 06)
+    if p.get("type") == "flexible" and p.get("streak_count") is not None:
+        result["streakCount"] = p.get("streak_count")
+
+    return result
 
 
 async def _fetch_with_timeout(coro, timeout: float, name: str, correlation_id: str):

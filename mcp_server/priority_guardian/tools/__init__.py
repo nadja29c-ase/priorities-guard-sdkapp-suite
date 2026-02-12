@@ -13,11 +13,10 @@ from mcp import types as mcp_types
 
 from .base import ToolDefinition
 # Public tools (LLM can see and call)
-from .connect_google_calendar import CONNECT_GOOGLE_CALENDAR
-from .disconnect_google_calendar import DISCONNECT_GOOGLE_CALENDAR
 from .create_priority import CREATE_PRIORITY
 from .get_priorities import GET_PRIORITIES
-# Private widget-only CRUD tools (Inc B)
+from .get_weekly_report import GET_WEEKLY_REPORT
+# Private widget-only tools (widget can call, LLM cannot see)
 from .widget_tools import (
     ADD_PRIORITY,
     UPDATE_PRIORITY,
@@ -25,38 +24,38 @@ from .widget_tools import (
     ADD_DELIVERABLE,
     UPDATE_DELIVERABLE,
     DELETE_DELIVERABLE,
+    CONNECT_GOOGLE_CALENDAR,
+    DISCONNECT_GOOGLE_CALENDAR,
 )
 
 logger = structlog.get_logger(__name__)
 
 # Tool-specific invocation messages for better UX
+# Only needed for public tools (LLM-callable) - private tools don't show messages
 TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
     "get_priorities": (
         "Loading your priorities...",
         "Here's your Priority Guardian dashboard.",
     ),
-    "connect_google_calendar": (
-        "Checking Google Calendar connection...",
-        "Connection status retrieved.",
-    ),
-    "disconnect_google_calendar": (
-        "Disconnecting Google Calendar...",
-        "Google Calendar disconnected.",
-    ),
     "create_priority": (
         "Creating your new priority...",
         "Priority created successfully.",
+    ),
+    "get_weekly_report": (
+        "Generating your weekly report...",
+        "Here's your weekly report.",
     ),
 }
 
 # Explicit tool registry
 TOOL_REGISTRY: dict[str, ToolDefinition] = {
     # Public tools (LLM can see and call)
-    CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
-    DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,
     CREATE_PRIORITY.name: CREATE_PRIORITY,
     GET_PRIORITIES.name: GET_PRIORITIES,
+    GET_WEEKLY_REPORT.name: GET_WEEKLY_REPORT,
     # Private widget-only tools (widget can call, LLM cannot see)
+    CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
+    DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,
     ADD_PRIORITY.name: ADD_PRIORITY,
     UPDATE_PRIORITY.name: UPDATE_PRIORITY,
     DELETE_PRIORITY.name: DELETE_PRIORITY,

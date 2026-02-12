@@ -158,9 +158,11 @@ describe('App', () => {
 
     it('renders weekly hour target in HourRing', () => {
       render(<App />)
-      // HourRing shows "/ 5h" for target and "per week" label
+      // HourRing shows "/ 5h" for target in header right column
       expect(screen.getByText(/\/ 5h/)).toBeInTheDocument()
-      expect(screen.getByText(/per week/i)).toBeInTheDocument()
+      // SVG ring should be present
+      const svg = document.querySelector('svg[role="img"]')
+      expect(svg).toBeInTheDocument()
     })
 
     it('renders desired result (1-Month Goal)', () => {

@@ -2,8 +2,8 @@
 Widget-only tools for Priority Guardian.
 
 These tools are callable from the widget via callTool() but are not visible
-to the LLM (visibility="private"). They handle CRUD operations that the
-widget performs directly.
+to the LLM (visibility="private"). They handle CRUD operations and Google
+Calendar connection that the widget performs directly.
 """
 
 from .add_priority import ADD_PRIORITY
@@ -12,6 +12,8 @@ from .delete_priority import DELETE_PRIORITY
 from .add_deliverable import ADD_DELIVERABLE
 from .update_deliverable import UPDATE_DELIVERABLE
 from .delete_deliverable import DELETE_DELIVERABLE
+from .connect_google_calendar import CONNECT_GOOGLE_CALENDAR
+from .disconnect_google_calendar import DISCONNECT_GOOGLE_CALENDAR
 
 __all__ = [
     "ADD_PRIORITY",
@@ -20,4 +22,6 @@ __all__ = [
     "ADD_DELIVERABLE",
     "UPDATE_DELIVERABLE",
     "DELETE_DELIVERABLE",
+    "CONNECT_GOOGLE_CALENDAR",
+    "DISCONNECT_GOOGLE_CALENDAR",
 ]

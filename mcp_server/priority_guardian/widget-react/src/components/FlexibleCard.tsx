@@ -188,27 +188,31 @@ export function FlexibleCard({
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
       onClick={handleCardClick}
     >
-      {/* Header: Badge + title + actions */}
+      {/* Header: Title row + actions (2-column layout) */}
       <div className="flex items-start gap-3 mb-2">
-        <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} mt-0.5`}>
-          {priority.calendarKeyword}
-        </span>
-
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={handleNameBlur}
-              disabled={isSaving}
-              maxLength={100}
-              autoFocus
-              className="w-full text-base text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
-              aria-label="Priority name"
-            />
+            <div className="flex items-center gap-2">
+              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
+                {priority.calendarKeyword}
+              </span>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleNameBlur}
+                disabled={isSaving}
+                maxLength={100}
+                autoFocus
+                className="flex-1 text-base text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
+                aria-label="Priority name"
+              />
+            </div>
           ) : (
-            <div className="flex items-baseline gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
+                {priority.calendarKeyword}
+              </span>
               <h3
                 className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
                 onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
@@ -229,24 +233,46 @@ export function FlexibleCard({
             </div>
           )}
 
-          {/* Type tag and calendar info below name */}
+          {/* Type tag, streak, and calendar info below name */}
           <div className="flex items-center gap-2 mt-1">
             <Badge color="secondary" variant="soft" size="sm">Flexible</Badge>
+            {!isEditing && priority.streakCount != null && priority.streakCount > 0 && (
+              <span
+                className="text-xs text-warning flex items-center gap-0.5"
+                title={`${priority.streakCount} consecutive week${priority.streakCount === 1 ? '' : 's'} investing time`}
+              >
+                🔥 {priority.streakCount}
+              </span>
+            )}
             {!isEditing && checkpointDays !== null && (
               <span className="text-xs text-secondary">
                 {checkpointDays > 0 ? `${checkpointDays}d until check-in` : checkpointDays === 0 ? 'Check-in today' : 'Check-in overdue'}
               </span>
             )}
           </div>
-          <div className="mt-2 p-2 bg-surface-secondary rounded-lg">
+          <div className="mt-2 p-2 bg-surface-secondary rounded-lg w-fit">
             <p className="text-xs text-secondary">
               📅 Use <strong className="text-default">{priority.calendarKeyword}</strong> in the calendar event title to track time
             </p>
           </div>
         </div>
 
-        {/* Delete button */}
-        <div className="flex-shrink-0">
+        {/* Right column: HourRing (if target set and not editing) + delete button */}
+        <div className="flex-shrink-0 flex flex-col items-center gap-2">
+          {/* HourRing - only in non-edit mode when target is set */}
+          {!isEditing && priority.weeklyHourTarget != null && (
+            <div
+              className="cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+              title="Click to edit"
+            >
+              <HourRing
+                actual={priority.weeklyHourActual ?? 0}
+                target={priority.weeklyHourTarget}
+                keyword={priority.calendarKeyword}
+              />
+            </div>
+          )}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
@@ -319,25 +345,7 @@ export function FlexibleCard({
             />
           </div>
         </div>
-      ) : (
-        <>
-          {/* Weekly hours progress ring - clickable to edit */}
-          {priority.weeklyHourTarget != null && (
-            <div
-              className="flex items-center gap-3 mb-3 cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-              title="Click to edit"
-            >
-              <HourRing
-                actual={priority.weeklyHourActual ?? 0}
-                target={priority.weeklyHourTarget}
-                keyword={priority.calendarKeyword}
-              />
-              <span className="text-xs text-secondary">per week</span>
-            </div>
-          )}
-        </>
-      )}
+      ) : null}
 
       {/* 1-Month Goal section - clickable to edit */}
       {!isEditing && priority.desiredResult && (
