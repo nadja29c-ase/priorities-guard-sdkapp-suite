@@ -140,3 +140,9 @@ When `get_weekly_report` runs for week Y, it checks if all intermediate weeks si
 - `pg_weekly_overview` table created in Increment 06 migration, populated by Increment 07's `save_semantic_grouping` tool
 - `pg_weekly_snapshots` contains NO semantic grouping data — stays clean, priority-scoped only
 - Pie chart widget view joins `pg_weekly_snapshots` (priority hours) + `pg_weekly_overview` (semantic categories) for the full picture (Increment 07)
+
+## Known Limitations
+
+1. **Backfilled deadline snapshots use current deliverable state.** When backfilling a snapshot for a past week (e.g., 3 weeks ago), `deliverables_completed` and `deliverables_total` are read from the live `priority.deliverables` collection — the current state, not the historical state. If the user completed 2 more deliverables since then, the backfilled snapshot records the current count. This means `pacing_status` for backfilled deadline priorities may be slightly inaccurate.
+
+   This is an inherent limitation of backfill. We cannot reconstruct historical deliverable states from the available data — deliverable completion history is not stored. The tradeoff is acceptable: backfill's primary purpose is preventing false streak breaks from missed reviews, and the slight inaccuracy in deadline pacing status for historical weeks does not impact current coaching value. Do not attempt to "fix" this without adding deliverable history tracking, which would require schema changes and significantly more complexity.

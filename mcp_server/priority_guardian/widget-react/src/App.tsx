@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword } from './types'
+import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData, PieChartData } from './types'
+import { isPieChartData, isDashboardData } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { DeadlineCard } from './components/DeadlineCard'
 import { FlexibleCard } from './components/FlexibleCard'
 import { AddPriorityForm, AddPriorityButton } from './components/AddPriorityForm'
 import { TimeAllocationBar } from './components/TimeAllocationBar'
+import { PieChart } from './components/PieChart'
 
 function App() {
   // Theme is handled automatically by SDK CSS via data-theme attribute
@@ -253,10 +255,32 @@ function App() {
     )
   }
 
-  const priorities = data?.priorities ?? []
+  // ============ Pie Chart View ============
+  // Renders when save_semantic_grouping returns data with slices
+  if (isPieChartData(data)) {
+    return (
+      <main
+        role="main"
+        aria-label="Time Allocation Pie Chart"
+        className="bg-surface-secondary rounded-2xl -m-4"
+      >
+        <PieChart
+          slices={data.slices}
+          totalHours={data.totalHours}
+          weekStart={data.weekStart}
+          weekEnd={data.weekEnd}
+        />
+      </main>
+    )
+  }
+
+  // ============ Dashboard View ============
+  // Renders when get_priorities returns data with priorities
+  const dashboardData = data as DashboardData | null
+  const priorities = dashboardData?.priorities ?? []
   const activePriorities = priorities.filter(p => p.status === 'active')
   const sortedPriorities = sortPrioritiesByKeyword(activePriorities)
-  const availableKeywords = data?.available_keywords ?? []
+  const availableKeywords = dashboardData?.available_keywords ?? []
 
   // Extract active keywords for TimeAllocationBar legend
   // Only show keywords that have active priorities (e.g., if no P2 priority exists, don't show P2)
@@ -332,8 +356,8 @@ function App() {
       {/* Connection Status (settings-level control, at bottom) */}
       <div className="mt-6">
         <ConnectionStatus
-          connected={data?.google_connected ?? false}
-          connectedAt={data?.google_connected_at}
+          connected={dashboardData?.google_connected ?? false}
+          connectedAt={dashboardData?.google_connected_at}
           onRefresh={refreshData}
           isRefreshing={isRefreshing}
         />

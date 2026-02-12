@@ -25,6 +25,7 @@ from backend.apps.priority_guardian.db_models import (
     PgPriority,
     PgDeliverable,
     PgWeeklySnapshot,
+    PgWeeklyOverview,
 )
 from backend.apps.priority_guardian.services.calendar_service import (
     compute_week_boundaries,
@@ -821,5 +822,311 @@ def _empty_report(week_start: date, week_end: date, is_current: bool) -> dict[st
                 "other_hours": 0.0,
             },
             "all_events": [],
+        },
+    }
+
+
+# ============================================================================
+# Semantic Grouping (Increment 07)
+# ============================================================================
+
+
+class SemanticGroupingError(Exception):
+    """Error during semantic grouping save."""
+
+    def __init__(self, code: str, message: str):
+        self.code = code
+        self.message = message
+        super().__init__(message)
+
+
+async def save_semantic_grouping(
+    user_id: UUID,
+    session: AsyncSession,
+    http_client: httpx.AsyncClient,
+    week_start: date,
+    groupings: list[dict],
+    correlation_id: str | None = None,
+) -> dict[str, Any]:
+    """
+    Save user-confirmed semantic groupings for a weekly snapshot.
+
+    Validates the groupings, computes other_hours from calendar data,
+    UPSERTs into pg_weekly_overview, and returns pie chart slices.
+
+    Args:
+        user_id: User ID
+        session: Database session
+        http_client: HTTP client for Google API
+        week_start: Monday of the week
+        groupings: List of {category, hours, event_count}
+        correlation_id: Request correlation ID
+
+    Returns:
+        Pie chart data with slices
+
+    Raises:
+        SemanticGroupingError: If validation fails
+    """
+    log = {"user_id": str(user_id), "correlation_id": correlation_id}
+
+    # -------------------------------------------------------------------------
+    # Step 1: Validate week_start is a Monday
+    # -------------------------------------------------------------------------
+    if week_start.weekday() != 0:
+        raise SemanticGroupingError(
+            "NOT_A_MONDAY",
+            f"week_start must be a Monday, got {week_start}"
+        )
+
+    week_end = week_start + timedelta(days=6)  # Sunday
+
+    # -------------------------------------------------------------------------
+    # Step 2: Validate groupings array
+    # -------------------------------------------------------------------------
+    if not groupings:
+        raise SemanticGroupingError(
+            "EMPTY_GROUPINGS",
+            "At least one category is required"
+        )
+
+    # Check for duplicates (case-insensitive)
+    seen_categories = set()
+    validated_groupings = []
+
+    for g in groupings:
+        category = (g.get("category") or "").strip()
+        hours = g.get("hours", 0)
+        event_count = g.get("event_count", 0)
+
+        # Validate category
+        if not category:
+            raise SemanticGroupingError(
+                "INVALID_CATEGORY",
+                "Category name cannot be empty"
+            )
+
+        # Check duplicates
+        category_lower = category.lower()
+        if category_lower in seen_categories:
+            raise SemanticGroupingError(
+                "DUPLICATE_CATEGORY",
+                f"Duplicate category name: {category}"
+            )
+        seen_categories.add(category_lower)
+
+        # Validate hours
+        if not isinstance(hours, (int, float)) or hours < 0:
+            raise SemanticGroupingError(
+                "INVALID_HOURS",
+                f"Hours must be non-negative, got {hours} for {category}"
+            )
+
+        # Validate event_count
+        if not isinstance(event_count, int) or event_count < 0:
+            raise SemanticGroupingError(
+                "INVALID_EVENT_COUNT",
+                f"Event count must be non-negative integer, got {event_count} for {category}"
+            )
+
+        validated_groupings.append({
+            "category": category,
+            "hours": round(float(hours), 2),
+            "event_count": int(event_count),
+        })
+
+    # -------------------------------------------------------------------------
+    # Step 3: Check snapshots exist for this week
+    # -------------------------------------------------------------------------
+    result = await session.execute(
+        select(PgWeeklySnapshot)
+        .where(
+            PgWeeklySnapshot.user_id == user_id,
+            PgWeeklySnapshot.week_start == week_start,
+        )
+    )
+    snapshots = list(result.scalars().all())
+
+    if not snapshots:
+        raise SemanticGroupingError(
+            "NO_SNAPSHOT",
+            "No weekly report found for this week. Generate your weekly report first."
+        )
+
+    logger.info(
+        "semantic_grouping.snapshots_found",
+        count=len(snapshots),
+        **log
+    )
+
+    # -------------------------------------------------------------------------
+    # Step 4: Fetch calendar data to compute other_hours for validation
+    # -------------------------------------------------------------------------
+    # Get Google connection
+    conn_result = await session.execute(
+        select(CoreConnection).where(
+            CoreConnection.user_id == user_id,
+            CoreConnection.provider == "google",
+            CoreConnection.connection_type == "google",
+            CoreConnection.revoked_at.is_(None),
+        )
+    )
+    connection = conn_result.scalar_one_or_none()
+
+    if not connection:
+        raise SemanticGroupingError(
+            "GOOGLE_NOT_CONNECTED",
+            "Google Calendar is not connected"
+        )
+
+    # Get valid access token
+    token_result = await ensure_valid_access_token(connection, session, http_client)
+    if "error" in token_result:
+        raise SemanticGroupingError(
+            "TOKEN_ERROR",
+            "Unable to access Google Calendar. Please reconnect."
+        )
+
+    access_token = token_result["access_token"]
+    timezone_str = await get_user_timezone(http_client, access_token, correlation_id)
+
+    # Compute week boundaries
+    week_start_dt, week_end_dt = compute_week_boundaries(timezone_str, week_start)
+    time_min = to_rfc3339(week_start_dt)
+    time_max = to_rfc3339(week_end_dt)
+
+    # Fetch events
+    events, _ = await list_events(
+        http_client,
+        access_token,
+        time_min,
+        time_max,
+        max_results_per_page=250,
+        max_pages=10,
+    )
+
+    # Compute allocation
+    allocation = compute_allocation_from_events(events)
+    other_hours = allocation["other_hours"]
+
+    # -------------------------------------------------------------------------
+    # Step 5: Validate groupings don't exceed other_hours
+    # -------------------------------------------------------------------------
+    total_grouped_hours = sum(g["hours"] for g in validated_groupings)
+    epsilon = 0.5  # Tolerance for rounding differences
+
+    if other_hours <= 0.01 and len(validated_groupings) > 0:
+        raise SemanticGroupingError(
+            "NO_OTHER_HOURS",
+            "No non-priority time to categorize for this week"
+        )
+
+    if total_grouped_hours > other_hours + epsilon:
+        raise SemanticGroupingError(
+            "EXCEEDS_OTHER_HOURS",
+            f"Grouped hours ({total_grouped_hours:.2f}) exceed non-priority time ({other_hours:.2f})"
+        )
+
+    logger.info(
+        "semantic_grouping.validated",
+        total_grouped_hours=total_grouped_hours,
+        other_hours=other_hours,
+        **log
+    )
+
+    # -------------------------------------------------------------------------
+    # Step 6: UPSERT into pg_weekly_overview
+    # -------------------------------------------------------------------------
+    # Check if overview row exists
+    overview_result = await session.execute(
+        select(PgWeeklyOverview).where(
+            PgWeeklyOverview.user_id == user_id,
+            PgWeeklyOverview.week_start == week_start,
+        )
+    )
+    overview = overview_result.scalar_one_or_none()
+
+    if overview:
+        # Update existing row
+        overview.semantic_grouping = validated_groupings
+        # updated_at is handled by onupdate
+    else:
+        # Insert new row
+        overview = PgWeeklyOverview(
+            user_id=user_id,
+            week_start=week_start,
+            semantic_grouping=validated_groupings,
+        )
+        session.add(overview)
+
+    await session.flush()
+
+    logger.info(
+        "semantic_grouping.saved",
+        overview_id=str(overview.id),
+        category_count=len(validated_groupings),
+        **log
+    )
+
+    # -------------------------------------------------------------------------
+    # Step 7: Build pie chart slices
+    # -------------------------------------------------------------------------
+    # Load priority names for labels (need to join with priorities)
+    priority_ids = [s.priority_id for s in snapshots]
+    priorities_result = await session.execute(
+        select(PgPriority).where(PgPriority.id.in_(priority_ids))
+    )
+    priorities_map = {p.id: p for p in priorities_result.scalars().all()}
+
+    slices = []
+    total_hours = 0.0
+
+    # Priority slices (from snapshots)
+    for snap in snapshots:
+        priority = priorities_map.get(snap.priority_id)
+        if not priority:
+            continue
+
+        hours = float(snap.actual_hours)
+        if hours <= 0:
+            continue
+
+        slices.append({
+            "label": f"{priority.calendar_keyword} — {priority.name}",
+            "hours": round(hours, 2),
+            "type": "priority",
+            "keyword": priority.calendar_keyword,
+        })
+        total_hours += hours
+
+    # Semantic slices (from just-saved groupings)
+    for g in validated_groupings:
+        if g["hours"] <= 0:
+            continue
+
+        slices.append({
+            "label": g["category"],
+            "hours": g["hours"],
+            "type": "semantic",
+            "eventCount": g["event_count"],
+        })
+        total_hours += g["hours"]
+
+    # Sort slices: priorities first (by keyword), then semantic (by hours descending)
+    priority_slices = [s for s in slices if s["type"] == "priority"]
+    semantic_slices = [s for s in slices if s["type"] == "semantic"]
+
+    priority_slices.sort(key=lambda s: s.get("keyword", ""))
+    semantic_slices.sort(key=lambda s: s["hours"], reverse=True)
+
+    slices = priority_slices + semantic_slices
+
+    return {
+        "success": True,
+        "data": {
+            "week_start": str(week_start),
+            "week_end": str(week_end),
+            "slices": slices,
+            "total_hours": round(total_hours, 2),
         },
     }

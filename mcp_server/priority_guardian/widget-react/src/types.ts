@@ -57,12 +57,42 @@ export interface TimeAllocation {
   }
 }
 
-export interface ToolOutputData {
+// Dashboard view data (from get_priorities)
+export interface DashboardData {
   google_connected: boolean
   google_connected_at?: string
   priorities: Priority[]
   available_keywords?: string[]
   timeAllocation?: TimeAllocation
+}
+
+// Pie chart slice (from save_semantic_grouping)
+export interface PieSlice {
+  label: string
+  hours: number
+  type: 'priority' | 'semantic'
+  keyword?: CalendarKeyword  // For priority slices
+  eventCount?: number        // For semantic slices
+}
+
+// Pie chart view data (from save_semantic_grouping)
+export interface PieChartData {
+  weekStart: string
+  weekEnd: string
+  slices: PieSlice[]
+  totalHours: number
+}
+
+// Union type for all tool output data
+export type ToolOutputData = DashboardData | PieChartData
+
+// Type guards
+export function isPieChartData(data: ToolOutputData | null | undefined): data is PieChartData {
+  return data !== null && data !== undefined && 'slices' in data
+}
+
+export function isDashboardData(data: ToolOutputData | null | undefined): data is DashboardData {
+  return data !== null && data !== undefined && 'priorities' in data
 }
 
 // Widget state for edit mode persistence

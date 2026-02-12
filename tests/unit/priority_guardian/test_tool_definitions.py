@@ -16,27 +16,27 @@ class TestInputSchemas:
 
     def test_connect_google_calendar_schema_valid(self):
         """connect_google_calendar has valid JSON Schema."""
-        from mcp_server.priority_guardian.tools.connect_google_calendar import INPUT_SCHEMA
+        from mcp_server.priority_guardian.tools.widget_tools.connect_google_calendar import INPUT_SCHEMA
 
         # Validate it's a valid JSON Schema by using it
         jsonschema.Draft7Validator.check_schema(INPUT_SCHEMA)
 
     def test_connect_google_calendar_no_required_fields(self):
         """connect_google_calendar has no required fields."""
-        from mcp_server.priority_guardian.tools.connect_google_calendar import INPUT_SCHEMA
+        from mcp_server.priority_guardian.tools.widget_tools.connect_google_calendar import INPUT_SCHEMA
 
         required = INPUT_SCHEMA.get("required", [])
         assert required == [], "connect_google_calendar should have no required fields"
 
     def test_disconnect_google_calendar_schema_valid(self):
         """disconnect_google_calendar has valid JSON Schema."""
-        from mcp_server.priority_guardian.tools.disconnect_google_calendar import INPUT_SCHEMA
+        from mcp_server.priority_guardian.tools.widget_tools.disconnect_google_calendar import INPUT_SCHEMA
 
         jsonschema.Draft7Validator.check_schema(INPUT_SCHEMA)
 
     def test_disconnect_google_calendar_has_confirm_field(self):
         """disconnect_google_calendar has confirm field."""
-        from mcp_server.priority_guardian.tools.disconnect_google_calendar import INPUT_SCHEMA
+        from mcp_server.priority_guardian.tools.widget_tools.disconnect_google_calendar import INPUT_SCHEMA
 
         properties = INPUT_SCHEMA.get("properties", {})
         assert "confirm" in properties, "disconnect_google_calendar should have confirm field"
@@ -153,11 +153,12 @@ class TestAnnotationValues:
         """Tools that produce widgets have correct widget_uri."""
         from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 
-        # Tools that produce the dashboard widget (used for initial render)
+        # Tools that produce the dashboard widget (used for initial render or pie chart)
         widget_producing_tools = {
             "connect_google_calendar",
             "disconnect_google_calendar",
             "get_priorities",
+            "save_semantic_grouping",
         }
 
         for name, tool in TOOL_REGISTRY.items():

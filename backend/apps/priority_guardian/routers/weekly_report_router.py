@@ -19,8 +19,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
 from backend.apps.priority_guardian.dependencies import validate_user_id_header
+from pydantic import BaseModel, Field
 from backend.apps.priority_guardian.services.weekly_report_service import (
     generate_weekly_report,
+    save_semantic_grouping,
+    SemanticGroupingError,
 )
 
 logger = structlog.get_logger(__name__)
@@ -192,6 +195,158 @@ async def get_weekly_report(
     except Exception as e:
         logger.error(
             "weekly_report.unexpected_error",
+            error=str(e),
+            error_type=type(e).__name__,
+            **log
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred. Please try again.",
+        )
+
+
+# ============================================================================
+# Semantic Grouping Endpoint (Increment 07)
+# ============================================================================
+
+
+class SemanticCategory(BaseModel):
+    """A single semantic category for non-priority time."""
+
+    category: str = Field(..., min_length=1, max_length=100, description="Category name")
+    hours: float = Field(..., ge=0, description="Hours in this category")
+    event_count: int = Field(..., ge=0, description="Number of events in this category")
+
+
+class SemanticGroupingRequest(BaseModel):
+    """Request body for saving semantic groupings."""
+
+    week_start: str = Field(
+        ...,
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Monday of the week (ISO date: YYYY-MM-DD)",
+    )
+    groupings: list[SemanticCategory] = Field(
+        ...,
+        min_length=1,
+        description="Semantic categories for non-priority time",
+    )
+
+
+@router.post("/weekly-report/semantic-grouping")
+async def post_semantic_grouping(
+    request: Request,
+    body: SemanticGroupingRequest,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Save semantic groupings for a weekly report.
+
+    Attaches user-confirmed categories for non-priority time to the
+    weekly snapshot. Returns pie chart data with priority + semantic slices.
+
+    Args:
+        request: FastAPI request (for correlation ID and HTTP client)
+        body: Semantic grouping request
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Pie chart slices data
+        400: Invalid request (not a Monday, empty groupings, validation errors)
+        404: No snapshot for this week
+        503: Google Calendar access error
+    """
+    correlation_id = getattr(request.state, "correlation_id", None)
+    log = {"user_id": str(user_id), "correlation_id": correlation_id}
+
+    # Parse week_start
+    try:
+        parsed_week_start = date.fromisoformat(body.week_start)
+    except ValueError:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "success": False,
+                "error": {
+                    "code": "INVALID_DATE_FORMAT",
+                    "message": f"week_start must be ISO date format (YYYY-MM-DD), got: {body.week_start}",
+                },
+            },
+        )
+
+    logger.info(
+        "semantic_grouping.request",
+        week_start=body.week_start,
+        category_count=len(body.groupings),
+        **log
+    )
+
+    # Get HTTP client from app state
+    http_client: httpx.AsyncClient = request.app.state.http_client
+
+    # Convert Pydantic models to dicts
+    groupings = [g.model_dump() for g in body.groupings]
+
+    try:
+        result = await save_semantic_grouping(
+            user_id=user_id,
+            session=session,
+            http_client=http_client,
+            week_start=parsed_week_start,
+            groupings=groupings,
+            correlation_id=correlation_id,
+        )
+
+        logger.info(
+            "semantic_grouping.success",
+            slice_count=len(result["data"]["slices"]),
+            total_hours=result["data"]["total_hours"],
+            **log
+        )
+
+        return result
+
+    except SemanticGroupingError as e:
+        logger.warning(
+            "semantic_grouping.error",
+            error_code=e.code,
+            error_message=e.message,
+            **log
+        )
+
+        # Map error codes to HTTP status codes
+        status_map = {
+            "NOT_A_MONDAY": status.HTTP_400_BAD_REQUEST,
+            "EMPTY_GROUPINGS": status.HTTP_400_BAD_REQUEST,
+            "INVALID_CATEGORY": status.HTTP_400_BAD_REQUEST,
+            "DUPLICATE_CATEGORY": status.HTTP_400_BAD_REQUEST,
+            "INVALID_HOURS": status.HTTP_400_BAD_REQUEST,
+            "INVALID_EVENT_COUNT": status.HTTP_400_BAD_REQUEST,
+            "NO_SNAPSHOT": status.HTTP_404_NOT_FOUND,
+            "GOOGLE_NOT_CONNECTED": status.HTTP_400_BAD_REQUEST,
+            "TOKEN_ERROR": status.HTTP_503_SERVICE_UNAVAILABLE,
+            "NO_OTHER_HOURS": status.HTTP_400_BAD_REQUEST,
+            "EXCEEDS_OTHER_HOURS": status.HTTP_400_BAD_REQUEST,
+        }
+
+        http_status = status_map.get(e.code, status.HTTP_400_BAD_REQUEST)
+
+        return JSONResponse(
+            status_code=http_status,
+            content={
+                "success": False,
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                },
+            },
+        )
+
+    except Exception as e:
+        logger.error(
+            "semantic_grouping.unexpected_error",
             error=str(e),
             error_type=type(e).__name__,
             **log

@@ -174,10 +174,18 @@ def _build_assistant_guidance(
 
     # Backfill mention
     if weeks_backfilled > 0:
-        guidance_parts.append(
-            f"NOTE: {weeks_backfilled} previous week(s) were backfilled with snapshots. "
-            "Mention this briefly so the user knows their historical data is now tracked."
-        )
+        backfill_truncated = data.get("backfill_truncated", False)
+        if backfill_truncated:
+            guidance_parts.append(
+                f"NOTE: {weeks_backfilled} previous week(s) were backfilled with snapshots, "
+                "but older weeks beyond the 12-week limit could not be captured. "
+                "Mention this so the user understands some historical data is missing."
+            )
+        else:
+            guidance_parts.append(
+                f"NOTE: {weeks_backfilled} previous week(s) were backfilled with snapshots. "
+                "Mention this briefly so the user knows their historical data is now tracked."
+            )
 
     # Snapshot confirmation
     if snapshot_saved:

@@ -19,13 +19,15 @@ class TestToolRegistry:
         """All expected tools are present in TOOL_REGISTRY."""
         from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 
-        # 4 public tools + 6 private CRUD tools = 10 total
+        # 6 public tools + 6 private CRUD tools = 12 total
         expected_tools = {
             # Public tools
             "connect_google_calendar",
             "disconnect_google_calendar",
             "create_priority",
             "get_priorities",
+            "get_weekly_report",
+            "save_semantic_grouping",
             # Private widget CRUD tools
             "add_priority",
             "update_priority",
@@ -97,8 +99,8 @@ class TestListTools:
         tools = await list_tools()
 
         assert isinstance(tools, list)
-        # 4 public tools + 6 private CRUD tools = 10 total
-        assert len(tools) == 10
+        # 6 public tools + 6 private CRUD tools = 12 total
+        assert len(tools) == 12
 
         for tool in tools:
             assert isinstance(tool, mcp_types.Tool)

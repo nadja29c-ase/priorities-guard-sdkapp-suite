@@ -16,6 +16,7 @@ from .base import ToolDefinition
 from .create_priority import CREATE_PRIORITY
 from .get_priorities import GET_PRIORITIES
 from .get_weekly_report import GET_WEEKLY_REPORT
+from .save_semantic_grouping import SAVE_SEMANTIC_GROUPING
 # Private widget-only tools (widget can call, LLM cannot see)
 from .widget_tools import (
     ADD_PRIORITY,
@@ -45,6 +46,10 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
         "Generating your weekly report...",
         "Here's your weekly report.",
     ),
+    "save_semantic_grouping": (
+        "Saving your time allocation categories...",
+        "Here's your time allocation breakdown.",
+    ),
 }
 
 # Explicit tool registry
@@ -53,6 +58,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     CREATE_PRIORITY.name: CREATE_PRIORITY,
     GET_PRIORITIES.name: GET_PRIORITIES,
     GET_WEEKLY_REPORT.name: GET_WEEKLY_REPORT,
+    SAVE_SEMANTIC_GROUPING.name: SAVE_SEMANTIC_GROUPING,
     # Private widget-only tools (widget can call, LLM cannot see)
     CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,
@@ -127,13 +133,17 @@ async def list_tools() -> List[mcp_types.Tool]:
         elif tool_def.widget_accessible:
             # Widget-callable public tools need widgetAccessible
             meta = {
+                "openai/toolInvocation/invoking": invoking_msg,
+                "openai/toolInvocation/invoked": invoked_msg,
                 "openai/widgetAccessible": True,
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         else:
-            # Data-only tools still need annotations
+            # Public tools without widget access still get invocation messages
             meta = {
+                "openai/toolInvocation/invoking": invoking_msg,
+                "openai/toolInvocation/invoked": invoked_msg,
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
