@@ -29,10 +29,14 @@ class TestComputeTargetWeeks:
 
     def test_returns_completed_weeks_oldest_first(self):
         """Returns completed weeks in chronological order (oldest first)."""
-        # Mock "now" to be a Wednesday
-        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2026, 2, 11, 14, 0, 0, tzinfo=ZoneInfo("UTC"))  # Wednesday
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+        # Mock "now" to be a Wednesday - must patch BOTH services
+        frozen_time = datetime(2026, 2, 11, 14, 0, 0, tzinfo=ZoneInfo("UTC"))  # Wednesday
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt1, \
+             patch("backend.apps.priority_guardian.services.weekly_report_service.datetime") as mock_dt2:
+            mock_dt1.now.return_value = frozen_time
+            mock_dt1.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            mock_dt2.now.return_value = frozen_time
+            mock_dt2.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
 
             weeks = _compute_target_weeks("UTC", 3)
 
@@ -42,10 +46,13 @@ class TestComputeTargetWeeks:
 
     def test_tuesday_returns_one_completed_week(self):
         """On Tuesday, only last week is complete."""
-        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
-            # Tuesday Feb 10, 2026
-            mock_dt.now.return_value = datetime(2026, 2, 10, 14, 0, 0, tzinfo=ZoneInfo("UTC"))
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+        frozen_time = datetime(2026, 2, 10, 14, 0, 0, tzinfo=ZoneInfo("UTC"))  # Tuesday
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt1, \
+             patch("backend.apps.priority_guardian.services.weekly_report_service.datetime") as mock_dt2:
+            mock_dt1.now.return_value = frozen_time
+            mock_dt1.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            mock_dt2.now.return_value = frozen_time
+            mock_dt2.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
 
             weeks = _compute_target_weeks("UTC", 3)
 
@@ -62,10 +69,13 @@ class TestComputeTargetWeeks:
 
     def test_monday_midnight_boundary_is_current_week(self):
         """Monday 00:00:01 is in the current week, not the completed week."""
-        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
-            # Monday Feb 9, 2026 at 00:00:01 (just after midnight)
-            mock_dt.now.return_value = datetime(2026, 2, 9, 0, 0, 1, tzinfo=ZoneInfo("UTC"))
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+        frozen_time = datetime(2026, 2, 9, 0, 0, 1, tzinfo=ZoneInfo("UTC"))  # Monday just after midnight
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt1, \
+             patch("backend.apps.priority_guardian.services.weekly_report_service.datetime") as mock_dt2:
+            mock_dt1.now.return_value = frozen_time
+            mock_dt1.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            mock_dt2.now.return_value = frozen_time
+            mock_dt2.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
 
             weeks = _compute_target_weeks("UTC", 3)
 
@@ -76,10 +86,13 @@ class TestComputeTargetWeeks:
 
     def test_sunday_midnight_boundary_week_complete(self):
         """Sunday 23:59:59 means that week is still in progress."""
-        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
-            # Sunday Feb 8, 2026 at 23:59:59 (just before Monday)
-            mock_dt.now.return_value = datetime(2026, 2, 8, 23, 59, 59, tzinfo=ZoneInfo("UTC"))
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+        frozen_time = datetime(2026, 2, 8, 23, 59, 59, tzinfo=ZoneInfo("UTC"))  # Sunday just before Monday
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt1, \
+             patch("backend.apps.priority_guardian.services.weekly_report_service.datetime") as mock_dt2:
+            mock_dt1.now.return_value = frozen_time
+            mock_dt1.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            mock_dt2.now.return_value = frozen_time
+            mock_dt2.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
 
             weeks = _compute_target_weeks("UTC", 3)
 
@@ -99,12 +112,15 @@ class TestComputeTargetWeeks:
         This tests that _compute_target_weeks uses the user's timezone,
         not server time, to determine week completion.
         """
-        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
-            # When datetime.now(tz) is called with Pacific/Apia timezone,
-            # return Monday Feb 9, 2026 at 00:00 in that timezone
-            # (which corresponds to UTC Sunday Feb 8, 2026 at 11:00)
-            mock_dt.now.return_value = datetime(2026, 2, 9, 0, 0, 0, tzinfo=ZoneInfo("Pacific/Apia"))
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+        # Monday Feb 9, 2026 at 00:00 in Pacific/Apia (UTC+13)
+        # corresponds to UTC Sunday Feb 8, 2026 at 11:00
+        frozen_time = datetime(2026, 2, 9, 0, 0, 0, tzinfo=ZoneInfo("Pacific/Apia"))
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt1, \
+             patch("backend.apps.priority_guardian.services.weekly_report_service.datetime") as mock_dt2:
+            mock_dt1.now.return_value = frozen_time
+            mock_dt1.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            mock_dt2.now.return_value = frozen_time
+            mock_dt2.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
 
             weeks = _compute_target_weeks("Pacific/Apia", 3)
 
@@ -124,12 +140,15 @@ class TestComputeTargetWeeks:
         This tests that _compute_target_weeks uses the user's timezone,
         not server time, to determine week completion.
         """
-        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
-            # When datetime.now(tz) is called with Pacific/Pago_Pago timezone,
-            # return Sunday Feb 8, 2026 at 00:00 in that timezone
-            # (which corresponds to UTC Monday Feb 9, 2026 at 11:00)
-            mock_dt.now.return_value = datetime(2026, 2, 8, 0, 0, 0, tzinfo=ZoneInfo("Pacific/Pago_Pago"))
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+        # Sunday Feb 8, 2026 at 00:00 in Pacific/Pago_Pago (UTC-11)
+        # corresponds to UTC Monday Feb 9, 2026 at 11:00
+        frozen_time = datetime(2026, 2, 8, 0, 0, 0, tzinfo=ZoneInfo("Pacific/Pago_Pago"))
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt1, \
+             patch("backend.apps.priority_guardian.services.weekly_report_service.datetime") as mock_dt2:
+            mock_dt1.now.return_value = frozen_time
+            mock_dt1.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            mock_dt2.now.return_value = frozen_time
+            mock_dt2.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
 
             weeks = _compute_target_weeks("Pacific/Pago_Pago", 3)
 
@@ -145,10 +164,13 @@ class TestComputeTargetWeeks:
         On Wednesday, the current week (starting Monday) is in progress.
         The 3 most recently completed weeks are the previous 3 Mondays.
         """
-        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
-            # Wednesday Feb 11, 2026 at 14:00 UTC
-            mock_dt.now.return_value = datetime(2026, 2, 11, 14, 0, 0, tzinfo=ZoneInfo("UTC"))
-            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+        frozen_time = datetime(2026, 2, 11, 14, 0, 0, tzinfo=ZoneInfo("UTC"))  # Wednesday
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt1, \
+             patch("backend.apps.priority_guardian.services.weekly_report_service.datetime") as mock_dt2:
+            mock_dt1.now.return_value = frozen_time
+            mock_dt1.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+            mock_dt2.now.return_value = frozen_time
+            mock_dt2.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
 
             weeks = _compute_target_weeks("UTC", 3)
 
