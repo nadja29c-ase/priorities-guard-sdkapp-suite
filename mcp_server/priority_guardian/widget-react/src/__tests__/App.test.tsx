@@ -320,6 +320,31 @@ describe('App', () => {
       })
     })
 
+    it('shows Done button in edit mode', async () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Enter edit mode
+      await userEvent.click(screen.getByText('Launch Feature X'))
+
+      // Should show Done button
+      expect(screen.getByRole('button', { name: /done/i })).toBeInTheDocument()
+    })
+
+    it('exits edit mode when Done button clicked', async () => {
+      setMockPriorities([deadlinePriority], true)
+      render(<App />)
+
+      // Enter edit mode
+      await userEvent.click(screen.getByText('Launch Feature X'))
+
+      // Click Done button
+      await userEvent.click(screen.getByRole('button', { name: /done/i }))
+
+      // Should exit edit mode (no more input field)
+      expect(screen.queryByRole('textbox', { name: /priority name/i })).not.toBeInTheDocument()
+    })
+
     it('does not show saving indicator during auto-save (silence = success)', async () => {
       // Make the callTool return slowly
       mockOpenai.callTool.mockImplementation(() => new Promise(resolve => {
@@ -472,6 +497,184 @@ describe('App', () => {
             done: false
           })
         )
+      })
+    })
+  })
+
+  describe('CRUD Error Handling (Widget C)', () => {
+    describe('Add Priority Error Handling', () => {
+      it('shows inline error when callTool returns isError: true', async () => {
+        mockOpenai.callTool.mockResolvedValue({ isError: true })
+
+        setMockPriorities([], true, ['P1', 'P2'])
+        render(<App />)
+
+        // Open add form
+        await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
+
+        // Select deadline type
+        await userEvent.click(screen.getByRole('button', { name: /create deadline priority/i }))
+
+        // Fill required fields
+        await userEvent.type(screen.getByLabelText(/name/i), 'Test Priority')
+        const deadlineInput = screen.getByLabelText(/deadline/i)
+        fireEvent.change(deadlineInput, { target: { value: '2026-12-31' } })
+
+        // Submit
+        await userEvent.click(screen.getByRole('button', { name: /create priority/i }))
+
+        // Should show inline error
+        await waitFor(() => {
+          expect(screen.getByText(/couldn't save/i)).toBeInTheDocument()
+        })
+
+        // Form should still be open (not closed on error)
+        expect(screen.getByLabelText(/name/i)).toBeInTheDocument()
+      })
+
+      it('shows inline error when callTool throws exception', async () => {
+        mockOpenai.callTool.mockRejectedValue(new Error('Network error'))
+
+        setMockPriorities([], true, ['P1', 'P2'])
+        render(<App />)
+
+        // Open add form and fill fields
+        await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
+        await userEvent.click(screen.getByRole('button', { name: /create deadline priority/i }))
+        await userEvent.type(screen.getByLabelText(/name/i), 'Test Priority')
+        fireEvent.change(screen.getByLabelText(/deadline/i), { target: { value: '2026-12-31' } })
+
+        // Submit
+        await userEvent.click(screen.getByRole('button', { name: /create priority/i }))
+
+        // Should show error (from the exception or wrapped error)
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+        })
+
+        // Form should still be open
+        expect(screen.getByLabelText(/name/i)).toBeInTheDocument()
+      })
+
+      it('shows inline error when response has no data field', async () => {
+        // Response without data field (malformed)
+        mockOpenai.callTool.mockResolvedValue({
+          structuredContent: { message: 'Something went wrong' }
+        })
+
+        setMockPriorities([], true, ['P1', 'P2'])
+        render(<App />)
+
+        // Open add form and fill fields
+        await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
+        await userEvent.click(screen.getByRole('button', { name: /create deadline priority/i }))
+        await userEvent.type(screen.getByLabelText(/name/i), 'Test Priority')
+        fireEvent.change(screen.getByLabelText(/deadline/i), { target: { value: '2026-12-31' } })
+
+        // Submit
+        await userEvent.click(screen.getByRole('button', { name: /create priority/i }))
+
+        // Should show inline error
+        await waitFor(() => {
+          expect(screen.getByText(/couldn't save/i)).toBeInTheDocument()
+        })
+
+        // Form should still be open
+        expect(screen.getByLabelText(/name/i)).toBeInTheDocument()
+      })
+    })
+
+    describe('Update Priority Error Handling', () => {
+      it('shows inline error and reverts value when update fails with isError', async () => {
+        mockOpenai.callTool.mockResolvedValue({ isError: true })
+
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        // Enter edit mode
+        await userEvent.click(screen.getByText('Launch Feature X'))
+
+        // Change name
+        const nameInput = screen.getByRole('textbox', { name: /priority name/i })
+        await userEvent.clear(nameInput)
+        await userEvent.type(nameInput, 'New Name')
+
+        // Blur to trigger auto-save
+        fireEvent.blur(nameInput)
+
+        // Should show error
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+        })
+
+        // Should revert to original value
+        await waitFor(() => {
+          expect(nameInput).toHaveValue('Launch Feature X')
+        })
+      })
+
+      it('shows inline error when update throws exception', async () => {
+        mockOpenai.callTool.mockRejectedValue(new Error('Server error'))
+
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        // Enter edit mode and change name
+        await userEvent.click(screen.getByText('Launch Feature X'))
+        const nameInput = screen.getByRole('textbox', { name: /priority name/i })
+        await userEvent.clear(nameInput)
+        await userEvent.type(nameInput, 'New Name')
+        fireEvent.blur(nameInput)
+
+        // Should show error and revert
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+          expect(nameInput).toHaveValue('Launch Feature X')
+        })
+      })
+    })
+
+    describe('Delete Priority Error Handling', () => {
+      it('shows inline error and closes confirm dialog when delete fails', async () => {
+        mockOpenai.callTool.mockResolvedValue({ isError: true })
+
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        // Click delete button
+        await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+
+        // Confirm delete
+        await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+        // Should show error on the card (dialog closes, card shows error)
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+          expect(screen.getByText(/couldn't save/i)).toBeInTheDocument()
+        })
+
+        // Confirm dialog should be closed (card is visible again)
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        expect(screen.getByText('Launch Feature X')).toBeInTheDocument()
+      })
+
+      it('shows error when delete throws exception', async () => {
+        mockOpenai.callTool.mockRejectedValue(new Error('Delete failed'))
+
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        // Click delete and confirm
+        await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+        await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+        // Should show error
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+        })
+
+        // Card should still be visible (not deleted)
+        expect(screen.getByText('Launch Feature X')).toBeInTheDocument()
       })
     })
   })

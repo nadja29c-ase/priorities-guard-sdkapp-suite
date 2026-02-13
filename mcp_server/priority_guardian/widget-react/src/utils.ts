@@ -99,11 +99,12 @@ export function daysUntil(dateStr: string): number {
 }
 
 /**
- * Format a date string for display
+ * Format a date string for display (locale-aware)
  */
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', {
+  const locale = window.openai?.locale ?? 'en-US'
+  return date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

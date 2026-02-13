@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Priority } from '../types'
 import { daysUntil, formatDate } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
 import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { Badge } from '@openai/apps-sdk-ui/components/Badge'
+import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 
 interface DeadlineCardProps {
@@ -39,6 +40,7 @@ export function DeadlineCard({
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cardRef = useRef<HTMLElement>(null)
 
   const days = priority.deadline ? daysUntil(priority.deadline) : null
   const doneCount = priority.deliverables.filter(d => d.done).length
@@ -130,18 +132,33 @@ export function DeadlineCard({
     setIsDeleting(true)
     try {
       await onDelete(priority.id)
+    } catch (e) {
+      console.error('Delete error:', e)
+      const errorMsg = e instanceof Error ? e.message : "Couldn't save. Try again."
+      setError(errorMsg)
+      setShowDeleteConfirm(false)
+      // Clear error after 3s
+      errorTimeoutRef.current = setTimeout(() => {
+        setError(null)
+      }, 3000)
     } finally {
       setIsDeleting(false)
     }
   }
 
-  // Click outside to exit edit mode
-  const handleCardClick = (e: React.MouseEvent) => {
-    // Only exit if clicking the card background, not inputs/buttons
-    if (e.target === e.currentTarget && isEditing && !isSaving) {
+  // Click outside to exit edit mode (reliable document-level listener)
+  const handleClickOutside = useCallback((e: MouseEvent) => {
+    if (isEditing && !isSaving && cardRef.current && !cardRef.current.contains(e.target as Node)) {
       onCancelEdit()
     }
-  }
+  }, [isEditing, isSaving, onCancelEdit])
+
+  useEffect(() => {
+    if (isEditing) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isEditing, handleClickOutside])
 
   if (showDeleteConfirm) {
     return (
@@ -158,9 +175,9 @@ export function DeadlineCard({
 
   return (
     <article
+      ref={cardRef}
       className="bg-surface rounded-xl border border-default p-6"
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
-      onClick={handleCardClick}
     >
       {/* Header: Title row + actions (2-column layout) */}
       <div className="flex items-start gap-3 mb-2">
@@ -310,11 +327,22 @@ export function DeadlineCard({
         />
       </div>
 
-      {/* Edit mode hint */}
+      {/* Edit mode actions */}
       {isEditing && (
-        <p className="text-xs text-tertiary mt-3 text-center">
-          Changes save automatically. Click outside to close.
-        </p>
+        <div className="mt-4 flex items-center justify-between">
+          <p className="text-xs text-tertiary">
+            Changes save automatically
+          </p>
+          <Button
+            color="secondary"
+            variant="ghost"
+            size="sm"
+            onClick={onCancelEdit}
+            disabled={isSaving}
+          >
+            Done
+          </Button>
+        </div>
       )}
     </article>
   )

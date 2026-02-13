@@ -123,8 +123,20 @@ function App() {
   }) => {
     if (!window.openai?.callTool) throw new Error('Tool calls not available')
 
-    const result = await window.openai.callTool<{ data?: ToolOutputData }>('add_priority', priorityData)
+    const result = await window.openai.callTool<{ data?: ToolOutputData }>('add_priority', priorityData) as { isError?: boolean }
+
+    // Check for error response
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    // Check for malformed response (no data)
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     updateDataFromResponse(content)
     setIsAddingPriority(false)
   }, [updateDataFromResponse])
@@ -141,8 +153,20 @@ function App() {
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('update_priority', {
       priority_id: priorityId,
       ...updates,
-    })
+    }) as { isError?: boolean }
+
+    // Check for error response
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    // Check for malformed response (no data)
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     updateDataFromResponse(content)
     setEditingPriorityId(null)
   }, [updateDataFromResponse])
@@ -153,8 +177,20 @@ function App() {
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('delete_priority', {
       priority_id: priorityId,
       confirm: true,
-    })
+    }) as { isError?: boolean }
+
+    // Check for error response
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    // Check for malformed response (no data)
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     updateDataFromResponse(content)
   }, [updateDataFromResponse])
 
