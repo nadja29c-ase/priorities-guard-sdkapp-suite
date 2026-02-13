@@ -19,7 +19,8 @@ class TestToolRegistry:
         """All expected tools are present in TOOL_REGISTRY."""
         from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 
-        # 6 public tools + 6 private CRUD tools = 12 total
+        # 5 public tools + 6 private CRUD tools = 11 total
+        # NOTE: save_semantic_grouping disabled until persistence increment ships
         expected_tools = {
             # Public tools
             "connect_google_calendar",
@@ -27,7 +28,7 @@ class TestToolRegistry:
             "create_priority",
             "get_priorities",
             "get_weekly_report",
-            "save_semantic_grouping",
+            # save_semantic_grouping - disabled, file kept on disk for future
             # Private widget CRUD tools
             "add_priority",
             "update_priority",
@@ -99,8 +100,9 @@ class TestListTools:
         tools = await list_tools()
 
         assert isinstance(tools, list)
-        # 6 public tools + 6 private CRUD tools = 12 total
-        assert len(tools) == 12
+        # 5 public tools + 6 private CRUD tools = 11 total
+        # NOTE: save_semantic_grouping disabled until persistence increment ships
+        assert len(tools) == 11
 
         for tool in tools:
             assert isinstance(tool, mcp_types.Tool)

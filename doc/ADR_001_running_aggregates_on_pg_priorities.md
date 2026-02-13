@@ -1,6 +1,6 @@
 # ADR-001: Running Aggregates Stored on pg_priorities
 
-**Status:** Accepted  
+**Status:** Accepted (amended 2026-02-13)  
 **Date:** 2026-02-12  
 **Context:** Priority Guardian v1.0 — Weekly Snapshot & Progress Tracking  
 
@@ -100,6 +100,36 @@ The snapshot is complete and useful the moment `get_weekly_report` runs (hours, 
 ### Pie Chart
 
 When semantic grouping exists in `pg_weekly_overview` for a week, a pie chart can render: P1/P2/P3 as individual slices (from `pg_weekly_snapshots`) + each semantic category as its own slice (from `pg_weekly_overview`). Full week in one visual. This is a separate widget view, not visible by default — callable when the user wants to see it. Defined in Increment 07.
+
+## Hot Path vs Cold Path
+
+**Decision (2026-02-13):** The dashboard progress bar (`get_priorities` → `compute_time_allocation()`) is the hot path. The weekly report (`get_weekly_report`) is the cold path.
+
+### Dashboard = Hot Path
+
+`get_priorities` is called on every widget mount — every conversation, every "how am I doing," every CRUD operation that refreshes the widget. It fetches priorities from DB (fast) AND calls `compute_time_allocation()` which hits the Google Calendar API live (slow: timezone fetch + paginated event fetch + keyword matching).
+
+This is the path that needs caching. Every dashboard open = 2-3 Google API round-trips minimum. Without caching, scaling is bounded by Google's per-user rate limits, not server capacity. The existing Redis infrastructure (`needs_sync` flag, webhook idempotency) is built but not yet wired into PG's time-allocation path. A separate infrastructure increment will add cache-aside to `compute_time_allocation()`: check Redis for `pg:allocation:{user_id}:{week_start}` → cache hit skips Google entirely → webhook invalidation clears cache on calendar changes.
+
+### Weekly Report = Cold Path
+
+**Decision (2026-02-13):** The weekly report is computed once per week, not on demand. It is a reflection ritual, not a monitoring tool.
+
+The intended trigger is the user's weekly check-in (e.g., during a scheduled "Priority Guardian Weekly Check-in" calendar event). The dashboard progress bar handles the everyday "where am I" question. The weekly report handles the "what does it mean" question — with full LLM narration, semantic grouping of non-priority time, and coaching observations.
+
+This means:
+- Weekly report always computes fresh from Google Calendar API (no caching). Acceptable at once-per-week frequency.
+- Dashboard path must be cached (high frequency, same expensive computation).
+- These two paths must NEVER share a cache. Dashboard reads cached allocation. Weekly report computes authoritative allocation. If the weekly report eventually persists snapshots, those snapshots are the canonical record — not a cached approximation.
+
+### Consequence for Persistence (Future)
+
+When snapshot persistence ships, the weekly report becomes the only write path for snapshots and aggregate updates. Its once-per-week cadence means:
+- Snapshot finalization happens once per week per user (low write frequency)
+- Backfill for missed weeks adds N Google API calls (capped at 12) — acceptable as a rare catch-up path
+- Aggregate columns (`streak_count`, `avg_hours_week`, `total_hours_invested`) update once per week per priority
+
+The dashboard reads these aggregate values from `pg_priorities` rows (already loaded, zero additional queries). The weekly report writes them. Clean read/write separation.
 
 ## Tradeoff
 

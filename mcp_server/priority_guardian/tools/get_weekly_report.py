@@ -2,10 +2,9 @@
 get_weekly_report tool for Priority Guardian MCP.
 
 Returns weekly report data with per-priority hours, status indicators,
-week-over-week comparison, and aggregate stats.
+and event details for LLM semantic grouping.
 
-For completed weeks, persists snapshots and updates priority aggregates.
-For current week, returns live data without persistence.
+Computes live data from Google Calendar. No persistence in this version.
 """
 
 import structlog
@@ -25,7 +24,7 @@ NAME = "get_weekly_report"
 DESCRIPTION = (
     "Get your weekly report showing time invested in each priority. "
     "Returns hours worked, status indicators (ahead/on_track/behind), "
-    "and comparison to last week. For past weeks, saves a snapshot."
+    "and a breakdown of how your week was spent."
 )
 
 INPUT_SCHEMA = {
@@ -46,7 +45,7 @@ INPUT_SCHEMA = {
 REQUIRED_SCOPES = ["pg.access"]
 
 # Timeout for backend call (seconds)
-BACKEND_TIMEOUT = 15.0  # Longer timeout for backfill scenarios
+BACKEND_TIMEOUT = 15.0
 
 
 # ============================================================================
@@ -84,20 +83,13 @@ def _normalize_priority_report(p: dict) -> dict:
     elif p.get("type") == "flexible":
         result["targetHours"] = p.get("target_hours")
         result["flexStatus"] = p.get("flex_status")
-        result["streakCount"] = p.get("streak_count")
+        # Aggregates are placeholders (always 0/null until persistence ships)
+        result["streakCount"] = p.get("streak_count", 0)
         result["avgHoursWeek"] = p.get("avg_hours_week")
-        result["totalHoursInvested"] = p.get("total_hours_invested")
+        result["totalHoursInvested"] = p.get("total_hours_invested", 0.0)
 
-    # Previous week comparison
-    prev = p.get("previous_week")
-    if prev:
-        result["previousWeek"] = {
-            "actualHours": prev.get("actual_hours"),
-            "eventCount": prev.get("event_count"),
-            "deltaHours": prev.get("delta_hours"),
-        }
-    else:
-        result["previousWeek"] = None
+    # Previous week comparison (always null until persistence ships)
+    result["previousWeek"] = None
 
     return result
 
@@ -142,84 +134,59 @@ def _build_assistant_guidance(
     all_events: list[dict],
 ) -> str:
     """
-    Build conditional assistant guidance based on report state.
+    Build assistant guidance for presenting the weekly report.
 
-    The guidance shapes how the LLM presents the report and proposes
-    semantic groupings for non-priority time.
+    The guidance shapes how the LLM narrates the report and proposes
+    semantic groupings for non-priority time (conversationally, not saved).
     """
     is_current = data.get("is_current_week", False)
-    snapshot_saved = data.get("snapshot_saved", False)
-    weeks_backfilled = data.get("weeks_backfilled", 0)
     other_hours = data.get("time_allocation", {}).get("other_hours", 0)
 
-    # Check if this is the user's first report (no previous week data)
-    is_first_report = all(p.get("previous_week") is None for p in priorities)
-
-    # Get non-priority events for semantic grouping
+    # Get non-priority events for semantic grouping proposal
     non_priority_events = [e for e in all_events if not e.get("matched_keywords")]
 
     guidance_parts = []
 
-    # Opening context
+    # Opening context based on week status
     if is_current:
         guidance_parts.append(
-            "This is a MID-WEEK PREVIEW. The week is not complete, so these numbers will change. "
-            "Frame this as a progress check, not a final report. No snapshot is saved for incomplete weeks."
+            "This is your CURRENT WEEK in progress. Numbers will change as you work through the week. "
+            "Frame this as a progress check-in, not a final tally."
         )
-    elif is_first_report:
+    else:
         guidance_parts.append(
-            "This is the user's FIRST WEEKLY REPORT. Welcome them to the reflection process. "
-            "Explain that weekly reports help track time investment patterns over time."
-        )
-
-    # Backfill mention
-    if weeks_backfilled > 0:
-        backfill_truncated = data.get("backfill_truncated", False)
-        if backfill_truncated:
-            guidance_parts.append(
-                f"NOTE: {weeks_backfilled} previous week(s) were backfilled with snapshots, "
-                "but older weeks beyond the 12-week limit could not be captured. "
-                "Mention this so the user understands some historical data is missing."
-            )
-        else:
-            guidance_parts.append(
-                f"NOTE: {weeks_backfilled} previous week(s) were backfilled with snapshots. "
-                "Mention this briefly so the user knows their historical data is now tracked."
-            )
-
-    # Snapshot confirmation
-    if snapshot_saved:
-        guidance_parts.append(
-            "A snapshot was saved for this completed week. The user's streaks and averages are updated."
+            "This is a COMPLETED WEEK reflection. Present it as a look back at how the week was spent."
         )
 
     # Priority insights
     guidance_parts.append(
         "Present each priority's hours naturally. For flexible priorities, note if they're "
-        "ahead/on_track/behind their target. For deadline priorities, mention pacing status "
-        "and days remaining. Use previousWeek.deltaHours for week-over-week comparison when available."
+        "ahead/on_track/behind their weekly target. For deadline priorities, mention pacing status "
+        "and days remaining. Keep insights brief and actionable."
     )
 
-    # Semantic grouping proposal (the bridge to Inc 07)
+    # Semantic grouping proposal (conversational only - no saving)
     if other_hours > 0 and non_priority_events:
         event_titles = [e.get("title", "Untitled") for e in non_priority_events[:15]]
         guidance_parts.append(
-            f"IMPORTANT: The user has {other_hours} hours of non-priority time across "
-            f"{len(non_priority_events)} events. Propose semantic categories based on these event titles: "
-            f"{event_titles}. Group similar activities (e.g., 'Client calls', 'Admin tasks', "
-            "'Learning/development'). Ask the user if these groupings look right, and if they'd "
-            "like to adjust or save them. This opens the door to the save_semantic_grouping flow."
+            f"The user has {other_hours:.1f} hours of non-priority time across "
+            f"{len(non_priority_events)} events. Propose approximate semantic categories based on these "
+            f"event titles: {event_titles}. Group similar activities (e.g., 'Client calls ~Xh', "
+            "'Admin/life ops ~Yh', 'Learning ~Zh'). Present this as an observation to help them "
+            "see where non-priority time went. Do NOT ask them to save or confirm these groupings - "
+            "this is just a conversational insight."
         )
     elif other_hours > 0:
         guidance_parts.append(
-            f"The user has {other_hours} hours of non-priority time but event details aren't available. "
-            "Ask them what this time was spent on if they'd like to categorize it."
+            f"The user has {other_hours:.1f} hours of non-priority time. "
+            "Ask what this time was generally spent on if they'd like to reflect on it."
         )
 
     # Closing
     guidance_parts.append(
         "Keep the tone reflective and coaching-oriented. The goal is insight, not judgment. "
-        "Ask what stood out to them or what they'd like to adjust next week."
+        "Ask what stood out to them or what they'd like to adjust. "
+        "Do NOT mention snapshots, saving data, or persistence - just focus on the reflection."
     )
 
     return " ".join(guidance_parts)
@@ -297,8 +264,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         user_id=user_id,
         week_start=data.get("week_start"),
         is_current_week=data.get("is_current_week"),
-        snapshot_saved=data.get("snapshot_saved"),
-        weeks_backfilled=data.get("weeks_backfilled"),
         priority_count=len(priorities),
     )
 
@@ -309,12 +274,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if not priorities:
         text = f"{week_label}: No active priorities."
     else:
-        text = f"{week_label}: {total_hours} hours tracked across {len(priorities)} priorities."
-
-    if data.get("snapshot_saved"):
-        text += " Snapshot saved."
-    if data.get("weeks_backfilled", 0) > 0:
-        text += f" {data.get('weeks_backfilled')} weeks backfilled."
+        text = f"{week_label}: {total_hours:.1f} hours tracked across {len(priorities)} priorities."
 
     # Build assistant guidance based on report state
     assistant_guidance = _build_assistant_guidance(data, priorities, all_events)
@@ -326,9 +286,9 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "weekStart": data.get("week_start"),
             "weekEnd": data.get("week_end"),
             "isCurrentWeek": data.get("is_current_week"),
-            "snapshotSaved": data.get("snapshot_saved"),
-            "weeksBackfilled": data.get("weeks_backfilled"),
-            "backfillTruncated": data.get("backfill_truncated"),
+            "snapshotSaved": False,  # Always false - no persistence
+            "weeksBackfilled": 0,  # Always 0 - no backfill
+            "backfillTruncated": False,  # Always false - no backfill
             "priorities": normalized_priorities,
             "timeAllocation": normalized_time_allocation,
             "allEvents": normalized_events,
@@ -356,8 +316,10 @@ GET_WEEKLY_REPORT = ToolDefinition(
     required_scopes=REQUIRED_SCOPES,
     widget_uri=None,  # Conversational tool, no widget template
     handle=handle,
-    read_only_hint=False,  # May persist snapshots for past weeks
+    read_only_hint=False,  # Token refresh can write to core_connections
     destructive_hint=False,
     open_world_hint=True,  # Calls Google Calendar API via backend
-    widget_accessible=False,  # LLM-only conversational tool, not widget-callable
+    # TODO: Flip to True when persistence increment ships and pie chart returns.
+    # Locked spec (pg-widget-spec-v1.md) says widget_accessible=True for this tool.
+    widget_accessible=False,
 )
