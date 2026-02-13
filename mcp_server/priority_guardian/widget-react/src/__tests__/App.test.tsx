@@ -677,6 +677,63 @@ describe('App', () => {
         expect(screen.getByText('Launch Feature X')).toBeInTheDocument()
       })
     })
+
+    describe('Deliverable CRUD Error Handling', () => {
+      it('propagates error when toggle deliverable fails with isError', async () => {
+        mockOpenai.callTool.mockResolvedValue({ isError: true })
+
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        // Toggle a deliverable checkbox
+        const checkboxes = screen.getAllByRole('checkbox')
+        await userEvent.click(checkboxes[0])
+
+        // Should show error (propagated from handler)
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+        })
+      })
+
+      it('propagates error when add deliverable fails with isError', async () => {
+        // First call succeeds (initial load doesn't call tool), subsequent fails
+        mockOpenai.callTool.mockResolvedValue({ isError: true })
+
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        // Click add deliverable button
+        await userEvent.click(screen.getByRole('button', { name: /add.*deliverable/i }))
+
+        // Fill in name and submit
+        await userEvent.type(screen.getByLabelText(/new deliverable name/i), 'New Item')
+        await userEvent.click(screen.getByRole('button', { name: /^add$/i }))
+
+        // Should show error
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+        })
+      })
+
+      it('propagates error when delete deliverable fails with isError', async () => {
+        mockOpenai.callTool.mockResolvedValue({ isError: true })
+
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        // Hover to reveal delete button, then click
+        const deleteButtons = screen.getAllByRole('button', { name: /delete ".*"/i })
+        await userEvent.click(deleteButtons[0])
+
+        // Confirm delete (deliverable uses "Confirm remove" aria-label)
+        await userEvent.click(screen.getByRole('button', { name: /confirm remove/i }))
+
+        // Should show error
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toBeInTheDocument()
+        })
+      })
+    })
   })
 
   describe('widgetState Persistence (Widget B)', () => {
