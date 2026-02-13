@@ -20,7 +20,9 @@ export function DeliverableItem({
   const [editName, setEditName] = useState(deliverable.name)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -29,11 +31,28 @@ export function DeliverableItem({
     }
   }, [isEditing])
 
+  // Clear error timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const showError = (message: string) => {
+    setError(message)
+    errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
+  }
+
   const handleToggle = async () => {
     if (isLoading || disabled) return
     setIsLoading(true)
+    setError(null)
     try {
       await onToggle(deliverable.id, !deliverable.done)
+    } catch (e) {
+      showError(e instanceof Error ? e.message : "Couldn't save. Try again.")
     } finally {
       setIsLoading(false)
     }
@@ -46,9 +65,13 @@ export function DeliverableItem({
       return
     }
     setIsLoading(true)
+    setError(null)
     try {
       await onRename(deliverable.id, editName.trim())
       setIsEditing(false)
+    } catch (e) {
+      showError(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      setEditName(deliverable.name) // Revert
     } finally {
       setIsLoading(false)
     }
@@ -70,11 +93,14 @@ export function DeliverableItem({
   const handleDelete = async () => {
     if (isLoading) return
     setIsLoading(true)
+    setError(null)
     try {
       await onDelete(deliverable.id)
+    } catch (e) {
+      showError(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      setShowDeleteConfirm(false)
     } finally {
       setIsLoading(false)
-      setShowDeleteConfirm(false)
     }
   }
 
@@ -104,7 +130,11 @@ export function DeliverableItem({
   }
 
   return (
-    <li className="flex items-center gap-2 group pb-2 border-b border-subtle last:border-b-0 last:pb-0">
+    <li className="pb-2 border-b border-subtle last:border-b-0 last:pb-0">
+      {error && (
+        <p className="text-xs text-danger mb-1" role="alert">{error}</p>
+      )}
+      <div className="flex items-center gap-2 group">
       {/* Checkbox */}
       <button
         type="button"
@@ -176,6 +206,7 @@ export function DeliverableItem({
           </button>
         </div>
       )}
+      </div>
     </li>
   )
 }

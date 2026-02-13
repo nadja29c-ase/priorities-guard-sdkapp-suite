@@ -36,7 +36,7 @@ export function AddDeliverableInput({
       setName('')
       setIsOpen(false)
     } catch (e) {
-      setError('Failed to add deliverable')
+      setError(e instanceof Error ? e.message : "Couldn't save. Try again.")
     } finally {
       setIsAdding(false)
     }

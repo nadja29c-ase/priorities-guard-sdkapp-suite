@@ -202,8 +202,18 @@ function App() {
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('add_deliverable', {
       priority_id: priorityId,
       name,
-    })
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     updateDataFromResponse(content)
   }, [updateDataFromResponse])
 
@@ -213,8 +223,18 @@ function App() {
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('update_deliverable', {
       deliverable_id: deliverableId,
       done,
-    })
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     updateDataFromResponse(content)
   }, [updateDataFromResponse])
 
@@ -224,8 +244,18 @@ function App() {
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('update_deliverable', {
       deliverable_id: deliverableId,
       name,
-    })
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     updateDataFromResponse(content)
   }, [updateDataFromResponse])
 
@@ -235,8 +265,18 @@ function App() {
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('delete_deliverable', {
       deliverable_id: deliverableId,
       confirm: true,
-    })
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
     updateDataFromResponse(content)
   }, [updateDataFromResponse])
 
