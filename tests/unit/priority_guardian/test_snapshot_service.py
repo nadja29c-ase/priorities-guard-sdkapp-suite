@@ -88,6 +88,81 @@ class TestComputeTargetWeeks:
             assert date(2026, 2, 2) not in weeks
             assert weeks[-1] == date(2026, 1, 26)
 
+    def test_monday_midnight_utc_plus_13_samoa(self):
+        """
+        UTC+13 (Samoa): UTC Sunday 11:00 is already Monday 00:00 locally.
+
+        When server UTC time is Sunday 11:00, a user in Pacific/Apia (UTC+13)
+        is already in Monday 00:00 of the new week. The previous week should
+        be marked as complete for this user.
+
+        This tests that _compute_target_weeks uses the user's timezone,
+        not server time, to determine week completion.
+        """
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
+            # When datetime.now(tz) is called with Pacific/Apia timezone,
+            # return Monday Feb 9, 2026 at 00:00 in that timezone
+            # (which corresponds to UTC Sunday Feb 8, 2026 at 11:00)
+            mock_dt.now.return_value = datetime(2026, 2, 9, 0, 0, 0, tzinfo=ZoneInfo("Pacific/Apia"))
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+
+            weeks = _compute_target_weeks("Pacific/Apia", 3)
+
+            # For Samoa user, it's already Monday → the week of Feb 2 is complete
+            # Most recent completed week should be Feb 2
+            assert date(2026, 2, 2) in weeks
+            assert weeks[-1] == date(2026, 2, 2)
+
+    def test_monday_midnight_utc_minus_11_pago_pago(self):
+        """
+        UTC-11 (American Samoa): UTC Monday 11:00 is still Sunday 00:00 locally.
+
+        When server UTC time is Monday 11:00, a user in Pacific/Pago_Pago (UTC-11)
+        is still on Sunday 00:00 of the previous week. The current week should
+        NOT be marked as complete for this user.
+
+        This tests that _compute_target_weeks uses the user's timezone,
+        not server time, to determine week completion.
+        """
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
+            # When datetime.now(tz) is called with Pacific/Pago_Pago timezone,
+            # return Sunday Feb 8, 2026 at 00:00 in that timezone
+            # (which corresponds to UTC Monday Feb 9, 2026 at 11:00)
+            mock_dt.now.return_value = datetime(2026, 2, 8, 0, 0, 0, tzinfo=ZoneInfo("Pacific/Pago_Pago"))
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+
+            weeks = _compute_target_weeks("Pacific/Pago_Pago", 3)
+
+            # For Pago Pago user, it's still Sunday → the week of Feb 2 is NOT complete
+            # Most recent completed week should be Jan 26
+            assert date(2026, 2, 2) not in weeks
+            assert weeks[-1] == date(2026, 1, 26)
+
+    def test_wednesday_utc_returns_three_completed_weeks(self):
+        """
+        Standard case: Wednesday UTC returns 3 completed weeks.
+
+        On Wednesday, the current week (starting Monday) is in progress.
+        The 3 most recently completed weeks are the previous 3 Mondays.
+        """
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
+            # Wednesday Feb 11, 2026 at 14:00 UTC
+            mock_dt.now.return_value = datetime(2026, 2, 11, 14, 0, 0, tzinfo=ZoneInfo("UTC"))
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+
+            weeks = _compute_target_weeks("UTC", 3)
+
+            # Should return exactly 3 completed weeks
+            assert len(weeks) == 3
+
+            # Current week (Feb 9) should NOT be included
+            assert date(2026, 2, 9) not in weeks
+
+            # The 3 completed weeks (oldest first):
+            # Jan 26, Feb 2, and... wait, Feb 9 is current week
+            # So: Jan 19, Jan 26, Feb 2
+            assert weeks == [date(2026, 1, 19), date(2026, 1, 26), date(2026, 2, 2)]
+
 
 class TestEnsureSnapshotsUpToDate:
     """Tests for ensure_snapshots_up_to_date main function."""
