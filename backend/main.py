@@ -41,6 +41,8 @@ from backend.apps.priority_guardian.routers.priorities_router import router as p
 from backend.apps.priority_guardian.routers.calendar_router import router as pg_calendar_router
 # Priority Guardian app routers (Increment 06)
 from backend.apps.priority_guardian.routers.weekly_report_router import router as pg_weekly_report_router
+# Priority Guardian app routers (Increment 08)
+from backend.apps.priority_guardian.routers.snapshot_router import router as pg_snapshot_router
 
 # Initialize logging first
 configure_logging()
@@ -293,3 +295,5 @@ app.include_router(pg_priorities_router, prefix="/api/priority-guardian")
 app.include_router(pg_calendar_router, prefix="/api/priority-guardian")
 # Priority Guardian SDK app routers (Increment 06)
 app.include_router(pg_weekly_report_router, prefix="/api/priority-guardian")
+# Priority Guardian SDK app routers (Increment 08)
+app.include_router(pg_snapshot_router, prefix="/api/priority-guardian")

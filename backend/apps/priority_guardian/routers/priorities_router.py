@@ -152,9 +152,10 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
             "updated_at": p.updated_at.isoformat() if p.updated_at else None,
         }
 
-        # Include streak_count for flexible priorities (Inc 06)
-        if p.type == "flexible":
-            priority_data["streak_count"] = p.streak_count
+        # Include all aggregates for all priority types (Inc 08)
+        priority_data["streak_count"] = p.streak_count
+        priority_data["avg_hours_week"] = float(p.avg_hours_week) if p.avg_hours_week else None
+        priority_data["total_hours_invested"] = float(p.total_hours_invested) if p.total_hours_invested else 0.0
 
         priorities_data.append(priority_data)
 

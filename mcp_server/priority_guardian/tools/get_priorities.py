@@ -11,7 +11,7 @@ import asyncio
 import structlog
 from mcp import types as mcp_types
 
-from mcp_server.priority_guardian.http_client import backend_get
+from mcp_server.priority_guardian.http_client import backend_get, backend_post
 from .base import ToolDefinition
 
 logger = structlog.get_logger(__name__)
@@ -89,11 +89,11 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
         "deliverables": normalized_deliverables,
         "createdAt": p.get("created_at"),
         "updatedAt": p.get("updated_at"),
+        # Include all aggregates for all priority types (Inc 08)
+        "streakCount": p.get("streak_count", 0),
+        "avgHoursWeek": p.get("avg_hours_week"),
+        "totalHoursInvested": p.get("total_hours_invested", 0.0),
     }
-
-    # Include streakCount for flexible priorities (Inc 06)
-    if p.get("type") == "flexible" and p.get("streak_count") is not None:
-        result["streakCount"] = p.get("streak_count")
 
     return result
 
@@ -163,7 +163,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     )
 
     # -------------------------------------------------------------------------
-    # Parallel fetch: priorities + calendar
+    # Parallel fetch: priorities + calendar + snapshots
     # -------------------------------------------------------------------------
     priorities_coro = backend_get(
         "/api/priority-guardian/priorities",
@@ -175,16 +175,44 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         user_id,
         correlation_id
     )
+    # Snapshot endpoint ensures weekly snapshots are up to date (Inc 08)
+    # This runs in parallel and its result is logged but not used for widget data
+    snapshot_coro = backend_post(
+        "/api/priority-guardian/snapshots/ensure",
+        {},  # No body required
+        user_id,
+        correlation_id
+    )
 
     # _fetch_with_timeout already catches exceptions and returns them as values,
     # so we don't need return_exceptions=True on gather
     results = await asyncio.gather(
         _fetch_with_timeout(priorities_coro, BACKEND_TIMEOUT, "priorities", correlation_id),
         _fetch_with_timeout(calendar_coro, BACKEND_TIMEOUT, "calendar", correlation_id),
+        _fetch_with_timeout(snapshot_coro, BACKEND_TIMEOUT, "snapshots", correlation_id),
     )
 
     priorities_result = results[0]
     calendar_result = results[1]
+    snapshot_result = results[2]
+
+    # Log snapshot result (never used for widget data, but useful for debugging)
+    if isinstance(snapshot_result, Exception):
+        logger.warning(
+            "tool.get_priorities.snapshots_failed",
+            correlation_id=correlation_id,
+            error=str(snapshot_result),
+            error_type=type(snapshot_result).__name__,
+        )
+    elif snapshot_result and snapshot_result.get("success"):
+        snap_data = snapshot_result.get("data", {})
+        logger.info(
+            "tool.get_priorities.snapshots_complete",
+            correlation_id=correlation_id,
+            checked=snap_data.get("checked", 0),
+            created=snap_data.get("created", 0),
+            errors=snap_data.get("errors", 0),
+        )
 
     # -------------------------------------------------------------------------
     # Handle priorities result (required)
@@ -343,7 +371,7 @@ GET_PRIORITIES = ToolDefinition(
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,  # Points to the widget this tool produces
     handle=handle,
-    read_only_hint=True,    # Pure data fetch, no side effects
+    read_only_hint=False,   # Triggers snapshot writes as side effect (Inc 08)
     destructive_hint=False,
     open_world_hint=True,   # Calls Google Calendar API via backend
     widget_accessible=True, # Widget can call this tool
