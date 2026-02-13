@@ -13,8 +13,7 @@ Creates missing snapshots for completed weeks, updates aggregates.
 import structlog
 from uuid import UUID
 
-import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
@@ -30,6 +29,7 @@ router = APIRouter(tags=["Priority Guardian Snapshots"])
 
 @router.post("/snapshots/ensure")
 async def ensure_snapshots(
+    request: Request,
     user_id: UUID = Depends(validate_user_id_header),
     session: AsyncSession = Depends(get_db),
 ):
@@ -46,6 +46,7 @@ async def ensure_snapshots(
     - Runs in parallel with other dashboard data fetches
 
     Args:
+        request: FastAPI request (for http_client and correlation_id)
         user_id: User ID from validated JWT (via X-User-ID header)
         session: Database session
 
@@ -59,14 +60,16 @@ async def ensure_snapshots(
             }
         }
     """
-    # Create HTTP client for Google API calls
-    async with httpx.AsyncClient(timeout=30.0) as http_client:
-        result = await ensure_snapshots_up_to_date(
-            user_id=user_id,
-            session=session,
-            http_client=http_client,
-            correlation_id=None,  # Could extract from header if needed
-        )
+    # Use shared HTTP client from app state
+    http_client = request.app.state.http_client
+    correlation_id = getattr(request.state, "correlation_id", None)
+
+    result = await ensure_snapshots_up_to_date(
+        user_id=user_id,
+        session=session,
+        http_client=http_client,
+        correlation_id=correlation_id,
+    )
 
     logger.info(
         "snapshot.ensure.complete",

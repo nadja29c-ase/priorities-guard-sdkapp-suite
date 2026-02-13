@@ -29,7 +29,7 @@ def create_mock_session():
     session.flush = AsyncMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
-    # add is NOT async - it's a sync method
+    # add is NOT async - but no longer used in new flow
     session.add = MagicMock()
     return session
 
@@ -149,18 +149,24 @@ class TestFullFlow:
         streak_result = MagicMock()
         streak_result.fetchone.return_value = None  # No previous snapshot
 
+        # INSERT ... RETURNING id returns a row (insert succeeded)
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = (uuid4(),)
+
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("3.0")
 
         update_result = MagicMock()  # For the UPDATE statement
 
-        # Execute order: connection, existing weeks, priorities,
-        # then for each priority: streak, avg, update
+        # New flow execute order:
+        # 1. connection, 2. existing weeks, 3. priorities
+        # Then for each priority: streak, INSERT, avg, UPDATE
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
             streak_result,
+            insert_result,
             avg_result,
             update_result,
         ]
@@ -187,7 +193,6 @@ class TestFullFlow:
 
         assert result["checked"] == 1
         assert result["created"] == 1
-        assert mock_session.add.called
         assert mock_session.commit.called
 
 
@@ -220,18 +225,21 @@ class TestBackfill:
         streak_result = MagicMock()
         streak_result.fetchone.return_value = None
 
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = (uuid4(),)  # Insert succeeded
+
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("3.0")
 
         update_result = MagicMock()
 
         # 3 weeks × 1 priority = 3 iterations
-        # Each iteration: streak, avg, update
+        # Each iteration: streak, INSERT, avg, update
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
-        ] + [streak_result, avg_result, update_result] * 3
+        ] + [streak_result, insert_result, avg_result, update_result] * 3
 
         with patch(
             "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
@@ -298,6 +306,9 @@ class TestStreakComputation:
         streak_result_3 = MagicMock()
         streak_result_3.fetchone.return_value = (2,)
 
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = (uuid4(),)
+
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("5.0")
 
@@ -317,9 +328,9 @@ class TestStreakComputation:
             conn_result,
             existing_result,
             priorities_result,
-            streak_result_1, avg_result, update_result,  # Week 1
-            streak_result_2, avg_result, update_result,  # Week 2
-            streak_result_3, avg_result, update_result,  # Week 3
+            streak_result_1, insert_result, avg_result, update_result,  # Week 1
+            streak_result_2, insert_result, avg_result, update_result,  # Week 2
+            streak_result_3, insert_result, avg_result, update_result,  # Week 3
         ]
 
         with patch(
@@ -370,8 +381,12 @@ class TestStreakComputation:
         priorities_result = MagicMock()
         priorities_result.scalars.return_value.all.return_value = [mock_flexible_priority]
 
-        # Previous week had streak=5, but since hours=0, _compute_streak returns 0 immediately
-        # (streak query is NOT called when hours=0)
+        # When hours=0, _compute_streak returns 0 without querying DB
+        # So no streak_result needed
+
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = (uuid4(),)
+
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("0.0")
 
@@ -380,12 +395,13 @@ class TestStreakComputation:
         # Empty events - no hours for this priority
         empty_events = []
 
-        # When hours=0, _compute_streak returns 0 without querying DB
+        # When hours=0, no streak query is made (returns early)
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
             # No streak query (hours=0 returns early)
+            insert_result,
             avg_result,
             update_result,
         ]
@@ -458,6 +474,69 @@ class TestIdempotency:
         assert result["checked"] == 1
         assert result["created"] == 0
 
+    @pytest.mark.asyncio
+    async def test_insert_conflict_returns_no_row(
+        self,
+        mock_http_client,
+        mock_google_connection,
+        mock_flexible_priority,
+        mock_calendar_events,
+    ):
+        """
+        INSERT ... ON CONFLICT DO NOTHING returns None when row exists.
+        """
+        user_id = uuid4()
+        mock_session = create_mock_session()
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_google_connection
+
+        existing_result = MagicMock()
+        existing_result.fetchall.return_value = []  # Looks empty but conflict will happen
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_flexible_priority]
+
+        streak_result = MagicMock()
+        streak_result.fetchone.return_value = None
+
+        # INSERT returns no row (conflict - row already exists)
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = None  # No row = conflict
+
+        mock_session.execute.side_effect = [
+            conn_result,
+            existing_result,
+            priorities_result,
+            streak_result,
+            insert_result,
+            # No avg/update calls because insert "failed" (conflict)
+        ]
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.snapshot_service._compute_target_weeks"
+        ) as mock_weeks, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_weeks.return_value = [date(2026, 2, 2)]
+            mock_events.return_value = (mock_calendar_events, 0)
+
+            result = await ensure_snapshots_up_to_date(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+            )
+
+        # Week checked but no new row created (conflict)
+        assert result["checked"] == 1
+        assert result["created"] == 0
+
 
 class TestPartialFailure:
     """Tests for partial failure handling."""
@@ -487,6 +566,9 @@ class TestPartialFailure:
         streak_result = MagicMock()
         streak_result.fetchone.return_value = None
 
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = (uuid4(),)
+
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("3.0")
 
@@ -506,9 +588,9 @@ class TestPartialFailure:
             conn_result,
             existing_result,
             priorities_result,
-            streak_result, avg_result, update_result,  # Week 1 succeeds
+            streak_result, insert_result, avg_result, update_result,  # Week 1 succeeds
             # Week 2 will fail via list_events
-            streak_result, avg_result, update_result,  # Week 3 succeeds
+            streak_result, insert_result, avg_result, update_result,  # Week 3 succeeds
         ]
 
         call_count = [0]

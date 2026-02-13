@@ -17,9 +17,11 @@ from backend.apps.priority_guardian.routers.snapshot_router import router
 
 @pytest.fixture
 def app():
-    """Create test FastAPI app with snapshot router."""
+    """Create test FastAPI app with snapshot router and mocked state."""
     app = FastAPI()
     app.include_router(router, prefix="/api/priority-guardian")
+    # Set up app.state.http_client as the endpoint expects
+    app.state.http_client = AsyncMock()
     return app
 
 
@@ -137,3 +139,30 @@ class TestEnsureSnapshotsEndpoint:
 
         # FastAPI dependency validation should fail
         assert response.status_code in [401, 422]  # Depends on how validate_user_id_header is implemented
+
+    @pytest.mark.asyncio
+    async def test_uses_shared_http_client(self, app, mock_user_id):
+        """Endpoint uses request.app.state.http_client, not creates new one."""
+        with patch(
+            "backend.apps.priority_guardian.routers.snapshot_router.validate_user_id_header"
+        ) as mock_validate, patch(
+            "backend.apps.priority_guardian.routers.snapshot_router.get_db"
+        ) as mock_db, patch(
+            "backend.apps.priority_guardian.routers.snapshot_router.ensure_snapshots_up_to_date"
+        ) as mock_ensure:
+            mock_validate.return_value = mock_user_id
+            mock_db.return_value = AsyncMock()
+            mock_ensure.return_value = {"checked": 0, "created": 0, "errors": 0}
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test"
+            ) as client:
+                await client.post(
+                    "/api/priority-guardian/snapshots/ensure",
+                    headers={"X-User-ID": str(mock_user_id)},
+                )
+
+            # Verify ensure_snapshots_up_to_date was called with the shared http_client
+            call_kwargs = mock_ensure.call_args.kwargs
+            assert call_kwargs["http_client"] is app.state.http_client

@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import select, func, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -320,45 +320,60 @@ async def _create_snapshots_for_week(
             session=session,
         )
 
-        # Build snapshot row
-        snapshot = PgWeeklySnapshot(
-            priority_id=priority.id,
-            user_id=user_id,
-            week_start=week_start,
-            week_end=week_end,
-            actual_hours=Decimal(str(actual_hours)),
-            event_count=event_count,
-            streak_at_snapshot=streak,
-        )
+        # Build insert params - common fields
+        insert_params = {
+            "priority_id": priority.id,
+            "user_id": user_id,
+            "week_start": week_start,
+            "week_end": week_end,
+            "actual_hours": Decimal(str(actual_hours)),
+            "event_count": event_count,
+            "streak_at_snapshot": streak,
+            # Type-specific fields - default to None
+            "deadline_date": None,
+            "days_remaining": None,
+            "deliverables_completed": None,
+            "deliverables_total": None,
+            "pacing_status": None,
+            "target_hours": None,
+            "flex_status": None,
+        }
 
         # Type-specific fields
         if priority.type == "deadline":
-            snapshot.deadline_date = priority.deadline
+            insert_params["deadline_date"] = priority.deadline
             if priority.deadline:
-                snapshot.days_remaining = (priority.deadline - week_end).days
+                insert_params["days_remaining"] = (priority.deadline - week_end).days
             done_count = sum(1 for d in priority.deliverables if d.done)
             total_count = len(priority.deliverables)
-            snapshot.deliverables_completed = done_count
-            snapshot.deliverables_total = total_count
+            insert_params["deliverables_completed"] = done_count
+            insert_params["deliverables_total"] = total_count
             if priority.deadline:
-                snapshot.pacing_status = compute_pacing_status(
+                insert_params["pacing_status"] = compute_pacing_status(
                     done_count, total_count, priority.created_at, priority.deadline, week_end
                 )
             else:
-                snapshot.pacing_status = "on_track"
+                insert_params["pacing_status"] = "on_track"
 
         elif priority.type == "flexible":
-            target = float(priority.weekly_hour_target or 0)
-            snapshot.target_hours = priority.weekly_hour_target
-            snapshot.flex_status = compute_flex_status(actual_hours, target)
+            insert_params["target_hours"] = priority.weekly_hour_target
+            insert_params["flex_status"] = compute_flex_status(
+                actual_hours, float(priority.weekly_hour_target or 0)
+            )
 
         # INSERT with ON CONFLICT DO NOTHING RETURNING id
-        # This is idempotent - if row exists, nothing happens
-        try:
-            session.add(snapshot)
-            await session.flush()
+        # If RETURNING returns a row, insert succeeded. If empty, row already existed.
+        stmt = (
+            insert(PgWeeklySnapshot)
+            .values(**insert_params)
+            .on_conflict_do_nothing(index_elements=["priority_id", "week_start"])
+            .returning(PgWeeklySnapshot.id)
+        )
+        result = await session.execute(stmt)
+        inserted_row = result.fetchone()
 
-            # If we get here, the insert succeeded - update aggregates
+        if inserted_row:
+            # Insert succeeded - update aggregates
             await _update_aggregates(
                 priority_id=priority.id,
                 streak=streak,
@@ -375,10 +390,8 @@ async def _create_snapshots_for_week(
                 streak=streak,
                 **log
             )
-
-        except IntegrityError:
-            # Row already exists (race condition or duplicate call) - skip aggregate update
-            await session.rollback()
+        else:
+            # Row already existed - skip aggregate update
             logger.debug(
                 "snapshot.row_exists",
                 priority_id=str(priority.id),
