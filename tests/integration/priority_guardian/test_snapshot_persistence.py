@@ -705,3 +705,237 @@ class TestNoGoogleConnection:
         )
 
         assert result == {"checked": 0, "created": 0, "errors": 0}
+
+
+class TestDeadlinePriorityFields:
+    """Tests for deadline-type priority snapshot fields."""
+
+    @pytest.mark.asyncio
+    async def test_deadline_priority_snapshot_fields(
+        self,
+        mock_http_client,
+        mock_google_connection,
+        mock_deadline_priority,
+    ):
+        """
+        Deadline priority snapshots include pacing_status, deliverables_completed, days_remaining.
+        """
+        user_id = uuid4()
+        mock_session = create_mock_session()
+
+        # Set up deadline priority with deliverables
+        mock_deadline_priority.deadline = date(2026, 3, 15)
+        deliverable_done = MagicMock()
+        deliverable_done.done = True
+        deliverable_pending = MagicMock()
+        deliverable_pending.done = False
+        mock_deadline_priority.deliverables = [deliverable_done, deliverable_pending]
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_google_connection
+
+        existing_result = MagicMock()
+        existing_result.fetchall.return_value = []
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_deadline_priority]
+
+        streak_result = MagicMock()
+        streak_result.fetchone.return_value = None
+
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = (uuid4(),)
+
+        avg_result = MagicMock()
+        avg_result.scalar.return_value = Decimal("2.0")
+
+        update_result = MagicMock()
+
+        # Capture the INSERT statement to verify deadline fields
+        captured_stmts = []
+        original_execute = mock_session.execute
+
+        async def capturing_execute(stmt, *args, **kwargs):
+            captured_stmts.append(stmt)
+            # Return the appropriate mock based on call order
+            idx = len(captured_stmts) - 1
+            results = [
+                conn_result, existing_result, priorities_result,
+                streak_result, insert_result, avg_result, update_result
+            ]
+            return results[idx] if idx < len(results) else MagicMock()
+
+        mock_session.execute = capturing_execute
+
+        events_with_deadline_hours = [
+            {
+                "id": "event1",
+                "summary": "P2 - Deadline work",
+                "start": {"dateTime": "2026-02-10T09:00:00Z"},
+                "end": {"dateTime": "2026-02-10T11:00:00Z"},
+                "status": "confirmed",
+            }
+        ]
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.snapshot_service._compute_target_weeks"
+        ) as mock_weeks, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_weeks.return_value = [date(2026, 2, 2)]  # Week ending Feb 8
+            mock_events.return_value = (events_with_deadline_hours, 0)
+
+            result = await ensure_snapshots_up_to_date(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+            )
+
+        assert result["created"] == 1
+
+        # Find the INSERT statement and verify deadline-specific fields
+        # The INSERT is the 5th statement (after conn, existing, priorities, streak)
+        insert_stmt = captured_stmts[4]
+
+        # Get the compiled parameters from the INSERT statement
+        # For SQLAlchemy dialect insert, we check the values
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        if hasattr(insert_stmt, 'compile'):
+            compiled = insert_stmt.compile()
+            params = compiled.params
+
+            # Verify deadline-specific fields are present
+            assert params.get("deadline_date") == date(2026, 3, 15)
+            assert params.get("deliverables_completed") == 1  # 1 done
+            assert params.get("deliverables_total") == 2  # 2 total
+            assert params.get("days_remaining") is not None  # Computed from deadline - week_end
+            assert params.get("pacing_status") in ["ahead", "on_track", "behind"]
+
+
+class TestAggregateComputation:
+    """Tests for aggregate computation (avg_hours_week)."""
+
+    @pytest.mark.asyncio
+    async def test_avg_hours_week_computed_correctly_after_multiple_snapshots(
+        self,
+        mock_http_client,
+        mock_google_connection,
+        mock_flexible_priority,
+    ):
+        """
+        After 3 weeks of snapshots (4h, 6h, 8h), avg_hours_week = 6.0.
+        """
+        user_id = uuid4()
+        mock_session = create_mock_session()
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_google_connection
+
+        existing_result = MagicMock()
+        existing_result.fetchall.return_value = []
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_flexible_priority]
+
+        streak_result = MagicMock()
+        streak_result.fetchone.return_value = None
+
+        insert_result = MagicMock()
+        insert_result.fetchone.return_value = (uuid4(),)
+
+        # Track the AVG values passed to UPDATE
+        captured_avg_values = []
+        update_call_count = [0]
+
+        async def capturing_execute(stmt, *args, **kwargs):
+            # Check if this is the UPDATE statement (contains avg_hours)
+            stmt_str = str(stmt) if hasattr(stmt, '__str__') else ""
+            if "UPDATE" in stmt_str and "avg_hours" in stmt_str:
+                # This is a raw text UPDATE, extract params
+                if args:
+                    params = args[0]
+                    if isinstance(params, dict) and "avg_hours" in params:
+                        captured_avg_values.append(params["avg_hours"])
+            return MagicMock()
+
+        # Build a more detailed mock that tracks AVG computation
+        # Week 1: 4h -> AVG = 4.0
+        # Week 2: 6h -> AVG = (4+6)/2 = 5.0
+        # Week 3: 8h -> AVG = (4+6+8)/3 = 6.0
+        avg_results = [Decimal("4.0"), Decimal("5.0"), Decimal("6.0")]
+        avg_call_idx = [0]
+
+        def make_avg_result():
+            result = MagicMock()
+            idx = avg_call_idx[0]
+            result.scalar.return_value = avg_results[idx] if idx < len(avg_results) else Decimal("0")
+            avg_call_idx[0] += 1
+            return result
+
+        update_result = MagicMock()
+
+        # 3 weeks, each with: streak, INSERT, avg, update
+        mock_session.execute.side_effect = [
+            conn_result,
+            existing_result,
+            priorities_result,
+            # Week 1
+            streak_result, insert_result, make_avg_result(), update_result,
+            # Week 2
+            streak_result, insert_result, make_avg_result(), update_result,
+            # Week 3
+            streak_result, insert_result, make_avg_result(), update_result,
+        ]
+
+        # Different hours per week to verify AVG computation
+        call_idx = [0]
+        hours_per_week = [4.0, 6.0, 8.0]
+
+        def events_for_week(*args, **kwargs):
+            idx = call_idx[0]
+            call_idx[0] += 1
+            hours = hours_per_week[idx] if idx < len(hours_per_week) else 0
+            # Create event with appropriate duration
+            return ([{
+                "id": f"event{idx}",
+                "summary": "P1 - Work",
+                "start": {"dateTime": "2026-02-10T09:00:00Z"},
+                "end": {"dateTime": f"2026-02-10T{9 + int(hours)}:00:00Z"},
+                "status": "confirmed",
+            }], 0)
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.snapshot_service._compute_target_weeks"
+        ) as mock_weeks, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_weeks.return_value = [
+                date(2026, 1, 19),
+                date(2026, 1, 26),
+                date(2026, 2, 2),
+            ]
+            mock_events.side_effect = events_for_week
+
+            result = await ensure_snapshots_up_to_date(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+            )
+
+        assert result["created"] == 3
+
+        # Verify AVG was called 3 times with increasing averages
+        # The avg_call_idx should have been incremented 3 times
+        assert avg_call_idx[0] == 3

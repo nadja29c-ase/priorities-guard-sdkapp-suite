@@ -60,6 +60,34 @@ class TestComputeTargetWeeks:
         # Should not raise, should return valid weeks
         assert isinstance(weeks, list)
 
+    def test_monday_midnight_boundary_is_current_week(self):
+        """Monday 00:00:01 is in the current week, not the completed week."""
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
+            # Monday Feb 9, 2026 at 00:00:01 (just after midnight)
+            mock_dt.now.return_value = datetime(2026, 2, 9, 0, 0, 1, tzinfo=ZoneInfo("UTC"))
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+
+            weeks = _compute_target_weeks("UTC", 3)
+
+            # Current week (starting Feb 9) should NOT be in the list
+            # Most recent completed week should be Feb 2 (the previous Monday)
+            assert date(2026, 2, 9) not in weeks
+            assert weeks[-1] == date(2026, 2, 2)
+
+    def test_sunday_midnight_boundary_week_complete(self):
+        """Sunday 23:59:59 means that week is still in progress."""
+        with patch("backend.apps.priority_guardian.services.snapshot_service.datetime") as mock_dt:
+            # Sunday Feb 8, 2026 at 23:59:59 (just before Monday)
+            mock_dt.now.return_value = datetime(2026, 2, 8, 23, 59, 59, tzinfo=ZoneInfo("UTC"))
+            mock_dt.side_effect = lambda *args, **kwargs: datetime(*args, **kwargs)
+
+            weeks = _compute_target_weeks("UTC", 3)
+
+            # Current week (Feb 2) is NOT complete yet (it's still Sunday)
+            # Most recent completed week should be Jan 26
+            assert date(2026, 2, 2) not in weeks
+            assert weeks[-1] == date(2026, 1, 26)
+
 
 class TestEnsureSnapshotsUpToDate:
     """Tests for ensure_snapshots_up_to_date main function."""
