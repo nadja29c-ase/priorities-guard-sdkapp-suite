@@ -66,7 +66,7 @@ export interface DashboardData {
   timeAllocation?: TimeAllocation
 }
 
-// Pie chart slice (from save_semantic_grouping)
+// Pie chart slice (from get_weekly_report)
 export interface PieSlice {
   label: string
   hours: number
@@ -75,12 +75,20 @@ export interface PieSlice {
   eventCount?: number        // For semantic slices
 }
 
-// Pie chart view data (from save_semantic_grouping)
+// Pie chart view data (from get_weekly_report)
+// Widget uses: slices, totalHours, weekStart, weekEnd
+// LLM uses: priorities, allEvents, isCurrentWeek (via assistant_guidance)
 export interface PieChartData {
   weekStart: string
   weekEnd: string
   slices: PieSlice[]
   totalHours: number
+  // Extra fields from get_weekly_report (widget ignores, LLM uses)
+  priorities?: unknown[]
+  allEvents?: unknown[]
+  isCurrentWeek?: boolean
+  timeAllocation?: unknown
+  [key: string]: unknown  // Forward-compatible with future fields
 }
 
 // Union type for all tool output data

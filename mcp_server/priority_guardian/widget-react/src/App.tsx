@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData, PieChartData } from './types'
+import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
 import { ConnectionStatus } from './components/ConnectionStatus'
@@ -63,7 +63,8 @@ function App() {
     setData(parsed)
 
     // Set timeAllocation if present (from get_priorities response)
-    if (parsed?.timeAllocation) {
+    // Only DashboardData has timeAllocation; PieChartData doesn't
+    if (parsed && isDashboardData(parsed) && parsed.timeAllocation) {
       setTimeAllocation(parsed.timeAllocation)
     }
 
@@ -83,7 +84,8 @@ function App() {
       setLoadError(null)
 
       // Only update timeAllocation if present (get_priorities includes it, CRUD doesn't)
-      if (content.data.timeAllocation) {
+      // Only DashboardData has timeAllocation; PieChartData doesn't
+      if (isDashboardData(content.data) && content.data.timeAllocation) {
         setTimeAllocation(content.data.timeAllocation)
       }
 
@@ -256,7 +258,7 @@ function App() {
   }
 
   // ============ Pie Chart View ============
-  // Renders when save_semantic_grouping returns data with slices
+  // Renders when get_weekly_report returns data with slices (semantic groupings provided)
   if (isPieChartData(data)) {
     return (
       <main

@@ -20,7 +20,6 @@ class TestToolRegistry:
         from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 
         # 5 public tools + 6 private CRUD tools = 11 total
-        # NOTE: save_semantic_grouping disabled until persistence increment ships
         expected_tools = {
             # Public tools
             "connect_google_calendar",
@@ -28,7 +27,6 @@ class TestToolRegistry:
             "create_priority",
             "get_priorities",
             "get_weekly_report",
-            # save_semantic_grouping - disabled, file kept on disk for future
             # Private widget CRUD tools
             "add_priority",
             "update_priority",
@@ -101,7 +99,6 @@ class TestListTools:
 
         assert isinstance(tools, list)
         # 5 public tools + 6 private CRUD tools = 11 total
-        # NOTE: save_semantic_grouping disabled until persistence increment ships
         assert len(tools) == 11
 
         for tool in tools:
@@ -191,3 +188,27 @@ class TestToolAnnotations:
         assert tool.read_only_hint is False  # Creates data
         assert tool.destructive_hint is False
         assert tool.open_world_hint is False  # No external systems
+
+    def test_get_weekly_report_annotations(self):
+        """get_weekly_report has correct annotations."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("get_weekly_report")
+        assert tool.read_only_hint is False  # Token refresh writes
+        assert tool.destructive_hint is False
+        assert tool.open_world_hint is True  # Calls Google Calendar API
+
+    def test_get_weekly_report_has_widget_uri(self):
+        """get_weekly_report has widget_uri set."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("get_weekly_report")
+        assert tool.widget_uri is not None
+        assert tool.widget_uri == "ui://widget/pg-dashboard.html"
+
+    def test_get_weekly_report_widget_accessible(self):
+        """get_weekly_report has widget_accessible=True."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("get_weekly_report")
+        assert tool.widget_accessible is True

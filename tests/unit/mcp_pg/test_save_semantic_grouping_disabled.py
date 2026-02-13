@@ -1,19 +1,20 @@
 """
-Unit tests verifying save_semantic_grouping is disabled (Increment 06-S).
+Unit tests verifying save_semantic_grouping is deleted (Increment 07).
 
 Verifies:
-- save_semantic_grouping not in TOOL_REGISTRY
-- save_semantic_grouping not in TOOL_INVOCATION_MESSAGES
-- Tool file still exists on disk (for future persistence increment)
+- save_semantic_grouping NOT in TOOL_REGISTRY
+- save_semantic_grouping NOT in TOOL_INVOCATION_MESSAGES
+- Tool file does NOT exist on disk (deleted in Increment 07)
 - list_tools does not include save_semantic_grouping
+- get_weekly_report IS still registered with widget_uri and widget_accessible=True
 """
 
 import os
 import pytest
 
 
-class TestSaveSemanticGroupingDisabled:
-    """Tests for save_semantic_grouping being disabled."""
+class TestSaveSemanticGroupingDeleted:
+    """Tests for save_semantic_grouping being deleted."""
 
     def test_not_in_tool_registry(self):
         """save_semantic_grouping is not in TOOL_REGISTRY."""
@@ -27,31 +28,15 @@ class TestSaveSemanticGroupingDisabled:
 
         assert "save_semantic_grouping" not in TOOL_INVOCATION_MESSAGES
 
-    def test_tool_file_still_exists_on_disk(self):
-        """Tool file exists on disk for future persistence increment."""
-        # Get the path to the tool file
+    def test_tool_file_does_not_exist_on_disk(self):
+        """Tool file has been deleted from disk."""
         from mcp_server.priority_guardian import tools
         tools_dir = os.path.dirname(tools.__file__)
         tool_file = os.path.join(tools_dir, "save_semantic_grouping.py")
 
-        assert os.path.exists(tool_file), (
-            f"save_semantic_grouping.py should exist at {tool_file} "
-            "for future persistence increment"
+        assert not os.path.exists(tool_file), (
+            f"save_semantic_grouping.py should be deleted but exists at {tool_file}"
         )
-
-    def test_tool_file_has_content(self):
-        """Tool file has meaningful content (not empty)."""
-        from mcp_server.priority_guardian import tools
-        tools_dir = os.path.dirname(tools.__file__)
-        tool_file = os.path.join(tools_dir, "save_semantic_grouping.py")
-
-        with open(tool_file, "r") as f:
-            content = f.read()
-
-        # Should have the tool definition
-        assert "SAVE_SEMANTIC_GROUPING" in content
-        assert "ToolDefinition" in content
-        assert "save_semantic_grouping" in content
 
     @pytest.mark.asyncio
     async def test_not_in_list_tools(self):
@@ -72,8 +57,8 @@ class TestSaveSemanticGroupingDisabled:
         assert tool is None
 
 
-class TestGetWeeklyReportStillRegistered:
-    """Verify get_weekly_report is still properly registered."""
+class TestGetWeeklyReportRegistration:
+    """Verify get_weekly_report is properly registered with widget support."""
 
     def test_in_tool_registry(self):
         """get_weekly_report is in TOOL_REGISTRY."""
@@ -97,19 +82,29 @@ class TestGetWeeklyReportStillRegistered:
 
         assert "get_weekly_report" in tool_names
 
-    def test_has_correct_widget_accessible_value(self):
-        """get_weekly_report has widget_accessible=False with TODO comment."""
+    def test_has_widget_uri(self):
+        """get_weekly_report has widget_uri set (not None)."""
         from mcp_server.priority_guardian.tools import get_tool
 
         tool = get_tool("get_weekly_report")
 
-        # Currently False in simplified version
-        assert tool.widget_accessible is False
+        assert tool.widget_uri is not None
+        assert tool.widget_uri == "ui://widget/pg-dashboard.html"
 
-    def test_has_no_widget_uri(self):
-        """get_weekly_report has widget_uri=None (conversational only)."""
+    def test_has_widget_accessible_true(self):
+        """get_weekly_report has widget_accessible=True."""
         from mcp_server.priority_guardian.tools import get_tool
 
         tool = get_tool("get_weekly_report")
 
-        assert tool.widget_uri is None
+        assert tool.widget_accessible is True
+
+    def test_has_semantic_groupings_in_schema(self):
+        """get_weekly_report input schema includes semantic_groupings parameter."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("get_weekly_report")
+        properties = tool.input_schema.get("properties", {})
+
+        assert "semantic_groupings" in properties
+        assert properties["semantic_groupings"]["type"] == "array"

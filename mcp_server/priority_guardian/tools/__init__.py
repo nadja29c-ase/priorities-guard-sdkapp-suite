@@ -16,8 +16,6 @@ from .base import ToolDefinition
 from .create_priority import CREATE_PRIORITY
 from .get_priorities import GET_PRIORITIES
 from .get_weekly_report import GET_WEEKLY_REPORT
-# NOTE: save_semantic_grouping is disabled until persistence increment ships
-# from .save_semantic_grouping import SAVE_SEMANTIC_GROUPING
 # Private widget-only tools (widget can call, LLM cannot see)
 from .widget_tools import (
     ADD_PRIORITY,
@@ -45,9 +43,8 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
     ),
     "get_weekly_report": (
         "Generating your weekly report...",
-        "Here's your weekly report.",
+        "Here's your weekly time allocation.",
     ),
-    # NOTE: save_semantic_grouping disabled until persistence increment ships
 }
 
 # Explicit tool registry
@@ -56,7 +53,6 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     CREATE_PRIORITY.name: CREATE_PRIORITY,
     GET_PRIORITIES.name: GET_PRIORITIES,
     GET_WEEKLY_REPORT.name: GET_WEEKLY_REPORT,
-    # NOTE: save_semantic_grouping disabled until persistence increment ships
     # Private widget-only tools (widget can call, LLM cannot see)
     CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,

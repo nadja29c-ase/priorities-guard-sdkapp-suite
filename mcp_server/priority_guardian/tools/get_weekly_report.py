@@ -2,9 +2,11 @@
 get_weekly_report tool for Priority Guardian MCP.
 
 Returns weekly report data with per-priority hours, status indicators,
-and event details for LLM semantic grouping.
+and pie chart visualization of time allocation.
 
-Computes live data from Google Calendar. No persistence in this version.
+On first call: Shows P1/P2/P3 + "Other" slice. LLM proposes semantic groupings.
+On second call (with semantic_groupings): Shows priority slices + user-confirmed
+semantic category slices. No persistence - purely conversational refinement.
 """
 
 import structlog
@@ -24,8 +26,10 @@ NAME = "get_weekly_report"
 DESCRIPTION = (
     "Get your weekly report showing time invested in each priority. "
     "Returns hours worked, status indicators (ahead/on_track/behind), "
-    "and a breakdown of how your week was spent."
+    "and a pie chart breakdown of how your week was spent."
 )
+
+WIDGET_URI = "ui://widget/pg-dashboard.html"
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -37,6 +41,32 @@ INPUT_SCHEMA = {
                 "Must be a Monday. If omitted, returns current week."
             ),
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        },
+        "semantic_groupings": {
+            "type": "array",
+            "description": (
+                "User-confirmed semantic categories for non-priority time. "
+                "When provided, replaces the 'Other' slice in the pie chart "
+                "with these categories. Only pass this after user confirms groupings."
+            ),
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "Category name (e.g., 'Client calls', 'Admin')",
+                    },
+                    "hours": {
+                        "type": "number",
+                        "description": "Hours spent in this category",
+                    },
+                    "event_count": {
+                        "type": "integer",
+                        "description": "Number of events in this category",
+                    },
+                },
+                "required": ["category", "hours", "event_count"],
+            },
         },
     },
     "required": [],
@@ -128,16 +158,101 @@ def _normalize_event(e: dict) -> dict:
     }
 
 
+def _build_pie_slices(
+    priorities: list[dict],
+    time_allocation: dict,
+    semantic_groupings: list[dict] | None,
+) -> tuple[list[dict], float | None]:
+    """
+    Build pie chart slices from priorities and time allocation.
+
+    Args:
+        priorities: List of priority report dicts from backend
+        time_allocation: Time allocation dict from backend
+        semantic_groupings: Optional user-confirmed semantic categories
+
+    Returns:
+        Tuple of (slices list, validation error message or None)
+    """
+    slices = []
+    keywords = time_allocation.get("keywords", {})
+    other_hours = time_allocation.get("other_hours", 0.0)
+
+    # Build priority slices (only those with hours > 0)
+    for p in priorities:
+        keyword = p.get("calendar_keyword")
+        if not keyword:
+            continue
+
+        keyword_data = keywords.get(keyword, {})
+        hours = keyword_data.get("hours", 0.0)
+
+        if hours > 0:
+            slices.append({
+                "label": f"{keyword}: {p.get('name', 'Unnamed')}",
+                "hours": hours,
+                "type": "priority",
+                "keyword": keyword,
+            })
+
+    # Build semantic slices based on whether groupings were provided
+    if semantic_groupings and len(semantic_groupings) > 0:
+        # Validate: sum of groupings cannot exceed other_hours by more than 0.5h
+        grouped_total = sum(g.get("hours", 0) for g in semantic_groupings)
+        if grouped_total > other_hours + 0.5:
+            return [], f"Grouped hours ({grouped_total:.1f}h) exceed non-priority time ({other_hours:.1f}h) by more than rounding tolerance. Please adjust."
+
+        # Add user-confirmed semantic category slices
+        for g in semantic_groupings:
+            slices.append({
+                "label": g.get("category", "Unnamed"),
+                "hours": g.get("hours", 0),
+                "type": "semantic",
+                "eventCount": g.get("event_count", 0),
+            })
+
+        # Add "Uncategorized" remainder if significant (>= 0.25h)
+        # Clamp to 0 to avoid negative remainder when sum slightly exceeds other_hours
+        # (within the 0.5h tolerance that passed validation)
+        remainder = max(0, other_hours - grouped_total)
+        if remainder >= 0.25:
+            slices.append({
+                "label": "Uncategorized",
+                "hours": round(remainder, 1),
+                "type": "semantic",
+            })
+        # If remainder < 0.25h, skip it (rounding noise, absorbed visually)
+
+    else:
+        # No semantic groupings: single "Other" slice
+        if other_hours > 0:
+            slices.append({
+                "label": "Other",
+                "hours": other_hours,
+                "type": "semantic",
+            })
+
+    return slices, None
+
+
 def _build_assistant_guidance(
     data: dict,
     priorities: list[dict],
     all_events: list[dict],
+    has_semantic_groupings: bool,
 ) -> str:
     """
     Build assistant guidance for presenting the weekly report.
 
-    The guidance shapes how the LLM narrates the report and proposes
-    semantic groupings for non-priority time (conversationally, not saved).
+    Two modes:
+    1. Without semantic_groupings: Propose groupings, ask user to confirm
+    2. With semantic_groupings: Brief observation, don't repeat categories
+
+    Args:
+        data: Backend response data
+        priorities: List of priority dicts
+        all_events: List of event dicts
+        has_semantic_groupings: Whether semantic_groupings parameter was provided
     """
     is_current = data.get("is_current_week", False)
     other_hours = data.get("time_allocation", {}).get("other_hours", 0)
@@ -147,47 +262,60 @@ def _build_assistant_guidance(
 
     guidance_parts = []
 
-    # Opening context based on week status
-    if is_current:
+    if has_semantic_groupings:
+        # MODE 2: Semantic groupings provided (second call)
+        # Brief observation, don't repeat categories
         guidance_parts.append(
-            "This is your CURRENT WEEK in progress. Numbers will change as you work through the week. "
-            "Frame this as a progress check-in, not a final tally."
+            "The pie chart now shows the refined time breakdown including the user's "
+            "semantic categories. Do NOT repeat or list the categories — the chart displays them. "
+            "Make a brief coaching observation about the overall distribution pattern "
+            "(e.g., balance, focus areas, potential adjustments). "
+            "Ask what stands out to them or what they'd like to adjust next week. "
+            "Keep it short — the visual does the heavy lifting."
         )
     else:
+        # MODE 1: No semantic groupings (first call)
+        # Opening context based on week status
+        if is_current:
+            guidance_parts.append(
+                "This is your CURRENT WEEK in progress. Numbers will change as you work through the week. "
+                "Frame this as a progress check-in, not a final tally."
+            )
+        else:
+            guidance_parts.append(
+                "This is a COMPLETED WEEK reflection. Present it as a look back at how the week was spent."
+            )
+
+        # Priority insights - narrate ALL active priorities including zero-hour ones
         guidance_parts.append(
-            "This is a COMPLETED WEEK reflection. Present it as a look back at how the week was spent."
+            "Present each priority's hours naturally. For flexible priorities, note if they're "
+            "ahead/on_track/behind their weekly target. For deadline priorities, mention pacing status "
+            "and days remaining. IMPORTANT: Narrate ALL active priorities — if a priority has zero hours, "
+            "say so explicitly (e.g., 'You didn't log any P3 time this week'). Keep insights brief and actionable."
         )
 
-    # Priority insights
-    guidance_parts.append(
-        "Present each priority's hours naturally. For flexible priorities, note if they're "
-        "ahead/on_track/behind their weekly target. For deadline priorities, mention pacing status "
-        "and days remaining. Keep insights brief and actionable."
-    )
+        # Semantic grouping proposal
+        if other_hours > 0 and non_priority_events:
+            guidance_parts.append(
+                f"The user has {other_hours:.1f} hours of non-priority time. "
+                "Based on the event titles and descriptions in allEvents, propose approximate "
+                "semantic categories. Frame it as an observation: 'Your non-priority time looks like "
+                "it breaks down to roughly: Client calls ~Xh, Admin ~Yh, etc.' "
+                "Ask if this grouping looks right or if they'd adjust it. "
+                "If they confirm, call get_weekly_report again with the semantic_groupings parameter "
+                "containing the confirmed categories (category name, hours, event_count for each)."
+            )
+        elif other_hours > 0:
+            guidance_parts.append(
+                f"The user has {other_hours:.1f} hours of non-priority time but no matching events. "
+                "Ask what this time was generally spent on if they'd like to reflect on it."
+            )
 
-    # Semantic grouping proposal (conversational only - no saving)
-    if other_hours > 0 and non_priority_events:
-        event_titles = [e.get("title", "Untitled") for e in non_priority_events[:15]]
+        # Closing
         guidance_parts.append(
-            f"The user has {other_hours:.1f} hours of non-priority time across "
-            f"{len(non_priority_events)} events. Propose approximate semantic categories based on these "
-            f"event titles: {event_titles}. Group similar activities (e.g., 'Client calls ~Xh', "
-            "'Admin/life ops ~Yh', 'Learning ~Zh'). Present this as an observation to help them "
-            "see where non-priority time went. Do NOT ask them to save or confirm these groupings - "
-            "this is just a conversational insight."
+            "Keep the tone reflective and coaching-oriented. The goal is insight, not judgment. "
+            "Do NOT mention snapshots, saving data, or persistence."
         )
-    elif other_hours > 0:
-        guidance_parts.append(
-            f"The user has {other_hours:.1f} hours of non-priority time. "
-            "Ask what this time was generally spent on if they'd like to reflect on it."
-        )
-
-    # Closing
-    guidance_parts.append(
-        "Keep the tone reflective and coaching-oriented. The goal is insight, not judgment. "
-        "Ask what stood out to them or what they'd like to adjust. "
-        "Do NOT mention snapshots, saving data, or persistence - just focus on the reflection."
-    )
 
     return " ".join(guidance_parts)
 
@@ -198,23 +326,32 @@ def _build_assistant_guidance(
 
 async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_types.CallToolResult:
     """
-    Get weekly report for the user.
+    Get weekly report for the user with pie chart visualization.
 
     Args:
         user_id: Validated user ID from JWT token
         correlation_id: Request correlation ID
-        arguments: Tool arguments (optional week_start)
+        arguments: Tool arguments (optional week_start, optional semantic_groupings)
 
     Returns:
-        CallToolResult with weekly report data
+        CallToolResult with weekly report data and pie chart slices
     """
     week_start = arguments.get("week_start")
+    semantic_groupings = arguments.get("semantic_groupings")
+
+    # Treat empty array same as not provided
+    if semantic_groupings is not None and len(semantic_groupings) == 0:
+        semantic_groupings = None
+
+    has_semantic_groupings = semantic_groupings is not None
 
     logger.info(
         "tool.get_weekly_report.start",
         correlation_id=correlation_id,
         user_id=user_id,
         week_start=week_start,
+        has_semantic_groupings=has_semantic_groupings,
+        grouping_count=len(semantic_groupings) if semantic_groupings else 0,
     )
 
     # Build endpoint URL with optional query param
@@ -248,15 +385,38 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
         raise ToolUsageError(error_message)
 
-    # Extract and normalize data
+    # Extract data
     data = result.get("data", {})
     priorities = data.get("priorities", [])
     time_allocation = data.get("time_allocation", {})
     all_events = data.get("all_events", [])
 
+    # Build pie chart slices (validates semantic_groupings if provided)
+    slices, validation_error = _build_pie_slices(
+        priorities, time_allocation, semantic_groupings
+    )
+
+    if validation_error:
+        logger.warning(
+            "tool.get_weekly_report.validation_error",
+            correlation_id=correlation_id,
+            error=validation_error,
+        )
+        return mcp_types.CallToolResult(
+            isError=True,
+            content=[mcp_types.TextContent(
+                type="text",
+                text=validation_error
+            )],
+        )
+
+    # Normalize data for response
     normalized_priorities = [_normalize_priority_report(p) for p in priorities]
     normalized_time_allocation = _normalize_time_allocation(time_allocation)
     normalized_events = [_normalize_event(e) for e in all_events]
+
+    # Calculate total hours for pie chart
+    total_hours = normalized_time_allocation.get("totalTrackedHours", 0)
 
     logger.info(
         "tool.get_weekly_report.success",
@@ -265,33 +425,44 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         week_start=data.get("week_start"),
         is_current_week=data.get("is_current_week"),
         priority_count=len(priorities),
+        slice_count=len(slices),
+        has_semantic_groupings=has_semantic_groupings,
     )
 
     # Build human-readable summary
     week_label = "This week" if data.get("is_current_week") else f"Week of {data.get('week_start')}"
-    total_hours = normalized_time_allocation.get("totalTrackedHours", 0)
 
     if not priorities:
         text = f"{week_label}: No active priorities."
+    elif has_semantic_groupings:
+        text = f"{week_label}: {total_hours:.1f}h tracked with refined time breakdown."
     else:
-        text = f"{week_label}: {total_hours:.1f} hours tracked across {len(priorities)} priorities."
+        text = f"{week_label}: {total_hours:.1f}h tracked across {len(priorities)} priorities."
 
-    # Build assistant guidance based on report state
-    assistant_guidance = _build_assistant_guidance(data, priorities, all_events)
+    # Build assistant guidance based on whether groupings were provided
+    assistant_guidance = _build_assistant_guidance(
+        data, priorities, all_events, has_semantic_groupings
+    )
 
-    # Build structured content
+    # Build structured content with pie chart data
+    # Widget reads: slices, totalHours, weekStart, weekEnd
+    # LLM reads: priorities, allEvents, isCurrentWeek via assistant_guidance context
     structured_content = {
         "success": True,
         "data": {
+            # Pie chart fields (widget uses these)
             "weekStart": data.get("week_start"),
             "weekEnd": data.get("week_end"),
+            "slices": slices,
+            "totalHours": total_hours,
+            # Report fields (LLM uses these via guidance)
             "isCurrentWeek": data.get("is_current_week"),
-            "snapshotSaved": False,  # Always false - no persistence
-            "weeksBackfilled": 0,  # Always 0 - no backfill
-            "backfillTruncated": False,  # Always false - no backfill
             "priorities": normalized_priorities,
             "timeAllocation": normalized_time_allocation,
             "allEvents": normalized_events,
+        },
+        "_meta": {
+            "openai/outputTemplate": WIDGET_URI,
         },
         "assistant_guidance": assistant_guidance,
     }
@@ -314,12 +485,10 @@ GET_WEEKLY_REPORT = ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,  # Conversational tool, no widget template
+    widget_uri=WIDGET_URI,  # Pie chart renders in pg-dashboard widget
     handle=handle,
     read_only_hint=False,  # Token refresh can write to core_connections
     destructive_hint=False,
     open_world_hint=True,  # Calls Google Calendar API via backend
-    # TODO: Flip to True when persistence increment ships and pie chart returns.
-    # Locked spec (pg-widget-spec-v1.md) says widget_accessible=True for this tool.
-    widget_accessible=False,
+    widget_accessible=True,  # Widget can call this tool (for future 3-week nav)
 )
