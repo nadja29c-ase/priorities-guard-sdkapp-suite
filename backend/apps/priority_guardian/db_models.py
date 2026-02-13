@@ -323,8 +323,9 @@ class PgWeeklySnapshot(Base):
     Stores deterministic, keyword-matched data at the time of finalization.
     Used for week-over-week comparison and aggregate computation.
 
-    One row per priority per week. Created when a completed week is finalized
-    via the get_weekly_report tool. Immutable after creation (no overwrites).
+    One row per priority per week. Created opportunistically on dashboard load
+    via ensure_snapshots_up_to_date(). See ADR-001 Decision 5 for rationale.
+    Immutable after creation — INSERT ON CONFLICT DO NOTHING, no updates.
 
     Deadline-specific fields are null for flexible priorities, and vice versa.
     """

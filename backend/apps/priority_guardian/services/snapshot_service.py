@@ -449,7 +449,7 @@ async def _update_aggregates(
     Update running aggregates on pg_priorities.
 
     - streak_count = streak_at_snapshot just computed
-    - total_hours_invested += actual_hours for this week
+    - total_hours_invested = SUM of all snapshots for this priority
     - avg_hours_week = AVG of all snapshots for this priority
     """
     # Compute avg_hours_week from all snapshots for this priority
@@ -460,21 +460,29 @@ async def _update_aggregates(
     )
     avg_hours = avg_result.scalar()
 
+    # Compute total_hours_invested from all snapshots (derived, not incremented)
+    total_result = await session.execute(
+        select(func.sum(PgWeeklySnapshot.actual_hours)).where(
+            PgWeeklySnapshot.priority_id == priority_id,
+        )
+    )
+    total_hours = total_result.scalar()
+
     # Update priority aggregates (only if still active - defense in depth)
     await session.execute(
         text("""
             UPDATE pg_priorities
             SET
                 streak_count = :streak,
-                total_hours_invested = total_hours_invested + :hours,
+                total_hours_invested = :total_hours,
                 avg_hours_week = :avg_hours,
                 updated_at = NOW()
             WHERE id = :priority_id AND status = 'active'
         """),
         {
             "streak": streak,
-            "hours": Decimal(str(actual_hours)),
-            "avg_hours": Decimal(str(avg_hours)) if avg_hours else None,
+            "total_hours": Decimal(str(total_hours)) if total_hours is not None else Decimal("0"),
+            "avg_hours": Decimal(str(avg_hours)) if avg_hours is not None else None,
             "priority_id": priority_id,
         }
     )

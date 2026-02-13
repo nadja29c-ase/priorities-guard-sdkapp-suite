@@ -156,11 +156,14 @@ class TestFullFlow:
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("3.0")
 
+        total_result = MagicMock()
+        total_result.scalar.return_value = Decimal("3.0")
+
         update_result = MagicMock()  # For the UPDATE statement
 
         # New flow execute order:
         # 1. connection, 2. existing weeks, 3. priorities
-        # Then for each priority: streak, INSERT, avg, UPDATE
+        # Then for each priority: streak, INSERT, avg, total, UPDATE
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
@@ -168,6 +171,7 @@ class TestFullFlow:
             streak_result,
             insert_result,
             avg_result,
+            total_result,
             update_result,
         ]
 
@@ -231,15 +235,18 @@ class TestBackfill:
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("3.0")
 
+        total_result = MagicMock()
+        total_result.scalar.return_value = Decimal("9.0")  # 3 weeks × 3h
+
         update_result = MagicMock()
 
         # 3 weeks × 1 priority = 3 iterations
-        # Each iteration: streak, INSERT, avg, update
+        # Each iteration: streak, INSERT, avg, total, update
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
-        ] + [streak_result, insert_result, avg_result, update_result] * 3
+        ] + [streak_result, insert_result, avg_result, total_result, update_result] * 3
 
         with patch(
             "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
@@ -312,6 +319,9 @@ class TestStreakComputation:
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("5.0")
 
+        total_result = MagicMock()
+        total_result.scalar.return_value = Decimal("15.0")
+
         update_result = MagicMock()
 
         events_with_hours = [
@@ -328,9 +338,9 @@ class TestStreakComputation:
             conn_result,
             existing_result,
             priorities_result,
-            streak_result_1, insert_result, avg_result, update_result,  # Week 1
-            streak_result_2, insert_result, avg_result, update_result,  # Week 2
-            streak_result_3, insert_result, avg_result, update_result,  # Week 3
+            streak_result_1, insert_result, avg_result, total_result, update_result,  # Week 1
+            streak_result_2, insert_result, avg_result, total_result, update_result,  # Week 2
+            streak_result_3, insert_result, avg_result, total_result, update_result,  # Week 3
         ]
 
         with patch(
@@ -390,6 +400,9 @@ class TestStreakComputation:
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("0.0")
 
+        total_result = MagicMock()
+        total_result.scalar.return_value = Decimal("0.0")
+
         update_result = MagicMock()
 
         # Empty events - no hours for this priority
@@ -403,6 +416,7 @@ class TestStreakComputation:
             # No streak query (hours=0 returns early)
             insert_result,
             avg_result,
+            total_result,
             update_result,
         ]
 
@@ -572,6 +586,9 @@ class TestPartialFailure:
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("3.0")
 
+        total_result = MagicMock()
+        total_result.scalar.return_value = Decimal("6.0")
+
         update_result = MagicMock()
 
         events = [
@@ -588,9 +605,9 @@ class TestPartialFailure:
             conn_result,
             existing_result,
             priorities_result,
-            streak_result, insert_result, avg_result, update_result,  # Week 1 succeeds
+            streak_result, insert_result, avg_result, total_result, update_result,  # Week 1 succeeds
             # Week 2 will fail via list_events
-            streak_result, insert_result, avg_result, update_result,  # Week 3 succeeds
+            streak_result, insert_result, avg_result, total_result, update_result,  # Week 3 succeeds
         ]
 
         call_count = [0]
@@ -749,6 +766,9 @@ class TestDeadlinePriorityFields:
         avg_result = MagicMock()
         avg_result.scalar.return_value = Decimal("2.0")
 
+        total_result = MagicMock()
+        total_result.scalar.return_value = Decimal("2.0")
+
         update_result = MagicMock()
 
         # Capture the INSERT statement to verify deadline fields
@@ -761,7 +781,7 @@ class TestDeadlinePriorityFields:
             idx = len(captured_stmts) - 1
             results = [
                 conn_result, existing_result, priorities_result,
-                streak_result, insert_result, avg_result, update_result
+                streak_result, insert_result, avg_result, total_result, update_result
             ]
             return results[idx] if idx < len(results) else MagicMock()
 
@@ -865,11 +885,13 @@ class TestAggregateComputation:
             return MagicMock()
 
         # Build a more detailed mock that tracks AVG computation
-        # Week 1: 4h -> AVG = 4.0
-        # Week 2: 6h -> AVG = (4+6)/2 = 5.0
-        # Week 3: 8h -> AVG = (4+6+8)/3 = 6.0
+        # Week 1: 4h -> AVG = 4.0, SUM = 4.0
+        # Week 2: 6h -> AVG = (4+6)/2 = 5.0, SUM = 10.0
+        # Week 3: 8h -> AVG = (4+6+8)/3 = 6.0, SUM = 18.0
         avg_results = [Decimal("4.0"), Decimal("5.0"), Decimal("6.0")]
+        total_results = [Decimal("4.0"), Decimal("10.0"), Decimal("18.0")]
         avg_call_idx = [0]
+        total_call_idx = [0]
 
         def make_avg_result():
             result = MagicMock()
@@ -878,19 +900,26 @@ class TestAggregateComputation:
             avg_call_idx[0] += 1
             return result
 
+        def make_total_result():
+            result = MagicMock()
+            idx = total_call_idx[0]
+            result.scalar.return_value = total_results[idx] if idx < len(total_results) else Decimal("0")
+            total_call_idx[0] += 1
+            return result
+
         update_result = MagicMock()
 
-        # 3 weeks, each with: streak, INSERT, avg, update
+        # 3 weeks, each with: streak, INSERT, avg, total, update
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
             # Week 1
-            streak_result, insert_result, make_avg_result(), update_result,
+            streak_result, insert_result, make_avg_result(), make_total_result(), update_result,
             # Week 2
-            streak_result, insert_result, make_avg_result(), update_result,
+            streak_result, insert_result, make_avg_result(), make_total_result(), update_result,
             # Week 3
-            streak_result, insert_result, make_avg_result(), update_result,
+            streak_result, insert_result, make_avg_result(), make_total_result(), update_result,
         ]
 
         # Different hours per week to verify AVG computation
