@@ -27,6 +27,7 @@ from sqlalchemy import (
     Numeric,
     ForeignKey,
     CheckConstraint,
+    UniqueConstraint,
     Index,
     text,
 )
@@ -152,7 +153,7 @@ class PgPriority(Base):
         nullable=False,
         server_default=text("0"),
         default=0,
-        comment="Future: consecutive weeks meeting target",
+        comment="Consecutive weeks with hours > 0 (binary streak rule, see ADR-001)",
     )
 
     avg_hours_week: Mapped[Decimal | None] = mapped_column(
@@ -443,8 +444,12 @@ class PgWeeklySnapshot(Base):
         foreign_keys=[priority_id],
     )
 
-    # Table-level constraints (indexes and unique constraint defined in migration)
+    # Table-level constraints
     __table_args__ = (
+        UniqueConstraint(
+            "priority_id", "week_start",
+            name="uq_pg_weekly_snapshots_priority_week",
+        ),
         CheckConstraint(
             "actual_hours >= 0",
             name="ck_pg_weekly_snapshots_actual_hours_non_negative",
@@ -532,7 +537,13 @@ class PgWeeklyOverview(Base):
         comment="When overview was last updated",
     )
 
-    # Note: Unique constraint (user_id, week_start) defined in migration
+    # Table-level constraints
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "week_start",
+            name="uq_pg_weekly_overview_user_week",
+        ),
+    )
 
     def __repr__(self) -> str:
         has_grouping = self.semantic_grouping is not None
