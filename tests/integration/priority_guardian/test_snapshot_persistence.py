@@ -968,3 +968,380 @@ class TestAggregateComputation:
         # Verify AVG was called 3 times with increasing averages
         # The avg_call_idx should have been incremented 3 times
         assert avg_call_idx[0] == 3
+
+
+# =============================================================================
+# REAL-DB INTEGRATION TESTS (no mocks on DB layer)
+# =============================================================================
+
+from sqlalchemy import select, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from backend.core.models import CoreUser
+from backend.apps.priority_guardian.db_models import PgPriority, PgWeeklySnapshot
+from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+
+class TestRealDBUniqueConstraint:
+    """Tests for UNIQUE constraint enforcement using real Postgres."""
+
+    @pytest.mark.asyncio
+    async def test_duplicate_snapshot_insert_returns_nothing(self, async_session):
+        """
+        INSERT with ON CONFLICT DO NOTHING returns no row when duplicate exists.
+
+        Tests the uq_pg_weekly_snapshots_priority_week constraint.
+        """
+        # Create test user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create test priority
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            desired_result="Test result",
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        week_start = date(2026, 2, 2)
+        week_end = date(2026, 2, 8)
+
+        # First insert - should succeed
+        stmt1 = (
+            pg_insert(PgWeeklySnapshot)
+            .values(
+                priority_id=priority.id,
+                user_id=user.id,
+                week_start=week_start,
+                week_end=week_end,
+                actual_hours=Decimal("5.0"),
+                event_count=3,
+                target_hours=Decimal("10.0"),
+                flex_status="behind",
+                streak_at_snapshot=1,
+            )
+            .on_conflict_do_nothing(index_elements=["priority_id", "week_start"])
+            .returning(PgWeeklySnapshot.id)
+        )
+        result1 = await async_session.execute(stmt1)
+        row1 = result1.fetchone()
+        assert row1 is not None, "First insert should return a row"
+
+        # Second insert with same (priority_id, week_start) - should conflict
+        stmt2 = (
+            pg_insert(PgWeeklySnapshot)
+            .values(
+                priority_id=priority.id,
+                user_id=user.id,
+                week_start=week_start,
+                week_end=week_end,
+                actual_hours=Decimal("8.0"),  # Different value
+                event_count=5,
+                target_hours=Decimal("10.0"),
+                flex_status="on_track",
+                streak_at_snapshot=2,
+            )
+            .on_conflict_do_nothing(index_elements=["priority_id", "week_start"])
+            .returning(PgWeeklySnapshot.id)
+        )
+        result2 = await async_session.execute(stmt2)
+        row2 = result2.fetchone()
+        assert row2 is None, "Second insert should return nothing (conflict)"
+
+        # Verify only one row exists
+        count_result = await async_session.execute(
+            select(func.count()).select_from(PgWeeklySnapshot).where(
+                PgWeeklySnapshot.priority_id == priority.id,
+                PgWeeklySnapshot.week_start == week_start,
+            )
+        )
+        count = count_result.scalar()
+        assert count == 1, "Only one snapshot row should exist"
+
+        await async_session.commit()
+
+
+class TestRealDBSumBasedAggregates:
+    """Tests for SUM-based total_hours_invested using real Postgres."""
+
+    @pytest.mark.asyncio
+    async def test_total_hours_invested_equals_sum_of_snapshots(self, async_session):
+        """
+        total_hours_invested = SUM(actual_hours) from all snapshots.
+        """
+        # Create test user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create test priority
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            desired_result="Test result",
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        # Insert 3 snapshots with different hours: 4h, 6h, 8h
+        weeks = [
+            (date(2026, 1, 19), date(2026, 1, 25), Decimal("4.0")),
+            (date(2026, 1, 26), date(2026, 2, 1), Decimal("6.0")),
+            (date(2026, 2, 2), date(2026, 2, 8), Decimal("8.0")),
+        ]
+
+        for week_start, week_end, hours in weeks:
+            snapshot = PgWeeklySnapshot(
+                priority_id=priority.id,
+                user_id=user.id,
+                week_start=week_start,
+                week_end=week_end,
+                actual_hours=hours,
+                event_count=int(hours),
+                target_hours=Decimal("10.0"),
+                flex_status="behind",
+                streak_at_snapshot=1,
+            )
+            async_session.add(snapshot)
+
+        await async_session.flush()
+
+        # Call _update_aggregates
+        await _update_aggregates(
+            priority_id=priority.id,
+            streak=3,
+            actual_hours=8.0,  # Last week's hours
+            session=async_session,
+        )
+
+        # Refresh priority to get updated values
+        await async_session.refresh(priority)
+
+        # Verify total_hours_invested = 4 + 6 + 8 = 18
+        assert priority.total_hours_invested == Decimal("18.0"), \
+            f"Expected 18.0, got {priority.total_hours_invested}"
+
+        await async_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_avg_hours_week_equals_avg_of_snapshots(self, async_session):
+        """
+        avg_hours_week = AVG(actual_hours) from all snapshots.
+        """
+        # Create test user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create test priority
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            desired_result="Test result",
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        # Insert 3 snapshots with hours: 4h, 6h, 8h -> AVG = 6.0
+        weeks = [
+            (date(2026, 1, 19), date(2026, 1, 25), Decimal("4.0")),
+            (date(2026, 1, 26), date(2026, 2, 1), Decimal("6.0")),
+            (date(2026, 2, 2), date(2026, 2, 8), Decimal("8.0")),
+        ]
+
+        for week_start, week_end, hours in weeks:
+            snapshot = PgWeeklySnapshot(
+                priority_id=priority.id,
+                user_id=user.id,
+                week_start=week_start,
+                week_end=week_end,
+                actual_hours=hours,
+                event_count=int(hours),
+                target_hours=Decimal("10.0"),
+                flex_status="behind",
+                streak_at_snapshot=1,
+            )
+            async_session.add(snapshot)
+
+        await async_session.flush()
+
+        # Call _update_aggregates
+        await _update_aggregates(
+            priority_id=priority.id,
+            streak=3,
+            actual_hours=8.0,
+            session=async_session,
+        )
+
+        # Refresh priority to get updated values
+        await async_session.refresh(priority)
+
+        # Verify avg_hours_week = (4 + 6 + 8) / 3 = 6.0
+        assert priority.avg_hours_week == Decimal("6.0"), \
+            f"Expected 6.0, got {priority.avg_hours_week}"
+
+        await async_session.commit()
+
+
+class TestRealDBIdempotentAggregates:
+    """Tests for idempotent aggregate updates using real Postgres."""
+
+    @pytest.mark.asyncio
+    async def test_duplicate_aggregate_update_unchanged(self, async_session):
+        """
+        Calling _update_aggregates twice with same snapshot data gives same result.
+
+        Aggregates are derived from SUM/AVG, not incremented, so duplicates are safe.
+        """
+        # Create test user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create test priority
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            desired_result="Test result",
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        # Insert one snapshot
+        snapshot = PgWeeklySnapshot(
+            priority_id=priority.id,
+            user_id=user.id,
+            week_start=date(2026, 2, 2),
+            week_end=date(2026, 2, 8),
+            actual_hours=Decimal("5.0"),
+            event_count=3,
+            target_hours=Decimal("10.0"),
+            flex_status="behind",
+            streak_at_snapshot=1,
+        )
+        async_session.add(snapshot)
+        await async_session.flush()
+
+        # First aggregate update
+        await _update_aggregates(
+            priority_id=priority.id,
+            streak=1,
+            actual_hours=5.0,
+            session=async_session,
+        )
+        await async_session.refresh(priority)
+
+        first_total = priority.total_hours_invested
+        first_avg = priority.avg_hours_week
+
+        # Second aggregate update (simulating duplicate call)
+        await _update_aggregates(
+            priority_id=priority.id,
+            streak=1,
+            actual_hours=5.0,
+            session=async_session,
+        )
+        await async_session.refresh(priority)
+
+        # Values should be unchanged (no double-counting)
+        assert priority.total_hours_invested == first_total, \
+            "total_hours_invested should not change on duplicate update"
+        assert priority.avg_hours_week == first_avg, \
+            "avg_hours_week should not change on duplicate update"
+
+        # Verify actual values
+        assert priority.total_hours_invested == Decimal("5.0")
+        assert priority.avg_hours_week == Decimal("5.0")
+
+        await async_session.commit()
+
+
+class TestRealDBZeroHoursAvg:
+    """Tests for zero hours handling using real Postgres."""
+
+    @pytest.mark.asyncio
+    async def test_zero_hours_snapshot_avg_is_zero_not_null(self, async_session):
+        """
+        Snapshot with actual_hours=0 results in avg_hours_week=0.0, not NULL.
+
+        Tests the `is not None` fix for falsy value handling.
+        """
+        # Create test user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create test priority
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            desired_result="Test result",
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        # Insert snapshot with zero hours
+        snapshot = PgWeeklySnapshot(
+            priority_id=priority.id,
+            user_id=user.id,
+            week_start=date(2026, 2, 2),
+            week_end=date(2026, 2, 8),
+            actual_hours=Decimal("0.0"),
+            event_count=0,
+            target_hours=Decimal("10.0"),
+            flex_status="behind",
+            streak_at_snapshot=0,
+        )
+        async_session.add(snapshot)
+        await async_session.flush()
+
+        # Call _update_aggregates
+        await _update_aggregates(
+            priority_id=priority.id,
+            streak=0,
+            actual_hours=0.0,
+            session=async_session,
+        )
+
+        # Refresh priority to get updated values
+        await async_session.refresh(priority)
+
+        # avg_hours_week should be 0.0, NOT None
+        assert priority.avg_hours_week is not None, \
+            "avg_hours_week should not be None for zero hours"
+        assert priority.avg_hours_week == Decimal("0.0"), \
+            f"Expected 0.0, got {priority.avg_hours_week}"
+
+        # total_hours_invested should also be 0.0
+        assert priority.total_hours_invested == Decimal("0.0"), \
+            f"Expected 0.0, got {priority.total_hours_invested}"
+
+        await async_session.commit()

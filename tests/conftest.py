@@ -132,11 +132,13 @@ async def cleanup_db(async_engine):
     yield  # Let the test run first
 
     # Clean up: Truncate all tables after test
+    # Order matters for FK constraints: snapshot tables before priorities
     async with async_engine.begin() as conn:
         await conn.execute(
             text(
                 "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
-                "focused_scheduled_jobs, clarity_clusters, pg_deliverables, pg_priorities, "
+                "focused_scheduled_jobs, clarity_clusters, "
+                "pg_weekly_snapshots, pg_weekly_overview, pg_deliverables, pg_priorities, "
                 "core_connections, core_users, core_tool_audit_log, core_consents, "
                 "oauth_authorization_codes, oauth_access_tokens, oauth_state "
                 "RESTART IDENTITY CASCADE"
