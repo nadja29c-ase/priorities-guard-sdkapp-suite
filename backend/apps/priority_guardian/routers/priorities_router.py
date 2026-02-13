@@ -93,8 +93,7 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
         .where(PgPriority.user_id == user_id)
         .options(selectinload(PgPriority.deliverables))
         .order_by(
-            # Active first (active < retired alphabetically works, but explicit is clearer)
-            PgPriority.status.desc(),  # 'retired' > 'active' so desc puts active first
+            PgPriority.status.asc(),  # 'active' < 'retired' alphabetically → active first
             PgPriority.created_at.asc(),
         )
     )
@@ -144,7 +143,7 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
             "calendar_keyword": p.calendar_keyword,
             "status": p.status,
             "deadline": p.deadline.isoformat() if p.deadline else None,
-            "weekly_hour_target": float(p.weekly_hour_target) if p.weekly_hour_target else None,
+            "weekly_hour_target": float(p.weekly_hour_target) if p.weekly_hour_target is not None else None,
             "checkpoint_date": p.checkpoint_date.isoformat() if p.checkpoint_date else None,
             "desired_result": p.desired_result,
             "deliverables": deliverables_data,
@@ -154,8 +153,8 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
 
         # Include all aggregates for all priority types (Inc 08)
         priority_data["streak_count"] = p.streak_count
-        priority_data["avg_hours_week"] = float(p.avg_hours_week) if p.avg_hours_week else None
-        priority_data["total_hours_invested"] = float(p.total_hours_invested) if p.total_hours_invested else 0.0
+        priority_data["avg_hours_week"] = float(p.avg_hours_week) if p.avg_hours_week is not None else None
+        priority_data["total_hours_invested"] = float(p.total_hours_invested) if p.total_hours_invested is not None else 0.0
 
         priorities_data.append(priority_data)
 
@@ -355,7 +354,7 @@ async def create_priority(
             "calendar_keyword": priority.calendar_keyword,
             "status": priority.status,
             "deadline": priority.deadline.isoformat() if priority.deadline else None,
-            "weekly_hour_target": float(priority.weekly_hour_target) if priority.weekly_hour_target else None,
+            "weekly_hour_target": float(priority.weekly_hour_target) if priority.weekly_hour_target is not None else None,
             "checkpoint_date": priority.checkpoint_date.isoformat() if priority.checkpoint_date else None,
             "desired_result": priority.desired_result,
             "deliverables": [],  # Always empty on creation
