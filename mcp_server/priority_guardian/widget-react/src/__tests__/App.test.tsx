@@ -810,17 +810,17 @@ describe('App', () => {
         expect(screen.queryByText(/invested total/i)).not.toBeInTheDocument()
       })
 
-      it('calculates percentage correctly: 4.2/5 = 84%', () => {
+      it('rounds percentage correctly at boundary: 2.49/5 = 50%', () => {
         const priority: Priority = {
           ...flexiblePriority,
-          avgHoursWeek: 4.2,
+          avgHoursWeek: 2.49,
           weeklyHourTarget: 5,
         }
         setMockPriorities([priority], true)
         render(<App />)
 
-        // Verify the exact calculation: Math.round(4.2 / 5 * 100) = 84
-        expect(screen.getByText(/~84%/)).toBeInTheDocument()
+        // Verify rounding: Math.round(2.49 / 5 * 100) = Math.round(49.8) = 50
+        expect(screen.getByText(/~50%/)).toBeInTheDocument()
       })
 
       it('does not show stats in edit mode', async () => {
@@ -893,6 +893,7 @@ describe('App', () => {
         expect(progressBar).toHaveAttribute('aria-valuenow', '1')
         expect(progressBar).toHaveAttribute('aria-valuemin', '0')
         expect(progressBar).toHaveAttribute('aria-valuemax', '2')
+        expect(progressBar).toHaveAttribute('aria-label', '1 of 2 deliverables completed')
       })
     })
 

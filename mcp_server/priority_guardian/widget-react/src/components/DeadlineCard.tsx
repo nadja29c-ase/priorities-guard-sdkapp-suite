@@ -290,7 +290,7 @@ export function DeadlineCard({
             aria-valuenow={doneCount}
             aria-valuemin={0}
             aria-valuemax={totalCount}
-            aria-label={`${doneCount} of ${totalCount} deliverables complete`}
+            aria-label={`${doneCount} of ${totalCount} deliverables completed`}
           >
             <div
               className="h-full bg-[color:var(--gray-400)] rounded-full transition-all duration-300 ease-out"
@@ -300,7 +300,7 @@ export function DeadlineCard({
         )}
 
         {/* Aggregate stats - non-edit mode only */}
-        {!isEditing && (priority.totalHoursInvested != null && priority.totalHoursInvested > 0 || priority.avgHoursWeek != null) && (
+        {!isEditing && ((priority.totalHoursInvested != null && priority.totalHoursInvested > 0) || priority.avgHoursWeek != null) && (
           <p className="mt-1.5 text-xs text-secondary">
             {priority.totalHoursInvested != null && priority.totalHoursInvested > 0 && (
               <>{priority.totalHoursInvested.toFixed(1)}h invested total</>
