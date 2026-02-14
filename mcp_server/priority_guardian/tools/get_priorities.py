@@ -91,7 +91,6 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
         "updatedAt": p.get("updated_at"),
         # Include all aggregates for all priority types (Inc 08)
         "streakCount": p.get("streak_count", 0),
-        "avgHoursWeek": p.get("avg_hours_week"),
         "totalHoursInvested": p.get("total_hours_invested", 0.0),
         "avgTargetAchievement": p.get("avg_target_achievement"),
     }

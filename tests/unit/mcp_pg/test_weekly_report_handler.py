@@ -452,7 +452,6 @@ class TestNormalizePriorityReport:
             "target_hours": 10.0,
             "flex_status": "on_track",
             "streak_count": 0,
-            "avg_hours_week": None,
             "total_hours_invested": 0.0,
         }
 

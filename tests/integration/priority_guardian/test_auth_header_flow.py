@@ -31,7 +31,7 @@ class TestMiddlewareAuthCapture:
             nonlocal captured_value
             captured_value = auth_header_var.get()
 
-        middleware = MCPContentTypeAndAcceptFixMiddleware(mock_app)
+        middleware = MCPContentTypeAndAcceptFixMiddleware(mock_app, auth_header_var)
 
         # Simulate HTTP POST to /mcp with Authorization header
         scope = {
@@ -63,7 +63,7 @@ class TestMiddlewareAuthCapture:
             nonlocal captured_value
             captured_value = auth_header_var.get()
 
-        middleware = MCPContentTypeAndAcceptFixMiddleware(mock_app)
+        middleware = MCPContentTypeAndAcceptFixMiddleware(mock_app, auth_header_var)
 
         # Simulate HTTP POST to /mcp WITHOUT Authorization header
         scope = {

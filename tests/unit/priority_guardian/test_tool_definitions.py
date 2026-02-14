@@ -158,6 +158,7 @@ class TestAnnotationValues:
             "connect_google_calendar",
             "disconnect_google_calendar",
             "get_priorities",
+            "get_weekly_report",
             "save_semantic_grouping",
         }
 

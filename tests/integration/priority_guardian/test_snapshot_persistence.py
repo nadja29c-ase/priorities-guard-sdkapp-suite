@@ -65,10 +65,8 @@ def mock_flexible_priority():
     p.calendar_keyword = "P1"
     p.status = "active"
     p.weekly_hour_target = Decimal("10.0")
-    p.deliverables = []
     p.created_at = datetime.now()
     p.streak_count = 0
-    p.avg_hours_week = None
     p.total_hours_invested = Decimal("0")
     return p
 
@@ -82,10 +80,8 @@ def mock_deadline_priority():
     p.calendar_keyword = "P2"
     p.status = "active"
     p.deadline = date.today() + timedelta(days=30)
-    p.deliverables = []
     p.created_at = datetime.now()
     p.streak_count = 0
-    p.avg_hours_week = None
     p.total_hours_invested = Decimal("0")
     return p
 
@@ -153,25 +149,28 @@ class TestFullFlow:
         insert_result = MagicMock()
         insert_result.fetchone.return_value = (uuid4(),)
 
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("3.0")
-
+        # _update_aggregates queries:
+        # 1. total_hours_invested SUM (scalar)
         total_result = MagicMock()
         total_result.scalar.return_value = Decimal("3.0")
 
+        # 2. avg_target_achievement AVG+COUNT (fetchone returns tuple)
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("100.0"), 1)  # (avg, count)
+
         update_result = MagicMock()  # For the UPDATE statement
 
-        # New flow execute order:
+        # Execute order:
         # 1. connection, 2. existing weeks, 3. priorities
-        # Then for each priority: streak, INSERT, avg, total, UPDATE
+        # Then for each priority: streak, INSERT, total, achievement, UPDATE
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
             streak_result,
             insert_result,
-            avg_result,
             total_result,
+            achievement_result,
             update_result,
         ]
 
@@ -232,21 +231,22 @@ class TestBackfill:
         insert_result = MagicMock()
         insert_result.fetchone.return_value = (uuid4(),)  # Insert succeeded
 
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("3.0")
-
+        # _update_aggregates queries:
         total_result = MagicMock()
         total_result.scalar.return_value = Decimal("9.0")  # 3 weeks × 3h
+
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("100.0"), 3)  # (avg, count)
 
         update_result = MagicMock()
 
         # 3 weeks × 1 priority = 3 iterations
-        # Each iteration: streak, INSERT, avg, total, update
+        # Each iteration: streak, INSERT, total, achievement, update
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
-        ] + [streak_result, insert_result, avg_result, total_result, update_result] * 3
+        ] + [streak_result, insert_result, total_result, achievement_result, update_result] * 3
 
         with patch(
             "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
@@ -316,11 +316,12 @@ class TestStreakComputation:
         insert_result = MagicMock()
         insert_result.fetchone.return_value = (uuid4(),)
 
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("5.0")
-
+        # _update_aggregates queries:
         total_result = MagicMock()
         total_result.scalar.return_value = Decimal("15.0")
+
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("100.0"), 3)  # (avg, count)
 
         update_result = MagicMock()
 
@@ -338,9 +339,9 @@ class TestStreakComputation:
             conn_result,
             existing_result,
             priorities_result,
-            streak_result_1, insert_result, avg_result, total_result, update_result,  # Week 1
-            streak_result_2, insert_result, avg_result, total_result, update_result,  # Week 2
-            streak_result_3, insert_result, avg_result, total_result, update_result,  # Week 3
+            streak_result_1, insert_result, total_result, achievement_result, update_result,  # Week 1
+            streak_result_2, insert_result, total_result, achievement_result, update_result,  # Week 2
+            streak_result_3, insert_result, total_result, achievement_result, update_result,  # Week 3
         ]
 
         with patch(
@@ -397,11 +398,12 @@ class TestStreakComputation:
         insert_result = MagicMock()
         insert_result.fetchone.return_value = (uuid4(),)
 
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("0.0")
-
+        # _update_aggregates queries:
         total_result = MagicMock()
         total_result.scalar.return_value = Decimal("0.0")
+
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (None, 0)  # (avg, count) - no data
 
         update_result = MagicMock()
 
@@ -415,8 +417,8 @@ class TestStreakComputation:
             priorities_result,
             # No streak query (hours=0 returns early)
             insert_result,
-            avg_result,
             total_result,
+            achievement_result,
             update_result,
         ]
 
@@ -583,11 +585,12 @@ class TestPartialFailure:
         insert_result = MagicMock()
         insert_result.fetchone.return_value = (uuid4(),)
 
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("3.0")
-
+        # _update_aggregates queries:
         total_result = MagicMock()
         total_result.scalar.return_value = Decimal("6.0")
+
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("100.0"), 2)  # (avg, count)
 
         update_result = MagicMock()
 
@@ -605,9 +608,9 @@ class TestPartialFailure:
             conn_result,
             existing_result,
             priorities_result,
-            streak_result, insert_result, avg_result, total_result, update_result,  # Week 1 succeeds
+            streak_result, insert_result, total_result, achievement_result, update_result,  # Week 1 succeeds
             # Week 2 will fail via list_events
-            streak_result, insert_result, avg_result, total_result, update_result,  # Week 3 succeeds
+            streak_result, insert_result, total_result, achievement_result, update_result,  # Week 3 succeeds
         ]
 
         call_count = [0]
@@ -728,25 +731,20 @@ class TestDeadlinePriorityFields:
     """Tests for deadline-type priority snapshot fields."""
 
     @pytest.mark.asyncio
-    async def test_deadline_priority_snapshot_fields(
+    async def test_deadline_priority_snapshot_core_fields(
         self,
         mock_http_client,
         mock_google_connection,
         mock_deadline_priority,
     ):
         """
-        Deadline priority snapshots include pacing_status, deliverables_completed, days_remaining.
+        Deadline priority snapshots include core fields but no target_hours.
         """
         user_id = uuid4()
         mock_session = create_mock_session()
 
-        # Set up deadline priority with deliverables
+        # Set up deadline priority
         mock_deadline_priority.deadline = date(2026, 3, 15)
-        deliverable_done = MagicMock()
-        deliverable_done.done = True
-        deliverable_pending = MagicMock()
-        deliverable_pending.done = False
-        mock_deadline_priority.deliverables = [deliverable_done, deliverable_pending]
 
         conn_result = MagicMock()
         conn_result.scalar_one_or_none.return_value = mock_google_connection
@@ -763,17 +761,17 @@ class TestDeadlinePriorityFields:
         insert_result = MagicMock()
         insert_result.fetchone.return_value = (uuid4(),)
 
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("2.0")
-
+        # _update_aggregates queries:
         total_result = MagicMock()
         total_result.scalar.return_value = Decimal("2.0")
 
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (None, 1)  # (avg, count) - deadline has no target
+
         update_result = MagicMock()
 
-        # Capture the INSERT statement to verify deadline fields
+        # Capture the INSERT statement to verify fields
         captured_stmts = []
-        original_execute = mock_session.execute
 
         async def capturing_execute(stmt, *args, **kwargs):
             captured_stmts.append(stmt)
@@ -781,7 +779,7 @@ class TestDeadlinePriorityFields:
             idx = len(captured_stmts) - 1
             results = [
                 conn_result, existing_result, priorities_result,
-                streak_result, insert_result, avg_result, total_result, update_result
+                streak_result, insert_result, total_result, achievement_result, update_result
             ]
             return results[idx] if idx < len(results) else MagicMock()
 
@@ -819,37 +817,35 @@ class TestDeadlinePriorityFields:
 
         assert result["created"] == 1
 
-        # Find the INSERT statement and verify deadline-specific fields
+        # Find the INSERT statement and verify core fields
         # The INSERT is the 5th statement (after conn, existing, priorities, streak)
         insert_stmt = captured_stmts[4]
 
         # Get the compiled parameters from the INSERT statement
-        # For SQLAlchemy dialect insert, we check the values
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
         if hasattr(insert_stmt, 'compile'):
             compiled = insert_stmt.compile()
             params = compiled.params
 
-            # Verify deadline-specific fields are present
-            assert params.get("deadline_date") == date(2026, 3, 15)
-            assert params.get("deliverables_completed") == 1  # 1 done
-            assert params.get("deliverables_total") == 2  # 2 total
-            assert params.get("days_remaining") is not None  # Computed from deadline - week_end
-            assert params.get("pacing_status") in ["ahead", "on_track", "behind"]
+            # Core fields present
+            assert params.get("priority_id") == mock_deadline_priority.id
+            assert params.get("actual_hours") == Decimal("2.0")
+            assert params.get("streak_at_snapshot") == 1  # First week
+            # Deadline priorities don't have weekly_hour_target
+            assert params.get("target_hours") is None
 
 
 class TestAggregateComputation:
-    """Tests for aggregate computation (avg_hours_week)."""
+    """Tests for aggregate computation (total_hours_invested, avg_target_achievement)."""
 
     @pytest.mark.asyncio
-    async def test_avg_hours_week_computed_correctly_after_multiple_snapshots(
+    async def test_total_hours_computed_correctly_after_multiple_snapshots(
         self,
         mock_http_client,
         mock_google_connection,
         mock_flexible_priority,
     ):
         """
-        After 3 weeks of snapshots (4h, 6h, 8h), avg_hours_week = 6.0.
+        After 3 weeks of snapshots (4h, 6h, 8h), total_hours_invested = 18.0.
         """
         user_id = uuid4()
         mock_session = create_mock_session()
@@ -869,36 +865,12 @@ class TestAggregateComputation:
         insert_result = MagicMock()
         insert_result.fetchone.return_value = (uuid4(),)
 
-        # Track the AVG values passed to UPDATE
-        captured_avg_values = []
-        update_call_count = [0]
-
-        async def capturing_execute(stmt, *args, **kwargs):
-            # Check if this is the UPDATE statement (contains avg_hours)
-            stmt_str = str(stmt) if hasattr(stmt, '__str__') else ""
-            if "UPDATE" in stmt_str and "avg_hours" in stmt_str:
-                # This is a raw text UPDATE, extract params
-                if args:
-                    params = args[0]
-                    if isinstance(params, dict) and "avg_hours" in params:
-                        captured_avg_values.append(params["avg_hours"])
-            return MagicMock()
-
-        # Build a more detailed mock that tracks AVG computation
-        # Week 1: 4h -> AVG = 4.0, SUM = 4.0
-        # Week 2: 6h -> AVG = (4+6)/2 = 5.0, SUM = 10.0
-        # Week 3: 8h -> AVG = (4+6+8)/3 = 6.0, SUM = 18.0
-        avg_results = [Decimal("4.0"), Decimal("5.0"), Decimal("6.0")]
+        # Build mocks for aggregate computation
+        # Week 1: 4h -> SUM = 4.0
+        # Week 2: 6h -> SUM = 10.0
+        # Week 3: 8h -> SUM = 18.0
         total_results = [Decimal("4.0"), Decimal("10.0"), Decimal("18.0")]
-        avg_call_idx = [0]
         total_call_idx = [0]
-
-        def make_avg_result():
-            result = MagicMock()
-            idx = avg_call_idx[0]
-            result.scalar.return_value = avg_results[idx] if idx < len(avg_results) else Decimal("0")
-            avg_call_idx[0] += 1
-            return result
 
         def make_total_result():
             result = MagicMock()
@@ -907,22 +879,35 @@ class TestAggregateComputation:
             total_call_idx[0] += 1
             return result
 
+        # Achievement result mock (returns count < 2 for first two calls, then count >= 2)
+        def make_achievement_result():
+            result = MagicMock()
+            idx = total_call_idx[0] - 1  # Use same index
+            # First 2 weeks: count < 2, achievement is NULL
+            # Week 3: count = 3, achievement computed
+            if idx < 2:
+                result.fetchone.return_value = (None, idx + 1)
+            else:
+                # AVG(40%, 60%, 80%) = 60%
+                result.fetchone.return_value = (Decimal("60.0"), 3)
+            return result
+
         update_result = MagicMock()
 
-        # 3 weeks, each with: streak, INSERT, avg, total, update
+        # 3 weeks, each with: streak, INSERT, total, achievement, update
         mock_session.execute.side_effect = [
             conn_result,
             existing_result,
             priorities_result,
             # Week 1
-            streak_result, insert_result, make_avg_result(), make_total_result(), update_result,
+            streak_result, insert_result, make_total_result(), make_achievement_result(), update_result,
             # Week 2
-            streak_result, insert_result, make_avg_result(), make_total_result(), update_result,
+            streak_result, insert_result, make_total_result(), make_achievement_result(), update_result,
             # Week 3
-            streak_result, insert_result, make_avg_result(), make_total_result(), update_result,
+            streak_result, insert_result, make_total_result(), make_achievement_result(), update_result,
         ]
 
-        # Different hours per week to verify AVG computation
+        # Different hours per week to verify SUM computation
         call_idx = [0]
         hours_per_week = [4.0, 6.0, 8.0]
 
@@ -965,9 +950,8 @@ class TestAggregateComputation:
 
         assert result["created"] == 3
 
-        # Verify AVG was called 3 times with increasing averages
-        # The avg_call_idx should have been incremented 3 times
-        assert avg_call_idx[0] == 3
+        # Verify SUM was computed 3 times
+        assert total_call_idx[0] == 3
 
 
 # =============================================================================
@@ -1023,9 +1007,7 @@ class TestRealDBUniqueConstraint:
                 week_start=week_start,
                 week_end=week_end,
                 actual_hours=Decimal("5.0"),
-                event_count=3,
                 target_hours=Decimal("10.0"),
-                flex_status="behind",
                 streak_at_snapshot=1,
             )
             .on_conflict_do_nothing(index_elements=["priority_id", "week_start"])
@@ -1044,9 +1026,7 @@ class TestRealDBUniqueConstraint:
                 week_start=week_start,
                 week_end=week_end,
                 actual_hours=Decimal("8.0"),  # Different value
-                event_count=5,
                 target_hours=Decimal("10.0"),
-                flex_status="on_track",
                 streak_at_snapshot=2,
             )
             .on_conflict_do_nothing(index_elements=["priority_id", "week_start"])
@@ -1110,9 +1090,7 @@ class TestRealDBSumBasedAggregates:
                 week_start=week_start,
                 week_end=week_end,
                 actual_hours=hours,
-                event_count=int(hours),
                 target_hours=Decimal("10.0"),
-                flex_status="behind",
                 streak_at_snapshot=1,
             )
             async_session.add(snapshot)
@@ -1137,9 +1115,9 @@ class TestRealDBSumBasedAggregates:
         await async_session.commit()
 
     @pytest.mark.asyncio
-    async def test_avg_hours_week_equals_avg_of_snapshots(self, async_session):
+    async def test_avg_target_achievement_computed_with_target(self, async_session):
         """
-        avg_hours_week = AVG(actual_hours) from all snapshots.
+        avg_target_achievement = AVG(actual_hours * 100 / target_hours) from all snapshots.
         """
         # Create test user
         user = CoreUser(id=uuid4())
@@ -1160,7 +1138,8 @@ class TestRealDBSumBasedAggregates:
         async_session.add(priority)
         await async_session.flush()
 
-        # Insert 3 snapshots with hours: 4h, 6h, 8h -> AVG = 6.0
+        # Insert 3 snapshots with hours: 4h, 6h, 8h against 10h target
+        # Percentages: 40%, 60%, 80% -> AVG = 60%
         weeks = [
             (date(2026, 1, 19), date(2026, 1, 25), Decimal("4.0")),
             (date(2026, 1, 26), date(2026, 2, 1), Decimal("6.0")),
@@ -1174,9 +1153,7 @@ class TestRealDBSumBasedAggregates:
                 week_start=week_start,
                 week_end=week_end,
                 actual_hours=hours,
-                event_count=int(hours),
                 target_hours=Decimal("10.0"),
-                flex_status="behind",
                 streak_at_snapshot=1,
             )
             async_session.add(snapshot)
@@ -1194,9 +1171,9 @@ class TestRealDBSumBasedAggregates:
         # Refresh priority to get updated values
         await async_session.refresh(priority)
 
-        # Verify avg_hours_week = (4 + 6 + 8) / 3 = 6.0
-        assert priority.avg_hours_week == Decimal("6.0"), \
-            f"Expected 6.0, got {priority.avg_hours_week}"
+        # Verify avg_target_achievement = (40 + 60 + 80) / 3 = 60%
+        assert priority.avg_target_achievement == Decimal("60.0"), \
+            f"Expected 60.0, got {priority.avg_target_achievement}"
 
         await async_session.commit()
 
@@ -1237,9 +1214,7 @@ class TestRealDBIdempotentAggregates:
             week_start=date(2026, 2, 2),
             week_end=date(2026, 2, 8),
             actual_hours=Decimal("5.0"),
-            event_count=3,
             target_hours=Decimal("10.0"),
-            flex_status="behind",
             streak_at_snapshot=1,
         )
         async_session.add(snapshot)
@@ -1255,7 +1230,6 @@ class TestRealDBIdempotentAggregates:
         await async_session.refresh(priority)
 
         first_total = priority.total_hours_invested
-        first_avg = priority.avg_hours_week
 
         # Second aggregate update (simulating duplicate call)
         await _update_aggregates(
@@ -1269,23 +1243,20 @@ class TestRealDBIdempotentAggregates:
         # Values should be unchanged (no double-counting)
         assert priority.total_hours_invested == first_total, \
             "total_hours_invested should not change on duplicate update"
-        assert priority.avg_hours_week == first_avg, \
-            "avg_hours_week should not change on duplicate update"
 
-        # Verify actual values
+        # Verify actual value
         assert priority.total_hours_invested == Decimal("5.0")
-        assert priority.avg_hours_week == Decimal("5.0")
 
         await async_session.commit()
 
 
-class TestRealDBZeroHoursAvg:
+class TestRealDBZeroHours:
     """Tests for zero hours handling using real Postgres."""
 
     @pytest.mark.asyncio
-    async def test_zero_hours_snapshot_avg_is_zero_not_null(self, async_session):
+    async def test_zero_hours_snapshot_total_is_zero_not_null(self, async_session):
         """
-        Snapshot with actual_hours=0 results in avg_hours_week=0.0, not NULL.
+        Snapshot with actual_hours=0 results in total_hours_invested=0.0, not NULL.
 
         Tests the `is not None` fix for falsy value handling.
         """
@@ -1315,9 +1286,7 @@ class TestRealDBZeroHoursAvg:
             week_start=date(2026, 2, 2),
             week_end=date(2026, 2, 8),
             actual_hours=Decimal("0.0"),
-            event_count=0,
             target_hours=Decimal("10.0"),
-            flex_status="behind",
             streak_at_snapshot=0,
         )
         async_session.add(snapshot)
@@ -1334,13 +1303,9 @@ class TestRealDBZeroHoursAvg:
         # Refresh priority to get updated values
         await async_session.refresh(priority)
 
-        # avg_hours_week should be 0.0, NOT None
-        assert priority.avg_hours_week is not None, \
-            "avg_hours_week should not be None for zero hours"
-        assert priority.avg_hours_week == Decimal("0.0"), \
-            f"Expected 0.0, got {priority.avg_hours_week}"
-
-        # total_hours_invested should also be 0.0
+        # total_hours_invested should be 0.0, NOT None
+        assert priority.total_hours_invested is not None, \
+            "total_hours_invested should not be None for zero hours"
         assert priority.total_hours_invested == Decimal("0.0"), \
             f"Expected 0.0, got {priority.total_hours_invested}"
 

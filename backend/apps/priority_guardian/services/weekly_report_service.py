@@ -372,7 +372,6 @@ async def generate_weekly_report(
             pdata["flex_status"] = compute_flex_status(actual, target)
             # Aggregate fields stay at defaults (no snapshots to compute from)
             pdata["streak_count"] = 0
-            pdata["avg_hours_week"] = None
             pdata["total_hours_invested"] = 0.0
 
         # No previous week comparison (no snapshots)

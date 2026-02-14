@@ -38,7 +38,7 @@ async def ensure_snapshots(
 
     Called by get_priorities MCP handler on every dashboard load.
     Creates missing snapshots for up to 3 completed weeks.
-    Updates running aggregates (streak_count, avg_hours_week, total_hours_invested).
+    Updates running aggregates (streak_count, total_hours_invested, avg_target_achievement).
 
     This endpoint:
     - Is idempotent (safe to call repeatedly)

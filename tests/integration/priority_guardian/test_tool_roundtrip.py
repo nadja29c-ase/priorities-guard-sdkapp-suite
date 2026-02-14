@@ -131,11 +131,11 @@ class TestConnectGoogleCalendarRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.connect_google_calendar.backend_get",
+            "mcp_server.priority_guardian.tools.widget_tools.connect_google_calendar.backend_get",
             new_callable=AsyncMock,
             return_value=status_response,
         ), patch(
-            "mcp_server.priority_guardian.tools.connect_google_calendar.backend_post",
+            "mcp_server.priority_guardian.tools.widget_tools.connect_google_calendar.backend_post",
             new_callable=AsyncMock,
             return_value=initiate_response,
         ):
@@ -165,7 +165,7 @@ class TestConnectGoogleCalendarRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.connect_google_calendar.backend_get",
+            "mcp_server.priority_guardian.tools.widget_tools.connect_google_calendar.backend_get",
             new_callable=AsyncMock,
             return_value=status_response,
         ):
@@ -232,11 +232,11 @@ class TestDisconnectGoogleCalendarRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.disconnect_google_calendar.backend_get",
+            "mcp_server.priority_guardian.tools.widget_tools.disconnect_google_calendar.backend_get",
             new_callable=AsyncMock,
             return_value=status_response,
         ), patch(
-            "mcp_server.priority_guardian.tools.disconnect_google_calendar.backend_post",
+            "mcp_server.priority_guardian.tools.widget_tools.disconnect_google_calendar.backend_post",
             new_callable=AsyncMock,
             return_value=disconnect_response,
         ):
@@ -320,7 +320,7 @@ class TestAddPriorityRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.add_priority.backend_post",
+            "mcp_server.priority_guardian.tools.widget_tools.add_priority.backend_post",
             new_callable=AsyncMock,
             return_value=create_response,
         ), patch(
@@ -367,9 +367,8 @@ class TestUpdatePriorityRoundtrip:
             ),
         )
 
-        update_response = {"success": True}
-
-        fresh_list_response = {
+        # Backend PUT returns full priority list directly
+        update_response = {
             "success": True,
             "data": {
                 "priorities": [
@@ -388,6 +387,7 @@ class TestUpdatePriorityRoundtrip:
                     },
                 ],
                 "google_connection": {"connected": True},
+                "available_keywords": ["P2", "P3"],
             },
         }
 
@@ -396,13 +396,9 @@ class TestUpdatePriorityRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.update_priority.backend_put",
+            "mcp_server.priority_guardian.tools.widget_tools.update_priority.backend_put",
             new_callable=AsyncMock,
             return_value=update_response,
-        ), patch(
-            "mcp_server.priority_guardian.tools.update_priority.backend_get",
-            new_callable=AsyncMock,
-            return_value=fresh_list_response,
         ):
             result = await call_tool_request(request)
 
@@ -441,9 +437,8 @@ class TestDeletePriorityRoundtrip:
             ),
         )
 
-        delete_response = {"success": True}
-
-        fresh_list_response = {
+        # Backend DELETE returns full priority list directly
+        delete_response = {
             "success": True,
             "data": {
                 "priorities": [],
@@ -457,13 +452,9 @@ class TestDeletePriorityRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.delete_priority.backend_delete",
+            "mcp_server.priority_guardian.tools.widget_tools.delete_priority.backend_delete",
             new_callable=AsyncMock,
             return_value=delete_response,
-        ), patch(
-            "mcp_server.priority_guardian.tools.delete_priority.backend_get",
-            new_callable=AsyncMock,
-            return_value=fresh_list_response,
         ):
             result = await call_tool_request(request)
 
@@ -508,9 +499,8 @@ class TestDeliverableCrudRoundtrip:
             ),
         )
 
-        create_response = {"success": True}
-
-        fresh_list_response = {
+        # Backend POST returns full priority list directly
+        create_response = {
             "success": True,
             "data": {
                 "priorities": [
@@ -528,6 +518,7 @@ class TestDeliverableCrudRoundtrip:
                     },
                 ],
                 "google_connection": {"connected": True},
+                "available_keywords": ["P2", "P3"],
             },
         }
 
@@ -536,13 +527,9 @@ class TestDeliverableCrudRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.add_deliverable.backend_post",
+            "mcp_server.priority_guardian.tools.widget_tools.add_deliverable.backend_post",
             new_callable=AsyncMock,
             return_value=create_response,
-        ), patch(
-            "mcp_server.priority_guardian.tools.add_deliverable.backend_get",
-            new_callable=AsyncMock,
-            return_value=fresh_list_response,
         ):
             result = await call_tool_request(request)
 
@@ -570,9 +557,8 @@ class TestDeliverableCrudRoundtrip:
             ),
         )
 
-        update_response = {"success": True}
-
-        fresh_list_response = {
+        # Backend PUT returns full priority list directly
+        update_response = {
             "success": True,
             "data": {
                 "priorities": [
@@ -589,6 +575,7 @@ class TestDeliverableCrudRoundtrip:
                     },
                 ],
                 "google_connection": {"connected": True},
+                "available_keywords": ["P2", "P3"],
             },
         }
 
@@ -597,13 +584,9 @@ class TestDeliverableCrudRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.update_deliverable.backend_put",
+            "mcp_server.priority_guardian.tools.widget_tools.update_deliverable.backend_put",
             new_callable=AsyncMock,
             return_value=update_response,
-        ), patch(
-            "mcp_server.priority_guardian.tools.update_deliverable.backend_get",
-            new_callable=AsyncMock,
-            return_value=fresh_list_response,
         ):
             result = await call_tool_request(request)
 
@@ -630,9 +613,8 @@ class TestDeliverableCrudRoundtrip:
             ),
         )
 
-        delete_response = {"success": True}
-
-        fresh_list_response = {
+        # Backend DELETE returns full priority list directly
+        delete_response = {
             "success": True,
             "data": {
                 "priorities": [
@@ -647,6 +629,7 @@ class TestDeliverableCrudRoundtrip:
                     },
                 ],
                 "google_connection": {"connected": True},
+                "available_keywords": ["P2", "P3"],
             },
         }
 
@@ -655,13 +638,9 @@ class TestDeliverableCrudRoundtrip:
             new_callable=AsyncMock,
             return_value=mock_auth_context,
         ), patch(
-            "mcp_server.priority_guardian.tools.delete_deliverable.backend_delete",
+            "mcp_server.priority_guardian.tools.widget_tools.delete_deliverable.backend_delete",
             new_callable=AsyncMock,
             return_value=delete_response,
-        ), patch(
-            "mcp_server.priority_guardian.tools.delete_deliverable.backend_get",
-            new_callable=AsyncMock,
-            return_value=fresh_list_response,
         ):
             result = await call_tool_request(request)
 

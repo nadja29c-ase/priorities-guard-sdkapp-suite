@@ -517,9 +517,9 @@ class TestToolDefinition:
         assert WIDGET_URI == "ui://widget/pg-dashboard.html"
         assert GET_PRIORITIES.widget_uri == "ui://widget/pg-dashboard.html"
 
-    def test_read_only_hint_is_true(self):
-        """Test read_only_hint is True (no side effects)."""
-        assert GET_PRIORITIES.read_only_hint is True
+    def test_read_only_hint_is_false(self):
+        """Test read_only_hint is False (triggers snapshot writes)."""
+        assert GET_PRIORITIES.read_only_hint is False
 
     def test_destructive_hint_is_false(self):
         """Test destructive_hint is False."""

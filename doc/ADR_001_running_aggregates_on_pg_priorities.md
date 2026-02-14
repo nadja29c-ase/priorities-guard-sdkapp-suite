@@ -6,11 +6,11 @@
 
 ## Decisions
 
-1. **Aggregates on `pg_priorities`:** 'streak_count' , `avg_target_achievement`, `total_hours_invested` stored as columns, updated once per week when a snapshot is finalized — not computed on-the-fly. All three are on the dashboard hot path (every widget mount, zero extra queries). `avg_hours_week` is also stored but currently unused on the dashboard — retained for potential weekly report use.
+1. **Aggregates on `pg_priorities`:** `streak_count`, `avg_target_achievement`, `total_hours_invested` stored as columns, updated once per week when a snapshot is finalized — not computed on-the-fly. All three are on the dashboard hot path (every widget mount, zero extra queries).
 
 2. **Streak = binary (hours > 0):** Not tied to `weekly_hour_target`. Any time invested keeps the streak; zero hours breaks it. Target measures pace, streak measures attention — different dimensions. Threshold-based alternatives rejected as punishing for freelancers with variable weeks.
 
-3. **Semantic grouping in `pg_weekly_overview`**, not on `pg_weekly_snapshots`. Grouping is a user-week fact, not a priority-week fact — storing on snapshot rows would duplicate the same JSONB across 1-3 rows with no schema-enforced consistency. `UNIQUE(user_id, week_start)` enforces one row, one truth. Grouping is optional enrichment — LLM proposes, user confirms, depth is opt-in.
+3. **Semantic grouping in `pg_weekly_overview`**, not on `pg_weekly_snapshots`. Grouping is a user-week fact, not a priority-week fact — storing on snapshot rows would duplicate the same JSONB across 1-3 rows with no schema-enforced consistency. `UNIQUE(user_id, week_start)` enforces one row, one truth. Grouping is optional enrichment — LLM proposes, user confirms, depth is opt-in. *(Note: Table `pg_weekly_overview` was dropped in cleanup migration s9t0u1v2w3x4 — semantic grouping persistence deferred indefinitely.)*
 
 4. **Dashboard and weekly report must never share a cache.** Dashboard (`get_priorities` → `compute_time_allocation()`) hits Google Calendar API live on every widget mount (~5 API calls). Weekly report computes fresh 1-3 times per week. At current scale neither path is under load pressure — caching becomes relevant around 10K-20K DAU (see `pg_backlog_dashboard_caching.md`). The separation is a **correctness constraint**: if dashboard data is ever cached, the weekly report must still read fresh from Google to produce accurate snapshots. Dashboard will hit caching pressure first (higher frequency per user), but the rule exists to prevent stale data from contaminating the canonical record.
 

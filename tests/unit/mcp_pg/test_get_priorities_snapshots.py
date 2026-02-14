@@ -179,7 +179,7 @@ class TestAggregateFieldMapping:
     """Tests for aggregate fields in _normalize_priority."""
 
     def test_normalize_priority_includes_all_aggregates(self):
-        """_normalize_priority includes streakCount, avgHoursWeek, totalHoursInvested."""
+        """_normalize_priority includes streakCount, totalHoursInvested, avgTargetAchievement."""
         from mcp_server.priority_guardian.tools.get_priorities import _normalize_priority
 
         priority = {
@@ -196,16 +196,16 @@ class TestAggregateFieldMapping:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
             "streak_count": 5,
-            "avg_hours_week": 8.5,
             "total_hours_invested": 42.5,
+            "avg_target_achievement": 85.0,
         }
 
         result = _normalize_priority(priority)
 
         # All aggregate fields present
         assert result["streakCount"] == 5
-        assert result["avgHoursWeek"] == 8.5
         assert result["totalHoursInvested"] == 42.5
+        assert result["avgTargetAchievement"] == 85.0
 
     def test_normalize_priority_defaults_for_missing_aggregates(self):
         """_normalize_priority provides defaults when aggregates are missing."""
@@ -231,8 +231,8 @@ class TestAggregateFieldMapping:
 
         # Default values
         assert result["streakCount"] == 0
-        assert result["avgHoursWeek"] is None
         assert result["totalHoursInvested"] == 0.0
+        assert result["avgTargetAchievement"] is None
 
     def test_aggregates_included_for_deadline_priorities(self):
         """Deadline priorities also get aggregate fields (Inc 08)."""
@@ -252,13 +252,13 @@ class TestAggregateFieldMapping:
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-01-01T00:00:00Z",
             "streak_count": 3,
-            "avg_hours_week": 12.0,
             "total_hours_invested": 36.0,
+            "avg_target_achievement": 92.5,
         }
 
         result = _normalize_priority(priority)
 
         # Aggregates present for deadline type
         assert result["streakCount"] == 3
-        assert result["avgHoursWeek"] == 12.0
         assert result["totalHoursInvested"] == 36.0
+        assert result["avgTargetAchievement"] == 92.5

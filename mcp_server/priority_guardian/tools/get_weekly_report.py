@@ -115,7 +115,6 @@ def _normalize_priority_report(p: dict) -> dict:
         result["flexStatus"] = p.get("flex_status")
         # Aggregates are placeholders (always 0/null until persistence ships)
         result["streakCount"] = p.get("streak_count", 0)
-        result["avgHoursWeek"] = p.get("avg_hours_week")
         result["totalHoursInvested"] = p.get("total_hours_invested", 0.0)
 
     # Previous week comparison (always null until persistence ships)

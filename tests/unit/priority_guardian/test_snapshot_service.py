@@ -219,10 +219,8 @@ class TestEnsureSnapshotsUpToDate:
         p.calendar_keyword = "P1"
         p.status = "active"
         p.weekly_hour_target = Decimal("10.0")
-        p.deliverables = []
         p.created_at = datetime.now()
         p.streak_count = 0
-        p.avg_hours_week = None
         p.total_hours_invested = Decimal("0")
         return p
 
@@ -236,10 +234,8 @@ class TestEnsureSnapshotsUpToDate:
         p.calendar_keyword = "P2"
         p.status = "active"
         p.deadline = date.today() + timedelta(days=30)
-        p.deliverables = []
         p.created_at = datetime.now()
         p.streak_count = 0
-        p.avg_hours_week = None
         p.total_hours_invested = Decimal("0")
         return p
 
@@ -538,11 +534,7 @@ class TestAvgTargetAchievementComputation:
 
         priority_id = uuid4()
 
-        # Mock AVG query result
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("5.0")
-
-        # Mock SUM query result
+        # Mock SUM query result (total_hours_invested)
         sum_result = MagicMock()
         sum_result.scalar.return_value = Decimal("5.0")
 
@@ -554,7 +546,6 @@ class TestAvgTargetAchievementComputation:
         update_result = MagicMock()
 
         mock_session.execute.side_effect = [
-            avg_result,
             sum_result,
             achievement_result,
             update_result,
@@ -579,11 +570,7 @@ class TestAvgTargetAchievementComputation:
 
         priority_id = uuid4()
 
-        # Mock AVG query result
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("8.5")
-
-        # Mock SUM query result
+        # Mock SUM query result (total_hours_invested)
         sum_result = MagicMock()
         sum_result.scalar.return_value = Decimal("17.0")
 
@@ -596,7 +583,6 @@ class TestAvgTargetAchievementComputation:
         update_result = MagicMock()
 
         mock_session.execute.side_effect = [
-            avg_result,
             sum_result,
             achievement_result,
             update_result,
@@ -621,11 +607,7 @@ class TestAvgTargetAchievementComputation:
 
         priority_id = uuid4()
 
-        # Mock AVG query result
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("4.0")
-
-        # Mock SUM query result
+        # Mock SUM query result (total_hours_invested)
         sum_result = MagicMock()
         sum_result.scalar.return_value = Decimal("8.0")
 
@@ -638,7 +620,6 @@ class TestAvgTargetAchievementComputation:
         update_result = MagicMock()
 
         mock_session.execute.side_effect = [
-            avg_result,
             sum_result,
             achievement_result,
             update_result,
@@ -663,11 +644,7 @@ class TestAvgTargetAchievementComputation:
 
         priority_id = uuid4()
 
-        # Mock AVG query result
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("12.0")
-
-        # Mock SUM query result
+        # Mock SUM query result (total_hours_invested)
         sum_result = MagicMock()
         sum_result.scalar.return_value = Decimal("24.0")
 
@@ -680,7 +657,6 @@ class TestAvgTargetAchievementComputation:
         update_result = MagicMock()
 
         mock_session.execute.side_effect = [
-            avg_result,
             sum_result,
             achievement_result,
             update_result,
@@ -705,11 +681,7 @@ class TestAvgTargetAchievementComputation:
 
         priority_id = uuid4()
 
-        # Mock AVG query result
-        avg_result = MagicMock()
-        avg_result.scalar.return_value = Decimal("5.0")
-
-        # Mock SUM query result
+        # Mock SUM query result (total_hours_invested)
         sum_result = MagicMock()
         sum_result.scalar.return_value = Decimal("15.0")
 
@@ -723,7 +695,6 @@ class TestAvgTargetAchievementComputation:
         update_result = MagicMock()
 
         mock_session.execute.side_effect = [
-            avg_result,
             sum_result,
             achievement_result,
             update_result,

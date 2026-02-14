@@ -138,7 +138,7 @@ async def cleanup_db(async_engine):
             text(
                 "TRUNCATE TABLE focused_focus_sessions, focused_user_keywords, "
                 "focused_scheduled_jobs, clarity_clusters, "
-                "pg_weekly_snapshots, pg_weekly_overview, pg_deliverables, pg_priorities, "
+                "pg_weekly_snapshots, pg_deliverables, pg_priorities, "
                 "core_connections, core_users, core_tool_audit_log, core_consents, "
                 "oauth_authorization_codes, oauth_access_tokens, oauth_state "
                 "RESTART IDENTITY CASCADE"

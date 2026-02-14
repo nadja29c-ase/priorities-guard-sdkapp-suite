@@ -70,8 +70,8 @@ class TestBuildPrioritiesResponseOrdering:
         retired_priority.created_at = datetime(2024, 1, 1, 10, 0, 0)
         retired_priority.updated_at = datetime(2024, 1, 15, 10, 0, 0)
         retired_priority.streak_count = 0
-        retired_priority.avg_hours_week = None
         retired_priority.total_hours_invested = Decimal("20.0")
+        retired_priority.avg_target_achievement = None
 
         active_priority = MagicMock()
         active_priority.id = uuid4()
@@ -88,8 +88,8 @@ class TestBuildPrioritiesResponseOrdering:
         active_priority.created_at = datetime(2024, 2, 1, 10, 0, 0)
         active_priority.updated_at = datetime(2024, 2, 1, 10, 0, 0)
         active_priority.streak_count = 3
-        active_priority.avg_hours_week = Decimal("8.5")
         active_priority.total_hours_invested = Decimal("25.5")
+        active_priority.avg_target_achievement = Decimal("85.0")
 
         # Mock session with query results
         # The query should return priorities in correct order (active first)
@@ -158,8 +158,8 @@ class TestBuildPrioritiesResponseFalsyConversion:
         priority.created_at = datetime(2024, 1, 1, 10, 0, 0)
         priority.updated_at = datetime(2024, 1, 1, 10, 0, 0)
         priority.streak_count = 0
-        priority.avg_hours_week = None
         priority.total_hours_invested = Decimal("0")
+        priority.avg_target_achievement = None
 
         mock_session = AsyncMock()
         priorities_result = MagicMock()
@@ -174,27 +174,27 @@ class TestBuildPrioritiesResponseFalsyConversion:
         assert response["data"]["priorities"][0]["weekly_hour_target"] == 0.0
 
     @pytest.mark.asyncio
-    async def test_zero_avg_hours_week_preserved(self):
-        """avg_hours_week of 0 is preserved as 0.0, not None."""
+    async def test_zero_avg_target_achievement_preserved(self):
+        """avg_target_achievement of 0 is preserved as 0.0, not None."""
         user_id = uuid4()
 
         priority = MagicMock()
         priority.id = uuid4()
         priority.user_id = user_id
         priority.name = "Test Priority"
-        priority.type = "deadline"
+        priority.type = "flexible"
         priority.calendar_keyword = "P1"
         priority.status = "active"
-        priority.deadline = date.today() + timedelta(days=30)
-        priority.weekly_hour_target = None
-        priority.checkpoint_date = None
-        priority.desired_result = None
+        priority.deadline = None
+        priority.weekly_hour_target = Decimal("10.0")
+        priority.checkpoint_date = date.today() + timedelta(days=30)
+        priority.desired_result = "Test"
         priority.deliverables = []
         priority.created_at = datetime(2024, 1, 1, 10, 0, 0)
         priority.updated_at = datetime(2024, 1, 1, 10, 0, 0)
         priority.streak_count = 0
-        priority.avg_hours_week = Decimal("0")  # Zero value
         priority.total_hours_invested = Decimal("10.0")
+        priority.avg_target_achievement = Decimal("0")  # Zero value
 
         mock_session = AsyncMock()
         priorities_result = MagicMock()
@@ -206,7 +206,7 @@ class TestBuildPrioritiesResponseFalsyConversion:
         response = await build_priorities_response(mock_session, user_id)
 
         # Zero should be preserved, not converted to None
-        assert response["data"]["priorities"][0]["avg_hours_week"] == 0.0
+        assert response["data"]["priorities"][0]["avg_target_achievement"] == 0.0
 
     @pytest.mark.asyncio
     async def test_zero_total_hours_invested_preserved(self):
@@ -228,8 +228,8 @@ class TestBuildPrioritiesResponseFalsyConversion:
         priority.created_at = datetime(2024, 1, 1, 10, 0, 0)
         priority.updated_at = datetime(2024, 1, 1, 10, 0, 0)
         priority.streak_count = 0
-        priority.avg_hours_week = None
         priority.total_hours_invested = Decimal("0")  # Zero value
+        priority.avg_target_achievement = None
 
         mock_session = AsyncMock()
         priorities_result = MagicMock()

@@ -5,10 +5,9 @@ System-level entities (users, connections, etc.) live in backend.core.models.
 This module is only for Priority Guardian-specific tables.
 
 Currently:
-- PgPriority: User's declared priorities with calendar keyword tracking
+- PgPriority: User's declared priorities with calendar keyword tracking and running aggregates
 - PgDeliverable: Deliverables associated with deadline-type priorities
-- PgWeeklySnapshot: Per-priority-per-week snapshot for weekly reports (Inc 06)
-- PgWeeklyOverview: Per-user-per-week overview with semantic grouping (Inc 06/07)
+- PgWeeklySnapshot: Per-priority weekly data point for running aggregate computation
 
 Tables use `pg_*` prefix and live in the shared PostgreSQL instance alongside `core_*` tables.
 The FK `pg_priorities.user_id → core_users.id` works because they share the same database.
@@ -31,7 +30,7 @@ from sqlalchemy import (
     Index,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID as PostgreSQLUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -57,8 +56,8 @@ class PgPriority(Base):
     - Retirement: status = 'retired', retired_at = now(), data retained but frozen
     - Deletion: cascade deletes deliverables, snapshots, checkpoint history
 
-    Aggregate columns (streak_count, avg_hours_week, total_hours_invested) are placeholders
-    in Increment 02. They will be populated by weekly reflection tools in later increments.
+    Aggregate columns (streak_count, avg_target_achievement, total_hours_invested) are
+    updated by snapshot_service when weekly snapshots are finalized.
 
     GDPR note: No intended PII fields. User-entered text (name, desired_result) may contain
     personal data. Users are instructed not to include sensitive data (UX-level guidance,
@@ -144,8 +143,7 @@ class PgPriority(Base):
     )
 
     # =========================================================================
-    # Future aggregate columns (placeholders in Inc 02 - do NOT read/write)
-    # These exist for migration simplicity (avoids future backfill migration)
+    # Aggregate columns (updated by snapshot_service)
     # =========================================================================
 
     streak_count: Mapped[int] = mapped_column(
@@ -156,18 +154,12 @@ class PgPriority(Base):
         comment="Consecutive weeks with hours > 0 (binary streak rule, see ADR-001)",
     )
 
-    avg_hours_week: Mapped[Decimal | None] = mapped_column(
-        Numeric(6, 2),
-        nullable=True,
-        comment="Future: rolling average hours per week",
-    )
-
     total_hours_invested: Mapped[Decimal] = mapped_column(
         Numeric(8, 2),
         nullable=False,
         server_default=text("0"),
         default=Decimal("0"),
-        comment="Future: cumulative hours invested",
+        comment="Cumulative hours invested across all snapshotted weeks",
     )
 
     avg_target_achievement: Mapped[Decimal | None] = mapped_column(
@@ -324,16 +316,18 @@ class PgDeliverable(Base):
 
 class PgWeeklySnapshot(Base):
     """
-    Per-priority-per-week snapshot for weekly reports.
+    Per-priority weekly data point for running aggregate computation.
 
-    Stores deterministic, keyword-matched data at the time of finalization.
-    Used for week-over-week comparison and aggregate computation.
+    One row per priority per completed week. Created opportunistically on dashboard
+    load via ensure_snapshots_up_to_date(). Immutable after creation (INSERT ON
+    CONFLICT DO NOTHING).
 
-    One row per priority per week. Created opportunistically on dashboard load
-    via ensure_snapshots_up_to_date(). See ADR-001 Decision 5 for rationale.
-    Immutable after creation — INSERT ON CONFLICT DO NOTHING, no updates.
+    Used exclusively by snapshot_service._update_aggregates() to compute:
+    - streak_count: from streak_at_snapshot chain
+    - total_hours_invested: SUM(actual_hours)
+    - avg_target_achievement: AVG(actual_hours / target_hours * 100)
 
-    Deadline-specific fields are null for flexible priorities, and vice versa.
+    Not queried directly for display. All consumer-facing data lives on pg_priorities.
     """
 
     __tablename__ = "pg_weekly_snapshots"
@@ -374,61 +368,18 @@ class PgWeeklySnapshot(Base):
         comment="Sunday of the reporting week (week_start + 6)",
     )
 
-    # Core metrics (all priority types)
+    # Core metric
     actual_hours: Mapped[Decimal] = mapped_column(
         Numeric(6, 2),
         nullable=False,
         comment="Keyword-matched hours for this priority this week",
     )
 
-    event_count: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        comment="Number of keyword-matched events",
-    )
-
-    # Deadline-specific fields (nullable for flexible priorities)
-    deadline_date: Mapped[date | None] = mapped_column(
-        Date,
-        nullable=True,
-        comment="Priority's deadline at time of snapshot",
-    )
-
-    days_remaining: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True,
-        comment="Calendar days from week_end to deadline_date",
-    )
-
-    deliverables_completed: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True,
-        comment="Count of done=true deliverables at snapshot time",
-    )
-
-    deliverables_total: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True,
-        comment="Total deliverable count at snapshot time",
-    )
-
-    pacing_status: Mapped[str | None] = mapped_column(
-        String(20),
-        nullable=True,
-        comment="Pacing status: on_track, behind, ahead, completed",
-    )
-
-    # Flexible-specific fields (nullable for deadline priorities)
+    # Flexible-specific field
     target_hours: Mapped[Decimal | None] = mapped_column(
         Numeric(6, 2),
         nullable=True,
         comment="weekly_hour_target at time of snapshot",
-    )
-
-    flex_status: Mapped[str | None] = mapped_column(
-        String(20),
-        nullable=True,
-        comment="Flex status: ahead, on_track, behind (based on 80%/110% thresholds)",
     )
 
     streak_at_snapshot: Mapped[int | None] = mapped_column(
@@ -461,100 +412,10 @@ class PgWeeklySnapshot(Base):
             "actual_hours >= 0",
             name="ck_pg_weekly_snapshots_actual_hours_non_negative",
         ),
-        CheckConstraint(
-            "event_count >= 0",
-            name="ck_pg_weekly_snapshots_event_count_non_negative",
-        ),
     )
 
     def __repr__(self) -> str:
         return (
             f"<PgWeeklySnapshot id={self.id}, priority_id={self.priority_id}, "
             f"week_start={self.week_start}, actual_hours={self.actual_hours}>"
-        )
-
-
-class PgWeeklyOverview(Base):
-    """
-    Per-user-per-week overview with semantic grouping.
-
-    Stores user-week-level data that doesn't belong on per-priority snapshot rows.
-    The semantic_grouping column holds user-confirmed categories for non-priority time.
-
-    Created empty in Inc 06. Populated by Inc 07's save_semantic_grouping tool via UPSERT.
-    No rows created by weekly report save - rows only exist when semantic grouping is saved.
-
-    Shape of semantic_grouping:
-    [{"category": "Client calls", "hours": 8.5, "event_count": 12}, ...]
-    """
-
-    __tablename__ = "pg_weekly_overview"
-
-    # Primary key (server-generated UUID)
-    id: Mapped[UUID] = mapped_column(
-        PostgreSQLUUID(as_uuid=True),
-        primary_key=True,
-        server_default=func.gen_random_uuid(),
-        comment="Internal identifier",
-    )
-
-    # Foreign key
-    user_id: Mapped[UUID] = mapped_column(
-        PostgreSQLUUID(as_uuid=True),
-        ForeignKey("core_users.id", ondelete="CASCADE"),
-        nullable=False,
-        comment="Owner user ID",
-    )
-
-    # Week identifier
-    week_start: Mapped[date] = mapped_column(
-        Date,
-        nullable=False,
-        comment="Monday of the reporting week",
-    )
-
-    # Cached other_hours from calendar fetch (set during weekly report generation)
-    # Used by save_semantic_grouping to avoid duplicate Google Calendar API call
-    other_hours: Mapped[Decimal | None] = mapped_column(
-        Numeric(6, 2),
-        nullable=True,
-        comment="Non-priority hours from calendar (cached during report generation)",
-    )
-
-    # Semantic grouping (populated by Inc 07's save_semantic_grouping tool)
-    semantic_grouping: Mapped[list | None] = mapped_column(
-        JSONB,
-        nullable=True,
-        comment="User-confirmed categories: [{category, hours, event_count}, ...]",
-    )
-
-    # Audit timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        comment="When overview was created",
-    )
-
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-        comment="When overview was last updated",
-    )
-
-    # Table-level constraints
-    __table_args__ = (
-        UniqueConstraint(
-            "user_id", "week_start",
-            name="uq_pg_weekly_overview_user_week",
-        ),
-    )
-
-    def __repr__(self) -> str:
-        has_grouping = self.semantic_grouping is not None
-        return (
-            f"<PgWeeklyOverview id={self.id}, user_id={self.user_id}, "
-            f"week_start={self.week_start}, has_grouping={has_grouping}>"
         )

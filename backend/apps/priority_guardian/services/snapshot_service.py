@@ -2,7 +2,7 @@
 Snapshot service for Priority Guardian.
 
 Creates weekly snapshots opportunistically when the user opens the dashboard.
-Updates running aggregates (streak_count, avg_hours_week, total_hours_invested)
+Updates running aggregates (streak_count, total_hours_invested, avg_target_achievement)
 on pg_priorities.
 
 See ADR-001 for design rationale and increment_08_snapshots.md for full spec.
@@ -19,8 +19,6 @@ import httpx
 from sqlalchemy import select, func, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-
 from backend.core.models import CoreConnection
 from backend.core.google_calendar import list_events, get_user_timezone
 from backend.core.google_token_management import ensure_valid_access_token
@@ -32,8 +30,6 @@ from backend.apps.priority_guardian.services.calendar_service import (
 )
 from backend.apps.priority_guardian.services.weekly_report_service import (
     is_week_complete,
-    compute_flex_status,
-    compute_pacing_status,
 )
 
 logger = structlog.get_logger(__name__)
@@ -170,7 +166,6 @@ async def _ensure_snapshots_impl(
     # -------------------------------------------------------------------------
     priorities_result = await session.execute(
         select(PgPriority)
-        .options(selectinload(PgPriority.deliverables))
         .where(
             PgPriority.user_id == user_id,
             PgPriority.status == "active",
@@ -310,7 +305,6 @@ async def _create_snapshots_for_week(
         kw = priority.calendar_keyword
         kw_data = keywords_data.get(kw, {"hours": 0.0, "event_count": 0})
         actual_hours = kw_data["hours"]
-        event_count = kw_data["event_count"]
 
         # Compute streak
         streak = await _compute_streak(
@@ -320,46 +314,17 @@ async def _create_snapshots_for_week(
             session=session,
         )
 
-        # Build insert params - common fields
+        # Build insert params
         insert_params = {
             "priority_id": priority.id,
             "user_id": user_id,
             "week_start": week_start,
             "week_end": week_end,
             "actual_hours": Decimal(str(actual_hours)),
-            "event_count": event_count,
             "streak_at_snapshot": streak,
-            # Type-specific fields - default to None
-            "deadline_date": None,
-            "days_remaining": None,
-            "deliverables_completed": None,
-            "deliverables_total": None,
-            "pacing_status": None,
-            "target_hours": None,
-            "flex_status": None,
+            # target_hours only set for flexible priorities
+            "target_hours": priority.weekly_hour_target if priority.type == "flexible" else None,
         }
-
-        # Type-specific fields
-        if priority.type == "deadline":
-            insert_params["deadline_date"] = priority.deadline
-            if priority.deadline:
-                insert_params["days_remaining"] = (priority.deadline - week_end).days
-            done_count = sum(1 for d in priority.deliverables if d.done)
-            total_count = len(priority.deliverables)
-            insert_params["deliverables_completed"] = done_count
-            insert_params["deliverables_total"] = total_count
-            if priority.deadline:
-                insert_params["pacing_status"] = compute_pacing_status(
-                    done_count, total_count, priority.created_at, priority.deadline, week_end
-                )
-            else:
-                insert_params["pacing_status"] = "on_track"
-
-        elif priority.type == "flexible":
-            insert_params["target_hours"] = priority.weekly_hour_target
-            insert_params["flex_status"] = compute_flex_status(
-                actual_hours, float(priority.weekly_hour_target or 0)
-            )
 
         # INSERT with ON CONFLICT DO NOTHING RETURNING id
         # If RETURNING returns a row, insert succeeded. If empty, row already existed.
@@ -450,18 +415,9 @@ async def _update_aggregates(
 
     - streak_count = streak_at_snapshot just computed
     - total_hours_invested = SUM of all snapshots for this priority
-    - avg_hours_week = AVG of all snapshots for this priority
     - avg_target_achievement = AVG of (actual_hours / target_hours * 100) for all snapshots
       with valid target_hours, NULL if < 2 data points
     """
-    # Compute avg_hours_week from all snapshots for this priority
-    avg_result = await session.execute(
-        select(func.avg(PgWeeklySnapshot.actual_hours)).where(
-            PgWeeklySnapshot.priority_id == priority_id,
-        )
-    )
-    avg_hours = avg_result.scalar()
-
     # Compute total_hours_invested from all snapshots (derived, not incremented)
     total_result = await session.execute(
         select(func.sum(PgWeeklySnapshot.actual_hours)).where(
@@ -497,7 +453,6 @@ async def _update_aggregates(
             SET
                 streak_count = :streak,
                 total_hours_invested = :total_hours,
-                avg_hours_week = :avg_hours,
                 avg_target_achievement = :avg_target_achievement,
                 updated_at = NOW()
             WHERE id = :priority_id AND status = 'active'
@@ -505,7 +460,6 @@ async def _update_aggregates(
         {
             "streak": streak,
             "total_hours": Decimal(str(total_hours)) if total_hours is not None else Decimal("0"),
-            "avg_hours": Decimal(str(avg_hours)) if avg_hours is not None else None,
             "avg_target_achievement": avg_target_achievement,
             "priority_id": priority_id,
         }

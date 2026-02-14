@@ -153,7 +153,6 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
 
         # Include all aggregates for all priority types (Inc 08)
         priority_data["streak_count"] = p.streak_count
-        priority_data["avg_hours_week"] = float(p.avg_hours_week) if p.avg_hours_week is not None else None
         priority_data["total_hours_invested"] = float(p.total_hours_invested) if p.total_hours_invested is not None else 0.0
         priority_data["avg_target_achievement"] = float(p.avg_target_achievement) if p.avg_target_achievement is not None else None
 
