@@ -170,6 +170,12 @@ class PgPriority(Base):
         comment="Future: cumulative hours invested",
     )
 
+    avg_target_achievement: Mapped[Decimal | None] = mapped_column(
+        Numeric(6, 2),
+        nullable=True,
+        comment="Average % of weekly target achieved across all snapshotted weeks. NULL when < 2 data points.",
+    )
+
     # Retirement timestamp (set when status changes to 'retired')
     retired_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

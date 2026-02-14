@@ -521,3 +521,223 @@ class TestIdempotency:
         # IntegrityError on duplicate should be caught and handled gracefully
         error = IntegrityError("statement", {}, Exception("duplicate key"))
         assert "duplicate" in str(error.orig).lower() or "IntegrityError" in str(type(error).__name__)
+
+
+class TestAvgTargetAchievementComputation:
+    """Tests for avg_target_achievement computation in _update_aggregates."""
+
+    @pytest.fixture
+    def mock_session(self):
+        """Create a mock async session."""
+        return AsyncMock()
+
+    @pytest.mark.asyncio
+    async def test_null_when_fewer_than_two_snapshots(self, mock_session):
+        """avg_target_achievement is NULL when fewer than 2 data points."""
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        priority_id = uuid4()
+
+        # Mock AVG query result
+        avg_result = MagicMock()
+        avg_result.scalar.return_value = Decimal("5.0")
+
+        # Mock SUM query result
+        sum_result = MagicMock()
+        sum_result.scalar.return_value = Decimal("5.0")
+
+        # Mock achievement query result: 1 snapshot (< 2 required)
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("80.0"), 1)
+
+        # Mock update query
+        update_result = MagicMock()
+
+        mock_session.execute.side_effect = [
+            avg_result,
+            sum_result,
+            achievement_result,
+            update_result,
+        ]
+
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=1,
+            actual_hours=5.0,
+            session=mock_session,
+        )
+
+        # Verify the UPDATE was called with avg_target_achievement = NULL
+        update_call = mock_session.execute.call_args_list[-1]
+        params = update_call[0][1]
+        assert params["avg_target_achievement"] is None
+
+    @pytest.mark.asyncio
+    async def test_correctly_averaged_with_two_or_more_snapshots(self, mock_session):
+        """avg_target_achievement is correctly computed when >= 2 data points."""
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        priority_id = uuid4()
+
+        # Mock AVG query result
+        avg_result = MagicMock()
+        avg_result.scalar.return_value = Decimal("8.5")
+
+        # Mock SUM query result
+        sum_result = MagicMock()
+        sum_result.scalar.return_value = Decimal("17.0")
+
+        # Mock achievement query result: 2 snapshots, avg = 85%
+        # (e.g., week 1: 8/10 = 80%, week 2: 9/10 = 90% → avg = 85%)
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("85.0"), 2)
+
+        # Mock update query
+        update_result = MagicMock()
+
+        mock_session.execute.side_effect = [
+            avg_result,
+            sum_result,
+            achievement_result,
+            update_result,
+        ]
+
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=2,
+            actual_hours=9.0,
+            session=mock_session,
+        )
+
+        # Verify the UPDATE was called with avg_target_achievement = 85.0
+        update_call = mock_session.execute.call_args_list[-1]
+        params = update_call[0][1]
+        assert params["avg_target_achievement"] == Decimal("85.0")
+
+    @pytest.mark.asyncio
+    async def test_zero_hour_week_contributes_zero_percent(self, mock_session):
+        """A zero-hour week contributes 0% to the average."""
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        priority_id = uuid4()
+
+        # Mock AVG query result
+        avg_result = MagicMock()
+        avg_result.scalar.return_value = Decimal("4.0")
+
+        # Mock SUM query result
+        sum_result = MagicMock()
+        sum_result.scalar.return_value = Decimal("8.0")
+
+        # Mock achievement query result:
+        # Week 1: 8/10 = 80%, Week 2: 0/10 = 0% → avg = 40%
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("40.0"), 2)
+
+        # Mock update query
+        update_result = MagicMock()
+
+        mock_session.execute.side_effect = [
+            avg_result,
+            sum_result,
+            achievement_result,
+            update_result,
+        ]
+
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=0,  # Zero hours breaks streak
+            actual_hours=0.0,
+            session=mock_session,
+        )
+
+        # Verify the UPDATE was called with avg_target_achievement = 40.0
+        update_call = mock_session.execute.call_args_list[-1]
+        params = update_call[0][1]
+        assert params["avg_target_achievement"] == Decimal("40.0")
+
+    @pytest.mark.asyncio
+    async def test_over_100_percent_allowed(self, mock_session):
+        """avg_target_achievement can exceed 100% when actual > target."""
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        priority_id = uuid4()
+
+        # Mock AVG query result
+        avg_result = MagicMock()
+        avg_result.scalar.return_value = Decimal("12.0")
+
+        # Mock SUM query result
+        sum_result = MagicMock()
+        sum_result.scalar.return_value = Decimal("24.0")
+
+        # Mock achievement query result:
+        # Week 1: 12/10 = 120%, Week 2: 14/10 = 140% → avg = 130%
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("130.0"), 2)
+
+        # Mock update query
+        update_result = MagicMock()
+
+        mock_session.execute.side_effect = [
+            avg_result,
+            sum_result,
+            achievement_result,
+            update_result,
+        ]
+
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=2,
+            actual_hours=14.0,
+            session=mock_session,
+        )
+
+        # Verify the UPDATE was called with avg_target_achievement = 130.0
+        update_call = mock_session.execute.call_args_list[-1]
+        params = update_call[0][1]
+        assert params["avg_target_achievement"] == Decimal("130.0")
+
+    @pytest.mark.asyncio
+    async def test_zero_target_hours_excluded_from_average(self, mock_session):
+        """Snapshots with target_hours = 0 are excluded from avg computation."""
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        priority_id = uuid4()
+
+        # Mock AVG query result
+        avg_result = MagicMock()
+        avg_result.scalar.return_value = Decimal("5.0")
+
+        # Mock SUM query result
+        sum_result = MagicMock()
+        sum_result.scalar.return_value = Decimal("15.0")
+
+        # Mock achievement query result:
+        # 3 total snapshots, but one has target_hours=0, so count=2
+        # Only 2 valid snapshots: 8/10 = 80%, 10/10 = 100% → avg = 90%
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (Decimal("90.0"), 2)
+
+        # Mock update query
+        update_result = MagicMock()
+
+        mock_session.execute.side_effect = [
+            avg_result,
+            sum_result,
+            achievement_result,
+            update_result,
+        ]
+
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=2,
+            actual_hours=10.0,
+            session=mock_session,
+        )
+
+        # The SQL query already excludes target_hours = 0 (WHERE target_hours > 0)
+        # So avg_target_achievement should be 90% based on valid snapshots only
+        update_call = mock_session.execute.call_args_list[-1]
+        params = update_call[0][1]
+        assert params["avg_target_achievement"] == Decimal("90.0")

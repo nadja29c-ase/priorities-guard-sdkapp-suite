@@ -451,6 +451,8 @@ async def _update_aggregates(
     - streak_count = streak_at_snapshot just computed
     - total_hours_invested = SUM of all snapshots for this priority
     - avg_hours_week = AVG of all snapshots for this priority
+    - avg_target_achievement = AVG of (actual_hours / target_hours * 100) for all snapshots
+      with valid target_hours, NULL if < 2 data points
     """
     # Compute avg_hours_week from all snapshots for this priority
     avg_result = await session.execute(
@@ -468,6 +470,26 @@ async def _update_aggregates(
     )
     total_hours = total_result.scalar()
 
+    # Compute avg_target_achievement: AVG(actual_hours * 100.0 / target_hours)
+    # Only for snapshots with valid target_hours (> 0), requires >= 2 data points
+    achievement_result = await session.execute(
+        text("""
+            SELECT AVG(actual_hours * 100.0 / NULLIF(target_hours, 0)), COUNT(*)
+            FROM pg_weekly_snapshots
+            WHERE priority_id = :priority_id
+              AND target_hours IS NOT NULL
+              AND target_hours > 0
+        """),
+        {"priority_id": priority_id}
+    )
+    row = achievement_result.fetchone()
+    avg_achievement_raw, snapshot_count = row if row else (None, 0)
+
+    # Only set avg_target_achievement if we have >= 2 data points
+    avg_target_achievement = None
+    if snapshot_count is not None and snapshot_count >= 2 and avg_achievement_raw is not None:
+        avg_target_achievement = Decimal(str(avg_achievement_raw))
+
     # Update priority aggregates (only if still active - defense in depth)
     await session.execute(
         text("""
@@ -476,6 +498,7 @@ async def _update_aggregates(
                 streak_count = :streak,
                 total_hours_invested = :total_hours,
                 avg_hours_week = :avg_hours,
+                avg_target_achievement = :avg_target_achievement,
                 updated_at = NOW()
             WHERE id = :priority_id AND status = 'active'
         """),
@@ -483,6 +506,7 @@ async def _update_aggregates(
             "streak": streak,
             "total_hours": Decimal(str(total_hours)) if total_hours is not None else Decimal("0"),
             "avg_hours": Decimal(str(avg_hours)) if avg_hours is not None else None,
+            "avg_target_achievement": avg_target_achievement,
             "priority_id": priority_id,
         }
     )

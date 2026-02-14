@@ -738,54 +738,77 @@ describe('App', () => {
 
   describe('Aggregate Stats Display (Inc 09)', () => {
     describe('FlexibleCard Aggregate Stats', () => {
-      it('renders cumulative percentage when avgHoursWeek and weeklyHourTarget are set', () => {
+      it('renders avgTargetAchievement when present', () => {
         const priority: Priority = {
           ...flexiblePriority,
-          avgHoursWeek: 4.2,
+          avgTargetAchievement: 84.0,
           weeklyHourTarget: 5,
         }
         setMockPriorities([priority], true)
         render(<App />)
 
-        // 4.2 / 5 * 100 = 84%
-        expect(screen.getByText(/~84% of 5h\/week target on avg/i)).toBeInTheDocument()
+        expect(screen.getByText(/~84% of weekly target on avg/i)).toBeInTheDocument()
       })
 
-      it('shows "First week — tracking" when avgHoursWeek is null', () => {
+      it('shows placeholder when avgTargetAchievement is null', () => {
         const priority: Priority = {
           ...flexiblePriority,
-          avgHoursWeek: null,
+          avgTargetAchievement: null,
           weeklyHourTarget: 5,
         }
         setMockPriorities([priority], true)
         render(<App />)
 
-        expect(screen.getByText(/first week — tracking/i)).toBeInTheDocument()
+        expect(screen.getByText(/building your average/i)).toBeInTheDocument()
       })
 
       it('hides percentage section when weeklyHourTarget is null', () => {
         const priority: Priority = {
           ...flexiblePriority,
-          avgHoursWeek: 4.2,
+          avgTargetAchievement: 84.0,
           weeklyHourTarget: undefined,
         }
         setMockPriorities([priority], true)
         render(<App />)
 
         expect(screen.queryByText(/% of.*target on avg/i)).not.toBeInTheDocument()
-        expect(screen.queryByText(/first week/i)).not.toBeInTheDocument()
+        expect(screen.queryByText(/building your average/i)).not.toBeInTheDocument()
       })
 
       it('hides percentage section when weeklyHourTarget is 0', () => {
         const priority: Priority = {
           ...flexiblePriority,
-          avgHoursWeek: 4.2,
+          avgTargetAchievement: 84.0,
           weeklyHourTarget: 0,
         }
         setMockPriorities([priority], true)
         render(<App />)
 
         expect(screen.queryByText(/% of.*target on avg/i)).not.toBeInTheDocument()
+      })
+
+      it('rounds avgTargetAchievement correctly: 49.8 → ~50%', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgTargetAchievement: 49.8,
+          weeklyHourTarget: 5,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.getByText(/~50%/)).toBeInTheDocument()
+      })
+
+      it('allows > 100%: avgTargetAchievement 160.5 → ~161%', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgTargetAchievement: 160.5,
+          weeklyHourTarget: 5,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.getByText(/~161%/)).toBeInTheDocument()
       })
 
       it('shows totalHoursInvested when > 0', () => {
@@ -810,23 +833,10 @@ describe('App', () => {
         expect(screen.queryByText(/invested total/i)).not.toBeInTheDocument()
       })
 
-      it('rounds percentage correctly at boundary: 2.49/5 = 50%', () => {
-        const priority: Priority = {
-          ...flexiblePriority,
-          avgHoursWeek: 2.49,
-          weeklyHourTarget: 5,
-        }
-        setMockPriorities([priority], true)
-        render(<App />)
-
-        // Verify rounding: Math.round(2.49 / 5 * 100) = Math.round(49.8) = 50
-        expect(screen.getByText(/~50%/)).toBeInTheDocument()
-      })
-
       it('does not show stats in edit mode', async () => {
         const priority: Priority = {
           ...flexiblePriority,
-          avgHoursWeek: 4.2,
+          avgTargetAchievement: 84.0,
           weeklyHourTarget: 5,
           totalHoursInvested: 12.5,
         }

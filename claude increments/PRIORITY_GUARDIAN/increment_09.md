@@ -4,9 +4,9 @@
 
 Surface aggregate data and visual progress on the Priorities Dashboard cards. No categorical labels. No hidden thresholds. Raw numbers only — the user interprets them.
 
-Flexible cards: cumulative investment percentage (`avgHoursWeek / weeklyHourTarget`).
+Flexible cards: cumulative target achievement percentage (`avgTargetAchievement` — computed server-side, see `fix_target_achievement_bug.md`).
 Deadline cards: neutral progress bar for deliverables (pure completion ratio).
-Both: `totalHoursInvested` and `avgHoursWeek` display.
+FlexibleCard only: `totalHoursInvested` display. DeadlineCard shows progress bar only — aggregate hours are noise without a target to benchmark against.
 
 **Design philosophy:** Dashboard = what IS. "4/7 done · 27d left" is factual. "Behind" is interpretation. The user sees the numbers and does the math themselves. Status labels (`pacing_status`, `flex_status`) exist in the snapshot/weekly report layer for historical records — they don't surface on the live dashboard.
 
@@ -17,7 +17,7 @@ Both: `totalHoursInvested` and `avgHoursWeek` display.
 | Card type | Progress indicator | Computed where | Why |
 |---|---|---|---|
 | Deadline | Neutral progress bar (doneCount/totalCount) | Widget (pure rendering) | Already has the counts. Just a visual bar. |
-| Flexible | Raw percentage: `avgHoursWeek / weeklyHourTarget * 100` | Widget (pure rendering) | Both values already in response. No business logic — just division. |
+| Flexible | `avgTargetAchievement` (pre-computed server-side) | Widget (pure rendering) | Backend computes per-snapshot `actual/target*100`, averages across engaged weeks. See ADR-001 #10. |
 
 **What's eliminated:**
 - ~~flex_status computation anywhere in the dashboard flow~~
@@ -30,9 +30,9 @@ Both: `totalHoursInvested` and `avgHoursWeek` display.
 - `compute_flex_status` and `compute_pacing_status` in `weekly_report_service` — used by snapshot_service (Inc 08) and weekly report generation. Already built, already capturing per-week data to `PgWeeklySnapshot.flex_status` and `PgWeeklySnapshot.pacing_status` columns. Not touched.
 
 **Separation of concerns:**
-- Backend = source of truth (aggregates already flowing: avg_hours_week, total_hours_invested, streak_count)
+- Backend = source of truth (aggregates flowing: avg_target_achievement, avg_hours_week, total_hours_invested, streak_count)
 - MCP = transport + normalization only (passes through existing fields, zero new computation)
-- Widget = pure rendering logic (division for percentage, bar width for progress)
+- Widget = pure rendering logic (reads pre-computed percentage, bar width for progress)
 
 ---
 
@@ -87,15 +87,13 @@ Progress bar uses neutral colors only — no pacing-based color mapping.
 
 **File:** `mcp_server/priority_guardian/widget-react/src/components/FlexibleCard.tsx`
 
-**A. Cumulative investment percentage** — Display in non-edit mode, below the calendar keyword reminder (after the `mt-2 p-2 bg-surface-secondary` div).
+**A. Cumulative target achievement percentage** — Display in non-edit mode, below the calendar keyword reminder (after the `mt-2 p-2 bg-surface-secondary` div).
 
 Conditions:
-- Show only when `priority.avgHoursWeek` is not null AND `priority.weeklyHourTarget` is not null and > 0
-- If `avgHoursWeek` is null (no completed weeks yet): show "First week — tracking" in `text-xs text-tertiary`
+- `avgTargetAchievement` not null → show `"~{Math.round(avgTargetAchievement)}% of {target}h/week target on avg"` in `text-xs text-secondary`
+- `avgTargetAchievement` null AND `weeklyHourTarget > 0` → show `"Building your average…"` in `text-xs text-tertiary`
 
-Compute in render: `Math.round((avgHoursWeek / weeklyHourTarget) * 100)`
-
-Display: `"~{pct}% of {target}h/week target on avg"` in `text-xs text-secondary`
+Widget reads `avgTargetAchievement` directly from backend — no local computation. See `fix_target_achievement_bug.md` for full spec.
 
 Example: "~84% of 5h/week target on avg"
 
@@ -157,13 +155,14 @@ Example: "8.0h invested total · ~2.7h avg/week"
 **File:** `mcp_server/priority_guardian/widget-react/src/__tests__/` (add to existing or new test files)
 
 **FlexibleCard tests:**
-1. Renders cumulative percentage when `avgHoursWeek` and `weeklyHourTarget` are both set
-2. Shows "First week — tracking" when `avgHoursWeek` is null
+1. Renders percentage when `avgTargetAchievement` is present: `84.0` → "~84%"
+2. Shows "Building your average" when `avgTargetAchievement` is null and `weeklyHourTarget > 0`
 3. Hides percentage section when `weeklyHourTarget` is null or 0
 4. Shows `totalHoursInvested` when > 0
 5. Hides total when `totalHoursInvested` is 0
-6. Percentage math is correct: `avgHoursWeek=4.2, weeklyHourTarget=5` → "~84%"
-7. No percentage/stats shown in edit mode
+6. Rounding: `avgTargetAchievement: 49.8` → "~50%"
+7. Allows > 100%: `avgTargetAchievement: 160.5` → "~161%"
+8. No percentage/stats shown in edit mode
 
 **DeadlineCard tests:**
 1. Renders progress bar when deliverables exist

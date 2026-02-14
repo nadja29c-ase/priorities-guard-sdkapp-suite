@@ -277,14 +277,14 @@ export function FlexibleCard({
           {/* Aggregate stats - non-edit mode only */}
           {!isEditing && (
             <div className="mt-2 space-y-0.5">
-              {/* Cumulative percentage or first week message */}
+              {/* Cumulative percentage or building average message */}
               {priority.weeklyHourTarget != null && priority.weeklyHourTarget > 0 && (
-                priority.avgHoursWeek != null ? (
+                priority.avgTargetAchievement != null ? (
                   <p className="text-xs text-secondary">
-                    ~{Math.round((priority.avgHoursWeek / priority.weeklyHourTarget) * 100)}% of {priority.weeklyHourTarget}h/week target on avg
+                    ~{Math.round(priority.avgTargetAchievement)}% of weekly target on avg
                   </p>
                 ) : (
-                  <p className="text-xs text-tertiary">First week — tracking</p>
+                  <p className="text-xs text-tertiary">Building your average…</p>
                 )
               )}
               {/* Total hours invested */}

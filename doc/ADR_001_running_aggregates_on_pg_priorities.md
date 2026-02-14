@@ -1,13 +1,12 @@
-# ADR-001: Running Aggregates & Data Architecture
+# ADR-001: PG V1.0 Product Design and Architectural Decisions
 
-**Status:** Accepted (amended 2026-02-14)  
-**Date:** 2026-02-12  
+**Date last update:** 2026-02-14
 
 ---
 
 ## Decisions
 
-1. **Aggregates on `pg_priorities`:** `streak_count`, `avg_hours_week`, `total_hours_invested` stored as columns, updated once per week when a snapshot is finalized — not computed on-the-fly. `streak_count` is on the dashboard hot path (every widget mount, zero extra queries); the other two are weekly-report-only convenience columns that already exist in the schema.
+1. **Aggregates on `pg_priorities`:** 'streak_count' , `avg_target_achievement`, `total_hours_invested` stored as columns, updated once per week when a snapshot is finalized — not computed on-the-fly. All three are on the dashboard hot path (every widget mount, zero extra queries). `avg_hours_week` is also stored but currently unused on the dashboard — retained for potential weekly report use.
 
 2. **Streak = binary (hours > 0):** Not tied to `weekly_hour_target`. Any time invested keeps the streak; zero hours breaks it. Target measures pace, streak measures attention — different dimensions. Threshold-based alternatives rejected as punishing for freelancers with variable weeks.
 
@@ -19,10 +18,7 @@
 
 6. **Weekly report: on-demand read, always.** Available anytime the user asks — no frequency limit. Pure compute (fetch calendar via Google API, compute, display). Weekly report does NOT write snapshots — that's the dashboard path. Semantic grouping persistence (future) is the only write triggered via weekly report. Weekly reflection cadence is coached by the LLM via `assistant_guidance`, not enforced by the system.
 
-7. **Display:** `streak_count`, `avg_hours_week`, and `total_hours_invested` on FlexibleCard only. Flexible cards show cumulative percentage and total hours. Deadline cards show neutral progress bar (`done_count / total_count`) — no aggregate hours because there's no target to benchmark against; the deliverable ratio is the actionable signal. *(Amended 2026-02-14: moved from weekly-report-only to dashboard after Inc 09 eliminated status labels. Further amended: dropped aggregates from DeadlineCard as noise.)*
+8. **FLEXIBLE PRIO: Lead and Lag Measures.** Current-week actual vs target is a LEAD MEASURE mid-week (Wednesday with 2h of 5h tells you still 3 hours more to plan/invest); displayed via HourRing. LAG MEASURE: The accountability signal is cumulative: `avg_target_achievement`. Computation Logic: per-snapshot `actual_hours / target_hours * 100` using that snapshot's target (not current target), then `AVG()` across ALL snapshotted weeks — zero-hours weeks contribute 0%, pulling the average down. Minimum 2 snapshotted weeks to display (NULL until then). See #10 for full design rationale.
 
-8. **No categorical labels on dashboard.** `flex_status` and `pacing_status` are NOT surfaced on the live dashboard. "Behind" is interpretation; "4/7 done · 27d left" is fact. Dashboard = what IS. Weekly report = what it MEANS. Status fields still exist in `weekly_report_service` and are still captured in `pg_weekly_snapshots` by the snapshot service — they may be used in weekly report narration.
+9. **`avg_target_achievement` replaces widget-side percentage computation.** Per-snapshot achievement = `actual_hours / target_hours * 100` using that week's target (not current target). Aggregated server-side as unweighted arithmetic mean across ALL snapshotted weeks — including zero-hours weeks (0% contribution). Stored on `pg_priorities`. Fixes target-change bug where changing weekly target retroactively skewed all historical percentages. Design choices: unweighted average (consistency signal, not volume ratio), zero-hours weeks INCLUDED (if you commit 5h/week and don't show up, the number must drop — that's accountability; streak tracks current momentum, achievement tracks cumulative commitment fulfillment), no cap at 100% (overinvestment is real data), minimum 2 snapshotted weeks before displaying (NULL until then, widget shows placeholder). *(Added 2026-02-14)*
 
-9. **Cumulative over current-week for flexible progress.** Current-week actual vs target is noise mid-week (Wednesday with 2h of 5h tells you nothing). The accountability signal is cumulative: `avg_hours_week / weekly_hour_target`. HourRing still shows current-week as a visual glance — different time horizons, complementary.
-
-10. **Week navigator dropped from dashboard.** Cumulative `avg_hours_week` answers "Am I consistently investing?" without browsing individual weeks. Per-week snapshot data (`pg_weekly_snapshots`) is still captured and available for future weekly-report history views triggered conversationally.

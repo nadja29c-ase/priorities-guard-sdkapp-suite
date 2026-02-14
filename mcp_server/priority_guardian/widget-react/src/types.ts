@@ -28,6 +28,7 @@ export interface Priority {
   // Aggregate fields from snapshot pipeline (Inc 08)
   avgHoursWeek?: number | null // Average hours per week across completed weeks
   totalHoursInvested?: number // Cumulative hours invested across all time
+  avgTargetAchievement?: number | null // Cumulative % of weekly target. NULL when < 2 snapshotted weeks.
 }
 
 export interface GoogleConnection {
