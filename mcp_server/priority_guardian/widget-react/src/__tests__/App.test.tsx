@@ -897,74 +897,7 @@ describe('App', () => {
       })
     })
 
-    describe('DeadlineCard Aggregate Stats', () => {
-      it('shows totalHoursInvested when > 0', () => {
-        const priority: Priority = {
-          ...deadlinePriority,
-          totalHoursInvested: 8.0,
-        }
-        setMockPriorities([priority], true)
-        render(<App />)
 
-        expect(screen.getByText(/8\.0h invested total/i)).toBeInTheDocument()
-      })
-
-      it('shows avgHoursWeek when not null', () => {
-        const priority: Priority = {
-          ...deadlinePriority,
-          avgHoursWeek: 2.7,
-        }
-        setMockPriorities([priority], true)
-        render(<App />)
-
-        expect(screen.getByText(/~2\.7h avg\/week/i)).toBeInTheDocument()
-      })
-
-      it('hides aggregate line when both values are 0/null', () => {
-        const priority: Priority = {
-          ...deadlinePriority,
-          totalHoursInvested: 0,
-          avgHoursWeek: null,
-        }
-        setMockPriorities([priority], true)
-        render(<App />)
-
-        expect(screen.queryByText(/invested total/i)).not.toBeInTheDocument()
-        expect(screen.queryByText(/avg\/week/i)).not.toBeInTheDocument()
-      })
-
-      it('shows both stats with separator when both are present', () => {
-        const priority: Priority = {
-          ...deadlinePriority,
-          totalHoursInvested: 8.0,
-          avgHoursWeek: 2.7,
-        }
-        setMockPriorities([priority], true)
-        render(<App />)
-
-        // Check for the combined format with separator
-        expect(screen.getByText(/8\.0h invested total.*·.*~2\.7h avg\/week/i)).toBeInTheDocument()
-      })
-
-      it('does not show stats in edit mode', async () => {
-        const priority: Priority = {
-          ...deadlinePriority,
-          totalHoursInvested: 8.0,
-          avgHoursWeek: 2.7,
-        }
-        setMockPriorities([priority], true)
-        render(<App />)
-
-        // Stats should be visible initially
-        expect(screen.getByText(/8\.0h invested total/i)).toBeInTheDocument()
-
-        // Enter edit mode
-        await userEvent.click(screen.getByText('Launch Feature X'))
-
-        // Stats should be hidden in edit mode
-        expect(screen.queryByText(/8\.0h invested total/i)).not.toBeInTheDocument()
-      })
-    })
   })
 
   describe('widgetState Persistence (Widget B)', () => {

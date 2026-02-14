@@ -299,18 +299,7 @@ export function DeadlineCard({
           </div>
         )}
 
-        {/* Aggregate stats - non-edit mode only */}
-        {!isEditing && ((priority.totalHoursInvested != null && priority.totalHoursInvested > 0) || priority.avgHoursWeek != null) && (
-          <p className="mt-1.5 text-xs text-secondary">
-            {priority.totalHoursInvested != null && priority.totalHoursInvested > 0 && (
-              <>{priority.totalHoursInvested.toFixed(1)}h invested total</>
-            )}
-            {priority.totalHoursInvested != null && priority.totalHoursInvested > 0 && priority.avgHoursWeek != null && ' · '}
-            {priority.avgHoursWeek != null && (
-              <>~{priority.avgHoursWeek.toFixed(1)}h avg/week</>
-            )}
-          </p>
-        )}
+
       </div>
 
       {/* Deadline field - editable in edit mode */}

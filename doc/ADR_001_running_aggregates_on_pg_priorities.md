@@ -19,7 +19,7 @@
 
 6. **Weekly report: on-demand read, always.** Available anytime the user asks — no frequency limit. Pure compute (fetch calendar via Google API, compute, display). Weekly report does NOT write snapshots — that's the dashboard path. Semantic grouping persistence (future) is the only write triggered via weekly report. Weekly reflection cadence is coached by the LLM via `assistant_guidance`, not enforced by the system.
 
-7. **Display:** `streak_count`, `avg_hours_week`, and `total_hours_invested` on dashboard cards. Flexible cards show cumulative percentage (`avg_hours_week / weekly_hour_target * 100`). Deadline cards show neutral progress bar (`done_count / total_count`). Both show aggregate stats line. *(Amended 2026-02-14: moved from weekly-report-only to dashboard after Inc 09 eliminated status labels.)*
+7. **Display:** `streak_count`, `avg_hours_week`, and `total_hours_invested` on FlexibleCard only. Flexible cards show cumulative percentage and total hours. Deadline cards show neutral progress bar (`done_count / total_count`) — no aggregate hours because there's no target to benchmark against; the deliverable ratio is the actionable signal. *(Amended 2026-02-14: moved from weekly-report-only to dashboard after Inc 09 eliminated status labels. Further amended: dropped aggregates from DeadlineCard as noise.)*
 
 8. **No categorical labels on dashboard.** `flex_status` and `pacing_status` are NOT surfaced on the live dashboard. "Behind" is interpretation; "4/7 done · 27d left" is fact. Dashboard = what IS. Weekly report = what it MEANS. Status fields still exist in `weekly_report_service` and are still captured in `pg_weekly_snapshots` by the snapshot service — they may be used in weekly report narration.
 
