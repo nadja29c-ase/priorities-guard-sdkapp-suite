@@ -267,17 +267,49 @@ export function DeadlineCard({
       )}
 
       {/* Progress info */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
+      <div className="mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          {totalCount > 0 && (
+            <span className="text-xs text-secondary">
+              {doneCount} of {totalCount} done
+              {days !== null && ` · ${days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`}`}
+            </span>
+          )}
+          {totalCount === 0 && days !== null && (
+            <span className="text-xs text-secondary">
+              {days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`}
+            </span>
+          )}
+        </div>
+
+        {/* Progress bar - neutral color, pure completion ratio */}
         {totalCount > 0 && (
-          <span className="text-xs text-secondary">
-            {doneCount} of {totalCount} done
-            {days !== null && ` · ${days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`}`}
-          </span>
+          <div
+            className="mt-2 h-1.5 w-full bg-surface-tertiary rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={doneCount}
+            aria-valuemin={0}
+            aria-valuemax={totalCount}
+            aria-label={`${doneCount} of ${totalCount} deliverables complete`}
+          >
+            <div
+              className="h-full bg-[color:var(--gray-400)] rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${Math.min(100, (doneCount / totalCount) * 100)}%` }}
+            />
+          </div>
         )}
-        {totalCount === 0 && days !== null && (
-          <span className="text-xs text-secondary">
-            {days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`}
-          </span>
+
+        {/* Aggregate stats - non-edit mode only */}
+        {!isEditing && (priority.totalHoursInvested != null && priority.totalHoursInvested > 0 || priority.avgHoursWeek != null) && (
+          <p className="mt-1.5 text-xs text-secondary">
+            {priority.totalHoursInvested != null && priority.totalHoursInvested > 0 && (
+              <>{priority.totalHoursInvested.toFixed(1)}h invested total</>
+            )}
+            {priority.totalHoursInvested != null && priority.totalHoursInvested > 0 && priority.avgHoursWeek != null && ' · '}
+            {priority.avgHoursWeek != null && (
+              <>~{priority.avgHoursWeek.toFixed(1)}h avg/week</>
+            )}
+          </p>
         )}
       </div>
 

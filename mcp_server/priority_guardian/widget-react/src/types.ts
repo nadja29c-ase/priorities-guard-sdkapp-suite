@@ -25,6 +25,9 @@ export interface Priority {
   deliverables: Deliverable[]
   createdAt: string
   updatedAt?: string
+  // Aggregate fields from snapshot pipeline (Inc 08)
+  avgHoursWeek?: number | null // Average hours per week across completed weeks
+  totalHoursInvested?: number // Cumulative hours invested across all time
 }
 
 export interface GoogleConnection {

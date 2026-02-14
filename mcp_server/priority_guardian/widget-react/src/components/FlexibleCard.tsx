@@ -273,6 +273,28 @@ export function FlexibleCard({
               📅 Use <strong className="text-default">{priority.calendarKeyword}</strong> in the calendar event title to track time
             </p>
           </div>
+
+          {/* Aggregate stats - non-edit mode only */}
+          {!isEditing && (
+            <div className="mt-2 space-y-0.5">
+              {/* Cumulative percentage or first week message */}
+              {priority.weeklyHourTarget != null && priority.weeklyHourTarget > 0 && (
+                priority.avgHoursWeek != null ? (
+                  <p className="text-xs text-secondary">
+                    ~{Math.round((priority.avgHoursWeek / priority.weeklyHourTarget) * 100)}% of {priority.weeklyHourTarget}h/week target on avg
+                  </p>
+                ) : (
+                  <p className="text-xs text-tertiary">First week — tracking</p>
+                )
+              )}
+              {/* Total hours invested */}
+              {priority.totalHoursInvested != null && priority.totalHoursInvested > 0 && (
+                <p className="text-xs text-secondary">
+                  {priority.totalHoursInvested.toFixed(1)}h invested total
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right column: HourRing (if target set and not editing) + delete button */}

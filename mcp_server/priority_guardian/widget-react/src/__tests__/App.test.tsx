@@ -736,6 +736,236 @@ describe('App', () => {
     })
   })
 
+  describe('Aggregate Stats Display (Inc 09)', () => {
+    describe('FlexibleCard Aggregate Stats', () => {
+      it('renders cumulative percentage when avgHoursWeek and weeklyHourTarget are set', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgHoursWeek: 4.2,
+          weeklyHourTarget: 5,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        // 4.2 / 5 * 100 = 84%
+        expect(screen.getByText(/~84% of 5h\/week target on avg/i)).toBeInTheDocument()
+      })
+
+      it('shows "First week — tracking" when avgHoursWeek is null', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgHoursWeek: null,
+          weeklyHourTarget: 5,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.getByText(/first week — tracking/i)).toBeInTheDocument()
+      })
+
+      it('hides percentage section when weeklyHourTarget is null', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgHoursWeek: 4.2,
+          weeklyHourTarget: undefined,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.queryByText(/% of.*target on avg/i)).not.toBeInTheDocument()
+        expect(screen.queryByText(/first week/i)).not.toBeInTheDocument()
+      })
+
+      it('hides percentage section when weeklyHourTarget is 0', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgHoursWeek: 4.2,
+          weeklyHourTarget: 0,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.queryByText(/% of.*target on avg/i)).not.toBeInTheDocument()
+      })
+
+      it('shows totalHoursInvested when > 0', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          totalHoursInvested: 12.5,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.getByText(/12\.5h invested total/i)).toBeInTheDocument()
+      })
+
+      it('hides total when totalHoursInvested is 0', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          totalHoursInvested: 0,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.queryByText(/invested total/i)).not.toBeInTheDocument()
+      })
+
+      it('calculates percentage correctly: 4.2/5 = 84%', () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgHoursWeek: 4.2,
+          weeklyHourTarget: 5,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        // Verify the exact calculation: Math.round(4.2 / 5 * 100) = 84
+        expect(screen.getByText(/~84%/)).toBeInTheDocument()
+      })
+
+      it('does not show stats in edit mode', async () => {
+        const priority: Priority = {
+          ...flexiblePriority,
+          avgHoursWeek: 4.2,
+          weeklyHourTarget: 5,
+          totalHoursInvested: 12.5,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        // Stats should be visible initially
+        expect(screen.getByText(/~84%/)).toBeInTheDocument()
+        expect(screen.getByText(/12\.5h invested total/i)).toBeInTheDocument()
+
+        // Enter edit mode
+        await userEvent.click(screen.getByText('Learn Rust'))
+
+        // Stats should be hidden in edit mode
+        expect(screen.queryByText(/~84%/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/12\.5h invested total/i)).not.toBeInTheDocument()
+      })
+    })
+
+    describe('DeadlineCard Progress Bar', () => {
+      it('renders progress bar when deliverables exist', () => {
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        expect(screen.getByRole('progressbar')).toBeInTheDocument()
+      })
+
+      it('hides progress bar when 0 deliverables', () => {
+        const priority: Priority = {
+          ...deadlinePriority,
+          deliverables: [],
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+      })
+
+      it('progress bar width matches doneCount/totalCount ratio', () => {
+        // 1 of 2 done = 50%
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        const progressBar = screen.getByRole('progressbar')
+        const fill = progressBar.querySelector('div')
+        expect(fill).toHaveStyle({ width: '50%' })
+      })
+
+      it('progress bar has neutral color (not conditionally colored)', () => {
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        const progressBar = screen.getByRole('progressbar')
+        const fill = progressBar.querySelector('div')
+        // Check it uses the neutral gray CSS variable
+        expect(fill).toHaveClass('bg-[color:var(--gray-400)]')
+      })
+
+      it('progress bar has correct ARIA attributes', () => {
+        setMockPriorities([deadlinePriority], true)
+        render(<App />)
+
+        const progressBar = screen.getByRole('progressbar')
+        expect(progressBar).toHaveAttribute('aria-valuenow', '1')
+        expect(progressBar).toHaveAttribute('aria-valuemin', '0')
+        expect(progressBar).toHaveAttribute('aria-valuemax', '2')
+      })
+    })
+
+    describe('DeadlineCard Aggregate Stats', () => {
+      it('shows totalHoursInvested when > 0', () => {
+        const priority: Priority = {
+          ...deadlinePriority,
+          totalHoursInvested: 8.0,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.getByText(/8\.0h invested total/i)).toBeInTheDocument()
+      })
+
+      it('shows avgHoursWeek when not null', () => {
+        const priority: Priority = {
+          ...deadlinePriority,
+          avgHoursWeek: 2.7,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.getByText(/~2\.7h avg\/week/i)).toBeInTheDocument()
+      })
+
+      it('hides aggregate line when both values are 0/null', () => {
+        const priority: Priority = {
+          ...deadlinePriority,
+          totalHoursInvested: 0,
+          avgHoursWeek: null,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        expect(screen.queryByText(/invested total/i)).not.toBeInTheDocument()
+        expect(screen.queryByText(/avg\/week/i)).not.toBeInTheDocument()
+      })
+
+      it('shows both stats with separator when both are present', () => {
+        const priority: Priority = {
+          ...deadlinePriority,
+          totalHoursInvested: 8.0,
+          avgHoursWeek: 2.7,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        // Check for the combined format with separator
+        expect(screen.getByText(/8\.0h invested total.*·.*~2\.7h avg\/week/i)).toBeInTheDocument()
+      })
+
+      it('does not show stats in edit mode', async () => {
+        const priority: Priority = {
+          ...deadlinePriority,
+          totalHoursInvested: 8.0,
+          avgHoursWeek: 2.7,
+        }
+        setMockPriorities([priority], true)
+        render(<App />)
+
+        // Stats should be visible initially
+        expect(screen.getByText(/8\.0h invested total/i)).toBeInTheDocument()
+
+        // Enter edit mode
+        await userEvent.click(screen.getByText('Launch Feature X'))
+
+        // Stats should be hidden in edit mode
+        expect(screen.queryByText(/8\.0h invested total/i)).not.toBeInTheDocument()
+      })
+    })
+  })
+
   describe('widgetState Persistence (Widget B)', () => {
     it('persists edit mode to widgetState', async () => {
       setMockPriorities([deadlinePriority], true)
