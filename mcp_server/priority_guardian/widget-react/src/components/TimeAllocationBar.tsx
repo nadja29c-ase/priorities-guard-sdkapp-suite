@@ -154,7 +154,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
   const ariaLabel = buildAriaLabel(timeAllocation, activeKeywords)
 
   return (
-    <section className="mb-5" aria-labelledby="time-allocation-heading">
+    <section className="mb-5 pl-1" aria-labelledby="time-allocation-heading">
       {/* Header row - V7 style */}
       <div className="flex justify-between items-center mb-1.5">
         <span
