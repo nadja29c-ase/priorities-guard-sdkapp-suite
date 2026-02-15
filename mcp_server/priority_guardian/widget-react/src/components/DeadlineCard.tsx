@@ -388,8 +388,8 @@ export function DeadlineCard({
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs mb-2" style={{ color: 'var(--gray-350, #9f9f9f)' }}>
-                  No deliverables yet
+                <p className="text-xs mb-2" style={{ color: 'var(--gray-450, #767676)' }}>
+                  Without E2E deliverables, you only see hours spent — add them to track real progress.
                 </p>
               )}
               <AddDeliverableInput
