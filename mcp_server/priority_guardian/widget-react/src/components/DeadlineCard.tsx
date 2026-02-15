@@ -5,7 +5,6 @@ import { DeliverableItem } from './DeliverableItem'
 import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { ChevronIcon } from './ChevronIcon'
-import { DeliverableRing } from './DeliverableRing'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 
@@ -308,33 +307,26 @@ export function DeadlineCard({
           <p className="text-xs text-danger mb-2" role="alert">{error}</p>
         )}
 
-        {/* V7: DeliverableRing on left + stats on right, vertically centered */}
-        <div className="flex items-center gap-4 mb-4">
-          <DeliverableRing
-            done={doneCount}
-            total={totalCount}
-            keyword={kw}
-          />
-          <div className="flex-1">
+        {/* V7: Lead measure - large done/total number */}
+        <div className="mb-4">
+          <span
+            className="text-2xl font-bold tabular-nums leading-none"
+            style={{ color: 'var(--gray-900, #181818)' }}
+          >
+            {doneCount}
             <span
-              className="text-2xl font-bold tabular-nums leading-none"
-              style={{ color: 'var(--gray-900, #181818)' }}
+              className="text-lg font-normal"
+              style={{ color: 'var(--gray-350, #9f9f9f)' }}
             >
-              {doneCount}
-              <span
-                className="text-lg font-normal"
-                style={{ color: 'var(--gray-350, #9f9f9f)' }}
-              >
-                /{totalCount}
-              </span>
+              /{totalCount}
             </span>
-            <p
-              className="text-xs mt-0.5"
-              style={{ color: 'var(--gray-450, #767676)' }}
-            >
-              deliverables done
-            </p>
-          </div>
+          </span>
+          <p
+            className="text-xs mt-0.5"
+            style={{ color: 'var(--gray-450, #767676)' }}
+          >
+            deliverables done
+          </p>
         </div>
 
         {/* Deadline field - editable in edit mode */}

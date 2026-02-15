@@ -336,6 +336,9 @@ async def create_priority(
 
         session.add(priority)
 
+        # Flush to generate priority.id before creating related objects
+        await session.flush()
+
         # Step 4b: For flexible priorities, create the initial goal
         if request.type == "flexible" and request.initial_goal_text:
             initial_goal = PgGoal(
@@ -344,7 +347,7 @@ async def create_priority(
             )
             session.add(initial_goal)
 
-        # Step 5: Commit (flush first to catch IntegrityError before commit)
+        # Step 5: Commit (flush again to catch IntegrityError before commit)
         await session.flush()
         await session.commit()
 

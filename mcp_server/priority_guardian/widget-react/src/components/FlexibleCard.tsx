@@ -314,12 +314,25 @@ export function FlexibleCard({
                 </p>
               </>
             ) : (
-              <span
-                className="text-sm"
-                style={{ color: 'var(--gray-350, #9f9f9f)' }}
-              >
-                Complete your first week to see your pattern.
-              </span>
+              <div className="flex items-center gap-1.5">
+                <svg
+                  className="w-3.5 h-3.5 flex-shrink-0"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="var(--gray-350, #9f9f9f)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
+                </svg>
+                <span
+                  className="text-sm"
+                  style={{ color: 'var(--gray-350, #9f9f9f)' }}
+                >
+                  Complete your first week to see your pattern.
+                </span>
+              </div>
             )}
           </div>
         </div>
