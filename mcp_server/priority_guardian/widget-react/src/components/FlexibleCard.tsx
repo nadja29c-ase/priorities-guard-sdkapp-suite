@@ -3,10 +3,16 @@ import type { Priority } from '../types'
 import { daysUntil } from '../utils'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { GoalSection } from './GoalSection'
-import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 import { HourRing } from './HourRing'
+
+// V7 border colors for card left border
+const BORDER_COLORS: Record<string, string> = {
+  P1: '#0285ff',
+  P2: '#924ff7',
+  P3: '#ffc300',
+}
 
 interface FlexibleCardProps {
   priority: Priority
@@ -50,9 +56,11 @@ export function FlexibleCard({
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cardRef = useRef<HTMLElement>(null)
 
-  const checkpointDays = priority.checkpointDate ? daysUntil(priority.checkpointDate) : null
-  const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
-  const borderColorClass = BORDER_COLORS[priority.calendarKeyword] ?? BORDER_COLORS.P1
+  const kw = priority.calendarKeyword
+  const badgeColorClass = BADGE_COLORS[kw] ?? BADGE_COLORS.P1
+  const borderColor = BORDER_COLORS[kw] ?? BORDER_COLORS.P1
+
+  const hasAvg = priority.avgTargetAchievement != null
 
   // Get tomorrow's date for min date constraint
   const tomorrow = new Date()
@@ -118,13 +126,10 @@ export function FlexibleCard({
       }
 
       await onSave(priority.id, updates)
-      // Silence means success - no indicator needed
     } catch (e) {
       console.error('callTool error:', e)
-      // Show error message from tool if available, otherwise generic
       const errorMsg = e instanceof Error ? e.message : 'Failed to save'
       setError(errorMsg)
-      // Revert to original value
       if (field === 'name') setEditName(priority.name)
       else if (field === 'weekly_hour_target') setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
       else if (field === 'checkpoint_date') setEditCheckpointDate(priority.checkpointDate || '')
@@ -164,7 +169,6 @@ export function FlexibleCard({
       const errorMsg = e instanceof Error ? e.message : "Couldn't save. Try again."
       setError(errorMsg)
       setShowDeleteConfirm(false)
-      // Clear error after 3s
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
@@ -173,7 +177,6 @@ export function FlexibleCard({
     }
   }
 
-  // Click outside to exit edit mode (reliable document-level listener)
   const handleClickOutside = useCallback((e: MouseEvent) => {
     if (isEditing && !isSaving && cardRef.current && !cardRef.current.contains(e.target as Node)) {
       onCancelEdit()
@@ -203,129 +206,82 @@ export function FlexibleCard({
   return (
     <article
       ref={cardRef}
-      className={`bg-surface rounded-xl border border-default p-6 ${borderColorClass}`}
-      aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
+      className="rounded-xl p-5"
+      style={{
+        background: 'var(--gray-0, #ffffff)',
+        border: '1px solid var(--gray-100, #ededed)',
+        borderLeft: `4px solid ${borderColor}`,
+      }}
+      aria-label={`Priority ${kw}: ${priority.name}`}
     >
-      {/* Header: Title row + actions (2-column layout) */}
-      <div className="flex items-start gap-3 mb-2">
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <div className="flex items-center gap-2">
-              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
-                {priority.calendarKeyword}
-              </span>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={handleNameBlur}
-                disabled={isSaving}
-                maxLength={100}
-                autoFocus
-                className="flex-1 text-base text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
-                aria-label="Priority name"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
-                {priority.calendarKeyword}
-              </span>
-              <h3
-                className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
-                onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-                title="Click to edit"
-              >
-                {priority.name}
-              </h3>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-                className="p-1 text-tertiary hover:text-info rounded flex-shrink-0"
-                aria-label={`Edit priority: ${priority.name}`}
-              >
-                <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {/* Type tag, streak, and calendar info below name */}
-          <div className="flex items-center gap-2 mt-1">
-            <Badge color="secondary" variant="soft" size="sm">Flexible</Badge>
-            {!isEditing && priority.streakCount != null && priority.streakCount > 0 && (
-              <span
-                className="text-xs text-warning flex items-center gap-0.5"
-                title={`${priority.streakCount} consecutive week${priority.streakCount === 1 ? '' : 's'} investing time`}
-              >
-                🔥 {priority.streakCount}
-              </span>
-            )}
-            {!isEditing && checkpointDays !== null && (
-              <span className="text-xs text-secondary">
-                {checkpointDays > 0 ? `${checkpointDays}d until check-in` : checkpointDays === 0 ? 'Check-in today' : 'Check-in overdue'}
-              </span>
-            )}
-          </div>
-          <div className="mt-2 p-2 bg-surface-secondary rounded-lg w-fit">
-            <p className="text-xs text-secondary">
-              📅 Use <strong className="text-default">{priority.calendarKeyword}</strong> in the calendar event title to track time
-            </p>
-          </div>
-
-          {/* Aggregate stats - non-edit mode only */}
-          {!isEditing && (
-            <div className="mt-2 space-y-0.5">
-              {/* Cumulative percentage or building average message */}
-              {priority.weeklyHourTarget != null && priority.weeklyHourTarget > 0 && (
-                priority.avgTargetAchievement != null ? (
-                  <p className="text-xs text-secondary">
-                    ~{Math.round(priority.avgTargetAchievement)}% of weekly target on avg
-                  </p>
-                ) : (
-                  <p className="text-xs text-tertiary">Building your average…</p>
-                )
-              )}
-              {/* Total hours invested */}
-              {priority.totalHoursInvested != null && priority.totalHoursInvested > 0 && (
-                <p className="text-xs text-secondary">
-                  {priority.totalHoursInvested.toFixed(1)}h invested total
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right column: HourRing (if target set and not editing) + delete button */}
-        <div className="flex-shrink-0 flex flex-col items-center gap-2">
-          {/* HourRing - only in non-edit mode when target is set */}
-          {!isEditing && priority.weeklyHourTarget != null && (
-            <div
-              className="cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-              title="Click to edit"
-            >
-              <HourRing
-                actual={priority.weeklyHourActual ?? 0}
-                target={priority.weeklyHourTarget}
-                keyword={priority.calendarKeyword}
-              />
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-            className="p-1 text-tertiary hover:text-danger rounded"
-            aria-label={`Delete priority: ${priority.name}`}
+      {/* V7 Header: Badge + Name + Streak pill + Edit/Trash */}
+      <div className="flex items-center gap-2 mb-3">
+        <span
+          className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}
+          style={{ fontSize: '0.65rem' }}
+        >
+          {kw}
+        </span>
+        {isEditing ? (
+          <input
+            type="text"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleNameBlur}
+            disabled={isSaving}
+            maxLength={100}
+            autoFocus
+            className="flex-1 text-sm font-semibold text-default bg-surface border border-default rounded-lg px-2 py-1 focus:outline-none focus:border-tertiary"
+            style={{ color: 'var(--gray-900, #181818)' }}
+            aria-label="Priority name"
+          />
+        ) : (
+          <h3
+            className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80"
+            style={{ color: 'var(--gray-900, #181818)' }}
+            onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+            title="Click to edit"
           >
-            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
-              <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
-              <path d="M6.5 7v5M8 7v5M9.5 7v5"/>
-            </svg>
-          </button>
-        </div>
+            {priority.name}
+          </h3>
+        )}
+        {/* V7: Streak as pill (not emoji) */}
+        {!isEditing && priority.streakCount != null && priority.streakCount > 0 && (
+          <span
+            className="text-xs tabular-nums px-1.5 py-0.5 rounded-full font-medium"
+            style={{
+              color: 'var(--gray-600, #414141)',
+              background: 'var(--gray-75, #f3f3f3)',
+              fontSize: '0.7rem',
+            }}
+          >
+            {priority.streakCount}w streak
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+          className="p-1 rounded hover:bg-surface-secondary transition-colors"
+          title="Edit"
+          aria-label={`Edit priority: ${priority.name}`}
+        >
+          <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
+          className="p-1 rounded hover:bg-danger-soft-alpha transition-colors"
+          title="Delete priority"
+          aria-label={`Delete priority: ${priority.name}`}
+        >
+          <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
+            <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
+            <path d="M6.5 7v5M9.5 7v5" />
+          </svg>
+        </button>
       </div>
 
       {/* Error message */}
@@ -333,8 +289,46 @@ export function FlexibleCard({
         <p className="text-xs text-danger mb-2" role="alert">{error}</p>
       )}
 
+      {/* V7: HourRing on left + Avg stats on right (not in edit mode) */}
+      {!isEditing && priority.weeklyHourTarget != null && (
+        <div className="flex items-start gap-4 mb-4">
+          <HourRing
+            actual={priority.weeklyHourActual ?? 0}
+            target={priority.weeklyHourTarget}
+            keyword={kw}
+          />
+          <div className="flex-1 pt-1">
+            {hasAvg ? (
+              <div className="mb-1.5">
+                <span
+                  className="text-2xl font-bold tabular-nums leading-none"
+                  style={{ color: 'var(--gray-900, #181818)' }}
+                >
+                  ~{Math.round(priority.avgTargetAchievement!)}%
+                </span>
+                <p
+                  className="text-xs mt-0.5"
+                  style={{ color: 'var(--gray-450, #767676)' }}
+                >
+                  of weekly target on avg
+                </p>
+              </div>
+            ) : (
+              <div className="mb-1.5">
+                <span
+                  className="text-sm"
+                  style={{ color: 'var(--gray-350, #9f9f9f)' }}
+                >
+                  Building your average…
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Edit mode: Flexible priority fields with auto-save on blur */}
-      {isEditing ? (
+      {isEditing && (
         <div className="space-y-3 mb-3">
           <div>
             <label htmlFor={`hours-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
@@ -369,9 +363,9 @@ export function FlexibleCard({
             />
           </div>
         </div>
-      ) : null}
+      )}
 
-      {/* Goals section (Inc D) - always visible, not just in edit mode */}
+      {/* Goals section (Inc D) */}
       <GoalSection
         goals={priority.goals ?? []}
         checkpointDate={priority.checkpointDate}

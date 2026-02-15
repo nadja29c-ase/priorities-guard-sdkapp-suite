@@ -1,13 +1,31 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Priority } from '../types'
-import { daysUntil, formatDate } from '../utils'
+import { daysUntil } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
 import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { ChevronIcon } from './ChevronIcon'
-import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
+
+// V7 accent colors for deadline banner
+const ACCENT_COLORS: Record<string, { soft: string; accent: string; border: string }> = {
+  P1: {
+    soft: 'var(--color-background-info-soft-alpha, #eff6ff)',
+    accent: 'var(--color-text-info, #0285ff)',
+    border: '#0285ff',
+  },
+  P2: {
+    soft: 'var(--color-background-discovery-soft-alpha, #faf5ff)',
+    accent: 'var(--color-text-discovery, #924ff7)',
+    border: '#924ff7',
+  },
+  P3: {
+    soft: 'var(--color-background-caution-soft-alpha, #fefce8)',
+    accent: 'var(--color-text-caution, #e0ac00)',
+    border: '#ffc300',
+  },
+}
 
 interface DeadlineCardProps {
   priority: Priority
@@ -50,8 +68,18 @@ export function DeadlineCard({
   const doneCount = priority.deliverables.filter(d => d.done).length
   const totalCount = priority.deliverables.length
 
-  const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
-  const borderColorClass = BORDER_COLORS[priority.calendarKeyword] ?? BORDER_COLORS.P1
+  const kw = priority.calendarKeyword
+  const badgeColorClass = BADGE_COLORS[kw] ?? BADGE_COLORS.P1
+  const colors = ACCENT_COLORS[kw] ?? ACCENT_COLORS.P1
+
+  // Format deadline date for banner (e.g., "Mar 15, 2026")
+  const deadlineDate = priority.deadline
+    ? new Date(priority.deadline + 'T00:00:00').toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : ''
 
   // Get tomorrow's date for min date constraint
   const tomorrow = new Date()
@@ -74,19 +102,17 @@ export function DeadlineCard({
   }, [])
 
   const autoSave = async (field: 'name' | 'deadline', value: string) => {
-    // Validate
     if (field === 'name' && !value.trim()) {
       setError('Name is required')
-      setEditName(priority.name) // Revert
+      setEditName(priority.name)
       return
     }
     if (field === 'deadline' && !value) {
       setError('Deadline is required')
-      setEditDeadline(priority.deadline || '') // Revert
+      setEditDeadline(priority.deadline || '')
       return
     }
 
-    // Check if value actually changed
     const originalValue = field === 'name' ? priority.name : priority.deadline
     if (value === originalValue) {
       return
@@ -100,19 +126,15 @@ export function DeadlineCard({
         ? { name: value.trim() }
         : { deadline: value }
       await onSave(priority.id, updates)
-      // Silence means success - no indicator needed
     } catch (e) {
       console.error('callTool error:', e)
-      // Show error message from tool if available, otherwise generic
       const errorMsg = e instanceof Error ? e.message : 'Failed to save'
       setError(errorMsg)
-      // Revert to original value
       if (field === 'name') {
         setEditName(priority.name)
       } else {
         setEditDeadline(priority.deadline || '')
       }
-      // Clear error after 3s
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
@@ -142,7 +164,6 @@ export function DeadlineCard({
       const errorMsg = e instanceof Error ? e.message : "Couldn't save. Try again."
       setError(errorMsg)
       setShowDeleteConfirm(false)
-      // Clear error after 3s
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
@@ -151,7 +172,6 @@ export function DeadlineCard({
     }
   }
 
-  // Click outside to exit edit mode (reliable document-level listener)
   const handleClickOutside = useCallback((e: MouseEvent) => {
     if (isEditing && !isSaving && cardRef.current && !cardRef.current.contains(e.target as Node)) {
       onCancelEdit()
@@ -181,210 +201,223 @@ export function DeadlineCard({
   return (
     <article
       ref={cardRef}
-      className={`bg-surface rounded-xl border border-default p-6 ${borderColorClass}`}
-      aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
+      className="rounded-xl overflow-hidden"
+      style={{
+        background: 'var(--gray-0, #ffffff)',
+        border: '1px solid var(--gray-100, #ededed)',
+        borderLeft: `4px solid ${colors.border}`,
+      }}
+      aria-label={`Priority ${kw}: ${priority.name}`}
     >
-      {/* Header: Title row + actions (2-column layout) */}
-      <div className="flex items-start gap-3 mb-2">
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <div className="flex items-center gap-2">
-              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
-                {priority.calendarKeyword}
-              </span>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onBlur={handleNameBlur}
-                disabled={isSaving}
-                maxLength={100}
-                autoFocus
-                className="flex-1 text-base text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
-                aria-label="Priority name"
-              />
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}>
-                {priority.calendarKeyword}
-              </span>
-              <h3
-                className="text-base font-semibold text-default truncate cursor-pointer hover:text-info"
-                onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-                title="Click to edit"
-              >
-                {priority.name}
-              </h3>
-              {priority.deadline && (
-                <span
-                  className="text-base font-semibold text-secondary flex-shrink-0 cursor-pointer hover:text-info"
-                  onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-                  title="Click to edit deadline"
-                >
-                  {formatDate(priority.deadline)}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-                className="p-1 text-tertiary hover:text-info rounded flex-shrink-0"
-                aria-label={`Edit priority: ${priority.name}`}
-              >
-                <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {/* Type tag and calendar info below name */}
-          <div className="flex items-center gap-2 mt-1">
-            <Badge color="warning" variant="soft" size="sm">⏰ Deadline-driven</Badge>
-          </div>
-          <div className="mt-2 p-2 bg-surface-secondary rounded-lg w-fit">
-            <p className="text-xs text-secondary">
-              📅 Use <strong className="text-default">{priority.calendarKeyword}</strong> in the calendar event title to track time
-            </p>
-          </div>
+      {/* V7: Colored deadline banner at top */}
+      <div
+        className="px-5 py-2.5 flex items-center justify-between"
+        style={{ background: colors.soft }}
+      >
+        <div className="flex items-center gap-2">
+          {/* Calendar icon */}
+          <svg
+            className="w-3.5 h-3.5 flex-shrink-0"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke={colors.accent}
+            strokeWidth="1.5"
+          >
+            <rect x="2" y="3" width="12" height="11" rx="1.5" />
+            <path d="M5 1.5v3M11 1.5v3M2 7h12" />
+          </svg>
+          <span
+            className="text-xs font-semibold"
+            style={{ color: colors.accent }}
+          >
+            {deadlineDate}
+          </span>
         </div>
+        <span
+          className="text-xs font-bold tabular-nums"
+          style={{ color: colors.accent }}
+        >
+          {days !== null && (
+            days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`
+          )}
+        </span>
+      </div>
 
-        {/* Delete button */}
-        <div className="flex-shrink-0">
+      {/* Main content area */}
+      <div className="p-5">
+        {/* Header row: Badge + Name + Edit/Trash */}
+        <div className="flex items-center gap-2 mb-3">
+          <span
+            className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}
+            style={{ fontSize: '0.65rem' }}
+          >
+            {kw}
+          </span>
+          {isEditing ? (
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onBlur={handleNameBlur}
+              disabled={isSaving}
+              maxLength={100}
+              autoFocus
+              className="flex-1 text-sm font-semibold text-default bg-surface border border-default rounded-lg px-2 py-1 focus:outline-none focus:border-tertiary"
+              style={{ color: 'var(--gray-900, #181818)' }}
+              aria-label="Priority name"
+            />
+          ) : (
+            <h3
+              className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80"
+              style={{ color: 'var(--gray-900, #181818)' }}
+              onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+              title="Click to edit"
+            >
+              {priority.name}
+            </h3>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+            className="p-1 rounded hover:bg-surface-secondary transition-colors"
+            title="Edit"
+            aria-label={`Edit priority: ${priority.name}`}
+          >
+            <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
-            className="p-1 text-tertiary hover:text-danger rounded"
+            className="p-1 rounded hover:bg-danger-soft-alpha transition-colors"
+            title="Delete priority"
             aria-label={`Delete priority: ${priority.name}`}
           >
-            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
-              <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
-              <path d="M6.5 7v5M8 7v5M9.5 7v5"/>
+            <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
+              <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
+              <path d="M6.5 7v5M9.5 7v5" />
             </svg>
           </button>
         </div>
-      </div>
 
-      {/* Error message */}
-      {error && (
-        <p className="text-xs text-danger mb-2" role="alert">{error}</p>
-      )}
+        {/* Error message */}
+        {error && (
+          <p className="text-xs text-danger mb-2" role="alert">{error}</p>
+        )}
 
-      {/* Progress info */}
-      <div className="mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          {totalCount > 0 && (
-            <span className="text-xs text-secondary">
-              {doneCount} of {totalCount} done
-              {days !== null && ` · ${days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`}`}
+        {/* V7: Lead measure - large done/total number */}
+        <div className="mb-4">
+          <span
+            className="text-2xl font-bold tabular-nums leading-none"
+            style={{ color: 'var(--gray-900, #181818)' }}
+          >
+            {doneCount}
+            <span
+              className="text-lg font-normal"
+              style={{ color: 'var(--gray-350, #9f9f9f)' }}
+            >
+              /{totalCount}
             </span>
-          )}
-          {totalCount === 0 && days !== null && (
-            <span className="text-xs text-secondary">
-              {days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`}
-            </span>
-          )}
+          </span>
+          <p
+            className="text-xs mt-0.5"
+            style={{ color: 'var(--gray-450, #767676)' }}
+          >
+            deliverables done
+          </p>
         </div>
 
-        {/* Progress bar - neutral color, pure completion ratio */}
-        {totalCount > 0 && (
-          <div
-            className="mt-2 h-1.5 w-full bg-surface-tertiary rounded-full overflow-hidden"
-            role="progressbar"
-            aria-valuenow={doneCount}
-            aria-valuemin={0}
-            aria-valuemax={totalCount}
-            aria-label={`${doneCount} of ${totalCount} deliverables completed`}
-          >
-            <div
-              className="h-full bg-[color:var(--gray-400)] rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${Math.min(100, (doneCount / totalCount) * 100)}%` }}
+        {/* Deadline field - editable in edit mode */}
+        {isEditing && (
+          <div className="mb-3">
+            <label htmlFor={`deadline-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
+              Deadline
+            </label>
+            <input
+              id={`deadline-${priority.id}`}
+              type="date"
+              value={editDeadline}
+              onChange={(e) => setEditDeadline(e.target.value)}
+              onBlur={handleDeadlineBlur}
+              disabled={isSaving}
+              min={minDate}
+              className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
             />
           </div>
         )}
 
-
-      </div>
-
-      {/* Deadline field - editable in edit mode */}
-      {isEditing && (
-        <div className="mb-3">
-          <label htmlFor={`deadline-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
-            Deadline
-          </label>
-          <input
-            id={`deadline-${priority.id}`}
-            type="date"
-            value={editDeadline}
-            onChange={(e) => setEditDeadline(e.target.value)}
-            onBlur={handleDeadlineBlur}
-            disabled={isSaving}
-            min={minDate}
-            className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
-          />
-        </div>
-      )}
-
-      {/* E2E Deliverables - Collapsible */}
-      <div className="border-t border-subtle pt-3">
-        <div
-          className="flex items-center gap-2 mb-2 cursor-pointer"
-          onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}
-        >
-          <ChevronIcon expanded={deliverablesExpanded} className="text-tertiary" />
-          <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide">
-            E2E Deliverables
-          </h4>
-          {totalCount > 0 && (
-            <span className="text-xs text-secondary ml-auto">
-              {doneCount}/{totalCount}
+        {/* E2E Deliverables - Collapsible */}
+        <div className="pt-3" style={{ borderTop: '1px solid var(--gray-75, #f3f3f3)' }}>
+          <button
+            onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}
+            className="flex items-center gap-1.5 w-full mb-2 hover:opacity-80 transition-opacity"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <h4
+              className="text-xs font-medium uppercase tracking-wide"
+              style={{ color: 'var(--gray-400, #8f8f8f)' }}
+            >
+              E2E Deliverables
+            </h4>
+            <span
+              className="text-xs tabular-nums"
+              style={{ color: 'var(--gray-350, #9f9f9f)' }}
+            >
+              ({doneCount}/{totalCount})
             </span>
+            <span className="ml-auto">
+              <ChevronIcon expanded={deliverablesExpanded} />
+            </span>
+          </button>
+
+          {deliverablesExpanded && (
+            <>
+              {priority.deliverables.length > 0 ? (
+                <ul className="space-y-1.5 mb-2" aria-label="Deliverables list">
+                  {priority.deliverables.map((d) => (
+                    <DeliverableItem
+                      key={d.id}
+                      deliverable={d}
+                      onToggle={onToggleDeliverable}
+                      onRename={onRenameDeliverable}
+                      onDelete={onDeleteDeliverable}
+                      disabled={false}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs mb-2" style={{ color: 'var(--gray-350, #9f9f9f)' }}>
+                  No deliverables yet
+                </p>
+              )}
+              <AddDeliverableInput
+                priorityId={priority.id}
+                onAdd={onAddDeliverable}
+              />
+            </>
           )}
         </div>
-        {deliverablesExpanded && (
-          <>
-            {priority.deliverables.length > 0 ? (
-              <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
-                {priority.deliverables.map((d) => (
-                  <DeliverableItem
-                    key={d.id}
-                    deliverable={d}
-                    onToggle={onToggleDeliverable}
-                    onRename={onRenameDeliverable}
-                    onDelete={onDeleteDeliverable}
-                    disabled={false}
-                  />
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
-            )}
-            <AddDeliverableInput
-              priorityId={priority.id}
-              onAdd={onAddDeliverable}
-            />
-          </>
+
+        {/* Edit mode actions */}
+        {isEditing && (
+          <div className="mt-4 flex items-center justify-between">
+            <p className="text-xs text-tertiary">
+              Changes save automatically
+            </p>
+            <Button
+              color="secondary"
+              variant="ghost"
+              size="sm"
+              onClick={onCancelEdit}
+              disabled={isSaving}
+            >
+              Done
+            </Button>
+          </div>
         )}
       </div>
-
-      {/* Edit mode actions */}
-      {isEditing && (
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-xs text-tertiary">
-            Changes save automatically
-          </p>
-          <Button
-            color="secondary"
-            variant="ghost"
-            size="sm"
-            onClick={onCancelEdit}
-            disabled={isSaving}
-          >
-            Done
-          </Button>
-        </div>
-      )}
     </article>
   )
 }

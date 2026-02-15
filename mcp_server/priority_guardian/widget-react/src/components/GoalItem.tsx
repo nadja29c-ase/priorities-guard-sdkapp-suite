@@ -4,37 +4,25 @@ import type { Goal } from '../types'
 interface GoalItemProps {
   goal: Goal
   onToggle: (goalId: string, achieved: boolean) => Promise<void>
-  onRename: (goalId: string, text: string) => Promise<void>
-  onDelete: (goalId: string) => Promise<void>
+  onRename?: (goalId: string, text: string) => Promise<void>
+  onDelete?: (goalId: string) => Promise<void>
   disabled?: boolean
 }
 
+/**
+ * GoalItem - V7 style
+ * - 18px circular checkbox (green when achieved)
+ * - Text with strikethrough when achieved
+ * - No hover edit/delete actions (per V7 spec)
+ */
 export function GoalItem({
   goal,
   onToggle,
-  onRename,
-  onDelete,
   disabled = false,
 }: GoalItemProps) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editText, setEditText] = useState(goal.text)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Sync editText with goal.text when goal changes
-  useEffect(() => {
-    setEditText(goal.text)
-  }, [goal.text])
-
-  // Focus input when entering edit mode
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [isEditing])
 
   // Clear timeout on unmount
   useEffect(() => {
@@ -60,121 +48,52 @@ export function GoalItem({
     }
   }, [disabled, isLoading, onToggle, goal.id, goal.achieved])
 
-  const handleSave = useCallback(async () => {
-    const trimmed = editText.trim()
-    if (!trimmed) {
-      setEditText(goal.text)
-      setIsEditing(false)
-      return
-    }
-    if (trimmed === goal.text) {
-      setIsEditing(false)
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-    try {
-      await onRename(goal.id, trimmed)
-      setIsEditing(false)
-    } catch (e) {
-      console.error('Rename goal error:', e)
-      setError(e instanceof Error ? e.message : 'Failed to save')
-      errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
-      setEditText(goal.text) // Revert
-    } finally {
-      setIsLoading(false)
-    }
-  }, [editText, goal.text, goal.id, onRename])
-
-  const handleDelete = useCallback(async () => {
-    if (disabled || isLoading) return
-    setIsLoading(true)
-    setError(null)
-    try {
-      await onDelete(goal.id)
-    } catch (e) {
-      console.error('Delete goal error:', e)
-      setError(e instanceof Error ? e.message : 'Failed to delete')
-      errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [disabled, isLoading, onDelete, goal.id])
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSave()
-    } else if (e.key === 'Escape') {
-      setEditText(goal.text)
-      setIsEditing(false)
-    }
-  }
-
   return (
-    <li className="flex items-start gap-2 group">
-      {/* Circular checkbox */}
+    <li className="flex items-start gap-2.5">
+      {/* Circular checkbox - V7: 18px diameter */}
       <button
         type="button"
         onClick={handleToggle}
         disabled={disabled || isLoading}
-        className={`flex-shrink-0 w-4 h-4 mt-0.5 rounded-full border-2 transition-colors ${
-          goal.achieved
-            ? 'bg-success border-success'
-            : 'border-outline-default hover:border-outline-strong'
-        } ${(disabled || isLoading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        className="mt-0.5 flex-shrink-0 transition-all"
+        title={goal.achieved ? 'Mark as not yet achieved' : 'Mark as achieved'}
         aria-label={goal.achieved ? 'Mark as not achieved' : 'Mark as achieved'}
       >
-        {goal.achieved && (
-          <svg className="w-full h-full text-white p-0.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="3">
-            <path d="M3 8l4 4 6-6" />
-          </svg>
-        )}
+        <span
+          className="rounded-full flex items-center justify-center"
+          style={{
+            width: '18px',
+            height: '18px',
+            border: goal.achieved ? 'none' : '1.5px solid var(--gray-300, #afafaf)',
+            background: goal.achieved ? 'var(--green-500, #00a240)' : 'transparent',
+            transition: 'all 150ms ease-out',
+            opacity: (disabled || isLoading) ? 0.5 : 1,
+            cursor: (disabled || isLoading) ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {goal.achieved && (
+            <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
+              <path d="M2 6l3 3 5-5" />
+            </svg>
+          )}
+        </span>
       </button>
 
-      {/* Goal text or edit input */}
+      {/* Goal text */}
       <div className="flex-1 min-w-0">
-        {isEditing ? (
-          <input
-            ref={inputRef}
-            type="text"
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={handleKeyDown}
-            disabled={isLoading}
-            maxLength={200}
-            className="w-full text-sm text-default bg-surface border border-default rounded px-2 py-0.5 focus:outline-none focus:border-tertiary"
-            aria-label="Edit goal text"
-          />
-        ) : (
-          <span
-            className={`text-sm cursor-pointer hover:text-info ${goal.achieved ? 'line-through text-tertiary' : 'text-default'}`}
-            onClick={() => !disabled && setIsEditing(true)}
-            title="Click to edit"
-          >
-            {goal.text}
-          </span>
-        )}
+        <p
+          className={`text-sm flex-1 ${goal.achieved ? 'line-through' : ''}`}
+          style={{
+            color: goal.achieved ? 'var(--gray-350, #9f9f9f)' : 'var(--gray-700, #303030)',
+            transition: 'color 150ms ease-out',
+          }}
+        >
+          {goal.text}
+        </p>
         {error && (
           <p className="text-xs text-danger mt-0.5" role="alert">{error}</p>
         )}
       </div>
-
-      {/* Delete button (visible on hover) */}
-      {!isEditing && (
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={disabled || isLoading}
-          className="flex-shrink-0 p-0.5 text-tertiary hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
-          aria-label={`Delete goal: ${goal.text}`}
-        >
-          <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M4 4l8 8M12 4l-8 8" />
-          </svg>
-        </button>
-      )}
     </li>
   )
 }

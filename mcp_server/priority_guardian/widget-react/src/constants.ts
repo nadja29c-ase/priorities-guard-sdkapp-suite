@@ -10,8 +10,8 @@ export const BADGE_COLORS: Record<string, string> = {
   P3: 'bg-caution-soft-alpha text-caution',
 }
 
-// Circle badge dimensions (use with rounded-full)
-export const BADGE_CIRCLE_CLASS = 'w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0'
+// Circle badge dimensions (use with rounded-full) - V7: w-6 h-6
+export const BADGE_CIRCLE_CLASS = 'w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0'
 
 // Bar segment and legend dot colors for TimeAllocationBar (Widget C)
 // Uses solid midtone tokens for better visibility on 12px height bar

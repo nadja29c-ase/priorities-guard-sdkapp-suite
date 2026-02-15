@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react'
-import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { extractStructuredContent } from '../utils'
 
 interface ConnectionStatusProps {
@@ -34,15 +33,11 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
       const connectUrl = content?.data?.connect_url
 
       if (connectUrl) {
-        // Open OAuth URL in external browser
         if (window.openai.openExternal) {
           window.openai.openExternal({ href: connectUrl })
         } else {
           window.open(connectUrl, '_blank')
         }
-
-        // Show "Check status" button instead of auto-refreshing
-        // OAuth flow takes 10-30+ seconds (user reads consent, clicks allow, redirect)
         setAwaitingOAuth(true)
       }
     } catch (err) {
@@ -70,7 +65,6 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
     try {
       await window.openai.callTool('disconnect_google_calendar', { confirm: true })
       setShowDisconnectConfirm(false)
-      // Refresh to update connection status
       onRefresh()
     } catch (err) {
       console.error('Failed to disconnect:', err)
@@ -81,101 +75,164 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
   }, [onRefresh])
 
   return (
-    <div className="mb-4">
-      <div className="flex items-center justify-between p-3 bg-surface rounded-xl">
+    <section
+      className="mt-4 rounded-xl p-4"
+      style={{
+        background: 'var(--gray-0, #ffffff)',
+        border: '1px solid var(--gray-100, #ededed)',
+      }}
+    >
+      {/* V7: Connection indicator row */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div
-            className={`w-2.5 h-2.5 rounded-full ${
-              connected ? 'bg-success' : 'bg-tertiary'
-            }`}
+          <span
+            className="w-2 h-2 rounded-full"
+            style={{
+              background: connected
+                ? 'var(--green-500, #00a240)'
+                : 'var(--gray-300, #afafaf)',
+            }}
             aria-hidden="true"
           />
-          <span className="text-sm text-secondary">
-            Google Calendar: {connected ? 'Connected \u2713' : 'Not connected'}
+          <span
+            className="text-sm font-medium"
+            style={{ color: 'var(--gray-700, #303030)' }}
+          >
+            Google Calendar
           </span>
         </div>
 
         {connected ? (
           showDisconnectConfirm ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-secondary">Disconnect?</span>
-              <Button
-                color="danger"
-                variant="outline"
-                size="sm"
+              <span
+                className="text-xs"
+                style={{ color: 'var(--gray-500, #5d5d5d)' }}
+              >
+                Disconnect?
+              </span>
+              <button
                 onClick={handleDisconnect}
                 disabled={isDisconnecting}
+                className="text-xs font-medium px-2 py-1 rounded-lg transition-colors"
+                style={{
+                  color: 'var(--red-500, #e02e2a)',
+                  background: 'var(--red-50, #fef2f2)',
+                  opacity: isDisconnecting ? 0.6 : 1,
+                }}
                 aria-label="Confirm disconnect"
               >
-                {isDisconnecting ? 'Disconnecting...' : 'Yes'}
-              </Button>
-              <Button
-                color="secondary"
-                variant="ghost"
-                size="sm"
+                {isDisconnecting ? '...' : 'Yes'}
+              </button>
+              <button
                 onClick={() => setShowDisconnectConfirm(false)}
                 disabled={isDisconnecting}
+                className="text-xs font-medium px-2 py-1 rounded-lg transition-colors"
+                style={{
+                  color: 'var(--gray-500, #5d5d5d)',
+                  background: 'var(--gray-50, #f9f9f9)',
+                }}
                 aria-label="Cancel disconnect"
               >
                 No
-              </Button>
+              </button>
             </div>
           ) : (
-            <Button
-              color="primary"
-              variant="solid"
-              size="sm"
+            <button
               onClick={() => setShowDisconnectConfirm(true)}
               disabled={isRefreshing}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              style={{
+                color: 'var(--red-500, #e02e2a)',
+                background: 'var(--red-50, #fef2f2)',
+              }}
               aria-label="Disconnect Google Calendar"
             >
               Disconnect
-            </Button>
+            </button>
           )
         ) : awaitingOAuth ? (
-          <Button
-            color="primary"
-            variant="outline"
-            size="sm"
+          <button
             onClick={handleCheckStatus}
             disabled={isRefreshing}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+            style={{
+              color: 'var(--blue-500, #0169cc)',
+              background: 'var(--blue-50, #eff6ff)',
+              opacity: isRefreshing ? 0.6 : 1,
+            }}
             aria-label="Check connection status"
           >
             {isRefreshing ? 'Checking...' : 'Check status'}
-          </Button>
+          </button>
         ) : (
-          <Button
-            color="primary"
-            variant="solid"
-            size="sm"
+          <button
             onClick={handleConnect}
             disabled={isConnecting || isRefreshing}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+            style={{
+              color: 'var(--blue-500, #0169cc)',
+              background: 'var(--blue-50, #eff6ff)',
+              opacity: (isConnecting || isRefreshing) ? 0.6 : 1,
+            }}
             aria-label="Connect Google Calendar"
           >
             {isConnecting ? 'Connecting...' : 'Connect'}
-          </Button>
+          </button>
         )}
       </div>
 
+      {/* V7: Instruction when connected - inside same section */}
       {connected && (
-        <div className="mt-2 p-2 bg-surface-secondary rounded-lg">
-          <p className="text-xs text-secondary">
-            {'📅'} Use <strong className="text-default">P1</strong>, <strong className="text-default">P2</strong>, or <strong className="text-default">P3</strong> in your calendar event titles to track time toward each priority.
+        <div
+          className="rounded-lg px-3 py-2.5 mt-3"
+          style={{ background: 'var(--gray-50, #f9f9f9)' }}
+        >
+          <p
+            className="text-xs leading-relaxed"
+            style={{ color: 'var(--gray-450, #767676)' }}
+          >
+            Add <strong style={{ color: 'var(--gray-700, #303030)' }}>P1</strong>,{' '}
+            <strong style={{ color: 'var(--gray-700, #303030)' }}>P2</strong>, or{' '}
+            <strong style={{ color: 'var(--gray-700, #303030)' }}>P3</strong>{' '}
+            to your calendar event titles to track time toward each priority.
           </p>
         </div>
       )}
 
+      {/* OAuth awaiting message */}
       {awaitingOAuth && !connected && (
-        <div className="mt-2 p-2 text-xs text-secondary bg-surface rounded-lg border border-default">
-          Complete the authorization in the opened window, then click "Check status".
+        <div
+          className="rounded-lg px-3 py-2.5 mt-3"
+          style={{ background: 'var(--gray-50, #f9f9f9)' }}
+        >
+          <p
+            className="text-xs"
+            style={{ color: 'var(--gray-500, #5d5d5d)' }}
+          >
+            Complete the authorization in the opened window, then click "Check status".
+          </p>
         </div>
       )}
 
+      {/* Error message */}
       {error && (
-        <div className="mt-2 p-2 text-xs text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
-          {error}
+        <div
+          className="rounded-lg px-3 py-2.5 mt-3"
+          style={{
+            background: 'var(--red-50, #fef2f2)',
+            border: '1px solid var(--red-200, #fecaca)',
+          }}
+          role="alert"
+        >
+          <p
+            className="text-xs"
+            style={{ color: 'var(--red-600, #dc2626)' }}
+          >
+            {error}
+          </p>
         </div>
       )}
-    </div>
+    </section>
   )
 }

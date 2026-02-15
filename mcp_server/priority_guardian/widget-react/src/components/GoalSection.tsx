@@ -91,7 +91,7 @@ export function GoalSection({
           <ChevronIcon expanded={expanded} className="text-tertiary" />
         )}
         <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide">
-          1-Month Goals
+          {goals.length === 1 ? '1-Month Goal' : '1-Month Goals'}
         </h4>
         {checkpointDate && (
           <span className="text-xs text-tertiary">

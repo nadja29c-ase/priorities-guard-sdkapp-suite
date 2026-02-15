@@ -5,6 +5,8 @@ import { formatHours } from '../utils'
 interface TimeAllocationBarProps {
   timeAllocation: TimeAllocation | undefined
   activeKeywords: CalendarKeyword[]  // Keywords that have active priorities
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }
 
 /**
@@ -21,10 +23,6 @@ function parseDateParts(isoString: string): { year: number; month: number; day: 
  * Format date range for display.
  * Shows "Feb 9 – Feb 15" (month abbreviated, no year if same year as now).
  * weekEnd is exclusive (next Monday 00:00), so we subtract 1 day for display.
- *
- * Uses string parsing instead of Date arithmetic to avoid timezone issues:
- * the backend sends dates in user's timezone, and we want to display those
- * dates regardless of the browser's current timezone.
  */
 function formatDateRange(weekStart: string, weekEnd: string): string {
   const locale = window.openai?.locale ?? 'en-US'
@@ -33,7 +31,6 @@ function formatDateRange(weekStart: string, weekEnd: string): string {
   const end = parseDateParts(weekEnd)
 
   // Subtract 1 day from end date (it's exclusive - Monday 00:00, we want Sunday)
-  // Create Date with year, month-1, day-1 to get the previous day
   const startDate = new Date(start.year, start.month - 1, start.day)
   const endDate = new Date(end.year, end.month - 1, end.day - 1)
 
@@ -44,14 +41,12 @@ function formatDateRange(weekStart: string, weekEnd: string): string {
     day: 'numeric',
   }
 
-  // Add year if different from current year
   if (start.year !== currentYear) {
     formatOptions.year = 'numeric'
   }
 
   const startFormatted = startDate.toLocaleDateString(locale, formatOptions)
 
-  // For end date, only add year if different from current year
   const endFormatOptions: Intl.DateTimeFormatOptions = {
     month: 'short',
     day: 'numeric',
@@ -66,7 +61,6 @@ function formatDateRange(weekStart: string, weekEnd: string): string {
 
 /**
  * Build aria-label for accessibility.
- * Uses keywords[].hours (true time toward each priority) not barSegments (exclusive bar allocation).
  */
 function buildAriaLabel(
   timeAllocation: TimeAllocation,
@@ -92,7 +86,7 @@ function buildAriaLabel(
   return `Time allocation: ${parts.join(', ')}`
 }
 
-export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAllocationBarProps) {
+export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, isRefreshing }: TimeAllocationBarProps) {
   // Don't render if timeAllocation is absent
   if (!timeAllocation) {
     return null
@@ -102,13 +96,11 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
   const dateRange = formatDateRange(weekStart, weekEnd)
 
   // Calculate segment widths as percentages
-  // Use minimum width of 2% for very small segments to keep them visible
   const MIN_SEGMENT_PERCENT = 2
 
   const segments: { key: string; width: number; color: string }[] = []
 
   if (totalTrackedHours > 0) {
-    // Add keyword segments for active priorities only
     for (const kw of activeKeywords) {
       const hours = barSegments[kw]
       if (hours > 0) {
@@ -121,7 +113,6 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
       }
     }
 
-    // Add "other" segment
     if (otherHours > 0) {
       const percent = (otherHours / totalTrackedHours) * 100
       segments.push({
@@ -131,7 +122,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
       })
     }
 
-    // Normalize widths to sum to 100% if we had to apply minimums
+    // Normalize widths to sum to 100%
     const totalWidth = segments.reduce((sum, s) => sum + s.width, 0)
     if (totalWidth > 100) {
       const scale = 100 / totalWidth
@@ -141,8 +132,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
     }
   }
 
-  // Build legend items: active keywords + "other" (always shown)
-  // Legend uses keywords[].hours (true time toward each priority), not barSegments (exclusive bar allocation)
+  // Build legend items
   const legendItems: { key: string; label: string; hours: number; isOther: boolean }[] = []
 
   for (const kw of activeKeywords) {
@@ -154,7 +144,6 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
     })
   }
 
-  // "Other" always shown
   legendItems.push({
     key: 'other',
     label: 'other',
@@ -165,55 +154,85 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
   const ariaLabel = buildAriaLabel(timeAllocation, activeKeywords)
 
   return (
-    <section
-      className="bg-surface rounded-xl border border-default p-4 mb-5"
-      aria-labelledby="time-allocation-heading"
-    >
-      {/* Header */}
-      <div className="flex justify-between items-baseline mb-1">
-        <h2 id="time-allocation-heading" className="text-sm font-medium text-default">
-          Your time allocation this week
-        </h2>
-        <span className="text-sm font-semibold text-default">
-          {formatHours(totalTrackedHours)}
+    <section className="mb-5" aria-labelledby="time-allocation-heading">
+      {/* Header row - V7 style */}
+      <div className="flex justify-between items-center mb-1.5">
+        <span
+          id="time-allocation-heading"
+          className="text-xs font-medium uppercase tracking-wide"
+          style={{ color: 'var(--gray-500, #5d5d5d)' }}
+        >
+          This week
         </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-sm font-semibold tabular-nums"
+            style={{ color: 'var(--gray-900, #181818)' }}
+          >
+            {formatHours(totalTrackedHours)}
+          </span>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="p-1 rounded-full hover:bg-surface-secondary transition-colors"
+              style={{ opacity: isRefreshing ? 0.4 : 1 }}
+              title="Refresh calendar data"
+              aria-label="Refresh calendar data"
+            >
+              <svg
+                className="w-3 h-3"
+                style={{ color: 'var(--gray-400, #8f8f8f)' }}
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path d="M2.5 8a5.5 5.5 0 019.3-3.9M13.5 8a5.5 5.5 0 01-9.3 3.9" />
+                <path d="M12 1v3.5h-3.5M4 15v-3.5h3.5" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Date range */}
-      <p className="text-xs text-secondary mb-3">
+      <p className="text-xs mb-2.5" style={{ color: 'var(--gray-450, #767676)' }}>
         {dateRange}
       </p>
 
-      {/* Stacked bar */}
+      {/* Stacked bar - V7: h-2, gap-px, rounded segments */}
       <div
-        className="h-3 rounded-full overflow-hidden flex bg-surface-tertiary"
+        className="h-2 rounded-full overflow-hidden flex gap-px"
+        style={{ background: 'var(--gray-100, #ededed)' }}
         role="img"
         aria-label={ariaLabel}
       >
         {totalTrackedHours === 0 ? (
-          // Empty state: full gray bar
-          <div className="w-full h-full bg-surface-tertiary" />
+          <div className="w-full h-full" />
         ) : (
-          // Render segments
-          segments.map((segment) => (
+          segments.map((segment, index) => (
             <div
               key={segment.key}
-              className={`h-full ${segment.color}`}
+              className={`h-full ${segment.color} ${index === 0 ? 'rounded-l-full' : ''} ${index === segments.length - 1 ? 'rounded-r-full' : ''}`}
               style={{ width: `${segment.width}%` }}
             />
           ))
         )}
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+      {/* Legend - V7: w-1.5 h-1.5 dots */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
         {legendItems.map((item) => (
           <div key={item.key} className="flex items-center gap-1.5">
             <span
-              className={`w-2 h-2 rounded-full ${BAR_COLORS[item.key] ?? BAR_COLORS.other}`}
+              className={`w-1.5 h-1.5 rounded-full ${BAR_COLORS[item.key] ?? BAR_COLORS.other}`}
               aria-hidden="true"
             />
-            <span className={`text-xs ${item.isOther ? 'text-secondary italic' : 'text-secondary'}`}>
+            <span
+              className={`text-xs tabular-nums ${item.isOther ? 'italic' : ''}`}
+              style={{ color: item.isOther ? 'var(--gray-400, #8f8f8f)' : 'var(--gray-500, #5d5d5d)' }}
+            >
               {item.label} {formatHours(item.hours)}
             </span>
           </div>

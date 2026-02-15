@@ -3,14 +3,23 @@ interface CalendarConnectionMinimalProps {
 }
 
 export function CalendarConnectionMinimal({ connected }: CalendarConnectionMinimalProps) {
+  // V7: Only show when connected, minimal indicator
+  if (!connected) {
+    return null
+  }
+
   return (
-    <div className="flex items-center gap-1.5 text-xs text-secondary">
+    <div className="mt-4 flex items-center gap-2 px-1">
       <span
-        className={`w-2 h-2 rounded-full ${connected ? 'bg-success' : 'bg-warning'}`}
+        className="w-1.5 h-1.5 rounded-full"
+        style={{ background: 'var(--green-500, #00a240)' }}
         aria-hidden="true"
       />
-      <span>
-        {connected ? 'Calendar connected' : 'Calendar not connected'}
+      <span
+        className="text-xs"
+        style={{ color: 'var(--gray-400, #8f8f8f)' }}
+      >
+        Google Calendar connected
       </span>
     </div>
   )

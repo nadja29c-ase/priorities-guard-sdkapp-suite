@@ -1,25 +1,36 @@
-import { Button } from '@openai/apps-sdk-ui/components/Button'
-
 interface FullscreenHeaderProps {
   onMinimize: () => void
 }
 
 export function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
   return (
-    <div className="flex items-center justify-between mb-4">
-      <h2 className="text-lg font-semibold text-default">My Priorities</h2>
-      <Button
-        color="secondary"
-        variant="ghost"
-        size="sm"
+    <div
+      className="flex items-center justify-between px-4 py-2.5 mb-1"
+      style={{
+        background: 'var(--gray-0, #ffffff)',
+        borderBottom: '1px solid var(--gray-75, #f3f3f3)',
+      }}
+    >
+      <span
+        className="text-sm font-semibold"
+        style={{ color: 'var(--gray-900, #181818)' }}
+      >
+        My Priorities
+      </span>
+      <button
         onClick={onMinimize}
+        className="text-xs px-2.5 py-1 rounded-lg transition-colors hover:bg-surface-secondary"
+        style={{
+          color: 'var(--gray-500, #5d5d5d)',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+        title="Minimize to inline card"
         aria-label="Minimize dashboard"
       >
-        <svg className="w-4 h-4 mr-1" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M4 8h8" />
-        </svg>
         Minimize
-      </Button>
+      </button>
     </div>
   )
 }

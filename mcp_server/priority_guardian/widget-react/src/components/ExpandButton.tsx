@@ -7,13 +7,26 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full mt-4 p-3 border border-default rounded-xl hover:border-strong hover:bg-surface-secondary/50 transition-colors flex items-center justify-center gap-2 text-secondary hover:text-default"
+      className="w-full mt-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors hover:opacity-80"
+      style={{
+        color: 'var(--blue-500, #0169cc)',
+        background: 'var(--blue-50, #eff6ff)',
+        border: 'none',
+        cursor: 'pointer',
+      }}
       aria-label="Open full dashboard"
     >
-      <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-        <path d="M10 2h4v4M6 14H2v-4M14 2L9 7M2 14l5-5" />
+      Open full dashboard
+      <svg
+        className="w-3 h-3"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      >
+        <path d="M6 4l4 4-4 4" />
       </svg>
-      <span className="text-sm font-medium">Open full dashboard</span>
     </button>
   )
 }
