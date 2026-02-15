@@ -82,7 +82,7 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
 
   return (
     <div className="mb-4">
-      <div className="flex items-center justify-between p-3 bg-surface rounded-xl border border-default">
+      <div className="flex items-center justify-between p-3 bg-surface rounded-xl">
         <div className="flex items-center gap-2">
           <div
             className={`w-2.5 h-2.5 rounded-full ${
