@@ -1,11 +1,12 @@
 """
-Unit tests for get_weekly_report MCP handler (Increment 07).
+Unit tests for get_weekly_report MCP handler (Increment 07 + Increment 10).
 
 Tests:
 - Slice construction (priority + semantic)
 - Validation (over-allocation, remainder handling)
 - Two assistant_guidance modes (with/without semantic_groupings)
 - Normalization functions
+- Per-priority semantic zoom (Increment 10)
 """
 
 import pytest
@@ -18,6 +19,7 @@ from mcp_server.priority_guardian.tools.get_weekly_report import (
     _normalize_event,
     WIDGET_URI,
 )
+from mcp_server.priority_guardian.tools.base import ToolUsageError
 
 
 class TestBuildPieSlices:
@@ -37,7 +39,7 @@ class TestBuildPieSlices:
             "other_hours": 2.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None)
+        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
 
         assert error is None
         priority_slices = [s for s in slices if s["type"] == "priority"]
@@ -59,7 +61,7 @@ class TestBuildPieSlices:
             "other_hours": 2.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None)
+        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
 
         assert error is None
         priority_slices = [s for s in slices if s["type"] == "priority"]
@@ -74,7 +76,7 @@ class TestBuildPieSlices:
             "other_hours": 5.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None)
+        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
 
         assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
@@ -90,7 +92,7 @@ class TestBuildPieSlices:
             "other_hours": 0.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None)
+        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
 
         assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
@@ -108,7 +110,8 @@ class TestBuildPieSlices:
             {"category": "Admin", "hours": 3.0, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        # Without semantic_target, defaults to "other" (backwards compatible)
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, None)
 
         assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
@@ -128,7 +131,7 @@ class TestBuildPieSlices:
             "other_hours": 5.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, [])
+        slices, error = _build_pie_slices(priorities, time_allocation, [], None)
 
         assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
@@ -139,8 +142,8 @@ class TestBuildPieSlices:
 class TestSliceValidation:
     """Tests for semantic_groupings validation in _build_pie_slices()."""
 
-    def test_over_allocation_returns_error(self):
-        """Grouped hours > other_hours + 0.5 returns validation error."""
+    def test_over_allocation_raises_error(self):
+        """Grouped hours > other_hours + 0.5 raises ToolUsageError."""
         priorities = []
         time_allocation = {
             "keywords": {},
@@ -152,13 +155,13 @@ class TestSliceValidation:
             {"category": "Admin", "hours": 4.0, "event_count": 3},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        with pytest.raises(ToolUsageError) as exc_info:
+            _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
-        assert error is not None
-        assert "exceed" in error.lower()
-        assert "12.0" in error  # Grouped total
-        assert "10.0" in error  # Other hours
-        assert slices == []
+        error_msg = str(exc_info.value)
+        assert "exceed" in error_msg.lower()
+        assert "12.0" in error_msg  # Grouped total
+        assert "10.0" in error_msg  # Other hours
 
     def test_within_tolerance_accepted(self):
         """Grouped hours <= other_hours + 0.5 is accepted."""
@@ -173,7 +176,7 @@ class TestSliceValidation:
             {"category": "Admin", "hours": 4.4, "event_count": 3},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
         assert error is None
         assert len(slices) == 2
@@ -190,7 +193,7 @@ class TestSliceValidation:
             {"category": "Admin", "hours": 3.3, "event_count": 3},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
         assert error is None
         # Hours match exactly what user provided
@@ -214,7 +217,7 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.5, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
         assert error is None
         assert len(slices) == 3
@@ -236,7 +239,7 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.8, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
         assert error is None
         assert len(slices) == 2
@@ -254,7 +257,7 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.0, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
         assert error is None
         assert len(slices) == 2
@@ -273,7 +276,7 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.4, "event_count": 3},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings)
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
         assert error is None
         assert len(slices) == 2
@@ -578,3 +581,326 @@ class TestWidgetUri:
     def test_widget_uri_is_pg_dashboard(self):
         """WIDGET_URI points to pg-dashboard widget."""
         assert WIDGET_URI == "ui://widget/pg-dashboard.html"
+
+
+# ============================================================================
+# Increment 10: Per-Priority Semantic Zoom Tests
+# ============================================================================
+
+
+class TestSemanticTargetValidation:
+    """Tests for semantic_target parameter validation (Increment 10)."""
+
+    def test_semantic_target_requires_semantic_groupings(self):
+        """semantic_target without semantic_groupings raises ToolUsageError."""
+        priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
+        time_allocation = {
+            "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+            "other_hours": 5.0,
+        }
+
+        with pytest.raises(ToolUsageError) as exc_info:
+            _build_pie_slices(priorities, time_allocation, None, "P1")
+
+        assert "semantic_target requires semantic_groupings" in str(exc_info.value)
+
+    def test_semantic_target_with_empty_groupings_raises_error(self):
+        """semantic_target with empty semantic_groupings raises ToolUsageError."""
+        priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
+        time_allocation = {
+            "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+            "other_hours": 5.0,
+        }
+
+        with pytest.raises(ToolUsageError) as exc_info:
+            _build_pie_slices(priorities, time_allocation, [], "P1")
+
+        assert "semantic_target requires semantic_groupings" in str(exc_info.value)
+
+    def test_semantic_target_unconfigured_priority_raises_error(self):
+        """semantic_target referencing unconfigured priority raises ToolUsageError."""
+        # Only P1 is active
+        priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
+        time_allocation = {
+            "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+            "other_hours": 5.0,
+        }
+        semantic_groupings = [
+            {"category": "Feature work", "hours": 5.0, "event_count": 3},
+        ]
+
+        # P3 is not active
+        with pytest.raises(ToolUsageError) as exc_info:
+            _build_pie_slices(priorities, time_allocation, semantic_groupings, "P3")
+
+        assert "No active priority found for P3" in str(exc_info.value)
+
+    def test_priority_over_allocation_raises_error(self):
+        """Grouped hours exceeding priority hours by > 0.5h raises ToolUsageError."""
+        priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
+        time_allocation = {
+            "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+            "other_hours": 5.0,
+        }
+        # Total: 12.0h, exceeds P1's 10.0 + 0.5 = 10.5h
+        semantic_groupings = [
+            {"category": "Feature work", "hours": 8.0, "event_count": 3},
+            {"category": "Bug fixes", "hours": 4.0, "event_count": 2},
+        ]
+
+        with pytest.raises(ToolUsageError) as exc_info:
+            _build_pie_slices(priorities, time_allocation, semantic_groupings, "P1")
+
+        error_msg = str(exc_info.value)
+        assert "exceed" in error_msg.lower()
+        assert "P1" in error_msg
+
+
+class TestPriorityZoom:
+    """Tests for zooming into priority slices (Increment 10)."""
+
+    def test_semantic_target_p1_explodes_p1_slice(self):
+        """semantic_target='P1' replaces P1's slice with semantic subcategories."""
+        priorities = [
+            {"name": "Build PG", "calendar_keyword": "P1"},
+            {"name": "Client Work", "calendar_keyword": "P2"},
+        ]
+        time_allocation = {
+            "keywords": {
+                "P1": {"hours": 10.0, "event_count": 5},
+                "P2": {"hours": 5.0, "event_count": 3},
+            },
+            "other_hours": 2.0,
+        }
+        semantic_groupings = [
+            {"category": "Feature work", "hours": 6.0, "event_count": 3},
+            {"category": "Bug fixes", "hours": 4.0, "event_count": 2},
+        ]
+
+        slices, error = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, "P1"
+        )
+
+        assert error is None
+
+        # P1 should NOT have a single priority slice
+        p1_priority_slices = [s for s in slices if s.get("keyword") == "P1"]
+        assert len(p1_priority_slices) == 0
+
+        # P1 subcategories should be semantic slices
+        semantic_slices = [s for s in slices if s["type"] == "semantic"]
+        assert len(semantic_slices) >= 2
+        labels = [s["label"] for s in semantic_slices]
+        assert "Feature work" in labels
+        assert "Bug fixes" in labels
+
+        # P2 and Other should remain as single slices
+        p2_slices = [s for s in slices if s.get("keyword") == "P2"]
+        assert len(p2_slices) == 1
+        other_slices = [s for s in slices if s["label"] == "Other"]
+        assert len(other_slices) == 1
+
+    def test_semantic_target_p2_explodes_p2_slice(self):
+        """semantic_target='P2' replaces P2's slice with semantic subcategories."""
+        priorities = [
+            {"name": "Build PG", "calendar_keyword": "P1"},
+            {"name": "Client Work", "calendar_keyword": "P2"},
+        ]
+        time_allocation = {
+            "keywords": {
+                "P1": {"hours": 10.0, "event_count": 5},
+                "P2": {"hours": 8.0, "event_count": 4},
+            },
+            "other_hours": 2.0,
+        }
+        semantic_groupings = [
+            {"category": "Meetings", "hours": 5.0, "event_count": 2},
+            {"category": "Deliverables", "hours": 3.0, "event_count": 2},
+        ]
+
+        slices, error = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, "P2"
+        )
+
+        assert error is None
+
+        # P2 should NOT have a single priority slice
+        p2_priority_slices = [s for s in slices if s.get("keyword") == "P2"]
+        assert len(p2_priority_slices) == 0
+
+        # P2 subcategories should be semantic slices
+        semantic_labels = [s["label"] for s in slices if s["type"] == "semantic"]
+        assert "Meetings" in semantic_labels
+        assert "Deliverables" in semantic_labels
+
+        # P1 should remain as single slice
+        p1_slices = [s for s in slices if s.get("keyword") == "P1"]
+        assert len(p1_slices) == 1
+
+    def test_semantic_target_other_explodes_other_slice(self):
+        """semantic_target='other' replaces Other slice (same as backwards-compatible)."""
+        priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
+        time_allocation = {
+            "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+            "other_hours": 8.0,
+        }
+        semantic_groupings = [
+            {"category": "Meetings", "hours": 5.0, "event_count": 3},
+            {"category": "Admin", "hours": 3.0, "event_count": 2},
+        ]
+
+        slices, error = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, "other"
+        )
+
+        assert error is None
+
+        # P1 should remain as single slice
+        p1_slices = [s for s in slices if s.get("keyword") == "P1"]
+        assert len(p1_slices) == 1
+
+        # Other should NOT exist, replaced by semantic categories
+        other_slices = [s for s in slices if s["label"] == "Other"]
+        assert len(other_slices) == 0
+
+        # Semantic categories should exist
+        semantic_labels = [s["label"] for s in slices if s["type"] == "semantic"]
+        assert "Meetings" in semantic_labels
+        assert "Admin" in semantic_labels
+
+    def test_priority_zoom_with_remainder_adds_uncategorized(self):
+        """Zooming into priority with remainder >= 0.25h adds Uncategorized slice."""
+        priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
+        time_allocation = {
+            "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+            "other_hours": 2.0,
+        }
+        # Total: 9.5h, remainder: 0.5h >= 0.25h
+        semantic_groupings = [
+            {"category": "Feature work", "hours": 6.0, "event_count": 3},
+            {"category": "Bug fixes", "hours": 3.5, "event_count": 2},
+        ]
+
+        slices, error = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, "P1"
+        )
+
+        assert error is None
+        uncategorized = [s for s in slices if s["label"] == "Uncategorized"]
+        assert len(uncategorized) == 1
+        assert uncategorized[0]["hours"] == 0.5
+
+    def test_zero_hour_priority_with_semantic_target(self):
+        """semantic_target referencing 0-hour priority still works (may all be 0h)."""
+        priorities = [
+            {"name": "Build PG", "calendar_keyword": "P1"},
+            {"name": "Hobby", "calendar_keyword": "P3"},
+        ]
+        time_allocation = {
+            "keywords": {
+                "P1": {"hours": 10.0, "event_count": 5},
+                "P3": {"hours": 0.0, "event_count": 0},  # Zero hours this week
+            },
+            "other_hours": 2.0,
+        }
+        # Even though P3 has 0 hours, we can still zoom into it
+        semantic_groupings = [
+            {"category": "Reading", "hours": 0.0, "event_count": 0},
+        ]
+
+        slices, error = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, "P3"
+        )
+
+        assert error is None
+        # P3 subcategories present (even if 0h)
+        semantic_slices = [s for s in slices if s["type"] == "semantic"]
+        # Should have at least the Reading slice (even at 0h)
+        # and the Other slice
+        reading_slices = [s for s in semantic_slices if s["label"] == "Reading"]
+        assert len(reading_slices) == 1
+
+
+class TestBackwardsCompatibility:
+    """Tests for backwards compatibility when semantic_target is not provided."""
+
+    def test_groupings_without_target_defaults_to_other(self):
+        """semantic_groupings without semantic_target defaults to 'other' zoom."""
+        priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
+        time_allocation = {
+            "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+            "other_hours": 8.0,
+        }
+        semantic_groupings = [
+            {"category": "Meetings", "hours": 5.0, "event_count": 3},
+            {"category": "Admin", "hours": 3.0, "event_count": 2},
+        ]
+
+        # No semantic_target - should default to "other"
+        slices, error = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, None
+        )
+
+        assert error is None
+
+        # Other should NOT exist, replaced by semantic categories
+        other_slices = [s for s in slices if s["label"] == "Other"]
+        assert len(other_slices) == 0
+
+        # Semantic categories should exist
+        semantic_labels = [s["label"] for s in slices if s["type"] == "semantic"]
+        assert "Meetings" in semantic_labels
+        assert "Admin" in semantic_labels
+
+
+class TestGuidanceIncrement10:
+    """Tests for assistant_guidance updates (Increment 10)."""
+
+    def test_mode1_includes_within_priority_breakdown(self):
+        """MODE 1 guidance includes within-priority breakdown instruction."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 5.0},
+        }
+        all_events = [{"title": "Meeting", "matched_keywords": []}]
+
+        guidance = _build_assistant_guidance(data, [], all_events, has_semantic_groupings=False)
+
+        assert "within-priority breakdown" in guidance.lower()
+        assert "semantic_target" in guidance
+
+    def test_mode2_uses_neutral_wording(self):
+        """MODE 2 guidance uses neutral wording, not 'coaching'."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 5.0},
+        }
+
+        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+
+        # Should say "neutral observation" not "coaching observation"
+        assert "neutral observation" in guidance.lower()
+        assert "coaching" not in guidance.lower()
+
+    def test_mode2_says_without_evaluation(self):
+        """MODE 2 guidance says 'without evaluation or recommendation'."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 5.0},
+        }
+
+        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+
+        assert "without evaluation" in guidance.lower() or "without" in guidance.lower() and "recommendation" in guidance.lower()
+
+    def test_mode2_is_generic_not_other_specific(self):
+        """MODE 2 guidance is generic ('selected category'), not 'Other' specific."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 5.0},
+        }
+
+        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+
+        # Should mention generic "selected category" not just "Other"
+        assert "selected category" in guidance.lower() or "refined breakdown" in guidance.lower()

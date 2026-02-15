@@ -45,9 +45,9 @@ INPUT_SCHEMA = {
         "semantic_groupings": {
             "type": "array",
             "description": (
-                "User-confirmed semantic categories for non-priority time. "
-                "When provided, replaces the 'Other' slice in the pie chart "
-                "with these categories. Only pass this after user confirms groupings."
+                "User-confirmed semantic categories for the target slice. "
+                "When provided, replaces the target category's slice in the pie chart "
+                "with these subcategory slices. Only pass this after user confirms groupings."
             ),
             "items": {
                 "type": "object",
@@ -67,6 +67,17 @@ INPUT_SCHEMA = {
                 },
                 "required": ["category", "hours", "event_count"],
             },
+        },
+        "semantic_target": {
+            "type": "string",
+            "enum": ["P1", "P2", "P3", "other"],
+            "description": (
+                "Which category to explode into semantic subcategories. "
+                "When set, the named category is replaced by its semantic_groupings "
+                "while all other categories remain as single slices. "
+                "Only one category can be expanded at a time. "
+                "Requires semantic_groupings to also be provided."
+            ),
         },
     },
     "required": [],
@@ -161,23 +172,68 @@ def _build_pie_slices(
     priorities: list[dict],
     time_allocation: dict,
     semantic_groupings: list[dict] | None,
-) -> tuple[list[dict], float | None]:
+    semantic_target: str | None,
+) -> tuple[list[dict], str | None]:
     """
     Build pie chart slices from priorities and time allocation.
+
+    Supports semantic zoom into any single category:
+    - semantic_target="other" (or None with groupings): explode Other slice
+    - semantic_target="P1"/"P2"/"P3": explode that priority's slice
+
+    Only one category can be exploded at a time.
 
     Args:
         priorities: List of priority report dicts from backend
         time_allocation: Time allocation dict from backend
         semantic_groupings: Optional user-confirmed semantic categories
+        semantic_target: Which category to explode ("P1", "P2", "P3", or "other")
 
     Returns:
         Tuple of (slices list, validation error message or None)
+
+    Raises:
+        ToolUsageError: For input validation failures
     """
-    slices = []
     keywords = time_allocation.get("keywords", {})
     other_hours = time_allocation.get("other_hours", 0.0)
 
-    # Build priority slices (only those with hours > 0)
+    # Default semantic_target to "other" when groupings provided but target not specified
+    # (backwards compatibility)
+    if semantic_groupings and len(semantic_groupings) > 0 and not semantic_target:
+        semantic_target = "other"
+
+    # Validation: semantic_target requires semantic_groupings
+    if semantic_target and (not semantic_groupings or len(semantic_groupings) == 0):
+        raise ToolUsageError("semantic_target requires semantic_groupings to be provided.")
+
+    # Build map of active priority keywords
+    active_keywords = {p.get("calendar_keyword") for p in priorities if p.get("calendar_keyword")}
+
+    # Validation: if targeting a priority, it must be active
+    if semantic_target in ("P1", "P2", "P3") and semantic_target not in active_keywords:
+        raise ToolUsageError(f"No active priority found for {semantic_target}.")
+
+    # Determine target hours for validation
+    if semantic_target == "other":
+        target_hours = other_hours
+    elif semantic_target in ("P1", "P2", "P3"):
+        target_hours = keywords.get(semantic_target, {}).get("hours", 0.0)
+    else:
+        target_hours = None
+
+    # Validation: grouped hours cannot exceed target's hours by more than 0.5h
+    if semantic_groupings and target_hours is not None:
+        grouped_total = sum(g.get("hours", 0) for g in semantic_groupings)
+        if grouped_total > target_hours + 0.5:
+            raise ToolUsageError(
+                f"Grouped hours ({grouped_total:.1f}h) exceed {semantic_target} time "
+                f"({target_hours:.1f}h) by more than rounding tolerance. Please adjust."
+            )
+
+    slices = []
+
+    # Build priority slices - explode if this priority is the semantic target
     for p in priorities:
         keyword = p.get("calendar_keyword")
         if not keyword:
@@ -186,22 +242,45 @@ def _build_pie_slices(
         keyword_data = keywords.get(keyword, {})
         hours = keyword_data.get("hours", 0.0)
 
-        if hours > 0:
-            slices.append({
-                "label": f"{keyword}: {p.get('name', 'Unnamed')}",
-                "hours": hours,
-                "type": "priority",
-                "keyword": keyword,
-            })
+        # Skip zero-hour priorities (unless being exploded with subcategories)
+        if hours <= 0 and keyword != semantic_target:
+            continue
 
-    # Build semantic slices based on whether groupings were provided
-    if semantic_groupings and len(semantic_groupings) > 0:
-        # Validate: sum of groupings cannot exceed other_hours by more than 0.5h
+        if keyword == semantic_target and semantic_groupings:
+            # Explode this priority into semantic subcategories
+            grouped_total = sum(g.get("hours", 0) for g in semantic_groupings)
+
+            for g in semantic_groupings:
+                slices.append({
+                    "label": g.get("category", "Unnamed"),
+                    "hours": g.get("hours", 0),
+                    "type": "semantic",
+                    "eventCount": g.get("event_count", 0),
+                })
+
+            # Add "Uncategorized" remainder if significant (>= 0.25h)
+            remainder = max(0, hours - grouped_total)
+            if remainder >= 0.25:
+                slices.append({
+                    "label": "Uncategorized",
+                    "hours": round(remainder, 1),
+                    "type": "semantic",
+                })
+        else:
+            # Keep as single priority slice
+            if hours > 0:
+                slices.append({
+                    "label": f"{keyword}: {p.get('name', 'Unnamed')}",
+                    "hours": hours,
+                    "type": "priority",
+                    "keyword": keyword,
+                })
+
+    # Build "Other" slice - explode if semantic_target is "other"
+    if semantic_target == "other" and semantic_groupings:
+        # Explode Other into semantic subcategories
         grouped_total = sum(g.get("hours", 0) for g in semantic_groupings)
-        if grouped_total > other_hours + 0.5:
-            return [], f"Grouped hours ({grouped_total:.1f}h) exceed non-priority time ({other_hours:.1f}h) by more than rounding tolerance. Please adjust."
 
-        # Add user-confirmed semantic category slices
         for g in semantic_groupings:
             slices.append({
                 "label": g.get("category", "Unnamed"),
@@ -211,8 +290,6 @@ def _build_pie_slices(
             })
 
         # Add "Uncategorized" remainder if significant (>= 0.25h)
-        # Clamp to 0 to avoid negative remainder when sum slightly exceeds other_hours
-        # (within the 0.5h tolerance that passed validation)
         remainder = max(0, other_hours - grouped_total)
         if remainder >= 0.25:
             slices.append({
@@ -220,10 +297,8 @@ def _build_pie_slices(
                 "hours": round(remainder, 1),
                 "type": "semantic",
             })
-        # If remainder < 0.25h, skip it (rounding noise, absorbed visually)
-
     else:
-        # No semantic groupings: single "Other" slice
+        # Keep as single "Other" slice
         if other_hours > 0:
             slices.append({
                 "label": "Other",
@@ -245,7 +320,7 @@ def _build_assistant_guidance(
 
     Two modes:
     1. Without semantic_groupings: Propose groupings, ask user to confirm
-    2. With semantic_groupings: Brief observation, don't repeat categories
+    2. With semantic_groupings: Brief neutral observation, don't repeat categories
 
     Args:
         data: Backend response data
@@ -263,13 +338,12 @@ def _build_assistant_guidance(
 
     if has_semantic_groupings:
         # MODE 2: Semantic groupings provided (second call)
-        # Brief observation, don't repeat categories
+        # Brief neutral observation, don't repeat categories
         guidance_parts.append(
-            "The pie chart now shows the refined time breakdown including the user's "
-            "semantic categories. Do NOT repeat or list the categories — the chart displays them. "
-            "Make a brief coaching observation about the overall distribution pattern "
-            "(e.g., balance, focus areas, potential adjustments). "
-            "Ask what stands out to them or what they'd like to adjust next week. "
+            "The pie chart now shows the refined breakdown for the selected category. "
+            "Do NOT repeat or list the categories — the chart displays them. "
+            "Make a brief neutral observation about the allocation pattern without evaluation or recommendation. "
+            "Ask what stands out to them. "
             "Keep it short — the visual does the heavy lifting."
         )
     else:
@@ -293,7 +367,7 @@ def _build_assistant_guidance(
             "say so explicitly (e.g., 'You didn't log any P3 time this week'). Keep insights brief and actionable."
         )
 
-        # Semantic grouping proposal
+        # Semantic grouping proposal for "Other" time
         if other_hours > 0 and non_priority_events:
             guidance_parts.append(
                 f"The user has {other_hours:.1f} hours of non-priority time. "
@@ -310,9 +384,19 @@ def _build_assistant_guidance(
                 "Ask what this time was generally spent on if they'd like to reflect on it."
             )
 
+        # Within-priority breakdown proposal
+        guidance_parts.append(
+            "You can also propose a within-priority breakdown for any single priority. "
+            "If the user asks to see where their P1/P2/P3 time went, analyze the keyword-matched events "
+            "for that priority from allEvents, propose approximate semantic categories based on event "
+            "titles and descriptions, and if confirmed, call get_weekly_report again with semantic_target "
+            "set to the keyword (e.g., 'P1') and semantic_groupings containing the confirmed within-priority "
+            "categories. Only one category (a priority or 'other') can be expanded at a time."
+        )
+
         # Closing
         guidance_parts.append(
-            "Keep the tone reflective and coaching-oriented. The goal is insight, not judgment. "
+            "Keep the tone reflective. The goal is insight, not judgment. "
             "Do NOT mention snapshots, saving data, or persistence."
         )
 
@@ -330,13 +414,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     Args:
         user_id: Validated user ID from JWT token
         correlation_id: Request correlation ID
-        arguments: Tool arguments (optional week_start, optional semantic_groupings)
+        arguments: Tool arguments (optional week_start, semantic_groupings, semantic_target)
 
     Returns:
         CallToolResult with weekly report data and pie chart slices
     """
     week_start = arguments.get("week_start")
     semantic_groupings = arguments.get("semantic_groupings")
+    semantic_target = arguments.get("semantic_target")
 
     # Treat empty array same as not provided
     if semantic_groupings is not None and len(semantic_groupings) == 0:
@@ -351,6 +436,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         week_start=week_start,
         has_semantic_groupings=has_semantic_groupings,
         grouping_count=len(semantic_groupings) if semantic_groupings else 0,
+        semantic_target=semantic_target,
     )
 
     # Build endpoint URL with optional query param
@@ -390,10 +476,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     time_allocation = data.get("time_allocation", {})
     all_events = data.get("all_events", [])
 
-    # Build pie chart slices (validates semantic_groupings if provided)
-    slices, validation_error = _build_pie_slices(
-        priorities, time_allocation, semantic_groupings
-    )
+    # Build pie chart slices (validates semantic_groupings/semantic_target if provided)
+    try:
+        slices, validation_error = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, semantic_target
+        )
+    except ToolUsageError:
+        # Re-raise ToolUsageError (input validation failures)
+        raise
 
     if validation_error:
         logger.warning(
@@ -426,6 +516,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         priority_count=len(priorities),
         slice_count=len(slices),
         has_semantic_groupings=has_semantic_groupings,
+        semantic_target=semantic_target,
     )
 
     # Build human-readable summary

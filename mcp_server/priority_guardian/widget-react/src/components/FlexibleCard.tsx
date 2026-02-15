@@ -327,7 +327,7 @@ export function FlexibleCard({
                   <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                 </svg>
                 <span
-                  className="text-sm"
+                  className="text-sm italic"
                   style={{ color: 'var(--gray-350, #9f9f9f)' }}
                 >
                   Complete your first week to see your pattern.
