@@ -185,9 +185,19 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
       {/* V7: Instruction when connected - inside same section */}
       {connected && (
         <div
-          className="rounded-lg px-3 py-2.5 mt-3"
+          className="rounded-lg px-3 py-2.5 mt-3 flex items-start gap-2"
           style={{ background: 'var(--gray-50, #f9f9f9)' }}
         >
+          <svg
+            className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="var(--gray-400, #8f8f8f)"
+            strokeWidth="1.5"
+          >
+            <rect x="2" y="3" width="12" height="11" rx="1.5" />
+            <path d="M5 1.5v3M11 1.5v3M2 7h12" />
+          </svg>
           <p
             className="text-xs leading-relaxed"
             style={{ color: 'var(--gray-450, #767676)' }}

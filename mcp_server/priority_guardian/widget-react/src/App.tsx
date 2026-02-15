@@ -450,7 +450,7 @@ function App() {
       <main
         role="main"
         aria-label="Time Allocation Pie Chart"
-        className="bg-surface-secondary rounded-2xl -m-4"
+        className="bg-surface-secondary rounded-2xl -m-4 p-4"
       >
         <PieChart
           slices={data.slices}
@@ -486,7 +486,7 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className="bg-surface-secondary rounded-2xl -m-4"
+      className="bg-surface-secondary rounded-2xl -m-4 p-4"
     >
       {/* Fullscreen header - only in fullscreen mode */}
       {!isInline && (
@@ -503,6 +503,8 @@ function App() {
       <TimeAllocationBar
         timeAllocation={timeAllocation}
         activeKeywords={activeKeywords}
+        onRefresh={refreshData}
+        isRefreshing={isRefreshing}
       />
 
       {/* Priority Cards (primary content) */}
@@ -554,9 +556,7 @@ function App() {
       {/* Inline mode: Minimal calendar indicator + Expand button */}
       {isInline && (
         <>
-          <div className="mt-4">
-            <CalendarConnectionMinimal connected={dashboardData?.google_connected ?? false} />
-          </div>
+          <CalendarConnectionMinimal connected={dashboardData?.google_connected ?? false} />
           <ExpandButton onClick={handleExpandToFullscreen} />
         </>
       )}

@@ -162,7 +162,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
           className="text-xs font-medium uppercase tracking-wide"
           style={{ color: 'var(--gray-500, #5d5d5d)' }}
         >
-          This week
+          Time allocation this week
         </span>
         <div className="flex items-center gap-2">
           <span
@@ -226,7 +226,8 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
         {legendItems.map((item) => (
           <div key={item.key} className="flex items-center gap-1.5">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${BAR_COLORS[item.key] ?? BAR_COLORS.other}`}
+              className={`w-1.5 h-1.5 rounded-full ${item.isOther ? '' : BAR_COLORS[item.key]}`}
+              style={item.isOther ? { background: 'var(--gray-300, #afafaf)' } : undefined}
               aria-hidden="true"
             />
             <span

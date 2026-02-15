@@ -9,8 +9,8 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
       onClick={onClick}
       className="w-full mt-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors hover:opacity-80"
       style={{
-        color: 'var(--blue-500, #0169cc)',
-        background: 'var(--blue-50, #eff6ff)',
+        color: 'var(--gray-600, #414141)',
+        background: 'var(--gray-75, #f3f3f3)',
         border: 'none',
         cursor: 'pointer',
       }}

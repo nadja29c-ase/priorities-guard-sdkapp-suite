@@ -291,15 +291,15 @@ export function FlexibleCard({
 
       {/* V7: HourRing on left + Avg stats on right (not in edit mode) */}
       {!isEditing && priority.weeklyHourTarget != null && (
-        <div className="flex items-start gap-4 mb-4">
+        <div className="flex items-center gap-4 mb-4">
           <HourRing
             actual={priority.weeklyHourActual ?? 0}
             target={priority.weeklyHourTarget}
             keyword={kw}
           />
-          <div className="flex-1 pt-1">
+          <div className="flex-1">
             {hasAvg ? (
-              <div className="mb-1.5">
+              <>
                 <span
                   className="text-2xl font-bold tabular-nums leading-none"
                   style={{ color: 'var(--gray-900, #181818)' }}
@@ -312,16 +312,14 @@ export function FlexibleCard({
                 >
                   of weekly target on avg
                 </p>
-              </div>
+              </>
             ) : (
-              <div className="mb-1.5">
-                <span
-                  className="text-sm"
-                  style={{ color: 'var(--gray-350, #9f9f9f)' }}
-                >
-                  Building your average…
-                </span>
-              </div>
+              <span
+                className="text-sm"
+                style={{ color: 'var(--gray-350, #9f9f9f)' }}
+              >
+                Complete your first week to see your pattern.
+              </span>
             )}
           </div>
         </div>
