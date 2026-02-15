@@ -5,10 +5,10 @@ interface FullscreenHeaderProps {
 export function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
   return (
     <div
-      className="flex items-center justify-between px-4 py-2.5 mb-1"
+      className="flex items-center justify-between px-4 py-3 mb-4 rounded-xl"
       style={{
         background: 'var(--gray-0, #ffffff)',
-        borderBottom: '1px solid var(--gray-75, #f3f3f3)',
+        border: '1px solid var(--gray-100, #ededed)',
       }}
     >
       <span

@@ -450,7 +450,7 @@ function App() {
       <main
         role="main"
         aria-label="Time Allocation Pie Chart"
-        className="bg-surface-secondary rounded-2xl -m-4 p-4"
+        className="bg-surface-secondary rounded-2xl -m-4 px-4 pt-4 pb-2"
       >
         <PieChart
           slices={data.slices}
@@ -486,7 +486,7 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className="bg-surface-secondary rounded-2xl -m-4 p-4"
+      className="bg-surface-secondary rounded-2xl -m-4 px-4 pt-4 pb-2"
     >
       {/* Fullscreen header - only in fullscreen mode */}
       {!isInline && (

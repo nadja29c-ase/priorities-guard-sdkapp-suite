@@ -76,7 +76,7 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
 
   return (
     <section
-      className="mt-4 rounded-xl p-4"
+      className="rounded-xl p-4"
       style={{
         background: 'var(--gray-0, #ffffff)',
         border: '1px solid var(--gray-100, #ededed)',
