@@ -313,21 +313,26 @@ async def exchange_code(
             scope_string = token_data.get("scope", "")
             scopes = scope_string.split() if scope_string else []
 
-            # Validate required scope was granted
+            # Validate required scope(s) were granted
             # Google can return fewer scopes than requested - this breaks the app silently
-            if required_scope and required_scope not in scopes:
-                logger.error(
-                    "google_oauth.token_exchange_missing_scope",
-                    required_scope=required_scope,
-                    granted_scopes=scopes,
-                    correlation_id=correlation_id
-                )
-                # Extract short scope name for user-friendly message
-                scope_short = required_scope.split("/")[-1] if "/" in required_scope else required_scope
-                raise ValueError(
-                    f"Missing required Google scope: {scope_short}. "
-                    f"User must grant calendar access to use this app."
-                )
+            # required_scope may be a space-separated string of multiple scopes
+            if required_scope:
+                required_scopes = required_scope.split()
+                missing_scopes = [s for s in required_scopes if s not in scopes]
+                if missing_scopes:
+                    logger.error(
+                        "google_oauth.token_exchange_missing_scope",
+                        required_scopes=required_scopes,
+                        granted_scopes=scopes,
+                        missing_scopes=missing_scopes,
+                        correlation_id=correlation_id
+                    )
+                    # Extract short scope names for user-friendly message
+                    missing_short = [s.split("/")[-1] for s in missing_scopes]
+                    raise ValueError(
+                        f"Missing required Google scope(s): {', '.join(missing_short)}. "
+                        f"User must grant calendar access to use this app."
+                    )
 
             logger.info(
                 "google_oauth.token_exchange_success",

@@ -489,6 +489,69 @@ class TestExchangeCodeScopeValidation:
         assert result["access_token"] == "access123"
         assert "https://www.googleapis.com/auth/calendar.readonly" in result["scopes"]
 
+    @pytest.mark.asyncio
+    async def test_exchange_code_validates_multiple_required_scopes(self):
+        """Test exchange_code validates space-separated multiple required scopes."""
+        from backend.core.google_oauth import exchange_code
+        import httpx
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "access123",
+            "refresh_token": "refresh456",
+            "expires_in": 3600,
+            # Google returns scopes as space-separated string
+            "scope": "https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.settings.readonly",
+        }
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        # Pass multiple required scopes as space-separated string
+        result = await exchange_code(
+            code="auth_code",
+            http_client=mock_client,
+            code_verifier="verifier",
+            required_scope="https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.settings.readonly",
+        )
+
+        assert result["access_token"] == "access123"
+        assert "https://www.googleapis.com/auth/calendar.events.readonly" in result["scopes"]
+        assert "https://www.googleapis.com/auth/calendar.settings.readonly" in result["scopes"]
+
+    @pytest.mark.asyncio
+    async def test_exchange_code_raises_when_one_of_multiple_scopes_missing(self):
+        """Test exchange_code raises ValueError when one of multiple required scopes is missing."""
+        from backend.core.google_oauth import exchange_code
+        import httpx
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json.return_value = {
+            "access_token": "access123",
+            "refresh_token": "refresh456",
+            "expires_in": 3600,
+            # Google only returns one of the two required scopes
+            "scope": "https://www.googleapis.com/auth/calendar.events.readonly",
+        }
+
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post = AsyncMock(return_value=mock_response)
+
+        with pytest.raises(ValueError) as exc_info:
+            await exchange_code(
+                code="auth_code",
+                http_client=mock_client,
+                code_verifier="verifier",
+                required_scope="https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.settings.readonly",
+            )
+
+        # Should mention the missing scope
+        assert "calendar.settings.readonly" in str(exc_info.value)
+
 
 # =============================================================================
 # OAuth State Scope Storage Tests
