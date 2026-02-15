@@ -157,6 +157,14 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
         )}
       </div>
 
+      {connected && (
+        <div className="mt-2 p-2 bg-surface-secondary rounded-lg">
+          <p className="text-xs text-secondary">
+            {'📅'} Use <strong className="text-default">P1</strong>, <strong className="text-default">P2</strong>, or <strong className="text-default">P3</strong> in your calendar event titles to track time toward each priority.
+          </p>
+        </div>
+      )}
+
       {awaitingOAuth && !connected && (
         <div className="mt-2 p-2 text-xs text-secondary bg-surface rounded-lg border border-default">
           Complete the authorization in the opened window, then click "Check status".
