@@ -59,7 +59,7 @@ class PgPriority(Base):
     Aggregate columns (streak_count, avg_target_achievement, total_hours_invested) are
     updated by snapshot_service when weekly snapshots are finalized.
 
-    GDPR note: No intended PII fields. User-entered text (name, desired_result) may contain
+    GDPR note: No intended PII fields. User-entered text (name, goals) may contain
     personal data. Users are instructed not to include sensitive data (UX-level guidance,
     not backend-enforced).
     """
@@ -135,12 +135,7 @@ class PgPriority(Base):
         comment="Evaluation checkpoint ~1 month out (required for flexible type)",
     )
 
-    # Desired result (required when type=flexible, max 200 chars)
-    desired_result: Mapped[str | None] = mapped_column(
-        String(200),
-        nullable=True,
-        comment="Concrete outcome in ~1 month (required for flexible type)",
-    )
+    # NOTE: desired_result was removed in Inc D - replaced by pg_goals table
 
     # =========================================================================
     # Aggregate columns (updated by snapshot_service)
