@@ -307,8 +307,8 @@ export function DeadlineCard({
           <p className="text-xs text-danger mb-2" role="alert">{error}</p>
         )}
 
-        {/* V7: Lead measure - large done/total number */}
-        <div className="mb-4">
+        {/* V7: Lead measure - inline done/total + label */}
+        <div className="flex items-center gap-2 mb-4">
           <span
             className="text-2xl font-bold tabular-nums leading-none"
             style={{ color: 'var(--gray-900, #181818)' }}
@@ -321,12 +321,12 @@ export function DeadlineCard({
               /{totalCount}
             </span>
           </span>
-          <p
-            className="text-xs mt-0.5"
+          <span
+            className="text-sm"
             style={{ color: 'var(--gray-450, #767676)' }}
           >
-            deliverables done
-          </p>
+            Deliverables done
+          </span>
         </div>
 
         {/* Deadline field - editable in edit mode */}

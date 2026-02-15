@@ -16,19 +16,22 @@ const PRIORITY_COLORS: Record<CalendarKeyword, string> = {
   P3: RING_STROKE_COLORS.P3,
 }
 
-// Neutral colors for semantic slices (non-priority categories)
-// 8 distinguishable tones with CSS variable support for dark mode
-// First 4 use SDK tokens, remaining use mid-range hex values for cross-theme contrast
+// Colorful semantic slice colors (non-priority categories)
+// Distinct from P1 (blue), P2 (purple), P3 (yellow) - uses greens, teals, pinks, oranges
+// SDK-compliant colors that work in both light and dark themes
 const SEMANTIC_COLORS = [
-  'var(--color-text-secondary, #6b7280)',    // SDK token: adapts to theme
-  'var(--color-text-tertiary, #9ca3af)',     // SDK token: adapts to theme
-  'var(--color-border-default, #78716c)',    // SDK token: warm stone
-  'var(--color-outline-default, #a8a29e)',   // SDK token: warm gray
-  '#7c8594',  // slate blue-gray (mid-range, works in both themes)
-  '#8b8b8b',  // neutral gray (mid-range)
-  '#8896a6',  // cool blue-gray (mid-range)
-  '#929292',  // zinc gray (mid-range)
+  'var(--color-background-success-solid, #00a240)',  // green - SDK success
+  'var(--color-background-danger-solid, #e02e2a)',   // red - SDK danger
+  '#14b8a6',  // teal-500
+  '#f97316',  // orange-500
+  '#ec4899',  // pink-500
+  '#06b6d4',  // cyan-500
+  '#84cc16',  // lime-500
+  '#a855f7',  // violet-500 (distinct from P2 purple)
 ]
+
+// Muted grey for unmatched "other" - visible but subordinate
+const OTHER_GREY = 'var(--gray-300, #afafaf)'
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartProps) {
   // Filter out zero-hour slices
@@ -63,9 +66,16 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartPro
     if (slice.type === 'priority' && slice.keyword) {
       color = PRIORITY_COLORS[slice.keyword as CalendarKeyword] || SEMANTIC_COLORS[0]
     } else {
-      // Semantic slices get muted colors (cycle through)
-      const semanticIndex = validSlices.filter((s, i) => i < index && s.type === 'semantic').length
-      color = SEMANTIC_COLORS[semanticIndex % SEMANTIC_COLORS.length]
+      // Check if this is a generic "other" slice (uncategorized)
+      const labelLower = slice.label.toLowerCase()
+      if (labelLower === 'other' || labelLower === 'uncategorized' || labelLower === 'misc') {
+        color = OTHER_GREY
+      } else {
+        // Semantic slices get colorful colors (cycle through)
+        const semanticIndex = validSlices.filter((s, i) => i < index && s.type === 'semantic' &&
+          !['other', 'uncategorized', 'misc'].includes(s.label.toLowerCase())).length
+        color = SEMANTIC_COLORS[semanticIndex % SEMANTIC_COLORS.length]
+      }
     }
 
     cumulativePercent += percent
@@ -178,6 +188,16 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartPro
           </div>
         ))}
       </div>
+
+      {/* CTA to categorize "Other" - only shown when uncategorized time exists */}
+      {validSlices.some(s => ['other', 'uncategorized', 'misc'].includes(s.label.toLowerCase())) && (
+        <p
+          className="mt-4 text-xs text-center"
+          style={{ color: 'var(--gray-450, #767676)' }}
+        >
+          Ask ChatGPT to categorize 'Other' to uncover where your time is really going.
+        </p>
+      )}
     </div>
   )
 }
