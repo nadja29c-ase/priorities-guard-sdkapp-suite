@@ -93,9 +93,20 @@ function buildAriaLabel(
 }
 
 export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAllocationBarProps) {
-  // Don't render if timeAllocation is absent
+  // Show instructional state if timeAllocation is absent
   if (!timeAllocation) {
-    return null
+    return (
+      <section
+        className="bg-surface rounded-xl border border-default p-4 mb-5"
+        aria-label="Time tracking instructions"
+      >
+        <div className="p-2 bg-surface-secondary rounded-lg">
+          <p className="text-xs text-secondary">
+            {'📅'} Use <strong className="text-default">P1</strong>, <strong className="text-default">P2</strong>, <strong className="text-default">P3</strong> in the calendar event title to track time
+          </p>
+        </div>
+      </section>
+    )
   }
 
   const { weekStart, weekEnd, totalTrackedHours, barSegments, otherHours } = timeAllocation
