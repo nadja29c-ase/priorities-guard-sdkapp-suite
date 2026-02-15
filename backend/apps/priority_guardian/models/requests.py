@@ -56,10 +56,10 @@ class CreatePriorityRequest(BaseModel):
         description="Evaluation checkpoint ~1 month out. Required when type=flexible.",
     )
 
-    desired_result: Optional[str] = Field(
+    initial_goal_text: Optional[str] = Field(
         default=None,
         max_length=200,
-        description="Concrete outcome in ~1 month. Required when type=flexible. Max 200 chars.",
+        description="Initial goal text. Required when type=flexible. Max 200 chars. Creates first goal.",
     )
 
     @field_validator("name")
@@ -70,12 +70,12 @@ class CreatePriorityRequest(BaseModel):
             raise ValueError("name cannot be empty or whitespace-only")
         return v.strip()
 
-    @field_validator("desired_result")
+    @field_validator("initial_goal_text")
     @classmethod
-    def validate_desired_result_not_empty(cls, v: Optional[str]) -> Optional[str]:
-        """Validate desired_result is not empty if provided."""
+    def validate_initial_goal_text_not_empty(cls, v: Optional[str]) -> Optional[str]:
+        """Validate initial_goal_text is not empty if provided."""
         if v is not None and not v.strip():
-            raise ValueError("desired_result cannot be empty or whitespace-only")
+            raise ValueError("initial_goal_text cannot be empty or whitespace-only")
         return v.strip() if v else v
 
     @model_validator(mode="after")
@@ -84,8 +84,8 @@ class CreatePriorityRequest(BaseModel):
         Validate type-conditional required fields and reject cross-type fields.
 
         - deadline type: requires `deadline` field, must be future date
-          REJECTS: weekly_hour_target, checkpoint_date, desired_result
-        - flexible type: requires `weekly_hour_target`, `checkpoint_date`, `desired_result`
+          REJECTS: weekly_hour_target, checkpoint_date, initial_goal_text
+        - flexible type: requires `weekly_hour_target`, `checkpoint_date`, `initial_goal_text`
           REJECTS: deadline
         """
         from datetime import date as date_type
@@ -106,8 +106,8 @@ class CreatePriorityRequest(BaseModel):
                 raise ValueError("weekly_hour_target is not valid for deadline priorities")
             if self.checkpoint_date is not None:
                 raise ValueError("checkpoint_date is not valid for deadline priorities")
-            if self.desired_result is not None:
-                raise ValueError("desired_result is not valid for deadline priorities")
+            if self.initial_goal_text is not None:
+                raise ValueError("initial_goal_text is not valid for deadline priorities")
 
         elif self.type == "flexible":
             # Flexible type requires all three fields
@@ -117,8 +117,8 @@ class CreatePriorityRequest(BaseModel):
             if self.checkpoint_date is None:
                 raise ValueError("checkpoint_date is required when type is 'flexible'")
 
-            if self.desired_result is None:
-                raise ValueError("desired_result is required when type is 'flexible'")
+            if self.initial_goal_text is None:
+                raise ValueError("initial_goal_text is required when type is 'flexible'")
 
             # Checkpoint date must be in the future
             if self.checkpoint_date <= today:
@@ -143,7 +143,7 @@ class CreatePriorityRequest(BaseModel):
                     "type": "flexible",
                     "weekly_hour_target": 10.0,
                     "checkpoint_date": "2026-03-08",
-                    "desired_result": "3 new client meetings scheduled",
+                    "initial_goal_text": "3 new client meetings scheduled",
                 },
             ]
         }
@@ -158,7 +158,9 @@ class UpdatePriorityRequest(BaseModel):
     Type and calendar_keyword are immutable after creation.
 
     For deadline priorities: name, deadline
-    For flexible priorities: name, weekly_hour_target, checkpoint_date, desired_result
+    For flexible priorities: name, weekly_hour_target, checkpoint_date
+
+    Note: Goals are updated via separate goal endpoints, not through priority update.
     """
 
     name: Optional[str] = Field(
@@ -184,26 +186,12 @@ class UpdatePriorityRequest(BaseModel):
         description="Evaluation checkpoint. Only valid for flexible-type priorities.",
     )
 
-    desired_result: Optional[str] = Field(
-        default=None,
-        max_length=200,
-        description="Concrete outcome. Only valid for flexible-type priorities.",
-    )
-
     @field_validator("name")
     @classmethod
     def validate_name_not_empty(cls, v: Optional[str]) -> Optional[str]:
         """Validate name is not empty or whitespace-only if provided."""
         if v is not None and not v.strip():
             raise ValueError("name cannot be empty or whitespace-only")
-        return v.strip() if v else v
-
-    @field_validator("desired_result")
-    @classmethod
-    def validate_desired_result_not_empty(cls, v: Optional[str]) -> Optional[str]:
-        """Validate desired_result is not empty if provided."""
-        if v is not None and not v.strip():
-            raise ValueError("desired_result cannot be empty or whitespace-only")
         return v.strip() if v else v
 
     @field_validator("deadline", "checkpoint_date")
@@ -223,8 +211,62 @@ class UpdatePriorityRequest(BaseModel):
             self.deadline is not None,
             self.weekly_hour_target is not None,
             self.checkpoint_date is not None,
-            self.desired_result is not None,
         ])
+
+
+class CreateGoalRequest(BaseModel):
+    """
+    Request model for creating a goal.
+
+    Goals are associated with flexible priorities (max 3 per priority).
+    """
+
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Goal text. Max 200 chars.",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def validate_text_not_empty(cls, v: str) -> str:
+        """Validate text is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError("text cannot be empty or whitespace-only")
+        return v.strip()
+
+
+class UpdateGoalRequest(BaseModel):
+    """
+    Request model for updating a goal.
+
+    All fields are optional (partial update). Only provided fields are updated.
+    """
+
+    text: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=200,
+        description="Goal text. Max 200 chars.",
+    )
+
+    achieved: Optional[bool] = Field(
+        default=None,
+        description="Whether the goal is achieved.",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def validate_text_not_empty(cls, v: Optional[str]) -> Optional[str]:
+        """Validate text is not empty or whitespace-only if provided."""
+        if v is not None and not v.strip():
+            raise ValueError("text cannot be empty or whitespace-only")
+        return v.strip() if v else v
+
+    def has_updates(self) -> bool:
+        """Check if any fields are provided for update."""
+        return self.text is not None or self.achieved is not None
 
 
 class CreateDeliverableRequest(BaseModel):

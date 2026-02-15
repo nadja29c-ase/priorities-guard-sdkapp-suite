@@ -10,6 +10,12 @@ export interface Deliverable {
   done: boolean
 }
 
+export interface Goal {
+  id: string
+  text: string
+  achieved: boolean
+}
+
 export interface Priority {
   id: string
   name: string
@@ -20,9 +26,9 @@ export interface Priority {
   weeklyHourTarget?: number // For flexible type
   weeklyHourActual?: number // For flexible type (current week hours)
   checkpointDate?: string // ISO date for flexible type
-  desiredResult?: string // For flexible type
   streakCount?: number // For flexible type: consecutive weeks meeting target
   deliverables: Deliverable[]
+  goals: Goal[] // For flexible type (Inc D)
   createdAt: string
   updatedAt?: string
   // Aggregate fields from snapshot pipeline (Inc 08)

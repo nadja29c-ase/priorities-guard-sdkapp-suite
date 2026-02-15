@@ -68,6 +68,17 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
         for d in deliverables
     ]
 
+    # Normalize goals (Inc D)
+    goals = p.get("goals", [])
+    normalized_goals = [
+        {
+            "id": g.get("id"),
+            "text": g.get("text"),
+            "achieved": g.get("achieved", False),
+        }
+        for g in goals
+    ]
+
     # Compute weeklyHourActual from calendar data if available
     weekly_hour_actual = None
     if calendar_hours:
@@ -85,8 +96,8 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
         "weeklyHourTarget": p.get("weekly_hour_target"),
         "weeklyHourActual": weekly_hour_actual,
         "checkpointDate": p.get("checkpoint_date"),
-        "desiredResult": p.get("desired_result"),
         "deliverables": normalized_deliverables,
+        "goals": normalized_goals,
         "createdAt": p.get("created_at"),
         "updatedAt": p.get("updated_at"),
         # Include all aggregates for all priority types (Inc 08)

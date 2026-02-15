@@ -10,7 +10,7 @@ interface AddPriorityFormProps {
     deadline?: string
     weekly_hour_target?: number
     checkpoint_date?: string
-    desired_result?: string
+    initial_goal_text?: string
   }) => Promise<void>
   onCancel: () => void
 }
@@ -26,7 +26,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
   const [deadline, setDeadline] = useState('')
   const [weeklyHourTarget, setWeeklyHourTarget] = useState('')
   const [checkpointDate, setCheckpointDate] = useState('')
-  const [desiredResult, setDesiredResult] = useState('')
+  const [initialGoalText, setInitialGoalText] = useState('')
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,8 +69,8 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
         setError('Checkpoint date is required')
         return false
       }
-      if (!desiredResult.trim()) {
-        setError('Desired result is required')
+      if (!initialGoalText.trim()) {
+        setError('Initial goal is required')
         return false
       }
     }
@@ -94,7 +94,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
       } else {
         data.weekly_hour_target = parseFloat(weeklyHourTarget)
         data.checkpoint_date = checkpointDate
-        data.desired_result = desiredResult.trim()
+        data.initial_goal_text = initialGoalText.trim()
       }
 
       await onAdd(data)
@@ -255,14 +255,14 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                 </div>
 
                 <div>
-                  <label htmlFor="priority-result" className="block text-xs font-medium text-secondary mb-1">
-                    Desired Result <span className="text-danger">*</span>
+                  <label htmlFor="priority-goal" className="block text-xs font-medium text-secondary mb-1">
+                    Initial Goal <span className="text-danger">*</span>
                   </label>
                   <textarea
-                    id="priority-result"
-                    value={desiredResult}
+                    id="priority-goal"
+                    value={initialGoalText}
                     onChange={(e) => {
-                      setDesiredResult(e.target.value)
+                      setInitialGoalText(e.target.value)
                       if (error) setError(null)
                     }}
                     disabled={isSubmitting}

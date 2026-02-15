@@ -4,13 +4,15 @@ import { daysUntil, formatDate } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
 import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
+import { ChevronIcon } from './ChevronIcon'
 import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
 
 interface DeadlineCardProps {
   priority: Priority
   isEditing: boolean
+  defaultDeliverablesExpanded?: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onSave: (priorityId: string, data: { name?: string; deadline?: string }) => Promise<void>
@@ -24,6 +26,7 @@ interface DeadlineCardProps {
 export function DeadlineCard({
   priority,
   isEditing,
+  defaultDeliverablesExpanded = true,
   onStartEdit,
   onCancelEdit,
   onSave,
@@ -39,6 +42,7 @@ export function DeadlineCard({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deliverablesExpanded, setDeliverablesExpanded] = useState(defaultDeliverablesExpanded)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cardRef = useRef<HTMLElement>(null)
 
@@ -47,6 +51,7 @@ export function DeadlineCard({
   const totalCount = priority.deliverables.length
 
   const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
+  const borderColorClass = BORDER_COLORS[priority.calendarKeyword] ?? BORDER_COLORS.P1
 
   // Get tomorrow's date for min date constraint
   const tomorrow = new Date()
@@ -176,7 +181,7 @@ export function DeadlineCard({
   return (
     <article
       ref={cardRef}
-      className="bg-surface rounded-xl border border-default p-6"
+      className={`bg-surface rounded-xl border border-default p-6 ${borderColorClass}`}
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
     >
       {/* Header: Title row + actions (2-column layout) */}
@@ -321,31 +326,46 @@ export function DeadlineCard({
         </div>
       )}
 
-      {/* E2E Deliverables */}
+      {/* E2E Deliverables - Collapsible */}
       <div className="border-t border-subtle pt-3">
-        <h4 className="text-sm font-semibold text-default mb-2">
-          E2E Deliverables
-        </h4>
-        {priority.deliverables.length > 0 ? (
-          <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
-            {priority.deliverables.map((d) => (
-              <DeliverableItem
-                key={d.id}
-                deliverable={d}
-                onToggle={onToggleDeliverable}
-                onRename={onRenameDeliverable}
-                onDelete={onDeleteDeliverable}
-                disabled={false}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
+        <div
+          className="flex items-center gap-2 mb-2 cursor-pointer"
+          onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}
+        >
+          <ChevronIcon expanded={deliverablesExpanded} className="text-tertiary" />
+          <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide">
+            E2E Deliverables
+          </h4>
+          {totalCount > 0 && (
+            <span className="text-xs text-secondary ml-auto">
+              {doneCount}/{totalCount}
+            </span>
+          )}
+        </div>
+        {deliverablesExpanded && (
+          <>
+            {priority.deliverables.length > 0 ? (
+              <ul className="space-y-1.5 mb-3" aria-label="Deliverables list">
+                {priority.deliverables.map((d) => (
+                  <DeliverableItem
+                    key={d.id}
+                    deliverable={d}
+                    onToggle={onToggleDeliverable}
+                    onRename={onRenameDeliverable}
+                    onDelete={onDeleteDeliverable}
+                    disabled={false}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-tertiary mb-3">No deliverables yet</p>
+            )}
+            <AddDeliverableInput
+              priorityId={priority.id}
+              onAdd={onAddDeliverable}
+            />
+          </>
         )}
-        <AddDeliverableInput
-          priorityId={priority.id}
-          onAdd={onAddDeliverable}
-        />
       </div>
 
       {/* Edit mode actions */}

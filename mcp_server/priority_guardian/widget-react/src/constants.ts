@@ -30,3 +30,11 @@ export const RING_STROKE_COLORS: Record<string, string> = {
   P2: 'var(--color-background-discovery-solid, var(--purple-400, #924ff7))',
   P3: 'var(--color-background-caution-solid, var(--yellow-400, #ffc300))',
 }
+
+// Card left border colors (Widget D) — 4px left border for visual hierarchy
+// Uses solid colors for visibility: P1 blue, P2 purple, P3 yellow
+export const BORDER_COLORS: Record<string, string> = {
+  P1: 'border-l-4 border-l-[var(--color-background-info-solid,#0285ff)]',
+  P2: 'border-l-4 border-l-[var(--color-background-discovery-solid,#924ff7)]',
+  P3: 'border-l-4 border-l-[var(--color-background-caution-solid,#ffc300)]',
+}

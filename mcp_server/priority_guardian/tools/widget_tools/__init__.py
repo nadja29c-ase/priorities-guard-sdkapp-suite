@@ -12,6 +12,9 @@ from .delete_priority import DELETE_PRIORITY
 from .add_deliverable import ADD_DELIVERABLE
 from .update_deliverable import UPDATE_DELIVERABLE
 from .delete_deliverable import DELETE_DELIVERABLE
+from .add_goal import ADD_GOAL
+from .update_goal import UPDATE_GOAL
+from .delete_goal import DELETE_GOAL
 from .connect_google_calendar import CONNECT_GOOGLE_CALENDAR
 from .disconnect_google_calendar import DISCONNECT_GOOGLE_CALENDAR
 
@@ -22,6 +25,9 @@ __all__ = [
     "ADD_DELIVERABLE",
     "UPDATE_DELIVERABLE",
     "DELETE_DELIVERABLE",
+    "ADD_GOAL",
+    "UPDATE_GOAL",
+    "DELETE_GOAL",
     "CONNECT_GOOGLE_CALENDAR",
     "DISCONNECT_GOOGLE_CALENDAR",
 ]

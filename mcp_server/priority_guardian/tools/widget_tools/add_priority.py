@@ -50,9 +50,9 @@ INPUT_SCHEMA = {
             "format": "date",
             "description": "Evaluation checkpoint (required for flexible type, ISO format)",
         },
-        "desired_result": {
+        "initial_goal_text": {
             "type": "string",
-            "description": "Concrete outcome in ~1 month (required for flexible type)",
+            "description": "Initial goal text (required for flexible type)",
             "maxLength": 200,
         },
     },
@@ -112,18 +112,18 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     else:  # flexible
         weekly_hour_target = arguments.get("weekly_hour_target")
         checkpoint_date = arguments.get("checkpoint_date")
-        desired_result = arguments.get("desired_result")
+        initial_goal_text = arguments.get("initial_goal_text")
 
         if weekly_hour_target is None:
             raise ToolUsageError("weekly_hour_target is required for flexible type")
         if not checkpoint_date:
             raise ToolUsageError("checkpoint_date is required for flexible type")
-        if not desired_result:
-            raise ToolUsageError("desired_result is required for flexible type")
+        if not initial_goal_text:
+            raise ToolUsageError("initial_goal_text is required for flexible type")
 
         payload["weekly_hour_target"] = weekly_hour_target
         payload["checkpoint_date"] = checkpoint_date
-        payload["desired_result"] = desired_result
+        payload["initial_goal_text"] = initial_goal_text
 
     # Call backend
     try:

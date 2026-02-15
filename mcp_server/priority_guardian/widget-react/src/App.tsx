@@ -8,6 +8,11 @@ import { FlexibleCard } from './components/FlexibleCard'
 import { AddPriorityForm, AddPriorityButton } from './components/AddPriorityForm'
 import { TimeAllocationBar } from './components/TimeAllocationBar'
 import { PieChart } from './components/PieChart'
+import { FullscreenHeader } from './components/FullscreenHeader'
+import { ExpandButton } from './components/ExpandButton'
+import { CalendarConnectionMinimal } from './components/CalendarConnectionMinimal'
+
+type DisplayMode = 'inline' | 'fullscreen'
 
 function App() {
   // Theme is handled automatically by SDK CSS via data-theme attribute
@@ -33,6 +38,14 @@ function App() {
     const widgetState = window.openai?.widgetState as WidgetState | undefined
     return widgetState?.addFormOpen ?? false
   })
+
+  // Display mode state (inline = collapsed sections, fullscreen = expanded)
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
+    const mode = (window.openai as { displayMode?: string } | undefined)?.displayMode
+    return mode === 'fullscreen' ? 'fullscreen' : 'inline'
+  })
+
+  const isInline = displayMode !== 'fullscreen'
 
   // Ref to avoid re-running effect on data change
   const isInitializedRef = useRef(false)
@@ -119,7 +132,7 @@ function App() {
     deadline?: string
     weekly_hour_target?: number
     checkpoint_date?: string
-    desired_result?: string
+    initial_goal_text?: string
   }) => {
     if (!window.openai?.callTool) throw new Error('Tool calls not available')
 
@@ -146,7 +159,6 @@ function App() {
     deadline?: string
     weekly_hour_target?: number
     checkpoint_date?: string
-    desired_result?: string
   }) => {
     if (!window.openai?.callTool) throw new Error('Tool calls not available')
 
@@ -280,6 +292,104 @@ function App() {
     updateDataFromResponse(content)
   }, [updateDataFromResponse])
 
+  // ============ Goal CRUD Operations (Inc D) ============
+
+  const handleAddGoal = useCallback(async (priorityId: string, text: string) => {
+    if (!window.openai?.callTool) throw new Error('Tool calls not available')
+
+    const result = await window.openai.callTool<{ data?: ToolOutputData }>('add_goal', {
+      priority_id: priorityId,
+      text,
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    updateDataFromResponse(content)
+  }, [updateDataFromResponse])
+
+  const handleToggleGoal = useCallback(async (goalId: string, achieved: boolean) => {
+    if (!window.openai?.callTool) throw new Error('Tool calls not available')
+
+    const result = await window.openai.callTool<{ data?: ToolOutputData }>('update_goal', {
+      goal_id: goalId,
+      achieved,
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    updateDataFromResponse(content)
+  }, [updateDataFromResponse])
+
+  const handleRenameGoal = useCallback(async (goalId: string, text: string) => {
+    if (!window.openai?.callTool) throw new Error('Tool calls not available')
+
+    const result = await window.openai.callTool<{ data?: ToolOutputData }>('update_goal', {
+      goal_id: goalId,
+      text,
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    updateDataFromResponse(content)
+  }, [updateDataFromResponse])
+
+  const handleDeleteGoal = useCallback(async (goalId: string) => {
+    if (!window.openai?.callTool) throw new Error('Tool calls not available')
+
+    const result = await window.openai.callTool<{ data?: ToolOutputData }>('delete_goal', {
+      goal_id: goalId,
+      confirm: true,
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    updateDataFromResponse(content)
+  }, [updateDataFromResponse])
+
+  // ============ Display Mode Handlers ============
+
+  const handleExpandToFullscreen = useCallback(() => {
+    setDisplayMode('fullscreen')
+    notifyHeight()
+  }, [notifyHeight])
+
+  const handleMinimizeToInline = useCallback(() => {
+    setDisplayMode('inline')
+    notifyHeight()
+  }, [notifyHeight])
+
   // ============ Effects ============
 
   // Initial load and listen for openai:set_globals
@@ -378,6 +488,11 @@ function App() {
       aria-label="Priority Guardian Dashboard"
       className="bg-surface-secondary rounded-2xl -m-4"
     >
+      {/* Fullscreen header - only in fullscreen mode */}
+      {!isInline && (
+        <FullscreenHeader onMinimize={handleMinimizeToInline} />
+      )}
+
       {loadError && (
         <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
           {loadError}
@@ -395,10 +510,11 @@ function App() {
         <div className="flex flex-col gap-5">
           {sortedPriorities.map((priority) => (
             <PriorityCardWrapper
-              key={priority.id}
+              key={`${priority.id}-${displayMode}`}
               priority={priority}
               isEditing={editingPriorityId === priority.id}
               canStartEdit={canEdit}
+              defaultSectionsExpanded={!isInline}
               onStartEdit={() => setEditingPriorityId(priority.id)}
               onCancelEdit={() => setEditingPriorityId(null)}
               onSavePriority={handleUpdatePriority}
@@ -407,6 +523,10 @@ function App() {
               onRenameDeliverable={handleRenameDeliverable}
               onDeleteDeliverable={handleDeleteDeliverable}
               onAddDeliverable={handleAddDeliverable}
+              onAddGoal={handleAddGoal}
+              onToggleGoal={handleToggleGoal}
+              onRenameGoal={handleRenameGoal}
+              onDeleteGoal={handleDeleteGoal}
             />
           ))}
         </div>
@@ -431,15 +551,27 @@ function App() {
         )
       )}
 
-      {/* Connection Status (settings-level control, at bottom) */}
-      <div className="mt-6">
-        <ConnectionStatus
-          connected={dashboardData?.google_connected ?? false}
-          connectedAt={dashboardData?.google_connected_at}
-          onRefresh={refreshData}
-          isRefreshing={isRefreshing}
-        />
-      </div>
+      {/* Inline mode: Minimal calendar indicator + Expand button */}
+      {isInline && (
+        <>
+          <div className="mt-4">
+            <CalendarConnectionMinimal connected={dashboardData?.google_connected ?? false} />
+          </div>
+          <ExpandButton onClick={handleExpandToFullscreen} />
+        </>
+      )}
+
+      {/* Fullscreen mode: Full Connection Status */}
+      {!isInline && (
+        <div className="mt-6">
+          <ConnectionStatus
+            connected={dashboardData?.google_connected ?? false}
+            connectedAt={dashboardData?.google_connected_at}
+            onRefresh={refreshData}
+            isRefreshing={isRefreshing}
+          />
+        </div>
+      )}
     </main>
   )
 }
@@ -448,6 +580,7 @@ interface PriorityCardWrapperProps {
   priority: Priority
   isEditing: boolean
   canStartEdit: boolean
+  defaultSectionsExpanded: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onSavePriority: (priorityId: string, data: Record<string, unknown>) => Promise<void>
@@ -456,12 +589,18 @@ interface PriorityCardWrapperProps {
   onRenameDeliverable: (deliverableId: string, name: string) => Promise<void>
   onDeleteDeliverable: (deliverableId: string) => Promise<void>
   onAddDeliverable: (priorityId: string, name: string) => Promise<void>
+  // Goal handlers (Inc D)
+  onAddGoal: (priorityId: string, text: string) => Promise<void>
+  onToggleGoal: (goalId: string, achieved: boolean) => Promise<void>
+  onRenameGoal: (goalId: string, text: string) => Promise<void>
+  onDeleteGoal: (goalId: string) => Promise<void>
 }
 
 function PriorityCardWrapper({
   priority,
   isEditing,
   canStartEdit,
+  defaultSectionsExpanded,
   onStartEdit,
   onCancelEdit,
   onSavePriority,
@@ -470,12 +609,17 @@ function PriorityCardWrapper({
   onRenameDeliverable,
   onDeleteDeliverable,
   onAddDeliverable,
+  onAddGoal,
+  onToggleGoal,
+  onRenameGoal,
+  onDeleteGoal,
 }: PriorityCardWrapperProps) {
   if (priority.type === 'deadline') {
     return (
       <DeadlineCard
         priority={priority}
         isEditing={isEditing}
+        defaultDeliverablesExpanded={defaultSectionsExpanded}
         onStartEdit={canStartEdit ? onStartEdit : () => {}}
         onCancelEdit={onCancelEdit}
         onSave={onSavePriority}
@@ -487,15 +631,20 @@ function PriorityCardWrapper({
       />
     )
   }
-  // Flexible priorities don't have deliverables
+  // Flexible priorities have goals (Inc D)
   return (
     <FlexibleCard
       priority={priority}
       isEditing={isEditing}
+      defaultGoalsExpanded={defaultSectionsExpanded}
       onStartEdit={canStartEdit ? onStartEdit : () => {}}
       onCancelEdit={onCancelEdit}
       onSave={onSavePriority}
       onDelete={onDeletePriority}
+      onAddGoal={(text) => onAddGoal(priority.id, text)}
+      onToggleGoal={onToggleGoal}
+      onRenameGoal={onRenameGoal}
+      onDeleteGoal={onDeleteGoal}
     />
   )
 }

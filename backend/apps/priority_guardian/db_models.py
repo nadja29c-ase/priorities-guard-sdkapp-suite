@@ -199,6 +199,14 @@ class PgPriority(Base):
         lazy="selectin",
     )
 
+    # Relationship to goals (for eager loading in responses)
+    goals: Mapped[list["PgGoal"]] = relationship(
+        "PgGoal",
+        back_populates="priority",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
     # Table-level constraints and indexes
     __table_args__ = (
         # Check constraint: type must be 'deadline' or 'flexible'
@@ -237,6 +245,82 @@ class PgPriority(Base):
         return (
             f"<PgPriority id={self.id}, user_id={self.user_id}, "
             f"name={self.name!r}, type={self.type}, keyword={self.calendar_keyword}>"
+        )
+
+
+class PgGoal(Base):
+    """
+    Goal associated with a flexible priority.
+
+    Goals are the 1-3 concrete outcomes a user wants to achieve by their
+    checkpoint date. Unlike the single desired_result string, goals can be
+    individually toggled as achieved.
+
+    Maximum 3 goals per flexible priority (enforced at API layer).
+    """
+
+    __tablename__ = "pg_goals"
+
+    # Primary key (server-generated UUID)
+    id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        primary_key=True,
+        server_default=func.gen_random_uuid(),
+        comment="Internal identifier",
+    )
+
+    # Foreign key to pg_priorities.id with CASCADE delete
+    priority_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True),
+        ForeignKey("pg_priorities.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="Parent priority",
+    )
+
+    # Goal text (max 200 chars)
+    goal_text: Mapped[str] = mapped_column(
+        "text",  # Column name in DB stays "text"
+        String(200),
+        nullable=False,
+        comment="Goal text",
+    )
+
+    # Achievement status (binary only)
+    achieved: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+        default=False,
+        comment="Whether goal is achieved",
+    )
+
+    # Audit timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="When goal was created",
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="When goal was last updated",
+    )
+
+    # Relationship back to priority
+    priority: Mapped["PgPriority"] = relationship(
+        "PgPriority",
+        back_populates="goals",
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<PgGoal id={self.id}, priority_id={self.priority_id}, "
+            f"text={self.goal_text!r}, achieved={self.achieved}>"
         )
 
 

@@ -1,38 +1,48 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Priority } from '../types'
-import { daysUntil, formatDate } from '../utils'
+import { daysUntil } from '../utils'
 import { DeleteConfirmation } from './DeleteConfirmation'
+import { GoalSection } from './GoalSection'
 import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
 import { HourRing } from './HourRing'
 
 interface FlexibleCardProps {
   priority: Priority
   isEditing: boolean
+  defaultGoalsExpanded?: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onSave: (priorityId: string, data: {
     name?: string
     weekly_hour_target?: number
     checkpoint_date?: string
-    desired_result?: string
   }) => Promise<void>
   onDelete: (priorityId: string) => Promise<void>
+  // Goal handlers (Inc D)
+  onAddGoal: (text: string) => Promise<void>
+  onToggleGoal: (goalId: string, achieved: boolean) => Promise<void>
+  onRenameGoal: (goalId: string, text: string) => Promise<void>
+  onDeleteGoal: (goalId: string) => Promise<void>
 }
 
 export function FlexibleCard({
   priority,
   isEditing,
+  defaultGoalsExpanded = true,
   onStartEdit,
   onCancelEdit,
   onSave,
   onDelete,
+  onAddGoal,
+  onToggleGoal,
+  onRenameGoal,
+  onDeleteGoal,
 }: FlexibleCardProps) {
   const [editName, setEditName] = useState(priority.name)
   const [editHourTarget, setEditHourTarget] = useState(priority.weeklyHourTarget?.toString() || '')
   const [editCheckpointDate, setEditCheckpointDate] = useState(priority.checkpointDate || '')
-  const [editDesiredResult, setEditDesiredResult] = useState(priority.desiredResult || '')
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -42,6 +52,7 @@ export function FlexibleCard({
 
   const checkpointDays = priority.checkpointDate ? daysUntil(priority.checkpointDate) : null
   const badgeColorClass = BADGE_COLORS[priority.calendarKeyword] ?? BADGE_COLORS.P1
+  const borderColorClass = BORDER_COLORS[priority.calendarKeyword] ?? BORDER_COLORS.P1
 
   // Get tomorrow's date for min date constraint
   const tomorrow = new Date()
@@ -53,8 +64,7 @@ export function FlexibleCard({
     setEditName(priority.name)
     setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
     setEditCheckpointDate(priority.checkpointDate || '')
-    setEditDesiredResult(priority.desiredResult || '')
-  }, [priority.name, priority.weeklyHourTarget, priority.checkpointDate, priority.desiredResult])
+  }, [priority.name, priority.weeklyHourTarget, priority.checkpointDate])
 
   // Clear timeout on unmount
   useEffect(() => {
@@ -66,7 +76,7 @@ export function FlexibleCard({
   }, [])
 
   const autoSave = async (
-    field: 'name' | 'weekly_hour_target' | 'checkpoint_date' | 'desired_result',
+    field: 'name' | 'weekly_hour_target' | 'checkpoint_date',
     value: string
   ) => {
     // Validate based on field
@@ -89,7 +99,6 @@ export function FlexibleCard({
     if (field === 'name') originalValue = priority.name
     else if (field === 'weekly_hour_target') originalValue = priority.weeklyHourTarget?.toString() || ''
     else if (field === 'checkpoint_date') originalValue = priority.checkpointDate || ''
-    else if (field === 'desired_result') originalValue = priority.desiredResult || ''
 
     if (value === originalValue) {
       return
@@ -106,8 +115,6 @@ export function FlexibleCard({
         updates.weekly_hour_target = parseFloat(value)
       } else if (field === 'checkpoint_date') {
         updates.checkpoint_date = value
-      } else if (field === 'desired_result') {
-        updates.desired_result = value.trim()
       }
 
       await onSave(priority.id, updates)
@@ -121,7 +128,6 @@ export function FlexibleCard({
       if (field === 'name') setEditName(priority.name)
       else if (field === 'weekly_hour_target') setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
       else if (field === 'checkpoint_date') setEditCheckpointDate(priority.checkpointDate || '')
-      else if (field === 'desired_result') setEditDesiredResult(priority.desiredResult || '')
 
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
@@ -146,12 +152,6 @@ export function FlexibleCard({
   const handleCheckpointBlur = () => {
     if (editCheckpointDate !== (priority.checkpointDate || '')) {
       autoSave('checkpoint_date', editCheckpointDate)
-    }
-  }
-
-  const handleDesiredResultBlur = () => {
-    if (editDesiredResult.trim() !== (priority.desiredResult || '')) {
-      autoSave('desired_result', editDesiredResult)
     }
   }
 
@@ -203,7 +203,7 @@ export function FlexibleCard({
   return (
     <article
       ref={cardRef}
-      className="bg-surface rounded-xl border border-default p-6"
+      className={`bg-surface rounded-xl border border-default p-6 ${borderColorClass}`}
       aria-label={`Priority ${priority.calendarKeyword}: ${priority.name}`}
     >
       {/* Header: Title row + actions (2-column layout) */}
@@ -333,7 +333,7 @@ export function FlexibleCard({
         <p className="text-xs text-danger mb-2" role="alert">{error}</p>
       )}
 
-      {/* Edit mode: All flexible fields with auto-save on blur */}
+      {/* Edit mode: Flexible priority fields with auto-save on blur */}
       {isEditing ? (
         <div className="space-y-3 mb-3">
           <div>
@@ -368,45 +368,19 @@ export function FlexibleCard({
               className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
             />
           </div>
-
-          <div>
-            <label htmlFor={`result-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
-              Desired Result
-            </label>
-            <textarea
-              id={`result-${priority.id}`}
-              value={editDesiredResult}
-              onChange={(e) => setEditDesiredResult(e.target.value)}
-              onBlur={handleDesiredResultBlur}
-              disabled={isSaving}
-              maxLength={200}
-              rows={2}
-              className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary resize-none"
-            />
-          </div>
         </div>
       ) : null}
 
-      {/* 1-Month Goal section - clickable to edit */}
-      {!isEditing && priority.desiredResult && (
-        <div
-          className="border-t border-subtle pt-3 cursor-pointer hover:bg-surface-secondary rounded-lg -mx-2 px-2"
-          onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
-          title="Click to edit"
-        >
-          <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide mb-1">
-            1-Month Goal
-          </h4>
-          {priority.checkpointDate && (
-            <p className="text-xs text-tertiary mb-1">
-              by {formatDate(priority.checkpointDate)}
-            </p>
-          )}
-          <p className="text-sm text-default">
-            {priority.desiredResult}
-          </p>
-        </div>
-      )}
+      {/* Goals section (Inc D) - always visible, not just in edit mode */}
+      <GoalSection
+        goals={priority.goals ?? []}
+        checkpointDate={priority.checkpointDate}
+        defaultExpanded={defaultGoalsExpanded || isEditing}
+        onToggleGoal={onToggleGoal}
+        onRenameGoal={onRenameGoal}
+        onDeleteGoal={onDeleteGoal}
+        onAddGoal={onAddGoal}
+      />
 
       {/* Edit mode actions */}
       {isEditing && (

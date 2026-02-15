@@ -48,11 +48,6 @@ INPUT_SCHEMA = {
             "format": "date",
             "description": "New checkpoint date (flexible type only, ISO format)",
         },
-        "desired_result": {
-            "type": "string",
-            "description": "New desired result (flexible type only)",
-            "maxLength": 200,
-        },
     },
     "required": ["priority_id"],
 }
@@ -99,8 +94,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         payload["weekly_hour_target"] = arguments["weekly_hour_target"]
     if "checkpoint_date" in arguments and arguments["checkpoint_date"] is not None:
         payload["checkpoint_date"] = arguments["checkpoint_date"]
-    if "desired_result" in arguments and arguments["desired_result"] is not None:
-        payload["desired_result"] = arguments["desired_result"]
 
     # Call backend - mutation endpoints return full priority list
     try:

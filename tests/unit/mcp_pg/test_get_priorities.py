@@ -40,11 +40,11 @@ def sample_backend_priority():
         "weekly_hour_target": 10,
         "weekly_hour_actual": 8,
         "checkpoint_date": None,
-        "desired_result": None,
         "deliverables": [
             {"id": "del-1", "name": "Design doc", "done": True},
             {"id": "del-2", "name": "Implementation", "done": False},
         ],
+        "goals": [],
         "created_at": "2025-01-01T10:00:00Z",
         "updated_at": "2025-01-10T15:30:00Z",
     }
@@ -63,8 +63,11 @@ def sample_flexible_priority():
         "weekly_hour_target": 5,
         "weekly_hour_actual": 3,
         "checkpoint_date": "2025-02-28",
-        "desired_result": "Complete first 10 chapters of Rust book",
         "deliverables": [],
+        "goals": [
+            {"id": "goal-1", "text": "Complete first 10 chapters", "achieved": False},
+            {"id": "goal-2", "text": "Build sample project", "achieved": True},
+        ],
         "created_at": "2025-01-05T09:00:00Z",
         "updated_at": "2025-01-12T11:00:00Z",
     }
@@ -107,11 +110,13 @@ class TestNormalizePriority:
         assert result["checkpointDate"] == "2025-02-28"
         assert "checkpoint_date" not in result
 
-    def test_converts_desired_result(self, sample_flexible_priority):
-        """Test desired_result becomes desiredResult."""
+    def test_normalizes_goals(self, sample_flexible_priority):
+        """Test goals array is normalized with id, text, achieved fields."""
         result = _normalize_priority(sample_flexible_priority)
-        assert result["desiredResult"] == "Complete first 10 chapters of Rust book"
-        assert "desired_result" not in result
+        goals = result["goals"]
+        assert len(goals) == 2
+        assert goals[0] == {"id": "goal-1", "text": "Complete first 10 chapters", "achieved": False}
+        assert goals[1] == {"id": "goal-2", "text": "Build sample project", "achieved": True}
 
     def test_converts_created_at(self, sample_backend_priority):
         """Test created_at becomes createdAt."""
@@ -158,8 +163,8 @@ class TestNormalizePriority:
         assert result["weeklyHourTarget"] is None
         assert result["weeklyHourActual"] is None
         assert result["checkpointDate"] is None
-        assert result["desiredResult"] is None
         assert result["deliverables"] == []
+        assert result["goals"] == []
 
     def test_handles_empty_deliverables(self, sample_flexible_priority):
         """Test handles empty deliverables list."""
@@ -357,10 +362,11 @@ class TestHandleFunction:
         assert priorities[0]["calendarKeyword"] == "P1"
         assert priorities[0]["weeklyHourTarget"] == 10
 
-        # Check second priority has camelCase fields
+        # Check second priority has camelCase fields and goals
         assert priorities[1]["calendarKeyword"] == "P2"
         assert priorities[1]["checkpointDate"] == "2025-02-28"
-        assert priorities[1]["desiredResult"] == "Complete first 10 chapters of Rust book"
+        assert len(priorities[1]["goals"]) == 2
+        assert priorities[1]["goals"][0]["text"] == "Complete first 10 chapters"
 
     @pytest.mark.asyncio
     async def test_text_content_for_active_priorities(self, sample_backend_priority):

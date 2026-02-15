@@ -32,13 +32,15 @@ from sqlalchemy.orm import selectinload
 
 from backend.core.database import get_db
 from backend.core.models import CoreConnection
-from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable
+from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable, PgGoal
 from backend.apps.priority_guardian.dependencies import validate_user_id_header
 from backend.apps.priority_guardian.models.requests import (
     CreatePriorityRequest,
     UpdatePriorityRequest,
     CreateDeliverableRequest,
     UpdateDeliverableRequest,
+    CreateGoalRequest,
+    UpdateGoalRequest,
 )
 
 logger = structlog.get_logger(__name__)
@@ -87,11 +89,14 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
         }
     """
     # Query priorities ordered by status (active first), then created_at
-    # Use selectinload to eagerly load deliverables (avoids N+1 queries)
+    # Use selectinload to eagerly load deliverables and goals (avoids N+1 queries)
     result = await session.execute(
         select(PgPriority)
         .where(PgPriority.user_id == user_id)
-        .options(selectinload(PgPriority.deliverables))
+        .options(
+            selectinload(PgPriority.deliverables),
+            selectinload(PgPriority.goals),
+        )
         .order_by(
             PgPriority.status.asc(),  # 'active' < 'retired' alphabetically → active first
             PgPriority.created_at.asc(),
@@ -124,7 +129,7 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
     active_keywords = [p.calendar_keyword for p in priorities if p.status == "active"]
     available_keywords = compute_available_keywords(active_keywords)
 
-    # Build priority list with deliverables
+    # Build priority list with deliverables and goals
     priorities_data = []
     for p in priorities:
         deliverables_data = [
@@ -136,6 +141,15 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
             for d in p.deliverables
         ]
 
+        goals_data = [
+            {
+                "id": str(g.id),
+                "text": g.goal_text,
+                "achieved": g.achieved,
+            }
+            for g in p.goals
+        ]
+
         priority_data = {
             "id": str(p.id),
             "name": p.name,
@@ -145,8 +159,8 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
             "deadline": p.deadline.isoformat() if p.deadline else None,
             "weekly_hour_target": float(p.weekly_hour_target) if p.weekly_hour_target is not None else None,
             "checkpoint_date": p.checkpoint_date.isoformat() if p.checkpoint_date else None,
-            "desired_result": p.desired_result,
             "deliverables": deliverables_data,
+            "goals": goals_data,
             "created_at": p.created_at.isoformat() if p.created_at else None,
             "updated_at": p.updated_at.isoformat() if p.updated_at else None,
         }
@@ -318,10 +332,17 @@ async def create_priority(
             deadline=request.deadline,
             weekly_hour_target=request.weekly_hour_target,
             checkpoint_date=request.checkpoint_date,
-            desired_result=request.desired_result,
         )
 
         session.add(priority)
+
+        # Step 4b: For flexible priorities, create the initial goal
+        if request.type == "flexible" and request.initial_goal_text:
+            initial_goal = PgGoal(
+                priority_id=priority.id,
+                goal_text=request.initial_goal_text,
+            )
+            session.add(initial_goal)
 
         # Step 5: Commit (flush first to catch IntegrityError before commit)
         await session.flush()
@@ -347,6 +368,16 @@ async def create_priority(
         )
 
         # Build response
+        # For goals, we need to query them since we just created them
+        goals_data = [
+            {
+                "id": str(g.id),
+                "text": g.goal_text,
+                "achieved": g.achieved,
+            }
+            for g in priority.goals
+        ]
+
         priority_data = {
             "id": str(priority.id),
             "name": priority.name,
@@ -356,8 +387,8 @@ async def create_priority(
             "deadline": priority.deadline.isoformat() if priority.deadline else None,
             "weekly_hour_target": float(priority.weekly_hour_target) if priority.weekly_hour_target is not None else None,
             "checkpoint_date": priority.checkpoint_date.isoformat() if priority.checkpoint_date else None,
-            "desired_result": priority.desired_result,
             "deliverables": [],  # Always empty on creation
+            "goals": goals_data,
             "created_at": priority.created_at.isoformat() if priority.created_at else None,
         }
 
@@ -516,11 +547,6 @@ async def update_priority(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail={"code": "VALIDATION_ERROR", "message": "checkpoint_date is not valid for deadline priorities"},
             )
-        if request.desired_result is not None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail={"code": "VALIDATION_ERROR", "message": "desired_result is not valid for deadline priorities"},
-            )
     elif priority.type == "flexible":
         if request.deadline is not None:
             raise HTTPException(
@@ -537,8 +563,6 @@ async def update_priority(
         priority.weekly_hour_target = request.weekly_hour_target
     if request.checkpoint_date is not None:
         priority.checkpoint_date = request.checkpoint_date
-    if request.desired_result is not None:
-        priority.desired_result = request.desired_result
 
     await session.commit()
 
@@ -804,6 +828,231 @@ async def delete_deliverable(
         "deliverable.delete.success",
         user_id=str(user_id),
         deliverable_id=str(did),
+        priority_id=str(priority_id),
+    )
+
+    return await build_priorities_response(session, user_id)
+
+
+# ============================================================================
+# Goal Endpoints (Widget CRUD - Inc D)
+# ============================================================================
+
+MAX_GOALS_PER_PRIORITY = 3
+
+
+@router.post("/priorities/{priority_id}/goals", status_code=status.HTTP_201_CREATED)
+async def create_goal(
+    priority_id: str,
+    request: CreateGoalRequest,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Add a goal to a flexible priority.
+
+    Maximum 3 goals per priority. Only valid for flexible priorities.
+
+    Args:
+        priority_id: Parent priority ID (UUID string)
+        request: Goal creation request
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        201: Full priorities response with new goal
+        404: Parent priority not found or wrong user
+        409: Max goals reached (3)
+        422: Priority is not flexible type
+    """
+    # Validate priority_id format
+    try:
+        pid = UUID(priority_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Fetch parent priority with goals
+    result = await session.execute(
+        select(PgPriority)
+        .where(
+            PgPriority.id == pid,
+            PgPriority.user_id == user_id,
+        )
+        .options(selectinload(PgPriority.goals))
+    )
+    priority = result.scalar_one_or_none()
+
+    if not priority:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Goals are only for flexible priorities
+    if priority.type != "flexible":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "VALIDATION_ERROR", "message": "Goals are only valid for flexible priorities"},
+        )
+
+    # Check max goals limit
+    if len(priority.goals) >= MAX_GOALS_PER_PRIORITY:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "success": False,
+                "error": {
+                    "code": "MAX_GOALS_REACHED",
+                    "message": f"Maximum {MAX_GOALS_PER_PRIORITY} goals per priority. Delete a goal to add a new one.",
+                },
+            },
+        )
+
+    # Create goal
+    goal = PgGoal(
+        priority_id=priority.id,
+        goal_text=request.text,
+    )
+    session.add(goal)
+    await session.commit()
+
+    logger.info(
+        "goal.create.success",
+        user_id=str(user_id),
+        priority_id=str(priority.id),
+        goal_id=str(goal.id),
+    )
+
+    # Expire cached objects so the next query gets fresh data with new goal
+    session.expire_all()
+
+    return await build_priorities_response(session, user_id)
+
+
+@router.put("/goals/{goal_id}")
+async def update_goal(
+    goal_id: str,
+    request: UpdateGoalRequest,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Update a goal (toggle achieved or rename).
+
+    Args:
+        goal_id: Goal ID (UUID string)
+        request: Partial update fields
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Full priorities response
+        404: Goal not found or parent priority belongs to different user
+    """
+    # Validate goal_id format
+    try:
+        gid = UUID(goal_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Goal not found"},
+        )
+
+    # Fetch goal with parent priority for user validation
+    result = await session.execute(
+        select(PgGoal)
+        .join(PgPriority)
+        .where(
+            PgGoal.id == gid,
+            PgPriority.user_id == user_id,
+        )
+    )
+    goal = result.scalar_one_or_none()
+
+    if not goal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Goal not found"},
+        )
+
+    # Check if any updates provided
+    if not request.has_updates():
+        return await build_priorities_response(session, user_id)
+
+    # Apply updates
+    if request.text is not None:
+        goal.goal_text = request.text
+    if request.achieved is not None:
+        goal.achieved = request.achieved
+
+    await session.commit()
+
+    logger.info(
+        "goal.update.success",
+        user_id=str(user_id),
+        goal_id=str(goal.id),
+        achieved=goal.achieved,
+    )
+
+    return await build_priorities_response(session, user_id)
+
+
+@router.delete("/goals/{goal_id}")
+async def delete_goal(
+    goal_id: str,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Delete a goal.
+
+    Args:
+        goal_id: Goal ID (UUID string)
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Full priorities response (without deleted goal)
+        404: Goal not found or parent priority belongs to different user
+    """
+    # Validate goal_id format
+    try:
+        gid = UUID(goal_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Goal not found"},
+        )
+
+    # Fetch goal with parent priority for user validation
+    result = await session.execute(
+        select(PgGoal)
+        .join(PgPriority)
+        .where(
+            PgGoal.id == gid,
+            PgPriority.user_id == user_id,
+        )
+    )
+    goal = result.scalar_one_or_none()
+
+    if not goal:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Goal not found"},
+        )
+
+    priority_id = goal.priority_id
+
+    await session.delete(goal)
+    await session.commit()
+
+    logger.info(
+        "goal.delete.success",
+        user_id=str(user_id),
+        goal_id=str(gid),
         priority_id=str(priority_id),
     )
 
