@@ -30,8 +30,8 @@ const SEMANTIC_COLORS = [
   '#a855f7',  // violet-500 (distinct from P2 purple)
 ]
 
-// Muted grey for unmatched "other" - visible but subordinate
-const OTHER_GREY = 'var(--gray-300, #afafaf)'
+// Muted grey for unmatched "other" - visible but subordinate (SDK semantic token)
+const OTHER_GREY = 'var(--color-border-default)'
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartProps) {
   // Filter out zero-hour slices
@@ -191,10 +191,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartPro
 
       {/* CTA to categorize "Other" - only shown when uncategorized time exists */}
       {validSlices.some(s => ['other', 'uncategorized', 'misc'].includes(s.label.toLowerCase())) && (
-        <p
-          className="mt-4 text-xs text-center"
-          style={{ color: 'var(--gray-450, #767676)' }}
-        >
+        <p className="mt-4 text-xs text-center text-secondary">
           Ask ChatGPT to categorize 'Other' to uncover where your time is really going.
         </p>
       )}

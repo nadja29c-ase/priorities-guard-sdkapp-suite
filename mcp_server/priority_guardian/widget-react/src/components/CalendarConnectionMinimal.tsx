@@ -11,14 +11,10 @@ export function CalendarConnectionMinimal({ connected }: CalendarConnectionMinim
   return (
     <div className="mt-4 flex items-center gap-2 px-1">
       <span
-        className="w-1.5 h-1.5 rounded-full"
-        style={{ background: 'var(--green-500, #00a240)' }}
+        className="w-1.5 h-1.5 rounded-full bg-success-solid"
         aria-hidden="true"
       />
-      <span
-        className="text-xs"
-        style={{ color: 'var(--gray-400, #8f8f8f)' }}
-      >
+      <span className="text-xs text-tertiary">
         Google Calendar connected
       </span>
     </div>

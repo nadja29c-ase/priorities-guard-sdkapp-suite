@@ -206,12 +206,8 @@ export function FlexibleCard({
   return (
     <article
       ref={cardRef}
-      className="rounded-xl p-5"
-      style={{
-        background: 'var(--gray-0, #ffffff)',
-        border: '1px solid var(--gray-100, #ededed)',
-        borderLeft: `4px solid ${borderColor}`,
-      }}
+      className="rounded-xl p-5 bg-surface border border-default"
+      style={{ borderLeft: `4px solid ${borderColor}` }}
       aria-label={`Priority ${kw}: ${priority.name}`}
     >
       {/* V7 Header: Badge + Name + Streak pill + Edit/Trash */}
@@ -232,13 +228,11 @@ export function FlexibleCard({
             maxLength={100}
             autoFocus
             className="flex-1 text-sm font-semibold text-default bg-surface border border-default rounded-lg px-2 py-1 focus:outline-none focus:border-tertiary"
-            style={{ color: 'var(--gray-900, #181818)' }}
             aria-label="Priority name"
           />
         ) : (
           <h3
-            className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80"
-            style={{ color: 'var(--gray-900, #181818)' }}
+            className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80 text-default"
             onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
             title="Click to edit"
           >
@@ -248,12 +242,8 @@ export function FlexibleCard({
         {/* V7: Streak as pill (not emoji) */}
         {!isEditing && priority.streakCount != null && priority.streakCount > 0 && (
           <span
-            className="text-xs tabular-nums px-1.5 py-0.5 rounded-full font-medium"
-            style={{
-              color: 'var(--gray-600, #414141)',
-              background: 'var(--gray-75, #f3f3f3)',
-              fontSize: '0.7rem',
-            }}
+            className="text-xs tabular-nums px-1.5 py-0.5 rounded-full font-medium text-default bg-surface-tertiary"
+            style={{ fontSize: '0.7rem' }}
           >
             {priority.streakCount}w streak
           </span>
@@ -265,7 +255,7 @@ export function FlexibleCard({
           title="Edit"
           aria-label={`Edit priority: ${priority.name}`}
         >
-          <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
           </svg>
         </button>
@@ -276,7 +266,7 @@ export function FlexibleCard({
           title="Delete priority"
           aria-label={`Delete priority: ${priority.name}`}
         >
-          <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
             <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
             <path d="M6.5 7v5M9.5 7v5" />
@@ -300,36 +290,27 @@ export function FlexibleCard({
           <div className="flex-1">
             {hasAvg ? (
               <>
-                <span
-                  className="text-2xl font-bold tabular-nums leading-none"
-                  style={{ color: 'var(--gray-900, #181818)' }}
-                >
+                <span className="text-2xl font-bold tabular-nums leading-none text-default">
                   ~{Math.round(priority.avgTargetAchievement!)}%
                 </span>
-                <p
-                  className="text-xs mt-0.5"
-                  style={{ color: 'var(--gray-450, #767676)' }}
-                >
+                <p className="text-xs mt-0.5 text-secondary">
                   of weekly target on avg
                 </p>
               </>
             ) : (
               <div className="flex items-center gap-1.5">
                 <svg
-                  className="w-3.5 h-3.5 flex-shrink-0"
+                  className="w-3.5 h-3.5 flex-shrink-0 text-tertiary"
                   viewBox="0 0 16 16"
                   fill="none"
-                  stroke="var(--gray-350, #9f9f9f)"
+                  stroke="currentColor"
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 >
                   <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                 </svg>
-                <span
-                  className="text-sm italic"
-                  style={{ color: 'var(--gray-350, #9f9f9f)' }}
-                >
+                <span className="text-sm italic text-tertiary">
                   Complete your first week to see your pattern.
                 </span>
               </div>

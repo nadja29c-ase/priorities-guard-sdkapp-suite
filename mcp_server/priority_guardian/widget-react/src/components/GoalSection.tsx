@@ -72,10 +72,11 @@ export function GoalSection({
     }
   }
 
-  // Format checkpoint date
+  // Format checkpoint date using SDK locale
   const formatDate = (dateStr: string) => {
+    const locale = window.openai?.locale || 'en-US'
     const date = new Date(dateStr + 'T00:00:00')
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
   }
 
   const achievedCount = goals.filter(g => g.achieved).length
@@ -83,9 +84,11 @@ export function GoalSection({
   return (
     <div className="border-t border-subtle pt-3">
       {/* Header */}
-      <div
-        className={`flex items-center gap-2 mb-2 ${isCollapsible ? 'cursor-pointer' : ''}`}
+      <button
+        type="button"
+        className={`flex items-center gap-2 mb-2 w-full text-left ${isCollapsible ? 'cursor-pointer' : ''}`}
         onClick={() => isCollapsible && setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
         {isCollapsible && (
           <ChevronIcon expanded={expanded} className="text-tertiary" />
@@ -103,7 +106,7 @@ export function GoalSection({
             {achievedCount}/{goals.length}
           </span>
         )}
-      </div>
+      </button>
 
       {/* Goals list */}
       {(expanded || !isCollapsible) && (

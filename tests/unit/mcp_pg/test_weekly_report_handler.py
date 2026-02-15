@@ -138,6 +138,44 @@ class TestBuildPieSlices:
         assert len(semantic_slices) == 1
         assert semantic_slices[0]["label"] == "Other"
 
+    def test_zero_other_hours_with_semantic_groupings_no_phantom_other(self):
+        """Zero other_hours with semantic_groupings present produces no phantom Other slice."""
+        # Edge case: all calendar time allocated to priorities, semantic_groupings provided
+        # but semantic_target=None (default). Should produce priority slices only, no error.
+        priorities = [
+            {"name": "Build PG", "calendar_keyword": "P1"},
+            {"name": "Client Work", "calendar_keyword": "P2"},
+        ]
+        time_allocation = {
+            "keywords": {
+                "P1": {"hours": 10.0, "event_count": 5},
+                "P2": {"hours": 8.0, "event_count": 4},
+            },
+            "other_hours": 0.0,  # All time allocated to priorities
+        }
+        # semantic_groupings present but empty (user categorized 0 hours of "Other")
+        semantic_groupings = [
+            {"category": "Meetings", "hours": 0.0, "event_count": 0},
+        ]
+
+        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, None)
+
+        assert error is None
+        # Priority slices for P1 and P2
+        priority_slices = [s for s in slices if s["type"] == "priority"]
+        assert len(priority_slices) == 2
+        keywords = [s["keyword"] for s in priority_slices]
+        assert "P1" in keywords
+        assert "P2" in keywords
+        # No "Other" slice (other_hours=0)
+        other_slices = [s for s in slices if s["label"] == "Other"]
+        assert len(other_slices) == 0
+        # Semantic slices for the 0h category exist (matching 0h "other")
+        semantic_slices = [s for s in slices if s["type"] == "semantic"]
+        assert len(semantic_slices) == 1
+        assert semantic_slices[0]["label"] == "Meetings"
+        assert semantic_slices[0]["hours"] == 0.0
+
 
 class TestSliceValidation:
     """Tests for semantic_groupings validation in _build_pie_slices()."""

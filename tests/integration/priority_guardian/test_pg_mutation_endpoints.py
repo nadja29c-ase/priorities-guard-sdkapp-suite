@@ -68,7 +68,6 @@ async def create_test_priority(
         if isinstance(checkpoint_val, str):
             checkpoint_val = date.fromisoformat(checkpoint_val)
         priority_data["checkpoint_date"] = checkpoint_val
-        priority_data["desired_result"] = kwargs.get("desired_result", "Test result")
 
     priority = PgPriority(**priority_data)
     async_session.add(priority)
@@ -144,7 +143,6 @@ class TestUpdatePriorityEndpoint:
             json={
                 "weekly_hour_target": 15.0,
                 "checkpoint_date": new_date,
-                "desired_result": "Updated result",
             },
             headers={"X-User-ID": str(user_id)},
         )
@@ -153,7 +151,6 @@ class TestUpdatePriorityEndpoint:
         updated = response.json()["data"]["priorities"][0]
         assert updated["weekly_hour_target"] == 15.0
         assert updated["checkpoint_date"] == new_date
-        assert updated["desired_result"] == "Updated result"
 
     @pytest.mark.asyncio
     async def test_ignores_update_to_type_field(self, client, async_session: AsyncSession):
@@ -274,6 +271,26 @@ class TestUpdatePriorityEndpoint:
         updated = response.json()["data"]["priorities"][0]
         assert updated["name"] == "Updated Name"
         assert updated["deadline"] == original_deadline  # Unchanged
+
+    @pytest.mark.asyncio
+    async def test_empty_body_returns_200_noop(self, client, async_session: AsyncSession):
+        """Empty {} body triggers has_updates()=False, returns current state unchanged."""
+        user_id = await create_test_user(async_session)
+        priority = await create_test_priority(
+            async_session, user_id,
+            name="Unchanged Name",
+            priority_type="deadline",
+        )
+
+        response = await client.put(
+            f"/api/priority-guardian/priorities/{priority.id}",
+            json={},
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 200
+        returned = response.json()["data"]["priorities"][0]
+        assert returned["name"] == "Unchanged Name"
 
 
 # ==============================================================================
@@ -445,6 +462,42 @@ class TestCreateDeliverableEndpoint:
 
         assert response.status_code == 422
 
+    @pytest.mark.asyncio
+    async def test_create_deliverable_on_deadline_priority_succeeds(self, client, async_session: AsyncSession):
+        """Creating deliverable on deadline priority returns 201."""
+        user_id = await create_test_user(async_session)
+        priority = await create_test_priority(async_session, user_id, priority_type="deadline")
+
+        response = await client.post(
+            f"/api/priority-guardian/priorities/{priority.id}/deliverables",
+            json={"name": "Deadline Deliverable"},
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["success"] is True
+        deliverables = data["data"]["priorities"][0]["deliverables"]
+        assert len(deliverables) == 1
+        assert deliverables[0]["name"] == "Deadline Deliverable"
+
+    @pytest.mark.asyncio
+    async def test_create_deliverable_on_flexible_priority_returns_422(self, client, async_session: AsyncSession):
+        """Creating deliverable on flexible priority returns 422 VALIDATION_ERROR."""
+        user_id = await create_test_user(async_session)
+        priority = await create_test_priority(async_session, user_id, priority_type="flexible")
+
+        response = await client.post(
+            f"/api/priority-guardian/priorities/{priority.id}/deliverables",
+            json={"name": "Invalid Deliverable"},
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 422
+        data = response.json()
+        assert data["detail"]["code"] == "VALIDATION_ERROR"
+        assert "deadline" in data["detail"]["message"].lower()
+
 
 # ==============================================================================
 # PUT /api/priority-guardian/deliverables/{deliverable_id}
@@ -535,6 +588,24 @@ class TestUpdateDeliverableEndpoint:
 
         assert response.status_code == 404
 
+    @pytest.mark.asyncio
+    async def test_empty_body_returns_200_noop(self, client, async_session: AsyncSession):
+        """Empty {} body triggers has_updates()=False, returns current state unchanged."""
+        user_id = await create_test_user(async_session)
+        priority = await create_test_priority(async_session, user_id)
+        deliverable = await create_test_deliverable(async_session, priority.id, name="Unchanged", done=False)
+
+        response = await client.put(
+            f"/api/priority-guardian/deliverables/{deliverable.id}",
+            json={},
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 200
+        returned_deliverable = response.json()["data"]["priorities"][0]["deliverables"][0]
+        assert returned_deliverable["name"] == "Unchanged"
+        assert returned_deliverable["done"] is False
+
 
 # ==============================================================================
 # DELETE /api/priority-guardian/deliverables/{deliverable_id}
@@ -586,3 +657,32 @@ class TestDeleteDeliverableEndpoint:
         )
 
         assert response.status_code == 404
+
+
+# ==============================================================================
+# POST /api/priority-guardian/priorities (CreatePriorityRequest validation)
+# ==============================================================================
+
+
+class TestCreatePriorityEndpoint:
+    """Tests for POST /api/priority-guardian/priorities validation."""
+
+    @pytest.mark.asyncio
+    async def test_negative_weekly_hour_target_returns_422(self, client, async_session: AsyncSession):
+        """Pydantic gt=0 enforcement: negative weekly_hour_target returns 422."""
+        user_id = await create_test_user(async_session)
+        future_date = (date.today() + timedelta(days=30)).isoformat()
+
+        response = await client.post(
+            "/api/priority-guardian/priorities",
+            json={
+                "name": "Test Flexible",
+                "type": "flexible",
+                "weekly_hour_target": -5,
+                "checkpoint_date": future_date,
+                "initial_goal_text": "Some goal",
+            },
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 422

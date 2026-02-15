@@ -60,12 +60,11 @@ export function GoalItem({
         aria-label={goal.achieved ? 'Mark as not achieved' : 'Mark as achieved'}
       >
         <span
-          className="rounded-full flex items-center justify-center"
+          className={`rounded-full flex items-center justify-center ${goal.achieved ? 'bg-success-solid' : ''}`}
           style={{
             width: '18px',
             height: '18px',
-            border: goal.achieved ? 'none' : '1.5px solid var(--gray-300, #afafaf)',
-            background: goal.achieved ? 'var(--green-500, #00a240)' : 'transparent',
+            border: goal.achieved ? 'none' : '1.5px solid var(--color-border-strong)',
             transition: 'all 150ms ease-out',
             opacity: (disabled || isLoading) ? 0.5 : 1,
             cursor: (disabled || isLoading) ? 'not-allowed' : 'pointer',
@@ -82,11 +81,7 @@ export function GoalItem({
       {/* Goal text */}
       <div className="flex-1 min-w-0">
         <p
-          className={`text-sm flex-1 ${goal.achieved ? 'line-through' : ''}`}
-          style={{
-            color: goal.achieved ? 'var(--gray-350, #9f9f9f)' : 'var(--gray-700, #303030)',
-            transition: 'color 150ms ease-out',
-          }}
+          className={`text-sm flex-1 transition-colors ${goal.achieved ? 'line-through text-tertiary' : 'text-default'}`}
         >
           {goal.text}
         </p>

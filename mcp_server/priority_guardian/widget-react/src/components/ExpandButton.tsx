@@ -7,13 +7,7 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full mt-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors hover:opacity-80"
-      style={{
-        color: 'var(--gray-0, #ffffff)',
-        background: 'var(--gray-900, #181818)',
-        border: 'none',
-        cursor: 'pointer',
-      }}
+      className="w-full mt-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors hover:opacity-80 text-inverse bg-primary-solid"
       aria-label="Open full dashboard"
     >
       Open full dashboard

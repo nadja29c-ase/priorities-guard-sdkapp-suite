@@ -75,29 +75,15 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
   }, [onRefresh])
 
   return (
-    <section
-      className="rounded-xl p-4"
-      style={{
-        background: 'var(--gray-0, #ffffff)',
-        border: '1px solid var(--gray-100, #ededed)',
-      }}
-    >
+    <section className="rounded-xl p-4 bg-surface border border-default">
       {/* V7: Connection indicator row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span
-            className="w-2 h-2 rounded-full"
-            style={{
-              background: connected
-                ? 'var(--green-500, #00a240)'
-                : 'var(--gray-300, #afafaf)',
-            }}
+            className={`w-2 h-2 rounded-full ${connected ? 'bg-success-solid' : 'bg-outline-default'}`}
             aria-hidden="true"
           />
-          <span
-            className="text-sm font-medium"
-            style={{ color: 'var(--gray-700, #303030)' }}
-          >
+          <span className="text-sm font-medium text-default">
             Google Calendar
           </span>
         </div>
@@ -105,21 +91,14 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
         {connected ? (
           showDisconnectConfirm ? (
             <div className="flex items-center gap-2">
-              <span
-                className="text-xs"
-                style={{ color: 'var(--gray-500, #5d5d5d)' }}
-              >
+              <span className="text-xs text-secondary">
                 Disconnect?
               </span>
               <button
                 onClick={handleDisconnect}
                 disabled={isDisconnecting}
-                className="text-xs font-medium px-2 py-1 rounded-lg transition-colors"
-                style={{
-                  color: 'var(--red-500, #e02e2a)',
-                  background: 'var(--red-50, #fef2f2)',
-                  opacity: isDisconnecting ? 0.6 : 1,
-                }}
+                className="text-xs font-medium px-2 py-1 rounded-lg transition-colors text-danger bg-danger-soft-alpha"
+                style={{ opacity: isDisconnecting ? 0.6 : 1 }}
                 aria-label="Confirm disconnect"
               >
                 {isDisconnecting ? '...' : 'Yes'}
@@ -127,11 +106,7 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
               <button
                 onClick={() => setShowDisconnectConfirm(false)}
                 disabled={isDisconnecting}
-                className="text-xs font-medium px-2 py-1 rounded-lg transition-colors"
-                style={{
-                  color: 'var(--gray-500, #5d5d5d)',
-                  background: 'var(--gray-50, #f9f9f9)',
-                }}
+                className="text-xs font-medium px-2 py-1 rounded-lg transition-colors text-secondary bg-surface-secondary"
                 aria-label="Cancel disconnect"
               >
                 No
@@ -141,11 +116,7 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
             <button
               onClick={() => setShowDisconnectConfirm(true)}
               disabled={isRefreshing}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-              style={{
-                color: 'var(--red-500, #e02e2a)',
-                background: 'var(--red-50, #fef2f2)',
-              }}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-danger bg-danger-soft-alpha"
               aria-label="Disconnect Google Calendar"
             >
               Disconnect
@@ -155,12 +126,8 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
           <button
             onClick={handleCheckStatus}
             disabled={isRefreshing}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-            style={{
-              color: 'var(--blue-500, #0169cc)',
-              background: 'var(--blue-50, #eff6ff)',
-              opacity: isRefreshing ? 0.6 : 1,
-            }}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft"
+            style={{ opacity: isRefreshing ? 0.6 : 1 }}
             aria-label="Check connection status"
           >
             {isRefreshing ? 'Checking...' : 'Check status'}
@@ -169,12 +136,8 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
           <button
             onClick={handleConnect}
             disabled={isConnecting || isRefreshing}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-            style={{
-              color: 'var(--blue-500, #0169cc)',
-              background: 'var(--blue-50, #eff6ff)',
-              opacity: (isConnecting || isRefreshing) ? 0.6 : 1,
-            }}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft"
+            style={{ opacity: (isConnecting || isRefreshing) ? 0.6 : 1 }}
             aria-label="Connect Google Calendar"
           >
             {isConnecting ? 'Connecting...' : 'Connect'}
@@ -184,27 +147,21 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
 
       {/* V7: Instruction when connected - inside same section */}
       {connected && (
-        <div
-          className="rounded-lg px-3 py-2.5 mt-3 flex items-start gap-2"
-          style={{ background: 'var(--gray-50, #f9f9f9)' }}
-        >
+        <div className="rounded-lg px-3 py-2.5 mt-3 flex items-start gap-2 bg-surface-secondary">
           <svg
-            className="w-3.5 h-3.5 flex-shrink-0 mt-0.5"
+            className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-tertiary"
             viewBox="0 0 16 16"
             fill="none"
-            stroke="var(--gray-400, #8f8f8f)"
+            stroke="currentColor"
             strokeWidth="1.5"
           >
             <rect x="2" y="3" width="12" height="11" rx="1.5" />
             <path d="M5 1.5v3M11 1.5v3M2 7h12" />
           </svg>
-          <p
-            className="text-xs leading-relaxed"
-            style={{ color: 'var(--gray-450, #767676)' }}
-          >
-            Add <strong style={{ color: 'var(--gray-700, #303030)' }}>P1</strong>,{' '}
-            <strong style={{ color: 'var(--gray-700, #303030)' }}>P2</strong>, or{' '}
-            <strong style={{ color: 'var(--gray-700, #303030)' }}>P3</strong>{' '}
+          <p className="text-xs leading-relaxed text-secondary">
+            Add <strong className="text-default">P1</strong>,{' '}
+            <strong className="text-default">P2</strong>, or{' '}
+            <strong className="text-default">P3</strong>{' '}
             to your calendar event titles to track time toward each priority.
           </p>
         </div>
@@ -212,14 +169,8 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
 
       {/* OAuth awaiting message */}
       {awaitingOAuth && !connected && (
-        <div
-          className="rounded-lg px-3 py-2.5 mt-3"
-          style={{ background: 'var(--gray-50, #f9f9f9)' }}
-        >
-          <p
-            className="text-xs"
-            style={{ color: 'var(--gray-500, #5d5d5d)' }}
-          >
+        <div className="rounded-lg px-3 py-2.5 mt-3 bg-surface-secondary">
+          <p className="text-xs text-secondary">
             Complete the authorization in the opened window, then click "Check status".
           </p>
         </div>
@@ -228,19 +179,10 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
       {/* Error message */}
       {error && (
         <div
-          className="rounded-lg px-3 py-2.5 mt-3"
-          style={{
-            background: 'var(--red-50, #fef2f2)',
-            border: '1px solid var(--red-200, #fecaca)',
-          }}
+          className="rounded-lg px-3 py-2.5 mt-3 bg-danger-soft-alpha border border-danger-outline"
           role="alert"
         >
-          <p
-            className="text-xs"
-            style={{ color: 'var(--red-600, #dc2626)' }}
-          >
-            {error}
-          </p>
+          <p className="text-xs text-danger">{error}</p>
         </div>
       )}
     </section>

@@ -689,6 +689,13 @@ async def create_deliverable(
             detail={"code": "NOT_FOUND", "message": "Priority not found"},
         )
 
+    # Deliverables are only for deadline priorities
+    if priority.type != "deadline":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "VALIDATION_ERROR", "message": "Deliverables are only valid for deadline priorities"},
+        )
+
     # Create deliverable
     deliverable = PgDeliverable(
         priority_id=priority.id,

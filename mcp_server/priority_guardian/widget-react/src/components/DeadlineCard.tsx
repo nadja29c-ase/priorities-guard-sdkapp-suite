@@ -73,8 +73,9 @@ export function DeadlineCard({
   const colors = ACCENT_COLORS[kw] ?? ACCENT_COLORS.P1
 
   // Format deadline date for banner (e.g., "Mar 15, 2026")
+  const locale = window.openai?.locale || 'en-US'
   const deadlineDate = priority.deadline
-    ? new Date(priority.deadline + 'T00:00:00').toLocaleDateString('en-US', {
+    ? new Date(priority.deadline + 'T00:00:00').toLocaleDateString(locale, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -201,12 +202,8 @@ export function DeadlineCard({
   return (
     <article
       ref={cardRef}
-      className="rounded-xl overflow-hidden"
-      style={{
-        background: 'var(--gray-0, #ffffff)',
-        border: '1px solid var(--gray-100, #ededed)',
-        borderLeft: `4px solid ${colors.border}`,
-      }}
+      className="rounded-xl overflow-hidden bg-surface border border-default"
+      style={{ borderLeft: `4px solid ${colors.border}` }}
       aria-label={`Priority ${kw}: ${priority.name}`}
     >
       {/* V7: Colored deadline banner at top */}
@@ -263,13 +260,11 @@ export function DeadlineCard({
               maxLength={100}
               autoFocus
               className="flex-1 text-sm font-semibold text-default bg-surface border border-default rounded-lg px-2 py-1 focus:outline-none focus:border-tertiary"
-              style={{ color: 'var(--gray-900, #181818)' }}
               aria-label="Priority name"
             />
           ) : (
             <h3
-              className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80"
-              style={{ color: 'var(--gray-900, #181818)' }}
+              className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80 text-default"
               onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
               title="Click to edit"
             >
@@ -283,7 +278,7 @@ export function DeadlineCard({
             title="Edit"
             aria-label={`Edit priority: ${priority.name}`}
           >
-            <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
             </svg>
           </button>
@@ -294,7 +289,7 @@ export function DeadlineCard({
             title="Delete priority"
             aria-label={`Delete priority: ${priority.name}`}
           >
-            <svg className="w-3.5 h-3.5" style={{ color: 'var(--gray-350, #9f9f9f)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
               <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
               <path d="M6.5 7v5M9.5 7v5" />
@@ -309,22 +304,13 @@ export function DeadlineCard({
 
         {/* V7: Lead measure - inline done/total + label */}
         <div className="flex items-center gap-2 mb-4">
-          <span
-            className="text-2xl font-bold tabular-nums leading-none"
-            style={{ color: 'var(--gray-900, #181818)' }}
-          >
+          <span className="text-2xl font-bold tabular-nums leading-none text-default">
             {doneCount}
-            <span
-              className="text-lg font-normal"
-              style={{ color: 'var(--gray-350, #9f9f9f)' }}
-            >
+            <span className="text-lg font-normal text-tertiary">
               /{totalCount}
             </span>
           </span>
-          <span
-            className="text-sm"
-            style={{ color: 'var(--gray-450, #767676)' }}
-          >
+          <span className="text-sm text-secondary">
             Deliverables done
           </span>
         </div>
@@ -349,22 +335,17 @@ export function DeadlineCard({
         )}
 
         {/* E2E Deliverables - Collapsible */}
-        <div className="pt-3" style={{ borderTop: '1px solid var(--gray-75, #f3f3f3)' }}>
+        <div className="pt-3 border-t border-subtle">
           <button
+            type="button"
             onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}
-            className="flex items-center gap-1.5 w-full mb-2 hover:opacity-80 transition-opacity"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            className="flex items-center gap-1.5 w-full mb-2 hover:opacity-80 transition-opacity bg-transparent p-0"
+            aria-expanded={deliverablesExpanded}
           >
-            <h4
-              className="text-xs font-medium uppercase tracking-wide"
-              style={{ color: 'var(--gray-400, #8f8f8f)' }}
-            >
+            <h4 className="text-xs font-medium uppercase tracking-wide text-tertiary">
               E2E Deliverables
             </h4>
-            <span
-              className="text-xs tabular-nums"
-              style={{ color: 'var(--gray-350, #9f9f9f)' }}
-            >
+            <span className="text-xs tabular-nums text-tertiary">
               ({doneCount}/{totalCount})
             </span>
             <span className="ml-auto">
@@ -388,7 +369,7 @@ export function DeadlineCard({
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs mb-2 italic" style={{ color: 'var(--gray-450, #767676)' }}>
+                <p className="text-xs mb-2 italic text-secondary">
                   Without E2E deliverables, you only see hours spent — add them to track real progress.
                 </p>
               )}

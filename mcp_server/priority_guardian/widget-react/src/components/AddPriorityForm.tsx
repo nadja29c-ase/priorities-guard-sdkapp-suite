@@ -78,6 +78,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
   }
 
   const handleSubmit = async () => {
+    if (isSubmitting) return
     if (!priorityType || !validateForm()) return
 
     setError(null)

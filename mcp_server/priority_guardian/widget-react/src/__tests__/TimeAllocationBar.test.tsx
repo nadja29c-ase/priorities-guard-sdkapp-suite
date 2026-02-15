@@ -58,7 +58,7 @@ describe('TimeAllocationBar', () => {
           activeKeywords={allActiveKeywords}
         />
       )
-      expect(screen.getByText('Your time allocation this week')).toBeInTheDocument()
+      expect(screen.getByText('Time allocation this week')).toBeInTheDocument()
     })
   })
 
@@ -74,14 +74,15 @@ describe('TimeAllocationBar', () => {
       expect(screen.getByText('31.8h')).toBeInTheDocument()
     })
 
-    it('renders "Your time allocation this week" heading', () => {
+    it('renders "Time allocation this week" heading', () => {
       render(
         <TimeAllocationBar
           timeAllocation={sampleTimeAllocation}
           activeKeywords={allActiveKeywords}
         />
       )
-      expect(screen.getByRole('heading', { name: /your time allocation this week/i })).toBeInTheDocument()
+      // V7: uses span with id, not heading role
+      expect(screen.getByText('Time allocation this week')).toBeInTheDocument()
     })
   })
 
@@ -417,8 +418,8 @@ describe('TimeAllocationBar', () => {
         />
       )
 
-      // Find legend dots by class
-      const dots = document.querySelectorAll('.w-2.h-2.rounded-full')
+      // V7: Find legend dots by class (w-1.5 h-1.5 in V7)
+      const dots = document.querySelectorAll('.w-1\\.5.h-1\\.5.rounded-full')
       dots.forEach(dot => {
         expect(dot).toHaveAttribute('aria-hidden', 'true')
       })

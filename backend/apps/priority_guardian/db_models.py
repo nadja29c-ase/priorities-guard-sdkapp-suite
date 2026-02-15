@@ -219,6 +219,28 @@ class PgPriority(Base):
             "status IN ('active', 'retired')",
             name="ck_pg_priorities_status",
         ),
+        # Check constraint: type-field consistency
+        # Deadline: must have deadline, must NOT have weekly_hour_target or checkpoint_date
+        # Flexible: must have weekly_hour_target and checkpoint_date, must NOT have deadline
+        CheckConstraint(
+            "("
+            "(type = 'deadline' AND deadline IS NOT NULL AND weekly_hour_target IS NULL AND checkpoint_date IS NULL) "
+            "OR "
+            "(type = 'flexible' AND weekly_hour_target IS NOT NULL AND checkpoint_date IS NOT NULL AND deadline IS NULL)"
+            ")",
+            name="ck_pg_priorities_type_field_consistency",
+        ),
+        # Check constraint: weekly_hour_target must be positive when set
+        CheckConstraint(
+            "weekly_hour_target IS NULL OR weekly_hour_target > 0",
+            name="ck_pg_priorities_weekly_target_positive",
+        ),
+        # Check constraint: retirement consistency
+        # Active must have retired_at=NULL, retired must have retired_at set
+        CheckConstraint(
+            "(status = 'active' AND retired_at IS NULL) OR (status = 'retired' AND retired_at IS NOT NULL)",
+            name="ck_pg_priorities_retirement_consistency",
+        ),
         # Partial unique index: one active keyword per user
         # (user_id, calendar_keyword) WHERE status = 'active'
         Index(
@@ -490,6 +512,22 @@ class PgWeeklySnapshot(Base):
         CheckConstraint(
             "actual_hours >= 0",
             name="ck_pg_weekly_snapshots_actual_hours_non_negative",
+        ),
+        # Check constraint: week_end must be exactly week_start + 6 days
+        # PostgreSQL: DATE + integer returns DATE
+        CheckConstraint(
+            "week_end = week_start + 6",
+            name="ck_pg_weekly_snapshots_week_consistency",
+        ),
+        # Check constraint: target_hours must be non-negative when set
+        CheckConstraint(
+            "target_hours IS NULL OR target_hours >= 0",
+            name="ck_pg_weekly_snapshots_target_hours_non_negative",
+        ),
+        # Check constraint: week_start must be a Monday (ISODOW 1 = Monday)
+        CheckConstraint(
+            "EXTRACT(ISODOW FROM week_start) = 1",
+            name="ck_pg_weekly_snapshots_week_start_monday",
         ),
     )
 

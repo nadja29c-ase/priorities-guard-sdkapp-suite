@@ -380,12 +380,14 @@ function App() {
 
   // ============ Display Mode Handlers ============
 
-  const handleExpandToFullscreen = useCallback(() => {
+  const handleExpandToFullscreen = useCallback(async () => {
+    await window.openai?.requestDisplayMode?.({ mode: 'fullscreen' })
     setDisplayMode('fullscreen')
     notifyHeight()
   }, [notifyHeight])
 
-  const handleMinimizeToInline = useCallback(() => {
+  const handleMinimizeToInline = useCallback(async () => {
+    await window.openai?.requestDisplayMode?.({ mode: 'inline' })
     setDisplayMode('inline')
     notifyHeight()
   }, [notifyHeight])
@@ -583,7 +585,12 @@ interface PriorityCardWrapperProps {
   defaultSectionsExpanded: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
-  onSavePriority: (priorityId: string, data: Record<string, unknown>) => Promise<void>
+  onSavePriority: (priorityId: string, data: {
+    name?: string
+    deadline?: string
+    weekly_hour_target?: number
+    checkpoint_date?: string
+  }) => Promise<void>
   onDeletePriority: (priorityId: string) => Promise<void>
   onToggleDeliverable: (deliverableId: string, done: boolean) => Promise<void>
   onRenameDeliverable: (deliverableId: string, name: string) => Promise<void>

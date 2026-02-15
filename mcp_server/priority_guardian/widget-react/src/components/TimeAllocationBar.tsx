@@ -159,16 +159,12 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
       <div className="flex justify-between items-center mb-1.5">
         <span
           id="time-allocation-heading"
-          className="text-xs font-medium uppercase tracking-wide"
-          style={{ color: 'var(--gray-500, #5d5d5d)' }}
+          className="text-xs font-medium uppercase tracking-wide text-secondary"
         >
           Time allocation this week
         </span>
         <div className="flex items-center gap-2">
-          <span
-            className="text-sm font-semibold tabular-nums"
-            style={{ color: 'var(--gray-900, #181818)' }}
-          >
+          <span className="text-sm font-semibold tabular-nums text-default">
             {formatHours(totalTrackedHours)}
           </span>
           {onRefresh && (
@@ -181,8 +177,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
               aria-label="Refresh calendar data"
             >
               <svg
-                className="w-3 h-3"
-                style={{ color: 'var(--gray-400, #8f8f8f)' }}
+                className="w-3 h-3 text-tertiary"
                 viewBox="0 0 16 16"
                 fill="none"
                 stroke="currentColor"
@@ -197,14 +192,13 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
       </div>
 
       {/* Date range */}
-      <p className="text-xs mb-2.5" style={{ color: 'var(--gray-450, #767676)' }}>
+      <p className="text-xs mb-2.5 text-secondary">
         {dateRange}
       </p>
 
       {/* Stacked bar - V7: h-2, gap-px, rounded segments */}
       <div
-        className="h-2 rounded-full overflow-hidden flex gap-px"
-        style={{ background: 'var(--gray-100, #ededed)' }}
+        className="h-2 rounded-full overflow-hidden flex gap-px bg-surface-tertiary"
         role="img"
         aria-label={ariaLabel}
       >
@@ -226,13 +220,11 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
         {legendItems.map((item) => (
           <div key={item.key} className="flex items-center gap-1.5">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${item.isOther ? '' : BAR_COLORS[item.key]}`}
-              style={item.isOther ? { background: 'var(--gray-300, #afafaf)' } : undefined}
+              className={`w-1.5 h-1.5 rounded-full ${item.isOther ? 'bg-outline-default' : BAR_COLORS[item.key]}`}
               aria-hidden="true"
             />
             <span
-              className={`text-xs tabular-nums ${item.isOther ? 'italic' : ''}`}
-              style={{ color: item.isOther ? 'var(--gray-400, #8f8f8f)' : 'var(--gray-500, #5d5d5d)' }}
+              className={`text-xs tabular-nums ${item.isOther ? 'italic text-tertiary' : 'text-secondary'}`}
             >
               {item.label} {formatHours(item.hours)}
             </span>
