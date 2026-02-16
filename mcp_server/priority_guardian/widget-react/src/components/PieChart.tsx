@@ -193,10 +193,10 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
         ))}
       </div>
 
-      {/* CTA to categorize "Other" - only shown when uncategorized time exists */}
-      {validSlices.some(s => ['other', 'uncategorized', 'misc'].includes(s.label.toLowerCase())) && (
+      {/* CTA to break down categories - shown when not already zoomed in */}
+      {!semanticTargetLabel && (
         <p className="mt-4 text-xs text-center text-secondary">
-          Ask ChatGPT to categorize 'Other' to uncover where your time is really going.
+          Ask ChatGPT to break down any category to see where the time went.
         </p>
       )}
     </div>
