@@ -528,8 +528,8 @@ class TestAvgTargetAchievementComputation:
         return AsyncMock()
 
     @pytest.mark.asyncio
-    async def test_null_when_fewer_than_two_snapshots(self, mock_session):
-        """avg_target_achievement is NULL when fewer than 2 data points."""
+    async def test_set_with_one_snapshot(self, mock_session):
+        """avg_target_achievement is set with just 1 data point."""
         from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
 
         priority_id = uuid4()
@@ -538,7 +538,7 @@ class TestAvgTargetAchievementComputation:
         sum_result = MagicMock()
         sum_result.scalar.return_value = Decimal("5.0")
 
-        # Mock achievement query result: 1 snapshot (< 2 required)
+        # Mock achievement query result: 1 snapshot with 80% achievement
         achievement_result = MagicMock()
         achievement_result.fetchone.return_value = (Decimal("80.0"), 1)
 
@@ -555,6 +555,42 @@ class TestAvgTargetAchievementComputation:
             priority_id=priority_id,
             streak=1,
             actual_hours=5.0,
+            session=mock_session,
+        )
+
+        # Verify the UPDATE was called with avg_target_achievement = 80.0
+        update_call = mock_session.execute.call_args_list[-1]
+        params = update_call[0][1]
+        assert params["avg_target_achievement"] == Decimal("80.0")
+
+    @pytest.mark.asyncio
+    async def test_null_when_zero_snapshots(self, mock_session):
+        """avg_target_achievement is NULL when zero valid snapshots exist."""
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        priority_id = uuid4()
+
+        # Mock SUM query result (total_hours_invested)
+        sum_result = MagicMock()
+        sum_result.scalar.return_value = Decimal("0")
+
+        # Mock achievement query result: 0 snapshots
+        achievement_result = MagicMock()
+        achievement_result.fetchone.return_value = (None, 0)
+
+        # Mock update query
+        update_result = MagicMock()
+
+        mock_session.execute.side_effect = [
+            sum_result,
+            achievement_result,
+            update_result,
+        ]
+
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=0,
+            actual_hours=0.0,
             session=mock_session,
         )
 

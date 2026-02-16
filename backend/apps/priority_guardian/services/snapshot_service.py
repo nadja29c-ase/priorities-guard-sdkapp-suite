@@ -464,9 +464,9 @@ async def _update_aggregates(
     row = achievement_result.fetchone()
     avg_achievement_raw, snapshot_count = row if row else (None, 0)
 
-    # Only set avg_target_achievement if we have >= 2 data points
+    # Only set avg_target_achievement if we have >= 1 data point
     avg_target_achievement = None
-    if snapshot_count is not None and snapshot_count >= 2 and avg_achievement_raw is not None:
+    if snapshot_count is not None and snapshot_count >= 1 and avg_achievement_raw is not None:
         avg_target_achievement = Decimal(str(avg_achievement_raw))
 
     # Update priority aggregates (only if still active - defense in depth)

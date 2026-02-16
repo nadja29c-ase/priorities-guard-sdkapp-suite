@@ -311,7 +311,7 @@ export function FlexibleCard({
                   <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                 </svg>
                 <span className="text-sm italic text-tertiary">
-                  Complete your first week to see your pattern.
+                  Tracking in progress — your average builds after this week.
                 </span>
               </div>
             )}
