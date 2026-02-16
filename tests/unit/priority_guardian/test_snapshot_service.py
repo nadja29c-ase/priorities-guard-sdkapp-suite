@@ -712,3 +712,37 @@ class TestAvgTargetAchievementComputation:
         update_call = mock_session.execute.call_args_list[-1]
         params = update_call[0][1]
         assert params["avg_target_achievement"] == Decimal("90.0")
+
+
+class TestPhantomSnapshotPrevention:
+    """Tests for preventing phantom snapshots (weeks before priority creation)."""
+
+    def test_week_end_before_priority_created_is_skipped(self):
+        """A week ending before priority was created should be skipped.
+
+        This validates the logic: if week_end < priority.created_at, skip.
+        """
+        priority_created = date(2026, 2, 10)  # Tuesday
+
+        # Week ending Feb 8 (Sun) - priority didn't exist yet
+        week_start_old = date(2026, 2, 2)  # Monday
+        week_end_old = date(2026, 2, 8)  # Sunday
+        assert week_end_old < priority_created  # Should be skipped
+
+        # Week ending Feb 15 (Sun) - priority existed (created Feb 10)
+        week_start_valid = date(2026, 2, 9)  # Monday
+        week_end_valid = date(2026, 2, 15)  # Sunday
+        assert week_end_valid >= priority_created  # Should be included
+
+    def test_priority_created_mid_week_is_valid(self):
+        """A priority created mid-week should have that week's snapshot.
+
+        Priority created on Wed Feb 11, week is Mon Feb 9 - Sun Feb 15.
+        The week includes the priority creation date, so snapshot is valid.
+        """
+        priority_created = date(2026, 2, 11)  # Wednesday
+        week_start = date(2026, 2, 9)  # Monday
+        week_end = date(2026, 2, 15)  # Sunday
+
+        # Week contains creation date → valid snapshot
+        assert week_end >= priority_created

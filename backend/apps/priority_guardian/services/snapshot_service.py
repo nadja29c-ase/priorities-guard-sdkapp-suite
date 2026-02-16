@@ -302,6 +302,20 @@ async def _create_snapshots_for_week(
     any_created = False
 
     for priority in priorities:
+        # Skip if priority didn't exist during this week
+        # week_end < created_at means the entire week ended before priority was created
+        priority_created_date = priority.created_at.date()
+        if week_end < priority_created_date:
+            logger.debug(
+                "snapshot.skip_pre_creation_week",
+                priority_id=str(priority.id),
+                week_start=str(week_start),
+                week_end=str(week_end),
+                priority_created=str(priority_created_date),
+                **log
+            )
+            continue
+
         kw = priority.calendar_keyword
         kw_data = keywords_data.get(kw, {"hours": 0.0, "event_count": 0})
         actual_hours = kw_data["hours"]
@@ -418,23 +432,32 @@ async def _update_aggregates(
     - avg_target_achievement = AVG of (actual_hours / target_hours * 100) for all snapshots
       with valid target_hours, NULL if < 2 data points
     """
-    # Compute total_hours_invested from all snapshots (derived, not incremented)
+    # Compute total_hours_invested from all valid snapshots (exclude phantom snapshots)
+    # A snapshot is valid if week_end >= priority.created_at (week includes/follows creation)
     total_result = await session.execute(
-        select(func.sum(PgWeeklySnapshot.actual_hours)).where(
-            PgWeeklySnapshot.priority_id == priority_id,
-        )
+        text("""
+            SELECT COALESCE(SUM(s.actual_hours), 0)
+            FROM pg_weekly_snapshots s
+            JOIN pg_priorities p ON s.priority_id = p.id
+            WHERE s.priority_id = :priority_id
+              AND s.week_end >= p.created_at::date
+        """),
+        {"priority_id": priority_id}
     )
     total_hours = total_result.scalar()
 
     # Compute avg_target_achievement: AVG(actual_hours * 100.0 / target_hours)
-    # Only for snapshots with valid target_hours (> 0), requires >= 2 data points
+    # Only for valid snapshots with target_hours > 0, requires >= 2 data points
+    # Excludes phantom snapshots (week_end < created_at)
     achievement_result = await session.execute(
         text("""
-            SELECT AVG(actual_hours * 100.0 / NULLIF(target_hours, 0)), COUNT(*)
-            FROM pg_weekly_snapshots
-            WHERE priority_id = :priority_id
-              AND target_hours IS NOT NULL
-              AND target_hours > 0
+            SELECT AVG(s.actual_hours * 100.0 / NULLIF(s.target_hours, 0)), COUNT(*)
+            FROM pg_weekly_snapshots s
+            JOIN pg_priorities p ON s.priority_id = p.id
+            WHERE s.priority_id = :priority_id
+              AND s.target_hours IS NOT NULL
+              AND s.target_hours > 0
+              AND s.week_end >= p.created_at::date
         """),
         {"priority_id": priority_id}
     )
