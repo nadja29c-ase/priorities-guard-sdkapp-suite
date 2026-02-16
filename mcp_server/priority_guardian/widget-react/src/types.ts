@@ -85,13 +85,16 @@ export interface PieSlice {
 }
 
 // Pie chart view data (from get_weekly_report)
-// Widget uses: slices, totalHours, weekStart, weekEnd
+// Widget uses: slices, totalHours, weekStart, weekEnd, semanticTarget, semanticTargetLabel
 // LLM uses: priorities, allEvents, isCurrentWeek (via assistant_guidance)
 export interface PieChartData {
   weekStart: string
   weekEnd: string
   slices: PieSlice[]
   totalHours: number
+  // Zoom context (Inc 10) - which category is expanded into subcategories
+  semanticTarget?: 'P1' | 'P2' | 'P3' | 'other' | null  // What's being zoomed into
+  semanticTargetLabel?: string | null  // "P1: Ship v1.0" or "Other" or null
   // Extra fields from get_weekly_report (widget ignores, LLM uses)
   priorities?: unknown[]
   allEvents?: unknown[]

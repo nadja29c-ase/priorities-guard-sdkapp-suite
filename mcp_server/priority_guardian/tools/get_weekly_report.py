@@ -504,6 +504,17 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     normalized_time_allocation = _normalize_time_allocation(time_allocation)
     normalized_events = [_normalize_event(e) for e in all_events]
 
+    # Compute semantic target label for widget subtitle
+    semantic_target_label = None
+    if semantic_target:
+        if semantic_target in ("P1", "P2", "P3"):
+            for p in priorities:
+                if p.get("calendar_keyword") == semantic_target:
+                    semantic_target_label = f"{semantic_target}: {p.get('name', '')}"
+                    break
+        elif semantic_target == "other":
+            semantic_target_label = "Other"
+
     # Calculate total hours for pie chart
     total_hours = normalized_time_allocation.get("totalTrackedHours", 0)
 
@@ -545,6 +556,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "weekEnd": data.get("week_end"),
             "slices": slices,
             "totalHours": total_hours,
+            "semanticTarget": semantic_target,  # "P1", "P2", "P3", "other", or None
+            "semanticTargetLabel": semantic_target_label,  # "P1: Ship v1.0" or "Other" or None
             # Report fields (LLM uses these via guidance)
             "isCurrentWeek": data.get("is_current_week"),
             "priorities": normalized_priorities,

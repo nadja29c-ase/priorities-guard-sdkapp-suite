@@ -459,6 +459,7 @@ function App() {
           totalHours={data.totalHours}
           weekStart={data.weekStart}
           weekEnd={data.weekEnd}
+          semanticTargetLabel={data.semanticTargetLabel}
         />
       </main>
     )

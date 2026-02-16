@@ -6,6 +6,7 @@ interface PieChartProps {
   totalHours: number
   weekStart: string
   weekEnd: string
+  semanticTargetLabel?: string | null  // "P1: Ship v1.0" or "Other" when zoomed
 }
 
 // Priority colors from SDK tokens (same as HourRing)
@@ -33,7 +34,7 @@ const SEMANTIC_COLORS = [
 // Muted grey for unmatched "other" - visible but subordinate (SDK semantic token)
 const OTHER_GREY = 'var(--color-border-default)'
 
-export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartProps) {
+export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTargetLabel }: PieChartProps) {
   // Filter out zero-hour slices
   const validSlices = slices.filter(s => s.hours > 0)
 
@@ -106,6 +107,9 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd }: PieChartPro
       {/* Header */}
       <div className="text-center mb-4">
         <h2 className="text-base font-semibold text-default">Time Allocation</h2>
+        {semanticTargetLabel && (
+          <p className="text-sm text-secondary mt-0.5">Breakdown of {semanticTargetLabel}</p>
+        )}
         <p className="text-xs text-tertiary">{formatWeekRange()}</p>
       </div>
 
