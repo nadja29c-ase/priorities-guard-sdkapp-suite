@@ -452,7 +452,7 @@ function App() {
       <main
         role="main"
         aria-label="Time Allocation Pie Chart"
-        className="bg-surface-secondary rounded-2xl p-4 pb-2"
+        className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
       >
         <PieChart
           slices={data.slices}
@@ -488,7 +488,7 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className="bg-surface-secondary rounded-2xl p-4 pb-2"
+      className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
     >
       {/* Fullscreen header - only in fullscreen mode */}
       {!isInline && (
