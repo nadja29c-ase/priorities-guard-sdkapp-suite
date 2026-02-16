@@ -32,7 +32,8 @@ const SEMANTIC_COLORS = [
 ]
 
 // Muted grey for unmatched "other" - visible but subordinate (SDK semantic token)
-const OTHER_GREY = 'var(--color-border-default)'
+// Using border-strong instead of border-default for better visibility in legend
+const OTHER_GREY = 'var(--color-border-strong)'
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTargetLabel }: PieChartProps) {
   // Filter out zero-hour slices
@@ -106,10 +107,9 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
     <div className="bg-surface rounded-xl border border-default p-6">
       {/* Header */}
       <div className="text-center mb-4">
-        <h2 className="text-base font-semibold text-default">Time Allocation</h2>
-        {semanticTargetLabel && (
-          <p className="text-sm text-secondary mt-0.5">Breakdown of {semanticTargetLabel}</p>
-        )}
+        <h2 className="text-base font-semibold text-default">
+          {semanticTargetLabel ? `Breakdown: ${semanticTargetLabel}` : 'Time Allocation'}
+        </h2>
         <p className="text-xs text-tertiary">{formatWeekRange()}</p>
       </div>
 
