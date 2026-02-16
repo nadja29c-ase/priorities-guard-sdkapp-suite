@@ -380,14 +380,14 @@ function App() {
 
   // ============ Display Mode Handlers ============
 
-  const handleExpandToFullscreen = useCallback(async () => {
-    await window.openai?.requestDisplayMode?.({ mode: 'fullscreen' })
+  // Display mode handlers - only manage internal layout state
+  // The host manages its own fullscreen container; we just expand/collapse content
+  const handleExpandToFullscreen = useCallback(() => {
     setDisplayMode('fullscreen')
     notifyHeight()
   }, [notifyHeight])
 
-  const handleMinimizeToInline = useCallback(async () => {
-    await window.openai?.requestDisplayMode?.({ mode: 'inline' })
+  const handleMinimizeToInline = useCallback(() => {
     setDisplayMode('inline')
     notifyHeight()
   }, [notifyHeight])
