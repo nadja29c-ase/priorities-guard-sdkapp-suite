@@ -171,12 +171,12 @@ class TestUpdatePriorityEndpoint:
         assert response.json()["data"]["priorities"][0]["name"] == "Updated"
 
     @pytest.mark.asyncio
-    async def test_ignores_update_to_calendar_keyword(self, client, async_session: AsyncSession):
-        """calendar_keyword in update request is silently ignored (immutable)."""
+    async def test_allows_update_to_calendar_keyword(self, client, async_session: AsyncSession):
+        """calendar_keyword can be updated to a free keyword (Inc 13 keyword reassignment)."""
         user_id = await create_test_user(async_session)
         priority = await create_test_priority(async_session, user_id, keyword="P1")
 
-        # Sending calendar_keyword field is silently ignored
+        # Request reassignment to P2 (which is free) along with name update
         response = await client.put(
             f"/api/priority-guardian/priorities/{priority.id}",
             json={"calendar_keyword": "P2", "name": "Updated"},
@@ -184,8 +184,8 @@ class TestUpdatePriorityEndpoint:
         )
 
         assert response.status_code == 200
-        # calendar_keyword should remain P1 (unchanged)
-        assert response.json()["data"]["priorities"][0]["calendar_keyword"] == "P1"
+        # calendar_keyword should now be P2 (free reassignment)
+        assert response.json()["data"]["priorities"][0]["calendar_keyword"] == "P2"
         assert response.json()["data"]["priorities"][0]["name"] == "Updated"
 
     @pytest.mark.asyncio

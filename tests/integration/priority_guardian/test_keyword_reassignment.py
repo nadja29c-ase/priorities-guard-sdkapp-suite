@@ -722,3 +722,208 @@ class TestSnapshotsUnaffectedByReassignment:
         )
         new_keyword = result.scalar()
         assert new_keyword == "P3", "Priority should now have P3 keyword"
+
+
+class TestConcurrentSwapDeadlockPrevention:
+    """
+    Tests verifying deadlock prevention via deterministic UUID-ordered locking.
+
+    The keyword reassignment logic locks rows by smallest UUID first to prevent
+    deadlocks when concurrent swaps attempt to lock rows in opposite order.
+    """
+
+    @pytest.mark.asyncio
+    async def test_concurrent_opposite_swaps_no_deadlock(
+        self, client, async_session: AsyncSession
+    ):
+        """
+        Fire concurrent API calls that swap keywords in opposite directions.
+
+        Without deterministic locking (smallest UUID first), this could deadlock:
+        - Tx A: P1→P2 (locks P1 first, then P2)
+        - Tx B: P2→P1 (locks P2 first, then P1)
+
+        With deterministic locking, both transactions lock in same order,
+        preventing deadlock. This test verifies the swap completes without timeout.
+        """
+        import asyncio
+        import httpx
+
+        user_id = uuid4()
+        await async_session.execute(
+            text("INSERT INTO core_users (id) VALUES (:id)"),
+            {"id": user_id},
+        )
+        await async_session.commit()
+
+        future_date = (date.today() + timedelta(days=30)).isoformat()
+
+        # Create two priorities
+        resp1 = await client.post(
+            "/api/priority-guardian/priorities",
+            json={"name": "Priority A", "type": "deadline", "deadline": future_date},
+            headers={"X-User-ID": str(user_id)},
+        )
+        assert resp1.status_code == 201
+        p1_id = resp1.json()["data"]["priority"]["id"]
+        p1_keyword = resp1.json()["data"]["priority"]["calendar_keyword"]  # P1
+
+        resp2 = await client.post(
+            "/api/priority-guardian/priorities",
+            json={"name": "Priority B", "type": "deadline", "deadline": future_date},
+            headers={"X-User-ID": str(user_id)},
+        )
+        assert resp2.status_code == 201
+        p2_id = resp2.json()["data"]["priority"]["id"]
+        p2_keyword = resp2.json()["data"]["priority"]["calendar_keyword"]  # P2
+
+        # Fire concurrent swaps in opposite directions
+        # Swap 1: P1's priority wants P2's keyword
+        # Swap 2: P2's priority wants P1's keyword
+        async def swap_p1_to_p2():
+            return await client.put(
+                f"/api/priority-guardian/priorities/{p1_id}",
+                json={"calendar_keyword": p2_keyword},
+                headers={"X-User-ID": str(user_id)},
+            )
+
+        async def swap_p2_to_p1():
+            return await client.put(
+                f"/api/priority-guardian/priorities/{p2_id}",
+                json={"calendar_keyword": p1_keyword},
+                headers={"X-User-ID": str(user_id)},
+            )
+
+        # Execute both swaps concurrently with timeout
+        # If deadlock occurs, this will timeout and fail
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(swap_p1_to_p2(), swap_p2_to_p1(), return_exceptions=True),
+                timeout=10.0,  # 10 seconds should be plenty
+            )
+        except asyncio.TimeoutError:
+            pytest.fail("Deadlock detected: concurrent swaps timed out")
+
+        # Both requests should complete (one succeeds, other may get 409 or also succeed)
+        # The important thing is no deadlock (timeout)
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                pytest.fail(f"Swap {i+1} raised exception: {result}")
+            assert result.status_code in (200, 409), \
+                f"Swap {i+1} returned unexpected status: {result.status_code}"
+
+        # Verify final state: both priorities have valid (non-NULL) keywords
+        result = await async_session.execute(
+            text("""
+                SELECT id, calendar_keyword
+                FROM pg_priorities
+                WHERE user_id = :uid AND status = 'active'
+                ORDER BY calendar_keyword
+            """),
+            {"uid": user_id},
+        )
+        rows = result.fetchall()
+
+        assert len(rows) == 2, f"Expected 2 priorities, got {len(rows)}"
+        keywords = [r[1] for r in rows]
+        assert None not in keywords, "NULL keyword found after concurrent swaps"
+        assert sorted(keywords) == ["P1", "P2"], f"Expected P1, P2 but got {keywords}"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_triple_swap_chain_no_deadlock(
+        self, client, async_session: AsyncSession
+    ):
+        """
+        Three concurrent swaps that could create a circular deadlock without
+        deterministic locking:
+        - Tx A: P1 → P2
+        - Tx B: P2 → P3
+        - Tx C: P3 → P1
+
+        With deterministic UUID ordering, all three lock in consistent order.
+        """
+        import asyncio
+
+        user_id = uuid4()
+        await async_session.execute(
+            text("INSERT INTO core_users (id) VALUES (:id)"),
+            {"id": user_id},
+        )
+        await async_session.commit()
+
+        future_date = (date.today() + timedelta(days=30)).isoformat()
+
+        # Create three priorities (P1, P2, P3)
+        priority_ids = {}
+        for i in range(3):
+            resp = await client.post(
+                "/api/priority-guardian/priorities",
+                json={"name": f"Priority {i+1}", "type": "deadline", "deadline": future_date},
+                headers={"X-User-ID": str(user_id)},
+            )
+            assert resp.status_code == 201
+            data = resp.json()["data"]["priority"]
+            priority_ids[data["calendar_keyword"]] = data["id"]
+
+        p1_id = priority_ids["P1"]
+        p2_id = priority_ids["P2"]
+        p3_id = priority_ids["P3"]
+
+        # Define circular swap chain
+        async def swap_p1_wants_p2():
+            return await client.put(
+                f"/api/priority-guardian/priorities/{p1_id}",
+                json={"calendar_keyword": "P2"},
+                headers={"X-User-ID": str(user_id)},
+            )
+
+        async def swap_p2_wants_p3():
+            return await client.put(
+                f"/api/priority-guardian/priorities/{p2_id}",
+                json={"calendar_keyword": "P3"},
+                headers={"X-User-ID": str(user_id)},
+            )
+
+        async def swap_p3_wants_p1():
+            return await client.put(
+                f"/api/priority-guardian/priorities/{p3_id}",
+                json={"calendar_keyword": "P1"},
+                headers={"X-User-ID": str(user_id)},
+            )
+
+        # Fire all three concurrently
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(
+                    swap_p1_wants_p2(),
+                    swap_p2_wants_p3(),
+                    swap_p3_wants_p1(),
+                    return_exceptions=True,
+                ),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            pytest.fail("Deadlock detected: concurrent triple swap timed out")
+
+        # All should complete without deadlock
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                pytest.fail(f"Swap {i+1} raised exception: {result}")
+            # Various outcomes possible due to race conditions, but should complete
+            assert result.status_code in (200, 409), \
+                f"Swap {i+1} returned unexpected status: {result.status_code}"
+
+        # Verify final state: all three have valid keywords, no NULLs
+        result = await async_session.execute(
+            text("""
+                SELECT calendar_keyword
+                FROM pg_priorities
+                WHERE user_id = :uid AND status = 'active'
+            """),
+            {"uid": user_id},
+        )
+        keywords = [r[0] for r in result.fetchall()]
+
+        assert len(keywords) == 3
+        assert None not in keywords, "NULL keyword found after concurrent swaps"
+        assert sorted(keywords) == ["P1", "P2", "P3"], f"Expected P1, P2, P3 but got {keywords}"
