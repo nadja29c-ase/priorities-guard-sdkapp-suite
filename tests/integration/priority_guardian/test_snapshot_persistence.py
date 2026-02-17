@@ -1252,6 +1252,132 @@ class TestRealDBIdempotentAggregates:
         await async_session.commit()
 
 
+class TestRealDBCreatedAtBoundary:
+    """Tests for created_at boundary enforcement using real Postgres."""
+
+    @pytest.mark.asyncio
+    async def test_no_snapshot_created_before_priority_created_at(self, async_session):
+        """
+        Snapshots are not created for weeks before a priority's created_at date.
+
+        Setup:
+        - Priority with created_at = 2026-02-01 (Sunday)
+        - First valid Monday on or after created_at = 2026-02-02
+        - Target weeks include 2026-01-19 (before created_at)
+
+        Assert:
+        - Zero rows exist for week_start = 2026-01-19
+        - Any snapshots have week_start >= 2026-02-02
+        """
+        from sqlalchemy import text
+        from backend.core.models import CoreConnection
+        from backend.core.encryption import encrypt_token
+
+        # Create test user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create real Google connection in DB (required by ensure_snapshots_up_to_date)
+        connection = CoreConnection(
+            user_id=user.id,
+            provider="google",
+            connection_type="google",  # Must be 'google' for snapshot service query
+            encrypted_access_token=encrypt_token("test_access_token"),
+            encrypted_refresh_token=encrypt_token("test_refresh_token"),
+            token_expires_at=datetime.now() + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+        )
+        async_session.add(connection)
+        await async_session.flush()
+
+        # Create priority with created_at = 2026-02-01 (a Sunday)
+        # First Monday on or after is 2026-02-02
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2026, 2, 1, 12, 0, 0),  # Sunday Feb 1, 2026
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # Mock calendar events (hours for all weeks)
+        mock_events = [
+            {
+                "id": "event1",
+                "summary": "P1 - Work session",
+                "start": {"dateTime": "2026-01-20T09:00:00Z"},
+                "end": {"dateTime": "2026-01-20T12:00:00Z"},
+                "status": "confirmed",
+            },
+            {
+                "id": "event2",
+                "summary": "P1 - More work",
+                "start": {"dateTime": "2026-02-03T09:00:00Z"},
+                "end": {"dateTime": "2026-02-03T14:00:00Z"},
+                "status": "confirmed",
+            },
+        ]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.snapshot_service._compute_target_weeks"
+        ) as mock_weeks, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_list_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            # Return weeks that include ones before created_at
+            mock_weeks.return_value = [
+                date(2026, 1, 19),  # Before created_at - should be skipped
+                date(2026, 1, 26),  # Before created_at - should be skipped
+                date(2026, 2, 2),   # First Monday on or after created_at - should be created
+                date(2026, 2, 9),   # After created_at - should be created
+            ]
+            mock_list_events.return_value = (mock_events, 0)
+
+            result = await ensure_snapshots_up_to_date(
+                user_id=user.id,
+                session=async_session,
+                http_client=mock_http_client,
+            )
+
+        # Verify: Query snapshots for this priority via raw SQL
+        snapshot_result = await async_session.execute(
+            text("""
+                SELECT week_start FROM pg_weekly_snapshots
+                WHERE priority_id = :priority_id
+                ORDER BY week_start
+            """),
+            {"priority_id": priority.id},
+        )
+        snapshot_weeks = [row[0] for row in snapshot_result.fetchall()]
+
+        # Assert: No snapshot for week_start = 2026-01-19 or 2026-01-26
+        assert date(2026, 1, 19) not in snapshot_weeks, \
+            "Snapshot should not exist for week before created_at"
+        assert date(2026, 1, 26) not in snapshot_weeks, \
+            "Snapshot should not exist for week before created_at"
+
+        # Assert: All snapshots have week_start >= 2026-02-02
+        for week_start in snapshot_weeks:
+            assert week_start >= date(2026, 2, 2), \
+                f"Snapshot week_start {week_start} is before first valid Monday 2026-02-02"
+
+        # Assert: At least one snapshot was created (for valid weeks)
+        assert len(snapshot_weeks) > 0, "At least one snapshot should be created"
+
+
 class TestRealDBZeroHours:
     """Tests for zero hours handling using real Postgres."""
 

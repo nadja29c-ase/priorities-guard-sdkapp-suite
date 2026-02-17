@@ -302,15 +302,19 @@ async def _create_snapshots_for_week(
     any_created = False
 
     for priority in priorities:
-        # Skip if priority didn't exist during this week
-        # week_end < created_at means the entire week ended before priority was created
+        # Skip partial weeks: only create snapshots for weeks where the priority
+        # existed for all 7 days. Find the first Monday on or after created_at.
+        # weekday(): 0=Monday, 6=Sunday. Formula: (7 - weekday) % 7 gives days to next Monday.
         priority_created_date = priority.created_at.date()
-        if week_end < priority_created_date:
+        days_until_monday = (7 - priority_created_date.weekday()) % 7
+        first_valid_monday = priority_created_date + timedelta(days=days_until_monday)
+
+        if week_start < first_valid_monday:
             logger.debug(
-                "snapshot.skip_pre_creation_week",
+                "snapshot.skip_partial_week",
                 priority_id=str(priority.id),
                 week_start=str(week_start),
-                week_end=str(week_end),
+                first_valid_monday=str(first_valid_monday),
                 priority_created=str(priority_created_date),
                 **log
             )
