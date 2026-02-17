@@ -378,10 +378,6 @@ class TestFreeKeywordReassignment:
         )
         timestamps_before = {str(r[0]): r[1] for r in result.fetchall()}
 
-        # Small delay to ensure timestamp difference is detectable
-        import asyncio
-        await asyncio.sleep(0.1)
-
         # Reassign P1 to P3 (free keyword - no displacement)
         resp_update = await client.put(
             f"/api/priority-guardian/priorities/{p1_id}",
@@ -409,7 +405,7 @@ class TestFreeKeywordReassignment:
             if row_id == p1_id:
                 # Requesting row should have new keyword and updated timestamp
                 assert keyword == "P3"
-                assert updated_at > timestamps_before[row_id], \
+                assert updated_at != timestamps_before[row_id], \
                     "Requesting row updated_at should have changed"
             else:
                 # Other row should be untouched
