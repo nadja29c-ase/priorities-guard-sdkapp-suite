@@ -231,8 +231,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 f"Tell the user what's missing or invalid based on this error: {error_message}. "
                 "Ask them to provide the correct information. Do not guess or fill in defaults."
             )
-        elif error_code == "UNAUTHORIZED":
-            guidance = "Authentication failed. The user may need to reconnect."
         else:
             guidance = f"An error occurred: {error_message}. Please try again."
 
