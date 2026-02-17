@@ -434,13 +434,14 @@ async def create_priority(
         await session.rollback()
 
         # Check if this is the expected partial unique index violation (race condition)
+        # Only check constraint name, do NOT log exception message (contains raw SQL)
         error_str = str(e.orig) if e.orig else str(e)
         if "idx_pg_priorities_user_keyword_active" in error_str:
             # Race condition fallback: partial unique index violation
             logger.warning(
                 "priority.create.keyword_race_condition",
                 user_id=str(user_id),
-                error=error_str,
+                error_type=type(e.orig).__name__ if e.orig else type(e).__name__,
             )
 
             return JSONResponse(
@@ -454,11 +455,10 @@ async def create_priority(
                 },
             )
         else:
-            # Unexpected constraint violation — log full error and return 500
+            # Unexpected constraint violation — do NOT log str(e), contains raw SQL
             logger.error(
                 "priority.create.unexpected_integrity_error",
                 user_id=str(user_id),
-                error=error_str,
                 error_type=type(e.orig).__name__ if e.orig else type(e).__name__,
             )
 
@@ -487,13 +487,12 @@ async def create_priority(
         )
 
     except Exception as e:
-        # Unexpected error
+        # Unexpected error — do NOT log str(e), may contain sensitive data
         await session.rollback()
 
         logger.error(
             "priority.create.unexpected_error",
             user_id=str(user_id),
-            error=str(e),
             error_type=type(e).__name__,
         )
 
@@ -609,7 +608,7 @@ async def update_priority(
                 "priority.reassign.integrity_error",
                 user_id=str(user_id),
                 priority_id=str(pid),
-                error=str(e),
+                error_type=type(e.orig).__name__ if e.orig else type(e).__name__,
             )
             return JSONResponse(
                 status_code=status.HTTP_409_CONFLICT,
@@ -725,19 +724,16 @@ async def _handle_keyword_reassignment(
 
     # Step 4: Re-validate after lock (TOCTOU defense)
     if displaced.calendar_keyword != desired_keyword:
-        # State changed between read and lock
-        # The keyword may now be free - re-check
-        if displaced.calendar_keyword != desired_keyword:
-            # Just do a simple assignment - the keyword we wanted might now be free
-            requesting.calendar_keyword = desired_keyword
-            await session.flush()
-            logger.info(
-                "priority.reassign.keyword_freed_during_lock",
-                user_id=str(user_id),
-                priority_id=str(requesting_priority_id),
-                new_keyword=desired_keyword,
-            )
-            return
+        # State changed between read and lock - keyword may now be free
+        requesting.calendar_keyword = desired_keyword
+        await session.flush()
+        logger.info(
+            "priority.reassign.keyword_freed_during_lock",
+            user_id=str(user_id),
+            priority_id=str(requesting_priority_id),
+            new_keyword=desired_keyword,
+        )
+        return
 
     # Step 5: Perform 3-step swap using NULL as intermediary
 
