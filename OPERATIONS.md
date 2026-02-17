@@ -47,3 +47,13 @@ pg_dump --schema-only "$PRODUCTION_DATABASE_URL" > /tmp/prod_schema.sql
 # Compare against expected (use psql introspection queries)
 psql "$PRODUCTION_DATABASE_URL" -c "\d+ pg_priorities"
 ```
+
+## Deploy Reminder
+
+**After pushing changes to the shared backend**, manually redeploy the service on Render.
+
+Render does not auto-deploy on push — you must trigger it manually:
+1. Go to Render Dashboard → priority-guardian service
+2. Click "Manual Deploy" → "Deploy latest commit"
+
+Changes to `backend/` are not live until the service is redeployed.
