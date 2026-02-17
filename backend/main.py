@@ -53,7 +53,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
     # Startup
-    logger.info(f"Starting {settings.APP_NAME} in {settings.ENV} environment")
+    logger.info("app.startup", app=settings.APP_NAME, environment=settings.ENV)
 
     # CRITICAL: Validate OAuth keys exist (Increment 7A)
     if not settings.OAUTH_RSA_PRIVATE_KEY or not settings.OAUTH_RSA_PUBLIC_KEY:
@@ -192,6 +192,15 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
             "type": err_type
         })
 
+    # Log validation errors for observability
+    correlation_id = getattr(_.state, 'correlation_id', 'system')
+    logger.warning(
+        "http.validation_error",
+        path=_.url.path,
+        correlation_id=correlation_id,
+        field_count=len(details),
+    )
+
     return JSONResponse(
         status_code=422,
         content={
@@ -285,10 +294,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Add Correlation ID and Security Headers Middleware (Increment 7C)
-"""
-CorrelationIDMiddleware: Generates or accepts correlation_id for request tracing
-SecurityHeadersMiddleware: Applies OWASP-recommended security headers globally
-"""
+# Middleware runs in reverse registration order (last registered = outermost = runs first)
+# CorrelationIDMiddleware must be outermost so correlation_id is available to all inner middleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
 
