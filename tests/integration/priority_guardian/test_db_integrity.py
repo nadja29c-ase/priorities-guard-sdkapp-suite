@@ -676,6 +676,28 @@ class TestCheckConstraints:
         await async_session.rollback()
 
     @pytest.mark.asyncio
+    async def test_zero_weekly_hour_target_rejected(self, async_session: AsyncSession):
+        """3f2. Zero weekly_hour_target rejected by CHECK constraint (boundary test)."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        with pytest.raises(IntegrityError) as exc_info:
+            await async_session.execute(
+                text("""
+                    INSERT INTO pg_priorities
+                    (id, user_id, name, type, calendar_keyword, status, weekly_hour_target, checkpoint_date)
+                    VALUES (gen_random_uuid(), :uid, 'Test', 'flexible', 'P1', 'active', 0, :checkpoint)
+                """),
+                {"uid": user.id, "checkpoint": date.today() + timedelta(days=30)},
+            )
+            await async_session.flush()
+
+        assert "ck_pg_priorities_weekly_target_positive" in str(exc_info.value).lower()
+
+        await async_session.rollback()
+
+    @pytest.mark.asyncio
     async def test_active_with_retired_at_rejected(self, async_session: AsyncSession):
         """3g. status='active' with retired_at set rejected by retirement consistency CHECK."""
         user = CoreUser(id=uuid4())
