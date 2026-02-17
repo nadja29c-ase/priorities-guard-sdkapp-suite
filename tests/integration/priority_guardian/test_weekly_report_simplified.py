@@ -585,7 +585,7 @@ class TestPieChartIntegration:
         priorities = data["priorities"]
         time_allocation = data["time_allocation"]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None)
+        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
 
         # No error
         assert error is None
@@ -662,6 +662,7 @@ class TestPieChartIntegration:
             data["priorities"],
             data["time_allocation"],
             semantic_groupings,
+            None,
         )
 
         # No error
@@ -727,17 +728,18 @@ class TestPieChartIntegration:
             {"category": "Meetings", "hours": other_hours + 1.0, "event_count": 3},
         ]
 
-        # Build slices - should return error
-        slices, error = _build_pie_slices(
-            data["priorities"],
-            data["time_allocation"],
-            semantic_groupings,
-        )
+        # Build slices - should raise ToolUsageError
+        from mcp_server.priority_guardian.tools.base import ToolUsageError
+        with pytest.raises(ToolUsageError) as exc_info:
+            _build_pie_slices(
+                data["priorities"],
+                data["time_allocation"],
+                semantic_groupings,
+                None,
+            )
 
-        # Should return error
-        assert error is not None
-        assert "exceed" in error.lower()
-        assert slices == []
+        # Should contain "exceed" in error message
+        assert "exceed" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
     async def test_total_hours_mathematically_correct(
@@ -796,7 +798,7 @@ class TestPieChartIntegration:
         assert abs(total_hours - (priority_hours + other_hours)) < 0.01
 
         # Build slices and verify slice sum equals total_hours
-        slices, error = _build_pie_slices(data["priorities"], time_allocation, None)
+        slices, error = _build_pie_slices(data["priorities"], time_allocation, None, None)
         assert error is None
         slice_sum = sum(s["hours"] for s in slices)
         assert abs(total_hours - slice_sum) < 0.01
@@ -854,6 +856,7 @@ class TestPieChartIntegration:
             data["priorities"],
             data["time_allocation"],
             semantic_groupings,
+            None,
         )
 
         # Should succeed (within tolerance)
@@ -966,6 +969,7 @@ class TestPieChartIntegration:
             data["priorities"],
             data["time_allocation"],
             semantic_groupings,
+            None,
         )
 
         assert error is None

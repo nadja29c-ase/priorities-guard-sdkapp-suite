@@ -65,7 +65,8 @@ def mock_flexible_priority():
     p.calendar_keyword = "P1"
     p.status = "active"
     p.weekly_hour_target = Decimal("10.0")
-    p.created_at = datetime.now()
+    # Use fixed date that predates all test weeks for deterministic tests
+    p.created_at = datetime(2026, 1, 1)
     p.streak_count = 0
     p.total_hours_invested = Decimal("0")
     return p
@@ -80,7 +81,8 @@ def mock_deadline_priority():
     p.calendar_keyword = "P2"
     p.status = "active"
     p.deadline = date.today() + timedelta(days=30)
-    p.created_at = datetime.now()
+    # Use fixed date that predates all test weeks for deterministic tests
+    p.created_at = datetime(2026, 1, 1)
     p.streak_count = 0
     p.total_hours_invested = Decimal("0")
     return p
@@ -990,7 +992,7 @@ class TestRealDBUniqueConstraint:
             status="active",
             weekly_hour_target=Decimal("10.0"),
             checkpoint_date=date.today() + timedelta(days=30),
-            desired_result="Test result",
+            created_at=datetime(2026, 1, 1),  # Predate all test weeks
         )
         async_session.add(priority)
         await async_session.flush()
@@ -1071,7 +1073,7 @@ class TestRealDBSumBasedAggregates:
             status="active",
             weekly_hour_target=Decimal("10.0"),
             checkpoint_date=date.today() + timedelta(days=30),
-            desired_result="Test result",
+            created_at=datetime(2026, 1, 1),  # Predate all test weeks
         )
         async_session.add(priority)
         await async_session.flush()
@@ -1133,7 +1135,7 @@ class TestRealDBSumBasedAggregates:
             status="active",
             weekly_hour_target=Decimal("10.0"),
             checkpoint_date=date.today() + timedelta(days=30),
-            desired_result="Test result",
+            created_at=datetime(2026, 1, 1),  # Predate all test weeks
         )
         async_session.add(priority)
         await async_session.flush()
@@ -1202,7 +1204,7 @@ class TestRealDBIdempotentAggregates:
             status="active",
             weekly_hour_target=Decimal("10.0"),
             checkpoint_date=date.today() + timedelta(days=30),
-            desired_result="Test result",
+            created_at=datetime(2026, 1, 1),  # Predate all test weeks
         )
         async_session.add(priority)
         await async_session.flush()
@@ -1274,7 +1276,7 @@ class TestRealDBZeroHours:
             status="active",
             weekly_hour_target=Decimal("10.0"),
             checkpoint_date=date.today() + timedelta(days=30),
-            desired_result="Test result",
+            created_at=datetime(2026, 1, 1),  # Predate all test weeks
         )
         async_session.add(priority)
         await async_session.flush()
