@@ -49,6 +49,14 @@ PG_PRIORITIES_INDEXES = [
     ("idx_pg_priorities_user_keyword_active", ["status", "'active'"]),
 ]
 
+# CHECK constraints on core_connections (data integrity guards)
+CORE_CONNECTIONS_CHECK_CONSTRAINTS = [
+    ("ck_connection_type_enum", ["connection_type", "'google'", "'apple'", "'oauth_provider'"]),
+    ("ck_encrypted_access_token_conditional", None),  # Complex cross-field logic
+    ("ck_encrypted_refresh_token_not_empty", ["encrypted_refresh_token"]),
+    ("ck_scopes_not_empty", ["scopes"]),
+]
+
 
 # =============================================================================
 # Validation Functions
@@ -104,6 +112,15 @@ async def validate_schema(session: AsyncSession) -> None:
             PG_SNAPSHOTS_UNIQUE_CONSTRAINTS,
         )
         errors.extend(snapshots_errors)
+
+        # Validate core_connections constraints
+        connections_errors = await _validate_table_constraints(
+            session,
+            "core_connections",
+            CORE_CONNECTIONS_CHECK_CONSTRAINTS,
+            [],  # No UNIQUE constraints to check
+        )
+        errors.extend(connections_errors)
 
     if errors:
         error_list = "\n  - ".join(errors)

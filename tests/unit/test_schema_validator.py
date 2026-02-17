@@ -16,6 +16,7 @@ from backend.core.schema_validator import (
     PG_SNAPSHOTS_CHECK_CONSTRAINTS,
     PG_SNAPSHOTS_UNIQUE_CONSTRAINTS,
     PG_PRIORITIES_INDEXES,
+    CORE_CONNECTIONS_CHECK_CONSTRAINTS,
 )
 
 
@@ -86,6 +87,14 @@ def build_constraint_rows():
         else:
             definition = f"UNIQUE (columns)"
         rows.append((name, definition, "u"))
+
+    # core_connections CHECK constraints
+    for name, fragments in CORE_CONNECTIONS_CHECK_CONSTRAINTS:
+        if fragments:
+            definition = f"CHECK (({' AND '.join(fragments)}))"
+        else:
+            definition = f"CHECK ((complex expression for {name}))"
+        rows.append((name, definition, "c"))
 
     return rows
 
