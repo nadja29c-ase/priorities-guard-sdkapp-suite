@@ -97,12 +97,12 @@ class PgPriority(Base):
         comment="Priority type: deadline or flexible",
     )
 
-    # Calendar keyword assigned by backend (P1, P2, or P3)
-    # Never assigned by LLM or client
-    calendar_keyword: Mapped[str] = mapped_column(
+    # Calendar keyword (P1, P2, or P3)
+    # User-chosen on creation or reassignable via update
+    calendar_keyword: Mapped[str | None] = mapped_column(
         String(2),
-        nullable=False,
-        comment="Assigned calendar keyword (P1, P2, P3)",
+        nullable=True,  # Allows NULL as transient state during keyword reassignment
+        comment="Calendar keyword (P1, P2, P3). Nullable only as transient state during keyword reassignment.",
     )
 
     # Status: 'active' or 'retired'

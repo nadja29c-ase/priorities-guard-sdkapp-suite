@@ -229,10 +229,10 @@ async def create_priority(
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Create a new priority with auto-assigned calendar keyword.
+    Create a new priority with optional keyword choice.
 
-    The backend assigns calendar_keyword deterministically (P1 → P2 → P3).
-    Users cannot choose or specify their keyword.
+    If calendar_keyword is provided and available, uses it.
+    If not provided, auto-assigns deterministically (P1 → P2 → P3).
 
     Transactional Safety:
     - Uses SELECT FOR UPDATE to lock user's active priorities
@@ -321,7 +321,30 @@ async def create_priority(
                 },
             )
 
-        assigned_keyword = available_keywords[0]  # First available in order
+        # Step 4: Determine keyword (user choice or auto-assign)
+        if request.calendar_keyword:
+            # User requested a specific keyword
+            if request.calendar_keyword not in available_keywords:
+                logger.info(
+                    "priority.create.keyword_unavailable",
+                    user_id=str(user_id),
+                    requested_keyword=request.calendar_keyword,
+                    available_keywords=available_keywords,
+                )
+                return JSONResponse(
+                    status_code=status.HTTP_409_CONFLICT,
+                    content={
+                        "success": False,
+                        "error": {
+                            "code": "KEYWORD_CONFLICT",
+                            "message": f"Keyword {request.calendar_keyword} is already in use. Choose from: {', '.join(available_keywords)}",
+                        },
+                    },
+                )
+            assigned_keyword = request.calendar_keyword
+        else:
+            # Auto-assign first available
+            assigned_keyword = available_keywords[0]
 
         # Step 4: Create the priority
         priority = PgPriority(
@@ -493,10 +516,13 @@ async def update_priority(
     Update a priority's editable fields.
 
     Accepts partial updates - only fields present in body are updated.
-    Type and calendar_keyword are immutable after creation.
+    Type is immutable. calendar_keyword can be reassigned.
 
-    For deadline priorities: name, deadline
-    For flexible priorities: name, weekly_hour_target, checkpoint_date, desired_result
+    For deadline priorities: name, deadline, calendar_keyword
+    For flexible priorities: name, weekly_hour_target, checkpoint_date, calendar_keyword
+
+    Keyword reassignment: If the requested keyword is held by another active priority,
+    they automatically swap keywords using a 3-step atomic swap.
 
     Args:
         priority_id: Priority ID (UUID string)
@@ -507,6 +533,7 @@ async def update_priority(
     Returns:
         200: Full priorities response (same shape as GET /priorities)
         404: Priority not found or wrong user
+        409: Keyword conflict during reassignment
         422: Validation error (cross-type field, etc.)
     """
     # Validate priority_id format
@@ -518,7 +545,7 @@ async def update_priority(
             detail={"code": "NOT_FOUND", "message": "Priority not found"},
         )
 
-    # Fetch priority
+    # Fetch priority (initial read, no lock yet)
     result = await session.execute(
         select(PgPriority).where(
             PgPriority.id == pid,
@@ -528,6 +555,13 @@ async def update_priority(
     priority = result.scalar_one_or_none()
 
     if not priority:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Only active priorities can be updated
+    if priority.status != "active":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "NOT_FOUND", "message": "Priority not found"},
@@ -557,7 +591,41 @@ async def update_priority(
                 detail={"code": "VALIDATION_ERROR", "message": "deadline is not valid for flexible priorities"},
             )
 
-    # Apply updates
+    # Handle keyword reassignment separately (requires special logic)
+    if request.calendar_keyword is not None:
+        try:
+            await _handle_keyword_reassignment(
+                session=session,
+                user_id=user_id,
+                requesting_priority_id=pid,
+                desired_keyword=request.calendar_keyword,
+            )
+        except IntegrityError as e:
+            await session.rollback()
+            logger.warning(
+                "priority.reassign.integrity_error",
+                user_id=str(user_id),
+                priority_id=str(pid),
+                error=str(e),
+            )
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "success": False,
+                    "error": {
+                        "code": "KEYWORD_CONFLICT",
+                        "message": "Keyword conflict during reassignment. Please retry.",
+                    },
+                },
+            )
+
+    # Re-fetch priority after potential keyword swap (it may have been modified)
+    result = await session.execute(
+        select(PgPriority).where(PgPriority.id == pid)
+    )
+    priority = result.scalar_one()
+
+    # Apply other updates
     if request.name is not None:
         priority.name = request.name
     if request.deadline is not None:
@@ -576,6 +644,136 @@ async def update_priority(
     )
 
     return await build_priorities_response(session, user_id)
+
+
+async def _handle_keyword_reassignment(
+    session: AsyncSession,
+    user_id: UUID,
+    requesting_priority_id: UUID,
+    desired_keyword: str,
+) -> None:
+    """
+    Handle keyword reassignment with 3-step swap if needed.
+
+    Case 0: Same keyword (no-op) - return immediately
+    Case 1: Keyword is free - simple update
+    Case 2: Keyword is held - 3-step swap with NULL intermediary
+
+    Uses deterministic row locking (smallest UUID first) to prevent deadlocks.
+
+    Args:
+        session: Database session
+        user_id: User ID
+        requesting_priority_id: ID of priority requesting the keyword
+        desired_keyword: The keyword to assign (P1, P2, or P3)
+
+    Raises:
+        IntegrityError: If a constraint violation occurs during swap
+        HTTPException: For invariant violations (NULL persists after swap)
+    """
+    # Step 1: Initial read of requesting priority (no lock)
+    result = await session.execute(
+        select(PgPriority).where(PgPriority.id == requesting_priority_id)
+    )
+    requesting = result.scalar_one()
+
+    # Case 0: Same keyword - no-op
+    if requesting.calendar_keyword == desired_keyword:
+        return
+
+    freed_keyword = requesting.calendar_keyword
+
+    # Step 2: Check if desired keyword is held by another active priority
+    result = await session.execute(
+        select(PgPriority).where(
+            PgPriority.user_id == user_id,
+            PgPriority.calendar_keyword == desired_keyword,
+            PgPriority.status == "active",
+            PgPriority.id != requesting_priority_id,
+        )
+    )
+    displaced = result.scalar_one_or_none()
+
+    if displaced is None:
+        # Case 1: Keyword is free - simple update
+        requesting.calendar_keyword = desired_keyword
+        await session.flush()
+        logger.info(
+            "priority.reassign.free_keyword",
+            user_id=str(user_id),
+            priority_id=str(requesting_priority_id),
+            new_keyword=desired_keyword,
+        )
+        return
+
+    # Case 2: Keyword is held - need 3-step swap
+
+    # Step 3: Lock both rows in deterministic order (smallest UUID first)
+    ids_to_lock = sorted([requesting.id, displaced.id])
+    result = await session.execute(
+        select(PgPriority)
+        .where(PgPriority.id.in_(ids_to_lock))
+        .order_by(PgPriority.id)
+        .with_for_update()
+    )
+    locked = {p.id: p for p in result.scalars().all()}
+    requesting = locked[requesting_priority_id]
+    displaced = locked[displaced.id]
+
+    # Step 4: Re-validate after lock (TOCTOU defense)
+    if displaced.calendar_keyword != desired_keyword:
+        # State changed between read and lock
+        # The keyword may now be free - re-check
+        if displaced.calendar_keyword != desired_keyword:
+            # Just do a simple assignment - the keyword we wanted might now be free
+            requesting.calendar_keyword = desired_keyword
+            await session.flush()
+            logger.info(
+                "priority.reassign.keyword_freed_during_lock",
+                user_id=str(user_id),
+                priority_id=str(requesting_priority_id),
+                new_keyword=desired_keyword,
+            )
+            return
+
+    # Step 5: Perform 3-step swap using NULL as intermediary
+
+    # 5a: Clear displaced priority's keyword (NULL intermediary)
+    displaced.calendar_keyword = None
+    await session.flush()
+
+    # 5b: Set requesting priority to desired keyword
+    requesting.calendar_keyword = desired_keyword
+    await session.flush()
+
+    # 5c: Set displaced priority to freed keyword
+    displaced.calendar_keyword = freed_keyword
+    await session.flush()
+
+    # Step 6: Invariant check (do NOT use assert — stripped by python -O)
+    if requesting.calendar_keyword is None or displaced.calendar_keyword is None:
+        await session.rollback()
+        logger.error(
+            "priority.reassign.invariant_violation",
+            user_id=str(user_id),
+            requesting_id=str(requesting.id),
+            displaced_id=str(displaced.id),
+            requesting_keyword=requesting.calendar_keyword,
+            displaced_keyword=displaced.calendar_keyword,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "INVARIANT_VIOLATION", "message": "Keyword swap left NULL state. This is a bug."},
+        )
+
+    logger.info(
+        "priority.reassign.swap_complete",
+        user_id=str(user_id),
+        requesting_id=str(requesting.id),
+        displaced_id=str(displaced.id),
+        requesting_keyword=desired_keyword,
+        displaced_keyword=freed_keyword,
+    )
 
 
 @router.delete("/priorities/{priority_id}")

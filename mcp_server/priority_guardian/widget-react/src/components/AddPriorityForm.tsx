@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
-import type { PriorityType } from '../types'
+import type { PriorityType, CalendarKeyword } from '../types'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 
 interface AddPriorityFormProps {
   availableKeywords: string[]
   onAdd: (data: {
     name: string
     type: PriorityType
+    calendar_keyword?: string
     deadline?: string
     weekly_hour_target?: number
     checkpoint_date?: string
@@ -15,11 +17,14 @@ interface AddPriorityFormProps {
   onCancel: () => void
 }
 
-type FormStep = 'type' | 'fields'
+type FormStep = 'type' | 'keyword' | 'fields'
+
+const ALL_KEYWORDS: CalendarKeyword[] = ['P1', 'P2', 'P3']
 
 export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPriorityFormProps) {
   const [step, setStep] = useState<FormStep>('type')
   const [priorityType, setPriorityType] = useState<PriorityType | null>(null)
+  const [selectedKeyword, setSelectedKeyword] = useState<CalendarKeyword | null>(null)
 
   // Form fields
   const [name, setName] = useState('')
@@ -38,12 +43,35 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
 
   const handleTypeSelect = (type: PriorityType) => {
     setPriorityType(type)
+    // If only 1 keyword available, auto-select and skip to fields
+    if (availableKeywords.length === 1) {
+      setSelectedKeyword(availableKeywords[0] as CalendarKeyword)
+      setStep('fields')
+    } else {
+      setStep('keyword')
+    }
+  }
+
+  const handleKeywordSelect = (keyword: CalendarKeyword) => {
+    setSelectedKeyword(keyword)
     setStep('fields')
   }
 
   const handleBack = () => {
-    setStep('type')
-    setPriorityType(null)
+    if (step === 'fields') {
+      // If only 1 keyword, go back to type (skip keyword step)
+      if (availableKeywords.length === 1) {
+        setStep('type')
+        setPriorityType(null)
+        setSelectedKeyword(null)
+      } else {
+        setStep('keyword')
+      }
+    } else if (step === 'keyword') {
+      setStep('type')
+      setPriorityType(null)
+      setSelectedKeyword(null)
+    }
     setError(null)
   }
 
@@ -88,6 +116,11 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
       const data: Parameters<typeof onAdd>[0] = {
         name: name.trim(),
         type: priorityType,
+      }
+
+      // Include selected keyword if set
+      if (selectedKeyword) {
+        data.calendar_keyword = selectedKeyword
       }
 
       if (priorityType === 'deadline') {
@@ -140,6 +173,72 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               <div className="font-medium text-default">Flexible</div>
               <div className="text-xs text-secondary">Ongoing weekly hours</div>
             </button>
+          </div>
+
+          <div className="mt-4">
+            <Button
+              color="secondary"
+              variant="ghost"
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {step === 'keyword' && priorityType && (
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              type="button"
+              onClick={handleBack}
+              className="text-secondary hover:text-default"
+              aria-label="Go back to type selection"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd"/>
+              </svg>
+            </button>
+            <h3 className="text-base font-semibold text-default">Choose Keyword</h3>
+          </div>
+
+          <p className="text-sm text-secondary mb-4">
+            Pick a keyword to tag your calendar events with
+          </p>
+
+          <div className="flex gap-3 justify-center">
+            {ALL_KEYWORDS.map((kw) => {
+              const isAvailable = availableKeywords.includes(kw)
+              const badgeColor = BADGE_COLORS[kw] ?? BADGE_COLORS.P1
+
+              return (
+                <button
+                  key={kw}
+                  type="button"
+                  onClick={() => isAvailable && handleKeywordSelect(kw)}
+                  disabled={!isAvailable}
+                  className={`
+                    flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors
+                    ${isAvailable
+                      ? 'border-default hover:border-strong hover:bg-surface-secondary cursor-pointer'
+                      : 'border-default opacity-40 cursor-not-allowed'
+                    }
+                  `}
+                  aria-label={`Select keyword ${kw}${isAvailable ? '' : ' (unavailable)'}`}
+                >
+                  <span
+                    className={`${BADGE_CIRCLE_CLASS} ${badgeColor}`}
+                    style={{ fontSize: '0.75rem', width: '32px', height: '32px' }}
+                  >
+                    {kw}
+                  </span>
+                  {!isAvailable && (
+                    <span className="text-xs text-tertiary">In use</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           <div className="mt-4">

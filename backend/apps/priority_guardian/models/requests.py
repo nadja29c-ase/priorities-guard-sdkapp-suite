@@ -21,9 +21,10 @@ class CreatePriorityRequest(BaseModel):
     Two priority types exist:
     - deadline: has a hard end date. Requires `deadline` field.
     - flexible: ongoing time investment toward a 1-month goal.
-      Requires `weekly_hour_target`, `checkpoint_date`, and `desired_result`.
+      Requires `weekly_hour_target`, `checkpoint_date`, and `initial_goal_text`.
 
-    The `calendar_keyword` is NOT in the request - the backend assigns it deterministically.
+    The `calendar_keyword` is optional - if provided, it must be available (not held by
+    another active priority). If not provided, the backend auto-assigns the first available.
     """
 
     name: str = Field(
@@ -31,6 +32,11 @@ class CreatePriorityRequest(BaseModel):
         min_length=1,
         max_length=100,
         description="Priority name exactly as stated by user. Max 100 chars.",
+    )
+
+    calendar_keyword: Optional[Literal["P1", "P2", "P3"]] = Field(
+        default=None,
+        description="Preferred keyword (P1/P2/P3). If not provided, auto-assigns first available.",
     )
 
     type: Literal["deadline", "flexible"] = Field(
@@ -155,10 +161,12 @@ class UpdatePriorityRequest(BaseModel):
     Request model for updating a priority.
 
     All fields are optional (partial update). Only provided fields are updated.
-    Type and calendar_keyword are immutable after creation.
+    Type is immutable after creation. calendar_keyword can be reassigned.
 
-    For deadline priorities: name, deadline
-    For flexible priorities: name, weekly_hour_target, checkpoint_date
+    For deadline priorities: name, deadline, calendar_keyword
+    For flexible priorities: name, weekly_hour_target, checkpoint_date, calendar_keyword
+
+    If calendar_keyword is held by another active priority, they automatically swap keywords.
 
     Note: Goals are updated via separate goal endpoints, not through priority update.
     """
@@ -168,6 +176,11 @@ class UpdatePriorityRequest(BaseModel):
         min_length=1,
         max_length=100,
         description="Priority name. Max 100 chars.",
+    )
+
+    calendar_keyword: Optional[Literal["P1", "P2", "P3"]] = Field(
+        default=None,
+        description="Reassign keyword. If held by another active priority, they automatically swap.",
     )
 
     deadline: Optional[date] = Field(
@@ -208,6 +221,7 @@ class UpdatePriorityRequest(BaseModel):
         """Check if any fields are provided for update."""
         return any([
             self.name is not None,
+            self.calendar_keyword is not None,
             self.deadline is not None,
             self.weekly_hour_target is not None,
             self.checkpoint_date is not None,

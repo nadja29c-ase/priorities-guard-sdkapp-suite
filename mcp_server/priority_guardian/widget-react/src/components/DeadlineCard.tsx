@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { Priority } from '../types'
+import type { Priority, CalendarKeyword } from '../types'
 import { daysUntil } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
 import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { ChevronIcon } from './ChevronIcon'
+import { KeywordPicker } from './KeywordPicker'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 
@@ -29,12 +30,14 @@ const ACCENT_COLORS: Record<string, { soft: string; accent: string; border: stri
 
 interface DeadlineCardProps {
   priority: Priority
+  priorities: Priority[]  // All priorities for keyword picker
   isEditing: boolean
   defaultDeliverablesExpanded?: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onSave: (priorityId: string, data: { name?: string; deadline?: string }) => Promise<void>
   onDelete: (priorityId: string) => Promise<void>
+  onKeywordChange: (priorityId: string, keyword: CalendarKeyword) => Promise<void>
   onToggleDeliverable: (deliverableId: string, done: boolean) => Promise<void>
   onRenameDeliverable: (deliverableId: string, name: string) => Promise<void>
   onDeleteDeliverable: (deliverableId: string) => Promise<void>
@@ -43,12 +46,14 @@ interface DeadlineCardProps {
 
 export function DeadlineCard({
   priority,
+  priorities,
   isEditing,
   defaultDeliverablesExpanded = true,
   onStartEdit,
   onCancelEdit,
   onSave,
   onDelete,
+  onKeywordChange,
   onToggleDeliverable,
   onRenameDeliverable,
   onDeleteDeliverable,
@@ -315,22 +320,32 @@ export function DeadlineCard({
           </span>
         </div>
 
-        {/* Deadline field - editable in edit mode */}
+        {/* Edit mode: Keyword picker + Deadline field */}
         {isEditing && (
-          <div className="mb-3">
-            <label htmlFor={`deadline-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
-              Deadline
-            </label>
-            <input
-              id={`deadline-${priority.id}`}
-              type="date"
-              value={editDeadline}
-              onChange={(e) => setEditDeadline(e.target.value)}
-              onBlur={handleDeadlineBlur}
+          <div className="space-y-3 mb-3">
+            {/* Keyword reassignment */}
+            <KeywordPicker
+              currentKeyword={kw as CalendarKeyword}
+              priorities={priorities}
+              onKeywordChange={(newKw) => onKeywordChange(priority.id, newKw)}
               disabled={isSaving}
-              min={minDate}
-              className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
             />
+
+            <div>
+              <label htmlFor={`deadline-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
+                Deadline
+              </label>
+              <input
+                id={`deadline-${priority.id}`}
+                type="date"
+                value={editDeadline}
+                onChange={(e) => setEditDeadline(e.target.value)}
+                onBlur={handleDeadlineBlur}
+                disabled={isSaving}
+                min={minDate}
+                className="w-full text-sm text-default bg-surface border border-default rounded-xl px-3 py-2 focus:outline-none focus:border-tertiary"
+              />
+            </div>
           </div>
         )}
 

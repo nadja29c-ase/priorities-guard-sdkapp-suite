@@ -19,7 +19,7 @@ logger = structlog.get_logger(__name__)
 
 NAME = "create_priority"
 
-DESCRIPTION = """Records a user's declared priority so Priority Guardian can track their time investment against it. The backend assigns a calendar keyword (P1, P2, or P3) — the user tags their Google Calendar events with this keyword so PG knows which hours count toward which priority.
+DESCRIPTION = """Records a user's declared priority so Priority Guardian can track their time investment against it. A calendar keyword (P1, P2, or P3) is assigned — the user tags their Google Calendar events with this keyword so PG knows which hours count toward which priority.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - User has clearly stated a priority name (their exact words — NEVER rephrase or embellish)
@@ -31,7 +31,7 @@ If ANY required field is missing or vague → ask the user. NEVER invent default
 
 ONBOARDING CONTEXT: User is setting up 1–3 priorities. Call this tool once per priority after gathering all fields. After the tool returns, tell the user their assigned calendar keyword and remind them to tag calendar events with it (e.g., "Tag your calendar events with P1 to track time — like 'P1: Design review'").
 
-KEYWORD ASSIGNMENT: The backend assigns the next available keyword automatically. Do not ask the user to choose a keyword. Just communicate the assigned keyword from the response."""
+KEYWORD ASSIGNMENT: If the user expresses a preference for which keyword (P1, P2, P3) to assign, include it. Otherwise omit and the backend assigns the next available."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -40,6 +40,11 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "Priority name exactly as stated by user (max 100 chars)",
             "maxLength": 100,
+        },
+        "calendar_keyword": {
+            "type": "string",
+            "enum": ["P1", "P2", "P3"],
+            "description": "Preferred keyword (optional). If not provided, next available is auto-assigned.",
         },
         "type": {
             "type": "string",
@@ -58,9 +63,9 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "ISO date (YYYY-MM-DD) - required when type=flexible",
         },
-        "desired_result": {
+        "initial_goal_text": {
             "type": "string",
-            "description": "Concrete outcome (max 200 chars) - required when type=flexible",
+            "description": "Initial goal text (max 200 chars) - required when type=flexible",
             "maxLength": 200,
         },
     },
@@ -94,11 +99,12 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     """
     # Extract arguments
     name = arguments.get("name")
+    calendar_keyword = arguments.get("calendar_keyword")
     priority_type = arguments.get("type")
     deadline = arguments.get("deadline")
     weekly_hour_target = arguments.get("weekly_hour_target")
     checkpoint_date = arguments.get("checkpoint_date")
-    desired_result = arguments.get("desired_result")
+    initial_goal_text = arguments.get("initial_goal_text")
 
     logger.info(
         "tool.create_priority.start",
@@ -106,6 +112,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         user_id=user_id,
         priority_name=name,
         priority_type=priority_type,
+        calendar_keyword=calendar_keyword,
     )
 
     # Build request payload (forward as-is, backend validates)
@@ -115,14 +122,16 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     }
 
     # Add optional fields only if provided
+    if calendar_keyword is not None:
+        payload["calendar_keyword"] = calendar_keyword
     if deadline is not None:
         payload["deadline"] = deadline
     if weekly_hour_target is not None:
         payload["weekly_hour_target"] = weekly_hour_target
     if checkpoint_date is not None:
         payload["checkpoint_date"] = checkpoint_date
-    if desired_result is not None:
-        payload["desired_result"] = desired_result
+    if initial_goal_text is not None:
+        payload["initial_goal_text"] = initial_goal_text
 
     # Call backend to create priority
     # NOTE: Inner try/except for HTTPStatusError builds tool-specific assistant_guidance.

@@ -19,7 +19,7 @@ logger = structlog.get_logger(__name__)
 
 NAME = "update_priority"
 
-DESCRIPTION = "Update a priority's fields (widget-only)."
+DESCRIPTION = "Update a priority's fields (widget-only). If the requested keyword is held by another active priority, they automatically swap keywords."
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -32,6 +32,11 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": "New priority name (max 100 chars)",
             "maxLength": 100,
+        },
+        "calendar_keyword": {
+            "type": "string",
+            "enum": ["P1", "P2", "P3"],
+            "description": "Reassign keyword badge. If held by another priority, they swap.",
         },
         "deadline": {
             "type": "string",
@@ -88,6 +93,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     payload = {}
     if "name" in arguments and arguments["name"] is not None:
         payload["name"] = arguments["name"]
+    if "calendar_keyword" in arguments and arguments["calendar_keyword"] is not None:
+        payload["calendar_keyword"] = arguments["calendar_keyword"]
     if "deadline" in arguments and arguments["deadline"] is not None:
         payload["deadline"] = arguments["deadline"]
     if "weekly_hour_target" in arguments and arguments["weekly_hour_target"] is not None:

@@ -129,6 +129,7 @@ function App() {
   const handleAddPriority = useCallback(async (priorityData: {
     name: string
     type: 'deadline' | 'flexible'
+    calendar_keyword?: string
     deadline?: string
     weekly_hour_target?: number
     checkpoint_date?: string
@@ -378,6 +379,29 @@ function App() {
     updateDataFromResponse(content)
   }, [updateDataFromResponse])
 
+  // ============ Keyword Reassignment (Inc 13) ============
+
+  const handleKeywordChange = useCallback(async (priorityId: string, keyword: CalendarKeyword) => {
+    if (!window.openai?.callTool) throw new Error('Tool calls not available')
+
+    const result = await window.openai.callTool<{ data?: ToolOutputData }>('update_priority', {
+      priority_id: priorityId,
+      calendar_keyword: keyword,
+    }) as { isError?: boolean }
+
+    if (result?.isError) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+
+    if (!content?.data) {
+      throw new Error("Couldn't save. Try again.")
+    }
+
+    updateDataFromResponse(content)
+  }, [updateDataFromResponse])
+
   // ============ Display Mode Handlers ============
 
   // Display mode handlers - only manage internal layout state
@@ -517,6 +541,7 @@ function App() {
             <PriorityCardWrapper
               key={`${priority.id}-${displayMode}`}
               priority={priority}
+              priorities={activePriorities}
               isEditing={editingPriorityId === priority.id}
               canStartEdit={canEdit}
               defaultSectionsExpanded={!isInline}
@@ -524,6 +549,7 @@ function App() {
               onCancelEdit={() => setEditingPriorityId(null)}
               onSavePriority={handleUpdatePriority}
               onDeletePriority={handleDeletePriority}
+              onKeywordChange={handleKeywordChange}
               onToggleDeliverable={handleToggleDeliverable}
               onRenameDeliverable={handleRenameDeliverable}
               onDeleteDeliverable={handleDeleteDeliverable}
@@ -581,6 +607,7 @@ function App() {
 
 interface PriorityCardWrapperProps {
   priority: Priority
+  priorities: Priority[]  // All priorities for keyword picker (Inc 13)
   isEditing: boolean
   canStartEdit: boolean
   defaultSectionsExpanded: boolean
@@ -593,6 +620,7 @@ interface PriorityCardWrapperProps {
     checkpoint_date?: string
   }) => Promise<void>
   onDeletePriority: (priorityId: string) => Promise<void>
+  onKeywordChange: (priorityId: string, keyword: CalendarKeyword) => Promise<void>  // Inc 13
   onToggleDeliverable: (deliverableId: string, done: boolean) => Promise<void>
   onRenameDeliverable: (deliverableId: string, name: string) => Promise<void>
   onDeleteDeliverable: (deliverableId: string) => Promise<void>
@@ -606,6 +634,7 @@ interface PriorityCardWrapperProps {
 
 function PriorityCardWrapper({
   priority,
+  priorities,
   isEditing,
   canStartEdit,
   defaultSectionsExpanded,
@@ -613,6 +642,7 @@ function PriorityCardWrapper({
   onCancelEdit,
   onSavePriority,
   onDeletePriority,
+  onKeywordChange,
   onToggleDeliverable,
   onRenameDeliverable,
   onDeleteDeliverable,
@@ -626,12 +656,14 @@ function PriorityCardWrapper({
     return (
       <DeadlineCard
         priority={priority}
+        priorities={priorities}
         isEditing={isEditing}
         defaultDeliverablesExpanded={defaultSectionsExpanded}
         onStartEdit={canStartEdit ? onStartEdit : () => {}}
         onCancelEdit={onCancelEdit}
         onSave={onSavePriority}
         onDelete={onDeletePriority}
+        onKeywordChange={onKeywordChange}
         onToggleDeliverable={onToggleDeliverable}
         onRenameDeliverable={onRenameDeliverable}
         onDeleteDeliverable={onDeleteDeliverable}
@@ -643,12 +675,14 @@ function PriorityCardWrapper({
   return (
     <FlexibleCard
       priority={priority}
+      priorities={priorities}
       isEditing={isEditing}
       defaultGoalsExpanded={defaultSectionsExpanded}
       onStartEdit={canStartEdit ? onStartEdit : () => {}}
       onCancelEdit={onCancelEdit}
       onSave={onSavePriority}
       onDelete={onDeletePriority}
+      onKeywordChange={onKeywordChange}
       onAddGoal={(text) => onAddGoal(priority.id, text)}
       onToggleGoal={onToggleGoal}
       onRenameGoal={onRenameGoal}

@@ -30,6 +30,11 @@ INPUT_SCHEMA = {
             "description": "Priority name (max 100 chars)",
             "maxLength": 100,
         },
+        "calendar_keyword": {
+            "type": "string",
+            "enum": ["P1", "P2", "P3"],
+            "description": "Preferred keyword (optional). If not provided, next available is auto-assigned.",
+        },
         "type": {
             "type": "string",
             "enum": ["deadline", "flexible"],
@@ -89,6 +94,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Validate required fields
     name = arguments.get("name")
+    calendar_keyword = arguments.get("calendar_keyword")
     priority_type = arguments.get("type")
 
     if not name:
@@ -103,6 +109,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         "name": name,
         "type": priority_type,
     }
+
+    # Add optional keyword if provided
+    if calendar_keyword:
+        payload["calendar_keyword"] = calendar_keyword
 
     if priority_type == "deadline":
         deadline = arguments.get("deadline")

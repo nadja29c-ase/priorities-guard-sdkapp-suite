@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import type { Priority } from '../types'
+import type { Priority, CalendarKeyword } from '../types'
 import { daysUntil } from '../utils'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { GoalSection } from './GoalSection'
+import { KeywordPicker } from './KeywordPicker'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 import { HourRing } from './HourRing'
@@ -16,6 +17,7 @@ const BORDER_COLORS: Record<string, string> = {
 
 interface FlexibleCardProps {
   priority: Priority
+  priorities: Priority[]  // All priorities for keyword picker
   isEditing: boolean
   defaultGoalsExpanded?: boolean
   onStartEdit: () => void
@@ -26,6 +28,7 @@ interface FlexibleCardProps {
     checkpoint_date?: string
   }) => Promise<void>
   onDelete: (priorityId: string) => Promise<void>
+  onKeywordChange: (priorityId: string, keyword: CalendarKeyword) => Promise<void>
   // Goal handlers (Inc D)
   onAddGoal: (text: string) => Promise<void>
   onToggleGoal: (goalId: string, achieved: boolean) => Promise<void>
@@ -35,12 +38,14 @@ interface FlexibleCardProps {
 
 export function FlexibleCard({
   priority,
+  priorities,
   isEditing,
   defaultGoalsExpanded = true,
   onStartEdit,
   onCancelEdit,
   onSave,
   onDelete,
+  onKeywordChange,
   onAddGoal,
   onToggleGoal,
   onRenameGoal,
@@ -319,9 +324,17 @@ export function FlexibleCard({
         </div>
       )}
 
-      {/* Edit mode: Flexible priority fields with auto-save on blur */}
+      {/* Edit mode: Keyword picker + Flexible priority fields with auto-save on blur */}
       {isEditing && (
         <div className="space-y-3 mb-3">
+          {/* Keyword reassignment */}
+          <KeywordPicker
+            currentKeyword={kw as CalendarKeyword}
+            priorities={priorities}
+            onKeywordChange={(newKw) => onKeywordChange(priority.id, newKw)}
+            disabled={isSaving}
+          />
+
           <div>
             <label htmlFor={`hours-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
               Weekly Hour Target
