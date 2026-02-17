@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Priority, CalendarKeyword } from '../types'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
 
@@ -21,6 +22,9 @@ export function KeywordPicker({
   onKeywordChange,
   disabled = false,
 }: KeywordPickerProps) {
+  // Prevent concurrent swaps from rapid taps
+  const [loadingKeyword, setLoadingKeyword] = useState<CalendarKeyword | null>(null)
+
   // Build map of keyword -> priority name (only active priorities)
   const keywordHolders = new Map<string, string>()
   for (const p of priorities) {
@@ -30,9 +34,16 @@ export function KeywordPicker({
   }
 
   const handleClick = async (kw: CalendarKeyword) => {
-    if (disabled || kw === currentKeyword) return
-    await onKeywordChange(kw)
+    if (disabled || loadingKeyword !== null || kw === currentKeyword) return
+    setLoadingKeyword(kw)
+    try {
+      await onKeywordChange(kw)
+    } finally {
+      setLoadingKeyword(null)
+    }
   }
+
+  const isLoading = loadingKeyword !== null
 
   return (
     <div className="flex items-center gap-2">
@@ -44,12 +55,15 @@ export function KeywordPicker({
           const isHeldByOther = holderName && !isSelected
           const badgeColor = BADGE_COLORS[kw] ?? BADGE_COLORS.P1
 
+          const isDisabled = disabled || isLoading
+
           return (
             <div key={kw} className="relative group">
               <button
                 type="button"
                 onClick={() => handleClick(kw)}
-                disabled={disabled}
+                disabled={isDisabled}
+                aria-pressed={isSelected}
                 className={`
                   ${BADGE_CIRCLE_CLASS} ${badgeColor}
                   transition-all cursor-pointer
@@ -57,7 +71,7 @@ export function KeywordPicker({
                     ? 'ring-2 ring-offset-1 ring-offset-surface'
                     : 'opacity-60 hover:opacity-100'
                   }
-                  ${disabled ? 'cursor-not-allowed' : ''}
+                  ${isDisabled ? 'cursor-not-allowed' : ''}
                 `}
                 style={{ fontSize: '0.6rem' }}
                 aria-label={`${isSelected ? 'Current keyword' : 'Switch to'} ${kw}${isHeldByOther ? ` (will swap with ${holderName})` : ''}`}
