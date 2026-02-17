@@ -108,12 +108,16 @@ export function FlexibleCard({
     }
 
     // Check if value actually changed
-    let originalValue: string | number | null = null
-    if (field === 'name') originalValue = priority.name
-    else if (field === 'weekly_hour_target') originalValue = priority.weeklyHourTarget?.toString() || ''
-    else if (field === 'checkpoint_date') originalValue = priority.checkpointDate || ''
-
-    if (value === originalValue) {
+    // Use numeric comparison for weekly_hour_target to handle "7.50" vs "7.5"
+    if (field === 'name' && value === priority.name) {
+      return
+    } else if (field === 'weekly_hour_target') {
+      const newNum = parseFloat(value)
+      const oldNum = priority.weeklyHourTarget ?? 0
+      if (newNum === oldNum) {
+        return
+      }
+    } else if (field === 'checkpoint_date' && value === (priority.checkpointDate || '')) {
       return
     }
 
@@ -154,7 +158,10 @@ export function FlexibleCard({
   }
 
   const handleHourTargetBlur = () => {
-    if (editHourTarget !== (priority.weeklyHourTarget?.toString() || '')) {
+    // Use numeric comparison to handle "7.50" vs "7.5"
+    const newNum = parseFloat(editHourTarget)
+    const oldNum = priority.weeklyHourTarget ?? 0
+    if (!isNaN(newNum) && newNum !== oldNum) {
       autoSave('weekly_hour_target', editHourTarget)
     }
   }
