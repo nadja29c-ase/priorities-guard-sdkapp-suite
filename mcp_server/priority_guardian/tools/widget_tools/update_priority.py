@@ -89,10 +89,15 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if not priority_id:
         raise ToolUsageError("priority_id is required")
 
+    # Validate name if provided (reject whitespace-only)
+    name = arguments.get("name")
+    if name is not None and (not name or not name.strip()):
+        raise ToolUsageError("Name cannot be empty or whitespace-only.")
+
     # Build update payload (only include provided fields)
     payload = {}
-    if "name" in arguments and arguments["name"] is not None:
-        payload["name"] = arguments["name"]
+    if name is not None:
+        payload["name"] = name
     if "calendar_keyword" in arguments and arguments["calendar_keyword"] is not None:
         payload["calendar_keyword"] = arguments["calendar_keyword"]
     if "deadline" in arguments and arguments["deadline"] is not None:
@@ -103,25 +108,49 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         payload["checkpoint_date"] = arguments["checkpoint_date"]
 
     # Call backend - mutation endpoints return full priority list
+    import httpx
     try:
-        import httpx
         response = await backend_put(
             f"/api/priority-guardian/priorities/{priority_id}",
             payload,
             user_id,
             correlation_id
         )
-    except Exception as e:
-        logger.error(
+    except httpx.HTTPStatusError as e:
+        status_code = e.response.status_code
+        logger.warning(
             "tool.update_priority.backend_error",
             correlation_id=correlation_id,
-            error=str(e),
+            status_code=status_code,
+            error_type=type(e).__name__,
         )
-        if isinstance(e, httpx.HTTPStatusError):
-            if e.response.status_code == 404:
-                raise ToolUsageError("Priority not found.")
-            if e.response.status_code == 422:
-                raise ToolUsageError("Invalid field for this priority type.")
+
+        if status_code == 404:
+            raise ToolUsageError("Priority not found.")
+        if status_code == 422:
+            raise ToolUsageError("Invalid field for this priority type.")
+        if status_code == 409:
+            # Parse error code to distinguish MAX_PRIORITIES_REACHED vs KEYWORD_CONFLICT
+            try:
+                error_data = e.response.json()
+                error_code = error_data.get("error", {}).get("code", "UNKNOWN")
+            except Exception:
+                error_code = "UNKNOWN"
+
+            if error_code == "MAX_PRIORITIES_REACHED":
+                raise ToolUsageError("You already have 3 active priorities.")
+            elif error_code == "KEYWORD_CONFLICT":
+                raise ToolUsageError("Keyword conflict during reassignment. Please retry.")
+            else:
+                raise ToolUsageError("Conflict occurred. Please retry.")
+
+        raise ToolUsageError("Failed to update priority. Please try again.")
+    except Exception as e:
+        logger.error(
+            "tool.update_priority.unexpected_error",
+            correlation_id=correlation_id,
+            error_type=type(e).__name__,
+        )
         raise ToolUsageError("Failed to update priority. Please try again.")
 
     # Use response directly - backend returns full priority list
