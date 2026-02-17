@@ -9,24 +9,32 @@
 
 When Render upgrades PostgreSQL, update local tools to match for `pg_dump` schema diffs.
 
-## Pre-Deploy Checks
+## Render Pre-Deploy Command
+
+Set this as the **Build Command** or **Pre-Deploy Command** in Render:
+
+```bash
+alembic heads | wc -l | grep -q "^1$" || (echo "FATAL: Multiple Alembic heads detected" && exit 1)
+alembic upgrade head
+```
+
+This is system-enforced — if there are multiple heads, the deploy fails before touching the DB.
+
+**Why this matters:** Alembic allows creating two migrations with the same `down_revision`, creating a fork. Without this check, one branch can be deployed while the other is silently ignored.
+
+## Defense in Depth
+
+The `alembic_version` table has a unique index `idx_alembic_version_single_row` that ensures exactly one row. If a forked migration somehow tries to insert a second version row, PostgreSQL rejects it.
+
+## Local Pre-Deploy Checks
 
 ### Alembic Migration Fork Detection
 
-Before deploying, verify there's only one migration head:
+Before pushing, verify there's only one migration head:
 
 ```bash
-cd priority-guardian
-HEADS=$(alembic heads 2>/dev/null | wc -l)
-if [ "$HEADS" -gt 1 ]; then
-    echo "ERROR: Alembic has multiple heads. Merge before deploying."
-    alembic heads
-    exit 1
-fi
-echo "OK: Single migration head"
+alembic heads | wc -l | grep -q "^1$" && echo "OK: Single head" || echo "ERROR: Multiple heads"
 ```
-
-This catches migrations created with the same `down_revision` (fork).
 
 ### Production Schema Diff
 

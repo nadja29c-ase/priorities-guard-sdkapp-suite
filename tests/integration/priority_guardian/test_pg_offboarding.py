@@ -432,3 +432,357 @@ class TestDisconnectDecryptionErrors:
         # Verify connection is still marked as revoked
         await async_session.refresh(connection)
         assert connection.revoked_at is not None
+
+
+# =============================================================================
+# DB State Verification Tests
+# =============================================================================
+
+class TestDisconnectDBStateVerification:
+    """
+    Tests verifying actual DB state after disconnect (not just API responses).
+
+    These tests use raw SQL SELECTs to verify PostgreSQL state directly.
+    """
+
+    @pytest.mark.asyncio
+    async def test_disconnect_sets_revoked_at_on_connection_in_db(
+        self,
+        client: AsyncClient,
+        async_session: AsyncSession,
+        pg_user_with_connection: dict,
+    ):
+        """5a. Disconnect sets revoked_at on connection (verified via raw SQL)."""
+        from sqlalchemy import text
+
+        user = pg_user_with_connection["user"]
+        user_id = str(user.id)
+
+        # Verify revoked_at is NULL before disconnect
+        result = await async_session.execute(
+            text("""
+                SELECT revoked_at
+                FROM core_connections
+                WHERE user_id = :uid AND provider = 'google'
+            """),
+            {"uid": user.id},
+        )
+        row = result.fetchone()
+        assert row is not None, "Connection should exist"
+        assert row[0] is None, "revoked_at should be NULL before disconnect"
+
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+            return_value={"success": True, "error": None},
+        ):
+            response = await client.post(
+                "/api/priority-guardian/disconnect",
+                headers={"X-User-ID": user_id},
+            )
+
+        assert response.status_code == 200
+
+        # Verify revoked_at is NOT NULL after disconnect (via raw SQL)
+        result = await async_session.execute(
+            text("""
+                SELECT revoked_at
+                FROM core_connections
+                WHERE user_id = :uid AND provider = 'google'
+            """),
+            {"uid": user.id},
+        )
+        row = result.fetchone()
+        assert row is not None, "Connection should still exist"
+        assert row[0] is not None, "revoked_at should be set after disconnect"
+
+    @pytest.mark.asyncio
+    async def test_disconnect_revokes_pg_oauth_tokens_in_db(
+        self,
+        client: AsyncClient,
+        async_session: AsyncSession,
+        pg_user_with_tokens: dict,
+    ):
+        """5b. Disconnect revokes PG OAuth tokens (verified via raw SQL)."""
+        from sqlalchemy import text
+
+        user = pg_user_with_tokens["user"]
+        user_id = str(user.id)
+
+        # Verify tokens are NOT revoked before disconnect
+        result = await async_session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM oauth_access_tokens
+                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = false
+            """),
+            {"uid": user.id},
+        )
+        unrevoked_count = result.scalar()
+        assert unrevoked_count == 2, "Should have 2 unrevoked PG tokens before disconnect"
+
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+            return_value={"success": True, "error": None},
+        ):
+            response = await client.post(
+                "/api/priority-guardian/disconnect",
+                headers={"X-User-ID": user_id},
+            )
+
+        assert response.status_code == 200
+
+        # Verify all PG tokens are revoked after disconnect
+        result = await async_session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM oauth_access_tokens
+                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = false
+            """),
+            {"uid": user.id},
+        )
+        unrevoked_count = result.scalar()
+        assert unrevoked_count == 0, "All PG tokens should be revoked after disconnect"
+
+        # Verify tokens still exist (just marked as revoked, not deleted)
+        result = await async_session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM oauth_access_tokens
+                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = true
+            """),
+            {"uid": user.id},
+        )
+        revoked_count = result.scalar()
+        assert revoked_count == 2, "Tokens should be marked revoked, not deleted"
+
+    @pytest.mark.asyncio
+    async def test_disconnect_preserves_priority_data_in_db(
+        self,
+        client: AsyncClient,
+        async_session: AsyncSession,
+        pg_user_with_connection: dict,
+    ):
+        """5c. Disconnect preserves priority data (not deleted)."""
+        from sqlalchemy import text
+        from datetime import date, timedelta
+        from decimal import Decimal
+        from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable
+
+        user = pg_user_with_connection["user"]
+        user_id = str(user.id)
+
+        # Create priorities and deliverables for this user
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="deadline",
+            calendar_keyword="P1",
+            status="active",
+            deadline=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        deliverable = PgDeliverable(
+            priority_id=priority.id,
+            name="Test Deliverable",
+            done=False,
+        )
+        async_session.add(deliverable)
+        await async_session.commit()
+
+        # Verify data exists before disconnect
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_priorities WHERE user_id = :uid"),
+            {"uid": user.id},
+        )
+        assert result.scalar() == 1
+
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :pid"),
+            {"pid": priority.id},
+        )
+        assert result.scalar() == 1
+
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+            return_value={"success": True, "error": None},
+        ):
+            response = await client.post(
+                "/api/priority-guardian/disconnect",
+                headers={"X-User-ID": user_id},
+            )
+
+        assert response.status_code == 200
+
+        # Verify priority data is PRESERVED after disconnect
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_priorities WHERE user_id = :uid"),
+            {"uid": user.id},
+        )
+        assert result.scalar() == 1, "Priority should be preserved after disconnect"
+
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :pid"),
+            {"pid": priority.id},
+        )
+        assert result.scalar() == 1, "Deliverable should be preserved after disconnect"
+
+    @pytest.mark.asyncio
+    async def test_disconnect_preserves_snapshots_in_db(
+        self,
+        client: AsyncClient,
+        async_session: AsyncSession,
+        pg_user_with_connection: dict,
+    ):
+        """5d. Disconnect preserves snapshot data (not deleted)."""
+        from sqlalchemy import text
+        from datetime import date, datetime, timedelta
+        from decimal import Decimal
+        from backend.apps.priority_guardian.db_models import PgPriority
+
+        user = pg_user_with_connection["user"]
+        user_id = str(user.id)
+
+        # Create priority
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            created_at=datetime(2026, 1, 1),  # Predate test weeks
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        # Insert snapshot directly via SQL
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot)
+                VALUES (gen_random_uuid(), :pid, :uid, '2026-01-19', '2026-01-25', 5.0, 10.0, 1)
+            """),
+            {"pid": priority.id, "uid": user.id},
+        )
+        await async_session.commit()
+
+        # Verify snapshot exists before disconnect
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_weekly_snapshots WHERE user_id = :uid"),
+            {"uid": user.id},
+        )
+        assert result.scalar() == 1
+
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+            return_value={"success": True, "error": None},
+        ):
+            response = await client.post(
+                "/api/priority-guardian/disconnect",
+                headers={"X-User-ID": user_id},
+            )
+
+        assert response.status_code == 200
+
+        # Verify snapshot is PRESERVED after disconnect
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_weekly_snapshots WHERE user_id = :uid"),
+            {"uid": user.id},
+        )
+        assert result.scalar() == 1, "Snapshot should be preserved after disconnect"
+
+    @pytest.mark.asyncio
+    async def test_double_disconnect_is_idempotent_in_db(
+        self,
+        client: AsyncClient,
+        async_session: AsyncSession,
+        pg_user_with_tokens: dict,
+    ):
+        """5e. Double disconnect is idempotent - DB state unchanged between calls."""
+        from sqlalchemy import text
+
+        user = pg_user_with_tokens["user"]
+        user_id = str(user.id)
+
+        # First disconnect
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+            return_value={"success": True, "error": None},
+        ):
+            response1 = await client.post(
+                "/api/priority-guardian/disconnect",
+                headers={"X-User-ID": user_id},
+            )
+
+        assert response1.status_code == 200
+        assert response1.json()["already_disconnected"] is False
+
+        # Capture DB state after first disconnect
+        result = await async_session.execute(
+            text("""
+                SELECT revoked_at
+                FROM core_connections
+                WHERE user_id = :uid AND provider = 'google'
+            """),
+            {"uid": user.id},
+        )
+        revoked_at_after_first = result.fetchone()[0]
+
+        result = await async_session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM oauth_access_tokens
+                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = true
+            """),
+            {"uid": user.id},
+        )
+        revoked_tokens_after_first = result.scalar()
+
+        # Second disconnect
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+        ) as mock_revoke:
+            response2 = await client.post(
+                "/api/priority-guardian/disconnect",
+                headers={"X-User-ID": user_id},
+            )
+
+        assert response2.status_code == 200
+        assert response2.json()["already_disconnected"] is True
+        mock_revoke.assert_not_called()  # Should not try to revoke again
+
+        # Verify DB state is UNCHANGED after second disconnect
+        result = await async_session.execute(
+            text("""
+                SELECT revoked_at
+                FROM core_connections
+                WHERE user_id = :uid AND provider = 'google'
+            """),
+            {"uid": user.id},
+        )
+        revoked_at_after_second = result.fetchone()[0]
+
+        result = await async_session.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM oauth_access_tokens
+                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = true
+            """),
+            {"uid": user.id},
+        )
+        revoked_tokens_after_second = result.scalar()
+
+        # DB state should be identical
+        assert revoked_at_after_first == revoked_at_after_second, \
+            "revoked_at should not change on second disconnect"
+        assert revoked_tokens_after_first == revoked_tokens_after_second, \
+            "Token revocation count should not change on second disconnect"

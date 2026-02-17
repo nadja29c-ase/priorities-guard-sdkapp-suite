@@ -310,10 +310,11 @@ class TestCascadeDelete:
         await async_session.commit()
 
         # Retire the priority via direct SQL (no retire endpoint)
+        # Retired priorities keep their keyword - partial unique index excludes them
         await async_session.execute(
             text("""
                 UPDATE pg_priorities
-                SET status = 'retired', retired_at = NOW(), calendar_keyword = NULL
+                SET status = 'retired', retired_at = NOW()
                 WHERE id = :pid
             """),
             {"pid": priority_id},
@@ -550,8 +551,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_keyword" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_keyword" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -573,14 +573,18 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_type" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_type" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
     @pytest.mark.asyncio
     async def test_invalid_status_rejected(self, async_session: AsyncSession):
-        """3c. status='unknown' rejected by CHECK constraint."""
+        """3c. status='unknown' rejected by CHECK constraint.
+
+        Note: Either ck_pg_priorities_status or ck_pg_priorities_retirement_consistency
+        may fire first - both effectively reject invalid status values. The retirement
+        consistency constraint fails because 'unknown' matches neither 'active' nor 'retired'.
+        """
         user = CoreUser(id=uuid4())
         async_session.add(user)
         await async_session.flush()
@@ -596,8 +600,10 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_status" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        error_msg = str(exc_info.value).lower()
+        # Either constraint may fire first - both reject invalid status
+        assert "ck_pg_priorities_status" in error_msg or \
+               "ck_pg_priorities_retirement_consistency" in error_msg
 
         await async_session.rollback()
 
@@ -621,8 +627,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_type_field_consistency" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_type_field_consistency" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -644,8 +649,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_type_field_consistency" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_type_field_consistency" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -667,8 +671,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_weekly_target_positive" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_weekly_target_positive" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -690,8 +693,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_retirement_consistency" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_retirement_consistency" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -713,8 +715,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_retirement_consistency" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_retirement_consistency" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -748,8 +749,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_weekly_snapshots_actual_hours_non_negative" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_weekly_snapshots_actual_hours_non_negative" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -785,8 +785,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_weekly_snapshots_week_consistency" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_weekly_snapshots_week_consistency" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -821,8 +820,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_weekly_snapshots_week_start_monday" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_weekly_snapshots_week_start_monday" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
@@ -853,8 +851,7 @@ class TestCheckConstraints:
             )
             await async_session.flush()
 
-        assert "ck_pg_priorities_type" in str(exc_info.value).lower() or \
-               "check" in str(exc_info.value).lower()
+        assert "ck_pg_priorities_type" in str(exc_info.value).lower()
 
         await async_session.rollback()
 
