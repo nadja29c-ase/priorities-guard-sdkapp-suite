@@ -10,7 +10,7 @@ Both endpoints require valid ChatGPT OAuth JWT for authentication.
 User ID is extracted from the JWT sub claim via X-User-ID header.
 """
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -24,7 +24,7 @@ from backend.core.google_oauth import revoke_google_token
 from backend.core.models import CoreConnection, CoreUser
 from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizationCode
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["priority-guardian-offboarding"])
 
@@ -82,10 +82,14 @@ async def disconnect(
         connection = result.scalar_one_or_none()
 
         if connection is None:
-            logger.info(f"[pg-offboarding] No Google connection found for user {user_id}")
+            logger.info("pg_offboarding.no_google_connection", user_id=str(user_id))
             # Still mark tokens as revoked even if no connection
         elif connection.revoked_at is not None:
-            logger.info(f"[pg-offboarding] User {user_id} already disconnected at {connection.revoked_at}")
+            logger.info(
+                "pg_offboarding.already_disconnected",
+                user_id=str(user_id),
+                revoked_at=connection.revoked_at.isoformat(),
+            )
             return {
                 "status": "disconnected",
                 "revoked_at": connection.revoked_at.isoformat(),
@@ -105,16 +109,21 @@ async def disconnect(
                     details["google_token_revoked"] = revoke_result.get("success", False)
                     if not revoke_result["success"]:
                         logger.warning(
-                            f"[pg-offboarding] Google token revoke failed for user {user_id}: "
-                            f"{revoke_result.get('error')}"
+                            "pg_offboarding.google_revoke_failed",
+                            user_id=str(user_id),
+                            error=revoke_result.get("error"),
                         )
                 except Exception as e:
-                    logger.warning(f"[pg-offboarding] Google token revoke error for user {user_id}: {e}")
+                    logger.warning(
+                        "pg_offboarding.google_revoke_error",
+                        user_id=str(user_id),
+                        error=str(e),
+                    )
                     # Continue - non-blocking
             else:
                 logger.info(
-                    f"[pg-offboarding] No refresh token to revoke for user {user_id}, "
-                    f"access token will expire naturally (max 1 hour)"
+                    "pg_offboarding.no_refresh_token",
+                    user_id=str(user_id),
                 )
 
             # Mark connection as revoked
@@ -137,16 +146,21 @@ async def disconnect(
             details["pg_tokens_revoked"] = result.rowcount
 
         except Exception as e:
-            logger.error(f"[pg-offboarding] OAuth token revocation error for user {user_id}: {e}")
+            logger.error(
+                "pg_offboarding.token_revocation_error",
+                user_id=str(user_id),
+                error=str(e),
+            )
             # Continue - non-blocking
 
         await session.commit()
 
         logger.info(
-            f"[pg-offboarding] Disconnect completed for user {user_id}: "
-            f"google_token_revoked={details['google_token_revoked']}, "
-            f"google_connection_revoked={details['google_connection_revoked']}, "
-            f"pg_tokens={details['pg_tokens_revoked']}"
+            "pg_offboarding.disconnect_completed",
+            user_id=str(user_id),
+            google_token_revoked=details["google_token_revoked"],
+            google_connection_revoked=details["google_connection_revoked"],
+            pg_tokens_revoked=details["pg_tokens_revoked"],
         )
 
         return {
@@ -157,12 +171,16 @@ async def disconnect(
         }
 
     except ValueError as e:
-        logger.error(f"[pg-offboarding] Invalid user_id: {e}")
+        logger.error("pg_offboarding.invalid_user_id", error=str(e))
         raise HTTPException(status_code=400, detail=f"Invalid user ID: {e}")
 
     except HTTPException:
         raise
 
     except Exception as e:
-        logger.error(f"[pg-offboarding] Disconnect error: {e}")
+        logger.error(
+            "pg_offboarding.unexpected_error",
+            error_type=type(e).__name__,
+            error=str(e),
+        )
         raise HTTPException(status_code=500, detail="Internal server error")

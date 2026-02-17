@@ -230,6 +230,41 @@ async def oauth_exception_handler(request: Request, exc: OAuthError):
     )
 
 
+# -------------------------------------------------------------
+# Global Unhandled Exception Handler
+# -------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Catch-all handler for unhandled exceptions.
+
+    Ensures all 500 errors are logged with structured logging and correlation IDs,
+    even from routes that don't have their own try/catch blocks.
+    """
+    correlation_id = getattr(request.state, 'correlation_id', 'system')
+    request_logger = logger.bind(correlation_id=correlation_id)
+
+    request_logger.error(
+        "unhandled_exception",
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+        path=request.url.path,
+        method=request.method,
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+            }
+        }
+    )
+
+
 # Add Correlation ID and Security Headers Middleware (Increment 7C)
 """
 CorrelationIDMiddleware: Generates or accepts correlation_id for request tracing
