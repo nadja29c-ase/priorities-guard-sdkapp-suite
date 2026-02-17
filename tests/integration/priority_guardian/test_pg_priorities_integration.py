@@ -78,7 +78,7 @@ class TestCreatePriorityHappyPath:
                 "type": "flexible",
                 "weekly_hour_target": 10.0,
                 "checkpoint_date": future_date,
-                "desired_result": "3 new client meetings scheduled",
+                "initial_goal_text": "3 new client meetings scheduled",
             },
             headers={"X-User-ID": str(user_id)},
         )
@@ -93,7 +93,10 @@ class TestCreatePriorityHappyPath:
         assert priority["type"] == "flexible"
         assert priority["weekly_hour_target"] == 10.0
         assert priority["checkpoint_date"] == future_date
-        assert priority["desired_result"] == "3 new client meetings scheduled"
+        # Initial goal text creates the first goal in the goals array
+        assert len(priority["goals"]) == 1
+        assert priority["goals"][0]["text"] == "3 new client meetings scheduled"
+        assert priority["goals"][0]["achieved"] is False
         assert priority["calendar_keyword"] == "P1"
 
 
@@ -293,10 +296,10 @@ class TestValidationEnforcement:
         assert response.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_flexible_type_without_desired_result_returns_422(
+    async def test_flexible_type_without_initial_goal_text_returns_422(
         self, client, async_session: AsyncSession
     ):
-        """Flexible type without desired_result returns 422."""
+        """Flexible type without initial_goal_text returns 422."""
         user_id = uuid4()
         await async_session.execute(
             text("INSERT INTO core_users (id) VALUES (:id)"),
@@ -313,7 +316,7 @@ class TestValidationEnforcement:
                 "type": "flexible",
                 "weekly_hour_target": 10.0,
                 "checkpoint_date": future_date,
-                # Missing desired_result
+                # Missing initial_goal_text
             },
             headers={"X-User-ID": str(user_id)},
         )

@@ -374,6 +374,9 @@ async def create_priority(
         await session.flush()
         await session.commit()
 
+        # Refresh to load relationships (goals) after commit
+        await session.refresh(priority)
+
         # Step 6: Compute available_keywords post-commit from actual DB state
         # Re-query to get accurate post-commit state
         result = await session.execute(
