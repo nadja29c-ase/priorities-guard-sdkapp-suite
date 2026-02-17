@@ -91,6 +91,12 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Database connection failed: {e}")
         raise
 
+    # Validate schema integrity (blocks startup if drift detected)
+    from backend.core.schema_validator import validate_schema
+    from backend.core.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        await validate_schema(session)
+
     yield
 
     # Shutdown
@@ -241,14 +247,27 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     Ensures all 500 errors are logged with structured logging and correlation IDs,
     even from routes that don't have their own try/catch blocks.
+
+    Re-raises exceptions that have their own handlers or require special handling.
+    Does NOT log str(exc) — SQLAlchemy exceptions contain raw SQL with parameters.
     """
+    import asyncio
+    from fastapi import HTTPException
+    from fastapi.exceptions import RequestValidationError
+
+    # Re-raise exceptions that have dedicated handlers or need special handling
+    if isinstance(exc, asyncio.CancelledError):
+        raise exc  # Don't swallow - breaks graceful shutdown
+    if isinstance(exc, (HTTPException, RequestValidationError, OAuthError)):
+        raise exc  # These have their own handlers
+
     correlation_id = getattr(request.state, 'correlation_id', 'system')
     request_logger = logger.bind(correlation_id=correlation_id)
 
+    # Log error_type only, NOT str(exc) — SQLAlchemy exceptions contain raw SQL
     request_logger.error(
-        "unhandled_exception",
+        "http.unhandled_exception",
         error_type=type(exc).__name__,
-        error_message=str(exc),
         path=request.url.path,
         method=request.method,
     )
