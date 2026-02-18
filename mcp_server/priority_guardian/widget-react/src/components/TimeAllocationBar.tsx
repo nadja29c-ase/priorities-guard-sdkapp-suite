@@ -220,7 +220,8 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
         {legendItems.map((item) => (
           <div key={item.key} className="flex items-center gap-1.5">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${item.isOther ? 'bg-outline-default' : BAR_COLORS[item.key]}`}
+              className={`w-1.5 h-1.5 rounded-full ${item.isOther ? '' : BAR_COLORS[item.key]}`}
+              style={item.isOther ? { backgroundColor: 'var(--color-text-tertiary)' } : undefined}
               aria-hidden="true"
             />
             <span
