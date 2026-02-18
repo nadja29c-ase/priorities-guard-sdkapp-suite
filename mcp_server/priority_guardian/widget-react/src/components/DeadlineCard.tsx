@@ -404,7 +404,7 @@ export function DeadlineCard({
             </p>
             <Button
               color="secondary"
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={onCancelEdit}
               disabled={isSaving}
