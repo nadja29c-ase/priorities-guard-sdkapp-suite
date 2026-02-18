@@ -1544,3 +1544,226 @@ class TestRealDBSnapshotWeekTotals:
         assert float(row[0]) == 3.0  # actual_hours (P1 events)
         assert float(row[1]) == 1.5  # other_hours (untagged meeting)
         assert float(row[2]) == 4.5  # total_tracked_hours (3.0 + 1.5)
+
+    @pytest.mark.asyncio
+    async def test_snapshot_persists_exact_decimal_values(self, async_session):
+        """
+        Snapshot stores exact Decimal values without floating-point drift.
+
+        Verifies NUMERIC(6,2) and NUMERIC(8,2) preserve precision.
+        """
+        from sqlalchemy import text
+        from backend.core.models import CoreConnection
+        from backend.core.encryption import encrypt_token
+
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        connection = CoreConnection(
+            user_id=user.id,
+            provider="google",
+            connection_type="google",
+            encrypted_access_token=encrypt_token("test_access_token"),
+            encrypted_refresh_token=encrypt_token("test_refresh_token"),
+            token_expires_at=datetime.now() + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+        )
+        async_session.add(connection)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2026, 1, 1),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # Events with precise decimal hours: 2h 15m = 2.25h, 45m = 0.75h
+        mock_events = [
+            {
+                "id": "event1",
+                "summary": "P1 - Precise work",
+                "start": {"dateTime": "2026-02-03T09:00:00Z"},
+                "end": {"dateTime": "2026-02-03T11:15:00Z"},  # 2.25 hours
+                "status": "confirmed",
+            },
+            {
+                "id": "event2",
+                "summary": "Other meeting",
+                "start": {"dateTime": "2026-02-03T14:00:00Z"},
+                "end": {"dateTime": "2026-02-03T14:45:00Z"},  # 0.75 hours
+                "status": "confirmed",
+            },
+        ]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.snapshot_service._compute_target_weeks"
+        ) as mock_weeks, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_list_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_weeks.return_value = [date(2026, 2, 2)]
+            mock_list_events.return_value = (mock_events, 0)
+
+            await ensure_snapshots_up_to_date(
+                user_id=user.id,
+                session=async_session,
+                http_client=mock_http_client,
+            )
+
+        # Query and verify exact Decimal values
+        result = await async_session.execute(
+            text("""
+                SELECT actual_hours, other_hours, total_tracked_hours
+                FROM pg_weekly_snapshots
+                WHERE priority_id = :priority_id
+            """),
+            {"priority_id": priority.id},
+        )
+        row = result.fetchone()
+
+        # Verify exact Decimal precision (no floating-point drift)
+        assert row[0] == Decimal("2.25"), f"Expected 2.25, got {row[0]}"
+        assert row[1] == Decimal("0.75"), f"Expected 0.75, got {row[1]}"
+        assert row[2] == Decimal("3.00"), f"Expected 3.00, got {row[2]}"
+
+    @pytest.mark.asyncio
+    async def test_snapshot_denormalized_values_identical_across_priorities(self, async_session):
+        """
+        Multiple priorities in the same week have identical other_hours and total_tracked_hours.
+
+        Verifies denormalization: week-level values are the same across all snapshot rows.
+        """
+        from sqlalchemy import text
+        from backend.core.models import CoreConnection
+        from backend.core.encryption import encrypt_token
+
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        connection = CoreConnection(
+            user_id=user.id,
+            provider="google",
+            connection_type="google",
+            encrypted_access_token=encrypt_token("test_access_token"),
+            encrypted_refresh_token=encrypt_token("test_refresh_token"),
+            token_expires_at=datetime.now() + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+        )
+        async_session.add(connection)
+        await async_session.flush()
+
+        # Create 3 priorities with different keywords
+        priorities = []
+        for kw in ["P1", "P2", "P3"]:
+            p = PgPriority(
+                user_id=user.id,
+                name=f"Priority {kw}",
+                type="flexible",
+                calendar_keyword=kw,
+                status="active",
+                weekly_hour_target=Decimal("10.0"),
+                checkpoint_date=date(2026, 3, 15),
+                created_at=datetime(2026, 1, 1),
+            )
+            async_session.add(p)
+            priorities.append(p)
+        await async_session.commit()
+
+        # Events for all keywords plus untagged
+        mock_events = [
+            {
+                "id": "event1",
+                "summary": "P1 - Work",
+                "start": {"dateTime": "2026-02-03T09:00:00Z"},
+                "end": {"dateTime": "2026-02-03T11:00:00Z"},  # 2h
+                "status": "confirmed",
+            },
+            {
+                "id": "event2",
+                "summary": "P2 - Other work",
+                "start": {"dateTime": "2026-02-03T11:00:00Z"},
+                "end": {"dateTime": "2026-02-03T13:00:00Z"},  # 2h
+                "status": "confirmed",
+            },
+            {
+                "id": "event3",
+                "summary": "P3 - More work",
+                "start": {"dateTime": "2026-02-03T14:00:00Z"},
+                "end": {"dateTime": "2026-02-03T15:00:00Z"},  # 1h
+                "status": "confirmed",
+            },
+            {
+                "id": "event4",
+                "summary": "Team standup",  # No keyword - other hours
+                "start": {"dateTime": "2026-02-03T16:00:00Z"},
+                "end": {"dateTime": "2026-02-03T16:30:00Z"},  # 0.5h
+                "status": "confirmed",
+            },
+        ]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.snapshot_service._compute_target_weeks"
+        ) as mock_weeks, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_list_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_weeks.return_value = [date(2026, 2, 2)]
+            mock_list_events.return_value = (mock_events, 0)
+
+            result = await ensure_snapshots_up_to_date(
+                user_id=user.id,
+                session=async_session,
+                http_client=mock_http_client,
+            )
+
+        assert result["created"] == 1  # 1 week processed (contains 3 snapshots)
+
+        # Query all snapshots for this week
+        snapshot_result = await async_session.execute(
+            text("""
+                SELECT priority_id, actual_hours, other_hours, total_tracked_hours
+                FROM pg_weekly_snapshots
+                WHERE user_id = :user_id AND week_start = '2026-02-02'
+                ORDER BY actual_hours DESC
+            """),
+            {"user_id": user.id},
+        )
+        rows = snapshot_result.fetchall()
+
+        assert len(rows) == 3
+
+        # Verify denormalized values are IDENTICAL across all rows
+        expected_other = Decimal("0.50")  # 0.5h untagged
+        expected_total = Decimal("5.50")  # 2 + 2 + 1 + 0.5 = 5.5h
+
+        for row in rows:
+            assert row[2] == expected_other, f"other_hours mismatch: {row[2]} != {expected_other}"
+            assert row[3] == expected_total, f"total_tracked_hours mismatch: {row[3]} != {expected_total}"
+
+        # Verify actual_hours differ (priority-specific)
+        actual_hours = [row[1] for row in rows]
+        assert Decimal("2.00") in actual_hours  # P1 or P2
+        assert Decimal("1.00") in actual_hours  # P3
