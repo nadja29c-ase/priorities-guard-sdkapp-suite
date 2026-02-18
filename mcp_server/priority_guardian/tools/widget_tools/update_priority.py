@@ -168,6 +168,17 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         priority_id=priority_id,
     )
 
+    # Build assistant guidance - include keyword reminder if keyword was changed
+    new_keyword = payload.get("calendar_keyword")
+    if new_keyword:
+        assistant_guidance = (
+            f"Priority updated. The keyword is now {new_keyword}. "
+            f"Remind the user to tag future calendar events with [{new_keyword}] "
+            f"to track time for this priority."
+        )
+    else:
+        assistant_guidance = "Priority updated. The dashboard reflects the changes."
+
     structured_content = {
         "success": True,
         "data": {
@@ -179,7 +190,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         "_meta": {
             "openai/outputTemplate": WIDGET_URI,
         },
-        "assistant_guidance": "Priority updated. The dashboard reflects the changes.",
+        "assistant_guidance": assistant_guidance,
     }
 
     return mcp_types.CallToolResult(

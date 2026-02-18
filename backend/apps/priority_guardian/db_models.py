@@ -417,18 +417,19 @@ class PgDeliverable(Base):
 
 class PgWeeklySnapshot(Base):
     """
-    Per-priority weekly data point for running aggregate computation.
+    Per-priority weekly data point for historical reports and aggregate computation.
 
     One row per priority per completed week. Created opportunistically on dashboard
     load via ensure_snapshots_up_to_date(). Immutable after creation (INSERT ON
     CONFLICT DO NOTHING).
 
-    Used exclusively by snapshot_service._update_aggregates() to compute:
-    - streak_count: from streak_at_snapshot chain
-    - total_hours_invested: SUM(actual_hours)
-    - avg_target_achievement: AVG(actual_hours / target_hours * 100)
+    Used by:
+    - snapshot_service._update_aggregates() to compute streak_count, total_hours_invested,
+      avg_target_achievement on pg_priorities
+    - weekly_report_service._build_report_from_snapshots() for past week reports
 
-    Not queried directly for display. All consumer-facing data lives on pg_priorities.
+    The calendar_keyword_at_snapshot field captures the keyword at snapshot creation time,
+    enabling accurate past-week reports even after keyword reassignments.
     """
 
     __tablename__ = "pg_weekly_snapshots"
@@ -487,6 +488,12 @@ class PgWeeklySnapshot(Base):
         Integer,
         nullable=True,
         comment="streak_count value AFTER this week's update",
+    )
+
+    calendar_keyword_at_snapshot: Mapped[str | None] = mapped_column(
+        String(2),
+        nullable=True,
+        comment="Calendar keyword (P1/P2/P3) at time of snapshot creation. NULL for pre-migration snapshots.",
     )
 
     # Audit timestamp

@@ -1,12 +1,11 @@
 """
-Unit tests for simplified weekly report service (Increment 06-S).
+Unit tests for weekly report service.
 
-Tests the generate_weekly_report() function after persistence was stripped:
-- Always returns snapshot_saved: false
-- Always returns weeks_backfilled: 0
-- Always returns previous_week: null
-- is_current_week flag computed correctly
-- Pure computation functions still work
+Tests the generate_weekly_report() function:
+- Snapshot-based reports for past weeks
+- Live calendar computation for current weeks
+- Fallback to live computation when no snapshots exist
+- Pure computation functions (flex_status, pacing_status, etc.)
 """
 
 import pytest
@@ -22,7 +21,9 @@ from backend.apps.priority_guardian.services.weekly_report_service import (
     compute_pacing_status,
     process_events_for_report,
     _empty_report,
+    _build_report_from_snapshots,
 )
+from backend.apps.priority_guardian.services.utils import priority_eligible_for_week
 
 
 class TestIsWeekComplete:
@@ -418,3 +419,382 @@ class TestGenerateWeeklyReportSimplified:
                 session=mock_session,
                 http_client=mock_http_client,
             )
+
+
+class TestPriorityEligibleForWeek:
+    """Tests for priority_eligible_for_week() helper."""
+
+    def test_priority_created_on_monday_eligible_same_week(self):
+        """Priority created on Monday is eligible for that week."""
+        created = date(2026, 2, 9)  # Monday
+        week_start = date(2026, 2, 9)  # Same Monday
+        assert priority_eligible_for_week(created, week_start) is True
+
+    def test_priority_created_on_tuesday_not_eligible_same_week(self):
+        """Priority created on Tuesday is NOT eligible for that week (partial week)."""
+        created = date(2026, 2, 10)  # Tuesday
+        week_start = date(2026, 2, 9)  # Monday of same week
+        assert priority_eligible_for_week(created, week_start) is False
+
+    def test_priority_created_on_tuesday_eligible_next_week(self):
+        """Priority created on Tuesday IS eligible for the following week."""
+        created = date(2026, 2, 10)  # Tuesday
+        week_start = date(2026, 2, 16)  # Next Monday
+        assert priority_eligible_for_week(created, week_start) is True
+
+    def test_priority_created_on_sunday_eligible_next_week(self):
+        """Priority created on Sunday is eligible for the next week."""
+        created = date(2026, 2, 15)  # Sunday
+        week_start = date(2026, 2, 16)  # Next Monday
+        assert priority_eligible_for_week(created, week_start) is True
+
+    def test_priority_created_before_week_start(self):
+        """Priority created well before week_start is eligible."""
+        created = date(2026, 1, 1)  # Wednesday
+        week_start = date(2026, 2, 16)  # Monday many weeks later
+        assert priority_eligible_for_week(created, week_start) is True
+
+
+class TestBuildReportFromSnapshots:
+    """Tests for _build_report_from_snapshots() function."""
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_snapshots(self):
+        """Returns None when no snapshot rows exist for the week."""
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        # First query: snapshots - returns empty
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = []
+
+        mock_session.execute.return_value = snapshot_result
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_report_with_snapshot_data(self):
+        """Returns report dict when snapshots exist with full coverage."""
+        user_id = uuid4()
+        priority_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        # Create mock snapshot and priority
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("7.5")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 3
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"
+
+        mock_priority = MagicMock()
+        mock_priority.id = priority_id
+        mock_priority.name = "Test Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P2"  # Current keyword (different from snapshot)
+        mock_priority.weekly_hour_target = Decimal("10.0")
+        mock_priority.total_hours_invested = Decimal("50.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = None
+
+        # First query: snapshots with priorities
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        # Second query: all priorities for expected count
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        assert result is not None
+        assert result["success"] is True
+        data = result["data"]
+        assert data["is_current_week"] is False
+        assert data["snapshot_saved"] is True  # Indicates data came from snapshots
+        assert data["all_events"] == []  # No event data from snapshots
+        assert data["time_allocation"]["other_hours"] == 0.0
+
+        # Check priority data uses snapshot keyword, not current
+        priority_data = data["priorities"][0]
+        assert priority_data["calendar_keyword"] == "P1"  # From snapshot
+        assert priority_data["actual_hours"] == 7.5
+        assert priority_data["streak_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_flex_status_computed_from_snapshot_hours(self):
+        """flex_status is computed from snapshot actual/target hours."""
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        # 120% of target = ahead
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("12.0")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 1
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"
+
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Test"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.total_hours_invested = Decimal("0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = None
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        assert result["data"]["priorities"][0]["flex_status"] == "ahead"
+
+    @pytest.mark.asyncio
+    async def test_other_hours_always_zero(self):
+        """other_hours is always 0.0 for snapshot-based reports."""
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("5.0")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 1
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"
+
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Test"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.total_hours_invested = Decimal("0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = None
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        assert result["data"]["time_allocation"]["other_hours"] == 0.0
+        assert result["data"]["time_allocation"]["total_tracked_hours"] == 5.0
+
+    @pytest.mark.asyncio
+    async def test_partial_snapshots_returns_none(self):
+        """Returns None when snapshot count < expected priority count."""
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        # Only one snapshot exists
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("5.0")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 1
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"
+
+        mock_priority1 = MagicMock()
+        mock_priority1.id = uuid4()
+        mock_priority1.name = "Priority 1"
+        mock_priority1.type = "flexible"
+        mock_priority1.calendar_keyword = "P1"
+        mock_priority1.deliverables = []
+        mock_priority1.created_at = datetime(2026, 1, 1)  # Created before week
+        mock_priority1.retired_at = None
+
+        # Second priority also should have snapshot but doesn't
+        mock_priority2 = MagicMock()
+        mock_priority2.id = uuid4()
+        mock_priority2.name = "Priority 2"
+        mock_priority2.type = "flexible"
+        mock_priority2.calendar_keyword = "P2"
+        mock_priority2.deliverables = []
+        mock_priority2.created_at = datetime(2026, 1, 1)  # Created before week
+        mock_priority2.retired_at = None
+
+        # Only 1 snapshot row
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority1)]
+
+        # But 2 priorities should have snapshots
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority1, mock_priority2]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        # Should return None due to partial coverage
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_uses_current_keyword_when_snapshot_keyword_null(self):
+        """Falls back to current keyword when calendar_keyword_at_snapshot is null."""
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        # Pre-migration snapshot without calendar_keyword_at_snapshot
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("5.0")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 1
+        mock_snapshot.calendar_keyword_at_snapshot = None  # Pre-migration
+
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Test"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P3"  # Current keyword
+        mock_priority.total_hours_invested = Decimal("0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = None
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        # Should use current keyword P3 as fallback
+        assert result["data"]["priorities"][0]["calendar_keyword"] == "P3"
+
+    @pytest.mark.asyncio
+    async def test_response_shape_matches_live_report(self):
+        """Snapshot report has same shape as live computation report."""
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("8.0")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 2
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"
+
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Flexible Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.total_hours_invested = Decimal("25.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = None
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        # Verify all required top-level keys
+        assert "success" in result
+        assert "data" in result
+
+        data = result["data"]
+        required_keys = [
+            "week_start", "week_end", "is_current_week", "snapshot_saved",
+            "weeks_backfilled", "backfill_truncated", "priorities",
+            "time_allocation", "all_events"
+        ]
+        for key in required_keys:
+            assert key in data, f"Missing key: {key}"
+
+        # Verify priority shape
+        priority = data["priorities"][0]
+        priority_keys = [
+            "id", "name", "type", "calendar_keyword", "actual_hours",
+            "event_count", "target_hours", "flex_status", "streak_count",
+            "total_hours_invested", "previous_week"
+        ]
+        for key in priority_keys:
+            assert key in priority, f"Missing priority key: {key}"
+
+        # Verify time_allocation shape
+        ta = data["time_allocation"]
+        assert "total_tracked_hours" in ta
+        assert "keywords" in ta
+        assert "other_hours" in ta
+        for kw in ["P1", "P2", "P3"]:
+            assert kw in ta["keywords"]
+            assert "hours" in ta["keywords"][kw]
+            assert "event_count" in ta["keywords"][kw]

@@ -37,6 +37,9 @@ logger = structlog.get_logger(__name__)
 # Maximum weeks to backfill (per spec)
 MAX_BACKFILL_WEEKS = 3
 
+# Import shared helper (defined in utils to avoid circular imports)
+from backend.apps.priority_guardian.services.utils import priority_eligible_for_week
+
 
 async def ensure_snapshots_up_to_date(
     user_id: UUID,
@@ -303,18 +306,13 @@ async def _create_snapshots_for_week(
 
     for priority in priorities:
         # Skip partial weeks: only create snapshots for weeks where the priority
-        # existed for all 7 days. Find the first Monday on or after created_at.
-        # weekday(): 0=Monday, 6=Sunday. Formula: (7 - weekday) % 7 gives days to next Monday.
+        # existed for all 7 days.
         priority_created_date = priority.created_at.date()
-        days_until_monday = (7 - priority_created_date.weekday()) % 7
-        first_valid_monday = priority_created_date + timedelta(days=days_until_monday)
-
-        if week_start < first_valid_monday:
+        if not priority_eligible_for_week(priority_created_date, week_start):
             logger.debug(
                 "snapshot.skip_partial_week",
                 priority_id=str(priority.id),
                 week_start=str(week_start),
-                first_valid_monday=str(first_valid_monday),
                 priority_created=str(priority_created_date),
                 **log
             )
@@ -342,6 +340,8 @@ async def _create_snapshots_for_week(
             "streak_at_snapshot": streak,
             # target_hours only set for flexible priorities
             "target_hours": priority.weekly_hour_target if priority.type == "flexible" else None,
+            # Capture keyword at snapshot time for accurate past-week reports
+            "calendar_keyword_at_snapshot": priority.calendar_keyword,
         }
 
         # INSERT with ON CONFLICT DO NOTHING RETURNING id
