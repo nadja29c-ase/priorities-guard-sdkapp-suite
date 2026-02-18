@@ -301,6 +301,10 @@ async def _create_snapshots_for_week(
     allocation = compute_allocation_from_events(events)
     keywords_data = allocation["keywords"]
 
+    # Extract week-level values (same for all priorities in this week)
+    week_other_hours = Decimal(str(allocation["other_hours"])).quantize(Decimal("0.01"))
+    week_total_tracked_hours = Decimal(str(allocation["total_tracked_hours"])).quantize(Decimal("0.01"))
+
     # Create snapshots for each priority
     any_created = False
 
@@ -342,6 +346,9 @@ async def _create_snapshots_for_week(
             "target_hours": priority.weekly_hour_target if priority.type == "flexible" else None,
             # Capture keyword at snapshot time for accurate past-week reports
             "calendar_keyword_at_snapshot": priority.calendar_keyword,
+            # Denormalized week-level values (same for all priorities in this week)
+            "other_hours": week_other_hours,
+            "total_tracked_hours": week_total_tracked_hours,
         }
 
         # INSERT with ON CONFLICT DO NOTHING RETURNING id

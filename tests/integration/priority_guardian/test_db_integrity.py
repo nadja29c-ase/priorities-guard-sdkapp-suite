@@ -847,6 +847,152 @@ class TestCheckConstraints:
         await async_session.rollback()
 
     @pytest.mark.asyncio
+    async def test_snapshot_negative_other_hours_rejected(self, async_session: AsyncSession):
+        """3l. Negative other_hours on snapshot rejected by CHECK constraint."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        with pytest.raises(IntegrityError) as exc_info:
+            await async_session.execute(
+                text("""
+                    INSERT INTO pg_weekly_snapshots
+                    (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot, other_hours)
+                    VALUES (gen_random_uuid(), :pid, :uid, '2026-02-02', '2026-02-08', 5.0, 10.0, 0, -1.0)
+                """),
+                {"pid": priority.id, "uid": user.id},
+            )
+            await async_session.flush()
+
+        assert "ck_pg_weekly_snapshots_other_hours_non_negative" in str(exc_info.value).lower()
+
+        await async_session.rollback()
+
+    @pytest.mark.asyncio
+    async def test_snapshot_negative_total_tracked_hours_rejected(self, async_session: AsyncSession):
+        """3m. Negative total_tracked_hours on snapshot rejected by CHECK constraint."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        with pytest.raises(IntegrityError) as exc_info:
+            await async_session.execute(
+                text("""
+                    INSERT INTO pg_weekly_snapshots
+                    (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot, total_tracked_hours)
+                    VALUES (gen_random_uuid(), :pid, :uid, '2026-02-02', '2026-02-08', 5.0, 10.0, 0, -5.0)
+                """),
+                {"pid": priority.id, "uid": user.id},
+            )
+            await async_session.flush()
+
+        assert "ck_pg_weekly_snapshots_total_hours_non_negative" in str(exc_info.value).lower()
+
+        await async_session.rollback()
+
+    @pytest.mark.asyncio
+    async def test_snapshot_zero_other_hours_accepted(self, async_session: AsyncSession):
+        """3n. Zero other_hours is valid (boundary test)."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # Zero is valid
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot, other_hours, total_tracked_hours)
+                VALUES (gen_random_uuid(), :pid, :uid, '2026-02-02', '2026-02-08', 5.0, 10.0, 0, 0.0, 5.0)
+            """),
+            {"pid": priority.id, "uid": user.id},
+        )
+        await async_session.commit()
+
+        # Verify it was inserted
+        result = await async_session.execute(
+            text("SELECT other_hours, total_tracked_hours FROM pg_weekly_snapshots WHERE priority_id = :pid"),
+            {"pid": priority.id},
+        )
+        row = result.fetchone()
+        assert float(row[0]) == 0.0
+        assert float(row[1]) == 5.0
+
+    @pytest.mark.asyncio
+    async def test_snapshot_null_other_hours_accepted(self, async_session: AsyncSession):
+        """3o. NULL other_hours is valid (for pre-migration snapshots)."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # NULL is valid
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot, other_hours, total_tracked_hours)
+                VALUES (gen_random_uuid(), :pid, :uid, '2026-02-02', '2026-02-08', 5.0, 10.0, 0, NULL, NULL)
+            """),
+            {"pid": priority.id, "uid": user.id},
+        )
+        await async_session.commit()
+
+        # Verify it was inserted with NULL
+        result = await async_session.execute(
+            text("SELECT other_hours, total_tracked_hours FROM pg_weekly_snapshots WHERE priority_id = :pid"),
+            {"pid": priority.id},
+        )
+        row = result.fetchone()
+        assert row[0] is None
+        assert row[1] is None
+
+    @pytest.mark.asyncio
     async def test_check_constraint_enforced_on_update(self, async_session: AsyncSession):
         """3l. CHECK constraint fires on UPDATE, not just INSERT."""
         user = CoreUser(id=uuid4())

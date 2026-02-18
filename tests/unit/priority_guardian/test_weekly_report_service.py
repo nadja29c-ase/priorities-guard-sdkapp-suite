@@ -498,6 +498,8 @@ class TestBuildReportFromSnapshots:
         mock_snapshot.target_hours = Decimal("10.0")
         mock_snapshot.streak_at_snapshot = 3
         mock_snapshot.calendar_keyword_at_snapshot = "P1"
+        mock_snapshot.other_hours = Decimal("2.5")
+        mock_snapshot.total_tracked_hours = Decimal("10.0")
 
         mock_priority = MagicMock()
         mock_priority.id = priority_id
@@ -533,7 +535,8 @@ class TestBuildReportFromSnapshots:
         assert data["is_current_week"] is False
         assert data["snapshot_saved"] is True  # Indicates data came from snapshots
         assert data["all_events"] == []  # No event data from snapshots
-        assert data["time_allocation"]["other_hours"] == 0.0
+        assert data["time_allocation"]["other_hours"] == 2.5
+        assert data["time_allocation"]["total_tracked_hours"] == 10.0
 
         # Check priority data uses snapshot keyword, not current
         priority_data = data["priorities"][0]
@@ -556,6 +559,8 @@ class TestBuildReportFromSnapshots:
         mock_snapshot.target_hours = Decimal("10.0")
         mock_snapshot.streak_at_snapshot = 1
         mock_snapshot.calendar_keyword_at_snapshot = "P1"
+        mock_snapshot.other_hours = None
+        mock_snapshot.total_tracked_hours = None
 
         mock_priority = MagicMock()
         mock_priority.id = uuid4()
@@ -585,8 +590,8 @@ class TestBuildReportFromSnapshots:
         assert result["data"]["priorities"][0]["flex_status"] == "ahead"
 
     @pytest.mark.asyncio
-    async def test_other_hours_always_zero(self):
-        """other_hours is always 0.0 for snapshot-based reports."""
+    async def test_snapshot_report_uses_stored_other_hours(self):
+        """Snapshot report uses stored other_hours and total_tracked_hours values."""
         user_id = uuid4()
         week_start = date(2026, 2, 9)
         week_end = date(2026, 2, 15)
@@ -598,6 +603,8 @@ class TestBuildReportFromSnapshots:
         mock_snapshot.target_hours = Decimal("10.0")
         mock_snapshot.streak_at_snapshot = 1
         mock_snapshot.calendar_keyword_at_snapshot = "P1"
+        mock_snapshot.other_hours = Decimal("12.5")  # Stored value
+        mock_snapshot.total_tracked_hours = Decimal("25.0")  # Stored value
 
         mock_priority = MagicMock()
         mock_priority.id = uuid4()
@@ -624,7 +631,55 @@ class TestBuildReportFromSnapshots:
             session=mock_session,
         )
 
+        # Should use stored values, not computed zeros
+        assert result["data"]["time_allocation"]["other_hours"] == 12.5
+        assert result["data"]["time_allocation"]["total_tracked_hours"] == 25.0
+
+    @pytest.mark.asyncio
+    async def test_snapshot_report_null_other_hours_defaults_to_zero(self):
+        """Pre-migration snapshots with NULL other_hours default to 0.0."""
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("5.0")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 1
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"
+        mock_snapshot.other_hours = None  # Pre-migration
+        mock_snapshot.total_tracked_hours = None  # Pre-migration
+
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Test"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.total_hours_invested = Decimal("0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = None
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        # Pre-migration: other_hours defaults to 0, total_tracked_hours computed from priority hours
         assert result["data"]["time_allocation"]["other_hours"] == 0.0
+        # total_tracked_hours should be 5.0 (priority hours) + 0.0 (other) since stored was None
         assert result["data"]["time_allocation"]["total_tracked_hours"] == 5.0
 
     @pytest.mark.asyncio
@@ -642,6 +697,8 @@ class TestBuildReportFromSnapshots:
         mock_snapshot.target_hours = Decimal("10.0")
         mock_snapshot.streak_at_snapshot = 1
         mock_snapshot.calendar_keyword_at_snapshot = "P1"
+        mock_snapshot.other_hours = None
+        mock_snapshot.total_tracked_hours = None
 
         mock_priority1 = MagicMock()
         mock_priority1.id = uuid4()
@@ -697,6 +754,8 @@ class TestBuildReportFromSnapshots:
         mock_snapshot.target_hours = Decimal("10.0")
         mock_snapshot.streak_at_snapshot = 1
         mock_snapshot.calendar_keyword_at_snapshot = None  # Pre-migration
+        mock_snapshot.other_hours = None
+        mock_snapshot.total_tracked_hours = None
 
         mock_priority = MagicMock()
         mock_priority.id = uuid4()
@@ -740,6 +799,8 @@ class TestBuildReportFromSnapshots:
         mock_snapshot.target_hours = Decimal("10.0")
         mock_snapshot.streak_at_snapshot = 2
         mock_snapshot.calendar_keyword_at_snapshot = "P1"
+        mock_snapshot.other_hours = Decimal("3.0")
+        mock_snapshot.total_tracked_hours = Decimal("11.0")
 
         mock_priority = MagicMock()
         mock_priority.id = uuid4()

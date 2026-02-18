@@ -37,6 +37,8 @@ PG_SNAPSHOTS_CHECK_CONSTRAINTS = [
     ("ck_pg_weekly_snapshots_week_consistency", None),  # Date arithmetic
     ("ck_pg_weekly_snapshots_week_start_monday", None),  # extract/date_part
     ("ck_pg_weekly_snapshots_target_hours_non_negative", ["target_hours", "0"]),
+    ("ck_pg_weekly_snapshots_other_hours_non_negative", ["other_hours", "0"]),
+    ("ck_pg_weekly_snapshots_total_hours_non_negative", ["total_tracked_hours", "0"]),
 ]
 
 # UNIQUE constraints on pg_weekly_snapshots (validated via pg_constraint, contype='u')

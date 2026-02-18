@@ -1438,3 +1438,109 @@ class TestRealDBZeroHours:
             f"Expected 0.0, got {priority.total_hours_invested}"
 
         await async_session.commit()
+
+
+class TestRealDBSnapshotWeekTotals:
+    """Tests for other_hours and total_tracked_hours persistence using real Postgres."""
+
+    @pytest.mark.asyncio
+    async def test_snapshot_persists_other_hours_and_total_tracked(self, async_session):
+        """
+        Snapshot INSERT includes other_hours and total_tracked_hours from allocation.
+
+        Verifies the snapshot_service extracts week-level values from
+        compute_allocation_from_events() and persists them.
+        """
+        from sqlalchemy import text
+        from backend.core.models import CoreConnection
+        from backend.core.encryption import encrypt_token
+
+        # Create test user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create real Google connection in DB
+        connection = CoreConnection(
+            user_id=user.id,
+            provider="google",
+            connection_type="google",
+            encrypted_access_token=encrypt_token("test_access_token"),
+            encrypted_refresh_token=encrypt_token("test_refresh_token"),
+            token_expires_at=datetime.now() + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+        )
+        async_session.add(connection)
+        await async_session.flush()
+
+        # Create priority
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2026, 1, 1),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # Mock calendar events including P1 tagged and untagged
+        mock_events = [
+            {
+                "id": "event1",
+                "summary": "P1 - Project work",
+                "start": {"dateTime": "2026-02-03T09:00:00Z"},
+                "end": {"dateTime": "2026-02-03T12:00:00Z"},  # 3 hours
+                "status": "confirmed",
+            },
+            {
+                "id": "event2",
+                "summary": "Team meeting",  # No keyword - other hours
+                "start": {"dateTime": "2026-02-03T14:00:00Z"},
+                "end": {"dateTime": "2026-02-03T15:30:00Z"},  # 1.5 hours
+                "status": "confirmed",
+            },
+        ]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.snapshot_service._compute_target_weeks"
+        ) as mock_weeks, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_list_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_weeks.return_value = [date(2026, 2, 2)]  # One week
+            mock_list_events.return_value = (mock_events, 0)
+
+            result = await ensure_snapshots_up_to_date(
+                user_id=user.id,
+                session=async_session,
+                http_client=mock_http_client,
+            )
+
+        assert result["created"] == 1
+
+        # Query snapshot and verify other_hours and total_tracked_hours
+        snapshot_result = await async_session.execute(
+            text("""
+                SELECT actual_hours, other_hours, total_tracked_hours
+                FROM pg_weekly_snapshots
+                WHERE priority_id = :priority_id
+            """),
+            {"priority_id": priority.id},
+        )
+        row = snapshot_result.fetchone()
+
+        assert row is not None
+        assert float(row[0]) == 3.0  # actual_hours (P1 events)
+        assert float(row[1]) == 1.5  # other_hours (untagged meeting)
+        assert float(row[2]) == 4.5  # total_tracked_hours (3.0 + 1.5)

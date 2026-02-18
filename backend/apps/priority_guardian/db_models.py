@@ -430,6 +430,11 @@ class PgWeeklySnapshot(Base):
 
     The calendar_keyword_at_snapshot field captures the keyword at snapshot creation time,
     enabling accurate past-week reports even after keyword reassignments.
+
+    Denormalized fields (same value across all snapshots for a week):
+    - other_hours: Untagged calendar hours for this week
+    - total_tracked_hours: Total tracked hours (all events) for this week
+    These enable accurate pie charts for historical weeks.
     """
 
     __tablename__ = "pg_weekly_snapshots"
@@ -496,6 +501,19 @@ class PgWeeklySnapshot(Base):
         comment="Calendar keyword (P1/P2/P3) at time of snapshot creation. NULL for pre-migration snapshots.",
     )
 
+    # Denormalized per-week values (same across all snapshots for a given week)
+    other_hours: Mapped[Decimal | None] = mapped_column(
+        Numeric(6, 2),
+        nullable=True,
+        comment="Untagged calendar hours for this week. Same value across all snapshots in the same week. NULL for pre-migration snapshots.",
+    )
+
+    total_tracked_hours: Mapped[Decimal | None] = mapped_column(
+        Numeric(8, 2),
+        nullable=True,
+        comment="Total tracked hours (all events) for this week. Same value across all snapshots in the same week. NULL for pre-migration snapshots.",
+    )
+
     # Audit timestamp
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -535,6 +553,16 @@ class PgWeeklySnapshot(Base):
         CheckConstraint(
             "EXTRACT(ISODOW FROM week_start) = 1",
             name="ck_pg_weekly_snapshots_week_start_monday",
+        ),
+        # Check constraint: other_hours must be non-negative when set
+        CheckConstraint(
+            "other_hours IS NULL OR other_hours >= 0",
+            name="ck_pg_weekly_snapshots_other_hours_non_negative",
+        ),
+        # Check constraint: total_tracked_hours must be non-negative when set
+        CheckConstraint(
+            "total_tracked_hours IS NULL OR total_tracked_hours >= 0",
+            name="ck_pg_weekly_snapshots_total_hours_non_negative",
         ),
     )
 

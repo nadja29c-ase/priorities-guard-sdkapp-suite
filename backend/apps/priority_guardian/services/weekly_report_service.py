@@ -360,16 +360,54 @@ async def _build_report_from_snapshots(
         priority_data.append(pdata)
 
     # -------------------------------------------------------------------------
-    # Step 5: Build time_allocation
-    # Note: other_hours = 0 for snapshot reports (documented limitation)
+    # Step 5: Build time_allocation using stored week-level values
     # -------------------------------------------------------------------------
+    # Read denormalized values from first snapshot (all rows have same value)
+    first_snapshot = snapshot_rows[0][0]  # (snapshot, priority) tuple
+
+    # Consistency guard: verify all rows have matching other_hours and total_tracked_hours
+    # This catches corruption from partial snapshot creation bugs
+    inconsistent = False
+    ref_other = first_snapshot.other_hours
+    ref_total = first_snapshot.total_tracked_hours
+
+    for snapshot, _ in snapshot_rows[1:]:
+        # Check for inconsistency: different non-null values, or mixed null/non-null
+        if snapshot.other_hours != ref_other or snapshot.total_tracked_hours != ref_total:
+            # Allow both being None (pre-migration), but not mixed states
+            if not (snapshot.other_hours is None and ref_other is None):
+                if snapshot.other_hours is not None or ref_other is not None:
+                    inconsistent = True
+                    break
+            if not (snapshot.total_tracked_hours is None and ref_total is None):
+                if snapshot.total_tracked_hours is not None or ref_total is not None:
+                    inconsistent = True
+                    break
+
+    if inconsistent:
+        logger.warning(
+            "snapshot_report.inconsistent_week_totals",
+            week_start=str(week_start),
+            **log
+        )
+        return None
+
+    # Use stored values, defaulting to 0 for pre-migration snapshots
+    snapshot_other_hours = float(first_snapshot.other_hours or Decimal("0"))
+    snapshot_total_tracked = float(first_snapshot.total_tracked_hours or Decimal("0"))
+
+    # If stored total is 0 but we have priority hours, use computed sum
+    # (handles pre-migration snapshots where total wasn't stored)
+    if snapshot_total_tracked == 0 and float(total_hours) > 0:
+        snapshot_total_tracked = float(total_hours) + snapshot_other_hours
+
     time_allocation = {
-        "total_tracked_hours": float(total_hours),
+        "total_tracked_hours": snapshot_total_tracked,
         "keywords": {
             kw: {"hours": float(keyword_hours[kw]), "event_count": 0}
             for kw in ["P1", "P2", "P3"]
         },
-        "other_hours": 0.0,
+        "other_hours": snapshot_other_hours,
     }
 
     logger.info(
