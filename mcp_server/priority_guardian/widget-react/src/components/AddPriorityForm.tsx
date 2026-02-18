@@ -178,7 +178,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
           <div className="mt-4">
             <Button
               color="secondary"
-              variant="ghost"
+              variant="outline"
               onClick={onCancel}
             >
               Cancel
@@ -244,7 +244,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
           <div className="mt-4">
             <Button
               color="secondary"
-              variant="ghost"
+              variant="outline"
               onClick={onCancel}
             >
               Cancel
@@ -394,7 +394,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               </Button>
               <Button
                 color="secondary"
-                variant="ghost"
+                variant="outline"
                 onClick={onCancel}
                 disabled={isSubmitting}
               >
