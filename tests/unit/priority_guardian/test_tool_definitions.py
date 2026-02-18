@@ -49,25 +49,45 @@ class TestInputSchemas:
         jsonschema.Draft7Validator.check_schema(INPUT_SCHEMA)
 
     def test_create_priority_required_fields(self):
-        """create_priority has name and type as required fields."""
+        """create_priority has name, type, and verbatim fields as required."""
         from mcp_server.priority_guardian.tools.create_priority import INPUT_SCHEMA
 
         required = INPUT_SCHEMA.get("required", [])
         assert "name" in required, "name should be required"
         assert "type" in required, "type should be required"
+        assert "user_priority_name_verbatim" in required, "user_priority_name_verbatim should be required"
+        assert "user_type_choice_verbatim" in required, "user_type_choice_verbatim should be required"
+
+    def test_create_priority_schema_requires_verbatim_fields(self):
+        """create_priority requires verbatim provenance fields."""
+        from mcp_server.priority_guardian.tools.create_priority import INPUT_SCHEMA
+
+        required = INPUT_SCHEMA.get("required", [])
+        assert "user_priority_name_verbatim" in required
+        assert "user_type_choice_verbatim" in required
+
+    def test_create_priority_schema_has_additional_properties_false(self):
+        """create_priority schema has additionalProperties: false."""
+        from mcp_server.priority_guardian.tools.create_priority import INPUT_SCHEMA
+
+        assert INPUT_SCHEMA.get("additionalProperties") is False
 
     def test_create_priority_has_all_fields(self):
-        """create_priority schema has all expected fields."""
+        """create_priority schema has all expected fields including verbatim."""
         from mcp_server.priority_guardian.tools.create_priority import INPUT_SCHEMA
 
         properties = INPUT_SCHEMA.get("properties", {})
         expected_fields = {
+            "user_priority_name_verbatim",
             "name",
+            "user_type_choice_verbatim",
             "type",
+            "calendar_keyword",
             "deadline",
             "weekly_hour_target",
             "checkpoint_date",
-            "desired_result",
+            "user_goal_verbatim",
+            "initial_goal_text",
         }
         assert set(properties.keys()) == expected_fields
 
@@ -149,23 +169,141 @@ class TestAnnotationValues:
         tool = get_tool("create_priority")
         assert tool.read_only_hint is False
 
-    def test_widget_producing_tools_have_widget_uri(self):
-        """Tools that produce widgets have correct widget_uri."""
-        from mcp_server.priority_guardian.tools import TOOL_REGISTRY
+    @pytest.mark.asyncio
+    async def test_public_tools_with_widget_uri_have_result_can_produce_widget(self):
+        """Public tools with widget_uri set have resultCanProduceWidget in meta."""
+        from mcp_server.priority_guardian.tools import TOOL_REGISTRY, list_tools
 
-        # Tools that produce the dashboard widget (used for initial render or pie chart)
-        widget_producing_tools = {
-            "connect_google_calendar",
-            "disconnect_google_calendar",
-            "get_priorities",
-            "get_weekly_report",
-            "save_semantic_grouping",
-        }
+        tools = await list_tools()
+        tool_metas = {t.name: t.meta for t in tools}
 
-        for name, tool in TOOL_REGISTRY.items():
-            if name in widget_producing_tools:
-                assert tool.widget_uri == "ui://widget/pg-dashboard.html", \
-                    f"{name} should have pg-dashboard.html widget_uri"
+        for name, tool_def in TOOL_REGISTRY.items():
+            meta = tool_metas[name]
+            if tool_def.visibility == "private":
+                # Private tools with widget_uri do NOT get resultCanProduceWidget
+                # They mutate data in an existing widget, not produce a new one
+                assert "openai/resultCanProduceWidget" not in meta, \
+                    f"Private tool {name} should not have resultCanProduceWidget"
+            elif tool_def.widget_uri:
+                # Public tools with widget_uri must have resultCanProduceWidget
+                assert meta.get("openai/resultCanProduceWidget") is True, \
+                    f"{name} has widget_uri but missing resultCanProduceWidget in meta"
+                assert meta.get("openai/outputTemplate") == tool_def.widget_uri, \
+                    f"{name} meta outputTemplate should match widget_uri"
             else:
-                # create_priority and private CRUD tools don't produce widgets
-                assert tool.widget_uri is None, f"{name} should have no widget_uri"
+                # Tools without widget_uri should not have resultCanProduceWidget
+                assert "openai/resultCanProduceWidget" not in meta, \
+                    f"{name} has no widget_uri but has resultCanProduceWidget"
+
+    def test_create_priority_has_widget_uri(self):
+        """create_priority has widget_uri for rendering dashboard after creation."""
+        from mcp_server.priority_guardian.tools.create_priority import CREATE_PRIORITY
+
+        assert CREATE_PRIORITY.widget_uri == "ui://widget/pg-dashboard.html"
+
+    def test_create_priority_not_widget_accessible(self):
+        """create_priority is not widget_accessible (requires verbatim provenance)."""
+        from mcp_server.priority_guardian.tools.create_priority import CREATE_PRIORITY
+
+        # widget_accessible should be False (default) or explicitly not True
+        assert CREATE_PRIORITY.widget_accessible is not True
+
+
+class TestListToolsMeta:
+    """Tests for _meta produced by list_tools()."""
+
+    @pytest.mark.asyncio
+    async def test_create_priority_not_widget_accessible_in_meta(self):
+        """create_priority meta does NOT have widgetAccessible (Inc 16 security)."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+        create_priority_tool = next(t for t in tools if t.name == "create_priority")
+
+        meta = create_priority_tool.meta
+        # Must have outputTemplate (renders widget after success)
+        assert meta.get("openai/outputTemplate") == "ui://widget/pg-dashboard.html"
+        # Must have resultCanProduceWidget
+        assert meta.get("openai/resultCanProduceWidget") is True
+        # Must NOT have widgetAccessible (widget cannot call this tool)
+        assert "openai/widgetAccessible" not in meta
+
+    @pytest.mark.asyncio
+    async def test_get_priorities_has_widget_accessible_in_meta(self):
+        """get_priorities meta has widgetAccessible (widget can call it)."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+        get_priorities_tool = next(t for t in tools if t.name == "get_priorities")
+
+        meta = get_priorities_tool.meta
+        # Must have outputTemplate
+        assert meta.get("openai/outputTemplate") == "ui://widget/pg-dashboard.html"
+        # Must have widgetAccessible
+        assert meta.get("openai/widgetAccessible") is True
+        # Must have resultCanProduceWidget
+        assert meta.get("openai/resultCanProduceWidget") is True
+
+    @pytest.mark.asyncio
+    async def test_private_tool_meta_has_correct_flags(self):
+        """Private tools have visibility=private, widgetAccessible, no invocation messages."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+        add_priority_tool = next(t for t in tools if t.name == "add_priority")
+
+        meta = add_priority_tool.meta
+        # Must have private visibility
+        assert meta.get("openai/visibility") == "private", \
+            "Private tool should have openai/visibility: private"
+        # Must have widgetAccessible (widget can call private tools)
+        assert meta.get("openai/widgetAccessible") is True, \
+            "Private tool should have widgetAccessible: true"
+        # Must NOT have invocation messages (LLM doesn't see private tools)
+        assert "openai/toolInvocation/invoking" not in meta, \
+            "Private tool should not have invocation messages"
+        assert "openai/toolInvocation/invoked" not in meta, \
+            "Private tool should not have invocation messages"
+        # Must NOT have resultCanProduceWidget (private tools mutate existing widget)
+        assert "openai/resultCanProduceWidget" not in meta, \
+            "Private tool should not have resultCanProduceWidget"
+
+    @pytest.mark.asyncio
+    async def test_oauth2_tool_has_security_schemes(self):
+        """Tool with required_scopes has oauth2 securitySchemes in meta."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+        create_priority_tool = next(t for t in tools if t.name == "create_priority")
+
+        meta = create_priority_tool.meta
+        security_schemes = meta.get("securitySchemes")
+        assert security_schemes is not None, "Tool should have securitySchemes"
+        assert len(security_schemes) == 1
+        assert security_schemes[0]["type"] == "oauth2"
+        assert "scopes" in security_schemes[0]
+        assert len(security_schemes[0]["scopes"]) > 0, "oauth2 tool should have non-empty scopes"
+
+    @pytest.mark.asyncio
+    async def test_noauth_tool_has_noauth_security_scheme(self):
+        """Tool without required_scopes has noauth securitySchemes in meta."""
+        from mcp_server.priority_guardian.tools import list_tools, TOOL_REGISTRY
+
+        # Find a tool without required_scopes
+        tool_without_scopes = None
+        for name, tool_def in TOOL_REGISTRY.items():
+            if not tool_def.required_scopes:
+                tool_without_scopes = name
+                break
+
+        if tool_without_scopes is None:
+            pytest.skip("No tools without required_scopes found")
+
+        tools = await list_tools()
+        tool = next(t for t in tools if t.name == tool_without_scopes)
+
+        meta = tool.meta
+        security_schemes = meta.get("securitySchemes")
+        assert security_schemes is not None, "Tool should have securitySchemes"
+        assert len(security_schemes) == 1
+        assert security_schemes[0]["type"] == "noauth"

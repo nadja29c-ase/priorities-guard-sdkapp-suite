@@ -396,9 +396,9 @@ async def _build_report_from_snapshots(
     snapshot_other_hours = float(first_snapshot.other_hours or Decimal("0"))
     snapshot_total_tracked = float(first_snapshot.total_tracked_hours or Decimal("0"))
 
-    # If stored total is 0 but we have priority hours, use computed sum
-    # (handles pre-migration snapshots where total wasn't stored)
-    if snapshot_total_tracked == 0 and float(total_hours) > 0:
+    # Pre-migration snapshots have NULL total_tracked_hours — recompute from priority sum
+    # Using `is None` instead of `== 0` so legitimate zero-hour weeks aren't misdetected
+    if first_snapshot.total_tracked_hours is None and total_hours > Decimal("0"):
         snapshot_total_tracked = float(total_hours) + snapshot_other_hours
 
     time_allocation = {

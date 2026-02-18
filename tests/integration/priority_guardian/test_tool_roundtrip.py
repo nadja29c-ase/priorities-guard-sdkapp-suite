@@ -15,7 +15,7 @@ from mcp import types as mcp_types
 
 
 class TestCreatePriorityRoundtrip:
-    """Full roundtrip tests for create_priority tool."""
+    """Full roundtrip tests for create_priority tool (Increment 16)."""
 
     @pytest.fixture
     def mock_auth_context(self):
@@ -26,13 +26,17 @@ class TestCreatePriorityRoundtrip:
         }
 
     @pytest.fixture
-    def mock_backend_success(self):
+    def mock_priority_id(self):
+        return str(uuid4())
+
+    @pytest.fixture
+    def mock_backend_success(self, mock_priority_id):
         """Successful backend response for create_priority."""
         return {
             "success": True,
             "data": {
                 "priority": {
-                    "id": str(uuid4()),
+                    "id": mock_priority_id,
                     "name": "Ship MVP",
                     "type": "deadline",
                     "calendar_keyword": "P1",
@@ -40,8 +44,8 @@ class TestCreatePriorityRoundtrip:
                     "deadline": "2026-03-15",
                     "weekly_hour_target": None,
                     "checkpoint_date": None,
-                    "desired_result": None,
                     "deliverables": [],
+                    "goals": [],
                     "created_at": "2026-02-09T12:00:00Z",
                 },
                 "active_priority_count": 1,
@@ -49,11 +53,36 @@ class TestCreatePriorityRoundtrip:
             },
         }
 
+    @pytest.fixture
+    def mock_get_priorities_response(self, mock_priority_id):
+        """Mock GET priorities response for widget rendering."""
+        return {
+            "success": True,
+            "data": {
+                "priorities": [
+                    {
+                        "id": mock_priority_id,
+                        "name": "Ship MVP",
+                        "type": "deadline",
+                        "calendar_keyword": "P1",
+                        "status": "active",
+                        "deadline": "2026-03-15",
+                        "deliverables": [],
+                        "goals": [],
+                        "created_at": "2026-02-09T12:00:00Z",
+                        "updated_at": "2026-02-09T12:00:00Z",
+                    },
+                ],
+                "google_connection": {"connected": False},
+                "available_keywords": ["P2", "P3"],
+            },
+        }
+
     @pytest.mark.asyncio
-    async def test_create_priority_returns_structured_content(
-        self, mock_auth_context, mock_backend_success
+    async def test_create_priority_roundtrip_with_widget_data(
+        self, mock_auth_context, mock_backend_success, mock_get_priorities_response
     ):
-        """create_priority returns CallToolResult with structuredContent and assistant_guidance."""
+        """create_priority returns widget data with correct calendarKeyword and _meta."""
         from mcp_server.priority_guardian.handlers.tools import call_tool_request
 
         request = mcp_types.CallToolRequest(
@@ -61,7 +90,9 @@ class TestCreatePriorityRoundtrip:
             params=mcp_types.CallToolRequestParams(
                 name="create_priority",
                 arguments={
+                    "user_priority_name_verbatim": "I need to ship the MVP by March",
                     "name": "Ship MVP",
+                    "user_type_choice_verbatim": "it has a hard deadline",
                     "type": "deadline",
                     "deadline": "2026-03-15",
                 },
@@ -76,23 +107,244 @@ class TestCreatePriorityRoundtrip:
             "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             return_value=mock_backend_success,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_get",
+            new_callable=AsyncMock,
+            return_value=mock_get_priorities_response,
         ):
             result = await call_tool_request(request)
 
         # Verify structure
         assert isinstance(result, mcp_types.CallToolResult)
-        assert result.isError is None or result.isError is False
+        assert not result.isError
 
         # Verify structuredContent
         sc = result.structuredContent
         assert sc is not None
-        assert "priority" in sc
+        assert sc["success"] is True
+        assert "data" in sc
+        assert "priorities" in sc["data"]
+        assert sc["data"]["priorities"][0]["calendarKeyword"] == "P1"
+
+        # Verify _meta with widget template
+        assert sc["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard.html"
+
+        # Verify assistant_guidance
         assert "assistant_guidance" in sc
-        assert sc["priority"]["calendar_keyword"] == "P1"
+        assert sc["assistant_guidance"]["action"] == "PRIORITY_CREATED"
+        assert sc["assistant_guidance"]["remaining_slots"] == 2
 
         # Verify content text
         assert len(result.content) == 1
         assert "Ship MVP" in result.content[0].text
+
+    @pytest.mark.asyncio
+    async def test_create_priority_roundtrip_flexible_with_goal(
+        self, mock_auth_context
+    ):
+        """create_priority for flexible type includes goal in response."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        priority_id = str(uuid4())
+        goal_id = str(uuid4())
+
+        mock_backend_success = {
+            "success": True,
+            "data": {
+                "priority": {
+                    "id": priority_id,
+                    "name": "Learn Spanish",
+                    "type": "flexible",
+                    "calendar_keyword": "P1",
+                    "status": "active",
+                    "weekly_hour_target": 5,
+                    "checkpoint_date": "2026-03-15",
+                    "goals": [{"id": goal_id, "text": "Hold basic conversation", "achieved": False}],
+                    "created_at": "2026-02-09T12:00:00Z",
+                },
+                "active_priority_count": 1,
+                "available_keywords": ["P2", "P3"],
+            },
+        }
+
+        mock_get_priorities = {
+            "success": True,
+            "data": {
+                "priorities": [
+                    {
+                        "id": priority_id,
+                        "name": "Learn Spanish",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "status": "active",
+                        "weekly_hour_target": 5,
+                        "checkpoint_date": "2026-03-15",
+                        "deliverables": [],
+                        "goals": [{"id": goal_id, "text": "Hold basic conversation", "achieved": False}],
+                        "created_at": "2026-02-09T12:00:00Z",
+                        "updated_at": "2026-02-09T12:00:00Z",
+                    },
+                ],
+                "google_connection": {"connected": False},
+                "available_keywords": ["P2", "P3"],
+            },
+        }
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="create_priority",
+                arguments={
+                    "user_priority_name_verbatim": "I want to learn Spanish",
+                    "name": "Learn Spanish",
+                    "user_type_choice_verbatim": "it's an ongoing commitment",
+                    "type": "flexible",
+                    "weekly_hour_target": 5,
+                    "checkpoint_date": "2026-03-15",
+                    "user_goal_verbatim": "I want to hold a basic conversation",
+                    "initial_goal_text": "Hold basic conversation",
+                },
+            ),
+        )
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
+            new_callable=AsyncMock,
+            return_value=mock_backend_success,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_get",
+            new_callable=AsyncMock,
+            return_value=mock_get_priorities,
+        ):
+            result = await call_tool_request(request)
+
+        assert isinstance(result, mcp_types.CallToolResult)
+        assert not result.isError
+
+        # Verify goals in response
+        priorities = result.structuredContent["data"]["priorities"]
+        assert len(priorities) == 1
+        assert len(priorities[0]["goals"]) == 1
+        assert priorities[0]["goals"][0]["text"] == "Hold basic conversation"
+
+    @pytest.mark.asyncio
+    async def test_create_priority_duplicate_name_creates_second_priority(
+        self, mock_auth_context
+    ):
+        """Creating two priorities with same name succeeds with different keywords."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        # Second creation gets P2
+        mock_backend_success = {
+            "success": True,
+            "data": {
+                "priority": {
+                    "id": str(uuid4()),
+                    "name": "Ship MVP",
+                    "type": "deadline",
+                    "calendar_keyword": "P2",
+                    "status": "active",
+                    "deadline": "2026-03-15",
+                    "created_at": "2026-02-09T12:00:00Z",
+                },
+                "active_priority_count": 2,
+                "available_keywords": ["P3"],
+            },
+        }
+
+        mock_get_priorities = {
+            "success": True,
+            "data": {
+                "priorities": [
+                    {"id": str(uuid4()), "name": "Ship MVP", "calendar_keyword": "P1", "status": "active",
+                     "type": "deadline", "deliverables": [], "goals": [], "created_at": "2026-02-09T12:00:00Z"},
+                    {"id": str(uuid4()), "name": "Ship MVP", "calendar_keyword": "P2", "status": "active",
+                     "type": "deadline", "deliverables": [], "goals": [], "created_at": "2026-02-09T12:00:00Z"},
+                ],
+                "google_connection": {"connected": False},
+                "available_keywords": ["P3"],
+            },
+        }
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="create_priority",
+                arguments={
+                    "user_priority_name_verbatim": "I need to ship the MVP",
+                    "name": "Ship MVP",
+                    "user_type_choice_verbatim": "it has a hard deadline",
+                    "type": "deadline",
+                    "deadline": "2026-03-15",
+                },
+            ),
+        )
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
+            new_callable=AsyncMock,
+            return_value=mock_backend_success,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_get",
+            new_callable=AsyncMock,
+            return_value=mock_get_priorities,
+        ):
+            result = await call_tool_request(request)
+
+        assert result.structuredContent["assistant_guidance"]["remaining_slots"] == 1
+        assert result.structuredContent["data"]["available_keywords"] == ["P3"]
+
+    @pytest.mark.asyncio
+    async def test_create_priority_fourth_call_returns_max_reached(
+        self, mock_auth_context
+    ):
+        """Fourth priority creation returns MAX_PRIORITIES_REACHED error."""
+        from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        mock_backend_error = {
+            "success": False,
+            "error": {
+                "code": "MAX_PRIORITIES_REACHED",
+                "message": "Maximum of 3 active priorities reached",
+            },
+        }
+
+        request = mcp_types.CallToolRequest(
+            method="tools/call",
+            params=mcp_types.CallToolRequestParams(
+                name="create_priority",
+                arguments={
+                    "user_priority_name_verbatim": "fourth priority",
+                    "name": "Fourth Priority",
+                    "user_type_choice_verbatim": "deadline",
+                    "type": "deadline",
+                    "deadline": "2026-04-15",
+                },
+            ),
+        )
+
+        with patch(
+            "mcp_server.priority_guardian.handlers.tools.authenticate_request",
+            new_callable=AsyncMock,
+            return_value=mock_auth_context,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_post",
+            new_callable=AsyncMock,
+            return_value=mock_backend_error,
+        ):
+            result = await call_tool_request(request)
+
+        assert result.isError is True
+        assert result.structuredContent["error"]["code"] == "MAX_PRIORITIES_REACHED"
+        assert "assistant_guidance" in result.structuredContent
 
 
 class TestConnectGoogleCalendarRoundtrip:
@@ -331,7 +583,7 @@ class TestAddPriorityRoundtrip:
             result = await call_tool_request(request)
 
         assert isinstance(result, mcp_types.CallToolResult)
-        assert result.isError is None or result.isError is False
+        assert not result.isError
         assert result.structuredContent["success"] is True
         assert len(result.structuredContent["data"]["priorities"]) == 1
         assert result.structuredContent["data"]["priorities"][0]["name"] == "New Priority"

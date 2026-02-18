@@ -564,6 +564,11 @@ class PgWeeklySnapshot(Base):
             "total_tracked_hours IS NULL OR total_tracked_hours >= 0",
             name="ck_pg_weekly_snapshots_total_hours_non_negative",
         ),
+        # Check constraint: calendar_keyword_at_snapshot must be valid domain (P1/P2/P3 or NULL)
+        CheckConstraint(
+            "calendar_keyword_at_snapshot IS NULL OR calendar_keyword_at_snapshot IN ('P1', 'P2', 'P3')",
+            name="ck_pg_weekly_snapshots_calendar_keyword_at_snapshot",
+        ),
     )
 
     def __repr__(self) -> str:

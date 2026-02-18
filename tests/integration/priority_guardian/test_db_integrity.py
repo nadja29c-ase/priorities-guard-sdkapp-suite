@@ -993,6 +993,84 @@ class TestCheckConstraints:
         assert row[1] is None
 
     @pytest.mark.asyncio
+    async def test_snapshot_invalid_calendar_keyword_at_snapshot_rejected(
+        self, async_session: AsyncSession
+    ):
+        """3p. Invalid calendar_keyword_at_snapshot rejected by CHECK constraint."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # P4 is not a valid keyword
+        with pytest.raises(IntegrityError) as exc_info:
+            await async_session.execute(
+                text("""
+                    INSERT INTO pg_weekly_snapshots
+                    (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot, calendar_keyword_at_snapshot)
+                    VALUES (gen_random_uuid(), :pid, :uid, '2026-02-02', '2026-02-08', 5.0, 10.0, 0, 'P4')
+                """),
+                {"pid": priority.id, "uid": user.id},
+            )
+            await async_session.flush()
+
+        assert "ck_pg_weekly_snapshots_calendar_keyword_at_snapshot" in str(exc_info.value).lower()
+
+        await async_session.rollback()
+
+    @pytest.mark.asyncio
+    async def test_snapshot_valid_calendar_keyword_at_snapshot_accepted(
+        self, async_session: AsyncSession
+    ):
+        """3q. Valid calendar_keyword_at_snapshot (P1/P2/P3 or NULL) accepted."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # Test valid values: P1, P2, P3, NULL
+        for keyword in ['P1', 'P2', 'P3']:
+            snapshot_id = uuid4()
+            await async_session.execute(
+                text("""
+                    INSERT INTO pg_weekly_snapshots
+                    (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot, calendar_keyword_at_snapshot)
+                    VALUES (:sid, :pid, :uid, '2026-02-02', '2026-02-08', 5.0, 10.0, 0, :keyword)
+                """),
+                {"sid": snapshot_id, "pid": priority.id, "uid": user.id, "keyword": keyword},
+            )
+
+            # Delete for next iteration
+            await async_session.execute(
+                text("DELETE FROM pg_weekly_snapshots WHERE id = :sid"),
+                {"sid": snapshot_id},
+            )
+
+        await async_session.commit()
+
+    @pytest.mark.asyncio
     async def test_check_constraint_enforced_on_update(self, async_session: AsyncSession):
         """3l. CHECK constraint fires on UPDATE, not just INSERT."""
         user = CoreUser(id=uuid4())

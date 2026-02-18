@@ -39,6 +39,7 @@ PG_SNAPSHOTS_CHECK_CONSTRAINTS = [
     ("ck_pg_weekly_snapshots_target_hours_non_negative", ["target_hours", "0"]),
     ("ck_pg_weekly_snapshots_other_hours_non_negative", ["other_hours", "0"]),
     ("ck_pg_weekly_snapshots_total_hours_non_negative", ["total_tracked_hours", "0"]),
+    ("ck_pg_weekly_snapshots_calendar_keyword_at_snapshot", ["calendar_keyword_at_snapshot", "'p1'", "'p2'", "'p3'"]),
 ]
 
 # UNIQUE constraints on pg_weekly_snapshots (validated via pg_constraint, contype='u')

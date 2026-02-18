@@ -41,8 +41,8 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
         "Here's your Priority Guardian dashboard.",
     ),
     "create_priority": (
-        "Creating your new priority...",
-        "Priority created successfully.",
+        "Setting up your priority...",
+        "Here's your Priority Guardian dashboard.",
     ),
     "get_weekly_report": (
         "Generating your weekly report...",
@@ -119,13 +119,24 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
-        elif tool_def.widget_uri:
-            # Widget-producing public tools get full metadata
+        elif tool_def.widget_uri and tool_def.widget_accessible:
+            # Widget-producing AND widget-callable public tools
             meta = {
                 "openai/outputTemplate": tool_def.widget_uri,
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
                 "openai/widgetAccessible": True,
+                "openai/resultCanProduceWidget": True,
+                "annotations": annotations,
+                "securitySchemes": security_schemes,
+            }
+        elif tool_def.widget_uri:
+            # Widget-producing but NOT widget-callable (e.g., create_priority)
+            # Can render widget after success, but widget cannot invoke this tool
+            meta = {
+                "openai/outputTemplate": tool_def.widget_uri,
+                "openai/toolInvocation/invoking": invoking_msg,
+                "openai/toolInvocation/invoked": invoked_msg,
                 "openai/resultCanProduceWidget": True,
                 "annotations": annotations,
                 "securitySchemes": security_schemes,

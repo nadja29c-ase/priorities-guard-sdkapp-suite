@@ -340,7 +340,7 @@ async def _create_snapshots_for_week(
             "user_id": user_id,
             "week_start": week_start,
             "week_end": week_end,
-            "actual_hours": Decimal(str(actual_hours)),
+            "actual_hours": Decimal(str(actual_hours)).quantize(Decimal("0.01")),
             "streak_at_snapshot": streak,
             # target_hours only set for flexible priorities
             "target_hours": priority.weekly_hour_target if priority.type == "flexible" else None,

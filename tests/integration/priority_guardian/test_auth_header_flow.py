@@ -9,7 +9,7 @@ Tests the full flow from middleware to mcp_auth:
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 
 class TestMiddlewareAuthCapture:
@@ -105,12 +105,47 @@ class TestMcpAuthReadsFromContextVar:
             "mcp_server.priority_guardian.mcp_auth.validate_jwt",
             new_callable=AsyncMock,
             return_value=mock_validated,
-        ), patch(
+        ) as mock_validate, patch(
             "mcp_server.priority_guardian.mcp_auth.enforce_tool_scope",
-        ):
+        ) as mock_enforce:
             result = await authenticate_request("create_priority", {})
 
         assert result["user_id"] == "user-123"
+        mock_validate.assert_called_once()
+        mock_enforce.assert_called_once()
+
+        # Clean up
+        auth_header_var.set(None)
+
+    @pytest.mark.asyncio
+    async def test_authenticate_fails_when_insufficient_scopes(self):
+        """authenticate_request raises InsufficientScopeError when scopes are insufficient."""
+        from mcp_server.priority_guardian.request_context import auth_header_var
+        from mcp_server.priority_guardian.mcp_auth import (
+            authenticate_request,
+            InsufficientScopeError,
+        )
+
+        # Set a valid-looking auth header in ContextVar
+        auth_header_var.set("Bearer mock-jwt-token")
+
+        # Mock JWT validation to succeed but with insufficient scopes
+        mock_validated = {
+            "user_id": "user-123",
+            "scopes": {"some.other.scope"},  # Missing pg.access
+            "jti": "token-id",
+            "azp": "client-id",
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.mcp_auth.validate_jwt",
+            new_callable=AsyncMock,
+            return_value=mock_validated,
+        ):
+            with pytest.raises(InsufficientScopeError) as exc_info:
+                await authenticate_request("create_priority", {})
+
+        assert "scope" in str(exc_info.value).lower()
 
         # Clean up
         auth_header_var.set(None)
@@ -150,7 +185,13 @@ class TestEndToEndAuthFlow:
             method="tools/call",
             params=mcp_types.CallToolRequestParams(
                 name="create_priority",
-                arguments={"name": "Test", "type": "deadline", "deadline": "2026-12-31"},
+                arguments={
+                    "user_priority_name_verbatim": "I need to finish the test",
+                    "name": "Test",
+                    "user_type_choice_verbatim": "it has a hard deadline",
+                    "type": "deadline",
+                    "deadline": "2026-12-31",
+                },
             ),
         )
 
@@ -174,11 +215,33 @@ class TestEndToEndAuthFlow:
                     "deadline": "2026-12-31",
                     "weekly_hour_target": None,
                     "checkpoint_date": None,
-                    "desired_result": None,
                     "deliverables": [],
+                    "goals": [],
                     "created_at": "2026-02-09T00:00:00Z",
                 },
                 "active_priority_count": 1,
+                "available_keywords": ["P2", "P3"],
+            },
+        }
+
+        mock_get_response = {
+            "success": True,
+            "data": {
+                "priorities": [
+                    {
+                        "id": "p-123",
+                        "name": "Test",
+                        "type": "deadline",
+                        "calendar_keyword": "P1",
+                        "status": "active",
+                        "deadline": "2026-12-31",
+                        "deliverables": [],
+                        "goals": [],
+                        "created_at": "2026-02-09T00:00:00Z",
+                        "updated_at": "2026-02-09T00:00:00Z",
+                    },
+                ],
+                "google_connection": {"connected": False},
                 "available_keywords": ["P2", "P3"],
             },
         }
@@ -191,11 +254,15 @@ class TestEndToEndAuthFlow:
             "mcp_server.priority_guardian.tools.create_priority.backend_post",
             new_callable=AsyncMock,
             return_value=mock_backend_response,
+        ), patch(
+            "mcp_server.priority_guardian.tools.create_priority.backend_get",
+            new_callable=AsyncMock,
+            return_value=mock_get_response,
         ):
             result = await call_tool_request(request)
 
         # Should succeed (not auth error)
-        assert result.isError is None or result.isError is False
+        assert not result.isError
         assert "P1" in result.content[0].text
 
         # Clean up

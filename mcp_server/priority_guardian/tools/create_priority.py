@@ -1,14 +1,20 @@
 """
 create_priority tool for Priority Guardian MCP.
 
-Records a user's declared priority for time tracking.
+Records a user's declared priority for time tracking with verbatim provenance
+fields to enforce conversational onboarding flow.
+
+Three-layer validation model:
+1. JSON Schema: Structural gate (required fields present)
+2. MCP handler (provenance): Behavioral gate (verbatim fields non-empty)
+3. Backend (domain): Business rules (conditional fields, future dates, max 3)
 """
 
-import httpx
 import structlog
 from mcp import types as mcp_types
 
-from mcp_server.priority_guardian.http_client import backend_post
+from mcp_server.priority_guardian.http_client import backend_post, backend_get
+from mcp_server.priority_guardian.tools.get_priorities import _normalize_priority
 from .base import ToolDefinition
 
 logger = structlog.get_logger(__name__)
@@ -19,60 +25,250 @@ logger = structlog.get_logger(__name__)
 
 NAME = "create_priority"
 
-DESCRIPTION = """Records a user's declared priority so Priority Guardian can track their time investment against it. A calendar keyword (P1, P2, or P3) is assigned — the user tags their Google Calendar events with this keyword so PG knows which hours count toward which priority.
+DESCRIPTION = """Creates ONE priority for time tracking. Call once per priority — user sets up 1–3 priorities iteratively.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- User has clearly stated a priority name (their exact words — NEVER rephrase or embellish)
-- You have confirmed the type (deadline or flexible) based on user's description
-- You have gathered ALL required fields for that type (see schema)
-- User has confirmed the details are correct
+- user_priority_name_verbatim: non-empty, user's exact words
+- name: derived from verbatim, normalized for clarity
+- user_type_choice_verbatim: non-empty, user's exact words choosing deadline or flexible
+- type: derived from user's choice
+- For deadline: deadline date gathered from user
+- For flexible: weekly_hour_target, checkpoint_date, user_goal_verbatim, AND initial_goal_text all gathered from user
 
-If ANY required field is missing or vague → ask the user. NEVER invent defaults.
+ONBOARDING FLOW: For each priority, gather information conversationally ONE question at a time:
+1. Ask what priority the user wants to track → store verbatim
+2. Explain deadline vs flexible concept → ask which applies → store verbatim
+3. Ask for type-specific fields (deadline date OR hours/week + 1-month goal + check-in date)
+4. Call this tool with ALL gathered data
 
-ONBOARDING CONTEXT: User is setting up 1–3 priorities. Call this tool once per priority after gathering all fields. After the tool returns, tell the user their assigned calendar keyword and remind them to tag calendar events with it (e.g., "Tag your calendar events with P1 to track time — like 'P1: Design review'").
-
-KEYWORD ASSIGNMENT: If the user expresses a preference for which keyword (P1, P2, P3) to assign, include it. Otherwise omit and the backend assigns the next available."""
+After the tool returns, follow the assistant_guidance for next steps. Do NOT deviate from the guided flow."""
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        "user_priority_name_verbatim": {
+            "type": "string",
+            "description": "Copy-paste user's exact words for their priority. Must be non-empty.",
+            "minLength": 1,
+        },
         "name": {
             "type": "string",
-            "description": "Priority name exactly as stated by user (max 100 chars)",
+            "description": "Priority name derived from verbatim — normalized for clarity (max 100 chars). Do not invent specificity the user did not state.",
             "maxLength": 100,
         },
-        "calendar_keyword": {
+        "user_type_choice_verbatim": {
             "type": "string",
-            "enum": ["P1", "P2", "P3"],
-            "description": "Preferred keyword (optional). If not provided, next available is auto-assigned.",
+            "description": "Copy-paste user's exact words when choosing deadline vs flexible. Must be non-empty.",
+            "minLength": 1,
         },
         "type": {
             "type": "string",
             "enum": ["deadline", "flexible"],
-            "description": "Priority type: 'deadline' for hard deadlines, 'flexible' for ongoing commitments",
+            "description": "Priority type derived from user's verbatim choice.",
+        },
+        "calendar_keyword": {
+            "type": "string",
+            "enum": ["P1", "P2", "P3"],
+            "description": "Preferred keyword (optional). Omit to auto-assign next available.",
         },
         "deadline": {
             "type": "string",
-            "description": "ISO date (YYYY-MM-DD) - required when type=deadline",
+            "description": "ISO date (YYYY-MM-DD). Required when type=deadline.",
         },
         "weekly_hour_target": {
             "type": "number",
-            "description": "Hours per week - required when type=flexible",
+            "description": "Hours per week commitment. Required when type=flexible.",
+            "exclusiveMinimum": 0,
         },
         "checkpoint_date": {
             "type": "string",
-            "description": "ISO date (YYYY-MM-DD) - required when type=flexible",
+            "description": "ISO date (YYYY-MM-DD) ~1 month out. Required when type=flexible.",
+        },
+        "user_goal_verbatim": {
+            "type": "string",
+            "description": "Copy-paste user's exact words for 1-month goal. Required when type=flexible. Must be non-empty.",
+            "minLength": 1,
         },
         "initial_goal_text": {
             "type": "string",
-            "description": "Initial goal text (max 200 chars) - required when type=flexible",
+            "description": "Goal text derived from user_goal_verbatim — normalized for clarity (max 200 chars). Required when type=flexible.",
             "maxLength": 200,
         },
     },
-    "required": ["name", "type"],
+    "required": [
+        "user_priority_name_verbatim",
+        "name",
+        "user_type_choice_verbatim",
+        "type",
+    ],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
+
+WIDGET_URI = "ui://widget/pg-dashboard.html"
+
+
+# ============================================================================
+# Action Constants (for assistant_guidance)
+# ============================================================================
+
+ACTION_PRIORITY_CREATED = "PRIORITY_CREATED"
+ACTION_ASK_CLARIFYING = "ASK_CLARIFYING"
+ACTION_RETRY = "RETRY"
+ACTION_MAX_REACHED = "MAX_REACHED"
+ACTION_ERROR = "ERROR"
+
+
+# ============================================================================
+# Provenance Guidance Messages
+# ============================================================================
+
+GUIDANCE_EMPTY_NAME_VERBATIM = (
+    "user_priority_name_verbatim is empty. Do not call this tool until user has stated a priority. "
+    "Ask: 'What is the #1 priority you want to lock in and track your time against?' "
+    "Then store their exact answer in user_priority_name_verbatim."
+)
+
+GUIDANCE_EMPTY_NAME = (
+    "name is empty. Derive from user_priority_name_verbatim — "
+    "normalize for clarity but do not invent specificity."
+)
+
+GUIDANCE_EMPTY_TYPE_VERBATIM = (
+    "user_type_choice_verbatim is empty. Do not call this tool until user has chosen deadline or flexible. "
+    "Explain: Deadline priorities have a hard end date. Flexible priorities are ongoing commitments "
+    "with a weekly hour target. "
+    "Ask: 'Does this priority have a hard deadline, or is it more of an ongoing commitment?' "
+    "Then store their exact answer in user_type_choice_verbatim."
+)
+
+GUIDANCE_EMPTY_GOAL_VERBATIM = (
+    "user_goal_verbatim is empty. Do not call this tool until user has stated a 1-month goal. "
+    "Explain: The 1-month goal anchors your time investment to a concrete outcome. "
+    "Ask: 'What would success look like in one month? One sentence — specific enough "
+    "that you will know whether it happened.' "
+    "Then store their exact answer in user_goal_verbatim."
+)
+
+GUIDANCE_EMPTY_GOAL_TEXT = (
+    "initial_goal_text is empty. Derive from user_goal_verbatim — "
+    "normalize for clarity but do not invent specificity."
+)
+
+GUIDANCE_MISSING_TYPE = (
+    "type is missing or invalid. Derive from user_type_choice_verbatim — "
+    "must be 'deadline' or 'flexible' based on user's stated preference."
+)
+
+GUIDANCE_MISSING_DEADLINE = (
+    "deadline is required for deadline-type priorities. "
+    "Ask: 'What is the due date for this priority?' "
+    "Then store the ISO date (YYYY-MM-DD) in the deadline field."
+)
+
+GUIDANCE_MISSING_WEEKLY_HOURS = (
+    "weekly_hour_target is required for flexible-type priorities. "
+    "Ask: 'How many hours per week do you want to commit to this priority?' "
+    "Then store the number in weekly_hour_target."
+)
+
+GUIDANCE_MISSING_CHECKPOINT = (
+    "checkpoint_date is required for flexible-type priorities. "
+    "Ask: 'When should we check in on your progress — about a month from now?' "
+    "Then store the ISO date (YYYY-MM-DD) in checkpoint_date."
+)
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def _build_provenance_error(error_code: str, instruction: str) -> mcp_types.CallToolResult:
+    """Build a structured error response for provenance validation failure."""
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(
+            type="text",
+            text=f"Provenance validation failed: {error_code}"
+        )],
+        structuredContent={
+            "success": False,
+            "error": error_code,
+            "assistant_guidance": {
+                "action": ACTION_ASK_CLARIFYING,
+                "instruction": instruction,
+            },
+        },
+        isError=True,
+    )
+
+
+def _build_success_guidance(
+    keyword: str,
+    priority_name: str,
+    available_keywords: list[str] | None,
+    correlation_id: str,
+) -> dict:
+    """Build structured guidance after successful priority creation.
+
+    Uses available_keywords from backend to determine remaining slots.
+    Defensive fallback if available_keywords is missing/invalid.
+    """
+    if available_keywords is None or not isinstance(available_keywords, list):
+        # Defensive: backend response shape may have changed
+        logger.error(
+            "tool.create_priority.missing_available_keywords",
+            correlation_id=correlation_id,
+        )
+        return {
+            "action": ACTION_PRIORITY_CREATED,
+            "instruction": (
+                f"Priority created: {priority_name} is now tracked as {keyword}. "
+                "The dashboard now shows the user's priorities. "
+                "Do NOT repeat priority details — the widget displays them.\n\n"
+                f"Remind user: tag calendar events with {keyword} to track time "
+                f"(e.g., '{keyword}: Meeting name')."
+            ),
+        }
+
+    remaining = len(available_keywords)
+
+    if remaining > 0:
+        next_slot = available_keywords[0] if available_keywords else None
+        guidance = {
+            "action": ACTION_PRIORITY_CREATED,
+            "remaining_slots": remaining,
+        }
+        if next_slot:
+            guidance["next_available_keyword"] = next_slot
+        guidance["instruction"] = (
+            f"Priority created: {priority_name} is now tracked as {keyword}. "
+            "The dashboard now shows the user's priorities. "
+            "Do NOT repeat priority details — the widget displays them.\n\n"
+            f"Remind user: tag calendar events with {keyword} to track time "
+            f"(e.g., '{keyword}: Meeting name').\n\n"
+            "Offer two paths for remaining priorities:\n"
+            "- Continue conversationally: 'What is your next priority?'\n"
+            "- Use the dashboard: 'Or add priorities directly in the dashboard above. "
+            "Just let me know when you are done.'\n\n"
+            "If user continues conversationally, gather the next priority ONE question at a time. "
+            "If user says 'done' or signals completion after using the widget, "
+            "acknowledge and proceed to next onboarding step."
+        )
+        return guidance
+    else:
+        return {
+            "action": ACTION_PRIORITY_CREATED,
+            "remaining_slots": 0,
+            "instruction": (
+                f"Priority created: {priority_name} is now tracked as {keyword}. "
+                "All 3 priority slots are filled. The dashboard shows the complete setup. "
+                "Do NOT repeat priority details — the widget displays them.\n\n"
+                "Remind user how calendar keyword tagging works for each priority. "
+                "Tell user they can say 'show my priorities' anytime to see their dashboard, "
+                "and that their data is saved across conversations."
+            ),
+        }
 
 
 # ============================================================================
@@ -81,13 +277,15 @@ REQUIRED_SCOPES = ["pg.access"]
 
 async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_types.CallToolResult:
     """
-    Create a priority for time tracking.
+    Create a priority for time tracking with provenance validation.
 
-    Extracts arguments, calls backend, and returns CallToolResult with
-    assistant_guidance based on active_priority_count.
-
-    For known backend errors (MAX_PRIORITIES_REACHED, KEYWORD_CONFLICT, VALIDATION_ERROR),
-    returns CallToolResult directly with full structuredContent to preserve behavioral invariance.
+    Flow:
+    1. Extract arguments
+    2. Validate provenance fields (verbatim non-empty)
+    3. Build backend payload (exclude verbatim fields)
+    4. Call backend POST /api/priority-guardian/priorities
+    5. On success: fetch fresh priorities, build widget response
+    6. On error: return structured error with guidance
 
     Args:
         user_id: Validated user ID from JWT token
@@ -95,16 +293,21 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         arguments: Tool arguments
 
     Returns:
-        CallToolResult with priority data and assistant_guidance
+        CallToolResult with widget data and assistant_guidance
     """
-    # Extract arguments
-    name = arguments.get("name")
-    calendar_keyword = arguments.get("calendar_keyword")
+    # -------------------------------------------------------------------------
+    # Step 1: Extract arguments
+    # -------------------------------------------------------------------------
+    user_priority_name_verbatim = arguments.get("user_priority_name_verbatim", "")
+    name = arguments.get("name", "")
+    user_type_choice_verbatim = arguments.get("user_type_choice_verbatim", "")
     priority_type = arguments.get("type")
+    calendar_keyword = arguments.get("calendar_keyword")
     deadline = arguments.get("deadline")
     weekly_hour_target = arguments.get("weekly_hour_target")
     checkpoint_date = arguments.get("checkpoint_date")
-    initial_goal_text = arguments.get("initial_goal_text")
+    user_goal_verbatim = arguments.get("user_goal_verbatim", "")
+    initial_goal_text = arguments.get("initial_goal_text", "")
 
     logger.info(
         "tool.create_priority.start",
@@ -115,7 +318,94 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         calendar_keyword=calendar_keyword,
     )
 
-    # Build request payload (forward as-is, backend validates)
+    # -------------------------------------------------------------------------
+    # Step 2: Provenance validation (behavioral gate)
+    # -------------------------------------------------------------------------
+
+    # Check user_priority_name_verbatim non-empty
+    if not user_priority_name_verbatim or not user_priority_name_verbatim.strip():
+        logger.info(
+            "tool.create_priority.provenance_failed",
+            correlation_id=correlation_id,
+            field="user_priority_name_verbatim",
+        )
+        return _build_provenance_error("empty_name_verbatim", GUIDANCE_EMPTY_NAME_VERBATIM)
+
+    # Check name non-empty
+    if not name or not name.strip():
+        logger.info(
+            "tool.create_priority.provenance_failed",
+            correlation_id=correlation_id,
+            field="name",
+        )
+        return _build_provenance_error("empty_name", GUIDANCE_EMPTY_NAME)
+
+    # Check user_type_choice_verbatim non-empty
+    if not user_type_choice_verbatim or not user_type_choice_verbatim.strip():
+        logger.info(
+            "tool.create_priority.provenance_failed",
+            correlation_id=correlation_id,
+            field="user_type_choice_verbatim",
+        )
+        return _build_provenance_error("empty_type_verbatim", GUIDANCE_EMPTY_TYPE_VERBATIM)
+
+    # Defensive guard: type must be valid (schema should prevent, but costs one line)
+    if priority_type not in ("deadline", "flexible"):
+        logger.info(
+            "tool.create_priority.provenance_failed",
+            correlation_id=correlation_id,
+            field="type",
+            value=priority_type,
+        )
+        return _build_provenance_error("missing_type", GUIDANCE_MISSING_TYPE)
+
+    # For deadline type: check deadline field is present
+    if priority_type == "deadline":
+        if not deadline or not deadline.strip():
+            logger.info(
+                "tool.create_priority.provenance_failed",
+                correlation_id=correlation_id,
+                field="deadline",
+            )
+            return _build_provenance_error("missing_deadline", GUIDANCE_MISSING_DEADLINE)
+
+    # For flexible type: check structural and goal fields
+    if priority_type == "flexible":
+        if weekly_hour_target is None:
+            logger.info(
+                "tool.create_priority.provenance_failed",
+                correlation_id=correlation_id,
+                field="weekly_hour_target",
+            )
+            return _build_provenance_error("missing_weekly_hours", GUIDANCE_MISSING_WEEKLY_HOURS)
+
+        if not checkpoint_date or not checkpoint_date.strip():
+            logger.info(
+                "tool.create_priority.provenance_failed",
+                correlation_id=correlation_id,
+                field="checkpoint_date",
+            )
+            return _build_provenance_error("missing_checkpoint", GUIDANCE_MISSING_CHECKPOINT)
+
+        if not user_goal_verbatim or not user_goal_verbatim.strip():
+            logger.info(
+                "tool.create_priority.provenance_failed",
+                correlation_id=correlation_id,
+                field="user_goal_verbatim",
+            )
+            return _build_provenance_error("empty_goal_verbatim", GUIDANCE_EMPTY_GOAL_VERBATIM)
+
+        if not initial_goal_text or not initial_goal_text.strip():
+            logger.info(
+                "tool.create_priority.provenance_failed",
+                correlation_id=correlation_id,
+                field="initial_goal_text",
+            )
+            return _build_provenance_error("empty_goal_text", GUIDANCE_EMPTY_GOAL_TEXT)
+
+    # -------------------------------------------------------------------------
+    # Step 3: Build backend payload (verbatim fields NOT sent)
+    # -------------------------------------------------------------------------
     payload = {
         "name": name,
         "type": priority_type,
@@ -130,13 +420,12 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         payload["weekly_hour_target"] = weekly_hour_target
     if checkpoint_date is not None:
         payload["checkpoint_date"] = checkpoint_date
-    if initial_goal_text is not None:
+    if initial_goal_text and initial_goal_text.strip():
         payload["initial_goal_text"] = initial_goal_text
 
-    # Call backend to create priority
-    # NOTE: Inner try/except for HTTPStatusError builds tool-specific assistant_guidance.
-    # Known backend errors return CallToolResult directly to preserve response structure.
-    # Unexpected errors propagate to dispatcher's generic catch.
+    # -------------------------------------------------------------------------
+    # Step 4: Call backend to create priority
+    # -------------------------------------------------------------------------
     try:
         response = await backend_post(
             "/api/priority-guardian/priorities",
@@ -145,40 +434,77 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             correlation_id
         )
 
-        # Backend returns success response
+        # Check if backend returned an error (4xx returns JSON, not exception)
+        if not response.get("success", True):
+            error_data = response.get("error", {})
+            error_code = error_data.get("code", "UNKNOWN")
+            error_message = error_data.get("message", "Unknown error")
+
+            logger.warning(
+                "tool.create_priority.backend_error",
+                correlation_id=correlation_id,
+                user_id=user_id,
+                error_code=error_code,
+            )
+
+            return _build_backend_error_response(error_code, error_message)
+
+        # -------------------------------------------------------------------------
+        # Step 5: Extract success data
+        # -------------------------------------------------------------------------
         priority = response["data"]["priority"]
-        active_count = response["data"]["active_priority_count"]
-        available_keywords = response["data"]["available_keywords"]
+        keyword = priority["calendar_keyword"]
+        priority_name = priority["name"]
 
         logger.info(
             "tool.create_priority.success",
             correlation_id=correlation_id,
             user_id=user_id,
             priority_id=priority["id"],
-            keyword=priority["calendar_keyword"],
+            keyword=keyword,
         )
 
-        # Build assistant_guidance based on active_priority_count
-        keyword = priority["calendar_keyword"]
-        priority_name = priority["name"]
+        # -------------------------------------------------------------------------
+        # Step 6: Fetch fresh priorities for widget rendering
+        # -------------------------------------------------------------------------
+        try:
+            fresh_response = await backend_get(
+                "/api/priority-guardian/priorities",
+                user_id,
+                correlation_id
+            )
 
-        if active_count < 3:
-            remaining = 3 - active_count
-            guidance = (
-                f'Priority created. Tell the user: "{priority_name} is now tracked as {keyword}."\n'
-                f'Remind them: "Tag your calendar events with {keyword} to track time — '
-                f"for example, '{keyword}: Meeting name'.\"\n\n"
-                f'Ask: "Do you have another priority you\'d like to track? '
-                f'You can have up to {remaining} more."'
+            data = fresh_response.get("data", {})
+            raw_priorities = data.get("priorities", [])
+            google_connection = data.get("google_connection", {"connected": False})
+            # Don't default to [] - preserve None for defensive check in _build_success_guidance
+            fresh_available_keywords = data.get("available_keywords")
+
+            priorities = [_normalize_priority(p) for p in raw_priorities]
+
+        except Exception as get_error:
+            # GET failed after POST succeeded - use POST response data as fallback
+            logger.warning(
+                "tool.create_priority.get_after_post_failed",
+                correlation_id=correlation_id,
+                user_id=user_id,
+                error=str(get_error),
+                error_type=type(get_error).__name__,
             )
-        else:
-            guidance = (
-                f'Priority created. Tell the user: "{priority_name} is now tracked as {keyword}."\n'
-                f'Remind them: "Tag your calendar events with {keyword} to track time — '
-                f"for example, '{keyword}: Meeting name'.\"\n\n"
-                'Say: "You\'ve set up all 3 priorities. Let me show you your dashboard." '
-                'Then call get_priorities to render the widget.'
-            )
+            # Build minimal widget data from the just-created priority
+            priorities = [_normalize_priority(priority)]
+            google_connection = {"connected": False}  # Safe default
+            fresh_available_keywords = None  # Will trigger defensive fallback in guidance
+
+        # -------------------------------------------------------------------------
+        # Step 7: Build structured response with widget
+        # -------------------------------------------------------------------------
+        guidance = _build_success_guidance(
+            keyword=keyword,
+            priority_name=priority_name,
+            available_keywords=fresh_available_keywords,
+            correlation_id=correlation_id,
+        )
 
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
@@ -186,68 +512,81 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 text=f"Created priority: {priority_name} (assigned {keyword})"
             )],
             structuredContent={
-                "priority": priority,
-                "active_priority_count": active_count,
-                "available_keywords": available_keywords,
-                "assistant_guidance": guidance,
-            },
-        )
-
-    except httpx.HTTPStatusError as e:
-        # Handle specific backend error responses
-        # Return CallToolResult directly for known errors to preserve behavioral invariance
-        status_code = e.response.status_code
-
-        try:
-            error_data = e.response.json()
-            error_code = error_data.get("error", {}).get("code", "UNKNOWN")
-            error_message = error_data.get("error", {}).get("message", "Unknown error")
-        except Exception:
-            error_code = "BACKEND_ERROR"
-            error_message = f"Backend returned {status_code}"
-
-        logger.warning(
-            "tool.create_priority.backend_error",
-            correlation_id=correlation_id,
-            user_id=user_id,
-            status_code=status_code,
-            error_code=error_code,
-        )
-
-        # Build error-specific assistant_guidance
-        if error_code == "MAX_PRIORITIES_REACHED":
-            guidance = (
-                "User already has 3 active priorities. Tell the user they've reached the maximum. "
-                "If they want to add a new one, they'll need to retire or delete an existing priority first "
-                "(available in their dashboard)."
-            )
-        elif error_code == "KEYWORD_CONFLICT":
-            guidance = (
-                "A race condition occurred assigning the keyword. Retry the request — "
-                "the backend will assign the next available keyword."
-            )
-        elif error_code == "VALIDATION_ERROR":
-            guidance = (
-                f"Tell the user what's missing or invalid based on this error: {error_message}. "
-                "Ask them to provide the correct information. Do not guess or fill in defaults."
-            )
-        else:
-            guidance = f"An error occurred: {error_message}. Please try again."
-
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text=f"Error: {error_message}"
-            )],
-            structuredContent={
-                "error": {
-                    "code": error_code,
-                    "message": error_message,
+                "success": True,
+                "data": {
+                    "priorities": priorities,
+                    "google_connected": google_connection.get("connected", False),
+                    # Default to [] for widget, but _build_success_guidance handles None defensively
+                    "available_keywords": fresh_available_keywords if fresh_available_keywords is not None else [],
+                },
+                "_meta": {
+                    "openai/outputTemplate": WIDGET_URI,
                 },
                 "assistant_guidance": guidance,
             },
-            isError=True,
         )
+
+    except Exception as e:
+        # Unexpected error - let dispatcher handle
+        logger.error(
+            "tool.create_priority.unexpected_error",
+            correlation_id=correlation_id,
+            user_id=user_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise
+
+
+def _build_backend_error_response(error_code: str, error_message: str) -> mcp_types.CallToolResult:
+    """Build error response for backend validation errors."""
+    if error_code == "MAX_PRIORITIES_REACHED":
+        guidance = {
+            "action": ACTION_MAX_REACHED,
+            "instruction": (
+                "User already has 3 active priorities. Tell the user they've reached the maximum. "
+                "If they want to add a new one, they'll need to retire or delete an existing priority first "
+                "(available in their dashboard)."
+            ),
+        }
+    elif error_code == "KEYWORD_CONFLICT":
+        guidance = {
+            "action": ACTION_RETRY,
+            "instruction": (
+                "A race condition occurred assigning the keyword. Retry the request without "
+                "specifying a keyword (omit calendar_keyword) — the backend will auto-assign "
+                "the next available one."
+            ),
+        }
+    elif error_code == "VALIDATION_ERROR":
+        guidance = {
+            "action": ACTION_ASK_CLARIFYING,
+            "instruction": (
+                "Some required fields are missing or invalid. Ask the user to re-confirm "
+                "the details for this priority type. Do not guess or fill in defaults."
+            ),
+        }
+    else:
+        guidance = {
+            "action": ACTION_ERROR,
+            "instruction": "An error occurred creating the priority. Please try again.",
+        }
+
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(
+            type="text",
+            text=f"Error: {error_message}"
+        )],
+        structuredContent={
+            "success": False,
+            "error": {
+                "code": error_code,
+                "message": error_message,
+            },
+            "assistant_guidance": guidance,
+        },
+        isError=True,
+    )
 
 
 # ============================================================================
@@ -259,9 +598,12 @@ CREATE_PRIORITY = ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,
+    widget_uri=WIDGET_URI,
     handle=handle,
     read_only_hint=False,   # Creates data in database
     destructive_hint=False,
     open_world_hint=False,  # No external system interaction
+    # widget_accessible intentionally NOT set (defaults False):
+    # This tool requires verbatim provenance fields that widgets cannot provide.
+    # Post-onboarding widget creation uses add_priority (private) which has no provenance gates.
 )
