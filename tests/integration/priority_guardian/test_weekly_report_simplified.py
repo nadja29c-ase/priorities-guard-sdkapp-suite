@@ -277,10 +277,14 @@ class TestPastWeekNoPersistence:
         conn_result = MagicMock()
         conn_result.scalar_one_or_none.return_value = mock_google_connection
 
+        # Empty snapshot result (no snapshots found, falls through to live computation)
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = []
+
         priorities_result = MagicMock()
         priorities_result.scalars.return_value.all.return_value = [mock_flexible_priority]
 
-        mock_session.execute.side_effect = [conn_result, priorities_result]
+        mock_session.execute.side_effect = [conn_result, snapshot_result, priorities_result]
 
         with patch(
             "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
@@ -324,10 +328,14 @@ class TestPastWeekNoPersistence:
         conn_result = MagicMock()
         conn_result.scalar_one_or_none.return_value = mock_google_connection
 
+        # Empty snapshot result (no snapshots found, falls through to live computation)
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = []
+
         priorities_result = MagicMock()
         priorities_result.scalars.return_value.all.return_value = [mock_flexible_priority]
 
-        mock_session.execute.side_effect = [conn_result, priorities_result]
+        mock_session.execute.side_effect = [conn_result, snapshot_result, priorities_result]
 
         with patch(
             "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
