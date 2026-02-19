@@ -55,6 +55,7 @@ INPUT_SCHEMA = {
         },
     },
     "required": ["priority_id"],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -97,7 +98,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     # Build update payload (only include provided fields)
     payload = {}
     if name is not None:
-        payload["name"] = name
+        payload["name"] = name.strip()
     if "calendar_keyword" in arguments and arguments["calendar_keyword"] is not None:
         payload["calendar_keyword"] = arguments["calendar_keyword"]
     if "deadline" in arguments and arguments["deadline"] is not None:
@@ -106,6 +107,9 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         payload["weekly_hour_target"] = arguments["weekly_hour_target"]
     if "checkpoint_date" in arguments and arguments["checkpoint_date"] is not None:
         payload["checkpoint_date"] = arguments["checkpoint_date"]
+
+    if not payload:
+        raise ToolUsageError("No fields provided to update.")
 
     # Call backend - mutation endpoints return full priority list
     import httpx
