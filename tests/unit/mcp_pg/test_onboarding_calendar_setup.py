@@ -356,6 +356,12 @@ async def test_first_snapshot_returns_weekly_data(
         assert data["isCurrentWeek"] is True
         assert data["timeAllocation"]["totalTrackedHours"] == 24.5
 
+        # Assert no snake_case leakage in response
+        assert "week_start" not in data
+        assert "time_allocation" not in data
+        assert "all_events" not in data
+        assert "is_current_week" not in data
+
         guidance = result.structuredContent["assistant_guidance"]
         assert guidance["action"] == "FIRST_SNAPSHOT"
         assert guidance["next_phase"] == "reflection_setup"
@@ -449,6 +455,128 @@ async def test_first_snapshot_google_not_connected(
 
         assert result.isError is True
         assert "full dashboard" in result.content[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_first_snapshot_without_keyword_phase_still_works(
+    mock_past_week_no_snapshot,
+):
+    """Call first_snapshot directly without prior keyword_education. Confirms stateless design."""
+    mock_valid_report = {
+        "success": True,
+        "data": {
+            "week_start": "2026-02-17",
+            "week_end": "2026-02-23",
+            "is_current_week": True,
+            "snapshot_saved": False,
+            "priorities": [
+                {
+                    "id": "p1",
+                    "name": "Ship PG V1.0",
+                    "type": "deadline",
+                    "calendar_keyword": "P1",
+                    "actual_hours": 4.0,
+                    "event_count": 3,
+                },
+            ],
+            "time_allocation": {
+                "total_tracked_hours": 12.0,
+                "keywords": {"P1": {"hours": 4.0, "event_count": 3}},
+                "other_hours": 8.0,
+            },
+            "all_events": [],
+        },
+    }
+
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_valid_report]
+
+        # Call first_snapshot directly — no prior keyword_education call
+        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+
+        assert result.isError is not True
+        assert result.structuredContent["assistant_guidance"]["action"] == "FIRST_SNAPSHOT"
+
+
+@pytest.mark.asyncio
+async def test_first_snapshot_unknown_backend_error(
+    mock_past_week_no_snapshot,
+):
+    """Mock backend returning unexpected error code. Assert ToolUsageError raised."""
+    mock_error_response = {
+        "success": False,
+        "error": {
+            "code": "SOMETHING_UNEXPECTED",
+            "message": "Unexpected failure",
+        },
+    }
+
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_error_response]
+
+        with pytest.raises(ToolUsageError, match="Unexpected failure"):
+            await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+
+
+@pytest.mark.asyncio
+async def test_first_snapshot_only_priority_hours_no_other(
+    mock_past_week_no_snapshot,
+):
+    """Mock report with priority hours but zero other_hours. Assert success."""
+    mock_priority_only = {
+        "success": True,
+        "data": {
+            "week_start": "2026-02-17",
+            "week_end": "2026-02-23",
+            "is_current_week": True,
+            "snapshot_saved": False,
+            "priorities": [
+                {
+                    "id": "p1",
+                    "name": "Ship PG V1.0",
+                    "type": "deadline",
+                    "calendar_keyword": "P1",
+                    "actual_hours": 6.0,
+                    "event_count": 4,
+                },
+                {
+                    "id": "p2",
+                    "name": "Client outreach",
+                    "type": "flexible",
+                    "calendar_keyword": "P2",
+                    "actual_hours": 2.0,
+                    "event_count": 2,
+                },
+            ],
+            "time_allocation": {
+                "total_tracked_hours": 8.0,
+                "keywords": {
+                    "P1": {"hours": 6.0, "event_count": 4},
+                    "P2": {"hours": 2.0, "event_count": 2},
+                    "P3": {"hours": 0.0, "event_count": 0},
+                },
+                "other_hours": 0.0,
+            },
+            "all_events": [],
+        },
+    }
+
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_priority_only]
+
+        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+
+        assert result.isError is not True
+        assert result.structuredContent["data"]["timeAllocation"]["otherHours"] == 0
 
 
 @pytest.mark.asyncio
