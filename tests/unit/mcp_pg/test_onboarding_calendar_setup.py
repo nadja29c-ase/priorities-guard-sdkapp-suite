@@ -212,14 +212,13 @@ def mock_past_week_no_snapshot():
 # Test: Tool Definition
 # ============================================================================
 
-def test_tool_is_read_only():
-    """Assert read_only_hint=True on tool definition."""
+def test_tool_metadata():
+    """Assert all tool metadata is correctly set."""
+    assert ONBOARDING_CALENDAR_SETUP.name == "onboarding_calendar_setup"
     assert ONBOARDING_CALENDAR_SETUP.read_only_hint is True
-
-
-def test_tool_not_widget_accessible():
-    """Assert tool is not widget-callable."""
     assert ONBOARDING_CALENDAR_SETUP.widget_accessible is False
+    assert ONBOARDING_CALENDAR_SETUP.open_world_hint is True
+    assert ONBOARDING_CALENDAR_SETUP.required_scopes == ["pg.access"]
 
 
 def test_schema_rejects_invalid_phase():
@@ -284,8 +283,7 @@ async def test_keyword_education_no_connection_returns_error(
         result = await handle("user-123", "corr-123", {"phase": "keyword_education"})
 
         assert result.isError is True
-        assert "isn't connected" in result.content[0].text.lower()
-        assert "dashboard" in result.content[0].text.lower()
+        assert "full dashboard" in result.content[0].text.lower()
 
 
 @pytest.mark.asyncio
@@ -303,11 +301,11 @@ async def test_keyword_education_no_priorities_returns_error(
         result = await handle("user-123", "corr-123", {"phase": "keyword_education"})
 
         assert result.isError is True
-        assert "priority" in result.content[0].text.lower()
+        assert "at least one priority" in result.content[0].text.lower()
 
 
 @pytest.mark.asyncio
-async def test_keyword_education_already_onboarded_logs_warning_but_continues(
+async def test_keyword_education_possible_returning_user_logs_but_continues(
     mock_past_week_with_snapshot,
     mock_priorities_response,
 ):
@@ -380,9 +378,77 @@ async def test_first_snapshot_zero_keyword_hours_returns_retry_guidance(
         result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
 
         assert result.isError is True
-        text = result.content[0].text.lower()
-        assert "keyword" in text
-        assert "try again" in text or "sync" in text
+        assert "keywords aren't reflected yet" in result.content[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_first_snapshot_empty_week_returns_no_events(
+    mock_past_week_no_snapshot,
+):
+    """Mock backend returning total_tracked_hours=0. Assert error about no events found."""
+    mock_empty_week = {
+        "success": True,
+        "data": {
+            "week_start": "2026-02-17",
+            "week_end": "2026-02-23",
+            "is_current_week": True,
+            "snapshot_saved": False,
+            "priorities": [
+                {
+                    "id": "p1",
+                    "name": "Ship PG V1.0",
+                    "type": "deadline",
+                    "calendar_keyword": "P1",
+                    "actual_hours": 0.0,
+                    "event_count": 0,
+                },
+            ],
+            "time_allocation": {
+                "total_tracked_hours": 0.0,
+                "keywords": {
+                    "P1": {"hours": 0.0, "event_count": 0},
+                },
+                "other_hours": 0.0,
+            },
+            "all_events": [],
+        },
+    }
+
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_empty_week]
+
+        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+
+        assert result.isError is True
+        assert "no calendar events found" in result.content[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_first_snapshot_google_not_connected(
+    mock_past_week_no_snapshot,
+):
+    """Mock backend returning GOOGLE_NOT_CONNECTED error. Assert error with full dashboard guidance."""
+    mock_not_connected = {
+        "success": False,
+        "error": {
+            "code": "GOOGLE_NOT_CONNECTED",
+            "message": "Google Calendar not connected",
+        },
+    }
+
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_not_connected]
+
+        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+
+        assert result.isError is True
+        assert "full dashboard" in result.content[0].text.lower()
 
 
 @pytest.mark.asyncio
