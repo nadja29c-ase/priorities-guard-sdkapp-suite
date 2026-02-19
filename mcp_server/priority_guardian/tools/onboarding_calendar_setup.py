@@ -483,6 +483,7 @@ async def _handle_reflection_setup(
     Phase 3: Reflection setup.
 
     Guidance-driven — introduces dashboard + weekly report, suggests recurring reflection event.
+    No backend call needed — purely guidance.
     """
     logger.info(
         "onboarding.phase_called",
@@ -491,32 +492,8 @@ async def _handle_reflection_setup(
         correlation_id=correlation_id,
     )
 
-    # Log if user might be returning (past snapshots exist), but don't block
-    today = date.today()
-    days_since_monday = today.weekday()
-    last_monday = today - timedelta(days=days_since_monday + 7)
-    week_start = last_monday.isoformat()
-
-    try:
-        past_report = await backend_get(
-            f"/api/priority-guardian/weekly-report?week_start={week_start}",
-            user_id,
-            correlation_id,
-        )
-        if past_report.get("success") and past_report.get("data", {}).get("snapshot_saved"):
-            logger.info(
-                "onboarding.possible_returning_user",
-                user_id=user_id,
-                correlation_id=correlation_id,
-                snapshot_saved=True,
-            )
-    except Exception as e:
-        logger.warning(
-            "onboarding.past_check_failed",
-            user_id=user_id,
-            correlation_id=correlation_id,
-            error=str(e),
-        )
+    # No past-snapshot check here — first_snapshot already logs returning-user signal
+    # and this phase is guidance-only (no backend data needed)
 
     logger.info(
         "onboarding.phase_success",

@@ -411,38 +411,34 @@ async def test_first_snapshot_past_snapshots_logs_warning_but_continues(
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_reflection_setup_returns_guidance_only(mock_past_week_no_snapshot):
+async def test_reflection_setup_returns_guidance_only():
     """Call with phase reflection_setup. Assert guidance includes onboarding_complete: true."""
-    with patch(
-        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
-        new_callable=AsyncMock,
-        return_value=mock_past_week_no_snapshot,
-    ):
-        result = await handle("user-123", "corr-123", {"phase": "reflection_setup"})
+    # No mock needed — reflection_setup makes no backend calls
+    result = await handle("user-123", "corr-123", {"phase": "reflection_setup"})
 
-        assert result.isError is not True
-        assert result.structuredContent["success"] is True
+    assert result.isError is not True
+    assert result.structuredContent["success"] is True
 
-        guidance = result.structuredContent["assistant_guidance"]
-        assert guidance["action"] == "REFLECTION_SETUP"
-        assert guidance["onboarding_complete"] is True
+    guidance = result.structuredContent["assistant_guidance"]
+    assert guidance["action"] == "REFLECTION_SETUP"
+    assert guidance["onboarding_complete"] is True
 
 
 @pytest.mark.asyncio
-async def test_reflection_setup_past_snapshots_logs_warning_but_continues(mock_past_week_with_snapshot):
-    """reflection_setup with past snapshots logs warning but continues (no isError)."""
+async def test_reflection_setup_no_backend_call():
+    """Assert reflection_setup does NOT call backend_get (purely guidance)."""
     with patch(
         "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
         new_callable=AsyncMock,
-        return_value=mock_past_week_with_snapshot,
-    ):
+    ) as mock_get:
         result = await handle("user-123", "corr-123", {"phase": "reflection_setup"})
 
-        # Should NOT be an error - logs warning but continues
+        # Verify no backend calls were made
+        mock_get.assert_not_called()
+
+        # Still returns success
         assert result.isError is not True
         assert result.structuredContent["success"] is True
-        assert result.structuredContent["assistant_guidance"]["action"] == "REFLECTION_SETUP"
-        assert result.structuredContent["assistant_guidance"]["onboarding_complete"] is True
 
 
 # ============================================================================
