@@ -16,6 +16,7 @@ from .base import ToolDefinition
 from .create_priority import CREATE_PRIORITY
 from .get_priorities import GET_PRIORITIES
 from .get_weekly_report import GET_WEEKLY_REPORT
+from .onboarding_calendar_setup import ONBOARDING_CALENDAR_SETUP
 # Private widget-only tools (widget can call, LLM cannot see)
 from .widget_tools import (
     ADD_PRIORITY,
@@ -48,6 +49,10 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
         "Generating your weekly report...",
         "Here's your weekly time allocation.",
     ),
+    "onboarding_calendar_setup": (
+        "Setting up your tracking...",
+        "Here's your Priority Guardian dashboard.",
+    ),
 }
 
 # Explicit tool registry
@@ -56,6 +61,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     CREATE_PRIORITY.name: CREATE_PRIORITY,
     GET_PRIORITIES.name: GET_PRIORITIES,
     GET_WEEKLY_REPORT.name: GET_WEEKLY_REPORT,
+    ONBOARDING_CALENDAR_SETUP.name: ONBOARDING_CALENDAR_SETUP,
     # Private widget-only tools (widget can call, LLM cannot see)
     CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,
