@@ -173,7 +173,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if new_keyword:
         assistant_guidance = (
             f"Priority updated. The keyword is now {new_keyword}. "
-            f"Remind the user to tag future calendar events with [{new_keyword}] "
+            f"Remind the user to add {new_keyword} to future calendar event titles "
             f"to track time for this priority."
         )
     else:

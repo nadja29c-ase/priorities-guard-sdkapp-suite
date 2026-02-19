@@ -274,7 +274,7 @@ def _build_success_guidance(
                 f"Priority created: {priority_name} is now tracked as {keyword}. "
                 "The dashboard now shows the user's priorities. "
                 "Do NOT repeat priority details — the widget displays them.\n\n"
-                f"Remind user: tag calendar events with {keyword} to track time "
+                f"Remind user: add {keyword} to calendar event titles to track time "
                 f"(e.g., '{keyword}: Meeting name')."
             ),
         }
