@@ -154,6 +154,17 @@ ACTION_RETRY = "RETRY"
 ACTION_MAX_REACHED = "MAX_REACHED"
 ACTION_ERROR = "ERROR"
 
+# Shared onboarding completion guidance (used in multiple branches)
+ONBOARDING_COMPLETION_GUIDANCE = (
+    "Acknowledge their setup is complete (even if fewer than 3 — that's fine, they can add more anytime). "
+    "Briefly introduce the dashboard: their home base — a quick way to check "
+    "how their week is going, stay flexible, and stay on track with what matters most. "
+    "Two views — inline summary in chat, and full dashboard (button at the bottom) "
+    "for detailed progress and editing. "
+    "Guide user to connect Google Calendar next — open the full dashboard to set that up. "
+    "Keywords and progress tracking will be explained after calendar is connected."
+)
+
 
 # ============================================================================
 # Provenance Guidance Messages
@@ -290,15 +301,15 @@ def _build_success_guidance(
                     "'Or you can add priorities directly in the dashboard above. "
                     "Just let me know when you are done.' "
                     "If user continues conversationally, gather ONE question at a time following the binding rules. "
-                    "If user says 'done' or signals completion after using the widget, "
-                    "acknowledge and proceed to next onboarding step."
+                    "If user says 'done' or signals completion, "
+                    + ONBOARDING_COMPLETION_GUIDANCE
                 ),
             },
             "path_b": {
                 "label": "widget",
                 "instruction": (
-                    "User chose to add via dashboard. Wait for user to say 'done' or signal completion. "
-                    "Then acknowledge and proceed to next onboarding step."
+                    "User chose to add via dashboard or said 'done'. "
+                    + ONBOARDING_COMPLETION_GUIDANCE
                 ),
             },
             "present_both": True,
@@ -310,18 +321,8 @@ def _build_success_guidance(
             "remaining_slots": 0,
             "instruction": (
                 f"Priority created: {priority_name} is now tracked as {keyword}. "
-                "All 3 priority slots are filled. Acknowledge this as a milestone — the user's priorities are locked in and stored."
-                "Explain what the dashboard does for them: this is where they come back to see "
-                "a quick way to check how their week is going and stay on track with their priorities. Two views — "
-                "the inline summary right here in chat for a quick check, and the full dashboard "
-                "(button at the bottom) for detailed progress, editing priorities, and managing e2e deliverables. "
-                "Tell user they can say 'show my priorities' anytime to see their dashboard, "
-                "Do NOT repeat priority details — the widget displays them."
-            ),
-            "next_onboarding_step": (
-                "Guide user to connect Google Calendar next — open the full dashboard to set that up. Explain why it's necessary: this is how PG tracks time against their priorities. "
-                "The use of keywords (P1,P2,P3) and progress tracking will be explained after calendar is connected."
-                "Proceed to next onboarding step (Google Calendar connection)."
+                "All 3 priority slots are filled. "
+                + ONBOARDING_COMPLETION_GUIDANCE
             ),
         }
 
