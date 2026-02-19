@@ -54,8 +54,6 @@ INPUT_SCHEMA = {
 
 REQUIRED_SCOPES = ["pg.access"]
 
-# Timeout for backend calls (seconds)
-BACKEND_TIMEOUT = 15.0
 
 
 # ============================================================================
@@ -79,7 +77,7 @@ async def _handle_keyword_education(
         correlation_id=correlation_id,
     )
 
-    # Check for already onboarded (past snapshots exist)
+    # Log if user might be returning (past snapshots exist), but don't block
     today = date.today()
     days_since_monday = today.weekday()
     last_monday = today - timedelta(days=days_since_monday + 7)
@@ -93,19 +91,12 @@ async def _handle_keyword_education(
         )
         if past_report.get("success") and past_report.get("data", {}).get("snapshot_saved"):
             logger.info(
-                "onboarding.already_completed",
+                "onboarding.possible_returning_user",
                 user_id=user_id,
                 correlation_id=correlation_id,
-            )
-            return mcp_types.CallToolResult(
-                isError=True,
-                content=[mcp_types.TextContent(
-                    type="text",
-                    text="You appear to have been using PG already. Use get_weekly_report for your regular weekly reflection.",
-                )],
+                snapshot_saved=True,
             )
     except Exception as e:
-        # Past report check failed — continue with onboarding (non-fatal)
         logger.warning(
             "onboarding.past_check_failed",
             user_id=user_id,
@@ -241,7 +232,7 @@ async def _handle_first_snapshot(
         correlation_id=correlation_id,
     )
 
-    # Check for already onboarded (past snapshots exist)
+    # Log if user might be returning (past snapshots exist), but don't block
     today = date.today()
     days_since_monday = today.weekday()
     last_monday = today - timedelta(days=days_since_monday + 7)
@@ -255,19 +246,12 @@ async def _handle_first_snapshot(
         )
         if past_report.get("success") and past_report.get("data", {}).get("snapshot_saved"):
             logger.info(
-                "onboarding.already_completed",
+                "onboarding.possible_returning_user",
                 user_id=user_id,
                 correlation_id=correlation_id,
-            )
-            return mcp_types.CallToolResult(
-                isError=True,
-                content=[mcp_types.TextContent(
-                    type="text",
-                    text="You appear to have been using PG already. Use get_weekly_report for your regular weekly reflection.",
-                )],
+                snapshot_saved=True,
             )
     except Exception as e:
-        # Past report check failed — continue (non-fatal)
         logger.warning(
             "onboarding.past_check_failed",
             user_id=user_id,
@@ -459,8 +443,7 @@ async def _handle_first_snapshot(
         "assistant_guidance": {
             "action": "FIRST_SNAPSHOT",
             "instruction": (
-                "Present the weekly snapshot. Frame positively — this is the user's first look "
-                "at their data. Show how time splits across priorities. Acknowledge events without "
+                "Present the weekly snapshot. Show how time splits across priorities. Acknowledge events without "
                 "keywords: 'You still have ~Xh in events without keywords — that's normal. As you "
                 "add keywords to more event titles, tracking becomes precise.' If semantic grouping "
                 "of untagged events is possible, show overlap with priorities: 'These hours include "
@@ -499,8 +482,7 @@ async def _handle_reflection_setup(
     """
     Phase 3: Reflection setup.
 
-    Purely guidance-driven — no backend call needed.
-    Introduces dashboard + weekly report, suggests recurring reflection event.
+    Guidance-driven — introduces dashboard + weekly report, suggests recurring reflection event.
     """
     logger.info(
         "onboarding.phase_called",
@@ -509,7 +491,7 @@ async def _handle_reflection_setup(
         correlation_id=correlation_id,
     )
 
-    # Check for already onboarded (past snapshots exist)
+    # Log if user might be returning (past snapshots exist), but don't block
     today = date.today()
     days_since_monday = today.weekday()
     last_monday = today - timedelta(days=days_since_monday + 7)
@@ -523,19 +505,12 @@ async def _handle_reflection_setup(
         )
         if past_report.get("success") and past_report.get("data", {}).get("snapshot_saved"):
             logger.info(
-                "onboarding.already_completed",
+                "onboarding.possible_returning_user",
                 user_id=user_id,
                 correlation_id=correlation_id,
-            )
-            return mcp_types.CallToolResult(
-                isError=True,
-                content=[mcp_types.TextContent(
-                    type="text",
-                    text="You appear to have been using PG already. Use get_weekly_report for your regular weekly reflection.",
-                )],
+                snapshot_saved=True,
             )
     except Exception as e:
-        # Past report check failed — continue (non-fatal)
         logger.warning(
             "onboarding.past_check_failed",
             user_id=user_id,

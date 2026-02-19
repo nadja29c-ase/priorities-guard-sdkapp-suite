@@ -306,6 +306,31 @@ async def test_keyword_education_no_priorities_returns_error(
         assert "priority" in result.content[0].text.lower()
 
 
+@pytest.mark.asyncio
+async def test_keyword_education_already_onboarded_logs_warning_but_continues(
+    mock_past_week_with_snapshot,
+    mock_priorities_response,
+):
+    """Mock past weekly report returning snapshot_saved=True, AND mock /priorities returning valid data. Assert tool does NOT return isError=True. Assert response contains KEYWORD_EDUCATION guidance."""
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        # First call: past week check (has snapshot), second call: priorities
+        mock_get.side_effect = [mock_past_week_with_snapshot, mock_priorities_response]
+
+        result = await handle("user-123", "corr-123", {"phase": "keyword_education"})
+
+        # Should NOT be an error - logs warning but continues
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert result.structuredContent["assistant_guidance"]["action"] == "KEYWORD_EDUCATION"
+
+        # Check priorities still returned
+        priorities = result.structuredContent["assistant_guidance"]["priorities"]
+        assert len(priorities) == 2
+
+
 # ============================================================================
 # Test: first_snapshot phase
 # ============================================================================
@@ -361,22 +386,24 @@ async def test_first_snapshot_zero_keyword_hours_returns_retry_guidance(
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_already_onboarded_returns_error(
+async def test_first_snapshot_past_snapshots_logs_warning_but_continues(
     mock_past_week_with_snapshot,
+    mock_weekly_report_with_keywords,
 ):
-    """Mock backend indicating past snapshots exist. Assert error guidance saying user appears to have been using PG."""
+    """Mock backend indicating past snapshots exist. Assert tool logs warning but continues (no isError)."""
     with patch(
         "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
         new_callable=AsyncMock,
     ) as mock_get:
-        mock_get.return_value = mock_past_week_with_snapshot
+        # First call: past week check (has snapshot), second call: current week
+        mock_get.side_effect = [mock_past_week_with_snapshot, mock_weekly_report_with_keywords]
 
         result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
 
-        assert result.isError is True
-        text = result.content[0].text.lower()
-        assert "appear" in text or "already" in text
-        assert "get_weekly_report" in result.content[0].text
+        # Should NOT be an error - logs warning but continues
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert result.structuredContent["assistant_guidance"]["action"] == "FIRST_SNAPSHOT"
 
 
 # ============================================================================
@@ -402,8 +429,8 @@ async def test_reflection_setup_returns_guidance_only(mock_past_week_no_snapshot
 
 
 @pytest.mark.asyncio
-async def test_reflection_setup_already_onboarded_returns_error(mock_past_week_with_snapshot):
-    """reflection_setup with past snapshots returns error."""
+async def test_reflection_setup_past_snapshots_logs_warning_but_continues(mock_past_week_with_snapshot):
+    """reflection_setup with past snapshots logs warning but continues (no isError)."""
     with patch(
         "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
         new_callable=AsyncMock,
@@ -411,10 +438,11 @@ async def test_reflection_setup_already_onboarded_returns_error(mock_past_week_w
     ):
         result = await handle("user-123", "corr-123", {"phase": "reflection_setup"})
 
-        assert result.isError is True
-        text = result.content[0].text.lower()
-        assert "already" in text or "appear" in text
-        assert "get_weekly_report" in result.content[0].text
+        # Should NOT be an error - logs warning but continues
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert result.structuredContent["assistant_guidance"]["action"] == "REFLECTION_SETUP"
+        assert result.structuredContent["assistant_guidance"]["onboarding_complete"] is True
 
 
 # ============================================================================

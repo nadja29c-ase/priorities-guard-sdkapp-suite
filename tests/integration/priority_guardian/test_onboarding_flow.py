@@ -75,26 +75,6 @@ class TestOnboardingCalendarSetup:
         }
 
     @pytest.fixture
-    def mock_past_week_with_snapshot(self):
-        """Mock past week report with snapshot (returning user)."""
-        return {
-            "success": True,
-            "data": {
-                "week_start": "2026-02-10",
-                "week_end": "2026-02-16",
-                "is_current_week": False,
-                "snapshot_saved": True,
-                "priorities": [],
-                "time_allocation": {
-                    "total_tracked_hours": 20,
-                    "keywords": {"P1": {"hours": 10, "event_count": 5}},
-                    "other_hours": 10,
-                },
-                "all_events": [],
-            },
-        }
-
-    @pytest.fixture
     def mock_current_week_with_keywords(self):
         """Mock current week report with keyword-matched hours."""
         return {
@@ -280,13 +260,44 @@ class TestOnboardingCalendarSetup:
         assert "24.5h" in result.content[0].text
 
     @pytest.mark.asyncio
-    async def test_first_snapshot_already_onboarded_rejected(
+    async def test_first_snapshot_no_keywords_rejected(
         self,
         mock_auth_context,
-        mock_past_week_with_snapshot,
+        mock_past_week_no_snapshot,
     ):
-        """Create user with past snapshots, call first_snapshot, assert error response."""
+        """Create test user with priorities and calendar but no keyword-tagged events. Call first_snapshot. Assert isError=True with retry guidance."""
         from mcp_server.priority_guardian.handlers.tools import call_tool_request
+
+        # Mock weekly report with events but zero priority hours
+        mock_weekly_report_zero_keywords = {
+            "success": True,
+            "data": {
+                "week_start": "2026-02-17",
+                "week_end": "2026-02-23",
+                "is_current_week": True,
+                "snapshot_saved": False,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship PG V1.0",
+                        "type": "deadline",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 0.0,
+                        "event_count": 0,
+                    },
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {
+                        "P1": {"hours": 0.0, "event_count": 0},
+                    },
+                    "other_hours": 15.0,
+                },
+                "all_events": [
+                    {"title": "Team meeting", "start": "2026-02-17T10:00:00", "end": "2026-02-17T11:00:00", "matched_keywords": []},
+                ],
+            },
+        }
 
         request = mcp_types.CallToolRequest(
             method="tools/call",
@@ -303,7 +314,7 @@ class TestOnboardingCalendarSetup:
         ), patch(
             "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
             new_callable=AsyncMock,
-            return_value=mock_past_week_with_snapshot,
+            side_effect=[mock_past_week_no_snapshot, mock_weekly_report_zero_keywords],
         ):
             result = await call_tool_request(request)
 
@@ -311,10 +322,9 @@ class TestOnboardingCalendarSetup:
         assert isinstance(result, mcp_types.CallToolResult)
         assert result.isError is True
 
-        # Verify error message
+        # Verify error message mentions keywords not reflected
         error_text = result.content[0].text.lower()
-        assert "already" in error_text
-        assert "get_weekly_report" in result.content[0].text
+        assert "keyword" in error_text
 
     @pytest.mark.asyncio
     async def test_full_onboarding_sequence(
