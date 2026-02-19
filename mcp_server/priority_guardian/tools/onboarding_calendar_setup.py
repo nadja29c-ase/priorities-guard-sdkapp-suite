@@ -101,7 +101,7 @@ async def _handle_keyword_education(
                 isError=True,
                 content=[mcp_types.TextContent(
                     type="text",
-                    text="User has already completed onboarding. Use get_weekly_report for regular reflection.",
+                    text="You appear to have been using PG already. Use get_weekly_report for your regular weekly reflection.",
                 )],
             )
     except Exception as e:
@@ -263,7 +263,7 @@ async def _handle_first_snapshot(
                 isError=True,
                 content=[mcp_types.TextContent(
                     type="text",
-                    text="User has already completed onboarding. Use get_weekly_report for regular reflection.",
+                    text="You appear to have been using PG already. Use get_weekly_report for your regular weekly reflection.",
                 )],
             )
     except Exception as e:
@@ -509,6 +509,40 @@ async def _handle_reflection_setup(
         correlation_id=correlation_id,
     )
 
+    # Check for already onboarded (past snapshots exist)
+    today = date.today()
+    days_since_monday = today.weekday()
+    last_monday = today - timedelta(days=days_since_monday + 7)
+    week_start = last_monday.isoformat()
+
+    try:
+        past_report = await backend_get(
+            f"/api/priority-guardian/weekly-report?week_start={week_start}",
+            user_id,
+            correlation_id,
+        )
+        if past_report.get("success") and past_report.get("data", {}).get("snapshot_saved"):
+            logger.info(
+                "onboarding.already_completed",
+                user_id=user_id,
+                correlation_id=correlation_id,
+            )
+            return mcp_types.CallToolResult(
+                isError=True,
+                content=[mcp_types.TextContent(
+                    type="text",
+                    text="You appear to have been using PG already. Use get_weekly_report for your regular weekly reflection.",
+                )],
+            )
+    except Exception as e:
+        # Past report check failed — continue (non-fatal)
+        logger.warning(
+            "onboarding.past_check_failed",
+            user_id=user_id,
+            correlation_id=correlation_id,
+            error=str(e),
+        )
+
     logger.info(
         "onboarding.phase_success",
         phase="reflection_setup",
@@ -533,8 +567,8 @@ async def _handle_reflection_setup(
                 "or 'Client work keeps eating into P1 time.' The weekly report is where you spot patterns "
                 "and decide what to adjust. Then suggest: 'Create a recurring Friday event — something "
                 "like PG Reflection. That's 10 minutes to pull up your weekly report, see the patterns, "
-                "and decide what to shift for next week.' Frame as: this is where the system pays off — "
-                "learning from your own data. NOT a chore — a decision-making ritual."
+                "and decide what to shift for next week.' Frame as: this is where you see patterns and "
+                "decide what to adjust. NOT a chore — a decision-making ritual."
             ),
             "onboarding_complete": True,
         },

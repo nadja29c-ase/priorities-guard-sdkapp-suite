@@ -364,7 +364,7 @@ async def test_first_snapshot_zero_keyword_hours_returns_retry_guidance(
 async def test_first_snapshot_already_onboarded_returns_error(
     mock_past_week_with_snapshot,
 ):
-    """Mock backend indicating past snapshots exist. Assert error guidance saying user is already onboarded."""
+    """Mock backend indicating past snapshots exist. Assert error guidance saying user appears to have been using PG."""
     with patch(
         "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
         new_callable=AsyncMock,
@@ -375,7 +375,7 @@ async def test_first_snapshot_already_onboarded_returns_error(
 
         assert result.isError is True
         text = result.content[0].text.lower()
-        assert "already" in text or "onboarding" in text
+        assert "appear" in text or "already" in text
         assert "get_weekly_report" in result.content[0].text
 
 
@@ -384,16 +384,14 @@ async def test_first_snapshot_already_onboarded_returns_error(
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_reflection_setup_returns_guidance_only():
-    """Call with phase reflection_setup. Assert no backend call made. Assert guidance includes onboarding_complete: true."""
+async def test_reflection_setup_returns_guidance_only(mock_past_week_no_snapshot):
+    """Call with phase reflection_setup. Assert guidance includes onboarding_complete: true."""
     with patch(
         "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
         new_callable=AsyncMock,
-    ) as mock_get:
+        return_value=mock_past_week_no_snapshot,
+    ):
         result = await handle("user-123", "corr-123", {"phase": "reflection_setup"})
-
-        # No backend calls should be made for reflection_setup
-        mock_get.assert_not_called()
 
         assert result.isError is not True
         assert result.structuredContent["success"] is True
@@ -401,6 +399,22 @@ async def test_reflection_setup_returns_guidance_only():
         guidance = result.structuredContent["assistant_guidance"]
         assert guidance["action"] == "REFLECTION_SETUP"
         assert guidance["onboarding_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_reflection_setup_already_onboarded_returns_error(mock_past_week_with_snapshot):
+    """reflection_setup with past snapshots returns error."""
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+        return_value=mock_past_week_with_snapshot,
+    ):
+        result = await handle("user-123", "corr-123", {"phase": "reflection_setup"})
+
+        assert result.isError is True
+        text = result.content[0].text.lower()
+        assert "already" in text or "appear" in text
+        assert "get_weekly_report" in result.content[0].text
 
 
 # ============================================================================

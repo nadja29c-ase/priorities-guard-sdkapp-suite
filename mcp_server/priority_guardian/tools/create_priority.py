@@ -41,7 +41,7 @@ FIRST-TIME CONTEXT: If user has no existing priorities, open with something like
 
 'Happy to help you set that up. We'll lock in your first priority together, and I'll walk you through how Priority Guardian works as we go.
 
-Quick overview: PG lets you anchor up to 3 priorities you want to protect time for. You stay flexible in how you plan your week — PG just tracks whether your calendar actually reflects what you said matters most. It works through calendar keywords (P1, P2, P3) that tag your events.
+Quick overview: PG lets you anchor up to 3 priorities you want to protect time for. You stay flexible in how you plan your week — PG just tracks whether your calendar actually reflects what you said matters most.
 
 Let's start — what's the first priority you want to lock in?'
 
@@ -67,6 +67,8 @@ INPUT_SCHEMA = {
             "type": "string",
             "description": (
                 "Copy-paste user's words that reveal their priority type. "
+                "NEVER ask user to say 'deadline' or 'flexible' literally — ask in natural terms "
+                "and capture their natural language response. "
                 "Explain the difference before asking:\n"
                 "- Deadline = non-negotiable external end date + concrete deliverables to ship. "
                 "PG tracks what gets delivered by when.\n"
@@ -74,7 +76,7 @@ INPUT_SCHEMA = {
                 "PG tracks weekly hours + a 1-month goal.\n"
                 "A date alone does NOT mean deadline — probe whether it's a hard external constraint "
                 "or an aspirational target. If unsure, suggest flexible: it gives weekly structure "
-                "and monthly checkpoints without artificial pressure. "
+                "and monthly checkpoints without artificial pressure."
             ),
             "minLength": 1,
         },
