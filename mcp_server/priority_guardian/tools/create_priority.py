@@ -268,19 +268,6 @@ def _build_success_guidance(
 
     remaining = len(available_keywords)
 
-    # Keyword education applies to all branches
-    keyword_education = {
-        "instruction": (
-            "Explain to the user how time tracking works in Priority Guardian: "
-            "Once you connect your Google Calendar (next step), PG automatically tracks "
-            "how much time you spend on each priority. You just tag your calendar events "
-            f"with the keyword '{keyword}' in the event title — for example, "
-            f"'{keyword}: Client meeting' or '{keyword}: Deep work session'. "
-            "PG reads your calendar and calculates your weekly hours per priority. "
-            "No manual time logging needed."
-        ),
-    }
-
     if remaining > 0:
         next_slot = available_keywords[0] if available_keywords else None
         guidance = {
@@ -294,7 +281,6 @@ def _build_success_guidance(
             "The dashboard now shows the user's priorities. "
             "Do NOT repeat priority details — the widget displays them."
         )
-        guidance["keyword_education"] = keyword_education
         guidance["next_steps"] = {
             "path_a": {
                 "label": "conversational",
@@ -324,13 +310,17 @@ def _build_success_guidance(
             "remaining_slots": 0,
             "instruction": (
                 f"Priority created: {priority_name} is now tracked as {keyword}. "
-                "All 3 priority slots are filled. The dashboard shows the complete setup. "
+                "All 3 priority slots are filled. Acknowledge this as a milestone — the user's priorities are locked in and stored."
+                "Explain what the dashboard does for them: this is where they come back to see "
+                "a quick way to check how their week is going and stay on track with their priorities. Two views — "
+                "the inline summary right here in chat for a quick check, and the full dashboard "
+                "(button at the bottom) for detailed progress, editing priorities, and managing e2e deliverables. "
+                "Tell user they can say 'show my priorities' anytime to see their dashboard, "
                 "Do NOT repeat priority details — the widget displays them."
             ),
-            "keyword_education": keyword_education,
-            "completion_guidance": (
-                "Tell user they can say 'show my priorities' anytime to see their dashboard, "
-                "and that their data is saved across conversations. "
+            "next_onboarding_step": (
+                "Guide user to connect Google Calendar next — open the full dashboard to set that up. Explain why it's necessary: this is how PG tracks time against their priorities. "
+                "The use of keywords (P1,P2,P3) and progress tracking will be explained after calendar is connected."
                 "Proceed to next onboarding step (Google Calendar connection)."
             ),
         }
