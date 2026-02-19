@@ -25,7 +25,7 @@ logger = structlog.get_logger(__name__)
 
 NAME = "create_priority"
 
-DESCRIPTION = """Creates ONE priority AT A TIME for time tracking. Call ONCE per priority — user sets up 1–3 priorities iteratively.
+DESCRIPTION = """Creates ONE priority AT A TIME for progress tracking while onboarding the user. Call ONCE per priority — user sets up 1–3 priorities iteratively.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - user_priority_name_verbatim: non-empty, user's exact words
