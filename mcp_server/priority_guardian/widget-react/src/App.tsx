@@ -129,7 +129,6 @@ function App() {
   const handleAddPriority = useCallback(async (priorityData: {
     name: string
     type: 'deadline' | 'flexible'
-    calendar_keyword?: string
     deadline?: string
     weekly_hour_target?: number
     checkpoint_date?: string

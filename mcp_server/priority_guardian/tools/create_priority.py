@@ -35,9 +35,9 @@ CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - For deadline: deadline date gathered from user
 - For flexible: weekly_hour_target, checkpoint_date, user_goal_verbatim, AND initial_goal_text all gathered from user
 
-PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Instead you take on the role of a Coach/Facilitator. Flow: Gather ONE field at a time → wait for user's response before asking the next question. NEVER ask for multiple fields in one message. NEVER call this tool until ALL required fields for one Priority are gathered and stored as verbatim.
+PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Instead you take on the role of a empathic Coach/Facilitator; your communication style: warm, acknowledging. Flow: Gather ONE field at a time → wait for user's response before asking the next question. NEVER ask for multiple fields in one message. NEVER call this tool until ALL required fields for one Priority are gathered and stored as verbatim.
 
-FIRST-TIME CONTEXT: If user has no existing priorities, acknowledge their intent, then briefly explain Priority Guardian: PG gives you a priority anchor — up to 3 priorities you commit to protecting time for. You stay flexible in how you plan your week, but PG tracks whether your calendar reflects what you said matters most. Time tracking works via calendar keywords (P1, P2, P3). Then begin the sequence.
+FIRST-TIME CONTEXT: If user has no existing priorities, acknowledge their intent and frame setup as onboarding: you'll set up their first priority together and explain how PG works along the way. PG is a priority anchor — up to 3 priorities you commit to protecting time for. You stay flexible in how you plan your week, but PG tracks whether your calendar reflects what you said matters most. Time tracking works via calendar keywords (P1, P2, P3). Then begin the sequence.
 
 Sequence: PRIORITY NAME → PRIORITY TYPE (explain deadline vs flexible, user chooses) → TYPE-SPECIFIC FIELDS → call tool with ALL data.
 """
@@ -57,13 +57,22 @@ INPUT_SCHEMA = {
         },
         "user_priority_type_verbatim": {
             "type": "string",
-            "description": "Copy-paste user's exact words when choosing deadline vs flexible. Must be non-empty.",
+            "description": (
+                "Copy-paste user's exact words when choosing their priority type. "
+                "Before asking, explain the two types naturally: "
+                "Some priorities have a clear finish line — a launch date, a submission deadline, a delivery date. "
+                "These are deadline priorities. "
+                "Others are ongoing commitments — like business development or learning a skill — "
+                "where the goal is to consistently invest time each week and check progress monthly. "
+                "These are flexible priorities. "
+                "Ask the user which fits their priority. Do NOT present it as a menu — have a conversation."
+            ),
             "minLength": 1,
         },
         "type": {
             "type": "string",
             "enum": ["deadline", "flexible"],
-            "description": "Priority type derived from user's verbatim choice. Explain to the user the difference: Deadline priorities have a hard due date. Flexible priorities are ongoing commitments where you track weekly hours and check in on progress about once a month.",
+            "description": "Priority type derived from user's verbatim choice. Map user's natural language to one of the enum values. Never ask the user to say 'deadline' or 'flexible' literally.",
         },
         "calendar_keyword": {
             "type": "string",
@@ -72,25 +81,43 @@ INPUT_SCHEMA = {
         },
         "deadline": {
             "type": "string",
-            "description": "ISO date (YYYY-MM-DD). Required when type=deadline.",
+            "description": (
+                "ISO date (YYYY-MM-DD). The hard due date for this priority. "
+                "User can say a natural date like 'end of March' or 'March 15th' — convert to ISO format. "
+                "Do NOT ask user for YYYY-MM-DD format. Required when type=deadline."
+            ),
         },
         "weekly_hour_target": {
             "type": "number",
             "description": "Hours per week commitment. Required when type=flexible. Explain why this is necessary and how it will be used for progress tracking.",
             "exclusiveMinimum": 0,
         },
-        "checkpoint_date": {
-            "type": "string",
-            "description": "ISO date (YYYY-MM-DD). The date when user will step back and evaluate: is the time I'm investing actually producing results? Typically ~1 month from now. Required when type=flexible.",
-        },
         "user_goal_verbatim": {
             "type": "string",
-            "description": "Copy-paste user's exact words for what success looks like by checkpoint_date. Example: 'I want to have 3 client meetings booked by then.' Required when type=flexible. Must be non-empty.",
+            "description": (
+                "Copy-paste user's exact words for their 1-month goal. "
+                "Ask BEFORE checkpoint_date. Explain why: hours alone don't tell you if you're making progress. "
+                "A concrete goal turns time investment into something measurable. "
+                "Ask: 'What would success look like in about a month? One sentence — specific enough that you'll know whether it happened.' "
+                "Must be non-empty. Required when type=flexible."
+            ),
             "minLength": 1,
+        },
+        "checkpoint_date": {
+            "type": "string",
+            "description": (
+                "ISO date (YYYY-MM-DD). Ask AFTER user_goal_verbatim. "
+                "The date when user will evaluate whether their time investment is producing results against their goal. "
+                "User can say a natural date like 'mid-March' or 'in 4 weeks' — convert to ISO format. "
+                "Do NOT ask user for YYYY-MM-DD format. Typically ~1 month from now. Required when type=flexible."
+            ),
         },
         "initial_goal_text": {
             "type": "string",
-            "description": "The concrete outcome user expects by checkpoint_date, derived from user_goal_verbatim. Normalized for clarity (max 200 chars). Required when type=flexible.",
+            "description": (
+                "The concrete outcome user expects, derived from user_goal_verbatim. "
+                "Normalized for clarity (max 200 chars). Required when type=flexible."
+            ),
             "maxLength": 200,
         },
     },
