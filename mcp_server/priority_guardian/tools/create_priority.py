@@ -66,14 +66,15 @@ INPUT_SCHEMA = {
         "user_priority_type_verbatim": {
             "type": "string",
             "description": (
-                "Copy-paste user's exact words when choosing their priority type. "
-                "Before asking, explain the two types naturally: "
-                "Some priorities have a clear finish line — a launch date, a submission deadline, a delivery date. "
-                "These are deadline priorities. "
-                "Others are ongoing commitments — like business development or learning a skill — "
-                "where the goal is to consistently invest time each week and check progress monthly. "
-                "These are flexible priorities. "
-                "Ask the user which fits their priority. Do NOT present it as a menu — have a conversation."
+                "Copy-paste user's words that reveal their priority type. "
+                "Explain the difference before asking:\n"
+                "- Deadline = non-negotiable external end date + concrete deliverables to ship. "
+                "PG tracks what gets delivered by when.\n"
+                "- Flexible = ongoing commitment where consistent time investment matters. "
+                "PG tracks weekly hours + a 1-month goal.\n"
+                "A date alone does NOT mean deadline — probe whether it's a hard external constraint "
+                "or an aspirational target. If unsure, suggest flexible: it gives weekly structure "
+                "and monthly checkpoints without artificial pressure. "
             ),
             "minLength": 1,
         },
