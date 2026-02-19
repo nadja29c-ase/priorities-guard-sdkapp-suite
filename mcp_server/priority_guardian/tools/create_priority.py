@@ -30,14 +30,14 @@ DESCRIPTION = """Creates ONE priority AT A TIME for time tracking. Call ONCE per
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - user_priority_name_verbatim: non-empty, user's exact words
 - name: derived from verbatim, normalized for clarity
-- user_priority_type_verbatim: non-empty, user's exact words choosing deadline-driven or flexible priority type.
+- user_priority_type_verbatim: non-empty, user's exact words choosing deadline or flexible priority type.
 - type: derived from user's choice
 - For deadline: deadline date gathered from user
 - For flexible: weekly_hour_target, checkpoint_date, user_goal_verbatim, AND initial_goal_text all gathered from user
 
 PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Instead you take on the role of a Coach/Facilitator. Flow: Gather ONE field at a time → wait for user's response before asking the next question. NEVER ask for multiple fields in one message. NEVER call this tool until ALL required fields for one Priority are gathered and stored as verbatim.
 
-FIRST-TIME CONTEXT: If user has no existing priorities, briefly explain how Priority Guardian works and which benefits to expect before gathering data: PG helps stick to/ protect time for your top 3 priorities by tracking hours via calendar keywords (P1, P2, P3). Then begin the sequence.
+FIRST-TIME CONTEXT: If user has no existing priorities, acknowledge their intent, then briefly explain Priority Guardian: PG gives you a priority anchor — up to 3 priorities you commit to protecting time for. You stay flexible in how you plan your week, but PG tracks whether your calendar reflects what you said matters most. Time tracking works via calendar keywords (P1, P2, P3). Then begin the sequence.
 
 Sequence: PRIORITY NAME → PRIORITY TYPE (explain deadline vs flexible, user chooses) → TYPE-SPECIFIC FIELDS → call tool with ALL data.
 """
@@ -57,13 +57,13 @@ INPUT_SCHEMA = {
         },
         "user_priority_type_verbatim": {
             "type": "string",
-            "description": "Copy-paste user's exact words when choosing deadline-driven vs flexible. Must be non-empty.",
+            "description": "Copy-paste user's exact words when choosing deadline vs flexible. Must be non-empty.",
             "minLength": 1,
         },
         "type": {
             "type": "string",
-            "enum": ["deadline-driven", "flexible"],
-            "description": "Priority type derived from user's verbatim choice. Explain to the user the difference: Deadline-driven priorities have a hard due date. Flexible priorities are ongoing commitments where you track weekly hours and check in on progress about once a month.",
+            "enum": ["deadline", "flexible"],
+            "description": "Priority type derived from user's verbatim choice. Explain to the user the difference: Deadline priorities have a hard due date. Flexible priorities are ongoing commitments where you track weekly hours and check in on progress about once a month.",
         },
         "calendar_keyword": {
             "type": "string",
@@ -136,7 +136,7 @@ GUIDANCE_EMPTY_NAME = (
 
 GUIDANCE_EMPTY_TYPE_VERBATIM = (
     "user_priority_type_verbatim is empty. Do not call this tool until user has chosen deadline or flexible. "
-    "Explain: Deadline-driven priorities have a hard end date. Flexible priorities are ongoing commitments/ investements into a better future. "
+    "Explain: Deadline priorities have a hard end date. Flexible priorities are ongoing commitments/ investements into a better future. "
     "with a weekly hour target. "
     "Ask: 'Does this priority have a hard deadline, or is it more of an ongoing commitment?' "
     "Then store their exact answer in user_priority_type_verbatim."
