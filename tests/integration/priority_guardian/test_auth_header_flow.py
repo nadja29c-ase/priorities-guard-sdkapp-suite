@@ -188,7 +188,7 @@ class TestEndToEndAuthFlow:
                 arguments={
                     "user_priority_name_verbatim": "I need to finish the test",
                     "name": "Test",
-                    "user_type_choice_verbatim": "it has a hard deadline",
+                    "user_priority_type_verbatim": "it has a hard deadline",
                     "type": "deadline",
                     "deadline": "2026-12-31",
                 },

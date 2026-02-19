@@ -25,23 +25,22 @@ logger = structlog.get_logger(__name__)
 
 NAME = "create_priority"
 
-DESCRIPTION = """Creates ONE priority for time tracking. Call once per priority — user sets up 1–3 priorities iteratively.
+DESCRIPTION = """Creates ONE priority AT A TIME for time tracking. Call ONCE per priority — user sets up 1–3 priorities iteratively.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - user_priority_name_verbatim: non-empty, user's exact words
 - name: derived from verbatim, normalized for clarity
-- user_type_choice_verbatim: non-empty, user's exact words choosing deadline or flexible
+- user_priority_type_verbatim: non-empty, user's exact words choosing deadline-driven or flexible priority type.
 - type: derived from user's choice
 - For deadline: deadline date gathered from user
 - For flexible: weekly_hour_target, checkpoint_date, user_goal_verbatim, AND initial_goal_text all gathered from user
 
-ONBOARDING FLOW: For each priority, gather information conversationally ONE question at a time:
-1. Ask what priority the user wants to track → store verbatim
-2. Explain deadline vs flexible concept → ask which applies → store verbatim
-3. Ask for type-specific fields (deadline date OR hours/week + 1-month goal + check-in date)
-4. Call this tool with ALL gathered data
+PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Instead you take on the role of a Coach/Facilitator. Flow: Gather ONE field at a time → wait for user's response before asking the next question. NEVER ask for multiple fields in one message. NEVER call this tool until ALL required fields for one Priority are gathered and stored as verbatim.
 
-After the tool returns, follow the assistant_guidance for next steps. Do NOT deviate from the guided flow."""
+FIRST-TIME CONTEXT: If user has no existing priorities, briefly explain how Priority Guardian works and which benefits to expect before gathering data: PG helps stick to/ protect time for your top 3 priorities by tracking hours via calendar keywords (P1, P2, P3). Then begin the sequence.
+
+Sequence: PRIORITY NAME → PRIORITY TYPE (explain deadline vs flexible, user chooses) → TYPE-SPECIFIC FIELDS → call tool with ALL data.
+"""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -56,15 +55,15 @@ INPUT_SCHEMA = {
             "description": "Priority name derived from verbatim — normalized for clarity (max 100 chars). Do not invent specificity the user did not state.",
             "maxLength": 100,
         },
-        "user_type_choice_verbatim": {
+        "user_priority_type_verbatim": {
             "type": "string",
-            "description": "Copy-paste user's exact words when choosing deadline vs flexible. Must be non-empty.",
+            "description": "Copy-paste user's exact words when choosing deadline-driven vs flexible. Must be non-empty.",
             "minLength": 1,
         },
         "type": {
             "type": "string",
-            "enum": ["deadline", "flexible"],
-            "description": "Priority type derived from user's verbatim choice.",
+            "enum": ["deadline-driven", "flexible"],
+            "description": "Priority type derived from user's verbatim choice. Explain to the user the difference: Deadline-driven priorities have a hard due date. Flexible priorities are ongoing commitments where you track weekly hours and check in on progress about once a month.",
         },
         "calendar_keyword": {
             "type": "string",
@@ -77,28 +76,28 @@ INPUT_SCHEMA = {
         },
         "weekly_hour_target": {
             "type": "number",
-            "description": "Hours per week commitment. Required when type=flexible.",
+            "description": "Hours per week commitment. Required when type=flexible. Explain why this is necessary and how it will be used for progress tracking.",
             "exclusiveMinimum": 0,
         },
         "checkpoint_date": {
             "type": "string",
-            "description": "ISO date (YYYY-MM-DD) ~1 month out. Required when type=flexible.",
+            "description": "ISO date (YYYY-MM-DD). The date when user will step back and evaluate: is the time I'm investing actually producing results? Typically ~1 month from now. Required when type=flexible.",
         },
         "user_goal_verbatim": {
             "type": "string",
-            "description": "Copy-paste user's exact words for 1-month goal. Required when type=flexible. Must be non-empty.",
+            "description": "Copy-paste user's exact words for what success looks like by checkpoint_date. Example: 'I want to have 3 client meetings booked by then.' Required when type=flexible. Must be non-empty.",
             "minLength": 1,
         },
         "initial_goal_text": {
             "type": "string",
-            "description": "Goal text derived from user_goal_verbatim — normalized for clarity (max 200 chars). Required when type=flexible.",
+            "description": "The concrete outcome user expects by checkpoint_date, derived from user_goal_verbatim. Normalized for clarity (max 200 chars). Required when type=flexible.",
             "maxLength": 200,
         },
     },
     "required": [
         "user_priority_name_verbatim",
         "name",
-        "user_type_choice_verbatim",
+        "user_priority_type_verbatim",
         "type",
     ],
     "additionalProperties": False,
@@ -126,7 +125,7 @@ ACTION_ERROR = "ERROR"
 
 GUIDANCE_EMPTY_NAME_VERBATIM = (
     "user_priority_name_verbatim is empty. Do not call this tool until user has stated a priority. "
-    "Ask: 'What is the #1 priority you want to lock in and track your time against?' "
+    "Ask: 'What is the priority you want to lock in and track your time against?' "
     "Then store their exact answer in user_priority_name_verbatim."
 )
 
@@ -136,16 +135,16 @@ GUIDANCE_EMPTY_NAME = (
 )
 
 GUIDANCE_EMPTY_TYPE_VERBATIM = (
-    "user_type_choice_verbatim is empty. Do not call this tool until user has chosen deadline or flexible. "
-    "Explain: Deadline priorities have a hard end date. Flexible priorities are ongoing commitments "
+    "user_priority_type_verbatim is empty. Do not call this tool until user has chosen deadline or flexible. "
+    "Explain: Deadline-driven priorities have a hard end date. Flexible priorities are ongoing commitments/ investements into a better future. "
     "with a weekly hour target. "
     "Ask: 'Does this priority have a hard deadline, or is it more of an ongoing commitment?' "
-    "Then store their exact answer in user_type_choice_verbatim."
+    "Then store their exact answer in user_priority_type_verbatim."
 )
 
 GUIDANCE_EMPTY_GOAL_VERBATIM = (
     "user_goal_verbatim is empty. Do not call this tool until user has stated a 1-month goal. "
-    "Explain: The 1-month goal anchors your time investment to a concrete outcome. "
+    "Explain: The 1-month goal anchors your time investment to a concrete outcome (to avoid vanity metrics). "
     "Ask: 'What would success look like in one month? One sentence — specific enough "
     "that you will know whether it happened.' "
     "Then store their exact answer in user_goal_verbatim."
@@ -157,7 +156,7 @@ GUIDANCE_EMPTY_GOAL_TEXT = (
 )
 
 GUIDANCE_MISSING_TYPE = (
-    "type is missing or invalid. Derive from user_type_choice_verbatim — "
+    "type is missing or invalid. Derive from user_priority_type_verbatim — "
     "must be 'deadline' or 'flexible' based on user's stated preference."
 )
 
@@ -233,6 +232,19 @@ def _build_success_guidance(
 
     remaining = len(available_keywords)
 
+    # Keyword education applies to all branches
+    keyword_education = {
+        "instruction": (
+            "Explain to the user how time tracking works in Priority Guardian: "
+            "Once you connect your Google Calendar (next step), PG automatically tracks "
+            "how much time you spend on each priority. You just tag your calendar events "
+            f"with the keyword '{keyword}' in the event title — for example, "
+            f"'{keyword}: Client meeting' or '{keyword}: Deep work session'. "
+            "PG reads your calendar and calculates your weekly hours per priority. "
+            "No manual time logging needed."
+        ),
+    }
+
     if remaining > 0:
         next_slot = available_keywords[0] if available_keywords else None
         guidance = {
@@ -244,17 +256,31 @@ def _build_success_guidance(
         guidance["instruction"] = (
             f"Priority created: {priority_name} is now tracked as {keyword}. "
             "The dashboard now shows the user's priorities. "
-            "Do NOT repeat priority details — the widget displays them.\n\n"
-            f"Remind user: tag calendar events with {keyword} to track time "
-            f"(e.g., '{keyword}: Meeting name').\n\n"
-            "Offer two paths for remaining priorities:\n"
-            "- Continue conversationally: 'What is your next priority?'\n"
-            "- Use the dashboard: 'Or add priorities directly in the dashboard above. "
-            "Just let me know when you are done.'\n\n"
-            "If user continues conversationally, gather the next priority ONE question at a time. "
-            "If user says 'done' or signals completion after using the widget, "
-            "acknowledge and proceed to next onboarding step."
+            "Do NOT repeat priority details — the widget displays them."
         )
+        guidance["keyword_education"] = keyword_education
+        guidance["next_steps"] = {
+            "path_a": {
+                "label": "conversational",
+                "instruction": (
+                    "Present both options to the user: "
+                    "'What is your next priority?' — and also mention: "
+                    "'Or you can add priorities directly in the dashboard above. "
+                    "Just let me know when you are done.' "
+                    "If user continues conversationally, gather ONE question at a time following the binding rules. "
+                    "If user says 'done' or signals completion after using the widget, "
+                    "acknowledge and proceed to next onboarding step."
+                ),
+            },
+            "path_b": {
+                "label": "widget",
+                "instruction": (
+                    "User chose to add via dashboard. Wait for user to say 'done' or signal completion. "
+                    "Then acknowledge and proceed to next onboarding step."
+                ),
+            },
+            "present_both": True,
+        }
         return guidance
     else:
         return {
@@ -263,10 +289,13 @@ def _build_success_guidance(
             "instruction": (
                 f"Priority created: {priority_name} is now tracked as {keyword}. "
                 "All 3 priority slots are filled. The dashboard shows the complete setup. "
-                "Do NOT repeat priority details — the widget displays them.\n\n"
-                "Remind user how calendar keyword tagging works for each priority. "
+                "Do NOT repeat priority details — the widget displays them."
+            ),
+            "keyword_education": keyword_education,
+            "completion_guidance": (
                 "Tell user they can say 'show my priorities' anytime to see their dashboard, "
-                "and that their data is saved across conversations."
+                "and that their data is saved across conversations. "
+                "Proceed to next onboarding step (Google Calendar connection)."
             ),
         }
 
@@ -300,7 +329,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     # -------------------------------------------------------------------------
     user_priority_name_verbatim = arguments.get("user_priority_name_verbatim", "")
     name = arguments.get("name", "")
-    user_type_choice_verbatim = arguments.get("user_type_choice_verbatim", "")
+    user_priority_type_verbatim = arguments.get("user_priority_type_verbatim", "")
     priority_type = arguments.get("type")
     calendar_keyword = arguments.get("calendar_keyword")
     deadline = arguments.get("deadline")
@@ -340,12 +369,12 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         )
         return _build_provenance_error("empty_name", GUIDANCE_EMPTY_NAME)
 
-    # Check user_type_choice_verbatim non-empty
-    if not user_type_choice_verbatim or not user_type_choice_verbatim.strip():
+    # Check user_priority_type_verbatim non-empty
+    if not user_priority_type_verbatim or not user_priority_type_verbatim.strip():
         logger.info(
             "tool.create_priority.provenance_failed",
             correlation_id=correlation_id,
-            field="user_type_choice_verbatim",
+            field="user_priority_type_verbatim",
         )
         return _build_provenance_error("empty_type_verbatim", GUIDANCE_EMPTY_TYPE_VERBATIM)
 

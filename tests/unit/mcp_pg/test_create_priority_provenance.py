@@ -46,7 +46,7 @@ def valid_deadline_args():
     return {
         "user_priority_name_verbatim": "I want to track my thesis writing",
         "name": "Thesis Writing",
-        "user_type_choice_verbatim": "it has a hard deadline in June",
+        "user_priority_type_verbatim": "it has a hard deadline in June",
         "type": "deadline",
         "deadline": "2026-06-01",
     }
@@ -58,7 +58,7 @@ def valid_flexible_args():
     return {
         "user_priority_name_verbatim": "I want to learn Spanish",
         "name": "Learn Spanish",
-        "user_type_choice_verbatim": "it's more of an ongoing thing, maybe 5 hours a week",
+        "user_priority_type_verbatim": "it's more of an ongoing thing, maybe 5 hours a week",
         "type": "flexible",
         "weekly_hour_target": 5,
         "checkpoint_date": "2026-03-15",
@@ -130,7 +130,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "",
                 "name": "Test Priority",
-                "user_type_choice_verbatim": "deadline",
+                "user_priority_type_verbatim": "deadline",
                 "type": "deadline",
             },
         )
@@ -149,7 +149,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "   ",
                 "name": "Test Priority",
-                "user_type_choice_verbatim": "deadline",
+                "user_priority_type_verbatim": "deadline",
                 "type": "deadline",
             },
         )
@@ -166,7 +166,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to track my project",
                 "name": "",
-                "user_type_choice_verbatim": "deadline",
+                "user_priority_type_verbatim": "deadline",
                 "type": "deadline",
             },
         )
@@ -176,14 +176,14 @@ class TestProvenanceValidation:
 
     @pytest.mark.asyncio
     async def test_empty_type_verbatim_returns_error(self):
-        """Call handler with empty user_type_choice_verbatim returns error."""
+        """Call handler with empty user_priority_type_verbatim returns error."""
         result = await handle(
             user_id="user-123",
             correlation_id="corr-123",
             arguments={
                 "user_priority_name_verbatim": "I want to track my project",
                 "name": "My Project",
-                "user_type_choice_verbatim": "",
+                "user_priority_type_verbatim": "",
                 "type": "deadline",
             },
         )
@@ -201,7 +201,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to track my project",
                 "name": "My Project",
-                "user_type_choice_verbatim": "it's urgent",
+                "user_priority_type_verbatim": "it's urgent",
                 "type": "urgent",  # Invalid type
             },
         )
@@ -219,7 +219,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to track my project",
                 "name": "My Project",
-                "user_type_choice_verbatim": "it's a deadline",
+                "user_priority_type_verbatim": "it's a deadline",
                 # type is missing
             },
         )
@@ -236,7 +236,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I need to ship the feature",
                 "name": "Ship Feature",
-                "user_type_choice_verbatim": "it has a hard deadline",
+                "user_priority_type_verbatim": "it has a hard deadline",
                 "type": "deadline",
                 # deadline field is missing
             },
@@ -255,7 +255,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I need to ship the feature",
                 "name": "Ship Feature",
-                "user_type_choice_verbatim": "it has a hard deadline",
+                "user_priority_type_verbatim": "it has a hard deadline",
                 "type": "deadline",
                 "deadline": "",
             },
@@ -273,7 +273,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to learn Spanish",
                 "name": "Learn Spanish",
-                "user_type_choice_verbatim": "it's ongoing",
+                "user_priority_type_verbatim": "it's ongoing",
                 "type": "flexible",
                 # weekly_hour_target missing
                 "checkpoint_date": "2026-03-15",
@@ -295,7 +295,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to learn Spanish",
                 "name": "Learn Spanish",
-                "user_type_choice_verbatim": "it's ongoing",
+                "user_priority_type_verbatim": "it's ongoing",
                 "type": "flexible",
                 "weekly_hour_target": 5,
                 # checkpoint_date missing
@@ -317,7 +317,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to learn Spanish",
                 "name": "Learn Spanish",
-                "user_type_choice_verbatim": "it's ongoing",
+                "user_priority_type_verbatim": "it's ongoing",
                 "type": "flexible",
                 "weekly_hour_target": 5,
                 "checkpoint_date": "",
@@ -338,7 +338,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to learn Spanish",
                 "name": "Learn Spanish",
-                "user_type_choice_verbatim": "it's ongoing",
+                "user_priority_type_verbatim": "it's ongoing",
                 "type": "flexible",
                 "weekly_hour_target": 5,
                 "checkpoint_date": "2026-03-15",
@@ -359,7 +359,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to learn Spanish",
                 "name": "Learn Spanish",
-                "user_type_choice_verbatim": "it's ongoing",
+                "user_priority_type_verbatim": "it's ongoing",
                 "type": "flexible",
                 "weekly_hour_target": 5,
                 "checkpoint_date": "2026-03-15",
@@ -380,7 +380,7 @@ class TestProvenanceValidation:
             arguments={
                 "user_priority_name_verbatim": "I want to learn Spanish",
                 "name": "Learn Spanish",
-                "user_type_choice_verbatim": "it's ongoing",
+                "user_priority_type_verbatim": "it's ongoing",
                 "type": "flexible",
                 "weekly_hour_target": 5,
                 "checkpoint_date": "2026-03-15",
@@ -545,7 +545,7 @@ class TestBackendCalls:
             payload = call_args[0][1]
 
             assert "user_priority_name_verbatim" not in payload
-            assert "user_type_choice_verbatim" not in payload
+            assert "user_priority_type_verbatim" not in payload
             assert "user_goal_verbatim" not in payload
 
 
@@ -956,7 +956,7 @@ class TestAdditionalProvenance:
             arguments={
                 "user_priority_name_verbatim": "I want to learn Spanish",
                 "name": "Learn Spanish",
-                "user_type_choice_verbatim": "it's ongoing",
+                "user_priority_type_verbatim": "it's ongoing",
                 "type": "flexible",
                 "weekly_hour_target": 5,
                 "checkpoint_date": "2026-03-15",

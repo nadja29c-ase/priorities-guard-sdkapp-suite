@@ -92,7 +92,7 @@ class TestCreatePriorityRoundtrip:
                 arguments={
                     "user_priority_name_verbatim": "I need to ship the MVP by March",
                     "name": "Ship MVP",
-                    "user_type_choice_verbatim": "it has a hard deadline",
+                    "user_priority_type_verbatim": "it has a hard deadline",
                     "type": "deadline",
                     "deadline": "2026-03-15",
                 },
@@ -197,7 +197,7 @@ class TestCreatePriorityRoundtrip:
                 arguments={
                     "user_priority_name_verbatim": "I want to learn Spanish",
                     "name": "Learn Spanish",
-                    "user_type_choice_verbatim": "it's an ongoing commitment",
+                    "user_priority_type_verbatim": "it's an ongoing commitment",
                     "type": "flexible",
                     "weekly_hour_target": 5,
                     "checkpoint_date": "2026-03-15",
@@ -277,7 +277,7 @@ class TestCreatePriorityRoundtrip:
                 arguments={
                     "user_priority_name_verbatim": "I need to ship the MVP",
                     "name": "Ship MVP",
-                    "user_type_choice_verbatim": "it has a hard deadline",
+                    "user_priority_type_verbatim": "it has a hard deadline",
                     "type": "deadline",
                     "deadline": "2026-03-15",
                 },
@@ -324,7 +324,7 @@ class TestCreatePriorityRoundtrip:
                 arguments={
                     "user_priority_name_verbatim": "fourth priority",
                     "name": "Fourth Priority",
-                    "user_type_choice_verbatim": "deadline",
+                    "user_priority_type_verbatim": "deadline",
                     "type": "deadline",
                     "deadline": "2026-04-15",
                 },

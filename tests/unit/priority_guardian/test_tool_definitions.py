@@ -56,7 +56,7 @@ class TestInputSchemas:
         assert "name" in required, "name should be required"
         assert "type" in required, "type should be required"
         assert "user_priority_name_verbatim" in required, "user_priority_name_verbatim should be required"
-        assert "user_type_choice_verbatim" in required, "user_type_choice_verbatim should be required"
+        assert "user_priority_type_verbatim" in required, "user_priority_type_verbatim should be required"
 
     def test_create_priority_schema_requires_verbatim_fields(self):
         """create_priority requires verbatim provenance fields."""
@@ -64,7 +64,7 @@ class TestInputSchemas:
 
         required = INPUT_SCHEMA.get("required", [])
         assert "user_priority_name_verbatim" in required
-        assert "user_type_choice_verbatim" in required
+        assert "user_priority_type_verbatim" in required
 
     def test_create_priority_schema_has_additional_properties_false(self):
         """create_priority schema has additionalProperties: false."""
@@ -80,7 +80,7 @@ class TestInputSchemas:
         expected_fields = {
             "user_priority_name_verbatim",
             "name",
-            "user_type_choice_verbatim",
+            "user_priority_type_verbatim",
             "type",
             "calendar_keyword",
             "deadline",
