@@ -185,15 +185,14 @@ GUIDANCE_EMPTY_NAME = (
 
 GUIDANCE_EMPTY_TYPE_VERBATIM = (
     "user_priority_type_verbatim is empty. Do not call this tool until user has chosen deadline or flexible. "
-    "Explain: Deadline priorities have a hard end date. Flexible priorities are ongoing commitments/ investements into a better future. "
-    "with a weekly hour target. "
+    "Explain: Deadline priorities have a hard end date. Flexible priorities are ongoing commitments with a weekly hour target. "
     "Ask: 'Does this priority have a hard deadline, or is it more of an ongoing commitment?' "
     "Then store their exact answer in user_priority_type_verbatim."
 )
 
 GUIDANCE_EMPTY_GOAL_VERBATIM = (
     "user_goal_verbatim is empty. Do not call this tool until user has stated a 1-month goal. "
-    "Explain: The 1-month goal anchors your time investment to a concrete outcome (to avoid vanity metrics). "
+    "Explain: The 1-month goal anchors your time investment to a concrete outcome."
     "Ask: 'What would success look like in one month? One sentence — specific enough "
     "that you will know whether it happened.' "
     "Then store their exact answer in user_goal_verbatim."
