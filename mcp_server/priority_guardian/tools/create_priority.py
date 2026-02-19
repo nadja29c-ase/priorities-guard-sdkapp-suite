@@ -192,7 +192,7 @@ GUIDANCE_EMPTY_TYPE_VERBATIM = (
 
 GUIDANCE_EMPTY_GOAL_VERBATIM = (
     "user_goal_verbatim is empty. Do not call this tool until user has stated a 1-month goal. "
-    "Explain: The 1-month goal anchors your time investment to a concrete outcome."
+    "Explain: The 1-month goal anchors your time investment to a concrete outcome. "
     "Ask: 'What would success look like in one month? One sentence — specific enough "
     "that you will know whether it happened.' "
     "Then store their exact answer in user_goal_verbatim."
@@ -428,7 +428,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # For flexible type: check structural and goal fields
     if priority_type == "flexible":
-        if weekly_hour_target is None:
+        if weekly_hour_target is None or weekly_hour_target <= 0:
             logger.info(
                 "tool.create_priority.provenance_failed",
                 correlation_id=correlation_id,
