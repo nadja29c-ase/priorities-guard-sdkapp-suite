@@ -30,18 +30,18 @@ from backend.core.models import CoreUser
 
 
 # =============================================================================
-# Section 1: CASCADE DELETE Verification
+# Section 1: Soft Delete (API) and CASCADE DELETE (Direct SQL) Verification
 # =============================================================================
 
 
-class TestCascadeDelete:
-    """Verify CASCADE DELETE actually removes child rows from the database."""
+class TestSoftDelete:
+    """Verify API DELETE soft-deletes priorities (preserves children)."""
 
     @pytest.mark.asyncio
-    async def test_delete_priority_cascades_deliverables_in_db(
+    async def test_soft_delete_preserves_deliverables_in_db(
         self, client, async_session: AsyncSession
     ):
-        """1a. DELETE priority removes deliverables from DB, not just API response."""
+        """1a. API DELETE soft-deletes priority, preserving deliverables."""
         # Create user and priority
         user = CoreUser(id=uuid4())
         async_session.add(user)
@@ -77,25 +77,36 @@ class TestCascadeDelete:
         )
         assert result.scalar() == 2
 
-        # DELETE via API
+        # DELETE via API (soft delete)
         response = await client.delete(
             f"/api/priority-guardian/priorities/{priority_id}",
             headers={"X-User-ID": str(user.id)},
         )
         assert response.status_code == 200
 
-        # Verify deliverables are gone from DB
+        # Verify priority is retired (not deleted)
+        result = await async_session.execute(
+            text("SELECT status, calendar_keyword, retired_at FROM pg_priorities WHERE id = :pid"),
+            {"pid": priority_id},
+        )
+        row = result.fetchone()
+        assert row is not None, "Priority should still exist"
+        assert row[0] == "retired", "Status should be 'retired'"
+        assert row[1] is None, "calendar_keyword should be NULL"
+        assert row[2] is not None, "retired_at should be set"
+
+        # Verify deliverables are PRESERVED (soft delete keeps children)
         result = await async_session.execute(
             text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :pid"),
             {"pid": priority_id},
         )
-        assert result.scalar() == 0, "Deliverables should be CASCADE deleted"
+        assert result.scalar() == 2, "Deliverables should be preserved on soft delete"
 
     @pytest.mark.asyncio
-    async def test_delete_priority_cascades_goals_in_db(
+    async def test_soft_delete_preserves_goals_in_db(
         self, client, async_session: AsyncSession
     ):
-        """1b. DELETE priority removes goals from DB."""
+        """1b. API DELETE soft-deletes priority, preserving goals."""
         user_id = uuid4()
         user = CoreUser(id=user_id)
         async_session.add(user)
@@ -132,25 +143,32 @@ class TestCascadeDelete:
         )
         assert result.scalar() == 2
 
-        # DELETE via API
+        # DELETE via API (soft delete)
         response = await client.delete(
             f"/api/priority-guardian/priorities/{priority_id}",
             headers={"X-User-ID": str(user_id)},
         )
         assert response.status_code == 200
 
-        # Verify goals are gone from DB
+        # Verify priority is retired
+        result = await async_session.execute(
+            text("SELECT status FROM pg_priorities WHERE id = :pid"),
+            {"pid": priority_id},
+        )
+        assert result.scalar() == "retired"
+
+        # Verify goals are PRESERVED
         result = await async_session.execute(
             text("SELECT COUNT(*) FROM pg_goals WHERE priority_id = :pid"),
             {"pid": priority_id},
         )
-        assert result.scalar() == 0, "Goals should be CASCADE deleted"
+        assert result.scalar() == 2, "Goals should be preserved on soft delete"
 
     @pytest.mark.asyncio
-    async def test_delete_priority_cascades_snapshots_in_db(
+    async def test_soft_delete_preserves_snapshots_in_db(
         self, client, async_session: AsyncSession
     ):
-        """1c. DELETE priority removes snapshots from DB."""
+        """1c. API DELETE soft-deletes priority, preserving snapshots."""
         user = CoreUser(id=uuid4())
         async_session.add(user)
         await async_session.flush()
@@ -174,10 +192,11 @@ class TestCascadeDelete:
         await async_session.execute(
             text("""
                 INSERT INTO pg_weekly_snapshots
-                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot)
+                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours,
+                 streak_at_snapshot, calendar_keyword_at_snapshot)
                 VALUES
-                (gen_random_uuid(), :pid, :uid, '2026-01-19', '2026-01-25', 5.0, 10.0, 1),
-                (gen_random_uuid(), :pid, :uid, '2026-01-26', '2026-02-01', 6.0, 10.0, 2)
+                (gen_random_uuid(), :pid, :uid, '2026-01-19', '2026-01-25', 5.0, 10.0, 1, 'P1'),
+                (gen_random_uuid(), :pid, :uid, '2026-01-26', '2026-02-01', 6.0, 10.0, 2, 'P1')
             """),
             {"pid": priority_id, "uid": user.id},
         )
@@ -190,14 +209,172 @@ class TestCascadeDelete:
         )
         assert result.scalar() == 2
 
-        # DELETE via API
+        # DELETE via API (soft delete)
         response = await client.delete(
             f"/api/priority-guardian/priorities/{priority_id}",
             headers={"X-User-ID": str(user.id)},
         )
         assert response.status_code == 200
 
-        # Verify snapshots are gone from DB
+        # Verify priority is retired with NULL keyword
+        result = await async_session.execute(
+            text("SELECT status, calendar_keyword FROM pg_priorities WHERE id = :pid"),
+            {"pid": priority_id},
+        )
+        row = result.fetchone()
+        assert row[0] == "retired"
+        assert row[1] is None
+
+        # Verify snapshots are PRESERVED with calendar_keyword_at_snapshot intact
+        result = await async_session.execute(
+            text("""
+                SELECT calendar_keyword_at_snapshot
+                FROM pg_weekly_snapshots
+                WHERE priority_id = :pid
+            """),
+            {"pid": priority_id},
+        )
+        rows = result.fetchall()
+        assert len(rows) == 2, "Snapshots should be preserved on soft delete"
+        for row in rows:
+            assert row[0] == "P1", "calendar_keyword_at_snapshot should be preserved"
+
+
+class TestCascadeDelete:
+    """Verify CASCADE DELETE (direct SQL or permanent delete) removes children."""
+
+    @pytest.mark.asyncio
+    async def test_permanent_delete_cascades_deliverables_via_api(
+        self, client, async_session: AsyncSession
+    ):
+        """Permanent delete endpoint cascades deliverables."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="deadline",
+            calendar_keyword="P1",
+            status="active",
+            deadline=date.today() + timedelta(days=30),
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        for i in range(2):
+            deliverable = PgDeliverable(
+                priority_id=priority.id,
+                name=f"Deliverable {i+1}",
+                done=False,
+            )
+            async_session.add(deliverable)
+        await async_session.commit()
+
+        priority_id = priority.id
+
+        # Verify deliverables exist
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :pid"),
+            {"pid": priority_id},
+        )
+        assert result.scalar() == 2
+
+        # PERMANENT DELETE via API
+        response = await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}/permanent",
+            headers={"X-User-ID": str(user.id)},
+        )
+        assert response.status_code == 200
+
+        # Verify priority is gone
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_priorities WHERE id = :pid"),
+            {"pid": priority_id},
+        )
+        assert result.scalar() == 0, "Priority should be hard deleted"
+
+        # Verify deliverables are CASCADE deleted
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :pid"),
+            {"pid": priority_id},
+        )
+        assert result.scalar() == 0, "Deliverables should be CASCADE deleted"
+
+    @pytest.mark.asyncio
+    async def test_permanent_delete_cascades_goals_and_snapshots_via_api(
+        self, client, async_session: AsyncSession
+    ):
+        """Permanent delete endpoint cascades goals and snapshots."""
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Flexible Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            created_at=datetime(2026, 1, 1),
+        )
+        async_session.add(priority)
+        await async_session.flush()
+
+        priority_id = priority.id
+
+        # Add goals
+        for i in range(2):
+            goal = PgGoal(
+                priority_id=priority_id,
+                goal_text=f"Goal {i+1}",
+                achieved=False,
+            )
+            async_session.add(goal)
+
+        # Add snapshots
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours, streak_at_snapshot)
+                VALUES
+                (gen_random_uuid(), :pid, :uid, '2026-01-19', '2026-01-25', 5.0, 10.0, 1),
+                (gen_random_uuid(), :pid, :uid, '2026-01-26', '2026-02-01', 6.0, 10.0, 2)
+            """),
+            {"pid": priority_id, "uid": user.id},
+        )
+        await async_session.commit()
+
+        # Verify children exist
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_goals WHERE priority_id = :pid"),
+            {"pid": priority_id},
+        )
+        assert result.scalar() == 2
+
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_weekly_snapshots WHERE priority_id = :pid"),
+            {"pid": priority_id},
+        )
+        assert result.scalar() == 2
+
+        # PERMANENT DELETE via API
+        response = await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}/permanent",
+            headers={"X-User-ID": str(user.id)},
+        )
+        assert response.status_code == 200
+
+        # Verify all children are CASCADE deleted
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_goals WHERE priority_id = :pid"),
+            {"pid": priority_id},
+        )
+        assert result.scalar() == 0, "Goals should be CASCADE deleted"
+
         result = await async_session.execute(
             text("SELECT COUNT(*) FROM pg_weekly_snapshots WHERE priority_id = :pid"),
             {"pid": priority_id},
@@ -205,7 +382,7 @@ class TestCascadeDelete:
         assert result.scalar() == 0, "Snapshots should be CASCADE deleted"
 
     @pytest.mark.asyncio
-    async def test_delete_priority_does_not_cascade_other_users_data(
+    async def test_soft_delete_does_not_cascade_other_users_data(
         self, client, async_session: AsyncSession
     ):
         """1d. DELETE user A's priority does NOT affect user B's data."""
