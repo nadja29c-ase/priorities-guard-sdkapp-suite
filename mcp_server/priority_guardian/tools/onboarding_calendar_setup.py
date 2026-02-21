@@ -459,15 +459,20 @@ async def _handle_first_snapshot(
             ),
             "deliverable_education": {
                 "instruction": (
-                    "After presenting the snapshot, explain deliverables. Show the contrast: "
+                    "After presenting the snapshot, explain E2E deliverables — these apply ONLY to deadline priorities. "
+                    "Show the contrast: "
                     "Without deliverables: 'P1: 12h this week — client calls, proposal writing, "
                     "research.' Hours and activity, but no sense of whether you're on track. "
-                    "With deliverables: 'P1: 4/10 deliverables done, 20 days to deadline.' Now "
-                    "you know exactly where you stand. Then: 'You can add E2E deliverables in "
-                    "the dashboard — the big chunks of work from start to finish. Not tasks, "
-                    "just the major pieces. Add them anytime.' For flexible priorities: 'Your "
-                    "monthly goal already anchors what the hours should produce.' No coaching. "
-                    "No prompting to add them now."
+                    "With deliverables: 'P1: 4/10 E2E deliverables done, 20 days to deadline.' Now "
+                    "you know exactly where you stand. Then: 'You can add E2E deliverables for your "
+                    "deadline priorities in the dashboard — the big chunks of work from start to finish. "
+                    "Not tasks, just the major pieces. "
+                    "For example, if your deadline priority is Launch client website, your E2E deliverables "
+                    "might be: Design mockup delivered, All pages built and functional, Content fully migrated, "
+                    "Client review and approval. Each one is a complete piece of work you either shipped or didn't. "
+                    "Add them anytime.' "
+                    "For flexible priorities: deliverables don't apply — the monthly goal already anchors "
+                    "what the hours should produce. No coaching. No prompting to add them now."
                 ),
             },
             "next_phase": "reflection_setup",
