@@ -475,6 +475,11 @@ async def _handle_first_snapshot(
                     "what the hours should produce. No coaching. No prompting to add them now."
                 ),
             },
+            "transition_prompt": {
+                "required": True,
+                "message": "That's your first weekly report. Want me to show you how to set up a weekly reflection so you can track patterns over time?",
+                "instruction": "You MUST end your response with this message (adapt naturally but keep the meaning). Wait for user response before calling next phase.",
+            },
             "next_phase": "reflection_setup",
         },
     }
