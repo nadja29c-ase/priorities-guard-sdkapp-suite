@@ -17,7 +17,7 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable, PgGoal, PgWeeklySnapshot
+from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable
 
 
 # ==============================================================================
@@ -939,3 +939,46 @@ class TestCreatePriorityEndpoint:
         )
 
         assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_create_fourth_priority_returns_409(self, client, async_session: AsyncSession):
+        """Creating a 4th active priority returns 409 MAX_PRIORITIES_REACHED."""
+        user_id = await create_test_user(async_session)
+
+        # Create 3 priorities via POST (using all available keywords P1, P2, P3)
+        for i in range(3):
+            future_date = (date.today() + timedelta(days=30 + i)).isoformat()
+            response = await client.post(
+                "/api/priority-guardian/priorities",
+                json={
+                    "name": f"Priority {i + 1}",
+                    "type": "deadline",
+                    "deadline": future_date,
+                },
+                headers={"X-User-ID": str(user_id)},
+            )
+            assert response.status_code == 201
+
+        # Attempt to create 4th priority
+        future_date = (date.today() + timedelta(days=60)).isoformat()
+        response = await client.post(
+            "/api/priority-guardian/priorities",
+            json={
+                "name": "Priority 4",
+                "type": "deadline",
+                "deadline": future_date,
+            },
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        # Should be rejected with 409
+        assert response.status_code == 409
+        data = response.json()
+        assert data["error"]["code"] == "MAX_PRIORITIES_REACHED"
+
+        # Verify DB still has exactly 3 active priorities
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_priorities WHERE user_id = :user_id AND status = 'active'"),
+            {"user_id": user_id},
+        )
+        assert result.scalar() == 3
