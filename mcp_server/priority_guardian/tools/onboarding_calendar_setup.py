@@ -6,7 +6,7 @@ generates their first snapshot, introduces deliverables, and sets up weekly refl
 
 Three phases called in sequence:
 1. keyword_education — explains P1/P2/P3 mechanism, prompts user to add keywords to event titles
-2. first_snapshot — generates first weekly report with real data, introduces deliverables
+2. first_weekly_report — generates first weekly report with real data, introduces deliverables
 3. reflection_setup — introduces dashboard + weekly report, suggests recurring reflection event
 """
 
@@ -32,7 +32,7 @@ This tool provides the educational content and user-specific data you need to te
 Call this tool ONLY after the user has set up their priorities AND connected Google Calendar via the dashboard. NEVER call this for returning users who have already completed onboarding.
 If calendar is not connected, do NOT call this tool — instead guide user to connect via the full dashboard first. ALWAYS follow the flow of this tool.
 
-FLOW: Call this tool THREE TIMES in sequence — once per phase (keyword_education → first_snapshot → reflection_setup). Each call returns guidance for that step and tells you which phase to call next. Wait for user action between phases.
+FLOW: Call this tool THREE TIMES in sequence — once per phase (keyword_education → first_weekly_report → reflection_setup). Each call returns guidance for that step and tells you which phase to call next. Wait for user action between phases.
 
 PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Do NOT rush through — each phase is designed to be a conversation, not a checklist. Follow the FLOW described above, and use the assistant_guidance returned from each phase to drive the conversation empathically.
 Example for empathic tone: 'So your first priority is Ship V1.0 PG with keyword P1 — that means if you have a calendar event like a backend implementation session, just pop P1 somewhere in the title. P1: Backend implementation, Backend implementation P1, doesn't matter. PG picks it up either way.'"""
@@ -44,10 +44,10 @@ INPUT_SCHEMA = {
     "properties": {
         "phase": {
             "type": "string",
-            "enum": ["keyword_education", "first_snapshot", "reflection_setup"],
+            "enum": ["keyword_education", "first_weekly_report", "reflection_setup"],
             "description": (
                 "Which phase of onboarding step 2 to execute. Must be called in sequence: "
-                "keyword_education first, then first_snapshot after user adds keywords to event titles, "
+                "keyword_education first, then first_weekly_report after user adds keywords to event titles, "
                 "then reflection_setup after user sees snapshot."
             ),
         },
@@ -201,10 +201,10 @@ async def _handle_keyword_education(
                 "Use the user's real priority names and keywords as examples: 'If [priority_name] is "
                 "[keyword], name your event something like [keyword]: [example activity]'. "
                 "Then prompt: 'Create 2-3 test events in Google Calendar for this week with your keywords in the titles. "
-                "Come back when you're done — check your dashboard progress bar to see your hours update, "
-                "and then we can explore your weekly report for a deeper look.'"
+                "Come back when you're done — check your dashboard progress bar at the top to see your hours update (refresh if necessary), "
+                "and then tell me so I can pull up your weekly report.' "
             ),
-            "next_phase": "first_snapshot",
+            "next_phase": "first_weekly_report",
         },
     }
 
@@ -217,7 +217,7 @@ async def _handle_keyword_education(
     )
 
 
-async def _handle_first_snapshot(
+async def _handle_first_weekly_report(
     user_id: str,
     correlation_id: str,
 ) -> mcp_types.CallToolResult:
@@ -229,7 +229,7 @@ async def _handle_first_snapshot(
     """
     logger.info(
         "onboarding.phase_called",
-        phase="first_snapshot",
+        phase="first_weekly_report",
         user_id=user_id,
         correlation_id=correlation_id,
     )
@@ -370,7 +370,7 @@ async def _handle_first_snapshot(
 
     logger.info(
         "onboarding.phase_success",
-        phase="first_snapshot",
+        phase="first_weekly_report",
         user_id=user_id,
         correlation_id=correlation_id,
         total_hours=total_hours,
@@ -443,7 +443,7 @@ async def _handle_first_snapshot(
             "openai/outputTemplate": WIDGET_URI,
         },
         "assistant_guidance": {
-            "action": "FIRST_SNAPSHOT",
+            "action": "FIRST_WEEKLY_REPORT",
             "instruction": (
                 "Present the weekly snapshot. Show how time splits across priorities. "
                 "Explain other time: total calendar hours minus keyword hours. This is non-priority work. "
@@ -485,7 +485,7 @@ async def _handle_first_snapshot(
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Here's your first weekly snapshot: {total_hours:.1f}h tracked this week.",
+            text=f"Here's your first weekly report: {total_hours:.1f}h tracked this week.",
         )],
         structuredContent=structured_content,
     )
@@ -508,7 +508,7 @@ async def _handle_reflection_setup(
         correlation_id=correlation_id,
     )
 
-    # No past-snapshot check here — first_snapshot already logs returning-user signal
+    # No past-snapshot check here — first_weekly_report already logs returning-user signal
     # and this phase is guidance-only (no backend data needed)
 
     logger.info(
@@ -572,15 +572,15 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if not phase:
         raise ToolUsageError("phase is required")
 
-    if phase not in ("keyword_education", "first_snapshot", "reflection_setup"):
+    if phase not in ("keyword_education", "first_weekly_report", "reflection_setup"):
         raise ToolUsageError(
-            f"Invalid phase: {phase}. Must be one of: keyword_education, first_snapshot, reflection_setup"
+            f"Invalid phase: {phase}. Must be one of: keyword_education, first_weekly_report, reflection_setup"
         )
 
     if phase == "keyword_education":
         return await _handle_keyword_education(user_id, correlation_id)
-    elif phase == "first_snapshot":
-        return await _handle_first_snapshot(user_id, correlation_id)
+    elif phase == "first_weekly_report":
+        return await _handle_first_weekly_report(user_id, correlation_id)
     elif phase == "reflection_setup":
         return await _handle_reflection_setup(user_id, correlation_id)
 
@@ -597,7 +597,7 @@ ONBOARDING_CALENDAR_SETUP = ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=WIDGET_URI,
+    widget_uri=None,  # Only first_weekly_report phase renders widget via structuredContent._meta
     handle=handle,
     read_only_hint=True,  # Never mutates state
     destructive_hint=False,

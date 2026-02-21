@@ -184,7 +184,7 @@ class TestOnboardingCalendarSetup:
         # Verify assistant_guidance
         guidance = sc["assistant_guidance"]
         assert guidance["action"] == "KEYWORD_EDUCATION"
-        assert guidance["next_phase"] == "first_snapshot"
+        assert guidance["next_phase"] == "first_weekly_report"
         assert len(guidance["priorities"]) == 2
         assert guidance["priorities"][0]["name"] == "Ship PG V1.0"
         assert guidance["priorities"][0]["keyword"] == "P1"
@@ -193,20 +193,20 @@ class TestOnboardingCalendarSetup:
         assert sc["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard.html"
 
     @pytest.mark.asyncio
-    async def test_first_snapshot_with_tagged_events(
+    async def test_first_weekly_report_with_tagged_events(
         self,
         mock_auth_context,
         mock_past_week_no_snapshot,
         mock_current_week_with_keywords,
     ):
-        """Create user with priorities and calendar connection, call first_snapshot, assert response includes weekly allocation data."""
+        """Create user with priorities and calendar connection, call first_weekly_report, assert response includes weekly allocation data."""
         from mcp_server.priority_guardian.handlers.tools import call_tool_request
 
         request = mcp_types.CallToolRequest(
             method="tools/call",
             params=mcp_types.CallToolRequestParams(
                 name="onboarding_calendar_setup",
-                arguments={"phase": "first_snapshot"},
+                arguments={"phase": "first_weekly_report"},
             ),
         )
 
@@ -251,7 +251,7 @@ class TestOnboardingCalendarSetup:
 
         # Verify guidance
         guidance = sc["assistant_guidance"]
-        assert guidance["action"] == "FIRST_SNAPSHOT"
+        assert guidance["action"] == "FIRST_WEEKLY_REPORT"
         assert guidance["next_phase"] == "reflection_setup"
         assert "deliverable_education" in guidance
         assert "instruction" in guidance["deliverable_education"]
@@ -260,12 +260,12 @@ class TestOnboardingCalendarSetup:
         assert "24.5h" in result.content[0].text
 
     @pytest.mark.asyncio
-    async def test_first_snapshot_no_keywords_rejected(
+    async def test_first_weekly_report_no_keywords_rejected(
         self,
         mock_auth_context,
         mock_past_week_no_snapshot,
     ):
-        """Create test user with priorities and calendar but no keyword-tagged events. Call first_snapshot. Assert isError=True with retry guidance."""
+        """Create test user with priorities and calendar but no keyword-tagged events. Call first_weekly_report. Assert isError=True with retry guidance."""
         from mcp_server.priority_guardian.handlers.tools import call_tool_request
 
         # Mock weekly report with events but zero priority hours
@@ -303,7 +303,7 @@ class TestOnboardingCalendarSetup:
             method="tools/call",
             params=mcp_types.CallToolRequestParams(
                 name="onboarding_calendar_setup",
-                arguments={"phase": "first_snapshot"},
+                arguments={"phase": "first_weekly_report"},
             ),
         )
 
@@ -359,14 +359,14 @@ class TestOnboardingCalendarSetup:
 
         assert result1.isError is not True
         assert result1.structuredContent["assistant_guidance"]["action"] == "KEYWORD_EDUCATION"
-        assert result1.structuredContent["assistant_guidance"]["next_phase"] == "first_snapshot"
+        assert result1.structuredContent["assistant_guidance"]["next_phase"] == "first_weekly_report"
 
-        # Phase 2: first_snapshot
+        # Phase 2: first_weekly_report
         request2 = mcp_types.CallToolRequest(
             method="tools/call",
             params=mcp_types.CallToolRequestParams(
                 name="onboarding_calendar_setup",
-                arguments={"phase": "first_snapshot"},
+                arguments={"phase": "first_weekly_report"},
             ),
         )
 
@@ -382,7 +382,7 @@ class TestOnboardingCalendarSetup:
             result2 = await call_tool_request(request2)
 
         assert result2.isError is not True
-        assert result2.structuredContent["assistant_guidance"]["action"] == "FIRST_SNAPSHOT"
+        assert result2.structuredContent["assistant_guidance"]["action"] == "FIRST_WEEKLY_REPORT"
         assert result2.structuredContent["assistant_guidance"]["next_phase"] == "reflection_setup"
         assert "deliverable_education" in result2.structuredContent["assistant_guidance"]
 

@@ -11,7 +11,7 @@ from mcp_server.priority_guardian.tools.onboarding_calendar_setup import (
     ONBOARDING_CALENDAR_SETUP,
     handle,
     _handle_keyword_education,
-    _handle_first_snapshot,
+    _handle_first_weekly_report,
     _handle_reflection_setup,
 )
 from mcp_server.priority_guardian.tools.base import ToolUsageError
@@ -226,7 +226,7 @@ def test_schema_rejects_invalid_phase():
     schema = ONBOARDING_CALENDAR_SETUP.input_schema
     assert schema["properties"]["phase"]["enum"] == [
         "keyword_education",
-        "first_snapshot",
+        "first_weekly_report",
         "reflection_setup",
     ]
     assert schema["additionalProperties"] is False
@@ -257,7 +257,7 @@ async def test_keyword_education_returns_priorities_with_keywords(
 
         guidance = result.structuredContent["assistant_guidance"]
         assert guidance["action"] == "KEYWORD_EDUCATION"
-        assert guidance["next_phase"] == "first_snapshot"
+        assert guidance["next_phase"] == "first_weekly_report"
 
         # Check priorities in guidance
         priorities = guidance["priorities"]
@@ -330,11 +330,11 @@ async def test_keyword_education_possible_returning_user_logs_but_continues(
 
 
 # ============================================================================
-# Test: first_snapshot phase
+# Test: first_weekly_report phase
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_first_snapshot_returns_weekly_data(
+async def test_first_weekly_report_returns_weekly_data(
     mock_weekly_report_with_keywords,
     mock_past_week_no_snapshot,
 ):
@@ -345,7 +345,7 @@ async def test_first_snapshot_returns_weekly_data(
     ) as mock_get:
         mock_get.side_effect = [mock_past_week_no_snapshot, mock_weekly_report_with_keywords]
 
-        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
         assert result.isError is not True
         assert result.structuredContent["success"] is True
@@ -363,14 +363,14 @@ async def test_first_snapshot_returns_weekly_data(
         assert "is_current_week" not in data
 
         guidance = result.structuredContent["assistant_guidance"]
-        assert guidance["action"] == "FIRST_SNAPSHOT"
+        assert guidance["action"] == "FIRST_WEEKLY_REPORT"
         assert guidance["next_phase"] == "reflection_setup"
         assert "deliverable_education" in guidance
         assert "instruction" in guidance["deliverable_education"]
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_zero_keyword_hours_returns_retry_guidance(
+async def test_first_weekly_report_zero_keyword_hours_returns_retry_guidance(
     mock_weekly_report_zero_keywords,
     mock_past_week_no_snapshot,
 ):
@@ -381,14 +381,14 @@ async def test_first_snapshot_zero_keyword_hours_returns_retry_guidance(
     ) as mock_get:
         mock_get.side_effect = [mock_past_week_no_snapshot, mock_weekly_report_zero_keywords]
 
-        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
         assert result.isError is True
         assert "keywords aren't reflected yet" in result.content[0].text.lower()
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_empty_week_returns_no_events(
+async def test_first_weekly_report_empty_week_returns_no_events(
     mock_past_week_no_snapshot,
 ):
     """Mock backend returning total_tracked_hours=0. Assert error about no events found."""
@@ -426,14 +426,14 @@ async def test_first_snapshot_empty_week_returns_no_events(
     ) as mock_get:
         mock_get.side_effect = [mock_past_week_no_snapshot, mock_empty_week]
 
-        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
         assert result.isError is True
         assert "no calendar events found" in result.content[0].text.lower()
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_google_not_connected(
+async def test_first_weekly_report_google_not_connected(
     mock_past_week_no_snapshot,
 ):
     """Mock backend returning GOOGLE_NOT_CONNECTED error. Assert error with full dashboard guidance."""
@@ -451,17 +451,17 @@ async def test_first_snapshot_google_not_connected(
     ) as mock_get:
         mock_get.side_effect = [mock_past_week_no_snapshot, mock_not_connected]
 
-        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
         assert result.isError is True
         assert "full dashboard" in result.content[0].text.lower()
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_without_keyword_phase_still_works(
+async def test_first_weekly_report_without_keyword_phase_still_works(
     mock_past_week_no_snapshot,
 ):
-    """Call first_snapshot directly without prior keyword_education. Confirms stateless design."""
+    """Call first_weekly_report directly without prior keyword_education. Confirms stateless design."""
     mock_valid_report = {
         "success": True,
         "data": {
@@ -494,15 +494,15 @@ async def test_first_snapshot_without_keyword_phase_still_works(
     ) as mock_get:
         mock_get.side_effect = [mock_past_week_no_snapshot, mock_valid_report]
 
-        # Call first_snapshot directly — no prior keyword_education call
-        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+        # Call first_weekly_report directly — no prior keyword_education call
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
         assert result.isError is not True
-        assert result.structuredContent["assistant_guidance"]["action"] == "FIRST_SNAPSHOT"
+        assert result.structuredContent["assistant_guidance"]["action"] == "FIRST_WEEKLY_REPORT"
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_unknown_backend_error(
+async def test_first_weekly_report_unknown_backend_error(
     mock_past_week_no_snapshot,
 ):
     """Mock backend returning unexpected error code. Assert ToolUsageError raised."""
@@ -521,11 +521,11 @@ async def test_first_snapshot_unknown_backend_error(
         mock_get.side_effect = [mock_past_week_no_snapshot, mock_error_response]
 
         with pytest.raises(ToolUsageError, match="Unexpected failure"):
-            await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+            await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_only_priority_hours_no_other(
+async def test_first_weekly_report_only_priority_hours_no_other(
     mock_past_week_no_snapshot,
 ):
     """Mock report with priority hours but zero other_hours. Assert success."""
@@ -573,14 +573,14 @@ async def test_first_snapshot_only_priority_hours_no_other(
     ) as mock_get:
         mock_get.side_effect = [mock_past_week_no_snapshot, mock_priority_only]
 
-        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
         assert result.isError is not True
         assert result.structuredContent["data"]["timeAllocation"]["otherHours"] == 0
 
 
 @pytest.mark.asyncio
-async def test_first_snapshot_past_snapshots_logs_warning_but_continues(
+async def test_first_weekly_report_past_snapshots_logs_warning_but_continues(
     mock_past_week_with_snapshot,
     mock_weekly_report_with_keywords,
 ):
@@ -592,12 +592,12 @@ async def test_first_snapshot_past_snapshots_logs_warning_but_continues(
         # First call: past week check (has snapshot), second call: current week
         mock_get.side_effect = [mock_past_week_with_snapshot, mock_weekly_report_with_keywords]
 
-        result = await handle("user-123", "corr-123", {"phase": "first_snapshot"})
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
 
         # Should NOT be an error - logs warning but continues
         assert result.isError is not True
         assert result.structuredContent["success"] is True
-        assert result.structuredContent["assistant_guidance"]["action"] == "FIRST_SNAPSHOT"
+        assert result.structuredContent["assistant_guidance"]["action"] == "FIRST_WEEKLY_REPORT"
 
 
 # ============================================================================
