@@ -1408,3 +1408,166 @@ class TestTransactionRollback:
         assert row[1] == original_name, "Original name preserved"
         assert row[2] == "P1", "Original keyword preserved"
         assert row[3] == "active", "Original status preserved"
+
+
+# =============================================================================
+# Section 6: Retired Priority Aggregate Freeze
+# =============================================================================
+
+
+class TestRetiredPriorityAggregateFreeze:
+    """Verify _update_aggregates only modifies active priorities."""
+
+    @pytest.mark.asyncio
+    async def test_aggregate_update_skips_retired_priority_in_db(
+        self, async_session: AsyncSession
+    ):
+        """_update_aggregates WHERE clause excludes retired priorities.
+
+        This is an integration test that verifies the actual SQL behavior:
+        1. Create an active priority with known aggregate values
+        2. Retire it
+        3. Call _update_aggregates for that priority_id
+        4. Verify the aggregate fields are unchanged (UPDATE affected 0 rows)
+        """
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create priority with specific aggregate values
+        priority = PgPriority(
+            user_id=user.id,
+            name="Test Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            created_at=datetime(2026, 1, 1),
+            # Set known aggregate values
+            streak_count=5,
+            total_hours_invested=Decimal("100.0"),
+            avg_target_achievement=Decimal("85.0"),
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        priority_id = priority.id
+
+        # Record original values
+        original_streak = 5
+        original_hours = Decimal("100.0")
+        original_achievement = Decimal("85.0")
+
+        # Create a snapshot so _update_aggregates has data to compute from
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours,
+                 streak_at_snapshot, calendar_keyword_at_snapshot)
+                VALUES (gen_random_uuid(), :pid, :uid, '2026-01-19', '2026-01-25', 8.0, 10.0, 1, 'P1')
+            """),
+            {"pid": priority_id, "uid": user.id},
+        )
+        await async_session.commit()
+
+        # Retire the priority
+        await async_session.execute(
+            text("""
+                UPDATE pg_priorities
+                SET status = 'retired', retired_at = NOW(), calendar_keyword = NULL
+                WHERE id = :pid
+            """),
+            {"pid": priority_id},
+        )
+        await async_session.commit()
+
+        # Call _update_aggregates - should NOT update because priority is retired
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=10,  # Different from original
+            actual_hours=50.0,  # Would change total_hours_invested
+            session=async_session,
+        )
+        await async_session.commit()
+
+        # Verify aggregates are UNCHANGED (frozen at retirement)
+        result = await async_session.execute(
+            text("""
+                SELECT streak_count, total_hours_invested, avg_target_achievement
+                FROM pg_priorities
+                WHERE id = :pid
+            """),
+            {"pid": priority_id},
+        )
+        row = result.fetchone()
+
+        assert row[0] == original_streak, "streak_count should be frozen"
+        assert row[1] == original_hours, "total_hours_invested should be frozen"
+        assert row[2] == original_achievement, "avg_target_achievement should be frozen"
+
+    @pytest.mark.asyncio
+    async def test_aggregate_update_modifies_active_priority_in_db(
+        self, async_session: AsyncSession
+    ):
+        """Contrast test: _update_aggregates DOES modify active priorities."""
+        from backend.apps.priority_guardian.services.snapshot_service import _update_aggregates
+
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        priority = PgPriority(
+            user_id=user.id,
+            name="Active Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date.today() + timedelta(days=30),
+            created_at=datetime(2026, 1, 1),
+            streak_count=0,
+            total_hours_invested=Decimal("0"),
+            avg_target_achievement=None,
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        priority_id = priority.id
+
+        # Create a snapshot
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (id, priority_id, user_id, week_start, week_end, actual_hours, target_hours,
+                 streak_at_snapshot, calendar_keyword_at_snapshot)
+                VALUES (gen_random_uuid(), :pid, :uid, '2026-01-19', '2026-01-25', 8.0, 10.0, 1, 'P1')
+            """),
+            {"pid": priority_id, "uid": user.id},
+        )
+        await async_session.commit()
+
+        # Call _update_aggregates on ACTIVE priority
+        await _update_aggregates(
+            priority_id=priority_id,
+            streak=3,
+            actual_hours=8.0,
+            session=async_session,
+        )
+        await async_session.commit()
+
+        # Verify aggregates ARE updated
+        result = await async_session.execute(
+            text("""
+                SELECT streak_count, total_hours_invested
+                FROM pg_priorities
+                WHERE id = :pid
+            """),
+            {"pid": priority_id},
+        )
+        row = result.fetchone()
+
+        assert row[0] == 3, "streak_count should be updated"
+        assert row[1] == Decimal("8.0"), "total_hours_invested should be updated"
