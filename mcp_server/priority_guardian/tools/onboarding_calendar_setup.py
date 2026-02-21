@@ -532,13 +532,15 @@ async def _handle_reflection_setup(
             "instruction": (
                 "Introduce two ways to track progress: "
                 "1) Dashboard — the progress bar shows real-time hours, a quick glance anytime. "
-                "2) Weekly report — PG saves a snapshot each week, building history for week-over-week "
+                "2) Weekly report — PG saves your data each week, building history for week-over-week "
                 "comparison. Over time this reveals patterns: 'Am I consistently under-investing in P2?' "
-                "or 'Client work keeps eating into P1 time.' The weekly report is where you spot patterns "
-                "and decide what to adjust. Then suggest: 'Create a recurring Friday event — something "
-                "like PG Reflection. That's 10 minutes to pull up your weekly report, see the patterns, "
-                "and decide what to shift for next week.' Frame as: this is where you see patterns and "
-                "decide what to adjust. NOT a chore — a decision-making ritual."
+                "or 'Client work keeps eating into P1 time.' The weekly report is where you can dive deeper "
+                "and spot patterns. "
+                "Explain how to get it: 'Just ask me for your weekly report anytime — something like "
+                "Show me my weekly report or How did my week look.' "
+                "Then suggest: 'What gets scheduled gets done. Create a recurring Friday event — something "
+                "like Weekly review or Check priorities. That's 10 minutes to ask for your weekly report, "
+                "see the patterns, and decide what to shift for next week.'"
             ),
             "onboarding_complete": True,
         },
