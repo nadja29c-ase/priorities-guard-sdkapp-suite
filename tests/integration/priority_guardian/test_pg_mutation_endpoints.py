@@ -509,6 +509,32 @@ class TestPermanentDeletePriorityEndpoint:
         await create_test_deliverable(async_session, priority_id, "Deliverable 1")
         await create_test_deliverable(async_session, priority_id, "Deliverable 2")
 
+        # Add a snapshot
+        today = date.today()
+        days_since_monday = today.weekday()
+        this_monday = today - timedelta(days=days_since_monday)
+        week_start = this_monday - timedelta(days=7)  # Last Monday
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (user_id, priority_id, week_start, week_end, actual_hours, target_hours,
+                 calendar_keyword_at_snapshot, streak_at_snapshot)
+                VALUES (:user_id, :priority_id, :week_start, :week_end, :actual_hours,
+                        :target_hours, :keyword, :streak)
+            """),
+            {
+                "user_id": user_id,
+                "priority_id": priority_id,
+                "week_start": week_start,
+                "week_end": week_start + timedelta(days=6),
+                "actual_hours": Decimal("5.0"),
+                "target_hours": Decimal("10.0"),
+                "keyword": "P1",
+                "streak": 1,
+            },
+        )
+        await async_session.commit()
+
         response = await client.delete(
             f"/api/priority-guardian/priorities/{priority_id}/permanent",
             headers={"X-User-ID": str(user_id)},
@@ -529,6 +555,13 @@ class TestPermanentDeletePriorityEndpoint:
         # Verify deliverables are gone (cascade deleted)
         result = await async_session.execute(
             text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :id"),
+            {"id": priority_id},
+        )
+        assert result.scalar() == 0
+
+        # Verify snapshots are gone (cascade deleted)
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_weekly_snapshots WHERE priority_id = :id"),
             {"id": priority_id},
         )
         assert result.scalar() == 0

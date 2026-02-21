@@ -505,20 +505,6 @@ class TestErrorHandling:
         # Function completed without raising
 
 
-class TestIdempotency:
-    """Tests for idempotent behavior."""
-
-    @pytest.mark.asyncio
-    async def test_duplicate_insert_skips_aggregate_update(self):
-        """ON CONFLICT DO NOTHING skips aggregate update on duplicate."""
-        # This is tested at integration level - unit test verifies the concept
-        from sqlalchemy.exc import IntegrityError
-
-        # IntegrityError on duplicate should be caught and handled gracefully
-        error = IntegrityError("statement", {}, Exception("duplicate key"))
-        assert "duplicate" in str(error.orig).lower() or "IntegrityError" in str(type(error).__name__)
-
-
 class TestAvgTargetAchievementComputation:
     """Tests for avg_target_achievement computation in _update_aggregates."""
 
