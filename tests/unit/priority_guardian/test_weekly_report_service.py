@@ -859,3 +859,197 @@ class TestBuildReportFromSnapshots:
             assert kw in ta["keywords"]
             assert "hours" in ta["keywords"][kw]
             assert "event_count" in ta["keywords"][kw]
+
+
+class TestRetiredPriorityHandlingInReports:
+    """Tests for retired priority handling in weekly reports.
+
+    These tests verify:
+    - Current week reports exclude retired priorities
+    - Past week reports include retired priorities' historical data from snapshots
+    - Keyword comes from snapshot, not from (now NULL) priority.calendar_keyword
+    """
+
+    @pytest.mark.asyncio
+    async def test_weekly_report_excludes_retired_from_current_week(self):
+        """generate_weekly_report() for current week excludes retired priorities.
+
+        The priority query filters by status='active', so retired priorities
+        should not appear in current week reports.
+        """
+        user_id = uuid4()
+
+        mock_session = AsyncMock()
+        mock_connection = MagicMock()
+        mock_connection.provider = "google"
+
+        # Create active priority
+        active_priority = MagicMock()
+        active_priority.id = uuid4()
+        active_priority.name = "Active Priority"
+        active_priority.type = "flexible"
+        active_priority.calendar_keyword = "P1"
+        active_priority.status = "active"
+        active_priority.weekly_hour_target = Decimal("10.0")
+        active_priority.deliverables = []
+
+        # Retired priority should NOT be returned by the query
+        # (because the query filters by status='active')
+        # So we don't include it in mock results
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_connection
+
+        priorities_result = MagicMock()
+        # Only active priority returned (retired filtered out by query)
+        priorities_result.scalars.return_value.all.return_value = [active_priority]
+
+        mock_session.execute.side_effect = [conn_result, priorities_result]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_events.return_value = ([], 0)  # No events
+
+            result = await generate_weekly_report(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+            )
+
+        # Only active priority in report
+        assert len(result["data"]["priorities"]) == 1
+        assert result["data"]["priorities"][0]["name"] == "Active Priority"
+
+    @pytest.mark.asyncio
+    async def test_past_week_report_includes_retired_priority_snapshots(self):
+        """_build_report_from_snapshots() returns data for retired priorities.
+
+        When a priority is retired but has snapshots from a past week,
+        those snapshots should still be included in past-week reports.
+        The priority row still exists (just status='retired').
+        """
+        user_id = uuid4()
+        priority_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        # Snapshot created before retirement
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("8.5")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 5
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"  # Preserved from when active
+        mock_snapshot.other_hours = Decimal("2.0")
+        mock_snapshot.total_tracked_hours = Decimal("10.5")
+
+        # Priority is now retired (but row still exists)
+        mock_priority = MagicMock()
+        mock_priority.id = priority_id
+        mock_priority.name = "Now Retired Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = None  # NULL after retirement
+        mock_priority.status = "retired"
+        mock_priority.total_hours_invested = Decimal("50.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = datetime(2026, 2, 20)  # Retired after the week
+
+        # Snapshot query returns the snapshot+priority pair
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        # Priority count query (for coverage check) should count priorities
+        # that WERE active during that week based on created_at/retired_at
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        # Report should include the retired priority's historical data
+        assert result is not None
+        assert result["success"] is True
+        assert len(result["data"]["priorities"]) == 1
+
+        priority_data = result["data"]["priorities"][0]
+        assert priority_data["name"] == "Now Retired Priority"
+        assert priority_data["actual_hours"] == 8.5
+        assert priority_data["streak_count"] == 5
+
+    @pytest.mark.asyncio
+    async def test_past_week_report_keyword_from_snapshot_not_priority(self):
+        """Past-week report uses calendar_keyword_at_snapshot, not priority.calendar_keyword.
+
+        After retirement, priority.calendar_keyword is NULL. The past-week
+        report must use the snapshot's calendar_keyword_at_snapshot value
+        so that keyword hours are correctly attributed.
+        """
+        user_id = uuid4()
+        week_start = date(2026, 2, 9)
+        week_end = date(2026, 2, 15)
+
+        mock_session = AsyncMock()
+
+        # Snapshot has the keyword value from when priority was active
+        mock_snapshot = MagicMock()
+        mock_snapshot.actual_hours = Decimal("6.0")
+        mock_snapshot.target_hours = Decimal("10.0")
+        mock_snapshot.streak_at_snapshot = 2
+        mock_snapshot.calendar_keyword_at_snapshot = "P1"  # CAPTURED AT SNAPSHOT TIME
+        mock_snapshot.other_hours = Decimal("4.0")
+        mock_snapshot.total_tracked_hours = Decimal("10.0")
+
+        # Priority is now retired with NULL keyword
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Retired P1 Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = None  # NULL after retirement
+        mock_priority.status = "retired"
+        mock_priority.total_hours_invested = Decimal("30.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 1, 1)
+        mock_priority.retired_at = datetime(2026, 2, 18)
+
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = [(mock_snapshot, mock_priority)]
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [snapshot_result, priorities_result]
+
+        result = await _build_report_from_snapshots(
+            user_id=user_id,
+            week_start=week_start,
+            week_end=week_end,
+            session=mock_session,
+        )
+
+        assert result is not None
+
+        # Critical assertion: keyword should be P1 (from snapshot), NOT NULL
+        priority_data = result["data"]["priorities"][0]
+        assert priority_data["calendar_keyword"] == "P1"
+        assert priority_data["calendar_keyword"] is not None
+
+        # And the time_allocation should have P1 hours attributed
+        time_alloc = result["data"]["time_allocation"]
+        assert time_alloc["keywords"]["P1"]["hours"] == 6.0

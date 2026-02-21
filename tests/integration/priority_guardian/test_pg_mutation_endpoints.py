@@ -17,7 +17,7 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable
+from backend.apps.priority_guardian.db_models import PgPriority, PgDeliverable, PgGoal, PgWeeklySnapshot
 
 
 # ==============================================================================
@@ -294,59 +294,173 @@ class TestUpdatePriorityEndpoint:
 
 
 # ==============================================================================
-# DELETE /api/priority-guardian/priorities/{priority_id}
+# DELETE /api/priority-guardian/priorities/{priority_id} (Soft Delete)
 # ==============================================================================
 
 
 class TestDeletePriorityEndpoint:
-    """Tests for DELETE /api/priority-guardian/priorities/{priority_id}."""
+    """Tests for DELETE /api/priority-guardian/priorities/{priority_id} (soft delete)."""
 
     @pytest.mark.asyncio
-    async def test_delete_priority_success(self, client, async_session: AsyncSession):
-        """Delete priority returns fresh list without deleted priority."""
+    async def test_delete_priority_soft_deletes(self, client, async_session: AsyncSession):
+        """Soft delete sets status='retired', retired_at, clears keyword. Data preserved."""
         user_id = await create_test_user(async_session)
-        priority = await create_test_priority(async_session, user_id)
+        priority = await create_test_priority(async_session, user_id, keyword="P1")
+        priority_id = priority.id
+
+        # Add deliverables and goals to verify they're preserved
+        await create_test_deliverable(async_session, priority_id, "Deliverable 1")
+        await create_test_deliverable(async_session, priority_id, "Deliverable 2")
 
         response = await client.delete(
-            f"/api/priority-guardian/priorities/{priority.id}",
+            f"/api/priority-guardian/priorities/{priority_id}",
             headers={"X-User-ID": str(user_id)},
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+        # Priority should NOT appear in response (only active priorities returned)
         assert len(data["data"]["priorities"]) == 0
+        # Freed keyword should be available
+        assert "P1" in data["data"]["available_keywords"]
+
+        # Verify DB state: priority row still exists with status='retired'
+        result = await async_session.execute(
+            text("SELECT status, retired_at, calendar_keyword FROM pg_priorities WHERE id = :id"),
+            {"id": priority_id},
+        )
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "retired"
+        assert row[1] is not None  # retired_at is set
+        assert row[2] is None  # calendar_keyword is NULL
+
+        # Verify deliverables still exist
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :id"),
+            {"id": priority_id},
+        )
+        assert result.scalar() == 2
 
     @pytest.mark.asyncio
-    async def test_delete_cascades_deliverables(self, client, async_session: AsyncSession):
-        """Deleting priority cascades to its deliverables."""
+    async def test_delete_retired_priority_is_idempotent(self, client, async_session: AsyncSession):
+        """Calling delete on already-retired priority returns 200, no state change."""
         user_id = await create_test_user(async_session)
-        priority = await create_test_priority(async_session, user_id)
-        await create_test_deliverable(async_session, priority.id, "Deliverable 1")
-        await create_test_deliverable(async_session, priority.id, "Deliverable 2")
-        await create_test_deliverable(async_session, priority.id, "Deliverable 3")
+        priority = await create_test_priority(async_session, user_id, keyword="P1")
+        priority_id = priority.id
 
-        response = await client.delete(
-            f"/api/priority-guardian/priorities/{priority.id}",
+        # First delete (retires the priority)
+        response1 = await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}",
             headers={"X-User-ID": str(user_id)},
         )
+        assert response1.status_code == 200
 
-        assert response.status_code == 200
-        assert len(response.json()["data"]["priorities"]) == 0
+        # Get retired_at timestamp
+        result = await async_session.execute(
+            text("SELECT retired_at FROM pg_priorities WHERE id = :id"),
+            {"id": priority_id},
+        )
+        original_retired_at = result.scalar()
+
+        # Second delete (idempotent - should return 200 with no change)
+        response2 = await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}",
+            headers={"X-User-ID": str(user_id)},
+        )
+        assert response2.status_code == 200
+
+        # Verify retired_at unchanged
+        result = await async_session.execute(
+            text("SELECT retired_at FROM pg_priorities WHERE id = :id"),
+            {"id": priority_id},
+        )
+        assert result.scalar() == original_retired_at
 
     @pytest.mark.asyncio
-    async def test_delete_frees_keyword(self, client, async_session: AsyncSession):
-        """After deletion, available_keywords includes the freed keyword."""
+    async def test_soft_deleted_priority_frees_keyword_for_reuse(self, client, async_session: AsyncSession):
+        """After soft delete, the freed keyword can be assigned to a new priority."""
         user_id = await create_test_user(async_session)
         priority = await create_test_priority(async_session, user_id, keyword="P1")
 
+        # Soft delete the P1 priority
         response = await client.delete(
             f"/api/priority-guardian/priorities/{priority.id}",
             headers={"X-User-ID": str(user_id)},
         )
-
         assert response.status_code == 200
         assert "P1" in response.json()["data"]["available_keywords"]
+
+        # Create a new priority - should be able to get P1
+        future_date = (date.today() + timedelta(days=30)).isoformat()
+        create_response = await client.post(
+            "/api/priority-guardian/priorities",
+            json={
+                "name": "New Priority",
+                "type": "deadline",
+                "deadline": future_date,
+            },
+            headers={"X-User-ID": str(user_id)},
+        )
+        assert create_response.status_code == 201
+        # Should have gotten P1 (first available after soft delete freed it)
+        assert create_response.json()["data"]["priority"]["calendar_keyword"] == "P1"
+
+    @pytest.mark.asyncio
+    async def test_soft_deleted_priority_snapshots_preserved(self, client, async_session: AsyncSession):
+        """Soft delete preserves weekly snapshots with calendar_keyword_at_snapshot."""
+        user_id = await create_test_user(async_session)
+        priority = await create_test_priority(async_session, user_id, keyword="P1")
+        priority_id = priority.id
+
+        # Create a snapshot for this priority
+        # Calculate last Monday properly
+        today = date.today()
+        days_since_monday = today.weekday()  # Monday=0, Sunday=6
+        this_monday = today - timedelta(days=days_since_monday)
+        week_start = this_monday - timedelta(days=7)  # Last Monday
+        await async_session.execute(
+            text("""
+                INSERT INTO pg_weekly_snapshots
+                (user_id, priority_id, week_start, week_end, actual_hours, target_hours,
+                 calendar_keyword_at_snapshot, streak_at_snapshot)
+                VALUES (:user_id, :priority_id, :week_start, :week_end, :actual_hours,
+                        :target_hours, :keyword, :streak)
+            """),
+            {
+                "user_id": user_id,
+                "priority_id": priority_id,
+                "week_start": week_start,
+                "week_end": week_start + timedelta(days=6),
+                "actual_hours": Decimal("8.5"),
+                "target_hours": Decimal("10.0"),
+                "keyword": "P1",
+                "streak": 1,
+            },
+        )
+        await async_session.commit()
+
+        # Soft delete the priority
+        response = await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}",
+            headers={"X-User-ID": str(user_id)},
+        )
+        assert response.status_code == 200
+
+        # Verify snapshot still exists with preserved keyword
+        result = await async_session.execute(
+            text("""
+                SELECT calendar_keyword_at_snapshot, actual_hours
+                FROM pg_weekly_snapshots
+                WHERE priority_id = :id
+            """),
+            {"id": priority_id},
+        )
+        row = result.fetchone()
+        assert row is not None
+        assert row[0] == "P1"  # calendar_keyword_at_snapshot preserved
+        assert row[1] == Decimal("8.5")
 
     @pytest.mark.asyncio
     async def test_returns_404_for_nonexistent(self, client, async_session: AsyncSession):
@@ -370,6 +484,112 @@ class TestDeletePriorityEndpoint:
 
         response = await client.delete(
             f"/api/priority-guardian/priorities/{priority.id}",
+            headers={"X-User-ID": str(user2)},
+        )
+
+        assert response.status_code == 404
+
+
+# ==============================================================================
+# DELETE /api/priority-guardian/priorities/{priority_id}/permanent (Hard Delete)
+# ==============================================================================
+
+
+class TestPermanentDeletePriorityEndpoint:
+    """Tests for DELETE /api/priority-guardian/priorities/{priority_id}/permanent."""
+
+    @pytest.mark.asyncio
+    async def test_permanent_delete_cascades(self, client, async_session: AsyncSession):
+        """Permanent delete cascade-deletes priority, deliverables, goals, snapshots."""
+        user_id = await create_test_user(async_session)
+        priority = await create_test_priority(async_session, user_id, keyword="P1")
+        priority_id = priority.id
+
+        # Add deliverables
+        await create_test_deliverable(async_session, priority_id, "Deliverable 1")
+        await create_test_deliverable(async_session, priority_id, "Deliverable 2")
+
+        response = await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}/permanent",
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert len(data["data"]["priorities"]) == 0
+
+        # Verify priority row is gone
+        result = await async_session.execute(
+            text("SELECT id FROM pg_priorities WHERE id = :id"),
+            {"id": priority_id},
+        )
+        assert result.fetchone() is None
+
+        # Verify deliverables are gone (cascade deleted)
+        result = await async_session.execute(
+            text("SELECT COUNT(*) FROM pg_deliverables WHERE priority_id = :id"),
+            {"id": priority_id},
+        )
+        assert result.scalar() == 0
+
+    @pytest.mark.asyncio
+    async def test_permanent_delete_works_on_retired_priority(self, client, async_session: AsyncSession):
+        """Permanent delete works on already-retired priorities."""
+        user_id = await create_test_user(async_session)
+        priority = await create_test_priority(async_session, user_id)
+        priority_id = priority.id
+
+        # First soft delete (retire)
+        await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}",
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        # Verify it's retired
+        result = await async_session.execute(
+            text("SELECT status FROM pg_priorities WHERE id = :id"),
+            {"id": priority_id},
+        )
+        assert result.scalar() == "retired"
+
+        # Now permanent delete
+        response = await client.delete(
+            f"/api/priority-guardian/priorities/{priority_id}/permanent",
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 200
+
+        # Verify it's gone
+        result = await async_session.execute(
+            text("SELECT id FROM pg_priorities WHERE id = :id"),
+            {"id": priority_id},
+        )
+        assert result.fetchone() is None
+
+    @pytest.mark.asyncio
+    async def test_permanent_delete_nonexistent_returns_404(self, client, async_session: AsyncSession):
+        """Returns 404 for non-existent priority_id."""
+        user_id = await create_test_user(async_session)
+        fake_id = uuid4()
+
+        response = await client.delete(
+            f"/api/priority-guardian/priorities/{fake_id}/permanent",
+            headers={"X-User-ID": str(user_id)},
+        )
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_permanent_delete_different_user_returns_404(self, client, async_session: AsyncSession):
+        """Returns 404 when priority belongs to different user."""
+        user1 = await create_test_user(async_session)
+        user2 = await create_test_user(async_session)
+        priority = await create_test_priority(async_session, user1)
+
+        response = await client.delete(
+            f"/api/priority-guardian/priorities/{priority.id}/permanent",
             headers={"X-User-ID": str(user2)},
         )
 

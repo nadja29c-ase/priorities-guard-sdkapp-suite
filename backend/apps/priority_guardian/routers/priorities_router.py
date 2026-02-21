@@ -19,6 +19,7 @@ the backend, or direct client → backend calls are added), add backend-side JWT
 """
 
 import structlog
+from datetime import datetime, timezone
 from uuid import UUID
 from typing import List
 
@@ -88,19 +89,19 @@ async def build_priorities_response(session: AsyncSession, user_id: UUID) -> dic
             }
         }
     """
-    # Query priorities ordered by status (active first), then created_at
+    # Query only active priorities (widget never needs retired priorities)
     # Use selectinload to eagerly load deliverables and goals (avoids N+1 queries)
     result = await session.execute(
         select(PgPriority)
-        .where(PgPriority.user_id == user_id)
+        .where(
+            PgPriority.user_id == user_id,
+            PgPriority.status == "active",
+        )
         .options(
             selectinload(PgPriority.deliverables),
             selectinload(PgPriority.goals),
         )
-        .order_by(
-            PgPriority.status.asc(),  # 'active' < 'retired' alphabetically → active first
-            PgPriority.created_at.asc(),
-        )
+        .order_by(PgPriority.created_at.asc())
     )
     priorities = result.scalars().all()
 
@@ -188,10 +189,10 @@ async def get_priorities(
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Get user's priorities with Google connection status.
+    Get user's active priorities with Google connection status.
 
-    Returns priorities (active first, then retired) along with Google Calendar
-    connection status for the widget to display.
+    Returns only active priorities (retired priorities are excluded) along
+    with Google Calendar connection status for the widget to display.
 
     Args:
         user_id: User ID from validated JWT (via X-User-ID header)
@@ -782,10 +783,90 @@ async def delete_priority(
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Delete a priority and its associated deliverables.
+    Soft-delete (retire) a priority.
 
-    Cascade delete handles deliverables automatically via relationship config.
-    After deletion, the freed keyword becomes available again.
+    Sets status to 'retired', retired_at to now, and clears calendar_keyword.
+    Deliverables, goals, and snapshots are preserved for historical reporting.
+    The freed keyword becomes available for new priorities.
+
+    Idempotent: calling on an already-retired priority returns 200 with no state change.
+
+    Args:
+        priority_id: Priority ID (UUID string)
+        user_id: User ID from validated JWT
+        session: Database session
+
+    Returns:
+        200: Full priorities response (active priorities only)
+        404: Priority not found or wrong user
+    """
+    # Validate priority_id format
+    try:
+        pid = UUID(priority_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Fetch priority
+    result = await session.execute(
+        select(PgPriority).where(
+            PgPriority.id == pid,
+            PgPriority.user_id == user_id,
+        )
+    )
+    priority = result.scalar_one_or_none()
+
+    if not priority:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NOT_FOUND", "message": "Priority not found"},
+        )
+
+    # Idempotent: if already retired, return success without changes
+    if priority.status == "retired":
+        logger.info(
+            "priority.retire.already_retired",
+            user_id=str(user_id),
+            priority_id=str(pid),
+        )
+        return await build_priorities_response(session, user_id)
+
+    # Capture keyword before clearing (for logging)
+    freed_keyword = priority.calendar_keyword
+
+    # Soft delete: set status, retired_at, clear keyword
+    priority.status = "retired"
+    priority.retired_at = datetime.now(timezone.utc)
+    priority.calendar_keyword = None
+
+    await session.commit()
+
+    logger.info(
+        "priority.retire.success",
+        user_id=str(user_id),
+        priority_id=str(pid),
+        freed_keyword=freed_keyword,
+    )
+
+    return await build_priorities_response(session, user_id)
+
+
+@router.delete("/priorities/{priority_id}/permanent")
+async def permanent_delete_priority(
+    priority_id: str,
+    user_id: UUID = Depends(validate_user_id_header),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Permanently delete a priority and all associated data.
+
+    Cascade-deletes deliverables, goals, and weekly snapshots.
+    Works on both active and retired priorities.
+
+    WARNING: This is destructive and irreversible. Reserved for GDPR account
+    deletion and future "permanently delete" UI option.
 
     Args:
         priority_id: Priority ID (UUID string)
@@ -820,17 +901,14 @@ async def delete_priority(
             detail={"code": "NOT_FOUND", "message": "Priority not found"},
         )
 
-    keyword = priority.calendar_keyword
-
-    # Delete (cascade handles deliverables)
+    # Hard delete (cascade handles deliverables, goals, snapshots)
     await session.delete(priority)
     await session.commit()
 
     logger.info(
-        "priority.delete.success",
+        "priority.permanent_delete.success",
         user_id=str(user_id),
         priority_id=str(pid),
-        freed_keyword=keyword,
     )
 
     return await build_priorities_response(session, user_id)

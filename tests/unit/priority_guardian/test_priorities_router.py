@@ -41,50 +41,32 @@ class TestComputeAvailableKeywords:
         assert available == []
 
 
-class TestBuildPrioritiesResponseOrdering:
-    """Tests for priority ordering in build_priorities_response."""
+class TestBuildPrioritiesResponseFiltering:
+    """Tests for priority filtering in build_priorities_response."""
 
     @pytest.mark.asyncio
-    async def test_active_priorities_ordered_before_retired(self):
-        """Active priorities appear before retired priorities in response.
+    async def test_only_active_priorities_returned(self):
+        """build_priorities_response only returns active priorities.
 
-        Regression test for Fix 1 in fix_priorities_router_ordering.md:
-        The query uses status.asc() so 'active' < 'retired' alphabetically
-        puts active first.
+        Retired priorities are excluded from the widget response.
+        The pattern engine (future) will query retired priorities directly.
         """
         user_id = uuid4()
 
-        # Create mock priorities: one retired (created first), one active (created second)
-        retired_priority = MagicMock()
-        retired_priority.id = uuid4()
-        retired_priority.user_id = user_id
-        retired_priority.name = "Retired Project"
-        retired_priority.type = "deadline"
-        retired_priority.calendar_keyword = "P1"
-        retired_priority.status = "retired"
-        retired_priority.deadline = date.today() - timedelta(days=30)
-        retired_priority.weekly_hour_target = None
-        retired_priority.checkpoint_date = None
-        retired_priority.desired_result = None
-        retired_priority.deliverables = []
-        retired_priority.created_at = datetime(2024, 1, 1, 10, 0, 0)
-        retired_priority.updated_at = datetime(2024, 1, 15, 10, 0, 0)
-        retired_priority.streak_count = 0
-        retired_priority.total_hours_invested = Decimal("20.0")
-        retired_priority.avg_target_achievement = None
-
+        # Create mock active priority
         active_priority = MagicMock()
         active_priority.id = uuid4()
         active_priority.user_id = user_id
         active_priority.name = "Active Project"
         active_priority.type = "flexible"
-        active_priority.calendar_keyword = "P2"
+        active_priority.calendar_keyword = "P1"
         active_priority.status = "active"
         active_priority.deadline = None
         active_priority.weekly_hour_target = Decimal("10.0")
         active_priority.checkpoint_date = date.today() + timedelta(days=30)
         active_priority.desired_result = "Complete milestone"
         active_priority.deliverables = []
+        active_priority.goals = []
         active_priority.created_at = datetime(2024, 2, 1, 10, 0, 0)
         active_priority.updated_at = datetime(2024, 2, 1, 10, 0, 0)
         active_priority.streak_count = 3
@@ -92,15 +74,12 @@ class TestBuildPrioritiesResponseOrdering:
         active_priority.avg_target_achievement = Decimal("85.0")
 
         # Mock session with query results
-        # The query should return priorities in correct order (active first)
+        # The query only returns active priorities (DB filters by status='active')
         mock_session = AsyncMock()
 
-        # Priority query result (already ordered by DB: active first)
+        # Priority query result (only active priorities from DB)
         priorities_result = MagicMock()
-        priorities_result.scalars.return_value.all.return_value = [
-            active_priority,
-            retired_priority,
-        ]
+        priorities_result.scalars.return_value.all.return_value = [active_priority]
 
         # Google connection query result
         conn_result = MagicMock()
@@ -111,18 +90,40 @@ class TestBuildPrioritiesResponseOrdering:
         # Call function
         response = await build_priorities_response(mock_session, user_id)
 
-        # Verify ordering: active should be first
+        # Verify only active priorities returned
         assert response["success"] is True
         priorities = response["data"]["priorities"]
-        assert len(priorities) == 2
-
-        # Active priority should be first
+        assert len(priorities) == 1
         assert priorities[0]["name"] == "Active Project"
         assert priorities[0]["status"] == "active"
 
-        # Retired priority should be second
-        assert priorities[1]["name"] == "Retired Project"
-        assert priorities[1]["status"] == "retired"
+    @pytest.mark.asyncio
+    async def test_retired_priority_not_in_response(self):
+        """Retired priorities are excluded from build_priorities_response.
+
+        This test verifies that after retirement, the response only contains
+        active priorities. The retired keyword should be in available_keywords.
+        """
+        user_id = uuid4()
+
+        # Mock session returns empty list (all priorities retired)
+        mock_session = AsyncMock()
+
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = []
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = None
+
+        mock_session.execute.side_effect = [priorities_result, conn_result]
+
+        response = await build_priorities_response(mock_session, user_id)
+
+        # No priorities in response
+        assert response["success"] is True
+        assert response["data"]["priorities"] == []
+        # All keywords available (none in use by active priorities)
+        assert response["data"]["available_keywords"] == ["P1", "P2", "P3"]
 
 
 class TestBuildPrioritiesResponseFalsyConversion:
