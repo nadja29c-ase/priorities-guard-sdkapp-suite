@@ -34,8 +34,8 @@ If calendar is not connected, do NOT call this tool — instead guide user to co
 
 FLOW: Call this tool THREE TIMES in sequence — once per phase (keyword_education → first_snapshot → reflection_setup). Each call returns guidance for that step and tells you which phase to call next. Wait for user action between phases.
 
-PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Instead you take on the role of a empathic Coach/Facilitator; Do NOT rush through — each step builds on the previous. Not adhering to these rules breaks Priority Guardian.
-"""
+PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Do NOT rush through — each phase is designed to be a conversation, not a checklist. Follow the FLOW described above, and use the assistant_guidance returned from each phase to drive the conversation empathically.
+Example for empathic tone: 'So your first priority is Ship V1.0 PG with keyword P1 — that means if you have a calendar event like a backend implementation session, just pop P1 somewhere in the title. P1: Backend implementation, Backend implementation P1, doesn't matter. PG picks it up either way.'"""
 
 WIDGET_URI = "ui://widget/pg-dashboard.html"
 
@@ -191,21 +191,18 @@ async def _handle_keyword_education(
                 for p in active_priorities
             ],
         },
-        "_meta": {
-            "openai/outputTemplate": WIDGET_URI,
-        },
         "assistant_guidance": {
             "action": "KEYWORD_EDUCATION",
             "priorities": priority_list,
             "instruction": (
-                "Explain how PG tracks time: add the keyword anywhere in the calendar EVENT TITLE (not event description). "
-                "PG reads titles and counts hours automatically. It's flexible — 'P1: Sales calls', "
+                "Explain how PG tracks time: PG scans calendar event titles for keywords (P1, P2, P3) to track time spent on each priority. "
+                "When PG finds a keyword in an event title, it counts that event's hours toward that priority. It's flexible — 'P1: Sales calls', "
                 "'Sales calls P1', or 'p1 client meeting' all work. Case and position don't matter. "
                 "Use the user's real priority names and keywords as examples: 'If [priority_name] is "
                 "[keyword], name your event something like [keyword]: [example activity]'. "
-                "Then prompt: 'Go add your keywords to "
-                "2-3 event titles from this week in your Google Calendar. Come back when you're "
-                "done and I'll generate your first snapshot."
+                "Then prompt: 'Create 2-3 test events in Google Calendar for this week with your keywords in the titles. "
+                "Come back when you're done — check your dashboard progress bar to see your hours update, "
+                "and then we can explore your weekly report for a deeper look.'"
             ),
             "next_phase": "first_snapshot",
         },
@@ -525,9 +522,6 @@ async def _handle_reflection_setup(
     structured_content = {
         "success": True,
         "data": {},
-        "_meta": {
-            "openai/outputTemplate": WIDGET_URI,
-        },
         "assistant_guidance": {
             "action": "REFLECTION_SETUP",
             "instruction": (
