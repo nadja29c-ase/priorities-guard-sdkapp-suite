@@ -50,8 +50,8 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
         "Here's your weekly time allocation.",
     ),
     "onboarding_calendar_setup": (
-        "Setting up your tracking...",
-        "Here's your Priority Guardian dashboard.",
+        "Walking you through tracking setup...",
+        "Here's your tracking guide.",
     ),
 }
 

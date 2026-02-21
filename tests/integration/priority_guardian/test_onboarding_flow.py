@@ -189,8 +189,8 @@ class TestOnboardingCalendarSetup:
         assert guidance["priorities"][0]["name"] == "Ship PG V1.0"
         assert guidance["priorities"][0]["keyword"] == "P1"
 
-        # Verify _meta
-        assert sc["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard.html"
+        # Verify no _meta (no widget rendering from this phase)
+        assert "_meta" not in sc
 
     @pytest.mark.asyncio
     async def test_first_weekly_report_with_tagged_events(

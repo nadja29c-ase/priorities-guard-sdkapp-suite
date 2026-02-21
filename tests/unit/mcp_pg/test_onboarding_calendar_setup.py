@@ -219,6 +219,7 @@ def test_tool_metadata():
     assert ONBOARDING_CALENDAR_SETUP.widget_accessible is False
     assert ONBOARDING_CALENDAR_SETUP.open_world_hint is True
     assert ONBOARDING_CALENDAR_SETUP.required_scopes == ["pg.access"]
+    assert ONBOARDING_CALENDAR_SETUP.widget_uri is None
 
 
 def test_schema_rejects_invalid_phase():
@@ -266,6 +267,9 @@ async def test_keyword_education_returns_priorities_with_keywords(
         assert priorities[0]["keyword"] == "P1"
         assert priorities[1]["name"] == "Client outreach"
         assert priorities[1]["keyword"] == "P2"
+
+        # Verify no widget rendering from this phase
+        assert "_meta" not in result.structuredContent
 
 
 @pytest.mark.asyncio
@@ -367,6 +371,24 @@ async def test_first_weekly_report_returns_weekly_data(
         assert guidance["next_phase"] == "reflection_setup"
         assert "deliverable_education" in guidance
         assert "instruction" in guidance["deliverable_education"]
+
+        # Verify no status fields in normalized priorities
+        for priority in data["priorities"]:
+            assert "flexStatus" not in priority
+            assert "pacingStatus" not in priority
+
+        # Verify widget_instruction structure
+        assert "widget_instruction" in guidance
+        assert guidance["widget_instruction"]["required"] is True
+        assert guidance["widget_instruction"]["tool"] == "get_weekly_report"
+        assert "week_start" in guidance["widget_instruction"]["arguments"]
+
+        # Verify transition_prompt structure
+        assert "transition_prompt" in guidance
+        assert guidance["transition_prompt"]["required"] is True
+
+        # Verify no widget rendering from this tool (no _meta)
+        assert "_meta" not in result.structuredContent
 
 
 @pytest.mark.asyncio
@@ -617,6 +639,9 @@ async def test_reflection_setup_returns_guidance_only():
     assert guidance["action"] == "REFLECTION_SETUP"
     assert guidance["onboarding_complete"] is True
 
+    # Verify no widget rendering from this phase
+    assert "_meta" not in result.structuredContent
+
 
 @pytest.mark.asyncio
 async def test_reflection_setup_no_backend_call():
@@ -651,3 +676,83 @@ async def test_invalid_phase_raises_error():
     """Assert invalid phase raises ToolUsageError."""
     with pytest.raises(ToolUsageError, match="Invalid phase"):
         await handle("user-123", "corr-123", {"phase": "invalid_phase"})
+
+
+# ============================================================================
+# Test: Status fields and terminology
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_first_weekly_report_no_status_fields_in_response(
+    mock_weekly_report_with_keywords,
+    mock_past_week_no_snapshot,
+):
+    """Verify flexStatus and pacingStatus are absent from normalized priorities even when backend includes them."""
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_weekly_report_with_keywords]
+
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
+
+        assert result.isError is not True
+        data = result.structuredContent["data"]
+
+        # Backend mock includes flex_status but normalized response should not
+        for priority in data["priorities"]:
+            assert "flexStatus" not in priority
+            assert "pacingStatus" not in priority
+
+
+@pytest.mark.asyncio
+async def test_keyword_education_instruction_contains_weekly_report_terminology(
+    mock_priorities_response,
+    mock_past_week_no_snapshot,
+):
+    """Assert instruction uses 'weekly report' and not 'snapshot' or 'allocation'."""
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_priorities_response]
+
+        result = await handle("user-123", "corr-123", {"phase": "keyword_education"})
+
+        instruction = result.structuredContent["assistant_guidance"]["instruction"]
+        assert "weekly report" in instruction.lower()
+        assert "snapshot" not in instruction.lower()
+        assert "allocation" not in instruction.lower()
+
+
+@pytest.mark.asyncio
+async def test_first_weekly_report_instruction_contains_weekly_report_terminology(
+    mock_weekly_report_with_keywords,
+    mock_past_week_no_snapshot,
+):
+    """Assert instruction uses 'weekly report' terminology consistently."""
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        mock_get.side_effect = [mock_past_week_no_snapshot, mock_weekly_report_with_keywords]
+
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
+
+        guidance = result.structuredContent["assistant_guidance"]
+        transition_message = guidance["transition_prompt"]["message"]
+        assert "weekly report" in transition_message.lower()
+        assert "snapshot" not in transition_message.lower()
+
+
+@pytest.mark.asyncio
+async def test_reflection_setup_instruction_no_motivational_filler():
+    """Assert instruction does not contain motivational filler phrases."""
+    result = await handle("user-123", "corr-123", {"phase": "reflection_setup"})
+
+    instruction = result.structuredContent["assistant_guidance"]["instruction"]
+    instruction_lower = instruction.lower()
+
+    assert "big leverage" not in instruction_lower
+    assert "real insight" not in instruction_lower
+    assert "game changer" not in instruction_lower

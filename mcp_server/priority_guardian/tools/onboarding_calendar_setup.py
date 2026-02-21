@@ -37,8 +37,6 @@ FLOW: Call this tool THREE TIMES in sequence — once per phase (keyword_educati
 PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Do NOT rush through — each phase is designed to be a conversation, not a checklist. Follow the FLOW described above, and use the assistant_guidance returned from each phase to drive the conversation empathically.
 Example for empathic tone: 'So your first priority is Ship V1.0 PG with keyword P1 — that means if you have a calendar event like a backend implementation session, just pop P1 somewhere in the title. P1: Backend implementation, Backend implementation P1, doesn't matter. PG picks it up either way.'"""
 
-WIDGET_URI = "ui://widget/pg-dashboard.html"
-
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -392,8 +390,6 @@ async def _handle_first_weekly_report(
             "deliverablesCompleted": p.get("deliverables_completed"),
             "deliverablesTotal": p.get("deliverables_total"),
             "targetHours": p.get("target_hours"),
-            "flexStatus": p.get("flex_status"),
-            "pacingStatus": p.get("pacing_status"),
         }
         for p in priorities
     ]
@@ -439,11 +435,14 @@ async def _handle_first_weekly_report(
             "timeAllocation": normalized_time_allocation,
             "allEvents": normalized_events,
         },
-        "_meta": {
-            "openai/outputTemplate": WIDGET_URI,
-        },
         "assistant_guidance": {
             "action": "FIRST_WEEKLY_REPORT",
+            "widget_instruction": {
+                "required": True,
+                "tool": "get_weekly_report",
+                "arguments": {"week_start": data.get("week_start")},
+                "purpose": "Call get_weekly_report FIRST to render the pie chart before presenting any data. The chart is the visual anchor — narrate the data while the user is looking at it.",
+            },
             "instruction": (
                 "Present the weekly snapshot. Show how time splits across priorities. "
                 "Explain other time: total calendar hours minus keyword hours. This is non-priority work. "
@@ -469,8 +468,9 @@ async def _handle_first_weekly_report(
                     "might be: Design mockup delivered, All pages built and functional, Content fully migrated, "
                     "Client review and approval. Each one is a complete piece of work you either shipped or didn't. "
                     "Add them anytime.' "
-                    "For flexible priorities: deliverables don't apply — the monthly goal already anchors "
-                    "what the hours should produce. No coaching. No prompting to add them now."
+                    "For flexible priorities: E2E deliverables don't apply. Flexible priorities use a monthly goal instead — "
+                    "for example 'Close 3 new clients' or 'Launch marketing site'. The monthly goal defines what success "
+                    "looks like, and the weekly hour target tracks whether you're investing enough time to get there. No coaching. No prompting to add them now."
                 ),
             },
             "transition_prompt": {
@@ -597,7 +597,7 @@ ONBOARDING_CALENDAR_SETUP = ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,  # Only first_weekly_report phase renders widget via structuredContent._meta
+    widget_uri=None,  # Widget rendered by get_weekly_report tool call, not this tool
     handle=handle,
     read_only_hint=True,  # Never mutates state
     destructive_hint=False,
