@@ -197,15 +197,14 @@ async def _handle_keyword_education(
             "action": "KEYWORD_EDUCATION",
             "priorities": priority_list,
             "instruction": (
-                "Explain how PG tracks time: add the keyword anywhere in the calendar event title. "
+                "Explain how PG tracks time: add the keyword anywhere in the calendar EVENT TITLE (not event description). "
                 "PG reads titles and counts hours automatically. It's flexible — 'P1: Sales calls', "
                 "'Sales calls P1', or 'p1 client meeting' all work. Case and position don't matter. "
                 "Use the user's real priority names and keywords as examples: 'If [priority_name] is "
                 "[keyword], name your event something like [keyword]: [example activity]'. "
                 "Then prompt: 'Go add your keywords to "
                 "2-3 event titles from this week in your Google Calendar. Come back when you're "
-                "done and I'll generate your first snapshot.' Do NOT present as a lecture — "
-                "weave into conversation naturally. Do NOT use the word 'tag'."
+                "done and I'll generate your first snapshot."
             ),
             "next_phase": "first_snapshot",
         },
@@ -448,15 +447,15 @@ async def _handle_first_snapshot(
         "assistant_guidance": {
             "action": "FIRST_SNAPSHOT",
             "instruction": (
-                "Present the weekly snapshot. Show how time splits across priorities. Acknowledge events without "
-                "keywords: 'You still have ~Xh in events without keywords — that's normal. As you "
-                "add keywords to more event titles, tracking becomes precise.' If semantic grouping "
-                "of untagged events is possible, show overlap with priorities: 'These hours include "
-                "[events] — some might already relate to your priorities.' "
-                "Explain that PG reads event titles and descriptions to semantically group untracked time. "
+                "Present the weekly snapshot. Show how time splits across priorities. "
+                "Explain other time: total calendar hours minus keyword hours. This is non-priority work. "
+                "Present it as useful context, not a gap to fix: 'You have ~Xh in non-priority events — "
+                "meetings, admin, coordination. That's the rest of your week.' "
+                "Then explain semantic grouping: PG reads event titles and descriptions to group events into categories. "
+                "Any events can be grouped and dissected further — but use other time as the example here: "
+                "'Your 12h of non-priority time includes 4h of meetings, 3h of admin, 2h of client support...' "
                 "More descriptive event titles and descriptions lead to more accurate grouping. "
-                "Example: 'Team standup' is harder to associate with a priority than 'P2 team standup' or "
-                "even 'Standup — discussing client migration timeline'."
+                "Example: 'Team standup' tells PG less than 'Standup — discussing client migration timeline'."
             ),
             "deliverable_education": {
                 "instruction": (
