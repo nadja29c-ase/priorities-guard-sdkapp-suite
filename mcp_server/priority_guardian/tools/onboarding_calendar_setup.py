@@ -25,7 +25,8 @@ logger = structlog.get_logger(__name__)
 
 NAME = "onboarding_calendar_setup"
 
-DESCRIPTION = """ONBOARDING PHASE 2 — CALENDAR SETUP AND FIRST SNAPSHOT.
+DESCRIPTION = """Walk the user through how Priority Guardian tracks time using your Google Calendar. If permitted, this reads calendar events and priorities to show based on real calendar data how progress tracking workds.
+
 This tool provides the educational content and user-specific data you need to teach the user how Priority Guardian tracks their time. You cannot explain the tracking mechanism correctly without calling this tool — it returns the user's real priorities, keywords, calendar data, and step-by-step guidance for each phase.
 
 Call this tool ONLY after the user has set up their priorities AND connected Google Calendar via the dashboard. NEVER call this for returning users who have already completed onboarding.
