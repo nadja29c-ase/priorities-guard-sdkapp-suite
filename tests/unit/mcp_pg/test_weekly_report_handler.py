@@ -9,6 +9,8 @@ Tests:
 - Per-priority semantic zoom (Increment 10)
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from mcp_server.priority_guardian.tools.get_weekly_report import (
@@ -17,6 +19,7 @@ from mcp_server.priority_guardian.tools.get_weekly_report import (
     _normalize_priority_report,
     _normalize_time_allocation,
     _normalize_event,
+    handle,
     WIDGET_URI,
 )
 from mcp_server.priority_guardian.tools.base import ToolUsageError
@@ -324,8 +327,63 @@ class TestRemainderHandling:
         assert all(s["hours"] >= 0 for s in slices)
 
 
+class TestBuildAssistantGuidanceNoPriorities:
+    """Tests for _build_assistant_guidance() when no priorities exist (defense in depth)."""
+
+    def test_empty_priorities_returns_tracking_not_started_guidance(self):
+        """Empty priorities list returns guidance about tracking not started."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 0},
+        }
+
+        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+
+        assert "No priorities were being tracked" in guidance
+        assert "Do not mention P1, P2, or P3" in guidance
+        assert "tracking had not started yet" in guidance
+
+    def test_empty_priorities_mentions_first_full_week(self):
+        """Empty priorities guidance mentions tracking begins from first full week."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 0},
+        }
+
+        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+
+        assert "first full week after creation" in guidance
+
+    def test_empty_priorities_does_not_mention_snapshots(self):
+        """Empty priorities guidance instructs not to mention snapshots."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 0},
+        }
+
+        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+
+        assert "Do NOT mention snapshots" in guidance
+
+    def test_empty_priorities_does_not_contain_narrate_all(self):
+        """Empty priorities guidance does NOT contain 'Narrate ALL' instruction."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 0},
+        }
+
+        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+
+        assert "Narrate ALL" not in guidance
+        # Also should not reference individual keywords in a way that suggests narrating them
+        assert "P1" not in guidance.split("P1, P2, or P3")[0]  # P1 only in "do not mention" context
+
+
 class TestBuildAssistantGuidanceMode1:
     """Tests for _build_assistant_guidance() without semantic_groupings (first call)."""
+
+    # Sample priority to use in Mode 1 tests
+    SAMPLE_PRIORITY = {"calendar_keyword": "P1", "name": "Test Priority"}
 
     def test_current_week_includes_progress_framing(self):
         """Current week guidance includes 'CURRENT WEEK in progress' framing."""
@@ -334,7 +392,9 @@ class TestBuildAssistantGuidanceMode1:
             "time_allocation": {"other_hours": 0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=False
+        )
 
         assert "CURRENT WEEK in progress" in guidance
         assert "progress check-in" in guidance.lower()
@@ -346,7 +406,9 @@ class TestBuildAssistantGuidanceMode1:
             "time_allocation": {"other_hours": 0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=False
+        )
 
         assert "COMPLETED WEEK reflection" in guidance
         assert "look back" in guidance.lower()
@@ -362,7 +424,9 @@ class TestBuildAssistantGuidanceMode1:
             {"title": "Client call", "matched_keywords": []},
         ]
 
-        guidance = _build_assistant_guidance(data, [], all_events, has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+        )
 
         assert "5.5 hours of non-priority time" in guidance
         assert "semantic" in guidance.lower() or "categories" in guidance.lower()
@@ -375,7 +439,9 @@ class TestBuildAssistantGuidanceMode1:
             "time_allocation": {"other_hours": 0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=False
+        )
 
         assert "ALL active priorities" in guidance or "zero hours" in guidance.lower()
 
@@ -389,7 +455,9 @@ class TestBuildAssistantGuidanceMode1:
             {"title": "Specific Event Title ABC123", "matched_keywords": []},
         ]
 
-        guidance = _build_assistant_guidance(data, [], all_events, has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+        )
 
         # Should reference events abstractly
         assert "allEvents" in guidance or "event titles" in guidance.lower()
@@ -404,7 +472,9 @@ class TestBuildAssistantGuidanceMode1:
         }
         all_events = [{"title": "Meeting", "matched_keywords": []}]
 
-        guidance = _build_assistant_guidance(data, [], all_events, has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+        )
 
         guidance_lower = guidance.lower()
         # Should not prompt to SAVE snapshots (instructing NOT to mention is fine)
@@ -417,6 +487,9 @@ class TestBuildAssistantGuidanceMode1:
 class TestBuildAssistantGuidanceMode2:
     """Tests for _build_assistant_guidance() with semantic_groupings (second call)."""
 
+    # Sample priority to use in Mode 2 tests
+    SAMPLE_PRIORITY = {"calendar_keyword": "P1", "name": "Test Priority"}
+
     def test_says_not_to_list_categories(self):
         """Mode 2 guidance says NOT to repeat/list categories."""
         data = {
@@ -424,7 +497,9 @@ class TestBuildAssistantGuidanceMode2:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         assert "NOT repeat" in guidance or "NOT list" in guidance
         assert "chart displays them" in guidance.lower()
@@ -436,7 +511,9 @@ class TestBuildAssistantGuidanceMode2:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         assert "brief" in guidance.lower()
         assert "observation" in guidance.lower() or "coaching" in guidance.lower()
@@ -448,7 +525,9 @@ class TestBuildAssistantGuidanceMode2:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         assert "stands out" in guidance.lower()
 
@@ -459,7 +538,9 @@ class TestBuildAssistantGuidanceMode2:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         assert "short" in guidance.lower() or "heavy lifting" in guidance.lower()
 
@@ -470,7 +551,9 @@ class TestBuildAssistantGuidanceMode2:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         guidance_lower = guidance.lower()
         assert "snapshot" not in guidance_lower
@@ -894,6 +977,9 @@ class TestBackwardsCompatibility:
 class TestGuidanceIncrement10:
     """Tests for assistant_guidance updates (Increment 10)."""
 
+    # Sample priority to use in tests
+    SAMPLE_PRIORITY = {"calendar_keyword": "P1", "name": "Test Priority"}
+
     def test_mode1_includes_within_priority_breakdown(self):
         """MODE 1 guidance includes within-priority breakdown instruction."""
         data = {
@@ -902,7 +988,9 @@ class TestGuidanceIncrement10:
         }
         all_events = [{"title": "Meeting", "matched_keywords": []}]
 
-        guidance = _build_assistant_guidance(data, [], all_events, has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+        )
 
         assert "within-priority breakdown" in guidance.lower()
         assert "semantic_target" in guidance
@@ -914,7 +1002,9 @@ class TestGuidanceIncrement10:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         # Should say "neutral observation" not "coaching observation"
         assert "neutral observation" in guidance.lower()
@@ -927,7 +1017,9 @@ class TestGuidanceIncrement10:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         assert "without evaluation" in guidance.lower() or "without" in guidance.lower() and "recommendation" in guidance.lower()
 
@@ -938,7 +1030,129 @@ class TestGuidanceIncrement10:
             "time_allocation": {"other_hours": 5.0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=True)
+        guidance = _build_assistant_guidance(
+            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+        )
 
         # Should mention generic "selected category" not just "Other"
         assert "selected category" in guidance.lower() or "refined breakdown" in guidance.lower()
+
+
+class TestHandlerEmptyPriorities:
+    """Handler-level tests for empty priorities (widget suppression + guidance)."""
+
+    @pytest.mark.asyncio
+    async def test_empty_priorities_no_meta_key_in_structured_content(self):
+        """When backend returns empty priorities, structuredContent has no _meta key."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-01-05",
+                "week_end": "2026-01-11",
+                "is_current_week": False,
+                "priorities": [],
+                "time_allocation": {
+                    "total_tracked_hours": 0,
+                    "keywords": {"P1": {"hours": 0, "event_count": 0}},
+                    "other_hours": 0,
+                },
+                "all_events": [],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={"week_start": "2026-01-05"},
+            )
+
+        # Widget should NOT be triggered - no _meta key
+        assert "_meta" not in result.structuredContent
+        assert "openai/outputTemplate" not in str(result.structuredContent)
+
+    @pytest.mark.asyncio
+    async def test_empty_priorities_guidance_correct(self):
+        """When backend returns empty priorities, guidance says 'not started' and avoids P1/P2/P3."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-01-05",
+                "week_end": "2026-01-11",
+                "is_current_week": False,
+                "priorities": [],
+                "time_allocation": {
+                    "total_tracked_hours": 0,
+                    "keywords": {},
+                    "other_hours": 0,
+                },
+                "all_events": [],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={"week_start": "2026-01-05"},
+            )
+
+        guidance = result.structuredContent.get("assistant_guidance", "")
+        assert "not started yet" in guidance.lower() or "not being tracked" in guidance.lower()
+        assert "Narrate ALL" not in guidance
+
+    @pytest.mark.asyncio
+    async def test_non_empty_priorities_has_meta_widget_uri(self):
+        """When backend returns priorities, structuredContent has _meta.openai/outputTemplate."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-02-16",
+                "week_end": "2026-02-22",
+                "is_current_week": False,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 5.0,
+                        "event_count": 3,
+                        "target_hours": 10.0,
+                        "flex_status": "behind",
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 5.0,
+                    "keywords": {"P1": {"hours": 5.0, "event_count": 3}},
+                    "other_hours": 0,
+                },
+                "all_events": [],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={"week_start": "2026-02-16"},
+            )
+
+        # Widget SHOULD be triggered - _meta with outputTemplate
+        assert "_meta" in result.structuredContent
+        assert result.structuredContent["_meta"]["openai/outputTemplate"] == WIDGET_URI

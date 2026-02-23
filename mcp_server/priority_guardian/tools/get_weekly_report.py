@@ -318,9 +318,10 @@ def _build_assistant_guidance(
     """
     Build assistant guidance for presenting the weekly report.
 
-    Two modes:
-    1. Without semantic_groupings: Propose groupings, ask user to confirm
-    2. With semantic_groupings: Brief neutral observation, don't repeat categories
+    Three modes:
+    1. No priorities: Tracking hadn't started for this week
+    2. Without semantic_groupings: Propose groupings, ask user to confirm
+    3. With semantic_groupings: Brief neutral observation, don't repeat categories
 
     Args:
         data: Backend response data
@@ -328,6 +329,18 @@ def _build_assistant_guidance(
         all_events: List of event dicts
         has_semantic_groupings: Whether semantic_groupings parameter was provided
     """
+    # Defense in depth: if handle() early return is bypassed, still return safe guidance
+    if not priorities:
+        return (
+            "No priorities were being tracked during this week. "
+            "Do not mention P1, P2, or P3 keywords or time allocation. "
+            "Simply tell the user that priority tracking had not started yet for this time period. "
+            "If they created priorities after this week, you can mention that tracking begins "
+            "from the first full week after creation. "
+            "Keep it to one or two sentences. "
+            "Do NOT mention snapshots, saving data, or persistence."
+        )
+
     is_current = data.get("is_current_week", False)
     other_hours = data.get("time_allocation", {}).get("other_hours", 0)
 
@@ -476,6 +489,50 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     time_allocation = data.get("time_allocation", {})
     all_events = data.get("all_events", [])
 
+    # Early return when no priorities existed during this week
+    # Prevents empty pie chart widget and incorrect LLM guidance
+    if not priorities:
+        week_label = (
+            "This week" if data.get("is_current_week")
+            else f"Week of {data.get('week_start')}"
+        )
+        no_priorities_guidance = (
+            "No priorities were being tracked during this week. "
+            "Do not mention P1, P2, or P3 keywords or time allocation. "
+            "Simply tell the user that priority tracking had not started yet for this time period. "
+            "If they created priorities after this week, you can mention that tracking begins "
+            "from the first full week after creation. "
+            "Keep it to one or two sentences. "
+            "Do NOT mention snapshots, saving data, or persistence."
+        )
+
+        logger.info(
+            "tool.get_weekly_report.no_priorities",
+            correlation_id=correlation_id,
+            user_id=user_id,
+            week_start=data.get("week_start"),
+            is_current_week=data.get("is_current_week"),
+        )
+
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"{week_label}: No priorities were being tracked during this period."
+            )],
+            structuredContent={
+                "success": True,
+                "data": {
+                    "weekStart": data.get("week_start"),
+                    "weekEnd": data.get("week_end"),
+                    "isCurrentWeek": data.get("is_current_week"),
+                    "priorities": [],
+                    "slices": [],
+                    "totalHours": 0,
+                },
+                "assistant_guidance": no_priorities_guidance,
+            },
+        )
+
     # Build pie chart slices (validates semantic_groupings/semantic_target if provided)
     try:
         slices, validation_error = _build_pie_slices(
@@ -531,11 +588,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     )
 
     # Build human-readable summary
+    # Note: empty priorities case handled by early return above
     week_label = "This week" if data.get("is_current_week") else f"Week of {data.get('week_start')}"
 
-    if not priorities:
-        text = f"{week_label}: No active priorities."
-    elif has_semantic_groupings:
+    if has_semantic_groupings:
         text = f"{week_label}: {total_hours:.1f}h tracked with refined time breakdown."
     else:
         text = f"{week_label}: {total_hours:.1f}h tracked across {len(priorities)} priorities."
