@@ -630,6 +630,14 @@ class TestSnapshotCreationDB:
         assert rows[1][3] == Decimal("2.00")  # other_hours (same, denormalized)
         assert rows[1][4] == Decimal("10.00")  # total_tracked_hours (same)
 
+        # Verify denormalization invariant: sum(priority actual_hours) + other_hours == total_tracked_hours
+        total_priority_hours = sum(row[1] for row in rows)  # actual_hours from all priority snapshots
+        other_hours = rows[0][3]  # other_hours (same denormalized value on all rows)
+        total_tracked = rows[0][4]  # total_tracked_hours (same denormalized value on all rows)
+        assert total_priority_hours + other_hours == total_tracked, (
+            f"Allocation invariant violated: {total_priority_hours} + {other_hours} != {total_tracked}"
+        )
+
     @pytest.mark.asyncio
     async def test_avg_target_achievement_computed_after_two_weeks(
         self, async_session: AsyncSession
