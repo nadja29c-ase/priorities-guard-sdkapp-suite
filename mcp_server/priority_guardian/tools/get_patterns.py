@@ -28,7 +28,7 @@ logger = structlog.get_logger(__name__)
 NAME = "get_patterns"
 
 DESCRIPTION = (
-    "Returns behavioral patterns detected from your priority tracking history. "
+    "Returns behavioral patterns detected from user's priority tracking history. "
     "Patterns include consistency streaks, low-investment priorities, priority switching frequency, "
     "and priority protection under calendar pressure. Requires at least 4 weeks of tracking data.\n\n"
     "Call this tool:\n"
@@ -58,8 +58,8 @@ WIDGET_URI = None
 # ============================================================================
 
 GUIDANCE_PATTERNS_FOUND = (
-    "Present these patterns as observations about how the user has been spending their time — "
-    "based on what was actually logged and tagged in their calendar. Do not coach, judge, or prescribe. "
+    "Present these patterns as NEUTRAL observations about how the user has been spending their time — "
+    "based on what was actually logged and tagged in their calendar. Do not evaluate, judge, or prescribe. "
     "For positive signals (consistency streaks, priority protection), acknowledge warmly in one sentence. "
     "For neutral signals (low-investment priorities), state the numbers and ask what the user wants to do. "
     "For priority switching, present both interpretations — healthy pivoting or difficulty committing — "
