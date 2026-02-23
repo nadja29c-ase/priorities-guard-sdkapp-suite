@@ -405,3 +405,296 @@ class TestSnapshotWeeklyReportIntegration:
         rows = result.fetchall()
         assert rows[0][1] == "P1"  # Priority A's snapshot still shows P1
         assert rows[1][1] == "P3"  # Priority B's snapshot still shows P3
+
+
+class TestPastWeekEligibilityFilter:
+    """
+    Real-DB integration tests for past week eligibility filtering (Increment 22/23).
+
+    Tests verify that the eligibility filter works correctly with real PostgreSQL:
+    - Priorities created after the requested week are excluded
+    - Priorities created before/on the week are included
+    - Mixed eligibility scenarios work correctly
+    - Calendar API is NOT called when no eligible priorities exist
+    """
+
+    @pytest.mark.asyncio
+    async def test_past_week_before_priority_exists_returns_empty_no_calendar_fetch(
+        self, async_session: AsyncSession
+    ):
+        """Past week before priority existed returns empty report, no calendar fetch."""
+        from unittest.mock import AsyncMock, patch
+        from backend.apps.priority_guardian.services.weekly_report_service import (
+            generate_weekly_report,
+        )
+        from backend.core.models import CoreConnection
+
+        # Create user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create Google connection
+        connection = CoreConnection(
+            user_id=user.id,
+            provider="google",
+            connection_type="google",
+            encrypted_access_token="encrypted_test_token",
+            token_expires_at=datetime.now() + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+            revoked_at=None,
+        )
+        async_session.add(connection)
+
+        # Create priority created AFTER the requested week (Feb 19)
+        priority = PgPriority(
+            user_id=user.id,
+            name="Future Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2026, 2, 19),  # Thursday, Feb 19
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # Mock only Google API calls
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_events.return_value = ([], 0)
+
+            # Request week Jan 5-11 (well before priority created Feb 19)
+            result = await generate_weekly_report(
+                user_id=user.id,
+                session=async_session,
+                http_client=mock_http_client,
+                week_start=date(2026, 1, 5),  # Monday, Jan 5
+            )
+
+        # Verify empty_report shape
+        assert result["success"] is True
+        data = result["data"]
+        assert data["priorities"] == []
+        assert data["is_current_week"] is False
+        assert data["time_allocation"]["total_tracked_hours"] == 0.0
+        assert data["time_allocation"]["other_hours"] == 0.0
+
+        # CRITICAL: list_events should NOT have been called (early return)
+        mock_events.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_past_week_where_priority_eligible_returns_data_with_calendar_fetch(
+        self, async_session: AsyncSession
+    ):
+        """Past week where priority IS eligible returns data with calendar fetch."""
+        from unittest.mock import AsyncMock, patch
+        from backend.apps.priority_guardian.services.weekly_report_service import (
+            generate_weekly_report,
+        )
+        from backend.core.models import CoreConnection
+
+        # Create user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create Google connection
+        connection = CoreConnection(
+            user_id=user.id,
+            provider="google",
+            connection_type="google",
+            encrypted_access_token="encrypted_test_token",
+            token_expires_at=datetime.now() + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+            revoked_at=None,
+        )
+        async_session.add(connection)
+
+        # Create priority created Jan 1 (Thursday)
+        # first_valid_monday = Jan 5, so eligible for week starting Jan 5
+        priority = PgPriority(
+            user_id=user.id,
+            name="Eligible Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2026, 1, 1),  # Thursday, Jan 1
+        )
+        async_session.add(priority)
+        await async_session.commit()
+
+        # Mock calendar events
+        mock_events_data = [
+            {
+                "id": "event1",
+                "summary": "[P1] Project work",
+                "start": {"dateTime": "2026-01-06T09:00:00Z"},
+                "end": {"dateTime": "2026-01-06T12:00:00Z"},  # 3 hours
+            },
+            {
+                "id": "event2",
+                "summary": "[P1] More work",
+                "start": {"dateTime": "2026-01-07T14:00:00Z"},
+                "end": {"dateTime": "2026-01-07T16:00:00Z"},  # 2 hours
+            },
+        ]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_events.return_value = (mock_events_data, 0)
+
+            # Request week Jan 5-11
+            result = await generate_weekly_report(
+                user_id=user.id,
+                session=async_session,
+                http_client=mock_http_client,
+                week_start=date(2026, 1, 5),
+            )
+
+        # Verify list_events WAS called
+        mock_events.assert_called_once()
+
+        # Verify response has the priority with correct hours
+        assert result["success"] is True
+        data = result["data"]
+        assert len(data["priorities"]) == 1
+        assert data["priorities"][0]["name"] == "Eligible Priority"
+        assert data["priorities"][0]["actual_hours"] == 5.0  # 3h + 2h
+        assert data["is_current_week"] is False
+
+    @pytest.mark.asyncio
+    async def test_mixed_eligibility_only_eligible_priority_in_response(
+        self, async_session: AsyncSession
+    ):
+        """Mixed eligibility: only eligible priority appears, ineligible hours go to other."""
+        from unittest.mock import AsyncMock, patch
+        from backend.apps.priority_guardian.services.weekly_report_service import (
+            generate_weekly_report,
+        )
+        from backend.core.models import CoreConnection
+
+        # Create user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create Google connection
+        connection = CoreConnection(
+            user_id=user.id,
+            provider="google",
+            connection_type="google",
+            encrypted_access_token="encrypted_test_token",
+            token_expires_at=datetime.now() + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+            revoked_at=None,
+        )
+        async_session.add(connection)
+
+        # Priority 1: Created Jan 1, eligible for Jan 5 week
+        priority_eligible = PgPriority(
+            user_id=user.id,
+            name="Eligible P1",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2026, 1, 1),
+        )
+        async_session.add(priority_eligible)
+
+        # Priority 2: Created Feb 19, NOT eligible for Jan 5 week
+        priority_ineligible = PgPriority(
+            user_id=user.id,
+            name="Ineligible P2",
+            type="flexible",
+            calendar_keyword="P2",
+            status="active",
+            weekly_hour_target=Decimal("8.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2026, 2, 19),
+        )
+        async_session.add(priority_ineligible)
+        await async_session.commit()
+
+        # Mock calendar events for both P1 and P2
+        mock_events_data = [
+            {
+                "id": "event1",
+                "summary": "[P1] Eligible work",
+                "start": {"dateTime": "2026-01-06T09:00:00Z"},
+                "end": {"dateTime": "2026-01-06T12:00:00Z"},  # 3 hours P1
+            },
+            {
+                "id": "event2",
+                "summary": "[P2] Ineligible work",
+                "start": {"dateTime": "2026-01-07T10:00:00Z"},
+                "end": {"dateTime": "2026-01-07T12:00:00Z"},  # 2 hours P2
+            },
+            {
+                "id": "event3",
+                "summary": "Lunch meeting",
+                "start": {"dateTime": "2026-01-08T12:00:00Z"},
+                "end": {"dateTime": "2026-01-08T13:00:00Z"},  # 1 hour other
+            },
+        ]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_events.return_value = (mock_events_data, 0)
+
+            result = await generate_weekly_report(
+                user_id=user.id,
+                session=async_session,
+                http_client=mock_http_client,
+                week_start=date(2026, 1, 5),
+            )
+
+        # Verify only eligible priority in response
+        assert result["success"] is True
+        data = result["data"]
+        assert len(data["priorities"]) == 1
+        assert data["priorities"][0]["name"] == "Eligible P1"
+        assert data["priorities"][0]["actual_hours"] == 3.0
+
+        # P2 hours are tracked under keywords.P2 but NOT attributed to any priority
+        # (since P2 priority is filtered out as ineligible)
+        # other_hours only includes events with no keyword match (lunch = 1h)
+        assert data["time_allocation"]["other_hours"] == 1.0  # Just lunch
+        assert data["time_allocation"]["keywords"]["P2"]["hours"] == 2.0  # P2 tracked but no priority
+        assert data["time_allocation"]["total_tracked_hours"] == 6.0  # 3h P1 + 2h P2 + 1h lunch
+
+        # Verify P2 is NOT in priorities list (the key assertion)
+        priority_names = [p["name"] for p in data["priorities"]]
+        assert "Ineligible P2" not in priority_names
