@@ -990,3 +990,98 @@ class TestPieChartIntegration:
         uncategorized = next(s for s in slices if s["label"] == "Uncategorized")
         assert uncategorized["hours"] == 0.5
         assert uncategorized["type"] == "semantic"
+
+
+class TestPastWeekBeforePrioritiesExisted:
+    """
+    Integration tests for past week reports before any priorities existed.
+
+    Increment 22 fix: When requesting a report for a past week where no
+    priorities existed (all current priorities were created after that week),
+    return _empty_report shape with no calendar API call.
+    """
+
+    @pytest.mark.asyncio
+    async def test_past_week_before_priorities_returns_empty_report_shape(
+        self,
+        mock_session,
+        mock_http_client,
+        mock_google_connection,
+    ):
+        """
+        Past week before any priorities existed returns empty_report shape:
+        - empty priorities list
+        - all time_allocation values zero
+        - is_current_week: False
+        """
+        user_id = uuid4()
+        # Request report for Feb 9, 2026 (a Monday)
+        week_start = date(2026, 2, 9)
+
+        # Priority created AFTER the requested week
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Future Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.status = "active"
+        mock_priority.weekly_hour_target = Decimal("10.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 2, 19)  # Created Feb 19, after Feb 9-15 week
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_google_connection
+
+        # Empty snapshot result (no snapshots for that week)
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = []
+
+        # Priorities query returns the future-created priority
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [conn_result, snapshot_result, priorities_result]
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.is_week_complete"
+        ) as mock_complete, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_complete.return_value = True  # Past week
+            mock_events.return_value = ([], 0)
+
+            result = await generate_weekly_report(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+                week_start=week_start,
+            )
+
+        # Verify empty_report shape
+        assert result["success"] is True
+        data = result["data"]
+
+        # Empty priorities list
+        assert data["priorities"] == []
+
+        # is_current_week: False
+        assert data["is_current_week"] is False
+
+        # All time_allocation values zero
+        assert data["time_allocation"]["total_tracked_hours"] == 0.0
+        assert data["time_allocation"]["other_hours"] == 0.0
+        for kw in ["P1", "P2", "P3"]:
+            assert data["time_allocation"]["keywords"][kw]["hours"] == 0.0
+            assert data["time_allocation"]["keywords"][kw]["event_count"] == 0
+
+        # No events
+        assert data["all_events"] == []
+
+        # Calendar API should NOT have been called (early return)
+        mock_events.assert_not_called()

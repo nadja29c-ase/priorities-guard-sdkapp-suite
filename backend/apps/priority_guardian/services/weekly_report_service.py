@@ -546,6 +546,18 @@ async def generate_weekly_report(
     )
     priorities = list(priorities_result.scalars().all())
 
+    # -------------------------------------------------------------------------
+    # Step 4b: For past weeks, filter to priorities eligible for that week
+    # -------------------------------------------------------------------------
+    # Historical calendar time before the first eligible priority is intentionally
+    # not surfaced — tracking hadn't started yet. This prevents attributing old
+    # P1/P2/P3 calendar events to priorities that didn't exist during that week.
+    if not is_current:
+        priorities = [
+            p for p in priorities
+            if priority_eligible_for_week(p.created_at.date(), actual_week_start)
+        ]
+
     if not priorities:
         return _empty_report(actual_week_start, actual_week_end, is_current)
 

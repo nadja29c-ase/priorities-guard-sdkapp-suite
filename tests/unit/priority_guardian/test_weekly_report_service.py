@@ -1053,3 +1053,260 @@ class TestRetiredPriorityHandlingInReports:
         # And the time_allocation should have P1 hours attributed
         time_alloc = result["data"]["time_allocation"]
         assert time_alloc["keywords"]["P1"]["hours"] == 6.0
+
+
+class TestFallbackPathEligibilityFilter:
+    """Tests for priority eligibility filtering in the live calendar fallback path.
+
+    When _build_report_from_snapshots returns None for a past week, the fallback
+    path must filter priorities by eligibility to prevent attributing old calendar
+    events to priorities that didn't exist during the requested week.
+    """
+
+    @pytest.mark.asyncio
+    async def test_past_week_priority_created_thursday_excluded(self):
+        """Past week: priority created Thursday of that week is excluded (not eligible)."""
+        user_id = uuid4()
+        # Week: Feb 9 (Mon) - Feb 15 (Sun)
+        week_start = date(2026, 2, 9)
+
+        mock_session = AsyncMock()
+        mock_connection = MagicMock()
+        mock_connection.provider = "google"
+
+        # Priority created Thursday of requested week - NOT eligible
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Thursday Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.status = "active"
+        mock_priority.weekly_hour_target = Decimal("10.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 2, 12)  # Thursday of that week
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_connection
+
+        # First query for past week: snapshots (returns empty to trigger fallback)
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = []
+
+        # Second query: priorities
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [conn_result, snapshot_result, priorities_result]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.is_week_complete"
+        ) as mock_complete:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_complete.return_value = True  # Past week
+
+            result = await generate_weekly_report(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+                week_start=week_start,
+            )
+
+        # Priority created Thursday is NOT eligible for this week
+        # Should return empty report
+        assert result["success"] is True
+        assert result["data"]["priorities"] == []
+        assert result["data"]["is_current_week"] is False
+
+    @pytest.mark.asyncio
+    async def test_past_week_priority_created_monday_included(self):
+        """Past week: priority created Monday of that week is included (eligible)."""
+        user_id = uuid4()
+        # Week: Feb 9 (Mon) - Feb 15 (Sun)
+        week_start = date(2026, 2, 9)
+
+        mock_session = AsyncMock()
+        mock_connection = MagicMock()
+        mock_connection.provider = "google"
+
+        # Priority created Monday of requested week - IS eligible
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Monday Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.status = "active"
+        mock_priority.weekly_hour_target = Decimal("10.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 2, 9)  # Monday of that week
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_connection
+
+        # First query for past week: snapshots (returns empty to trigger fallback)
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = []
+
+        # Second query: priorities
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [conn_result, snapshot_result, priorities_result]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.is_week_complete"
+        ) as mock_complete, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_complete.return_value = True  # Past week
+            mock_events.return_value = ([], 0)  # No events
+
+            result = await generate_weekly_report(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+                week_start=week_start,
+            )
+
+        # Priority created Monday IS eligible for this week
+        assert result["success"] is True
+        assert len(result["data"]["priorities"]) == 1
+        assert result["data"]["priorities"][0]["name"] == "Monday Priority"
+
+    @pytest.mark.asyncio
+    async def test_past_week_priority_created_after_week_returns_empty_no_api_call(self):
+        """Past week: priority created after requested week returns empty, no calendar API call."""
+        user_id = uuid4()
+        # Week: Feb 9 (Mon) - Feb 15 (Sun)
+        week_start = date(2026, 2, 9)
+
+        mock_session = AsyncMock()
+        mock_connection = MagicMock()
+        mock_connection.provider = "google"
+
+        # Priority created AFTER the requested week - NOT eligible
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "Future Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.status = "active"
+        mock_priority.weekly_hour_target = Decimal("10.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 2, 19)  # Created AFTER the requested week
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_connection
+
+        # First query for past week: snapshots (returns empty to trigger fallback)
+        snapshot_result = MagicMock()
+        snapshot_result.all.return_value = []
+
+        # Second query: priorities
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [conn_result, snapshot_result, priorities_result]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.is_week_complete"
+        ) as mock_complete, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_complete.return_value = True  # Past week
+            mock_events.return_value = ([], 0)
+
+            result = await generate_weekly_report(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+                week_start=week_start,
+            )
+
+        # Should return empty report
+        assert result["success"] is True
+        assert result["data"]["priorities"] == []
+
+        # CRITICAL: list_events should NOT have been called
+        # (early return before calendar fetch)
+        mock_events.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_current_week_all_priorities_included_regardless_of_creation(self):
+        """Current week: all active priorities included regardless of creation date."""
+        user_id = uuid4()
+
+        mock_session = AsyncMock()
+        mock_connection = MagicMock()
+        mock_connection.provider = "google"
+
+        # Priority created "today" (mid-week) - should still be included for current week
+        mock_priority = MagicMock()
+        mock_priority.id = uuid4()
+        mock_priority.name = "New Priority"
+        mock_priority.type = "flexible"
+        mock_priority.calendar_keyword = "P1"
+        mock_priority.status = "active"
+        mock_priority.weekly_hour_target = Decimal("10.0")
+        mock_priority.deliverables = []
+        mock_priority.created_at = datetime(2026, 2, 12)  # Thursday
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = mock_connection
+
+        # For current week, no snapshot query happens (is_current=True)
+        priorities_result = MagicMock()
+        priorities_result.scalars.return_value.all.return_value = [mock_priority]
+
+        mock_session.execute.side_effect = [conn_result, priorities_result]
+
+        mock_http_client = AsyncMock()
+
+        with patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.ensure_valid_access_token"
+        ) as mock_token, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.get_user_timezone"
+        ) as mock_tz, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.is_week_complete"
+        ) as mock_complete, patch(
+            "backend.apps.priority_guardian.services.weekly_report_service.list_events"
+        ) as mock_events:
+            mock_token.return_value = {"access_token": "test_token"}
+            mock_tz.return_value = "UTC"
+            mock_complete.return_value = False  # Current week
+            mock_events.return_value = ([], 0)
+
+            result = await generate_weekly_report(
+                user_id=user_id,
+                session=mock_session,
+                http_client=mock_http_client,
+            )
+
+        # Current week: NO eligibility filter applied
+        # Priority should be included even if created mid-week
+        assert result["success"] is True
+        assert len(result["data"]["priorities"]) == 1
+        assert result["data"]["priorities"][0]["name"] == "New Priority"
+        assert result["data"]["is_current_week"] is True
