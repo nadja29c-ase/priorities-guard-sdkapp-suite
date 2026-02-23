@@ -75,17 +75,21 @@ GUIDANCE_COMMON = (
 # Per-pattern guidance constants
 GUIDANCE_CONSISTENCY_STREAK = (
     "The dashboard already shows the streak count — do not just restate it. "
-    "Look at the actual_hours vs target_hours across the streak weeks in the data. "
+    "weekly_detail contains the actual hours and target hours for each week in the streak. "
+    "Use these specific numbers in your narration. "
     "If some weeks fell significantly below target but the user still logged time, "
     "acknowledge that showing up consistently matters more than hitting the target every week. "
-    "If hours are steady, note the reliability. "
+    "Reference the specific week's hours. "
+    "If hours are steady across weeks, note the reliability. "
     "If the streak is 4+ weeks, note that this has moved past initial motivation into habit territory — "
     "the weeks where hours were lowest are actually the most telling because the user kept going anyway. "
     "Keep it to 2-3 sentences max."
 )
 
 GUIDANCE_ABANDONED_PRIORITY = (
-    "State the observed average hours neutrally. "
+    "weekly_detail contains the actual hours for the last 4 weeks. "
+    "Reference these specific numbers rather than just the average. "
+    "State the observed pattern neutrally. "
     "Ask what the user wants to do about it — do not prescribe action. "
     "Do not judge. Do not say \"you should retire this\" or \"you're neglecting this.\" "
     "Keep it to 1-2 sentences plus a question."
@@ -101,7 +105,8 @@ GUIDANCE_PRIORITY_SWITCHING = (
 
 GUIDANCE_PRIORITY_PROTECTION = (
     "Acknowledge warmly that the user protected this priority's time despite growing calendar pressure. "
-    "Reference the observed numbers: priority hours stayed at ~Xh/week while total calendar grew Y%. "
+    "period_summary contains the exact numbers. Reference them: priority hours stayed at ~Xh/week "
+    "while total calendar grew from ~Yh to ~Zh (N% increase). "
     "This is a positive signal — the user is defending what matters to them. "
     "Keep it to 1-2 sentences."
 )
@@ -114,13 +119,21 @@ PATTERN_GUIDANCE = {
     "priority_protection": GUIDANCE_PRIORITY_PROTECTION,
 }
 
-# Human-readable labels for pattern types
+# Human-readable labels for pattern types (inline phrasing for guidance)
 PATTERN_LABELS = {
-    "consistency_streak": "Consistency Streak",
-    "abandoned_priority": "Low-Investment Priority",
-    "priority_switching": "Priority Switching",
-    "priority_protection": "Priority Protection",
+    "consistency_streak": "consistency streak",
+    "abandoned_priority": "low-investment priority",
+    "priority_switching": "priority switching",
+    "priority_protection": "priority protection",
 }
+
+# Canonical order for iterating patterns in guidance
+CANONICAL_PATTERN_ORDER = [
+    "consistency_streak",
+    "abandoned_priority",
+    "priority_switching",
+    "priority_protection",
+]
 
 GUIDANCE_INSUFFICIENT_DATA_TEMPLATE = (
     "The user has {weeks} weeks of tracking data. We wait for at least 4 completed weeks of "
@@ -145,6 +158,8 @@ def _build_assistant_guidance(data: dict) -> str:
     For PATTERNS_FOUND, composes guidance from GUIDANCE_COMMON plus
     per-pattern guidance for each pattern in the response.
 
+    Iterates canonical order (not pattern array order) for stable guidance.
+
     Args:
         data: Backend response data dict
 
@@ -163,12 +178,17 @@ def _build_assistant_guidance(data: dict) -> str:
     # PATTERNS_FOUND: compose guidance from common + per-pattern blocks
     guidance_parts = [GUIDANCE_COMMON]
 
+    # Collect which pattern_types are present in the data
     patterns = data.get("patterns", [])
-    for pattern in patterns:
-        pattern_type = pattern.get("pattern_type", "")
-        if pattern_type in PATTERN_GUIDANCE:
+    present_types = {p.get("pattern_type") for p in patterns}
+
+    # Iterate canonical order (not pattern array order) for stable guidance
+    for pattern_type in CANONICAL_PATTERN_ORDER:
+        if pattern_type in present_types and pattern_type in PATTERN_GUIDANCE:
             label = PATTERN_LABELS.get(pattern_type, pattern_type)
-            guidance_parts.append(f"[{label}]: {PATTERN_GUIDANCE[pattern_type]}")
+            guidance_parts.append(
+                f"When narrating {label} patterns: {PATTERN_GUIDANCE[pattern_type]}"
+            )
         # Unknown pattern_types are skipped gracefully (forward-compatible)
 
     return "\n\n".join(guidance_parts)

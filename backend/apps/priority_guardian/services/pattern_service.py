@@ -233,6 +233,40 @@ def _compute_consistency_streaks(
         if streak_value < STREAK_THRESHOLD:
             continue
 
+        # Build weekly_detail from the exact snapshots that determined the streak
+        # These are the consecutive non-zero weeks counting backward from most recent
+        streak_snapshots = []
+        for snapshot in snapshots:
+            if snapshot.actual_hours is not None and snapshot.actual_hours > 0:
+                streak_snapshots.append(snapshot)
+            else:
+                break
+
+        # Cap at 8 most recent streak weeks, then reverse to chronological order (oldest first)
+        capped_count = min(streak_value, 8)
+        weekly_detail_snapshots = streak_snapshots[:capped_count]
+        weekly_detail_snapshots.reverse()  # Oldest first
+
+        # Build weekly_detail entries
+        weekly_detail = [
+            {
+                "week_start": s.week_start.isoformat(),
+                "actual_hours": s.actual_hours,
+                "target_hours": s.target_hours,  # From snapshot, not priority
+            }
+            for s in weekly_detail_snapshots
+        ]
+
+        # Sanity check: weekly_detail length must match expected count
+        if len(weekly_detail) != capped_count:
+            logger.warning(
+                "patterns.consistency_streak.weekly_detail_mismatch",
+                priority_id=str(priority.id),
+                expected=capped_count,
+                actual=len(weekly_detail),
+            )
+            continue
+
         # Resolve keyword
         keyword = resolve_keyword(priority, snapshots)
 
@@ -253,6 +287,7 @@ def _compute_consistency_streaks(
             "calendar_keyword": keyword,
             "streak_weeks": streak_value,
             "streak_source": streak_source,
+            "weekly_detail": weekly_detail,
             "detail": detail,
         })
 
@@ -303,6 +338,29 @@ def _compute_abandoned_priorities(
         if avg_hours >= ABANDONED_AVG_THRESHOLD:
             continue
 
+        # Build weekly_detail from the last 4 qualifying snapshots
+        # Reverse to chronological order (oldest first)
+        weekly_detail_snapshots = list(reversed(last_4))
+
+        weekly_detail = [
+            {
+                "week_start": s.week_start.isoformat(),
+                "actual_hours": s.actual_hours,
+                "target_hours": s.target_hours,  # From snapshot, not priority
+            }
+            for s in weekly_detail_snapshots
+        ]
+
+        # Sanity check: weekly_detail length must be exactly 4
+        if len(weekly_detail) != ABANDONED_WEEKS_NEEDED:
+            logger.warning(
+                "patterns.abandoned_priority.weekly_detail_mismatch",
+                priority_id=str(priority.id),
+                expected=ABANDONED_WEEKS_NEEDED,
+                actual=len(weekly_detail),
+            )
+            continue
+
         # Resolve keyword
         keyword = resolve_keyword(priority, snapshots)
 
@@ -318,6 +376,7 @@ def _compute_abandoned_priorities(
             "priority_status": priority.status,
             "calendar_keyword": keyword,
             "avg_hours_last_4_weeks": avg_hours,
+            "weekly_detail": weekly_detail,
             "detail": detail,
         })
 
@@ -477,6 +536,15 @@ def _compute_priority_protection(
             pct=int(total_change_rounded),
         )
 
+        # Build period_summary with the computed values
+        period_summary = {
+            "prior_avg_priority_hours": prior_priority_avg,
+            "recent_avg_priority_hours": recent_priority_avg,
+            "prior_avg_total_hours": prior_total_avg,
+            "recent_avg_total_hours": recent_total_avg,
+            "total_hours_change_pct": total_hours_change_pct,
+        }
+
         patterns.append({
             "pattern_type": "priority_protection",
             "narration_label": "Priority protection",
@@ -486,6 +554,7 @@ def _compute_priority_protection(
             "calendar_keyword": keyword,
             "priority_hours_trend": priority_hours_trend,
             "total_hours_change_pct": total_hours_change_pct,
+            "period_summary": period_summary,
             "detail": detail,
         })
 

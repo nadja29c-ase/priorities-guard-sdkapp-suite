@@ -1,5 +1,5 @@
 """
-Unit tests for get_patterns assistant_guidance composition (Increment 25).
+Unit tests for get_patterns assistant_guidance composition (Increment 25/26).
 
 Tests per-pattern guidance composition for consistency_streak, abandoned_priority,
 priority_switching, and priority_protection patterns.
@@ -35,13 +35,13 @@ class TestPerPatternGuidance:
 
         # Should contain common guidance
         assert GUIDANCE_COMMON in guidance
-        # Should contain consistency streak guidance with label
-        assert "[Consistency Streak]:" in guidance
+        # Should contain consistency streak guidance with inline phrasing
+        assert "When narrating consistency streak patterns:" in guidance
         assert "dashboard already shows the streak count" in guidance
         # Should NOT contain other pattern guidance
-        assert "[Low-Investment Priority]:" not in guidance
-        assert "[Priority Switching]:" not in guidance
-        assert "[Priority Protection]:" not in guidance
+        assert "When narrating low-investment priority patterns:" not in guidance
+        assert "When narrating priority switching patterns:" not in guidance
+        assert "When narrating priority protection patterns:" not in guidance
         assert "Ask what the user wants to do about it" not in guidance  # abandoned
         assert "healthy pivoting" not in guidance  # switching
         assert "despite growing calendar pressure" not in guidance  # protection
@@ -62,11 +62,11 @@ class TestPerPatternGuidance:
 
         # Should contain common guidance
         assert GUIDANCE_COMMON in guidance
-        # Should contain all 4 pattern guidance blocks with labels
-        assert "[Consistency Streak]:" in guidance
-        assert "[Low-Investment Priority]:" in guidance
-        assert "[Priority Switching]:" in guidance
-        assert "[Priority Protection]:" in guidance
+        # Should contain all 4 pattern guidance blocks with inline phrasing
+        assert "When narrating consistency streak patterns:" in guidance
+        assert "When narrating low-investment priority patterns:" in guidance
+        assert "When narrating priority switching patterns:" in guidance
+        assert "When narrating priority protection patterns:" in guidance
         # Verify actual guidance content is present
         assert "dashboard already shows the streak count" in guidance
         assert "Ask what the user wants to do about it" in guidance
@@ -85,8 +85,8 @@ class TestPerPatternGuidance:
         assert guidance == GUIDANCE_NO_PATTERNS
         # Should NOT contain common or per-pattern guidance
         assert GUIDANCE_COMMON not in guidance
-        assert "[Consistency Streak]:" not in guidance
-        assert "[Low-Investment Priority]:" not in guidance
+        assert "When narrating consistency streak patterns:" not in guidance
+        assert "When narrating low-investment priority patterns:" not in guidance
 
     def test_insufficient_weeks_reason(self):
         """INSUFFICIENT_WEEKS reason returns templated guidance, no per-pattern guidance."""
@@ -102,7 +102,7 @@ class TestPerPatternGuidance:
         assert "at least 4 completed weeks" in guidance
         # Should NOT contain common or per-pattern guidance
         assert GUIDANCE_COMMON not in guidance
-        assert "[Consistency Streak]:" not in guidance
+        assert "When narrating consistency streak patterns:" not in guidance
 
     def test_unknown_pattern_type_skipped_gracefully(self):
         """Unknown pattern_type is skipped, other patterns still get guidance."""
@@ -119,10 +119,10 @@ class TestPerPatternGuidance:
         # Should contain common guidance
         assert GUIDANCE_COMMON in guidance
         # Should contain consistency streak guidance
-        assert "[Consistency Streak]:" in guidance
+        assert "When narrating consistency streak patterns:" in guidance
         assert "dashboard already shows the streak count" in guidance
         # Should NOT contain the unknown pattern type as a label
-        assert "[future_pattern_v2]:" not in guidance
+        assert "When narrating future_pattern_v2 patterns:" not in guidance
         assert "future_pattern_v2" not in guidance
 
 
@@ -142,8 +142,8 @@ class TestGuidanceSeparation:
         guidance = _build_assistant_guidance(data)
 
         # Should have double newline between blocks
-        assert "\n\n[Consistency Streak]:" in guidance
-        assert "\n\n[Priority Protection]:" in guidance
+        assert "\n\nWhen narrating consistency streak patterns:" in guidance
+        assert "\n\nWhen narrating priority protection patterns:" in guidance
 
     def test_empty_patterns_list_returns_common_only(self):
         """PATTERNS_FOUND with empty patterns list returns only GUIDANCE_COMMON."""
@@ -156,3 +156,37 @@ class TestGuidanceSeparation:
 
         # Should just be common guidance with no pattern blocks
         assert guidance == GUIDANCE_COMMON
+
+
+class TestCanonicalOrder:
+    """Tests for canonical order iteration (increment_26)."""
+
+    def test_all_patterns_in_canonical_order(self):
+        """All 4 patterns appear in canonical order regardless of input order."""
+        # Input in reverse order
+        data = {
+            "reason": "PATTERNS_FOUND",
+            "patterns": [
+                {"pattern_type": "priority_protection", "priority_id": "p4"},
+                {"pattern_type": "priority_switching"},
+                {"pattern_type": "abandoned_priority", "priority_id": "p2"},
+                {"pattern_type": "consistency_streak", "priority_id": "p1"},
+            ],
+        }
+
+        guidance = _build_assistant_guidance(data)
+
+        # Find positions of each pattern guidance in the output
+        streak_pos = guidance.find("When narrating consistency streak patterns:")
+        abandoned_pos = guidance.find("When narrating low-investment priority patterns:")
+        switching_pos = guidance.find("When narrating priority switching patterns:")
+        protection_pos = guidance.find("When narrating priority protection patterns:")
+
+        # All should be present
+        assert streak_pos > 0
+        assert abandoned_pos > 0
+        assert switching_pos > 0
+        assert protection_pos > 0
+
+        # Verify canonical order: streak < abandoned < switching < protection
+        assert streak_pos < abandoned_pos < switching_pos < protection_pos

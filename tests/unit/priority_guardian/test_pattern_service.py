@@ -251,23 +251,27 @@ class TestConsistencyStreak:
         p.retired_at = None
         return p
 
-    def _create_snapshot(self, week_start, streak=None, actual_hours=Decimal("5.0"), keyword="P1"):
+    def _create_snapshot(self, week_start, streak=None, actual_hours=Decimal("5.0"), keyword="P1", target_hours=Decimal("8.0")):
         """Create a mock snapshot."""
         s = MagicMock()
         s.week_start = week_start
         s.streak_at_snapshot = streak
         s.actual_hours = actual_hours
         s.calendar_keyword_at_snapshot = keyword
+        s.target_hours = target_hours
         return s
 
     def test_flexible_priority_with_streak_6_surfaced(self):
         """Flexible priority with 6-week streak is surfaced."""
         priority = self._create_priority()
+        # Need 6 actual snapshots for a streak of 6
         snapshots = [
             self._create_snapshot(date(2026, 2, 2), streak=6),
             self._create_snapshot(date(2026, 1, 26), streak=5),
             self._create_snapshot(date(2026, 1, 19), streak=4),
             self._create_snapshot(date(2026, 1, 12), streak=3),
+            self._create_snapshot(date(2026, 1, 5), streak=2),
+            self._create_snapshot(date(2025, 12, 29), streak=1),
         ]
 
         patterns = _compute_consistency_streaks(
@@ -322,11 +326,13 @@ class TestConsistencyStreak:
         priority = self._create_priority(status="retired", keyword=None)
         priority.retired_at = datetime(2026, 2, 4, tzinfo=timezone.utc)  # Retired mid-week
 
+        # Need 5 snapshots for streak=5
         snapshots = [
             self._create_snapshot(date(2026, 2, 2), streak=5, keyword="P1"),
             self._create_snapshot(date(2026, 1, 26), streak=4, keyword="P1"),
             self._create_snapshot(date(2026, 1, 19), streak=3, keyword="P1"),
             self._create_snapshot(date(2026, 1, 12), streak=2, keyword="P1"),
+            self._create_snapshot(date(2026, 1, 5), streak=1, keyword="P1"),
         ]
 
         patterns = _compute_consistency_streaks(
@@ -342,11 +348,13 @@ class TestConsistencyStreak:
     def test_null_streak_at_snapshot_skipped(self):
         """Snapshot with NULL streak_at_snapshot is skipped, next non-NULL used."""
         priority = self._create_priority()
+        # Need 5 snapshots with actual_hours > 0 for streak=5
         snapshots = [
             self._create_snapshot(date(2026, 2, 2), streak=None),  # NULL
             self._create_snapshot(date(2026, 1, 26), streak=5),     # This is used
             self._create_snapshot(date(2026, 1, 19), streak=4),
             self._create_snapshot(date(2026, 1, 12), streak=3),
+            self._create_snapshot(date(2026, 1, 5), streak=2),
         ]
 
         patterns = _compute_consistency_streaks(
@@ -403,7 +411,8 @@ class TestConsistencyStreak:
         priority = self._create_priority(status="retired", keyword=None)
         priority.retired_at = datetime(2026, 1, 22, tzinfo=timezone.utc)  # Wednesday of week starting 1/19
 
-        # Post-retirement snapshot should be excluded
+        # Post-retirement snapshots should be excluded. After filtering, 4 remain with streak=6.
+        # Need 6 snapshots with hours > 0 for weekly_detail to match streak=6.
         snapshots = [
             self._create_snapshot(date(2026, 2, 2), streak=8, keyword="P1"),   # After retirement
             self._create_snapshot(date(2026, 1, 26), streak=7, keyword="P1"),  # After retirement
@@ -411,6 +420,8 @@ class TestConsistencyStreak:
             self._create_snapshot(date(2026, 1, 12), streak=5, keyword="P1"),
             self._create_snapshot(date(2026, 1, 5), streak=4, keyword="P1"),
             self._create_snapshot(date(2025, 12, 29), streak=3, keyword="P1"),
+            self._create_snapshot(date(2025, 12, 22), streak=2, keyword="P1"),
+            self._create_snapshot(date(2025, 12, 15), streak=1, keyword="P1"),
         ]
 
         patterns = _compute_consistency_streaks(
@@ -950,25 +961,29 @@ class TestDetailStrings:
         p.type = "flexible"
         p.status = "active"
         p.calendar_keyword = keyword
+        p.retired_at = None
         return p
 
-    def _create_snapshot(self, week_start, streak=5, keyword="P1"):
+    def _create_snapshot(self, week_start, streak=5, keyword="P1", target_hours=Decimal("8.0")):
         """Create a mock snapshot."""
         s = MagicMock()
         s.week_start = week_start
         s.streak_at_snapshot = streak
         s.actual_hours = Decimal("5")
         s.calendar_keyword_at_snapshot = keyword
+        s.target_hours = target_hours
         return s
 
     def test_detail_with_keyword(self):
         """Pattern with non-null keyword includes keyword in detail."""
         priority = self._create_priority(keyword="P1")
+        # Need 5 snapshots for streak=5
         snapshots = [
             self._create_snapshot(date(2026, 2, 2), streak=5, keyword="P1"),
             self._create_snapshot(date(2026, 1, 26), streak=4),
             self._create_snapshot(date(2026, 1, 19), streak=3),
             self._create_snapshot(date(2026, 1, 12), streak=2),
+            self._create_snapshot(date(2026, 1, 5), streak=1),
         ]
 
         patterns = _compute_consistency_streaks(
@@ -987,12 +1002,13 @@ class TestDetailStrings:
         priority.status = "retired"  # Retired priority has NULL keyword
         priority.retired_at = datetime(2026, 2, 4, tzinfo=timezone.utc)
 
-        # Snapshots also have NULL keyword
+        # Need 5 snapshots with NULL keyword for streak=5
         snapshots = [
             self._create_snapshot(date(2026, 2, 2), streak=5, keyword=None),
             self._create_snapshot(date(2026, 1, 26), streak=4, keyword=None),
             self._create_snapshot(date(2026, 1, 19), streak=3, keyword=None),
             self._create_snapshot(date(2026, 1, 12), streak=2, keyword=None),
+            self._create_snapshot(date(2026, 1, 5), streak=1, keyword=None),
         ]
 
         patterns = _compute_consistency_streaks(
@@ -1290,13 +1306,14 @@ class TestSnapshotOrderingContract:
         p.retired_at = None
         return p
 
-    def _create_snapshot(self, week_start, streak=None, actual_hours=Decimal("5.0"), keyword="P1"):
+    def _create_snapshot(self, week_start, streak=None, actual_hours=Decimal("5.0"), keyword="P1", target_hours=Decimal("8.0")):
         """Create a mock snapshot."""
         s = MagicMock()
         s.week_start = week_start
         s.streak_at_snapshot = streak
         s.actual_hours = actual_hours
         s.calendar_keyword_at_snapshot = keyword
+        s.target_hours = target_hours
         return s
 
     def test_ascending_order_breaks_fallback_streak(self):
@@ -1460,6 +1477,7 @@ class TestCrossPrioritySortingDeterminism:
                 s.total_tracked_hours = Decimal("40")
                 s.streak_at_snapshot = 4 - i
                 s.calendar_keyword_at_snapshot = "P1"
+                s.target_hours = Decimal("8")
                 snapshots.append(s)
 
         snap_result = MagicMock()
@@ -1495,3 +1513,374 @@ class TestCrossPrioritySortingDeterminism:
         # Verify sorted by priority_id (string comparison)
         ids = [p["priority_id"] for p in streak_patterns]
         assert ids == sorted(ids), "Same pattern_type must be sorted by priority_id"
+
+
+# ============================================================================
+# Increment 26: Weekly Detail Enrichment Tests
+# ============================================================================
+
+class TestConsistencyStreakWeeklyDetail:
+    """Tests for weekly_detail in consistency_streak patterns (Increment 26)."""
+
+    def _create_priority(self, type_="flexible", status="active", keyword="P1"):
+        """Create a mock priority."""
+        p = MagicMock()
+        p.id = uuid4()
+        p.name = "Test Priority"
+        p.type = type_
+        p.status = status
+        p.calendar_keyword = keyword
+        p.retired_at = None
+        return p
+
+    def _create_snapshot(
+        self,
+        week_start,
+        streak=None,
+        actual_hours=Decimal("5.0"),
+        target_hours=Decimal("8.0"),
+        keyword="P1",
+    ):
+        """Create a mock snapshot."""
+        s = MagicMock()
+        s.week_start = week_start
+        s.streak_at_snapshot = streak
+        s.actual_hours = actual_hours
+        s.target_hours = target_hours
+        s.calendar_keyword_at_snapshot = keyword
+        return s
+
+    def test_6_week_streak_weekly_detail_structure(self):
+        """6-week streak has weekly_detail with 6 entries, chronological order."""
+        priority = self._create_priority()
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), streak=6, actual_hours=Decimal("7"), target_hours=Decimal("8")),
+            self._create_snapshot(date(2026, 1, 26), streak=5, actual_hours=Decimal("6"), target_hours=Decimal("8")),
+            self._create_snapshot(date(2026, 1, 19), streak=4, actual_hours=Decimal("5"), target_hours=Decimal("8")),
+            self._create_snapshot(date(2026, 1, 12), streak=3, actual_hours=Decimal("4"), target_hours=Decimal("8")),
+            self._create_snapshot(date(2026, 1, 5), streak=2, actual_hours=Decimal("3"), target_hours=Decimal("8")),
+            self._create_snapshot(date(2025, 12, 29), streak=1, actual_hours=Decimal("2"), target_hours=Decimal("8")),
+        ]
+
+        patterns = _compute_consistency_streaks(
+            [priority],
+            {priority.id: snapshots},
+            date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        pattern = patterns[0]
+        assert "weekly_detail" in pattern
+        weekly_detail = pattern["weekly_detail"]
+
+        # Should have 6 entries
+        assert len(weekly_detail) == 6
+
+        # Should be chronological (oldest first)
+        assert weekly_detail[0]["week_start"] == "2025-12-29"
+        assert weekly_detail[5]["week_start"] == "2026-02-02"
+
+        # Check structure of entries
+        for entry in weekly_detail:
+            assert "week_start" in entry
+            assert "actual_hours" in entry
+            assert "target_hours" in entry
+            assert isinstance(entry["week_start"], str)
+
+        # Verify actual values match snapshot data
+        assert weekly_detail[0]["actual_hours"] == Decimal("2")
+        assert weekly_detail[0]["target_hours"] == Decimal("8")
+        assert weekly_detail[5]["actual_hours"] == Decimal("7")
+
+    def test_null_target_hours_preserved(self):
+        """Deadline priority with NULL target_hours has target_hours: None."""
+        priority = self._create_priority(type_="flexible")
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), streak=4, actual_hours=Decimal("10"), target_hours=None),
+            self._create_snapshot(date(2026, 1, 26), streak=3, actual_hours=Decimal("10"), target_hours=None),
+            self._create_snapshot(date(2026, 1, 19), streak=2, actual_hours=Decimal("10"), target_hours=None),
+            self._create_snapshot(date(2026, 1, 12), streak=1, actual_hours=Decimal("10"), target_hours=None),
+        ]
+
+        patterns = _compute_consistency_streaks(
+            [priority],
+            {priority.id: snapshots},
+            date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        weekly_detail = patterns[0]["weekly_detail"]
+
+        # target_hours should be None (serializes as JSON null)
+        for entry in weekly_detail:
+            assert entry["target_hours"] is None
+
+    def test_12_week_streak_capped_at_8(self):
+        """12-week streak has weekly_detail capped at 8 entries."""
+        priority = self._create_priority()
+        # Create 12 weeks of snapshots
+        snapshots = []
+        for i in range(12):
+            week = date(2026, 2, 2) - timedelta(weeks=i)
+            snapshots.append(
+                self._create_snapshot(week, streak=12 - i, actual_hours=Decimal(f"{10 - i * 0.5}"))
+            )
+
+        patterns = _compute_consistency_streaks(
+            [priority],
+            {priority.id: snapshots},
+            date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        pattern = patterns[0]
+
+        # streak_weeks should still report 12
+        assert pattern["streak_weeks"] == 12
+
+        # But weekly_detail should be capped at 8 entries
+        assert len(pattern["weekly_detail"]) == 8
+
+        # Should be the 8 most recent weeks (chronologically ordered)
+        # Most recent is 2026-02-02, 8th most recent is 2025-12-15
+        assert pattern["weekly_detail"][0]["week_start"] == "2025-12-15"
+        assert pattern["weekly_detail"][7]["week_start"] == "2026-02-02"
+
+    def test_weekly_detail_from_exact_streak_slice(self):
+        """weekly_detail only includes consecutive streak weeks from most recent."""
+        priority = self._create_priority()
+        # Pattern: weeks 1-4 have hours > 0, week 5 has 0, weeks 6-8 have hours > 0
+        # Streak should be 4 (from most recent backward until break)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), streak=None, actual_hours=Decimal("5")),   # Week 8
+            self._create_snapshot(date(2026, 1, 26), streak=None, actual_hours=Decimal("5")),  # Week 7
+            self._create_snapshot(date(2026, 1, 19), streak=None, actual_hours=Decimal("5")),  # Week 6
+            self._create_snapshot(date(2026, 1, 12), streak=None, actual_hours=Decimal("5")),  # Week 5
+            self._create_snapshot(date(2026, 1, 5), streak=None, actual_hours=Decimal("0")),   # Week 4 - BREAK
+            self._create_snapshot(date(2025, 12, 29), streak=None, actual_hours=Decimal("5")), # Week 3
+            self._create_snapshot(date(2025, 12, 22), streak=None, actual_hours=Decimal("5")), # Week 2
+            self._create_snapshot(date(2025, 12, 15), streak=None, actual_hours=Decimal("5")), # Week 1
+        ]
+
+        patterns = _compute_consistency_streaks(
+            [priority],
+            {priority.id: snapshots},
+            date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        pattern = patterns[0]
+
+        # Streak should be 4 (computed fallback)
+        assert pattern["streak_weeks"] == 4
+        assert pattern["streak_source"] == "computed"
+
+        # weekly_detail should only include the 4 consecutive streak weeks
+        assert len(pattern["weekly_detail"]) == 4
+
+        # Should not include week 5 (2026-01-05) or earlier
+        week_starts = [e["week_start"] for e in pattern["weekly_detail"]]
+        assert "2026-01-05" not in week_starts  # The break week
+        assert "2025-12-29" not in week_starts  # Before break
+
+        # Should include the 4 consecutive weeks from most recent
+        assert "2026-01-12" in week_starts
+        assert "2026-01-19" in week_starts
+        assert "2026-01-26" in week_starts
+        assert "2026-02-02" in week_starts
+
+
+class TestAbandonedPriorityWeeklyDetail:
+    """Tests for weekly_detail in abandoned_priority patterns (Increment 26)."""
+
+    def _create_priority(self, status="active", keyword="P1"):
+        """Create a mock priority."""
+        p = MagicMock()
+        p.id = uuid4()
+        p.name = "Test Priority"
+        p.type = "flexible"
+        p.status = status
+        p.calendar_keyword = keyword
+        return p
+
+    def _create_snapshot(
+        self,
+        week_start,
+        actual_hours=Decimal("0.5"),
+        target_hours=Decimal("5.0"),
+        keyword="P1",
+    ):
+        """Create a mock snapshot."""
+        s = MagicMock()
+        s.week_start = week_start
+        s.actual_hours = actual_hours
+        s.target_hours = target_hours
+        s.calendar_keyword_at_snapshot = keyword
+        return s
+
+    def test_weekly_detail_with_4_entries(self):
+        """abandoned_priority has weekly_detail with 4 entries, chronological order."""
+        priority = self._create_priority()
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5"), target_hours=Decimal("5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.3"), target_hours=Decimal("5")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.2"), target_hours=Decimal("5")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2"), target_hours=Decimal("5")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+        )
+
+        assert len(patterns) == 1
+        pattern = patterns[0]
+        assert "weekly_detail" in pattern
+        weekly_detail = pattern["weekly_detail"]
+
+        # Should have exactly 4 entries
+        assert len(weekly_detail) == 4
+
+        # Should be chronological (oldest first)
+        assert weekly_detail[0]["week_start"] == "2026-01-12"
+        assert weekly_detail[3]["week_start"] == "2026-02-02"
+
+        # Check values match
+        assert weekly_detail[0]["actual_hours"] == Decimal("0.2")
+        assert weekly_detail[0]["target_hours"] == Decimal("5")
+        assert weekly_detail[3]["actual_hours"] == Decimal("0.5")
+
+
+class TestPriorityProtectionPeriodSummary:
+    """Tests for period_summary in priority_protection patterns (Increment 26)."""
+
+    def _create_priority(self, status="active", keyword="P1"):
+        """Create a mock priority."""
+        p = MagicMock()
+        p.id = uuid4()
+        p.name = "Test Priority"
+        p.type = "flexible"
+        p.status = status
+        p.calendar_keyword = keyword
+        return p
+
+    def _create_snapshot(
+        self,
+        week_start,
+        actual_hours=Decimal("10.0"),
+        total_tracked_hours=Decimal("40.0"),
+        keyword="P1",
+    ):
+        """Create a mock snapshot."""
+        s = MagicMock()
+        s.week_start = week_start
+        s.actual_hours = actual_hours
+        s.total_tracked_hours = total_tracked_hours
+        s.calendar_keyword_at_snapshot = keyword
+        return s
+
+    def test_period_summary_correct_values(self):
+        """priority_protection has period_summary with correct computed values."""
+        priority = self._create_priority()
+
+        # Recent 4 weeks: priority=10h, total=50h
+        # Prior 4 weeks: priority=10h, total=40h
+        # Total change: 25%
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), Decimal("10"), Decimal("50")),
+            self._create_snapshot(date(2026, 1, 26), Decimal("10"), Decimal("50")),
+            self._create_snapshot(date(2026, 1, 19), Decimal("10"), Decimal("50")),
+            self._create_snapshot(date(2026, 1, 12), Decimal("10"), Decimal("50")),
+            self._create_snapshot(date(2026, 1, 5), Decimal("10"), Decimal("40")),
+            self._create_snapshot(date(2025, 12, 29), Decimal("10"), Decimal("40")),
+            self._create_snapshot(date(2025, 12, 22), Decimal("10"), Decimal("40")),
+            self._create_snapshot(date(2025, 12, 15), Decimal("10"), Decimal("40")),
+        ]
+
+        patterns = _compute_priority_protection(
+            [priority],
+            {priority.id: snapshots},
+        )
+
+        assert len(patterns) == 1
+        pattern = patterns[0]
+        assert "period_summary" in pattern
+        period_summary = pattern["period_summary"]
+
+        # Check all required fields
+        assert "prior_avg_priority_hours" in period_summary
+        assert "recent_avg_priority_hours" in period_summary
+        assert "prior_avg_total_hours" in period_summary
+        assert "recent_avg_total_hours" in period_summary
+        assert "total_hours_change_pct" in period_summary
+
+        # Verify computed values
+        assert period_summary["prior_avg_priority_hours"] == Decimal("10")
+        assert period_summary["recent_avg_priority_hours"] == Decimal("10")
+        assert period_summary["prior_avg_total_hours"] == Decimal("40")
+        assert period_summary["recent_avg_total_hours"] == Decimal("50")
+        assert period_summary["total_hours_change_pct"] == Decimal("25.0")
+
+
+class TestDecimalToFloatWithWeeklyDetail:
+    """Tests for decimal_to_float_recursive with weekly_detail structures (Increment 26)."""
+
+    def test_converts_nested_weekly_detail_decimals(self):
+        """Converts Decimal values inside nested weekly_detail dicts to float."""
+        pattern = {
+            "pattern_type": "consistency_streak",
+            "streak_weeks": 6,
+            "weekly_detail": [
+                {
+                    "week_start": "2026-01-12",
+                    "actual_hours": Decimal("6.5"),
+                    "target_hours": Decimal("8.0"),
+                },
+                {
+                    "week_start": "2026-01-19",
+                    "actual_hours": Decimal("7.0"),
+                    "target_hours": Decimal("8.0"),
+                },
+            ],
+        }
+
+        result = decimal_to_float_recursive(pattern)
+
+        # Decimals should be converted to float
+        assert result["weekly_detail"][0]["actual_hours"] == 6.5
+        assert isinstance(result["weekly_detail"][0]["actual_hours"], float)
+        assert result["weekly_detail"][0]["target_hours"] == 8.0
+        assert isinstance(result["weekly_detail"][0]["target_hours"], float)
+
+    def test_preserves_none_in_weekly_detail(self):
+        """Preserves None values (for NULL target_hours) in weekly_detail."""
+        pattern = {
+            "weekly_detail": [
+                {
+                    "week_start": "2026-01-12",
+                    "actual_hours": Decimal("10.0"),
+                    "target_hours": None,
+                },
+            ],
+        }
+
+        result = decimal_to_float_recursive(pattern)
+
+        assert result["weekly_detail"][0]["target_hours"] is None
+
+    def test_preserves_string_week_start(self):
+        """Does not mutate string fields like week_start."""
+        pattern = {
+            "weekly_detail": [
+                {
+                    "week_start": "2026-01-12",
+                    "actual_hours": Decimal("5.0"),
+                    "target_hours": Decimal("8.0"),
+                },
+            ],
+        }
+
+        result = decimal_to_float_recursive(pattern)
+
+        assert result["weekly_detail"][0]["week_start"] == "2026-01-12"
+        assert isinstance(result["weekly_detail"][0]["week_start"], str)
