@@ -25,8 +25,7 @@ NAME = "get_weekly_report"
 
 DESCRIPTION = (
     "Get your weekly report showing time invested in each priority. "
-    "Returns hours worked, status indicators (ahead/on_track/behind), "
-    "and a pie chart breakdown of how your week was spent.\n\n"
+    "Returns hours worked and a pie chart breakdown of how your week was spent.\n\n"
     "Call this tool:\n"
     "- When the user asks about their week, progress, or hours\n"
     "- When the user says \"how did I do?\", \"show my report\", \"weekly summary\"\n"
@@ -137,7 +136,10 @@ GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE = (
 # Template with {other_hours} placeholder
 GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE = (
     "The user has {other_hours:.1f} hours of non-priority time but no matching events. "
-    "Ask what this time was generally spent on if they'd like to reflect on it."
+    "Since this is a past week, the detailed event data is no longer available "
+    "and the non-priority time cannot be broken down further. "
+    "Mention this briefly. "
+    "CRITICAL: NEVER interpret/ judge non-priority time f.e. as wasted, unfocused, or dilutive. NEVER assume non-priority time should be strategic or priority-related. "
 )
 
 GUIDANCE_WITHIN_PRIORITY_BREAKDOWN = (
