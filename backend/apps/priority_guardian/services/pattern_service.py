@@ -479,7 +479,7 @@ def _compute_priority_switching(
                     successful_retirements_excluded += 1
                 else:
                     retirements_in_window += 1
-                    # Build entry with completion status
+                    # Build entry with completion status and goal/deliverable details
                     entry = {
                         "name": priority.name,
                         "type": priority.type,
@@ -488,10 +488,22 @@ def _compute_priority_switching(
                         goals = priority.goals or []
                         entry["goals_achieved"] = sum(1 for g in goals if g.achieved is True)
                         entry["goals_total"] = len(goals)
+                        # Include actual goal details for LLM narration
+                        if goals:
+                            entry["goals"] = [
+                                {"text": g.goal_text, "achieved": g.achieved is True}
+                                for g in goals
+                            ]
                     elif priority.type == "deadline":
                         deliverables = priority.deliverables or []
                         entry["deliverables_done"] = sum(1 for d in deliverables if d.done is True)
                         entry["deliverables_total"] = len(deliverables)
+                        # Include actual deliverable details for LLM narration
+                        if deliverables:
+                            entry["deliverables"] = [
+                                {"name": d.name, "done": d.done is True}
+                                for d in deliverables
+                            ]
                     retired_priorities.append(entry)
 
         # Check created_at

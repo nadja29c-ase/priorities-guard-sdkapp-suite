@@ -217,7 +217,7 @@ class TestSwitchingPatternGuidance:
     def test_incomplete_variant_mentions_incomplete_outcomes(self):
         """INCOMPLETE variant mentions incomplete goals/deliverables."""
         assert "goals or deliverables still incomplete" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
-        assert "1 out of 3 goals done" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+        assert "specific incomplete goals or deliverables by name" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
 
     def test_switching_guidance_inline_phrasing_in_canonical_order(self):
         """Switching guidance uses inline phrasing consistent with canonical order."""

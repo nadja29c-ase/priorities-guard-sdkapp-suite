@@ -119,9 +119,8 @@ GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA = (
 GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE = (
     "This pattern detected multiple priorities that were retired with goals or deliverables "
     "still incomplete — meaning they were abandoned before completion, not finished and moved on from. "
-    "Name the specific retired priorities and mention what was left incomplete "
-    "(e.g., '1 out of 3 goals done') so the user knows exactly which ones you're referring to "
-    "and what was unfinished. The user needs specifics to reflect meaningfully. "
+    "Name the specific retired priorities and mention the specific incomplete goals or deliverables "
+    "by name so the user remembers what was left unfinished. The user needs specifics to reflect meaningfully. "
     "Always bold the retired priority names when mentioning them. "
     "Present both interpretations: this could be healthy, intentional pivoting — "
     "or it could signal reactive switching. To help the user reflect, ask 1-2 of these "

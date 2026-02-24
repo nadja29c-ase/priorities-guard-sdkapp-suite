@@ -757,16 +757,18 @@ class TestPrioritySwitching:
         p.deliverables = deliverables if deliverables is not None else []
         return p
 
-    def _create_goal(self, achieved):
+    def _create_goal(self, achieved, text="Test goal"):
         """Create a mock goal."""
         g = MagicMock()
         g.achieved = achieved
+        g.goal_text = text
         return g
 
-    def _create_deliverable(self, done):
+    def _create_deliverable(self, done, name="Test deliverable"):
         """Create a mock deliverable."""
         d = MagicMock()
         d.done = done
+        d.name = name
         return d
 
     def test_4_retirements_surfaced(self):
@@ -1218,19 +1220,26 @@ class TestPrioritySwitching:
         assert patterns[0]["successful_retirements_excluded"] == 0
 
     def test_completion_filter_retired_priorities_list(self):
-        """retired_priorities list contains name, type, and completion status."""
+        """retired_priorities list contains name, type, completion status, and goal/deliverable details."""
         priorities = [
             self._create_priority(
                 datetime(2025, 12, 1, tzinfo=timezone.utc),
                 datetime(2025, 12, 15, tzinfo=timezone.utc),
                 priority_type="flexible",
-                goals=[self._create_goal(True), self._create_goal(False), self._create_goal(False)],
+                goals=[
+                    self._create_goal(True, "Post 3x per week"),
+                    self._create_goal(False, "Reach 1000 followers"),
+                    self._create_goal(False, "Get 5 inbound leads"),
+                ],
             ),
             self._create_priority(
                 datetime(2025, 12, 15, tzinfo=timezone.utc),
                 datetime(2026, 1, 1, tzinfo=timezone.utc),
                 priority_type="deadline",
-                deliverables=[self._create_deliverable(False), self._create_deliverable(False)],
+                deliverables=[
+                    self._create_deliverable(False, "Book venue"),
+                    self._create_deliverable(False, "Send invitations"),
+                ],
             ),
             self._create_priority(
                 datetime(2026, 1, 1, tzinfo=timezone.utc),
@@ -1240,7 +1249,7 @@ class TestPrioritySwitching:
             ),
         ]
         # Set names for verification
-        priorities[0].name = "Project Alpha"
+        priorities[0].name = "Grow LinkedIn presence"
         priorities[1].name = "Birthday Party"
         priorities[2].name = "Side Hustle"
 
@@ -1253,19 +1262,33 @@ class TestPrioritySwitching:
         assert "retired_priorities" in patterns[0]
         retired = patterns[0]["retired_priorities"]
         assert len(retired) == 3
-        # Check structure with completion status
+
+        # Check flexible priority with goals
         assert retired[0] == {
-            "name": "Project Alpha",
+            "name": "Grow LinkedIn presence",
             "type": "flexible",
             "goals_achieved": 1,
             "goals_total": 3,
+            "goals": [
+                {"text": "Post 3x per week", "achieved": True},
+                {"text": "Reach 1000 followers", "achieved": False},
+                {"text": "Get 5 inbound leads", "achieved": False},
+            ],
         }
+
+        # Check deadline priority with deliverables
         assert retired[1] == {
             "name": "Birthday Party",
             "type": "deadline",
             "deliverables_done": 0,
             "deliverables_total": 2,
+            "deliverables": [
+                {"name": "Book venue", "done": False},
+                {"name": "Send invitations", "done": False},
+            ],
         }
+
+        # Check flexible priority with no goals (no goals list in output)
         assert retired[2] == {
             "name": "Side Hustle",
             "type": "flexible",
