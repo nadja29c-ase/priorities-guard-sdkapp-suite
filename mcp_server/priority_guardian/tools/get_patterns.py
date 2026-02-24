@@ -102,13 +102,27 @@ GUIDANCE_ABANDONED_PRIORITY = (
     "Keep it to 1-2 sentences plus a question."
 )
 
-GUIDANCE_PRIORITY_SWITCHING = (
+# Two variants for priority switching based on whether criteria were defined
+GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA = (
+    "This pattern detected multiple priorities that were retired without any goals or deliverables defined — "
+    "meaning there was no clear success criteria to work toward. "
+    "Name the specific retired priorities. "
+    "Always bold the retired priority names when mentioning them. "
+    "Present both interpretations: this could be healthy, intentional pivoting — "
+    "or it could signal reactive switching. To help the user reflect, ask 1-2 of these "
+    "questions based on what fits: Did you have hard evidence that each pivot was more "
+    "promising, or did it feel more like a gut call? Were any of those switches driven "
+    "by frustration, low energy, or feeling stuck rather than a clear reason to move on? "
+    "Keep the overall narration to 2-4 sentences including the question(s)."
+)
+
+GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE = (
     "This pattern detected multiple priorities that were retired with goals or deliverables "
     "still incomplete — meaning they were abandoned before completion, not finished and moved on from. "
-    "Always bold the retired priority names when mentioning them. "
     "Name the specific retired priorities and mention what was left incomplete "
     "(e.g., '1 out of 3 goals done') so the user knows exactly which ones you're referring to "
     "and what was unfinished. The user needs specifics to reflect meaningfully. "
+    "Always bold the retired priority names when mentioning them. "
     "Present both interpretations: this could be healthy, intentional pivoting — "
     "or it could signal reactive switching. To help the user reflect, ask 1-2 of these "
     "questions based on what fits: Did you have hard evidence that each pivot was more "
@@ -127,10 +141,10 @@ GUIDANCE_PRIORITY_PROTECTION = (
 )
 
 # Mapping from pattern_type to guidance constant
+# Note: priority_switching is handled dynamically in _build_assistant_guidance
 PATTERN_GUIDANCE = {
     "consistency_streak": GUIDANCE_CONSISTENCY_STREAK,
     "abandoned_priority": GUIDANCE_ABANDONED_PRIORITY,
-    "priority_switching": GUIDANCE_PRIORITY_SWITCHING,
     "priority_protection": GUIDANCE_PRIORITY_PROTECTION,
 }
 
@@ -165,6 +179,50 @@ GUIDANCE_NO_PATTERNS = (
 # Helpers
 # ============================================================================
 
+def _get_switching_guidance(patterns: list) -> str:
+    """
+    Select the appropriate priority_switching guidance variant.
+
+    If all retired priorities have goals_total == 0 and deliverables_total == 0,
+    use NO_CRITERIA variant. Otherwise use INCOMPLETE variant (handles mixed cases).
+
+    Args:
+        patterns: List of pattern dicts from backend
+
+    Returns:
+        Selected switching guidance string
+    """
+    # Find the switching pattern
+    switching_pattern = None
+    for p in patterns:
+        if p.get("pattern_type") == "priority_switching":
+            switching_pattern = p
+            break
+
+    if not switching_pattern:
+        return GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE  # Fallback
+
+    retired_priorities = switching_pattern.get("retired_priorities", [])
+
+    if not retired_priorities:
+        return GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA  # No data = no criteria
+
+    # Check if ALL retired priorities have no criteria defined
+    all_no_criteria = True
+    for entry in retired_priorities:
+        # Flexible priorities have goals_total, deadline priorities have deliverables_total
+        goals_total = entry.get("goals_total", 0)
+        deliverables_total = entry.get("deliverables_total", 0)
+        if goals_total > 0 or deliverables_total > 0:
+            all_no_criteria = False
+            break
+
+    if all_no_criteria:
+        return GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+    else:
+        return GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+
+
 def _build_assistant_guidance(data: dict) -> str:
     """
     Build assistant_guidance based on response state.
@@ -174,6 +232,7 @@ def _build_assistant_guidance(data: dict) -> str:
     per-pattern guidance for each pattern in the response.
 
     Iterates canonical order (not pattern array order) for stable guidance.
+    priority_switching guidance is selected dynamically based on retired_priorities data.
 
     Args:
         data: Backend response data dict
@@ -199,8 +258,18 @@ def _build_assistant_guidance(data: dict) -> str:
 
     # Iterate canonical order (not pattern array order) for stable guidance
     for pattern_type in CANONICAL_PATTERN_ORDER:
-        if pattern_type in present_types and pattern_type in PATTERN_GUIDANCE:
-            label = PATTERN_LABELS.get(pattern_type, pattern_type)
+        if pattern_type not in present_types:
+            continue
+
+        label = PATTERN_LABELS.get(pattern_type, pattern_type)
+
+        # priority_switching is handled dynamically based on retired_priorities data
+        if pattern_type == "priority_switching":
+            switching_guidance = _get_switching_guidance(patterns)
+            guidance_parts.append(
+                f"When narrating {label} patterns: {switching_guidance}"
+            )
+        elif pattern_type in PATTERN_GUIDANCE:
             guidance_parts.append(
                 f"When narrating {label} patterns: {PATTERN_GUIDANCE[pattern_type]}"
             )

@@ -1,5 +1,5 @@
 """
-Unit tests for get_patterns assistant_guidance composition (Increment 25/26).
+Unit tests for get_patterns assistant_guidance composition (Increment 25/26/28).
 
 Tests per-pattern guidance composition for consistency_streak, abandoned_priority,
 priority_switching, and priority_protection patterns.
@@ -9,10 +9,12 @@ import pytest
 
 from mcp_server.priority_guardian.tools.get_patterns import (
     _build_assistant_guidance,
+    _get_switching_guidance,
     GUIDANCE_COMMON,
     GUIDANCE_CONSISTENCY_STREAK,
     GUIDANCE_ABANDONED_PRIORITY,
-    GUIDANCE_PRIORITY_SWITCHING,
+    GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA,
+    GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE,
     GUIDANCE_PRIORITY_PROTECTION,
     GUIDANCE_NO_PATTERNS,
     GUIDANCE_INSUFFICIENT_DATA_TEMPLATE,
@@ -43,7 +45,7 @@ class TestPerPatternGuidance:
         assert "When narrating priority switching patterns:" not in guidance
         assert "When narrating priority protection patterns:" not in guidance
         assert "Ask what the user wants to do about it" not in guidance  # abandoned
-        assert "healthy pivoting" not in guidance  # switching
+        assert "intentional pivoting" not in guidance  # switching
         assert "despite growing calendar pressure" not in guidance  # protection
 
     def test_all_four_patterns_present(self):
@@ -53,7 +55,7 @@ class TestPerPatternGuidance:
             "patterns": [
                 {"pattern_type": "consistency_streak", "priority_id": "p1"},
                 {"pattern_type": "abandoned_priority", "priority_id": "p2"},
-                {"pattern_type": "priority_switching"},
+                {"pattern_type": "priority_switching", "retired_priorities": []},
                 {"pattern_type": "priority_protection", "priority_id": "p3"},
             ],
         }
@@ -168,7 +170,7 @@ class TestCanonicalOrder:
             "reason": "PATTERNS_FOUND",
             "patterns": [
                 {"pattern_type": "priority_protection", "priority_id": "p4"},
-                {"pattern_type": "priority_switching"},
+                {"pattern_type": "priority_switching", "retired_priorities": []},
                 {"pattern_type": "abandoned_priority", "priority_id": "p2"},
                 {"pattern_type": "consistency_streak", "priority_id": "p1"},
             ],
@@ -193,30 +195,35 @@ class TestCanonicalOrder:
 
 
 class TestSwitchingPatternGuidance:
-    """Tests for priority switching guidance (increment_28)."""
+    """Tests for priority switching guidance variants (increment_28)."""
 
-    def test_switching_guidance_contains_reflection_questions(self):
-        """GUIDANCE_PRIORITY_SWITCHING contains the two reflection questions."""
-        from mcp_server.priority_guardian.tools.get_patterns import (
-            GUIDANCE_PRIORITY_SWITCHING,
-        )
+    def test_both_variants_contain_reflection_questions(self):
+        """Both switching guidance variants contain the reflection questions."""
+        # Check NO_CRITERIA variant
+        assert "hard evidence that each pivot was more promising" in GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+        assert "gut call" in GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+        assert "frustration, low energy, or feeling stuck" in GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
 
-        # Check for the evidence vs gut call question
-        assert "hard evidence that each pivot was more promising" in GUIDANCE_PRIORITY_SWITCHING
-        assert "gut call" in GUIDANCE_PRIORITY_SWITCHING
+        # Check INCOMPLETE variant
+        assert "hard evidence that each pivot was more promising" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+        assert "gut call" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+        assert "frustration, low energy, or feeling stuck" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
 
-        # Check for the frustration/energy question
-        assert "frustration, low energy, or feeling stuck" in GUIDANCE_PRIORITY_SWITCHING
+    def test_no_criteria_variant_mentions_no_goals_defined(self):
+        """NO_CRITERIA variant mentions goals/deliverables not defined."""
+        assert "without any goals or deliverables defined" in GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+        assert "no clear success criteria" in GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+
+    def test_incomplete_variant_mentions_incomplete_outcomes(self):
+        """INCOMPLETE variant mentions incomplete goals/deliverables."""
+        assert "goals or deliverables still incomplete" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+        assert "1 out of 3 goals done" in GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
 
     def test_switching_guidance_inline_phrasing_in_canonical_order(self):
         """Switching guidance uses inline phrasing consistent with canonical order."""
-        from mcp_server.priority_guardian.tools.get_patterns import (
-            _build_assistant_guidance,
-        )
-
         data = {
             "reason": "PATTERNS_FOUND",
-            "patterns": [{"pattern_type": "priority_switching"}],
+            "patterns": [{"pattern_type": "priority_switching", "retired_priorities": []}],
         }
 
         guidance = _build_assistant_guidance(data)
@@ -235,3 +242,144 @@ class TestSwitchingPatternGuidance:
         # (Note: "4 weeks" is for data requirements, not switching window)
         assert "3 months" not in DESCRIPTION.lower()
         assert "6 months" not in DESCRIPTION.lower()
+
+
+class TestSwitchingGuidanceSelection:
+    """Tests for dynamic switching guidance selection based on retired_priorities data."""
+
+    def test_all_no_criteria_selects_no_criteria_variant(self):
+        """All retired priorities with goals_total=0 selects NO_CRITERIA variant."""
+        patterns = [
+            {
+                "pattern_type": "priority_switching",
+                "retired_priorities": [
+                    {"name": "Priority A", "type": "flexible", "goals_achieved": 0, "goals_total": 0},
+                    {"name": "Priority B", "type": "flexible", "goals_achieved": 0, "goals_total": 0},
+                    {"name": "Priority C", "type": "deadline", "deliverables_done": 0, "deliverables_total": 0},
+                ],
+            }
+        ]
+
+        guidance = _get_switching_guidance(patterns)
+
+        assert guidance == GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+
+    def test_some_with_criteria_selects_incomplete_variant(self):
+        """Mixed priorities (some with criteria) selects INCOMPLETE variant."""
+        patterns = [
+            {
+                "pattern_type": "priority_switching",
+                "retired_priorities": [
+                    {"name": "Priority A", "type": "flexible", "goals_achieved": 1, "goals_total": 3},  # Has criteria
+                    {"name": "Priority B", "type": "flexible", "goals_achieved": 0, "goals_total": 0},  # No criteria
+                ],
+            }
+        ]
+
+        guidance = _get_switching_guidance(patterns)
+
+        assert guidance == GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+
+    def test_all_with_criteria_selects_incomplete_variant(self):
+        """All retired priorities with criteria selects INCOMPLETE variant."""
+        patterns = [
+            {
+                "pattern_type": "priority_switching",
+                "retired_priorities": [
+                    {"name": "Priority A", "type": "flexible", "goals_achieved": 1, "goals_total": 3},
+                    {"name": "Priority B", "type": "deadline", "deliverables_done": 2, "deliverables_total": 5},
+                ],
+            }
+        ]
+
+        guidance = _get_switching_guidance(patterns)
+
+        assert guidance == GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+
+    def test_empty_retired_priorities_selects_no_criteria_variant(self):
+        """Empty retired_priorities list selects NO_CRITERIA variant."""
+        patterns = [
+            {
+                "pattern_type": "priority_switching",
+                "retired_priorities": [],
+            }
+        ]
+
+        guidance = _get_switching_guidance(patterns)
+
+        assert guidance == GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+
+    def test_missing_retired_priorities_selects_no_criteria_variant(self):
+        """Missing retired_priorities key selects NO_CRITERIA variant."""
+        patterns = [
+            {
+                "pattern_type": "priority_switching",
+            }
+        ]
+
+        guidance = _get_switching_guidance(patterns)
+
+        assert guidance == GUIDANCE_PRIORITY_SWITCHING_NO_CRITERIA
+
+    def test_no_switching_pattern_returns_incomplete_fallback(self):
+        """No switching pattern in list returns INCOMPLETE as fallback."""
+        patterns = [
+            {"pattern_type": "consistency_streak", "priority_id": "p1"},
+        ]
+
+        guidance = _get_switching_guidance(patterns)
+
+        assert guidance == GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+
+    def test_deadline_priority_with_deliverables_selects_incomplete(self):
+        """Deadline priority with deliverables_total > 0 selects INCOMPLETE variant."""
+        patterns = [
+            {
+                "pattern_type": "priority_switching",
+                "retired_priorities": [
+                    {"name": "Launch Event", "type": "deadline", "deliverables_done": 1, "deliverables_total": 4},
+                ],
+            }
+        ]
+
+        guidance = _get_switching_guidance(patterns)
+
+        assert guidance == GUIDANCE_PRIORITY_SWITCHING_INCOMPLETE
+
+    def test_build_guidance_uses_correct_variant_for_no_criteria(self):
+        """_build_assistant_guidance uses NO_CRITERIA variant when appropriate."""
+        data = {
+            "reason": "PATTERNS_FOUND",
+            "patterns": [
+                {
+                    "pattern_type": "priority_switching",
+                    "retired_priorities": [
+                        {"name": "Priority A", "type": "flexible", "goals_achieved": 0, "goals_total": 0},
+                    ],
+                }
+            ],
+        }
+
+        guidance = _build_assistant_guidance(data)
+
+        assert "without any goals or deliverables defined" in guidance
+        assert "goals or deliverables still incomplete" not in guidance
+
+    def test_build_guidance_uses_correct_variant_for_incomplete(self):
+        """_build_assistant_guidance uses INCOMPLETE variant when appropriate."""
+        data = {
+            "reason": "PATTERNS_FOUND",
+            "patterns": [
+                {
+                    "pattern_type": "priority_switching",
+                    "retired_priorities": [
+                        {"name": "Priority A", "type": "flexible", "goals_achieved": 1, "goals_total": 3},
+                    ],
+                }
+            ],
+        }
+
+        guidance = _build_assistant_guidance(data)
+
+        assert "goals or deliverables still incomplete" in guidance
+        assert "without any goals or deliverables defined" not in guidance
