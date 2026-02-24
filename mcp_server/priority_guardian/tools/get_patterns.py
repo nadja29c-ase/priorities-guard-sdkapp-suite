@@ -75,6 +75,7 @@ GUIDANCE_COMMON = (
 
 # Per-pattern guidance constants
 GUIDANCE_CONSISTENCY_STREAK = (
+    "Always bold the priority name (e.g., **Ship V1.0 PG**) when first mentioning it. "
     "The dashboard already shows the streak count — do not just restate it. "
     "weekly_detail contains the actual hours and target hours for each week in the streak. "
     "Use these specific numbers in your narration. "
@@ -88,6 +89,7 @@ GUIDANCE_CONSISTENCY_STREAK = (
 )
 
 GUIDANCE_ABANDONED_PRIORITY = (
+    "Always bold the priority name (e.g., **Plan my birthday party**) when first mentioning it. "
     "weekly_detail contains the actual hours for the last 4 weeks. "
     "Reference these specific numbers rather than just the average. "
     "State the observed pattern neutrally. "
@@ -103,6 +105,7 @@ GUIDANCE_ABANDONED_PRIORITY = (
 GUIDANCE_PRIORITY_SWITCHING = (
     "This pattern detected multiple priorities that were retired with goals or deliverables "
     "still incomplete — meaning they were abandoned before completion, not finished and moved on from. "
+    "Always bold the retired priority names when mentioning them. "
     "Name the specific retired priorities and mention what was left incomplete "
     "(e.g., '1 out of 3 goals done') so the user knows exactly which ones you're referring to "
     "and what was unfinished. The user needs specifics to reflect meaningfully. "
@@ -115,6 +118,7 @@ GUIDANCE_PRIORITY_SWITCHING = (
 )
 
 GUIDANCE_PRIORITY_PROTECTION = (
+    "Always bold the priority name when first mentioning it. "
     "Acknowledge warmly that the user protected this priority's time despite growing calendar pressure. "
     "period_summary contains the exact numbers. Reference them: priority hours stayed at ~Xh/week "
     "while total calendar grew from ~Yh to ~Zh (N% increase). "
