@@ -1217,6 +1217,62 @@ class TestPrioritySwitching:
         assert patterns[0]["retirements_in_window"] == 3
         assert patterns[0]["successful_retirements_excluded"] == 0
 
+    def test_completion_filter_retired_priorities_list(self):
+        """retired_priorities list contains name, type, and completion status."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                priority_type="flexible",
+                goals=[self._create_goal(True), self._create_goal(False), self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                priority_type="deadline",
+                deliverables=[self._create_deliverable(False), self._create_deliverable(False)],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                priority_type="flexible",
+                goals=[],
+            ),
+        ]
+        # Set names for verification
+        priorities[0].name = "Project Alpha"
+        priorities[1].name = "Birthday Party"
+        priorities[2].name = "Side Hustle"
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        assert "retired_priorities" in patterns[0]
+        retired = patterns[0]["retired_priorities"]
+        assert len(retired) == 3
+        # Check structure with completion status
+        assert retired[0] == {
+            "name": "Project Alpha",
+            "type": "flexible",
+            "goals_achieved": 1,
+            "goals_total": 3,
+        }
+        assert retired[1] == {
+            "name": "Birthday Party",
+            "type": "deadline",
+            "deliverables_done": 0,
+            "deliverables_total": 2,
+        }
+        assert retired[2] == {
+            "name": "Side Hustle",
+            "type": "flexible",
+            "goals_achieved": 0,
+            "goals_total": 0,
+        }
+
 
 # ============================================================================
 # Pattern 4: Priority Protection Tests

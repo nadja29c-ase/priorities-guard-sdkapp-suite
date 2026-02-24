@@ -467,6 +467,7 @@ def _compute_priority_switching(
     retirements_in_window = 0
     successful_retirements_excluded = 0
     creations_in_window = 0
+    retired_priorities = []  # Track names/types of switches for LLM narration
 
     for priority in priorities:
         # Check retired_at
@@ -478,6 +479,20 @@ def _compute_priority_switching(
                     successful_retirements_excluded += 1
                 else:
                     retirements_in_window += 1
+                    # Build entry with completion status
+                    entry = {
+                        "name": priority.name,
+                        "type": priority.type,
+                    }
+                    if priority.type == "flexible":
+                        goals = priority.goals or []
+                        entry["goals_achieved"] = sum(1 for g in goals if g.achieved is True)
+                        entry["goals_total"] = len(goals)
+                    elif priority.type == "deadline":
+                        deliverables = priority.deliverables or []
+                        entry["deliverables_done"] = sum(1 for d in deliverables if d.done is True)
+                        entry["deliverables_total"] = len(deliverables)
+                    retired_priorities.append(entry)
 
         # Check created_at
         if priority.created_at:
@@ -503,6 +518,7 @@ def _compute_priority_switching(
         "retirements_in_window": retirements_in_window,
         "successful_retirements_excluded": successful_retirements_excluded,
         "creations_in_window": creations_in_window,
+        "retired_priorities": retired_priorities,
         "window_weeks": window_weeks,
         "detail": detail,
     }]
