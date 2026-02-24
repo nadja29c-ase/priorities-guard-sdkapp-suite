@@ -6,8 +6,8 @@ Read-only queries on pg_weekly_snapshots and pg_priorities tables.
 No new database tables, no new migrations, no data stored.
 
 Patterns computed:
-- Pattern 1: Consistency Streak (flexible priorities only)
-- Pattern 2: Abandoned Priority Signal (active priorities only)
+- Pattern 1: Consistency Streak (active flexible priorities only)
+- Pattern 2: Abandoned Priority Signal (active only; deadline priorities require proximity)
 - Pattern 3: Priority Switching Frequency (cross-priority)
 - Pattern 4: Priority Protection (stable hours under calendar pressure)
 
@@ -40,6 +40,7 @@ ROLLING_WINDOW_MONTHS = 6
 STREAK_THRESHOLD = 4
 ABANDONED_AVG_THRESHOLD = Decimal("1.0")
 ABANDONED_WEEKS_NEEDED = 4
+ABANDONED_DEADLINE_PROXIMITY_WEEKS = 4
 SWITCHING_RETIREMENT_THRESHOLD = 3
 PROTECTION_WEEKS_NEEDED = 8
 PROTECTION_TOTAL_CHANGE_PCT_THRESHOLD = Decimal("15.0")
@@ -176,16 +177,16 @@ def _compute_consistency_streaks(
     current_week_start: date,
 ) -> list[dict]:
     """
-    Compute Pattern 1: Consistency Streak for flexible priorities.
+    Compute Pattern 1: Consistency Streak for active flexible priorities.
 
-    Detects consecutive weeks where a flexible priority had hours > 0.
+    Detects consecutive weeks where an active flexible priority had hours > 0.
     Uses streak_at_snapshot from most recent snapshot, falls back to
     computing from actual_hours if all streak_at_snapshot values are NULL.
 
     Args:
         priorities: All user priorities (active and retired)
         snapshots_by_priority: Snapshots grouped by priority_id, ordered by week_start desc
-        current_week_start: Monday of current week (for retirement boundary)
+        current_week_start: Monday of current week (unused, kept for signature stability)
 
     Returns:
         List of consistency_streak pattern dicts
@@ -193,8 +194,10 @@ def _compute_consistency_streaks(
     patterns = []
 
     for priority in priorities:
-        # Pattern 1 is for flexible priorities only
+        # Pattern 1 is for active flexible priorities only
         if priority.type != "flexible":
+            continue
+        if priority.status != "active":
             continue
 
         snapshots = snapshots_by_priority.get(priority.id, [])
@@ -202,13 +205,6 @@ def _compute_consistency_streaks(
         # Need at least 4 completed-week snapshots
         if len(snapshots) < MINIMUM_WEEKS_FLOOR:
             continue
-
-        # For retired priorities, exclude post-retirement snapshots
-        if priority.status == "retired" and priority.retired_at:
-            retirement_week_start = _get_retirement_week_start(priority.retired_at)
-            snapshots = [s for s in snapshots if s.week_start <= retirement_week_start]
-            if len(snapshots) < MINIMUM_WEEKS_FLOOR:
-                continue
 
         # Try to read streak_at_snapshot from most recent non-NULL snapshot
         streak_value = None
@@ -297,6 +293,7 @@ def _compute_consistency_streaks(
 def _compute_abandoned_priorities(
     priorities: list[PgPriority],
     snapshots_by_priority: dict[UUID, list[PgWeeklySnapshot]],
+    current_week_start: date,
 ) -> list[dict]:
     """
     Compute Pattern 2: Abandoned Priority Signal for active priorities.
@@ -304,9 +301,14 @@ def _compute_abandoned_priorities(
     Detects active priorities that consistently get < 1.0h/week average
     over the last 4 snapshots with non-NULL actual_hours.
 
+    Flexible priorities: fires when avg < 1.0h/week over last 4 snapshots.
+    Deadline priorities: same threshold + deadline must be <= 4 weeks away
+    (relative to current_week_start). Past deadlines are clamped to 0 weeks remaining.
+
     Args:
         priorities: All user priorities
         snapshots_by_priority: Snapshots grouped by priority_id, ordered by week_start desc
+        current_week_start: Monday of current week (for deadline proximity calculation)
 
     Returns:
         List of abandoned_priority pattern dicts
@@ -317,6 +319,16 @@ def _compute_abandoned_priorities(
         # Pattern 2 is for active priorities only
         if priority.status != "active":
             continue
+
+        # Deadline proximity filter for deadline priorities
+        weeks_until_deadline = None
+        if priority.type == "deadline":
+            # Deadline is guaranteed NOT NULL for deadline priorities
+            days_until = (priority.deadline - current_week_start).days
+            weeks_until_deadline = max(0, days_until // 7)  # Clamp past deadlines to 0
+            # Only proceed if deadline is within proximity window
+            if weeks_until_deadline > ABANDONED_DEADLINE_PROXIMITY_WEEKS:
+                continue
 
         snapshots = snapshots_by_priority.get(priority.id, [])
 
@@ -368,7 +380,7 @@ def _compute_abandoned_priorities(
         avg_rounded = round(float(avg_hours), 1)
         detail = f"Averaging {avg_rounded}h/week over the last 4 weeks"
 
-        patterns.append({
+        pattern_dict = {
             "pattern_type": "abandoned_priority",
             "narration_label": "Low investment",
             "priority_id": str(priority.id),
@@ -378,7 +390,13 @@ def _compute_abandoned_priorities(
             "avg_hours_last_4_weeks": avg_hours,
             "weekly_detail": weekly_detail,
             "detail": detail,
-        })
+        }
+
+        # Add weeks_until_deadline for deadline priorities only
+        if weeks_until_deadline is not None:
+            pattern_dict["weeks_until_deadline"] = weeks_until_deadline
+
+        patterns.append(pattern_dict)
 
     return patterns
 
@@ -702,7 +720,7 @@ async def _compute_patterns_impl(
 
     # Pattern 2: Abandoned Priority Signal
     patterns.extend(_compute_abandoned_priorities(
-        all_priorities, snapshots_by_priority
+        all_priorities, snapshots_by_priority, current_week_start
     ))
 
     # Pattern 3: Priority Switching Frequency

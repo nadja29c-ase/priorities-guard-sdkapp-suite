@@ -222,8 +222,10 @@ class TestMCPTool:
         # Check structuredContent has assistant_guidance
         assert result.structuredContent is not None
         assert "assistant_guidance" in result.structuredContent
-        # Should use PATTERNS_FOUND guidance
-        assert "Present these patterns" in result.structuredContent["assistant_guidance"]
+        # Should use GUIDANCE_COMMON + per-pattern guidance
+        guidance = result.structuredContent["assistant_guidance"]
+        assert "Keep it conversational" in guidance
+        assert "When narrating consistency streak patterns:" in guidance
 
     @pytest.mark.asyncio
     async def test_tool_guidance_varies_by_state(self):
@@ -312,24 +314,35 @@ class TestMCPTool:
     async def test_guidance_instructs_not_to_use_abandoned(self):
         """assistant_guidance instructs LLM not to use the word 'abandoned'."""
         from mcp_server.priority_guardian.tools.get_patterns import (
-            GUIDANCE_PATTERNS_FOUND,
+            GUIDANCE_COMMON,
         )
 
         # The guidance should instruct the LLM not to use "abandoned"
-        assert 'do not use the word "abandoned"' in GUIDANCE_PATTERNS_FOUND.lower()
+        assert 'do not use the word "abandoned"' in GUIDANCE_COMMON.lower()
 
     @pytest.mark.asyncio
     async def test_guidance_doesnt_contain_pattern_type_verbatim(self):
         """assistant_guidance does not contain pattern_type strings verbatim."""
         from mcp_server.priority_guardian.tools.get_patterns import (
-            GUIDANCE_PATTERNS_FOUND,
+            GUIDANCE_COMMON,
+            GUIDANCE_CONSISTENCY_STREAK,
+            GUIDANCE_ABANDONED_PRIORITY,
+            GUIDANCE_PRIORITY_SWITCHING,
+            GUIDANCE_PRIORITY_PROTECTION,
         )
 
         # Check that internal pattern_type values are not in guidance
-        assert "consistency_streak" not in GUIDANCE_PATTERNS_FOUND
-        assert "abandoned_priority" not in GUIDANCE_PATTERNS_FOUND
-        assert "priority_switching" not in GUIDANCE_PATTERNS_FOUND
-        assert "priority_protection" not in GUIDANCE_PATTERNS_FOUND
+        all_guidance = (
+            GUIDANCE_COMMON
+            + GUIDANCE_CONSISTENCY_STREAK
+            + GUIDANCE_ABANDONED_PRIORITY
+            + GUIDANCE_PRIORITY_SWITCHING
+            + GUIDANCE_PRIORITY_PROTECTION
+        )
+        assert "consistency_streak" not in all_guidance
+        assert "abandoned_priority" not in all_guidance
+        assert "priority_switching" not in all_guidance
+        assert "priority_protection" not in all_guidance
 
 
 # ============================================================================
@@ -340,11 +353,10 @@ class TestE2EFlows:
     """End-to-end tests for specific flows."""
 
     @pytest.mark.asyncio
-    async def test_retired_keyword_resolution_e2e(self):
-        """E2E: Retired priority keyword resolved from snapshot."""
+    async def test_retired_priority_no_consistency_streak_e2e(self):
+        """E2E: Retired priority does NOT produce consistency_streak pattern."""
         from backend.apps.priority_guardian.services.pattern_service import (
             compute_patterns,
-            get_current_week_start_utc,
         )
 
         user_id = uuid4()
@@ -363,7 +375,7 @@ class TestE2EFlows:
         priority.retired_at = datetime(2026, 2, 4, tzinfo=timezone.utc)
         priority.created_at = datetime(2025, 10, 1, tzinfo=timezone.utc)
 
-        # Create snapshots with keyword preserved
+        # Create snapshots with keyword preserved - would have streak=4 if active
         snapshots = []
         base_date = date(2026, 1, 5)
         for i in range(4):
@@ -374,6 +386,7 @@ class TestE2EFlows:
             s.total_tracked_hours = Decimal("40")
             s.streak_at_snapshot = i + 1
             s.calendar_keyword_at_snapshot = "P2"  # Preserved in snapshot
+            s.target_hours = Decimal("8")
             snapshots.append(s)
 
         # Mock query results
@@ -390,18 +403,15 @@ class TestE2EFlows:
 
             result = await compute_patterns(user_id, session)
 
-        # Verify patterns returned with resolved keyword
+        # Verify no consistency_streak pattern for retired priority
         assert result["success"] is True
         patterns = result["data"]["patterns"]
-        # Should have consistency_streak pattern
         streak_pattern = next(
             (p for p in patterns if p["pattern_type"] == "consistency_streak"),
             None,
         )
-        if streak_pattern:
-            assert streak_pattern["calendar_keyword"] == "P2"
-            assert streak_pattern["priority_status"] == "retired"
-            assert "None" not in streak_pattern["detail"]
+        # Should be None - retired priorities don't produce consistency_streak
+        assert streak_pattern is None
 
     @pytest.mark.asyncio
     async def test_decimal_serialization_e2e(self):
@@ -436,6 +446,7 @@ class TestE2EFlows:
             s.total_tracked_hours = Decimal("40.0")
             s.streak_at_snapshot = 0
             s.calendar_keyword_at_snapshot = "P1"
+            s.target_hours = Decimal("5.0")
             snapshots.append(s)
 
         snap_result = MagicMock()

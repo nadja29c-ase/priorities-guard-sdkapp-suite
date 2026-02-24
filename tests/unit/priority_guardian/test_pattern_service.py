@@ -321,12 +321,12 @@ class TestConsistencyStreak:
 
         assert len(patterns) == 0
 
-    def test_retired_priority_surfaced_with_status(self):
-        """Retired flexible priority with streak >= 4 is surfaced with retired status."""
+    def test_retired_priority_not_surfaced(self):
+        """Retired flexible priority with streak >= 4 is NOT surfaced (active only)."""
         priority = self._create_priority(status="retired", keyword=None)
         priority.retired_at = datetime(2026, 2, 4, tzinfo=timezone.utc)  # Retired mid-week
 
-        # Need 5 snapshots for streak=5
+        # Would have streak=5 if active
         snapshots = [
             self._create_snapshot(date(2026, 2, 2), streak=5, keyword="P1"),
             self._create_snapshot(date(2026, 1, 26), streak=4, keyword="P1"),
@@ -341,9 +341,8 @@ class TestConsistencyStreak:
             date(2026, 2, 9),
         )
 
-        assert len(patterns) == 1
-        assert patterns[0]["priority_status"] == "retired"
-        assert patterns[0]["calendar_keyword"] == "P1"
+        # Retired priorities are skipped entirely
+        assert len(patterns) == 0
 
     def test_null_streak_at_snapshot_skipped(self):
         """Snapshot with NULL streak_at_snapshot is skipped, next non-NULL used."""
@@ -406,17 +405,16 @@ class TestConsistencyStreak:
 
         assert len(patterns) == 0
 
-    def test_retired_priority_excludes_post_retirement_snapshots(self):
-        """Retired priority excludes snapshots after retirement week."""
+    def test_retired_flexible_with_long_streak_not_surfaced(self):
+        """Retired flexible priority with 6-week streak and snapshots returns no pattern."""
         priority = self._create_priority(status="retired", keyword=None)
         priority.retired_at = datetime(2026, 1, 22, tzinfo=timezone.utc)  # Wednesday of week starting 1/19
 
-        # Post-retirement snapshots should be excluded. After filtering, 4 remain with streak=6.
-        # Need 6 snapshots with hours > 0 for weekly_detail to match streak=6.
+        # Would have streak=6 if active
         snapshots = [
-            self._create_snapshot(date(2026, 2, 2), streak=8, keyword="P1"),   # After retirement
-            self._create_snapshot(date(2026, 1, 26), streak=7, keyword="P1"),  # After retirement
-            self._create_snapshot(date(2026, 1, 19), streak=6, keyword="P1"),  # Retirement week - included
+            self._create_snapshot(date(2026, 2, 2), streak=8, keyword="P1"),
+            self._create_snapshot(date(2026, 1, 26), streak=7, keyword="P1"),
+            self._create_snapshot(date(2026, 1, 19), streak=6, keyword="P1"),
             self._create_snapshot(date(2026, 1, 12), streak=5, keyword="P1"),
             self._create_snapshot(date(2026, 1, 5), streak=4, keyword="P1"),
             self._create_snapshot(date(2025, 12, 29), streak=3, keyword="P1"),
@@ -430,9 +428,8 @@ class TestConsistencyStreak:
             date(2026, 2, 9),
         )
 
-        # Should use streak from week 1/19 (retirement week)
-        assert len(patterns) == 1
-        assert patterns[0]["streak_weeks"] == 6
+        # Retired priorities are skipped entirely - no pattern returned
+        assert len(patterns) == 0
 
 
 # ============================================================================
@@ -473,6 +470,7 @@ class TestAbandonedPriority:
         patterns = _compute_abandoned_priorities(
             [priority],
             {priority.id: snapshots},
+            current_week_start=date(2026, 2, 9),
         )
 
         assert len(patterns) == 1
@@ -492,6 +490,7 @@ class TestAbandonedPriority:
         patterns = _compute_abandoned_priorities(
             [priority],
             {priority.id: snapshots},
+            current_week_start=date(2026, 2, 9),
         )
 
         assert len(patterns) == 0
@@ -509,6 +508,7 @@ class TestAbandonedPriority:
         patterns = _compute_abandoned_priorities(
             [priority],
             {priority.id: snapshots},
+            current_week_start=date(2026, 2, 9),
         )
 
         assert len(patterns) == 0
@@ -525,6 +525,7 @@ class TestAbandonedPriority:
         patterns = _compute_abandoned_priorities(
             [priority],
             {priority.id: snapshots},
+            current_week_start=date(2026, 2, 9),
         )
 
         assert len(patterns) == 0
@@ -543,11 +544,192 @@ class TestAbandonedPriority:
         patterns = _compute_abandoned_priorities(
             [priority],
             {priority.id: snapshots},
+            current_week_start=date(2026, 2, 9),
         )
 
         # Should use 4 non-NULL snapshots
         assert len(patterns) == 1
         assert patterns[0]["avg_hours_last_4_weeks"] == Decimal("0.2")
+
+    # -------------------------------------------------------------------------
+    # Deadline Priority Tests (increment_27)
+    # -------------------------------------------------------------------------
+
+    def _create_deadline_priority(self, deadline, status="active", keyword="P1"):
+        """Create a mock deadline priority."""
+        p = MagicMock()
+        p.id = uuid4()
+        p.name = "Test Deadline Priority"
+        p.type = "deadline"
+        p.status = status
+        p.calendar_keyword = keyword
+        p.deadline = deadline
+        return p
+
+    def test_deadline_3_weeks_away_fires(self):
+        """Deadline priority, avg < 1.0h, deadline in 3 weeks → pattern fires, weeks_until_deadline = 3."""
+        current_week_start = date(2026, 2, 9)
+        deadline = current_week_start + timedelta(weeks=3)  # 3 weeks away
+        priority = self._create_deadline_priority(deadline=deadline)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.2")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.3")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=current_week_start,
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["pattern_type"] == "abandoned_priority"
+        assert patterns[0]["weeks_until_deadline"] == 3
+
+    def test_deadline_8_weeks_away_not_fires(self):
+        """Deadline priority, avg < 1.0h, deadline in 8 weeks → pattern does NOT fire."""
+        current_week_start = date(2026, 2, 9)
+        deadline = current_week_start + timedelta(weeks=8)  # 8 weeks away
+        priority = self._create_deadline_priority(deadline=deadline)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.2")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.3")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=current_week_start,
+        )
+
+        assert len(patterns) == 0
+
+    def test_deadline_exactly_4_weeks_fires(self):
+        """Deadline priority, avg < 1.0h, deadline in exactly 4 weeks → pattern fires (boundary, ≤ 4)."""
+        current_week_start = date(2026, 2, 9)
+        deadline = current_week_start + timedelta(weeks=4)  # Exactly 4 weeks
+        priority = self._create_deadline_priority(deadline=deadline)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.2")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.3")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=current_week_start,
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["weeks_until_deadline"] == 4
+
+    def test_deadline_5_weeks_away_not_fires(self):
+        """Deadline priority, avg < 1.0h, deadline in 5 weeks → pattern does NOT fire (boundary, > 4)."""
+        current_week_start = date(2026, 2, 9)
+        deadline = current_week_start + timedelta(weeks=5)  # 5 weeks away
+        priority = self._create_deadline_priority(deadline=deadline)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.2")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.3")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=current_week_start,
+        )
+
+        assert len(patterns) == 0
+
+    def test_deadline_flexible_no_weeks_field(self):
+        """Flexible priority, avg < 1.0h → pattern fires as before, no weeks_until_deadline field."""
+        priority = self._create_priority()  # Flexible by default
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.2")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.3")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["pattern_type"] == "abandoned_priority"
+        assert "weeks_until_deadline" not in patterns[0]
+
+    def test_deadline_above_threshold_not_fires(self):
+        """Deadline priority, avg ≥ 1.0h, deadline in 2 weeks → pattern does NOT fire."""
+        current_week_start = date(2026, 2, 9)
+        deadline = current_week_start + timedelta(weeks=2)
+        priority = self._create_deadline_priority(deadline=deadline)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("2.0")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("2.0")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("2.0")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("2.0")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=current_week_start,
+        )
+
+        assert len(patterns) == 0
+
+    def test_deadline_past_clamped_to_zero(self):
+        """Deadline priority, avg < 1.0h, deadline already passed → pattern fires, weeks_until_deadline = 0."""
+        current_week_start = date(2026, 2, 9)
+        deadline = current_week_start - timedelta(weeks=2)  # 2 weeks ago
+        priority = self._create_deadline_priority(deadline=deadline)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.2")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.3")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=current_week_start,
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["weeks_until_deadline"] == 0
+
+    def test_deadline_exactly_current_week_zero(self):
+        """Deadline priority, avg < 1.0h, deadline is exactly current_week_start → weeks_until_deadline = 0."""
+        current_week_start = date(2026, 2, 9)
+        deadline = current_week_start  # Exactly on current week start
+        priority = self._create_deadline_priority(deadline=deadline)
+        snapshots = [
+            self._create_snapshot(date(2026, 2, 2), actual_hours=Decimal("0.5")),
+            self._create_snapshot(date(2026, 1, 26), actual_hours=Decimal("0.2")),
+            self._create_snapshot(date(2026, 1, 19), actual_hours=Decimal("0.3")),
+            self._create_snapshot(date(2026, 1, 12), actual_hours=Decimal("0.2")),
+        ]
+
+        patterns = _compute_abandoned_priorities(
+            [priority],
+            {priority.id: snapshots},
+            current_week_start=current_week_start,
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["weeks_until_deadline"] == 0
 
 
 # ============================================================================
@@ -998,9 +1180,9 @@ class TestDetailStrings:
 
     def test_detail_without_keyword_uses_name(self):
         """Pattern with null keyword uses priority_name in detail."""
+        # Active priority with NULL keyword (edge case - logs warning but still produces pattern)
         priority = self._create_priority(name="My Custom Priority", keyword=None)
-        priority.status = "retired"  # Retired priority has NULL keyword
-        priority.retired_at = datetime(2026, 2, 4, tzinfo=timezone.utc)
+        # status is already "active" from helper
 
         # Need 5 snapshots with NULL keyword for streak=5
         snapshots = [
@@ -1011,13 +1193,16 @@ class TestDetailStrings:
             self._create_snapshot(date(2026, 1, 5), streak=1, keyword=None),
         ]
 
-        patterns = _compute_consistency_streaks(
-            [priority],
-            {priority.id: snapshots},
-            date(2026, 2, 9),
-        )
+        with patch("backend.apps.priority_guardian.services.pattern_service.logger"):
+            patterns = _compute_consistency_streaks(
+                [priority],
+                {priority.id: snapshots},
+                date(2026, 2, 9),
+            )
 
-        # Detail should NOT contain "None" or "null"
+        # Pattern should still be produced
+        assert len(patterns) == 1
+        # Detail should NOT contain "None" or "null" - uses priority_name fallback
         assert "None" not in patterns[0]["detail"]
         assert "null" not in patterns[0]["detail"]
 
@@ -1731,6 +1916,7 @@ class TestAbandonedPriorityWeeklyDetail:
         patterns = _compute_abandoned_priorities(
             [priority],
             {priority.id: snapshots},
+            current_week_start=date(2026, 2, 9),
         )
 
         assert len(patterns) == 1
