@@ -126,9 +126,10 @@ GUIDANCE_PRIORITY_INSIGHTS = (
 GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE = (
     "The user has {other_hours:.1f} hours of non-priority time. "
     "Based on the event titles and descriptions in allEvents, propose approximate "
-    "semantic categories. Frame it as an observation: 'Your non-priority time looks like "
+    "semantic categories. Frame it as a NEUTRAL observation: 'Your non-priority time looks like "
     "it breaks down to roughly: Client calls ~Xh, Admin ~Yh, etc.' "
     "Ask if this grouping looks right or if they'd adjust it. "
+    "CRITICAL: NEVER interpret/ judge non-priority time f.e. as wasted, unfocused, or dilutive. NEVER assume non-priority time should be strategic or priority-related. "
     "If they confirm, call get_weekly_report again with the semantic_groupings parameter "
     "containing the confirmed categories (category name, hours, event_count for each)."
 )
