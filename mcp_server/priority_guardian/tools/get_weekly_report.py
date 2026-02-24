@@ -107,7 +107,6 @@ GUIDANCE_NO_PRIORITIES = (
     "If they created priorities after this week, you can mention that tracking begins "
     "from the first full week after creation. "
     "Keep it to one or two sentences. "
-    "Do NOT mention snapshots, saving data, or persistence."
 )
 
 GUIDANCE_CURRENT_WEEK = (
@@ -116,14 +115,11 @@ GUIDANCE_CURRENT_WEEK = (
 )
 
 GUIDANCE_COMPLETED_WEEK = (
-    "This is a COMPLETED WEEK reflection. Present it as a look back at how the week was spent."
+    "This is a COMPLETED WEEK reflection. Present it as a look back/ a snapshot at how the week was spent."
 )
 
 GUIDANCE_PRIORITY_INSIGHTS = (
-    "Present each priority's hours naturally. For flexible priorities, note if they're "
-    "ahead/on_track/behind their weekly target. For deadline priorities, mention pacing status "
-    "and days remaining. IMPORTANT: Narrate ALL active priorities — if a priority has zero hours, "
-    "say so explicitly (e.g., 'You didn't log any P3 time this week'). Keep insights brief and actionable."
+    "Do not repeat the priority names or hours — the report displays them."
 )
 
 # Template with {other_hours} placeholder
@@ -145,16 +141,13 @@ GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE = (
 
 GUIDANCE_WITHIN_PRIORITY_BREAKDOWN = (
     "You can also propose a within-priority breakdown for any single priority. "
-    "If the user asks to see where their P1/P2/P3 time went, analyze the keyword-matched events "
-    "for that priority from allEvents, propose approximate semantic categories based on event "
-    "titles and descriptions, and if confirmed, call get_weekly_report again with semantic_target "
-    "set to the keyword (e.g., 'P1') and semantic_groupings containing the confirmed within-priority "
-    "categories. Only one category (a priority or 'other') can be expanded at a time."
 )
 
 GUIDANCE_CLOSING = (
-    "Keep the tone reflective. The goal is insight, not judgment. "
-    "Do NOT mention snapshots, saving data, or persistence."
+    "Keep the tone neutral and reflective. The goal is insight, not judgment. "
+    "After presenting the report, ask briefly if the user wants to dig into "
+    "what's helping them make progress or what's getting in the way — "
+    "keep it short. "
 )
 
 GUIDANCE_SEMANTIC_PROVIDED = (
@@ -195,12 +188,12 @@ def _normalize_priority_report(p: dict) -> dict:
         result["daysRemaining"] = p.get("days_remaining")
         result["deliverablesCompleted"] = p.get("deliverables_completed")
         result["deliverablesTotal"] = p.get("deliverables_total")
-        result["pacingStatus"] = p.get("pacing_status")
+        # pacingStatus intentionally excluded - LLM should not use computed status
 
     # Flexible-specific fields
     elif p.get("type") == "flexible":
         result["targetHours"] = p.get("target_hours")
-        result["flexStatus"] = p.get("flex_status")
+        # flexStatus intentionally excluded - LLM should not use computed status
         # Aggregates are placeholders (always 0/null until persistence ships)
         result["streakCount"] = p.get("streak_count", 0)
         result["totalHoursInvested"] = p.get("total_hours_invested", 0.0)

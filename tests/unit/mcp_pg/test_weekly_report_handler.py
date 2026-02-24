@@ -354,8 +354,8 @@ class TestBuildAssistantGuidanceNoPriorities:
 
         assert "first full week after creation" in guidance
 
-    def test_empty_priorities_does_not_mention_snapshots(self):
-        """Empty priorities guidance instructs not to mention snapshots."""
+    def test_empty_priorities_does_not_mention_keywords(self):
+        """Empty priorities guidance instructs not to mention P1/P2/P3."""
         data = {
             "is_current_week": False,
             "time_allocation": {"other_hours": 0},
@@ -363,7 +363,7 @@ class TestBuildAssistantGuidanceNoPriorities:
 
         guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
 
-        assert "Do NOT mention snapshots" in guidance
+        assert "Do not mention P1" in guidance
 
     def test_empty_priorities_does_not_contain_narrate_all(self):
         """Empty priorities guidance does NOT contain 'Narrate ALL' instruction."""
@@ -432,8 +432,8 @@ class TestBuildAssistantGuidanceMode1:
         assert "semantic" in guidance.lower() or "categories" in guidance.lower()
         assert "call get_weekly_report again with the semantic_groupings" in guidance
 
-    def test_instructs_to_narrate_all_priorities_including_zero(self):
-        """Mode 1 guidance instructs to narrate ALL priorities including zero-hour ones."""
+    def test_instructs_not_to_repeat_displayed_data(self):
+        """Mode 1 guidance instructs LLM not to repeat data the report already displays."""
         data = {
             "is_current_week": False,
             "time_allocation": {"other_hours": 0},
@@ -443,7 +443,7 @@ class TestBuildAssistantGuidanceMode1:
             data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=False
         )
 
-        assert "ALL active priorities" in guidance or "zero hours" in guidance.lower()
+        assert "Do not repeat" in guidance or "report displays" in guidance
 
     def test_does_not_contain_raw_event_titles_in_guidance(self):
         """Mode 1 guidance references allEvents abstractly, doesn't embed raw titles."""
@@ -465,7 +465,7 @@ class TestBuildAssistantGuidanceMode1:
         assert "Specific Event Title ABC123" not in guidance
 
     def test_no_save_or_snapshot_language(self):
-        """Mode 1 guidance doesn't prompt to save snapshots (but may instruct NOT to mention them)."""
+        """Mode 1 guidance doesn't prompt to save snapshots."""
         data = {
             "is_current_week": False,
             "time_allocation": {"other_hours": 5.0},
@@ -477,11 +477,11 @@ class TestBuildAssistantGuidanceMode1:
         )
 
         guidance_lower = guidance.lower()
-        # Should not prompt to SAVE snapshots (instructing NOT to mention is fine)
+        # Should not prompt to SAVE snapshots
         assert "save snapshot" not in guidance_lower
         assert "snapshot saved" not in guidance_lower
-        # Should instruct NOT to mention
-        assert "do not mention" in guidance_lower or "not mention" in guidance_lower
+        # Should instruct not to repeat
+        assert "do not repeat" in guidance_lower
 
 
 class TestBuildAssistantGuidanceMode2:
@@ -585,9 +585,10 @@ class TestNormalizePriorityReport:
         assert result["actualHours"] == 5.5
         assert result["eventCount"] == 3
         assert result["targetHours"] == 10.0
-        assert result["flexStatus"] == "on_track"
         assert result["streakCount"] == 0
         assert result["previousWeek"] is None
+        # flexStatus intentionally excluded from LLM data
+        assert "flexStatus" not in result
 
     def test_normalizes_deadline_priority_fields(self):
         """Deadline priority fields are normalized to camelCase."""
@@ -612,8 +613,9 @@ class TestNormalizePriorityReport:
         assert result["daysRemaining"] == 15
         assert result["deliverablesCompleted"] == 2
         assert result["deliverablesTotal"] == 5
-        assert result["pacingStatus"] == "ahead"
         assert result["previousWeek"] is None
+        # pacingStatus intentionally excluded from LLM data
+        assert "pacingStatus" not in result
 
     def test_previous_week_always_null(self):
         """previousWeek is always null."""
@@ -993,7 +995,6 @@ class TestGuidanceIncrement10:
         )
 
         assert "within-priority breakdown" in guidance.lower()
-        assert "semantic_target" in guidance
 
     def test_mode2_uses_neutral_wording(self):
         """MODE 2 guidance uses neutral wording, not 'coaching'."""
