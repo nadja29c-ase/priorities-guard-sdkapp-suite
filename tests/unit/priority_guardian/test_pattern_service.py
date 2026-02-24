@@ -739,42 +739,64 @@ class TestAbandonedPriority:
 class TestPrioritySwitching:
     """Tests for Pattern 3: Priority Switching Frequency."""
 
-    def _create_priority(self, created_at, retired_at=None):
-        """Create a mock priority."""
+    def _create_priority(
+        self,
+        created_at,
+        retired_at=None,
+        priority_type="flexible",
+        goals=None,
+        deliverables=None,
+    ):
+        """Create a mock priority with goals/deliverables."""
         p = MagicMock()
         p.id = uuid4()
         p.created_at = created_at
         p.retired_at = retired_at
+        p.type = priority_type
+        p.goals = goals if goals is not None else []
+        p.deliverables = deliverables if deliverables is not None else []
         return p
 
+    def _create_goal(self, achieved):
+        """Create a mock goal."""
+        g = MagicMock()
+        g.achieved = achieved
+        return g
+
+    def _create_deliverable(self, done):
+        """Create a mock deliverable."""
+        d = MagicMock()
+        d.done = done
+        return d
+
     def test_4_retirements_surfaced(self):
-        """4 retirements in 6 months is surfaced."""
+        """4 retirements in 3 months is surfaced."""
+        # current_week_start=2026-02-09, so 3 months ago is ~2025-11-09
         priorities = [
             self._create_priority(
-                datetime(2025, 9, 1, tzinfo=timezone.utc),
-                datetime(2025, 10, 1, tzinfo=timezone.utc),
-            ),
-            self._create_priority(
-                datetime(2025, 10, 1, tzinfo=timezone.utc),
-                datetime(2025, 11, 1, tzinfo=timezone.utc),
-            ),
-            self._create_priority(
-                datetime(2025, 11, 1, tzinfo=timezone.utc),
+                datetime(2025, 11, 15, tzinfo=timezone.utc),
                 datetime(2025, 12, 1, tzinfo=timezone.utc),
             ),
             self._create_priority(
                 datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
                 datetime(2026, 1, 1, tzinfo=timezone.utc),
             ),
             self._create_priority(
                 datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+            ),
+            self._create_priority(
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
                 None,  # Active
             ),
         ]
 
         patterns = _compute_priority_switching(
             priorities,
-            window_start_date=date(2025, 8, 9),  # 6 months ago
             current_week_start=date(2026, 2, 9),
         )
 
@@ -783,10 +805,10 @@ class TestPrioritySwitching:
         assert patterns[0]["retirements_in_window"] == 4
 
     def test_1_retirement_not_surfaced(self):
-        """1 retirement in 6 months is not surfaced (below threshold 3)."""
+        """1 retirement in 3 months is not surfaced (below threshold 3)."""
         priorities = [
             self._create_priority(
-                datetime(2025, 10, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
                 datetime(2026, 1, 1, tzinfo=timezone.utc),
             ),
             self._create_priority(
@@ -797,67 +819,403 @@ class TestPrioritySwitching:
 
         patterns = _compute_priority_switching(
             priorities,
-            window_start_date=date(2025, 8, 9),
             current_week_start=date(2026, 2, 9),
         )
 
         assert len(patterns) == 0
 
     def test_old_retirements_excluded(self):
-        """Retirements older than 6 months are excluded."""
+        """Retirements older than 3 months are excluded."""
+        # current_week_start=2026-02-09, so 3 months ago is ~2025-11-09
+        # All these retirements are before that window
         priorities = [
             self._create_priority(
-                datetime(2025, 1, 1, tzinfo=timezone.utc),
-                datetime(2025, 2, 1, tzinfo=timezone.utc),  # Too old
+                datetime(2025, 6, 1, tzinfo=timezone.utc),
+                datetime(2025, 7, 1, tzinfo=timezone.utc),  # Too old
             ),
             self._create_priority(
-                datetime(2025, 2, 1, tzinfo=timezone.utc),
-                datetime(2025, 3, 1, tzinfo=timezone.utc),  # Too old
+                datetime(2025, 7, 1, tzinfo=timezone.utc),
+                datetime(2025, 8, 1, tzinfo=timezone.utc),  # Too old
             ),
             self._create_priority(
-                datetime(2025, 3, 1, tzinfo=timezone.utc),
-                datetime(2025, 4, 1, tzinfo=timezone.utc),  # Too old
+                datetime(2025, 8, 1, tzinfo=timezone.utc),
+                datetime(2025, 9, 1, tzinfo=timezone.utc),  # Too old
             ),
             self._create_priority(
-                datetime(2025, 4, 1, tzinfo=timezone.utc),
-                datetime(2025, 5, 1, tzinfo=timezone.utc),  # Too old
+                datetime(2025, 9, 1, tzinfo=timezone.utc),
+                datetime(2025, 10, 1, tzinfo=timezone.utc),  # Too old
             ),
         ]
 
         patterns = _compute_priority_switching(
             priorities,
-            window_start_date=date(2025, 8, 9),  # Window starts Aug 9
             current_week_start=date(2026, 2, 9),
         )
 
-        # All retirements before Aug 9 are excluded
+        # All retirements before Nov 9, 2025 are excluded
         assert len(patterns) == 0
 
     def test_threshold_uses_retirements_not_creations(self):
         """Threshold is on retirements only, not creations."""
+        # 5 creations in window but only 2 retirements
         priorities = [
-            # 5 creations but only 2 retirements
-            self._create_priority(datetime(2025, 9, 1, tzinfo=timezone.utc), None),
-            self._create_priority(datetime(2025, 10, 1, tzinfo=timezone.utc), None),
-            self._create_priority(datetime(2025, 11, 1, tzinfo=timezone.utc), None),
+            self._create_priority(datetime(2025, 11, 15, tzinfo=timezone.utc), None),
+            self._create_priority(datetime(2025, 12, 1, tzinfo=timezone.utc), None),
+            self._create_priority(datetime(2025, 12, 15, tzinfo=timezone.utc), None),
             self._create_priority(
-                datetime(2025, 12, 1, tzinfo=timezone.utc),
                 datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 10, tzinfo=timezone.utc),
             ),
             self._create_priority(
-                datetime(2026, 1, 1, tzinfo=timezone.utc),
-                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 10, tzinfo=timezone.utc),
+                datetime(2026, 1, 20, tzinfo=timezone.utc),
             ),
         ]
 
         patterns = _compute_priority_switching(
             priorities,
-            window_start_date=date(2025, 8, 9),
             current_week_start=date(2026, 2, 9),
         )
 
         # Only 2 retirements, below threshold of 3
         assert len(patterns) == 0
+
+    # -------------------------------------------------------------------------
+    # Completion Filter Tests (increment_28)
+    # -------------------------------------------------------------------------
+
+    def test_completion_filter_all_incomplete_fires(self):
+        """3 retired priorities with incomplete goals → retirements_in_window: 3, pattern fires."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(False), self._create_goal(True)],  # Partial
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(None)],  # None is not True
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["retirements_in_window"] == 3
+
+    def test_completion_filter_all_goals_achieved_excluded(self):
+        """3 retired flexible priorities with all goals achieved → excluded, pattern does NOT fire."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(True), self._create_goal(True)],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(True)],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(True), self._create_goal(True), self._create_goal(True)],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 0
+
+    def test_completion_filter_mixed_completions(self):
+        """1 completed + 2 incomplete → retirements_in_window: 2, below threshold."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(True)],  # Completed - excluded
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],  # Incomplete
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[],  # Empty = incomplete
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        # 2 incomplete, below threshold of 3
+        assert len(patterns) == 0
+
+    def test_completion_filter_1_complete_3_incomplete_fires(self):
+        """1 completed + 3 incomplete → retirements_in_window: 3, pattern fires."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 11, 20, tzinfo=timezone.utc),
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(True)],  # Completed - excluded
+            ),
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["retirements_in_window"] == 3
+        assert patterns[0]["successful_retirements_excluded"] == 1
+
+    def test_completion_filter_empty_goals_counts_as_switch(self):
+        """3 retired with zero goals → all count as switches, pattern fires."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                goals=[],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["retirements_in_window"] == 3
+
+    def test_completion_filter_deadline_all_deliverables_done_excluded(self):
+        """Deadline priority with all deliverables done → excluded from switch count."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                priority_type="deadline",
+                deliverables=[self._create_deliverable(True), self._create_deliverable(True)],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                priority_type="deadline",
+                deliverables=[self._create_deliverable(True)],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                priority_type="deadline",
+                deliverables=[self._create_deliverable(True)],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        # All 3 completed, excluded
+        assert len(patterns) == 0
+
+    def test_completion_filter_mixed_types(self):
+        """Mixed types: 1 flexible completed, 1 deadline incomplete, 1 flexible empty → 2 switches."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                priority_type="flexible",
+                goals=[self._create_goal(True)],  # Completed - excluded
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                priority_type="deadline",
+                deliverables=[self._create_deliverable(False)],  # Incomplete
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                priority_type="flexible",
+                goals=[],  # Empty = incomplete
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        # 2 switches, below threshold
+        assert len(patterns) == 0
+
+    def test_completion_filter_outside_3_month_window(self):
+        """3 retirements within 6-month but outside 3-month window → pattern does NOT fire."""
+        # Retirements in Aug-Oct 2025, outside 3-month window from Feb 2026
+        priorities = [
+            self._create_priority(
+                datetime(2025, 7, 1, tzinfo=timezone.utc),
+                datetime(2025, 8, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2025, 8, 1, tzinfo=timezone.utc),
+                datetime(2025, 9, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2025, 9, 1, tzinfo=timezone.utc),
+                datetime(2025, 10, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        # All outside 3-month window
+        assert len(patterns) == 0
+
+    def test_completion_filter_successful_retirements_excluded_field(self):
+        """successful_retirements_excluded field is present and correct."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 11, 20, tzinfo=timezone.utc),
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(True)],  # Excluded
+            ),
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 10, tzinfo=timezone.utc),
+                goals=[self._create_goal(True), self._create_goal(True)],  # Excluded
+            ),
+            self._create_priority(
+                datetime(2025, 12, 10, tzinfo=timezone.utc),
+                datetime(2025, 12, 20, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 20, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["retirements_in_window"] == 3
+        assert patterns[0]["successful_retirements_excluded"] == 2
+
+    def test_completion_filter_partial_goals_counts_as_switch(self):
+        """Flexible priority with 2/3 goals achieved → counts as switch (partial != complete)."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(True), self._create_goal(True), self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[self._create_goal(True), self._create_goal(False)],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[self._create_goal(False)],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        # All 3 have at least one incomplete goal
+        assert len(patterns) == 1
+        assert patterns[0]["retirements_in_window"] == 3
+
+    def test_completion_filter_empty_goals_list_is_switch(self):
+        """Flexible priority with empty goals list ([]) → counts as switch."""
+        priorities = [
+            self._create_priority(
+                datetime(2025, 12, 1, tzinfo=timezone.utc),
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                goals=[],  # Empty list
+            ),
+            self._create_priority(
+                datetime(2025, 12, 15, tzinfo=timezone.utc),
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                goals=[],
+            ),
+            self._create_priority(
+                datetime(2026, 1, 1, tzinfo=timezone.utc),
+                datetime(2026, 1, 15, tzinfo=timezone.utc),
+                goals=[],
+            ),
+        ]
+
+        patterns = _compute_priority_switching(
+            priorities,
+            current_week_start=date(2026, 2, 9),
+        )
+
+        assert len(patterns) == 1
+        assert patterns[0]["retirements_in_window"] == 3
+        assert patterns[0]["successful_retirements_excluded"] == 0
 
 
 # ============================================================================

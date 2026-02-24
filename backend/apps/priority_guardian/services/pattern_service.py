@@ -23,6 +23,7 @@ import structlog
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from backend.apps.priority_guardian.db_models import PgPriority, PgWeeklySnapshot
 
@@ -42,6 +43,7 @@ ABANDONED_AVG_THRESHOLD = Decimal("1.0")
 ABANDONED_WEEKS_NEEDED = 4
 ABANDONED_DEADLINE_PROXIMITY_WEEKS = 4
 SWITCHING_RETIREMENT_THRESHOLD = 3
+SWITCHING_WINDOW_MONTHS = 3
 PROTECTION_WEEKS_NEEDED = 8
 PROTECTION_TOTAL_CHANGE_PCT_THRESHOLD = Decimal("15.0")
 PROTECTION_TOTAL_DELTA_THRESHOLD = Decimal("2.0")
@@ -401,27 +403,69 @@ def _compute_abandoned_priorities(
     return patterns
 
 
+def _is_successful_completion(priority: PgPriority) -> bool:
+    """
+    Check if a retired priority was successfully completed.
+
+    A priority is considered successfully completed if:
+    - Flexible: has goals AND all goals have achieved is True
+    - Deadline: has deliverables AND all deliverables have done is True
+
+    Empty or missing goals/deliverables means NOT completed (no success criteria defined).
+
+    Args:
+        priority: A retired priority to check
+
+    Returns:
+        True if successfully completed, False otherwise (counts as switch)
+    """
+    if priority.type == "flexible":
+        # Flexible priorities use goals
+        if priority.goals and len(priority.goals) > 0:
+            # All goals must have achieved is True (not just truthy)
+            return all(g.achieved is True for g in priority.goals)
+        # Empty or no goals = not completed
+        return False
+    elif priority.type == "deadline":
+        # Deadline priorities use deliverables
+        if priority.deliverables and len(priority.deliverables) > 0:
+            # All deliverables must have done is True (not just truthy)
+            return all(d.done is True for d in priority.deliverables)
+        # Empty or no deliverables = not completed
+        return False
+    else:
+        # Unknown type - treat as not completed
+        return False
+
+
 def _compute_priority_switching(
     priorities: list[PgPriority],
-    window_start_date: date,
     current_week_start: date,
 ) -> list[dict]:
     """
     Compute Pattern 3: Priority Switching Frequency.
 
-    Detects frequent retire-and-replace cycles (3+ retirements in 6 months).
+    Detects frequent retire-and-replace cycles (3+ incomplete retirements in 3 months).
     This is a cross-priority pattern - one instance per user.
 
+    A retirement counts as a "switch" only if goals/deliverables were incomplete:
+    - Flexible: excluded if all goals have achieved is True
+    - Deadline: excluded if all deliverables have done is True
+    - Empty or missing goals/deliverables count as switches (no success criteria)
+
     Args:
-        priorities: All user priorities
-        window_start_date: Start of rolling window
+        priorities: All user priorities (with goals/deliverables eager loaded)
         current_week_start: Monday of current week (end of window)
 
     Returns:
         List with zero or one priority_switching pattern dict
     """
-    # Count retirements within window
+    # Compute window start from switching-specific constant
+    window_start_date = current_week_start - relativedelta(months=SWITCHING_WINDOW_MONTHS)
+
+    # Count retirements and creations within window
     retirements_in_window = 0
+    successful_retirements_excluded = 0
     creations_in_window = 0
 
     for priority in priorities:
@@ -429,7 +473,11 @@ def _compute_priority_switching(
         if priority.retired_at:
             retired_date = priority.retired_at.astimezone(timezone.utc).date()
             if window_start_date <= retired_date < current_week_start:
-                retirements_in_window += 1
+                # Check if this was a successful completion
+                if _is_successful_completion(priority):
+                    successful_retirements_excluded += 1
+                else:
+                    retirements_in_window += 1
 
         # Check created_at
         if priority.created_at:
@@ -437,22 +485,23 @@ def _compute_priority_switching(
             if window_start_date <= created_date < current_week_start:
                 creations_in_window += 1
 
-    # Threshold is on retirements only
+    # Threshold is on incomplete retirements only
     if retirements_in_window < SWITCHING_RETIREMENT_THRESHOLD:
         return []
 
-    # Compute window weeks (approximately 26 weeks for 6 months)
+    # Compute window weeks (approximately 13 weeks for 3 months)
     window_weeks = (current_week_start - window_start_date).days // 7
 
     detail = (
-        f"{retirements_in_window} priorities retired and "
-        f"{creations_in_window} created in the last 6 months"
+        f"{retirements_in_window} priorities retired incomplete and "
+        f"{creations_in_window} created in the last 3 months"
     )
 
     return [{
         "pattern_type": "priority_switching",
         "narration_label": "Priority changes",
         "retirements_in_window": retirements_in_window,
+        "successful_retirements_excluded": successful_retirements_excluded,
         "creations_in_window": creations_in_window,
         "window_weeks": window_weeks,
         "detail": detail,
@@ -672,10 +721,14 @@ async def _compute_patterns_impl(
     snapshot_result = await session.execute(snapshot_query)
     all_snapshots = list(snapshot_result.scalars().all())
 
-    # Query all priorities (active and retired)
+    # Query all priorities (active and retired) with goals/deliverables eager loaded
     priority_query = (
         select(PgPriority)
         .where(PgPriority.user_id == user_id)
+        .options(
+            selectinload(PgPriority.goals),
+            selectinload(PgPriority.deliverables),
+        )
     )
     priority_result = await session.execute(priority_query)
     all_priorities = list(priority_result.scalars().all())
@@ -725,7 +778,7 @@ async def _compute_patterns_impl(
 
     # Pattern 3: Priority Switching Frequency
     patterns.extend(_compute_priority_switching(
-        all_priorities, window_start_date, current_week_start
+        all_priorities, current_week_start
     ))
 
     # Pattern 4: Priority Protection

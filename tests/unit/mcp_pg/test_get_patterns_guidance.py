@@ -70,7 +70,7 @@ class TestPerPatternGuidance:
         # Verify actual guidance content is present
         assert "dashboard already shows the streak count" in guidance
         assert "Ask what the user wants to do about it" in guidance
-        assert "healthy pivoting" in guidance
+        assert "intentional pivoting" in guidance
         assert "despite growing calendar pressure" in guidance
 
     def test_no_patterns_reason(self):
@@ -190,3 +190,48 @@ class TestCanonicalOrder:
 
         # Verify canonical order: streak < abandoned < switching < protection
         assert streak_pos < abandoned_pos < switching_pos < protection_pos
+
+
+class TestSwitchingPatternGuidance:
+    """Tests for priority switching guidance (increment_28)."""
+
+    def test_switching_guidance_contains_reflection_questions(self):
+        """GUIDANCE_PRIORITY_SWITCHING contains the two reflection questions."""
+        from mcp_server.priority_guardian.tools.get_patterns import (
+            GUIDANCE_PRIORITY_SWITCHING,
+        )
+
+        # Check for the evidence vs gut call question
+        assert "hard evidence that each pivot was more promising" in GUIDANCE_PRIORITY_SWITCHING
+        assert "gut call" in GUIDANCE_PRIORITY_SWITCHING
+
+        # Check for the frustration/energy question
+        assert "frustration, low energy, or feeling stuck" in GUIDANCE_PRIORITY_SWITCHING
+
+    def test_switching_guidance_inline_phrasing_in_canonical_order(self):
+        """Switching guidance uses inline phrasing consistent with canonical order."""
+        from mcp_server.priority_guardian.tools.get_patterns import (
+            _build_assistant_guidance,
+        )
+
+        data = {
+            "reason": "PATTERNS_FOUND",
+            "patterns": [{"pattern_type": "priority_switching"}],
+        }
+
+        guidance = _build_assistant_guidance(data)
+
+        # Should use inline phrasing "When narrating priority switching patterns:"
+        assert "When narrating priority switching patterns:" in guidance
+
+    def test_description_uses_recent_months_not_hardcoded(self):
+        """DESCRIPTION uses 'recent months' not a hardcoded month count for switching."""
+        from mcp_server.priority_guardian.tools.get_patterns import DESCRIPTION
+
+        # Should NOT contain hardcoded month counts for switching
+        # The description mentions "priority switching frequency" without a specific window
+        assert "priority switching frequency" in DESCRIPTION
+        # Should not hardcode "3 months" or "6 months" for the switching pattern
+        # (Note: "4 weeks" is for data requirements, not switching window)
+        assert "3 months" not in DESCRIPTION.lower()
+        assert "6 months" not in DESCRIPTION.lower()

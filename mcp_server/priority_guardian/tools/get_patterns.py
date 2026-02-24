@@ -101,11 +101,14 @@ GUIDANCE_ABANDONED_PRIORITY = (
 )
 
 GUIDANCE_PRIORITY_SWITCHING = (
-    "Present both interpretations: this could be healthy pivoting and adapting, "
-    "or it could signal difficulty committing. "
-    "Ask what's been driving the changes. "
-    "Do not lean toward either interpretation — present them equally. "
-    "Keep it to 2-3 sentences."
+    "This pattern detected multiple priorities that were retired with goals or deliverables "
+    "still incomplete — meaning they were abandoned before completion, not finished and moved on from. "
+    "Present both interpretations: this could be healthy, intentional pivoting — "
+    "or it could signal reactive switching. To help the user reflect, ask 1-2 of these "
+    "questions based on what fits: Did you have hard evidence that each pivot was more "
+    "promising, or did it feel more like a gut call? Were any of those switches driven "
+    "by frustration, low energy, or feeling stuck rather than a clear reason to move on? "
+    "Keep the overall narration to 2-4 sentences including the question(s)."
 )
 
 GUIDANCE_PRIORITY_PROTECTION = (
