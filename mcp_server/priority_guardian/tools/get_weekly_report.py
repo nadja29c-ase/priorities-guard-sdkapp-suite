@@ -26,7 +26,14 @@ NAME = "get_weekly_report"
 DESCRIPTION = (
     "Get your weekly report showing time invested in each priority. "
     "Returns hours worked, status indicators (ahead/on_track/behind), "
-    "and a pie chart breakdown of how your week was spent."
+    "and a pie chart breakdown of how your week was spent.\n\n"
+    "Call this tool:\n"
+    "- When the user asks about their week, progress, or hours\n"
+    "- When the user says \"how did I do?\", \"show my report\", \"weekly summary\"\n"
+    "- At the start of a reflection or check-in conversation\n\n"
+    "Do NOT call this tool:\n"
+    "- During onboarding or priority setup\n"
+    "- When the user is asking about patterns or trends over time (use get_patterns instead)"
 )
 
 WIDGET_URI = "ui://widget/pg-dashboard.html"
@@ -87,6 +94,76 @@ REQUIRED_SCOPES = ["pg.access"]
 
 # Timeout for backend call (seconds)
 BACKEND_TIMEOUT = 15.0
+
+
+# ============================================================================
+# assistant_guidance Templates
+# ============================================================================
+
+GUIDANCE_NO_PRIORITIES = (
+    "No priorities were being tracked during this week. "
+    "Do not mention P1, P2, or P3 keywords or time allocation. "
+    "Simply tell the user that priority tracking had not started yet for this time period. "
+    "If they created priorities after this week, you can mention that tracking begins "
+    "from the first full week after creation. "
+    "Keep it to one or two sentences. "
+    "Do NOT mention snapshots, saving data, or persistence."
+)
+
+GUIDANCE_CURRENT_WEEK = (
+    "This is your CURRENT WEEK in progress. Numbers will change as you work through the week. "
+    "Frame this as a progress check-in, not a final tally."
+)
+
+GUIDANCE_COMPLETED_WEEK = (
+    "This is a COMPLETED WEEK reflection. Present it as a look back at how the week was spent."
+)
+
+GUIDANCE_PRIORITY_INSIGHTS = (
+    "Present each priority's hours naturally. For flexible priorities, note if they're "
+    "ahead/on_track/behind their weekly target. For deadline priorities, mention pacing status "
+    "and days remaining. IMPORTANT: Narrate ALL active priorities — if a priority has zero hours, "
+    "say so explicitly (e.g., 'You didn't log any P3 time this week'). Keep insights brief and actionable."
+)
+
+# Template with {other_hours} placeholder
+GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE = (
+    "The user has {other_hours:.1f} hours of non-priority time. "
+    "Based on the event titles and descriptions in allEvents, propose approximate "
+    "semantic categories. Frame it as an observation: 'Your non-priority time looks like "
+    "it breaks down to roughly: Client calls ~Xh, Admin ~Yh, etc.' "
+    "Ask if this grouping looks right or if they'd adjust it. "
+    "If they confirm, call get_weekly_report again with the semantic_groupings parameter "
+    "containing the confirmed categories (category name, hours, event_count for each)."
+)
+
+# Template with {other_hours} placeholder
+GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE = (
+    "The user has {other_hours:.1f} hours of non-priority time but no matching events. "
+    "Ask what this time was generally spent on if they'd like to reflect on it."
+)
+
+GUIDANCE_WITHIN_PRIORITY_BREAKDOWN = (
+    "You can also propose a within-priority breakdown for any single priority. "
+    "If the user asks to see where their P1/P2/P3 time went, analyze the keyword-matched events "
+    "for that priority from allEvents, propose approximate semantic categories based on event "
+    "titles and descriptions, and if confirmed, call get_weekly_report again with semantic_target "
+    "set to the keyword (e.g., 'P1') and semantic_groupings containing the confirmed within-priority "
+    "categories. Only one category (a priority or 'other') can be expanded at a time."
+)
+
+GUIDANCE_CLOSING = (
+    "Keep the tone reflective. The goal is insight, not judgment. "
+    "Do NOT mention snapshots, saving data, or persistence."
+)
+
+GUIDANCE_SEMANTIC_PROVIDED = (
+    "The pie chart now shows the refined breakdown for the selected category. "
+    "Do NOT repeat or list the categories — the chart displays them. "
+    "Make a brief neutral observation about the allocation pattern without evaluation or recommendation. "
+    "Ask what stands out to them. "
+    "Keep it short — the visual does the heavy lifting."
+)
 
 
 # ============================================================================
@@ -331,15 +408,7 @@ def _build_assistant_guidance(
     """
     # Defense in depth: if handle() early return is bypassed, still return safe guidance
     if not priorities:
-        return (
-            "No priorities were being tracked during this week. "
-            "Do not mention P1, P2, or P3 keywords or time allocation. "
-            "Simply tell the user that priority tracking had not started yet for this time period. "
-            "If they created priorities after this week, you can mention that tracking begins "
-            "from the first full week after creation. "
-            "Keep it to one or two sentences. "
-            "Do NOT mention snapshots, saving data, or persistence."
-        )
+        return GUIDANCE_NO_PRIORITIES
 
     is_current = data.get("is_current_week", False)
     other_hours = data.get("time_allocation", {}).get("other_hours", 0)
@@ -351,67 +420,33 @@ def _build_assistant_guidance(
 
     if has_semantic_groupings:
         # MODE 2: Semantic groupings provided (second call)
-        # Brief neutral observation, don't repeat categories
-        guidance_parts.append(
-            "The pie chart now shows the refined breakdown for the selected category. "
-            "Do NOT repeat or list the categories — the chart displays them. "
-            "Make a brief neutral observation about the allocation pattern without evaluation or recommendation. "
-            "Ask what stands out to them. "
-            "Keep it short — the visual does the heavy lifting."
-        )
+        guidance_parts.append(GUIDANCE_SEMANTIC_PROVIDED)
     else:
         # MODE 1: No semantic groupings (first call)
         # Opening context based on week status
         if is_current:
-            guidance_parts.append(
-                "This is your CURRENT WEEK in progress. Numbers will change as you work through the week. "
-                "Frame this as a progress check-in, not a final tally."
-            )
+            guidance_parts.append(GUIDANCE_CURRENT_WEEK)
         else:
-            guidance_parts.append(
-                "This is a COMPLETED WEEK reflection. Present it as a look back at how the week was spent."
-            )
+            guidance_parts.append(GUIDANCE_COMPLETED_WEEK)
 
-        # Priority insights - narrate ALL active priorities including zero-hour ones
-        guidance_parts.append(
-            "Present each priority's hours naturally. For flexible priorities, note if they're "
-            "ahead/on_track/behind their weekly target. For deadline priorities, mention pacing status "
-            "and days remaining. IMPORTANT: Narrate ALL active priorities — if a priority has zero hours, "
-            "say so explicitly (e.g., 'You didn't log any P3 time this week'). Keep insights brief and actionable."
-        )
+        # Priority insights
+        guidance_parts.append(GUIDANCE_PRIORITY_INSIGHTS)
 
         # Semantic grouping proposal for "Other" time
         if other_hours > 0 and non_priority_events:
             guidance_parts.append(
-                f"The user has {other_hours:.1f} hours of non-priority time. "
-                "Based on the event titles and descriptions in allEvents, propose approximate "
-                "semantic categories. Frame it as an observation: 'Your non-priority time looks like "
-                "it breaks down to roughly: Client calls ~Xh, Admin ~Yh, etc.' "
-                "Ask if this grouping looks right or if they'd adjust it. "
-                "If they confirm, call get_weekly_report again with the semantic_groupings parameter "
-                "containing the confirmed categories (category name, hours, event_count for each)."
+                GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE.format(other_hours=other_hours)
             )
         elif other_hours > 0:
             guidance_parts.append(
-                f"The user has {other_hours:.1f} hours of non-priority time but no matching events. "
-                "Ask what this time was generally spent on if they'd like to reflect on it."
+                GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE.format(other_hours=other_hours)
             )
 
         # Within-priority breakdown proposal
-        guidance_parts.append(
-            "You can also propose a within-priority breakdown for any single priority. "
-            "If the user asks to see where their P1/P2/P3 time went, analyze the keyword-matched events "
-            "for that priority from allEvents, propose approximate semantic categories based on event "
-            "titles and descriptions, and if confirmed, call get_weekly_report again with semantic_target "
-            "set to the keyword (e.g., 'P1') and semantic_groupings containing the confirmed within-priority "
-            "categories. Only one category (a priority or 'other') can be expanded at a time."
-        )
+        guidance_parts.append(GUIDANCE_WITHIN_PRIORITY_BREAKDOWN)
 
         # Closing
-        guidance_parts.append(
-            "Keep the tone reflective. The goal is insight, not judgment. "
-            "Do NOT mention snapshots, saving data, or persistence."
-        )
+        guidance_parts.append(GUIDANCE_CLOSING)
 
     return " ".join(guidance_parts)
 
@@ -496,15 +531,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "This week" if data.get("is_current_week")
             else f"Week of {data.get('week_start')}"
         )
-        no_priorities_guidance = (
-            "No priorities were being tracked during this week. "
-            "Do not mention P1, P2, or P3 keywords or time allocation. "
-            "Simply tell the user that priority tracking had not started yet for this time period. "
-            "If they created priorities after this week, you can mention that tracking begins "
-            "from the first full week after creation. "
-            "Keep it to one or two sentences. "
-            "Do NOT mention snapshots, saving data, or persistence."
-        )
 
         logger.info(
             "tool.get_weekly_report.no_priorities",
@@ -529,7 +555,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     "slices": [],
                     "totalHours": 0,
                 },
-                "assistant_guidance": no_priorities_guidance,
+                "assistant_guidance": GUIDANCE_NO_PRIORITIES,
             },
         )
 

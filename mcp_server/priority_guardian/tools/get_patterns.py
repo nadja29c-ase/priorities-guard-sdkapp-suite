@@ -34,7 +34,7 @@ DESCRIPTION = (
     "under calendar pressure. Requires at least 4 weeks of tracking data.\n\n"
     "Call this tool:\n"
     "- During weekly reflection after presenting the weekly report\n"
-    "- When the user asks \"how am I doing?\", \"any trends?\", \"what patterns do you see?\"\n"
+    "- When the user asks \"any trends?\", \"what patterns do you see?\"\n"
     "- When the user asks about their tracking behavior over time\n\n"
     "Do NOT call this tool:\n"
     "- During onboarding (not enough data)\n"
