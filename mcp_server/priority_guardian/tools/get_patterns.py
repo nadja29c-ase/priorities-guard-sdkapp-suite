@@ -17,7 +17,7 @@ import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get
-from .base import ToolDefinition, ToolUsageError
+from .base import ToolDefinition
 
 logger = structlog.get_logger(__name__)
 
