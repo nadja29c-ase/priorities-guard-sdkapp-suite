@@ -284,7 +284,7 @@ def _build_assistant_guidance(data: dict) -> str:
 async def handle(
     user_id: str,
     correlation_id: str,
-    arguments: dict,
+    _arguments: dict,
 ) -> mcp_types.CallToolResult:
     """
     Get behavioral patterns from user's tracking history.
