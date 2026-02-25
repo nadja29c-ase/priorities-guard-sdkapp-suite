@@ -8,6 +8,9 @@ from uuid import UUID
 
 from fastapi import Header, HTTPException, status
 
+# Re-export verify_internal_call from core for backward compatibility
+from backend.core.dependencies import verify_internal_call  # noqa: F401
+
 
 def validate_user_id_header(
     x_user_id: str | None = Header(None, alias="X-User-ID")

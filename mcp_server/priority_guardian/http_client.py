@@ -7,7 +7,7 @@ Provides helpers for calling the backend REST API with user identity headers.
 import httpx
 import structlog
 
-from mcp_server.priority_guardian.config import BACKEND_URL
+from mcp_server.priority_guardian.config import BACKEND_URL, INTERNAL_API_SECRET
 
 logger = structlog.get_logger(__name__)
 
@@ -53,6 +53,8 @@ async def backend_get(
         "X-User-ID": user_id,
         "X-Correlation-ID": correlation_id,
     }
+    if INTERNAL_API_SECRET:
+        headers["X-Internal-Secret"] = INTERNAL_API_SECRET
 
     logger.info(
         "backend.api.get",
@@ -107,6 +109,8 @@ async def backend_post(
         "X-User-ID": user_id,
         "X-Correlation-ID": correlation_id,
     }
+    if INTERNAL_API_SECRET:
+        headers["X-Internal-Secret"] = INTERNAL_API_SECRET
 
     logger.info(
         "backend.api.post",
@@ -160,6 +164,8 @@ async def backend_put(
         "X-User-ID": user_id,
         "X-Correlation-ID": correlation_id,
     }
+    if INTERNAL_API_SECRET:
+        headers["X-Internal-Secret"] = INTERNAL_API_SECRET
 
     logger.info(
         "backend.api.put",
@@ -211,6 +217,8 @@ async def backend_delete(
         "X-User-ID": user_id,
         "X-Correlation-ID": correlation_id,
     }
+    if INTERNAL_API_SECRET:
+        headers["X-Internal-Secret"] = INTERNAL_API_SECRET
 
     logger.info(
         "backend.api.delete",

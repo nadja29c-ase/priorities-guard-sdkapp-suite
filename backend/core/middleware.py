@@ -80,7 +80,21 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "X-XSS-Protection": "1; mode=block",
             "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
             "Cache-Control": "no-store",
-            "Pragma": "no-cache"
+            "Pragma": "no-cache",
+            # CSP: default-src 'self' restricts to same origin
+            # base-uri 'self' prevents <base> tag injection
+            # object-src 'none' blocks Flash/plugin-based XSS
+            # script-src 'self' 'unsafe-inline' allows inline scripts (consent pages)
+            # style-src 'self' 'unsafe-inline' allows inline styles
+            # frame-ancestors 'none' reinforces X-Frame-Options DENY
+            "Content-Security-Policy": (
+                "default-src 'self'; "
+                "base-uri 'self'; "
+                "object-src 'none'; "
+                "script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "frame-ancestors 'none'"
+            ),
         })
 
         return response

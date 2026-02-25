@@ -161,6 +161,14 @@ class TestSecurityHeadersMiddleware:
         "strict-transport-security": "max-age=31536000; includeSubDomains",
         "cache-control": "no-store",
         "pragma": "no-cache",
+        "content-security-policy": (
+            "default-src 'self'; "
+            "base-uri 'self'; "
+            "object-src 'none'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "frame-ancestors 'none'"
+        ),
     }
 
     def test_security_headers_on_success_response(self, client):

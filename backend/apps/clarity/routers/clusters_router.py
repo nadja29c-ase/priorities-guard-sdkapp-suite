@@ -37,7 +37,7 @@ from sqlalchemy.sql import func
 import structlog
 
 from backend.core.database import get_db
-from backend.core.config import settings
+from backend.core.dependencies import verify_internal_call
 from backend.core.models import CoreUser, CoreToolAuditLog
 from backend.apps.clarity.db_models import ClarityCluster
 from backend.apps.clarity.models.requests import (
@@ -51,33 +51,10 @@ from backend.apps.clarity.models.requests import (
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(tags=["clarity"])
-
-
-def _verify_internal_call(request: Request) -> None:
-    """
-    Verify request comes from trusted internal service (MCP server).
-
-    Args:
-        request: FastAPI request object
-
-    Raises:
-        HTTPException: 403 if X-Internal-Secret is missing or invalid
-
-    Note:
-        If INTERNAL_API_SECRET is empty, verification is skipped (dev mode).
-        In production, set INTERNAL_API_SECRET to a strong random value.
-    """
-    if not settings.INTERNAL_API_SECRET:
-        # Dev mode: skip verification
-        return
-
-    secret = request.headers.get("x-internal-secret")
-    if not secret or secret != settings.INTERNAL_API_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Forbidden",
-        )
+router = APIRouter(
+    tags=["clarity"],
+    dependencies=[Depends(verify_internal_call)],
+)
 
 
 def _extract_user_id(request: Request) -> str:
@@ -166,9 +143,6 @@ async def get_clusters(
         trusted MCP server. In dev mode (INTERNAL_API_SECRET empty), this
         check is skipped.
     """
-    # Verify internal call (403 if invalid secret in production)
-    _verify_internal_call(request)
-
     # Extract and validate user_id
     user_id_str = _extract_user_id(request)
 
@@ -248,9 +222,6 @@ async def create_cluster(
         trusted MCP server. In dev mode (INTERNAL_API_SECRET empty), this
         check is skipped.
     """
-    # Verify internal call (403 if invalid secret in production)
-    _verify_internal_call(request)
-
     # Extract and validate user_id
     user_id_str = _extract_user_id(request)
     user_uuid = await _verify_user_exists(user_id_str, session)
@@ -345,9 +316,6 @@ async def delete_data(
         Delete and audit log write happen in the SAME database transaction.
         If either fails, the entire transaction rolls back.
     """
-    # Verify internal call (403 if invalid secret in production)
-    _verify_internal_call(request)
-
     # Check confirmation BEFORE any database operations
     if not payload.confirm:
         raise HTTPException(

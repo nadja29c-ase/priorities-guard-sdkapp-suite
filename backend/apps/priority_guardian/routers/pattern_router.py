@@ -15,12 +15,15 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
-from backend.apps.priority_guardian.dependencies import validate_user_id_header
+from backend.apps.priority_guardian.dependencies import validate_user_id_header, verify_internal_call
 from backend.apps.priority_guardian.services.pattern_service import compute_patterns
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(tags=["Priority Guardian Patterns"])
+router = APIRouter(
+    tags=["Priority Guardian Patterns"],
+    dependencies=[Depends(verify_internal_call)],
+)
 
 
 @router.get("/patterns")

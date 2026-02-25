@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+
+from backend.apps.priority_guardian.dependencies import verify_internal_call
 from sqlalchemy import select, update, any_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +28,10 @@ from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizat
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(tags=["priority-guardian-offboarding"])
+router = APIRouter(
+    tags=["priority-guardian-offboarding"],
+    dependencies=[Depends(verify_internal_call)],
+)
 
 
 @router.post("/disconnect")

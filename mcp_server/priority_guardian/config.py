@@ -121,6 +121,14 @@ BACKEND_URL = get_env(
     default="http://localhost:8000"
 ).rstrip("/")
 
+# Internal API secret for backend authentication
+# Must match backend's INTERNAL_API_SECRET setting.
+# Empty = disabled (dev mode). In production, this MUST be set.
+INTERNAL_API_SECRET = get_env(
+    "INTERNAL_API_SECRET",
+    default=""
+)
+
 
 # ============================================================================
 # OAuth Discovery Configuration

@@ -391,6 +391,147 @@ class TestBackendDelete:
         assert result["data"]["deleted"] is True
 
 
+class TestInternalSecretHeader:
+    """Tests for X-Internal-Secret header inclusion."""
+
+    @pytest.mark.asyncio
+    async def test_backend_get_includes_internal_secret_when_configured(self):
+        """backend_get includes X-Internal-Secret header when INTERNAL_API_SECRET is set."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with patch("mcp_server.priority_guardian.http_client.INTERNAL_API_SECRET", "test-secret"):
+                from mcp_server.priority_guardian.http_client import backend_get
+
+                await backend_get(
+                    "/api/test",
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                )
+
+        call_kwargs = mock_client.get.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert headers["X-Internal-Secret"] == "test-secret"
+
+    @pytest.mark.asyncio
+    async def test_backend_get_omits_internal_secret_when_empty(self):
+        """backend_get omits X-Internal-Secret header when INTERNAL_API_SECRET is empty."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.get.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with patch("mcp_server.priority_guardian.http_client.INTERNAL_API_SECRET", ""):
+                from mcp_server.priority_guardian.http_client import backend_get
+
+                await backend_get(
+                    "/api/test",
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                )
+
+        call_kwargs = mock_client.get.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert "X-Internal-Secret" not in headers
+
+    @pytest.mark.asyncio
+    async def test_backend_post_includes_internal_secret_when_configured(self):
+        """backend_post includes X-Internal-Secret header when INTERNAL_API_SECRET is set."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.post.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with patch("mcp_server.priority_guardian.http_client.INTERNAL_API_SECRET", "test-secret"):
+                from mcp_server.priority_guardian.http_client import backend_post
+
+                await backend_post(
+                    "/api/test",
+                    {"key": "value"},
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                )
+
+        call_kwargs = mock_client.post.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert headers["X-Internal-Secret"] == "test-secret"
+
+    @pytest.mark.asyncio
+    async def test_backend_put_includes_internal_secret_when_configured(self):
+        """backend_put includes X-Internal-Secret header when INTERNAL_API_SECRET is set."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": "test"}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.put.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with patch("mcp_server.priority_guardian.http_client.INTERNAL_API_SECRET", "test-secret"):
+                from mcp_server.priority_guardian.http_client import backend_put
+
+                await backend_put(
+                    "/api/test/123",
+                    {"name": "Updated"},
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                )
+
+        call_kwargs = mock_client.put.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert headers["X-Internal-Secret"] == "test-secret"
+
+    @pytest.mark.asyncio
+    async def test_backend_delete_includes_internal_secret_when_configured(self):
+        """backend_delete includes X-Internal-Secret header when INTERNAL_API_SECRET is set."""
+        import mcp_server.priority_guardian.http_client as http_client_module
+        http_client_module.http_client = None
+
+        mock_client = AsyncMock()
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status = MagicMock()
+        mock_client.delete.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with patch("mcp_server.priority_guardian.http_client.INTERNAL_API_SECRET", "test-secret"):
+                from mcp_server.priority_guardian.http_client import backend_delete
+
+                await backend_delete(
+                    "/api/test/123",
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                )
+
+        call_kwargs = mock_client.delete.call_args
+        headers = call_kwargs.kwargs.get("headers", {})
+        assert headers["X-Internal-Secret"] == "test-secret"
+
+
 class TestCleanupHttpClient:
     """Tests for cleanup_http_client function."""
 

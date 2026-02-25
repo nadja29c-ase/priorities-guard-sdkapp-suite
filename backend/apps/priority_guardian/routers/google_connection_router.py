@@ -16,6 +16,8 @@ import structlog
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+
+from backend.apps.priority_guardian.dependencies import verify_internal_call
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,7 +29,10 @@ from backend.apps.priority_guardian.pg_config import GOOGLE_CALENDAR_SCOPE
 
 logger = structlog.get_logger(__name__)
 
-router = APIRouter(tags=["Priority Guardian Google Connection"])
+router = APIRouter(
+    tags=["Priority Guardian Google Connection"],
+    dependencies=[Depends(verify_internal_call)],
+)
 
 
 @router.get("/connection-status")
