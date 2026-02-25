@@ -46,24 +46,29 @@ class TestToolRegistration:
         assert "inspect & adapt" in inspect_adapt_tool.description.lower()
         assert "action steps" in inspect_adapt_tool.description.lower()
 
-        # Check input schema has required properties (no phase anymore)
+        # Check input schema has required properties
         assert "reflection_items" in inspect_adapt_tool.inputSchema["properties"]
         assert "action_steps" in inspect_adapt_tool.inputSchema["properties"]
         assert "user_confirmed" in inspect_adapt_tool.inputSchema["properties"]
 
-        # Verify phase is NOT in schema (single-call tool)
-        assert "phase" not in inspect_adapt_tool.inputSchema["properties"]
+        # Verify lean schema - no description or action fields
+        reflection_props = inspect_adapt_tool.inputSchema["properties"]["reflection_items"]["items"]["properties"]
+        assert "id" in reflection_props
+        assert "user_reflection_verbatim" in reflection_props
+        assert "lens" in reflection_props
+        assert "description" not in reflection_props  # Removed
 
-        # Check meta has correct structure (Tool model uses 'meta' attribute)
+        action_props = inspect_adapt_tool.inputSchema["properties"]["action_steps"]["items"]["properties"]
+        assert "user_action_verbatim" in action_props
+        assert "derived_from_id" in action_props
+        assert "action" not in action_props  # Removed
+
+        # Check meta has correct structure
         tool_meta = getattr(inspect_adapt_tool, "meta", None) or getattr(inspect_adapt_tool, "_meta", None)
         assert tool_meta is not None
         assert "annotations" in tool_meta
         assert tool_meta["annotations"]["readOnlyHint"] is True
         assert tool_meta["annotations"]["destructiveHint"] is False
-
-        # Check invocation messages are present
-        assert "openai/toolInvocation/invoking" in tool_meta
-        assert "openai/toolInvocation/invoked" in tool_meta
 
     def test_tool_has_required_scopes(self):
         """inspect_adapt requires pg.access scope."""
@@ -89,25 +94,21 @@ class TestFullFlow:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "I blocked the first 2 hours of every morning for P1 work",
-                    "description": "Morning 2-hour block dedicated to P1",
                     "lens": "helped",
                 },
                 {
                     "id": "r2",
                     "user_reflection_verbatim": "I kept skipping Spanish because evenings were too packed",
-                    "description": "Evening schedule too busy for Spanish practice",
                     "lens": "hindered",
                 },
             ],
             "action_steps": [
                 {
                     "user_action_verbatim": "I'll keep the morning block, it's working",
-                    "action": "Continue morning 2-hour P1 block",
                     "derived_from_id": "r1",
                 },
                 {
                     "user_action_verbatim": "I'll try 20 minutes at lunch instead of evenings",
-                    "action": "Move Spanish practice to 20-minute lunch slot",
                     "derived_from_id": "r2",
                 },
             ],

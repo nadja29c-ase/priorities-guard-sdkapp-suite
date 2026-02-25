@@ -14,9 +14,7 @@ from mcp_server.priority_guardian.tools.inspect_adapt import (
     handle,
     GUIDANCE_COMMIT_SUCCESS,
     GUIDANCE_EMPTY_REFLECTION_VERBATIM,
-    GUIDANCE_EMPTY_REFLECTION_DESCRIPTION,
     GUIDANCE_EMPTY_ACTION_VERBATIM,
-    GUIDANCE_EMPTY_ACTION,
     GUIDANCE_INVALID_DERIVED_FROM_ID,
     GUIDANCE_USER_NOT_CONFIRMED,
 )
@@ -34,7 +32,6 @@ def valid_reflection_items():
         {
             "id": "r1",
             "user_reflection_verbatim": "I blocked 2 hours every morning before checking email",
-            "description": "Morning time block before email",
             "lens": "helped",
         },
     ]
@@ -46,7 +43,6 @@ def valid_action_steps():
     return [
         {
             "user_action_verbatim": "I'll keep the morning block but add a reminder",
-            "action": "Continue morning block with calendar reminder at 8am",
             "derived_from_id": "r1",
         },
     ]
@@ -90,25 +86,21 @@ class TestSuccess:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "Morning routine helped",
-                    "description": "Consistent morning routine",
                     "lens": "helped",
                 },
                 {
                     "id": "r2",
                     "user_reflection_verbatim": "Too many meetings in the afternoon",
-                    "description": "Afternoon meeting overload",
                     "lens": "hindered",
                 },
             ],
             "action_steps": [
                 {
                     "user_action_verbatim": "Keep morning routine",
-                    "action": "Continue morning routine",
                     "derived_from_id": "r1",
                 },
                 {
                     "user_action_verbatim": "Block one meeting-free afternoon",
-                    "action": "Block Wednesday afternoon as meeting-free",
                     "derived_from_id": "r2",
                 },
             ],
@@ -129,20 +121,17 @@ class TestSuccess:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "First reflection",
-                    "description": "First item",
                     "lens": "helped",
                 },
                 {
                     "id": "r2",
                     "user_reflection_verbatim": "Second reflection",
-                    "description": "Second item",
                     "lens": "hindered",
                 },
             ],
             "action_steps": [
                 {
                     "user_action_verbatim": "Action for second",
-                    "action": "Do something about second",
                     "derived_from_id": "r2",  # Links to r2
                 },
             ],
@@ -169,7 +158,6 @@ class TestProvenanceValidation:
             "action_steps": [
                 {
                     "user_action_verbatim": "Do something",
-                    "action": "Something",
                     "derived_from_id": "r1",
                 },
             ],
@@ -191,7 +179,6 @@ class TestProvenanceValidation:
             "action_steps": [
                 {
                     "user_action_verbatim": "Do something",
-                    "action": "Something",
                     "derived_from_id": "r1",
                 },
             ],
@@ -211,14 +198,12 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "",
-                    "description": "Some description",
                     "lens": "helped",
                 },
             ],
             "action_steps": [
                 {
                     "user_action_verbatim": "Do something",
-                    "action": "Something",
                     "derived_from_id": "r1",
                 },
             ],
@@ -231,34 +216,6 @@ class TestProvenanceValidation:
         assert result.structuredContent["error"] == "empty_reflection_verbatim"
 
     @pytest.mark.asyncio
-    async def test_reflection_description_empty(self):
-        """Empty description returns provenance error."""
-        args = {
-            "reflection_items": [
-                {
-                    "id": "r1",
-                    "user_reflection_verbatim": "User said something",
-                    "description": "",
-                    "lens": "helped",
-                },
-            ],
-            "action_steps": [
-                {
-                    "user_action_verbatim": "Do something",
-                    "action": "Something",
-                    "derived_from_id": "r1",
-                },
-            ],
-            "user_confirmed": True,
-        }
-
-        result = await handle("user-123", "corr-456", args)
-
-        assert result.isError is True
-        assert result.structuredContent["error"] == "empty_reflection_description"
-        assert GUIDANCE_EMPTY_REFLECTION_DESCRIPTION in result.structuredContent["assistant_guidance"]["instruction"]
-
-    @pytest.mark.asyncio
     async def test_missing_action_steps(self):
         """Missing action_steps returns provenance error."""
         args = {
@@ -266,7 +223,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
@@ -287,7 +243,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
@@ -308,14 +263,12 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
             "action_steps": [
                 {
                     "user_action_verbatim": "",
-                    "action": "Something",
                     "derived_from_id": "r1",
                 },
             ],
@@ -328,34 +281,6 @@ class TestProvenanceValidation:
         assert result.structuredContent["error"] == "empty_action_verbatim"
 
     @pytest.mark.asyncio
-    async def test_action_empty(self):
-        """Empty action returns provenance error."""
-        args = {
-            "reflection_items": [
-                {
-                    "id": "r1",
-                    "user_reflection_verbatim": "User said something",
-                    "description": "Description",
-                    "lens": "helped",
-                },
-            ],
-            "action_steps": [
-                {
-                    "user_action_verbatim": "User said they will do something",
-                    "action": "",
-                    "derived_from_id": "r1",
-                },
-            ],
-            "user_confirmed": True,
-        }
-
-        result = await handle("user-123", "corr-456", args)
-
-        assert result.isError is True
-        assert result.structuredContent["error"] == "empty_action"
-        assert GUIDANCE_EMPTY_ACTION in result.structuredContent["assistant_guidance"]["instruction"]
-
-    @pytest.mark.asyncio
     async def test_invalid_derived_from_id(self):
         """derived_from_id doesn't match any reflection item id, returns provenance error."""
         args = {
@@ -363,14 +288,12 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
             "action_steps": [
                 {
                     "user_action_verbatim": "User said they will do something",
-                    "action": "Do something",
                     "derived_from_id": "r99",  # Invalid - r99 doesn't exist
                 },
             ],
@@ -391,12 +314,11 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "   \t\n  ",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
             "action_steps": [
-                {"user_action_verbatim": "x", "action": "x", "derived_from_id": "r1"},
+                {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }
@@ -414,12 +336,11 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "Something",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
             "action_steps": [
-                {"user_action_verbatim": "   ", "action": "x", "derived_from_id": "r1"},
+                {"user_action_verbatim": "   ", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }
@@ -481,13 +402,13 @@ class TestDefensiveGuards:
         """4+ reflection items raises ToolUsageError."""
         args = {
             "reflection_items": [
-                {"id": "r1", "user_reflection_verbatim": "a", "description": "a", "lens": "helped"},
-                {"id": "r2", "user_reflection_verbatim": "b", "description": "b", "lens": "helped"},
-                {"id": "r3", "user_reflection_verbatim": "c", "description": "c", "lens": "helped"},
-                {"id": "r4", "user_reflection_verbatim": "d", "description": "d", "lens": "helped"},
+                {"id": "r1", "user_reflection_verbatim": "a", "lens": "helped"},
+                {"id": "r2", "user_reflection_verbatim": "b", "lens": "helped"},
+                {"id": "r3", "user_reflection_verbatim": "c", "lens": "helped"},
+                {"id": "r4", "user_reflection_verbatim": "d", "lens": "helped"},
             ],
             "action_steps": [
-                {"user_action_verbatim": "x", "action": "x", "derived_from_id": "r1"},
+                {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }
@@ -503,10 +424,10 @@ class TestDefensiveGuards:
         args = {
             "reflection_items": valid_reflection_items,
             "action_steps": [
-                {"user_action_verbatim": "a", "action": "a", "derived_from_id": "r1"},
-                {"user_action_verbatim": "b", "action": "b", "derived_from_id": "r1"},
-                {"user_action_verbatim": "c", "action": "c", "derived_from_id": "r1"},
-                {"user_action_verbatim": "d", "action": "d", "derived_from_id": "r1"},
+                {"user_action_verbatim": "a", "derived_from_id": "r1"},
+                {"user_action_verbatim": "b", "derived_from_id": "r1"},
+                {"user_action_verbatim": "c", "derived_from_id": "r1"},
+                {"user_action_verbatim": "d", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }
@@ -524,12 +445,11 @@ class TestDefensiveGuards:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "Something",
-                    "description": "Description",
                     "lens": "neutral",  # Invalid
                 },
             ],
             "action_steps": [
-                {"user_action_verbatim": "x", "action": "x", "derived_from_id": "r1"},
+                {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }
@@ -547,12 +467,11 @@ class TestDefensiveGuards:
                 {
                     # id missing
                     "user_reflection_verbatim": "Something",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
             "action_steps": [
-                {"user_action_verbatim": "x", "action": "x", "derived_from_id": "r1"},
+                {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }
@@ -570,12 +489,11 @@ class TestDefensiveGuards:
                 {
                     "id": "",
                     "user_reflection_verbatim": "Something",
-                    "description": "Description",
                     "lens": "helped",
                 },
             ],
             "action_steps": [
-                {"user_action_verbatim": "x", "action": "x", "derived_from_id": "r1"},
+                {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }
@@ -593,18 +511,16 @@ class TestDefensiveGuards:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "First",
-                    "description": "First",
                     "lens": "helped",
                 },
                 {
                     "id": "r1",  # Duplicate
                     "user_reflection_verbatim": "Second",
-                    "description": "Second",
                     "lens": "hindered",
                 },
             ],
             "action_steps": [
-                {"user_action_verbatim": "x", "action": "x", "derived_from_id": "r1"},
+                {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
             "user_confirmed": True,
         }

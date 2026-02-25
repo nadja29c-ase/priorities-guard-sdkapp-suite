@@ -53,52 +53,44 @@ INPUT_SCHEMA = {
                     },
                     "user_reflection_verbatim": {
                         "type": "string",
-                        "description": "Copy-paste the user's exact words describing this behavior, ritual, or decision. Must be non-empty. Do NOT paraphrase or infer — use the user's actual statement.",
+                        "description": "The user's exact words describing this behavior, ritual, or decision. Must be non-empty.",
                         "minLength": 1,
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Derived from user_reflection_verbatim — normalized for clarity. Do not invent specificity the user did not state.",
                     },
                     "lens": {
                         "type": "string",
                         "enum": ["helped", "hindered"],
-                        "description": "Whether this item helped progress or hindered it. Derived from the user's framing.",
+                        "description": "Whether this item helped progress or hindered it.",
                     },
                 },
-                "required": ["id", "user_reflection_verbatim", "description", "lens"],
+                "required": ["id", "user_reflection_verbatim", "lens"],
             },
             "minItems": 1,
             "maxItems": 3,
         },
         "action_steps": {
             "type": "array",
-            "description": "1-3 small, concrete action steps for next week. Each must link to a reflection item by id.",
+            "description": "1-3 action steps for next week. Each must link to a reflection item by id.",
             "items": {
                 "type": "object",
                 "properties": {
                     "user_action_verbatim": {
                         "type": "string",
-                        "description": "Copy-paste the user's exact words for what they will do next week. Must be non-empty. Do NOT propose new actions the user didn't imply — only rephrase the user's described behaviors into next-week commitments.",
+                        "description": "The user's exact words for what they will do next week. Must be non-empty.",
                         "minLength": 1,
-                    },
-                    "action": {
-                        "type": "string",
-                        "description": "Derived from user_action_verbatim — normalized for clarity. Must be concrete enough to do in one week. Close to user's existing habits — adjustment, not overhaul.",
                     },
                     "derived_from_id": {
                         "type": "string",
-                        "description": "The 'id' of the reflection item this action connects to. Must exactly match an id from reflection_items (e.g., 'r1').",
+                        "description": "The 'id' of the reflection item this action connects to (e.g., 'r1').",
                     },
                 },
-                "required": ["user_action_verbatim", "action", "derived_from_id"],
+                "required": ["user_action_verbatim", "derived_from_id"],
             },
             "minItems": 1,
             "maxItems": 3,
         },
         "user_confirmed": {
             "type": "boolean",
-            "description": "Must be true — indicates the user explicitly confirmed these action steps. Do NOT set to true unless the user has seen and agreed to the specific actions.",
+            "description": "Must be true — indicates the user explicitly confirmed these action steps.",
         },
     },
     "required": ["reflection_items", "action_steps", "user_confirmed"],
@@ -121,22 +113,10 @@ GUIDANCE_EMPTY_REFLECTION_VERBATIM = (
     "Ask ONE question and wait for their answer. Store their exact words in user_reflection_verbatim."
 )
 
-GUIDANCE_EMPTY_REFLECTION_DESCRIPTION = (
-    "description is empty for one or more reflection items. "
-    "Derive from user_reflection_verbatim — normalize for clarity but do not invent specificity."
-)
-
 GUIDANCE_EMPTY_ACTION_VERBATIM = (
     "user_action_verbatim is empty for one or more action steps. "
     "Do not call this tool until the user has stated what they will do next week. "
-    "Only rephrase the user's described behaviors into next-week commitments. "
-    "Do NOT propose new actions the user didn't imply. "
     "Store their exact words in user_action_verbatim."
-)
-
-GUIDANCE_EMPTY_ACTION = (
-    "action is empty for one or more action steps. "
-    "Derive from user_action_verbatim — normalize for clarity but do not invent specificity."
 )
 
 GUIDANCE_INVALID_DERIVED_FROM_ID = (
@@ -159,10 +139,6 @@ GUIDANCE_COMMIT_SUCCESS = (
     "Present a brief, clean summary of what they committed to. "
     "Mention they can add these to their calendar if they want to lock in the time. "
     "Do NOT add more advice. Do NOT expand on the steps. Keep it to 2-3 sentences max."
-)
-
-GUIDANCE_COMMIT_VALIDATION_ERROR = (
-    "The commit could not be recorded. Tell the user what was missing and ask them to confirm again."
 )
 
 
@@ -279,17 +255,6 @@ async def handle(
             )
             return _build_provenance_error("empty_reflection_verbatim", GUIDANCE_EMPTY_REFLECTION_VERBATIM)
 
-        # Check description
-        description = item.get("description", "")
-        if not description or not description.strip():
-            logger.info(
-                "tool.inspect_adapt.provenance_failed",
-                correlation_id=correlation_id,
-                field="description",
-                index=i,
-            )
-            return _build_provenance_error("empty_reflection_description", GUIDANCE_EMPTY_REFLECTION_DESCRIPTION)
-
         # Check lens
         lens = item.get("lens")
         if lens not in ("helped", "hindered"):
@@ -321,17 +286,6 @@ async def handle(
                 index=i,
             )
             return _build_provenance_error("empty_action_verbatim", GUIDANCE_EMPTY_ACTION_VERBATIM)
-
-        # Check action
-        action = step.get("action", "")
-        if not action or not action.strip():
-            logger.info(
-                "tool.inspect_adapt.provenance_failed",
-                correlation_id=correlation_id,
-                field="action",
-                index=i,
-            )
-            return _build_provenance_error("empty_action", GUIDANCE_EMPTY_ACTION)
 
         # Check derived_from_id references a valid reflection item
         derived_from_id = step.get("derived_from_id", "")
