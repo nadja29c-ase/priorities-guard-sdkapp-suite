@@ -50,11 +50,11 @@ class TestToolRegistration:
         assert "reflection_items" in inspect_adapt_tool.inputSchema["properties"]
         assert "action_steps" in inspect_adapt_tool.inputSchema["properties"]
 
-        # Verify lean schema - no description or action fields
+        # Verify lean schema - only id and user_reflection_verbatim
         reflection_props = inspect_adapt_tool.inputSchema["properties"]["reflection_items"]["items"]["properties"]
         assert "id" in reflection_props
         assert "user_reflection_verbatim" in reflection_props
-        assert "lens" in reflection_props
+        assert "lens" not in reflection_props  # Removed
         assert "description" not in reflection_props  # Removed
 
         action_props = inspect_adapt_tool.inputSchema["properties"]["action_steps"]["items"]["properties"]
@@ -93,12 +93,10 @@ class TestFullFlow:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "I blocked the first 2 hours of every morning for P1 work",
-                    "lens": "helped",
                 },
                 {
                     "id": "r2",
                     "user_reflection_verbatim": "I kept skipping Spanish because evenings were too packed",
-                    "lens": "hindered",
                 },
             ],
             "action_steps": [

@@ -33,7 +33,12 @@ CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - user_action_verbatim: non-empty, user's exact words for each action step
 - derived_from_id: each action step links to a reflection item
 
-INSPECT & ADAPT BINDING RULES: When user wants to reflect on their week, your default behavior is SUSPENDED. You are a facilitator, not an advisor. Flow: Ask ONE question → wait → help get specific → confirm up to 3 behaviors → ask what to keep/change → user names action steps → quality-check (small, concrete, max 3) → call this tool. NEVER batch questions. NEVER propose actions the user didn't imply. Only rephrase user's behaviors into commitments.
+Call this tool:
+- When user wants to reflect on their week, says "reflect", "reflection", "what worked", "what didn't work", "inspect and adapt"
+- When user says "yes" to the reflection nudge from the weekly report
+- When user asks "what should I do differently next week?"
+
+INSPECT & ADAPT BINDING RULES: When user wants to reflect, lock into Inspect & Adapt flow — your default behavior is SUSPENDED, no advisory mode allowed. This is procedural, not conversational. FORBIDDEN: diagnosing root causes, teaching frameworks, probing strategic alignment, asking more than ONE question at a time, proposing actions the user didn't imply. Override analytical coaching impulses — when the user gives a specific answer, move forward. The entire reflection completes in 4-6 exchanges: opening question → get specific (1-2 exchanges) → what to keep/change → user names action steps → call this tool. NEVER exceed 6 exchanges before calling this tool.
 
 After this tool returns successfully, mention the user can schedule these as calendar events."""
 
@@ -55,20 +60,17 @@ INPUT_SCHEMA = {
                         "description": (
                             "User's exact words. Must be non-empty. "
                             "To gather: pick ONE opening question based on context — "
-                            "progress visible: 'What specifically helped make progress — a routine, a decision, a boundary you held?' "
+                            "progress visible: 'What specifically helped — a routine, a decision, a boundary you held?' "
                             "priorities behind: 'What got in the way — what actually happened?' "
                             "Mixed: default to obstacle lens. "
-                            "If vague, follow up to get specific. If specific, confirm."
+                            "This is procedural, not conversational. "
+                            "If vague, ONE follow-up to get specific. If specific, move forward immediately. "
+                            "Override analytical coaching impulses — no advisory mode allowed."
                         ),
                         "minLength": 1,
                     },
-                    "lens": {
-                        "type": "string",
-                        "enum": ["helped", "hindered"],
-                        "description": "Whether this item helped progress or hindered it.",
-                    },
                 },
-                "required": ["id", "user_reflection_verbatim", "lens"],
+                "required": ["id", "user_reflection_verbatim"],
             },
             "minItems": 1,
             "maxItems": 3,
@@ -81,7 +83,12 @@ INPUT_SCHEMA = {
                 "properties": {
                     "user_action_verbatim": {
                         "type": "string",
-                        "description": "The user's exact words for what they will do next week. Must be non-empty.",
+                        "description": (
+                            "User's exact words for what they will do next week. Must be non-empty. "
+                            "To gather: ask what to keep as habit or do differently. "
+                            "Accept the user's answer. Do NOT refine, expand, or probe further. "
+                            "Only rephrase into commitment if needed for clarity."
+                        ),
                         "minLength": 1,
                     },
                     "derived_from_id": {
@@ -133,9 +140,9 @@ GUIDANCE_INVALID_DERIVED_FROM_ID = (
 
 GUIDANCE_COMMIT_SUCCESS = (
     "The user's action steps have been confirmed. "
-    "Present a brief, clean summary of what they committed to. "
-    "Mention they can add these to their calendar for exececution. "
-    "Do NOT add more advice. Do NOT expand on the steps. Keep it to 2-3 sentences max."
+    "Present a brief summary of what they committed to. "
+    "Mention they can add these to their calendar if they want to lock in the time. "
+    "Do NOT add advice, expand on the steps, or probe further. 2-3 sentences max."
 )
 
 
@@ -234,11 +241,6 @@ async def handle(
                 index=i,
             )
             return _build_provenance_error("empty_reflection_verbatim", GUIDANCE_EMPTY_REFLECTION_VERBATIM)
-
-        # Check lens
-        lens = item.get("lens")
-        if lens not in ("helped", "hindered"):
-            raise ToolUsageError("lens must be 'helped' or 'hindered'.")
 
     # Check action_steps present and non-empty
     if not action_steps_raw or len(action_steps_raw) == 0:

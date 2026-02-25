@@ -30,7 +30,6 @@ def valid_reflection_items():
         {
             "id": "r1",
             "user_reflection_verbatim": "I blocked 2 hours every morning before checking email",
-            "lens": "helped",
         },
     ]
 
@@ -83,12 +82,10 @@ class TestSuccess:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "Morning routine helped",
-                    "lens": "helped",
                 },
                 {
                     "id": "r2",
                     "user_reflection_verbatim": "Too many meetings in the afternoon",
-                    "lens": "hindered",
                 },
             ],
             "action_steps": [
@@ -117,12 +114,10 @@ class TestSuccess:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "First reflection",
-                    "lens": "helped",
                 },
                 {
                     "id": "r2",
                     "user_reflection_verbatim": "Second reflection",
-                    "lens": "hindered",
                 },
             ],
             "action_steps": [
@@ -191,7 +186,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [
@@ -215,7 +209,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "lens": "helped",
                 },
             ],
         }
@@ -234,7 +227,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [],
@@ -253,7 +245,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [
@@ -277,7 +268,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "User said something",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [
@@ -302,7 +292,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "   \t\n  ",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [
@@ -323,7 +312,6 @@ class TestProvenanceValidation:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "Something",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [
@@ -349,10 +337,10 @@ class TestDefensiveGuards:
         """4+ reflection items raises ToolUsageError."""
         args = {
             "reflection_items": [
-                {"id": "r1", "user_reflection_verbatim": "a", "lens": "helped"},
-                {"id": "r2", "user_reflection_verbatim": "b", "lens": "helped"},
-                {"id": "r3", "user_reflection_verbatim": "c", "lens": "helped"},
-                {"id": "r4", "user_reflection_verbatim": "d", "lens": "helped"},
+                {"id": "r1", "user_reflection_verbatim": "a"},
+                {"id": "r2", "user_reflection_verbatim": "b"},
+                {"id": "r3", "user_reflection_verbatim": "c"},
+                {"id": "r4", "user_reflection_verbatim": "d"},
             ],
             "action_steps": [
                 {"user_action_verbatim": "x", "derived_from_id": "r1"},
@@ -383,27 +371,6 @@ class TestDefensiveGuards:
         assert "1-3 items" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_reflection_item_invalid_lens(self):
-        """lens not in ["helped", "hindered"] raises ToolUsageError."""
-        args = {
-            "reflection_items": [
-                {
-                    "id": "r1",
-                    "user_reflection_verbatim": "Something",
-                    "lens": "neutral",  # Invalid
-                },
-            ],
-            "action_steps": [
-                {"user_action_verbatim": "x", "derived_from_id": "r1"},
-            ],
-        }
-
-        with pytest.raises(ToolUsageError) as exc_info:
-            await handle("user-123", "corr-456", args)
-
-        assert "helped" in str(exc_info.value) or "hindered" in str(exc_info.value)
-
-    @pytest.mark.asyncio
     async def test_reflection_item_missing_id(self):
         """Missing id on reflection item raises ToolUsageError."""
         args = {
@@ -411,7 +378,6 @@ class TestDefensiveGuards:
                 {
                     # id missing
                     "user_reflection_verbatim": "Something",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [
@@ -432,7 +398,6 @@ class TestDefensiveGuards:
                 {
                     "id": "",
                     "user_reflection_verbatim": "Something",
-                    "lens": "helped",
                 },
             ],
             "action_steps": [
@@ -453,12 +418,10 @@ class TestDefensiveGuards:
                 {
                     "id": "r1",
                     "user_reflection_verbatim": "First",
-                    "lens": "helped",
                 },
                 {
                     "id": "r1",  # Duplicate
                     "user_reflection_verbatim": "Second",
-                    "lens": "hindered",
                 },
             ],
             "action_steps": [
