@@ -17,8 +17,6 @@ Implements increment_29 specification.
 
 import structlog
 from mcp import types as mcp_types
-from pydantic import BaseModel, field_validator
-from typing import Literal
 
 from .base import ToolDefinition, ToolUsageError
 
@@ -132,60 +130,6 @@ REQUIRED_SCOPES = ["pg.access"]
 
 # No widget for inspect_adapt - LLM narrates conversationally
 WIDGET_URI = None
-
-
-# ============================================================================
-# Pydantic Models for Commit Validation
-# ============================================================================
-
-class ReflectionItem(BaseModel):
-    """A single reflection item from the user."""
-    id: str
-    user_reflection_verbatim: str
-    description: str
-    lens: Literal["helped", "hindered"]
-
-    @field_validator("id")
-    @classmethod
-    def id_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("id must not be empty")
-        return v
-
-    @field_validator("user_reflection_verbatim")
-    @classmethod
-    def verbatim_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("user_reflection_verbatim must not be empty")
-        return v
-
-    @field_validator("description")
-    @classmethod
-    def description_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("description must not be empty")
-        return v
-
-
-class ActionStep(BaseModel):
-    """A single action step for next week."""
-    user_action_verbatim: str
-    action: str
-    derived_from_id: str
-
-    @field_validator("user_action_verbatim")
-    @classmethod
-    def verbatim_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("user_action_verbatim must not be empty")
-        return v
-
-    @field_validator("action")
-    @classmethod
-    def action_not_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("action must not be empty")
-        return v
 
 
 # ============================================================================
