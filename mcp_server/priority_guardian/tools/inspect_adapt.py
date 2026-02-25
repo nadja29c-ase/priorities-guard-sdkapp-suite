@@ -53,7 +53,14 @@ INPUT_SCHEMA = {
                     },
                     "user_reflection_verbatim": {
                         "type": "string",
-                        "description": "The user's exact words describing this behavior, ritual, or decision. Must be non-empty.",
+                        "description": (
+                            "User's exact words. Must be non-empty. "
+                            "To gather: pick ONE opening question based on context — "
+                            "progress visible: 'What specifically helped — a routine, a decision, a boundary you held?' "
+                            "priorities behind: 'What got in the way — what actually happened?' "
+                            "Mixed: default to obstacle lens. "
+                            "If vague, follow up to get specific. If specific, confirm."
+                        ),
                         "minLength": 1,
                     },
                     "lens": {
