@@ -12,7 +12,7 @@ PERSISTENCE SEMANTICS:
 
     Enforced at DB level via UNIQUE constraint on user_id.
 
-    This design was chosen because:
+    This design was chosen because: 
     - Clarity is stateless from ChatGPT's perspective
     - Only the current brain dump state matters
     - Historical snapshots have no use case
