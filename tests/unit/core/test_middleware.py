@@ -167,7 +167,6 @@ class TestSecurityHeadersMiddleware:
             "object-src 'none'; "
             "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline'; "
-            "form-action 'self'; "
             "frame-ancestors 'none'"
         ),
     }

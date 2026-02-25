@@ -86,15 +86,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             # object-src 'none' blocks Flash/plugin-based XSS
             # script-src 'self' 'unsafe-inline' allows inline scripts (consent pages)
             # style-src 'self' 'unsafe-inline' allows inline styles
-            # form-action 'self' prevents consent page forms from being redirected to external domains
             # frame-ancestors 'none' reinforces X-Frame-Options DENY
+            # NOTE: form-action intentionally omitted - consent forms post to same-origin
+            # but the directive caused issues in production (possibly proxy/CDN related)
             "Content-Security-Policy": (
                 "default-src 'self'; "
                 "base-uri 'self'; "
                 "object-src 'none'; "
                 "script-src 'self' 'unsafe-inline'; "
                 "style-src 'self' 'unsafe-inline'; "
-                "form-action 'self'; "
                 "frame-ancestors 'none'"
             ),
         })
