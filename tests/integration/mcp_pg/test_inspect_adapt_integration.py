@@ -49,7 +49,6 @@ class TestToolRegistration:
         # Check input schema has required properties
         assert "reflection_items" in inspect_adapt_tool.inputSchema["properties"]
         assert "action_steps" in inspect_adapt_tool.inputSchema["properties"]
-        assert "user_confirmed" in inspect_adapt_tool.inputSchema["properties"]
 
         # Verify lean schema - no description or action fields
         reflection_props = inspect_adapt_tool.inputSchema["properties"]["reflection_items"]["items"]["properties"]
@@ -112,7 +111,6 @@ class TestFullFlow:
                     "derived_from_id": "r2",
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle(user_id, correlation_id, args)

@@ -4,7 +4,6 @@ Unit tests for inspect_adapt MCP tool (Increment 30).
 Single-call tool — tests:
 - Success cases
 - Provenance validation (isError: true)
-- Conversational guardrails (isError: false)
 - Defensive guards (ToolUsageError)
 """
 
@@ -16,7 +15,6 @@ from mcp_server.priority_guardian.tools.inspect_adapt import (
     GUIDANCE_EMPTY_REFLECTION_VERBATIM,
     GUIDANCE_EMPTY_ACTION_VERBATIM,
     GUIDANCE_INVALID_DERIVED_FROM_ID,
-    GUIDANCE_USER_NOT_CONFIRMED,
 )
 from mcp_server.priority_guardian.tools.base import ToolUsageError
 
@@ -54,7 +52,6 @@ def valid_args(valid_reflection_items, valid_action_steps):
     return {
         "reflection_items": valid_reflection_items,
         "action_steps": valid_action_steps,
-        "user_confirmed": True,
     }
 
 
@@ -104,7 +101,6 @@ class TestSuccess:
                     "derived_from_id": "r2",
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -135,7 +131,6 @@ class TestSuccess:
                     "derived_from_id": "r2",  # Links to r2
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -161,7 +156,6 @@ class TestProvenanceValidation:
                     "derived_from_id": "r1",
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -182,7 +176,6 @@ class TestProvenanceValidation:
                     "derived_from_id": "r1",
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -207,7 +200,6 @@ class TestProvenanceValidation:
                     "derived_from_id": "r1",
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -226,7 +218,6 @@ class TestProvenanceValidation:
                     "lens": "helped",
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -247,7 +238,6 @@ class TestProvenanceValidation:
                 },
             ],
             "action_steps": [],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -272,7 +262,6 @@ class TestProvenanceValidation:
                     "derived_from_id": "r1",
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -297,7 +286,6 @@ class TestProvenanceValidation:
                     "derived_from_id": "r99",  # Invalid - r99 doesn't exist
                 },
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -320,7 +308,6 @@ class TestProvenanceValidation:
             "action_steps": [
                 {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
@@ -342,52 +329,12 @@ class TestProvenanceValidation:
             "action_steps": [
                 {"user_action_verbatim": "   ", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         result = await handle("user-123", "corr-456", args)
 
         assert result.isError is True
         assert result.structuredContent["error"] == "empty_action_verbatim"
-
-
-# ============================================================================
-# Conversational Guardrail Tests (isError: false)
-# ============================================================================
-
-class TestConversationalGuardrails:
-    """Tests for conversational guardrails (isError: false)."""
-
-    @pytest.mark.asyncio
-    async def test_user_not_confirmed(self, valid_reflection_items, valid_action_steps):
-        """user_confirmed=false returns soft block with GUIDANCE_USER_NOT_CONFIRMED, isError=false."""
-        args = {
-            "reflection_items": valid_reflection_items,
-            "action_steps": valid_action_steps,
-            "user_confirmed": False,
-        }
-
-        result = await handle("user-123", "corr-456", args)
-
-        assert result.isError is False  # Soft block, not error
-        assert result.structuredContent["success"] is False
-        assert result.structuredContent["needs_confirmation"] is True
-        assert result.structuredContent["assistant_guidance"] == GUIDANCE_USER_NOT_CONFIRMED
-
-    @pytest.mark.asyncio
-    async def test_user_confirmed_missing(self, valid_reflection_items, valid_action_steps):
-        """user_confirmed not provided returns soft block, isError=false."""
-        args = {
-            "reflection_items": valid_reflection_items,
-            "action_steps": valid_action_steps,
-            # user_confirmed omitted
-        }
-
-        result = await handle("user-123", "corr-456", args)
-
-        assert result.isError is False
-        assert result.structuredContent["success"] is False
-        assert result.structuredContent["needs_confirmation"] is True
 
 
 # ============================================================================
@@ -410,7 +357,6 @@ class TestDefensiveGuards:
             "action_steps": [
                 {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         with pytest.raises(ToolUsageError) as exc_info:
@@ -429,7 +375,6 @@ class TestDefensiveGuards:
                 {"user_action_verbatim": "c", "derived_from_id": "r1"},
                 {"user_action_verbatim": "d", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         with pytest.raises(ToolUsageError) as exc_info:
@@ -451,7 +396,6 @@ class TestDefensiveGuards:
             "action_steps": [
                 {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         with pytest.raises(ToolUsageError) as exc_info:
@@ -473,7 +417,6 @@ class TestDefensiveGuards:
             "action_steps": [
                 {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         with pytest.raises(ToolUsageError) as exc_info:
@@ -495,7 +438,6 @@ class TestDefensiveGuards:
             "action_steps": [
                 {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         with pytest.raises(ToolUsageError) as exc_info:
@@ -522,7 +464,6 @@ class TestDefensiveGuards:
             "action_steps": [
                 {"user_action_verbatim": "x", "derived_from_id": "r1"},
             ],
-            "user_confirmed": True,
         }
 
         with pytest.raises(ToolUsageError) as exc_info:

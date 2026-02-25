@@ -32,9 +32,8 @@ CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - user_reflection_verbatim: non-empty, user's exact words for each reflection item
 - user_action_verbatim: non-empty, user's exact words for each action step
 - derived_from_id: each action step links to a reflection item
-- user_confirmed: user has explicitly agreed to the action steps
 
-INSPECT & ADAPT BINDING RULES: When user wants to reflect on their week, your default behavior is SUSPENDED. You are a facilitator, not an advisor. Flow: Ask ONE question → wait → help get specific → confirm up to 3 behaviors → ask what to keep/change → user names action steps → quality-check (small, concrete, max 3) → user confirms → call this tool. NEVER batch questions. NEVER propose actions the user didn't imply. Only rephrase user's behaviors into commitments.
+INSPECT & ADAPT BINDING RULES: When user wants to reflect on their week, your default behavior is SUSPENDED. You are a facilitator, not an advisor. Flow: Ask ONE question → wait → help get specific → confirm up to 3 behaviors → ask what to keep/change → user names action steps → quality-check (small, concrete, max 3) → call this tool. NEVER batch questions. NEVER propose actions the user didn't imply. Only rephrase user's behaviors into commitments.
 
 After this tool returns successfully, mention the user can schedule these as calendar events."""
 
@@ -95,12 +94,8 @@ INPUT_SCHEMA = {
             "minItems": 1,
             "maxItems": 3,
         },
-        "user_confirmed": {
-            "type": "boolean",
-            "description": "Must be true — indicates the user explicitly confirmed these action steps.",
-        },
     },
-    "required": ["reflection_items", "action_steps", "user_confirmed"],
+    "required": ["reflection_items", "action_steps"],
     "additionalProperties": False,
 }
 
@@ -129,11 +124,6 @@ GUIDANCE_EMPTY_ACTION_VERBATIM = (
 GUIDANCE_INVALID_DERIVED_FROM_ID = (
     "derived_from_id does not match any reflection item id. "
     "Each action step must reference a valid reflection item id (e.g., 'r1', 'r2', 'r3')."
-)
-
-GUIDANCE_USER_NOT_CONFIRMED = (
-    "user_confirmed must be true. "
-    "Present the action steps to the user and ask for explicit confirmation before calling again."
 )
 
 
@@ -172,22 +162,6 @@ def _build_provenance_error(error_code: str, instruction: str) -> mcp_types.Call
     )
 
 
-def _build_soft_block(instruction: str) -> mcp_types.CallToolResult:
-    """Build a soft block response (conversational correction, not tool misuse)."""
-    return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(
-            type="text",
-            text="Action steps need user confirmation.",
-        )],
-        structuredContent={
-            "success": False,
-            "needs_confirmation": True,
-            "assistant_guidance": instruction,
-        },
-        isError=False,
-    )
-
-
 # ============================================================================
 # Handler
 # ============================================================================
@@ -200,7 +174,7 @@ async def handle(
     """
     Handle inspect_adapt tool calls.
 
-    Single-call tool: validate provenance → check confirmation → return success.
+    Single-call tool: validate provenance → return success.
 
     Args:
         user_id: Validated user ID from JWT token
@@ -218,10 +192,9 @@ async def handle(
 
     reflection_items_raw = arguments.get("reflection_items")
     action_steps_raw = arguments.get("action_steps")
-    user_confirmed = arguments.get("user_confirmed", False)
 
     # -------------------------------------------------------------------------
-    # A. Provenance validation (behavioral gate) → isError: true
+    # Provenance validation (behavioral gate) → isError: true
     # -------------------------------------------------------------------------
 
     # Check reflection_items present and non-empty
@@ -308,19 +281,7 @@ async def handle(
             return _build_provenance_error("invalid_derived_from_id", GUIDANCE_INVALID_DERIVED_FROM_ID)
 
     # -------------------------------------------------------------------------
-    # B. Conversational guardrail (soft block) → isError: false
-    # -------------------------------------------------------------------------
-
-    if not user_confirmed:
-        logger.info(
-            "tool.inspect_adapt.soft_block",
-            correlation_id=correlation_id,
-            reason="user_not_confirmed",
-        )
-        return _build_soft_block(GUIDANCE_USER_NOT_CONFIRMED)
-
-    # -------------------------------------------------------------------------
-    # C. Success path
+    # Success path
     # -------------------------------------------------------------------------
 
     action_count = len(action_steps_raw)
