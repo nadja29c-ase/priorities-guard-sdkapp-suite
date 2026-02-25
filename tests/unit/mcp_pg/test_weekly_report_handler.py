@@ -1157,3 +1157,94 @@ class TestHandlerEmptyPriorities:
         # Widget SHOULD be triggered - _meta with outputTemplate
         assert "_meta" in result.structuredContent
         assert result.structuredContent["_meta"]["openai/outputTemplate"] == WIDGET_URI
+
+
+# ============================================================================
+# Increment 31: Semantic Breakdown Guard Tests
+# ============================================================================
+
+
+class TestSemanticBreakdownGuard:
+    """Tests for preventing semantic breakdown on snapshot data (Increment 31)."""
+
+    @pytest.mark.asyncio
+    async def test_semantic_groupings_rejected_when_no_events(self):
+        """semantic_groupings provided but all_events empty returns isError: true."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-01-05",
+                "week_end": "2026-01-11",
+                "is_current_week": False,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [],  # Empty - snapshot week
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-01-05",
+                    "semantic_groupings": [
+                        {"category": "Meetings", "hours": 3.0, "event_count": 2},
+                        {"category": "Admin", "hours": 2.0, "event_count": 1},
+                    ],
+                },
+            )
+
+        assert result.isError is True
+        assert result.structuredContent["success"] is False
+        assert result.structuredContent["error"] == "semantic_breakdown_unavailable"
+        assert "not available for past weeks" in result.structuredContent["assistant_guidance"]
+        assert "Do NOT propose" in result.structuredContent["assistant_guidance"]
+
+    def test_no_within_priority_breakdown_offered_when_no_events(self):
+        """guidance with all_events=[] does NOT contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 5.0},
+        }
+        priorities = [{"calendar_keyword": "P1", "name": "Test Priority"}]
+
+        guidance = _build_assistant_guidance(
+            data, priorities, all_events=[], has_semantic_groupings=False
+        )
+
+        assert "within-priority breakdown" not in guidance.lower()
+
+    def test_within_priority_breakdown_offered_when_events_exist(self):
+        """guidance with non-empty all_events DOES contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
+        data = {
+            "is_current_week": False,
+            "time_allocation": {"other_hours": 5.0},
+        }
+        priorities = [{"calendar_keyword": "P1", "name": "Test Priority"}]
+        all_events = [{"title": "Meeting", "matched_keywords": []}]
+
+        guidance = _build_assistant_guidance(
+            data, priorities, all_events=all_events, has_semantic_groupings=False
+        )
+
+        assert "within-priority breakdown" in guidance.lower()

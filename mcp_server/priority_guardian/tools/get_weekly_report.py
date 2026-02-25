@@ -438,8 +438,9 @@ def _build_assistant_guidance(
                 GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE.format(other_hours=other_hours)
             )
 
-        # Within-priority breakdown proposal
-        guidance_parts.append(GUIDANCE_WITHIN_PRIORITY_BREAKDOWN)
+        # Within-priority breakdown proposal (only when events available)
+        if all_events:
+            guidance_parts.append(GUIDANCE_WITHIN_PRIORITY_BREAKDOWN)
 
         # Closing
         guidance_parts.append(GUIDANCE_CLOSING)
@@ -519,6 +520,33 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     priorities = data.get("priorities", [])
     time_allocation = data.get("time_allocation", {})
     all_events = data.get("all_events", [])
+
+    # Guard: reject semantic_groupings when no event data available
+    # (past weeks have empty all_events, can't break down)
+    if has_semantic_groupings and not all_events:
+        logger.info(
+            "tool.get_weekly_report.semantic_breakdown_unavailable",
+            correlation_id=correlation_id,
+            user_id=user_id,
+            week_start=data.get("week_start"),
+        )
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Semantic breakdown not available for this week.",
+            )],
+            structuredContent={
+                "success": False,
+                "error": "semantic_breakdown_unavailable",
+                "assistant_guidance": (
+                    "Semantic breakdown is not available for past weeks — "
+                    "detailed event data is only available for the current week. "
+                    "Do NOT propose or offer any breakdown. "
+                    "Present the report as-is."
+                ),
+            },
+            isError=True,
+        )
 
     # Early return when no priorities existed during this week
     # Prevents empty pie chart widget and incorrect LLM guidance
