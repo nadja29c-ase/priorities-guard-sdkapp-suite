@@ -1,10 +1,10 @@
 """
-Integration tests for inspect_adapt MCP tool (Increment 29).
+Integration tests for inspect_adapt MCP tool (Increment 30).
 
 Tests:
 - Tool registration in TOOL_REGISTRY
 - Tool appears in list_tools() output
-- Full flow: start then commit
+- Full flow: call with valid data
 """
 
 import pytest
@@ -16,7 +16,6 @@ from mcp_server.priority_guardian.tools import (
 from mcp_server.priority_guardian.tools.inspect_adapt import (
     INSPECT_ADAPT,
     handle,
-    GUIDANCE_START,
     GUIDANCE_COMMIT_SUCCESS,
 )
 
@@ -45,11 +44,15 @@ class TestToolRegistration:
 
         # Check description contains key phrases
         assert "inspect & adapt" in inspect_adapt_tool.description.lower()
-        assert "weekly report" in inspect_adapt_tool.description.lower()
+        assert "action steps" in inspect_adapt_tool.description.lower()
 
-        # Check input schema has phase property
-        assert "phase" in inspect_adapt_tool.inputSchema["properties"]
-        assert inspect_adapt_tool.inputSchema["properties"]["phase"]["enum"] == ["start", "commit"]
+        # Check input schema has required properties (no phase anymore)
+        assert "reflection_items" in inspect_adapt_tool.inputSchema["properties"]
+        assert "action_steps" in inspect_adapt_tool.inputSchema["properties"]
+        assert "user_confirmed" in inspect_adapt_tool.inputSchema["properties"]
+
+        # Verify phase is NOT in schema (single-call tool)
+        assert "phase" not in inspect_adapt_tool.inputSchema["properties"]
 
         # Check meta has correct structure (Tool model uses 'meta' attribute)
         tool_meta = getattr(inspect_adapt_tool, "meta", None) or getattr(inspect_adapt_tool, "_meta", None)
@@ -73,34 +76,15 @@ class TestToolRegistration:
 
 
 class TestFullFlow:
-    """Tests for full start → commit flow."""
+    """Tests for full flow."""
 
     @pytest.mark.asyncio
-    async def test_full_flow_start_then_commit(self):
-        """Call start, then call commit with valid data including proper id linkage."""
+    async def test_full_flow(self):
+        """Call with valid data including proper id linkage, succeeds."""
         user_id = "test-user-123"
         correlation_id = "corr-789"
 
-        # Phase 1: Start
-        start_args = {
-            "phase": "start",
-            "weekly_context_summary": (
-                "P1 (Ship V1.0) got 12h this week, exceeding the 10h target. "
-                "P2 (Learn Spanish) got 2h, below the 5h target."
-            ),
-        }
-
-        start_result = await handle(user_id, correlation_id, start_args)
-
-        assert start_result.isError is not True
-        assert start_result.structuredContent["success"] is True
-        assert start_result.structuredContent["phase"] == "start"
-        assert start_result.structuredContent["assistant_guidance"] == GUIDANCE_START
-        assert "Starting inspect & adapt" in start_result.content[0].text
-
-        # Phase 2: Commit
-        commit_args = {
-            "phase": "commit",
+        args = {
             "reflection_items": [
                 {
                     "id": "r1",
@@ -130,20 +114,19 @@ class TestFullFlow:
             "user_confirmed": True,
         }
 
-        commit_result = await handle(user_id, correlation_id, commit_args)
+        result = await handle(user_id, correlation_id, args)
 
-        assert commit_result.isError is not True
-        assert commit_result.structuredContent["success"] is True
-        assert commit_result.structuredContent["phase"] == "commit"
-        assert commit_result.structuredContent["completed"] is True
-        assert commit_result.structuredContent["assistant_guidance"] == GUIDANCE_COMMIT_SUCCESS
-        assert "2 action step(s) confirmed" in commit_result.content[0].text
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert result.structuredContent["completed"] is True
+        assert result.structuredContent["assistant_guidance"] == GUIDANCE_COMMIT_SUCCESS
+        assert "2 action step(s) confirmed" in result.content[0].text
 
         # Verify the data was passed through
-        assert len(commit_result.structuredContent["reflection_items"]) == 2
-        assert len(commit_result.structuredContent["action_steps"]) == 2
+        assert len(result.structuredContent["reflection_items"]) == 2
+        assert len(result.structuredContent["action_steps"]) == 2
 
         # Verify id linkage is preserved
-        action_step_ids = [s["derived_from_id"] for s in commit_result.structuredContent["action_steps"]]
+        action_step_ids = [s["derived_from_id"] for s in result.structuredContent["action_steps"]]
         assert "r1" in action_step_ids
         assert "r2" in action_step_ids

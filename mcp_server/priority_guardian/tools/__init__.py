@@ -60,8 +60,8 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
         "Here's what I found in your history.",
     ),
     "inspect_adapt": (
-        "Setting up inspect & adapt...",
-        "Ready to reflect.",
+        "Recording your action steps...",
+        "Action steps confirmed.",
     ),
 }
 

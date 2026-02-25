@@ -1,18 +1,15 @@
 """
 inspect_adapt tool for Priority Guardian MCP.
 
-Facilitates a lightweight inspect & adapt flow after the weekly report,
-helping users derive 1-3 small, concrete action steps for the next week.
+Records confirmed action steps from an inspect & adapt reflection.
+Single-call tool — LLM facilitates the full reflection conversation,
+then calls this tool once to commit the action steps.
 
 No backend endpoint needed. No data to fetch, no persistence.
 Shapes the LLM's conversational behavior through schema constraints,
 provenance validation, and assistant_guidance.
 
-Two-call conversation flow:
-- Phase 'start': Begin the reflection with weekly context
-- Phase 'commit': Record confirmed action steps
-
-Implements increment_29 specification.
+Implements increment_30 specification.
 """
 
 import structlog
@@ -28,40 +25,58 @@ logger = structlog.get_logger(__name__)
 
 NAME = "inspect_adapt"
 
-DESCRIPTION = """Facilitate a focused inspect & adapt reflection.
-Helps the user identify what specifically helped or hindered progress,
-then derive 1-3 small, concrete action steps for next week.
+DESCRIPTION = """Record confirmed action steps from an inspect & adapt reflection.
+Call this tool ONCE after facilitating the full reflection conversation.
 
-CALL PRECONDITION for phase 'commit':
-- ALL verbatim fields gathered from user's own words during reflection conversation
+CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
+- User has identified 1-3 specific behaviors/rituals/decisions (helped or hindered)
+- User has named 1-3 concrete action steps for next week
+- All verbatim fields contain the user's exact words
+- User has explicitly confirmed the action steps
 
-Call this tool:
-- When the user wants to reflect on their week
-- After presenting the weekly report, when the user says "yes" to the reflection nudge
-- When the user asks "what should I do differently next week?"
-- Anytime the user wants structured reflection on progress
+INSPECT & ADAPT FACILITATION — BINDING RULES:
+When the user wants to reflect on their week, your default behavior is SUSPENDED.
+You are a facilitator, not an advisor.
 
-Do NOT call this tool:
-- During onboarding or priority setup
-- When the user is asking about patterns or trends (use get_patterns instead)
+FORBIDDEN:
+- Proposing new actions the user didn't imply
+- Batching multiple questions
+- Inferring what the user 'probably means'
 
-INSPECT & ADAPT BINDING RULES: When facilitating inspect & adapt, your default behavior is SUSPENDED. You are a facilitator, not an advisor. Flow: Ask ONE question → wait for user's response → reflect/get specific → confirm → gather next item or move to action steps. NEVER ask multiple questions at once. NEVER call this tool with phase='commit' until ALL reflection items and action steps are gathered from the user's own words and confirmed."""
+REQUIRED FLOW:
+1. Ask ONE opening question based on conversation context:
+   - If user made progress: 'What specifically helped — a routine, a decision, a boundary you held?'
+   - If priorities got less time: 'What was the biggest thing that got in the way — what actually happened?'
+   - If mixed context: default to the obstacle lens — it yields more concrete adjustments.
+   Ask. Stop. Wait.
+
+2. Help user get specific. If vague ('I just focused more'), follow up:
+   'What did that look like — what did you do differently?'
+   If already specific, reflect back and confirm.
+   Gather up to 3 confirmed behaviors/rituals/decisions.
+
+3. Ask: 'Anything you want to keep as a habit next week, or do differently?'
+   Wait for user's answer.
+
+4. User names action steps (up to 3). Quality-check each:
+   - Small — doable in one week without heroic effort
+   - Close to existing habits — adjustments, not overhauls
+   - Concrete — 'block 90 min for P1 Tuesday and Thursday mornings' not 'focus more on P1'
+   Only rephrase user's described behaviors into commitments.
+   Do NOT propose new actions the user didn't imply.
+   Push back if steps are too big, too vague, or more than 3.
+
+5. Confirm action steps with user. Then call this tool with all data.
+
+After this tool returns successfully, briefly mention the user can schedule
+these as calendar events if they want to lock in the time."""
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "phase": {
-            "type": "string",
-            "enum": ["start", "commit"],
-            "description": "Which phase of the inspect & adapt flow. 'start' = begin the reflection. 'commit' = record confirmed action steps.",
-        },
-        "weekly_context_summary": {
-            "type": "string",
-            "description": "Phase 'start' only. Optional. If a weekly report was presented, summarize context: which priorities had progress, which didn't. 2-3 sentences max. If no weekly context available, omit — the LLM will ask a neutral opening question.",
-        },
         "reflection_items": {
             "type": "array",
-            "description": "Phase 'commit' only. 1-3 specific behaviors, rituals, or decisions the user named during reflection.",
+            "description": "1-3 specific behaviors, rituals, or decisions the user named during reflection.",
             "items": {
                 "type": "object",
                 "properties": {
@@ -91,7 +106,7 @@ INPUT_SCHEMA = {
         },
         "action_steps": {
             "type": "array",
-            "description": "Phase 'commit' only. 1-3 small, concrete action steps for next week. Each must link to a reflection item by id.",
+            "description": "1-3 small, concrete action steps for next week. Each must link to a reflection item by id.",
             "items": {
                 "type": "object",
                 "properties": {
@@ -116,10 +131,10 @@ INPUT_SCHEMA = {
         },
         "user_confirmed": {
             "type": "boolean",
-            "description": "Phase 'commit' only. Must be true — indicates the user explicitly confirmed these action steps. Do NOT set to true unless the user has seen and agreed to the specific actions.",
+            "description": "Must be true — indicates the user explicitly confirmed these action steps. Do NOT set to true unless the user has seen and agreed to the specific actions.",
         },
     },
-    "required": ["phase"],
+    "required": ["reflection_items", "action_steps", "user_confirmed"],
     "additionalProperties": False,
 }
 
@@ -171,50 +186,6 @@ GUIDANCE_USER_NOT_CONFIRMED = (
 # ============================================================================
 # Guidance Constants
 # ============================================================================
-
-GUIDANCE_START = (
-    "You are facilitating an inspect & adapt — not therapy, not coaching, not advice. "
-    "Your job: ask ONE question, wait, help distill, confirm. "
-    "\n\n"
-    "BINDING RULES:\n"
-    "- Ask ONE question at a time. Wait for the answer.\n"
-    "- Do NOT propose new actions, solutions, or options the user didn't imply.\n"
-    "- NEVER batch multiple questions.\n"
-    "- NEVER infer what the user 'probably means.'\n"
-    "\n"
-    "DIRECTION: Pick ONE opening question based on context:\n"
-    "- If weekly_context_summary was provided and shows visible progress: "
-    "'What specifically helped you make progress this week — a routine, a decision, a boundary you held?'\n"
-    "- If weekly_context_summary shows most priorities got less time than intended: "
-    "'What was the biggest thing that got in the way this week — what actually happened?'\n"
-    "- If weekly_context_summary is mixed (some progress, some behind): "
-    "default to the obstacle lens — it yields more concrete adjustments.\n"
-    "- If NO weekly_context_summary was provided: "
-    "ask a neutral opener like 'Looking back at this past week — what's one thing that either "
-    "helped you make progress or got in the way?'\n"
-    "\n"
-    "Ask ONE question. Stop. Wait for the user's response.\n"
-    "\n"
-    "After the user responds, your job is to help them get specific. "
-    "If their answer is vague ('I just focused more'), ask a follow-up like "
-    "'What did that actually look like — what did you do differently on Monday vs. the week before?' "
-    "If their answer is already specific ('I blocked 2 hours every morning before checking email'), "
-    "reflect it back and confirm: 'So the morning block before email was the key thing — is that right?'\n"
-    "\n"
-    "Once you have 1-3 specific, confirmed behaviors/rituals/decisions from the user, "
-    "help them turn these into action steps for next week. "
-    "Only rephrase the user's described behaviors into next-week commitments. "
-    "Do NOT propose new actions the user didn't imply. "
-    "The action steps MUST be:\n"
-    "- Small — doable in one week without heroic effort\n"
-    "- Close to existing habits — adjustments, not overhauls\n"
-    "- Concrete — 'block 90 min for P1 on Tuesday and Thursday mornings' not 'focus more on P1'\n"
-    "- Maximum 3 action steps. Fewer is better.\n"
-    "\n"
-    "Confirm the action steps with the user, then call inspect_adapt again with phase='commit'.\n"
-    "\n"
-    "At the end, briefly mention the user can schedule these as calendar events if they want to."
-)
 
 GUIDANCE_COMMIT_SUCCESS = (
     "The user's action steps have been confirmed. "
@@ -279,9 +250,7 @@ async def handle(
     """
     Handle inspect_adapt tool calls.
 
-    Two-phase flow:
-    - Phase 'start': Validate context, return guidance for reflection conversation
-    - Phase 'commit': Validate provenance, confirm action steps
+    Single-call tool: validate provenance → check confirmation → return success.
 
     Args:
         user_id: Validated user ID from JWT token
@@ -291,64 +260,12 @@ async def handle(
     Returns:
         CallToolResult with structured content and assistant_guidance
     """
-    phase = arguments.get("phase")
-
     logger.info(
         "tool.inspect_adapt.start",
         correlation_id=correlation_id,
         user_id=user_id,
-        phase=phase,
     )
 
-    if phase == "start":
-        return await _handle_start(user_id, correlation_id, arguments)
-    elif phase == "commit":
-        return await _handle_commit(user_id, correlation_id, arguments)
-    else:
-        # Schema should prevent this, but defensive guard
-        raise ToolUsageError(f"Invalid phase: {phase}. Must be 'start' or 'commit'.")
-
-
-async def _handle_start(
-    user_id: str,
-    correlation_id: str,
-    arguments: dict,
-) -> mcp_types.CallToolResult:
-    """Handle phase='start' - begin the reflection."""
-    weekly_context_summary = arguments.get("weekly_context_summary", "")
-    has_context = bool(weekly_context_summary and weekly_context_summary.strip())
-
-    logger.info(
-        "tool.inspect_adapt.start.success",
-        correlation_id=correlation_id,
-        user_id=user_id,
-        has_weekly_context=has_context,
-    )
-
-    # Build structured content - include context only if provided
-    structured_content = {
-        "success": True,
-        "phase": "start",
-        "assistant_guidance": GUIDANCE_START,
-    }
-    if has_context:
-        structured_content["weekly_context_summary"] = weekly_context_summary
-
-    return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(
-            type="text",
-            text="Starting inspect & adapt.",
-        )],
-        structuredContent=structured_content,
-    )
-
-
-async def _handle_commit(
-    user_id: str,
-    correlation_id: str,
-    arguments: dict,
-) -> mcp_types.CallToolResult:
-    """Handle phase='commit' - record confirmed action steps."""
     reflection_items_raw = arguments.get("reflection_items")
     action_steps_raw = arguments.get("action_steps")
     user_confirmed = arguments.get("user_confirmed", False)
@@ -360,7 +277,7 @@ async def _handle_commit(
     # Check reflection_items present and non-empty
     if not reflection_items_raw or len(reflection_items_raw) == 0:
         logger.info(
-            "tool.inspect_adapt.commit.provenance_failed",
+            "tool.inspect_adapt.provenance_failed",
             correlation_id=correlation_id,
             field="reflection_items",
             reason="missing_or_empty",
@@ -378,13 +295,17 @@ async def _handle_commit(
         item_id = item.get("id", "")
         if not item_id or not item_id.strip():
             raise ToolUsageError("Each reflection item must have an 'id'.")
+
+        # Check for duplicate id
+        if item_id in reflection_ids:
+            raise ToolUsageError(f"Duplicate reflection item id: '{item_id}'.")
         reflection_ids.add(item_id)
 
         # Check user_reflection_verbatim
         verbatim = item.get("user_reflection_verbatim", "")
         if not verbatim or not verbatim.strip():
             logger.info(
-                "tool.inspect_adapt.commit.provenance_failed",
+                "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="user_reflection_verbatim",
                 index=i,
@@ -395,7 +316,7 @@ async def _handle_commit(
         description = item.get("description", "")
         if not description or not description.strip():
             logger.info(
-                "tool.inspect_adapt.commit.provenance_failed",
+                "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="description",
                 index=i,
@@ -410,7 +331,7 @@ async def _handle_commit(
     # Check action_steps present and non-empty
     if not action_steps_raw or len(action_steps_raw) == 0:
         logger.info(
-            "tool.inspect_adapt.commit.provenance_failed",
+            "tool.inspect_adapt.provenance_failed",
             correlation_id=correlation_id,
             field="action_steps",
             reason="missing_or_empty",
@@ -427,7 +348,7 @@ async def _handle_commit(
         verbatim = step.get("user_action_verbatim", "")
         if not verbatim or not verbatim.strip():
             logger.info(
-                "tool.inspect_adapt.commit.provenance_failed",
+                "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="user_action_verbatim",
                 index=i,
@@ -438,7 +359,7 @@ async def _handle_commit(
         action = step.get("action", "")
         if not action or not action.strip():
             logger.info(
-                "tool.inspect_adapt.commit.provenance_failed",
+                "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="action",
                 index=i,
@@ -449,7 +370,7 @@ async def _handle_commit(
         derived_from_id = step.get("derived_from_id", "")
         if derived_from_id not in reflection_ids:
             logger.info(
-                "tool.inspect_adapt.commit.provenance_failed",
+                "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="derived_from_id",
                 index=i,
@@ -464,7 +385,7 @@ async def _handle_commit(
 
     if not user_confirmed:
         logger.info(
-            "tool.inspect_adapt.commit.soft_block",
+            "tool.inspect_adapt.soft_block",
             correlation_id=correlation_id,
             reason="user_not_confirmed",
         )
@@ -477,7 +398,7 @@ async def _handle_commit(
     action_count = len(action_steps_raw)
 
     logger.info(
-        "tool.inspect_adapt.commit.success",
+        "tool.inspect_adapt.success",
         correlation_id=correlation_id,
         user_id=user_id,
         reflection_count=len(reflection_items_raw),
@@ -491,7 +412,6 @@ async def _handle_commit(
         )],
         structuredContent={
             "success": True,
-            "phase": "commit",
             "completed": True,
             "reflection_items": reflection_items_raw,
             "action_steps": action_steps_raw,
