@@ -542,7 +542,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     "Semantic breakdown is not available for past weeks — "
                     "detailed event data is only available for the current week. "
                     "Do NOT propose or offer any breakdown. "
-                    "Present the report as-is."
+                    "Do NOT suggest workarounds, sub-tags, naming patterns, or tracking changes. "
+                    "Acknowledge briefly that the breakdown isn't available for past weeks, "
+                    "then ask if the user wants to look at the current week instead, "
+                    "or if they'd like to reflect on what they remember about how they spent that time."
                 ),
             },
             isError=True,
