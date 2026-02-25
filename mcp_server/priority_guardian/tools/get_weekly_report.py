@@ -135,11 +135,11 @@ GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE = (
 
 # Template with {other_hours} placeholder
 GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE = (
-    "The user has {other_hours:.1f} hours of non-priority time but no matching events. "
-    "Since this is a past week, the detailed event data is no longer available "
-    "and the non-priority time cannot be broken down further. "
-    "Mention this briefly. "
-    "CRITICAL: NEVER interpret/ judge non-priority time f.e. as wasted, unfocused, or dilutive. NEVER assume non-priority time should be strategic or priority-related. "
+    "The user has {other_hours:.1f} hours of non-priority time. "
+    "No event data available for past weeks — no breakdown possible. "
+    "Breakdowns are only available during the current week while event data exists. "
+    "Do NOT suggest sub-tags, naming patterns, or any other workarounds. "
+    "Do NOT interpret or judge non-priority time."
 )
 
 GUIDANCE_WITHIN_PRIORITY_BREAKDOWN = (
@@ -542,10 +542,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     "Semantic breakdown is not available for past weeks — "
                     "detailed event data is only available for the current week. "
                     "Do NOT propose or offer any breakdown. "
-                    "Do NOT suggest workarounds, sub-tags, naming patterns, or tracking changes. "
-                    "Acknowledge briefly that the breakdown isn't available for past weeks, "
-                    "then ask if the user wants to look at the current week instead, "
-                    "or if they'd like to reflect on what they remember about how they spent that time."
+                    "Suggest looking at the current week instead where event-level data is available. "
+                    "Do NOT suggest any other workarounds, sub-tags, naming patterns, or tracking changes."
                 ),
             },
             isError=True,
