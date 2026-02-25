@@ -29,47 +29,14 @@ DESCRIPTION = """Record confirmed action steps from an inspect & adapt reflectio
 Call this tool ONCE after facilitating the full reflection conversation.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- User has identified 1-3 specific behaviors/rituals/decisions (helped or hindered)
-- User has named 1-3 concrete action steps for next week
-- All verbatim fields contain the user's exact words
-- User has explicitly confirmed the action steps
+- user_reflection_verbatim: non-empty, user's exact words for each reflection item
+- user_action_verbatim: non-empty, user's exact words for each action step
+- derived_from_id: each action step links to a reflection item
+- user_confirmed: user has explicitly agreed to the action steps
 
-INSPECT & ADAPT FACILITATION — BINDING RULES:
-When the user wants to reflect on their week, your default behavior is SUSPENDED.
-You are a facilitator, not an advisor.
+INSPECT & ADAPT BINDING RULES: When user wants to reflect on their week, your default behavior is SUSPENDED. You are a facilitator, not an advisor. Flow: Ask ONE question → wait → help get specific → confirm up to 3 behaviors → ask what to keep/change → user names action steps → quality-check (small, concrete, max 3) → user confirms → call this tool. NEVER batch questions. NEVER propose actions the user didn't imply. Only rephrase user's behaviors into commitments.
 
-FORBIDDEN:
-- Proposing new actions the user didn't imply
-- Batching multiple questions
-- Inferring what the user 'probably means'
-
-REQUIRED FLOW:
-1. Ask ONE opening question based on conversation context:
-   - If user made progress: 'What specifically helped — a routine, a decision, a boundary you held?'
-   - If priorities got less time: 'What was the biggest thing that got in the way — what actually happened?'
-   - If mixed context: default to the obstacle lens — it yields more concrete adjustments.
-   Ask. Stop. Wait.
-
-2. Help user get specific. If vague ('I just focused more'), follow up:
-   'What did that look like — what did you do differently?'
-   If already specific, reflect back and confirm.
-   Gather up to 3 confirmed behaviors/rituals/decisions.
-
-3. Ask: 'Anything you want to keep as a habit next week, or do differently?'
-   Wait for user's answer.
-
-4. User names action steps (up to 3). Quality-check each:
-   - Small — doable in one week without heroic effort
-   - Close to existing habits — adjustments, not overhauls
-   - Concrete — 'block 90 min for P1 Tuesday and Thursday mornings' not 'focus more on P1'
-   Only rephrase user's described behaviors into commitments.
-   Do NOT propose new actions the user didn't imply.
-   Push back if steps are too big, too vague, or more than 3.
-
-5. Confirm action steps with user. Then call this tool with all data.
-
-After this tool returns successfully, briefly mention the user can schedule
-these as calendar events if they want to lock in the time."""
+After this tool returns successfully, mention the user can schedule these as calendar events."""
 
 INPUT_SCHEMA = {
     "type": "object",
