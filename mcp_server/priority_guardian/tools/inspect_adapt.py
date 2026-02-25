@@ -56,7 +56,7 @@ INPUT_SCHEMA = {
                         "description": (
                             "User's exact words. Must be non-empty. "
                             "To gather: pick ONE opening question based on context — "
-                            "progress visible: 'What specifically helped — a routine, a decision, a boundary you held?' "
+                            "progress visible: 'What specifically helped make progress — a routine, a decision, a boundary you held?' "
                             "priorities behind: 'What got in the way — what actually happened?' "
                             "Mixed: default to obstacle lens. "
                             "If vague, follow up to get specific. If specific, confirm."
@@ -144,7 +144,7 @@ GUIDANCE_USER_NOT_CONFIRMED = (
 GUIDANCE_COMMIT_SUCCESS = (
     "The user's action steps have been confirmed. "
     "Present a brief, clean summary of what they committed to. "
-    "Mention they can add these to their calendar if they want to lock in the time. "
+    "Mention they can add these to their calendar for exececution. "
     "Do NOT add more advice. Do NOT expand on the steps. Keep it to 2-3 sentences max."
 )
 
