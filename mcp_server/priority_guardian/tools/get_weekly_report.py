@@ -114,7 +114,11 @@ GUIDANCE_CURRENT_WEEK = (
 )
 
 GUIDANCE_COMPLETED_WEEK = (
-    "This is a COMPLETED WEEK reflection. Present it as a look back/ a snapshot at how the week was spent."
+    "This is a COMPLETED WEEK reflection. Present it as a look back/ a snapshot at how the week was spent. "
+    "Detailed event data is NOT available for past weeks. If the user asks for any time breakdown "
+    "(within-priority or non-priority), say briefly it's not available for past weeks "
+    "and suggest looking at the current week instead where event-level data is available. "
+    "Do NOT suggest any other workarounds, sub-tags, naming patterns, or tracking changes."
 )
 
 GUIDANCE_PRIORITY_INSIGHTS = (
