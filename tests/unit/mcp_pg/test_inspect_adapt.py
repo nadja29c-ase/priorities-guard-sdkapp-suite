@@ -88,42 +88,47 @@ class TestPhaseStart:
         assert result.structuredContent["assistant_guidance"] == GUIDANCE_START
 
     @pytest.mark.asyncio
-    async def test_start_missing_context(self):
-        """Missing weekly_context_summary raises ToolUsageError."""
+    async def test_start_without_context_succeeds(self):
+        """Start without weekly_context_summary succeeds (context is optional)."""
         args = {
             "phase": "start",
         }
 
-        with pytest.raises(ToolUsageError) as exc_info:
-            await handle("user-123", "corr-456", args)
+        result = await handle("user-123", "corr-456", args)
 
-        assert "weekly_context_summary is required" in str(exc_info.value)
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert result.structuredContent["phase"] == "start"
+        assert "weekly_context_summary" not in result.structuredContent
+        assert result.structuredContent["assistant_guidance"] == GUIDANCE_START
 
     @pytest.mark.asyncio
-    async def test_start_empty_context(self):
-        """Empty string weekly_context_summary raises ToolUsageError."""
+    async def test_start_empty_context_treated_as_no_context(self):
+        """Empty string weekly_context_summary treated as no context provided."""
         args = {
             "phase": "start",
             "weekly_context_summary": "",
         }
 
-        with pytest.raises(ToolUsageError) as exc_info:
-            await handle("user-123", "corr-456", args)
+        result = await handle("user-123", "corr-456", args)
 
-        assert "weekly_context_summary is required" in str(exc_info.value)
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert "weekly_context_summary" not in result.structuredContent
 
     @pytest.mark.asyncio
-    async def test_start_whitespace_only_context(self):
-        """Whitespace-only weekly_context_summary raises ToolUsageError."""
+    async def test_start_whitespace_only_context_treated_as_no_context(self):
+        """Whitespace-only weekly_context_summary treated as no context provided."""
         args = {
             "phase": "start",
             "weekly_context_summary": "   ",
         }
 
-        with pytest.raises(ToolUsageError) as exc_info:
-            await handle("user-123", "corr-456", args)
+        result = await handle("user-123", "corr-456", args)
 
-        assert "weekly_context_summary is required" in str(exc_info.value)
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert "weekly_context_summary" not in result.structuredContent
 
 
 # ============================================================================

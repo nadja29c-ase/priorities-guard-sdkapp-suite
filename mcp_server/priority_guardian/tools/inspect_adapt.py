@@ -28,26 +28,24 @@ logger = structlog.get_logger(__name__)
 
 NAME = "inspect_adapt"
 
-DESCRIPTION = """Facilitate a focused inspect & adapt after presenting the weekly report.
+DESCRIPTION = """Facilitate a focused inspect & adapt reflection.
 Helps the user identify what specifically helped or hindered progress,
 then derive 1-3 small, concrete action steps for next week.
 
-CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
-- Phase 'start': weekly_context_summary derived from the weekly report data already in conversation
-- Phase 'commit': ALL verbatim fields gathered from user's own words during reflection conversation
+CALL PRECONDITION for phase 'commit':
+- ALL verbatim fields gathered from user's own words during reflection conversation
 
 Call this tool:
-- After presenting the weekly report, when the user wants to reflect
-- When the user says "yes" to the reflection nudge from the weekly report
+- When the user wants to reflect on their week
+- After presenting the weekly report, when the user says "yes" to the reflection nudge
 - When the user asks "what should I do differently next week?"
+- Anytime the user wants structured reflection on progress
 
 Do NOT call this tool:
-- Before the weekly report has been presented in this conversation
 - During onboarding or priority setup
 - When the user is asking about patterns or trends (use get_patterns instead)
-- If you already completed an inspect & adapt in this conversation (phase='commit' succeeded)
 
-INSPECT & ADAPT BINDING RULES: When facilitating inspect & adapt, your default behavior is SUSPENDED. You are a facilitator, not an advisor. Flow: Ask ONE question → wait for user's response → reflect/get specific → confirm → gather next item or move to action steps. NEVER ask for multiple reflections at once. NEVER call this tool with phase='commit' until ALL reflection items and action steps are gathered from the user's own words and confirmed."""
+INSPECT & ADAPT BINDING RULES: When facilitating inspect & adapt, your default behavior is SUSPENDED. You are a facilitator, not an advisor. Flow: Ask ONE question → wait for user's response → reflect/get specific → confirm → gather next item or move to action steps. NEVER ask multiple questions at once. NEVER call this tool with phase='commit' until ALL reflection items and action steps are gathered from the user's own words and confirmed."""
 
 INPUT_SCHEMA = {
     "type": "object",
@@ -59,8 +57,7 @@ INPUT_SCHEMA = {
         },
         "weekly_context_summary": {
             "type": "string",
-            "description": "Phase 'start' only. Brief summary of weekly report context: which priorities had progress, which didn't, any notable patterns. 2-3 sentences max. Must come from the weekly report data already in conversation, not invented.",
-            "minLength": 1,
+            "description": "Phase 'start' only. Optional. If a weekly report was presented, summarize context: which priorities had progress, which didn't. 2-3 sentences max. If no weekly context available, omit — the LLM will ask a neutral opening question.",
         },
         "reflection_items": {
             "type": "array",
@@ -185,15 +182,18 @@ GUIDANCE_START = (
     "- NEVER batch multiple questions.\n"
     "- NEVER infer what the user 'probably means.'\n"
     "\n"
-    "DIRECTION: Based on the weekly context, pick ONE of these questions — never both:\n"
-    "- If the user made visible progress on most priorities: "
+    "DIRECTION: Pick ONE opening question based on context:\n"
+    "- If weekly_context_summary was provided and shows visible progress: "
     "'What specifically helped you make progress this week — a routine, a decision, a boundary you held?'\n"
-    "- If most priorities got less time than intended: "
+    "- If weekly_context_summary shows most priorities got less time than intended: "
     "'What was the biggest thing that got in the way this week — what actually happened?'\n"
-    "- If the weekly context is mixed (some progress, some behind): "
+    "- If weekly_context_summary is mixed (some progress, some behind): "
     "default to the obstacle lens — it yields more concrete adjustments.\n"
+    "- If NO weekly_context_summary was provided: "
+    "ask a neutral opener like 'Looking back at this past week — what's one thing that either "
+    "helped you make progress or got in the way?'\n"
     "\n"
-    "Pick the direction that fits the data. Ask the question. Stop. Wait for the user's response.\n"
+    "Ask ONE question. Stop. Wait for the user's response.\n"
     "\n"
     "After the user responds, your job is to help them get specific. "
     "If their answer is vague ('I just focused more'), ask a follow-up like "
@@ -316,33 +316,30 @@ async def _handle_start(
 ) -> mcp_types.CallToolResult:
     """Handle phase='start' - begin the reflection."""
     weekly_context_summary = arguments.get("weekly_context_summary", "")
-
-    # Validate weekly_context_summary is present and non-empty
-    if not weekly_context_summary or not weekly_context_summary.strip():
-        logger.warning(
-            "tool.inspect_adapt.start.missing_context",
-            correlation_id=correlation_id,
-            user_id=user_id,
-        )
-        raise ToolUsageError("weekly_context_summary is required for phase 'start'.")
+    has_context = bool(weekly_context_summary and weekly_context_summary.strip())
 
     logger.info(
         "tool.inspect_adapt.start.success",
         correlation_id=correlation_id,
         user_id=user_id,
+        has_weekly_context=has_context,
     )
+
+    # Build structured content - include context only if provided
+    structured_content = {
+        "success": True,
+        "phase": "start",
+        "assistant_guidance": GUIDANCE_START,
+    }
+    if has_context:
+        structured_content["weekly_context_summary"] = weekly_context_summary
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
             text="Starting inspect & adapt.",
         )],
-        structuredContent={
-            "success": True,
-            "phase": "start",
-            "weekly_context_summary": weekly_context_summary,
-            "assistant_guidance": GUIDANCE_START,
-        },
+        structuredContent=structured_content,
     )
 
 
