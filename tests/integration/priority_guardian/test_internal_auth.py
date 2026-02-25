@@ -151,6 +151,31 @@ class TestInternalSecretProduction:
         assert response.json()["detail"] == "Forbidden"
 
     # =========================================================================
+    # Dependency Ordering Tests
+    # =========================================================================
+
+    @pytest.mark.asyncio
+    async def test_correct_secret_missing_user_id_returns_401(self, client):
+        """Correct X-Internal-Secret but missing X-User-ID returns 401.
+
+        Verifies dependency ordering: verify_internal_call runs first and passes,
+        then validate_user_id_header rejects with 401. If someone reorders the
+        router dependencies, this test catches it.
+        """
+        with patch("backend.core.config.settings.INTERNAL_API_SECRET", "production-secret"):
+            response = await client.get(
+                "/api/priority-guardian/priorities",
+                headers={
+                    "X-Internal-Secret": "production-secret",
+                    # No X-User-ID header
+                },
+            )
+
+        assert response.status_code == 401
+        body = response.json()
+        assert body["detail"]["code"] == "UNAUTHORIZED"
+
+    # =========================================================================
     # Health Endpoint - Must remain unauthenticated
     # =========================================================================
 

@@ -82,7 +82,7 @@ class TestClustersPersistence:
         )
 
         assert response.status_code == 401
-        assert "X-User-ID" in response.json()["detail"]
+        assert response.json()["detail"]["code"] == "UNAUTHORIZED"
 
     @pytest.mark.asyncio
     async def test_nonexistent_user_returns_404(self, client):
@@ -102,8 +102,8 @@ class TestClustersPersistence:
         assert "User not found" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_invalid_user_id_format_returns_400(self, client):
-        """POST with invalid UUID format returns 400."""
+    async def test_invalid_user_id_format_returns_401(self, client):
+        """POST with invalid UUID format returns 401."""
         response = await client.post(
             "/api/clarity/clusters",
             headers={"X-User-ID": "not-a-uuid"},
@@ -113,8 +113,8 @@ class TestClustersPersistence:
             },
         )
 
-        assert response.status_code == 400
-        assert "Invalid user_id format" in response.json()["detail"]
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "UNAUTHORIZED"
 
     @pytest.mark.asyncio
     async def test_malformed_cluster_data_missing_clusters_key(self, client, test_user):
@@ -510,7 +510,7 @@ class TestGetClusters:
         response = await client.get("/api/clarity/clusters")
 
         assert response.status_code == 401
-        assert "X-User-ID" in response.json()["detail"]
+        assert response.json()["detail"]["code"] == "UNAUTHORIZED"
 
     @pytest.mark.asyncio
     async def test_get_clusters_nonexistent_user_returns_404(self, client):
@@ -526,15 +526,15 @@ class TestGetClusters:
         assert "User not found" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_get_clusters_invalid_user_id_format_returns_400(self, client):
-        """GET with invalid UUID format returns 400."""
+    async def test_get_clusters_invalid_user_id_format_returns_401(self, client):
+        """GET with invalid UUID format returns 401."""
         response = await client.get(
             "/api/clarity/clusters",
             headers={"X-User-ID": "not-a-uuid"},
         )
 
-        assert response.status_code == 400
-        assert "Invalid user_id format" in response.json()["detail"]
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "UNAUTHORIZED"
 
     @pytest.mark.asyncio
     async def test_get_returns_updated_snapshot_after_upsert(self, client, test_user):
@@ -782,7 +782,7 @@ class TestDeleteData:
         )
 
         assert response.status_code == 401
-        assert "X-User-ID" in response.json()["detail"]
+        assert response.json()["detail"]["code"] == "UNAUTHORIZED"
 
     @pytest.mark.asyncio
     async def test_delete_nonexistent_user_returns_404(self, client):
@@ -800,8 +800,8 @@ class TestDeleteData:
         assert "User not found" in response.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_delete_invalid_user_id_format_returns_400(self, client):
-        """DELETE with invalid UUID format returns 400."""
+    async def test_delete_invalid_user_id_format_returns_401(self, client):
+        """DELETE with invalid UUID format returns 401."""
         response = await client.request(
             "DELETE",
             "/api/clarity/data",
@@ -809,8 +809,8 @@ class TestDeleteData:
             json={"confirm": True},
         )
 
-        assert response.status_code == 400
-        assert "Invalid user_id format" in response.json()["detail"]
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "UNAUTHORIZED"
 
     @pytest.mark.asyncio
     async def test_delete_writes_audit_log(self, client, user_with_cluster, async_session):

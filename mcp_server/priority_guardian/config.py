@@ -39,7 +39,7 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 
     if required and value is None:
         # In production, critical configs must be set
-        if ENV in ("production", "staging"):
+        if ENV in ("production", "prod", "staging"):
             raise RuntimeError(
                 f"Required environment variable {key} not set. "
                 f"This is required in {ENV} environment."
@@ -128,6 +128,14 @@ INTERNAL_API_SECRET = get_env(
     "INTERNAL_API_SECRET",
     default=""
 )
+
+# Fail-fast: INTERNAL_API_SECRET required in production
+# Without this, every request would silently 403 - better to fail at startup
+if ENV in ("production", "prod", "staging") and not INTERNAL_API_SECRET:
+    raise RuntimeError(
+        "INTERNAL_API_SECRET is required in production. "
+        "Set ENV=dev to disable this check for local development."
+    )
 
 
 # ============================================================================

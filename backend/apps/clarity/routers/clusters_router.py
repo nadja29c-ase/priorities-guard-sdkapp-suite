@@ -37,7 +37,7 @@ from sqlalchemy.sql import func
 import structlog
 
 from backend.core.database import get_db
-from backend.core.dependencies import verify_internal_call
+from backend.core.dependencies import verify_internal_call, validate_user_id_header
 from backend.core.models import CoreUser, CoreToolAuditLog
 from backend.apps.clarity.db_models import ClarityCluster
 from backend.apps.clarity.models.requests import (
@@ -57,61 +57,25 @@ router = APIRouter(
 )
 
 
-def _extract_user_id(request: Request) -> str:
-    """
-    Extract user_id from X-User-ID header.
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        User ID string (UUID format)
-
-    Raises:
-        HTTPException: 401 if X-User-ID header is missing
-    """
-    user_id = request.headers.get("x-user-id")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="X-User-ID header required",
-        )
-    return user_id
-
-
-async def _verify_user_exists(user_id: str, session: AsyncSession) -> UUID:
+async def _verify_user_exists(user_id: UUID, session: AsyncSession) -> None:
     """
     Verify user exists in core_users table.
 
     Args:
-        user_id: User ID string (should be UUID format)
+        user_id: User UUID (already validated by validate_user_id_header)
         session: Database session
-
-    Returns:
-        User UUID
 
     Raises:
         HTTPException: 404 if user doesn't exist
-        HTTPException: 400 if user_id is not valid UUID
     """
-    try:
-        user_uuid = UUID(user_id)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid user_id format (expected UUID)",
-        )
-
     result = await session.execute(
-        select(CoreUser.id).where(CoreUser.id == user_uuid)
+        select(CoreUser.id).where(CoreUser.id == user_id)
     )
     if result.scalar_one_or_none() is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
-
-    return user_uuid
 
 
 @router.get(
@@ -120,6 +84,7 @@ async def _verify_user_exists(user_id: str, session: AsyncSession) -> UUID:
 )
 async def get_clusters(
     request: Request,
+    user_id: UUID = Depends(validate_user_id_header),
     session: AsyncSession = Depends(get_db),
 ) -> GetClusterResponse:
     """
@@ -134,7 +99,7 @@ async def get_clusters(
 
     Returns:
         200: Cluster snapshot data
-        401: Missing X-User-ID header
+        401: Missing or malformed X-User-ID header
         403: Invalid internal secret (production only)
         404: No cluster snapshot found for user
 
@@ -143,19 +108,16 @@ async def get_clusters(
         trusted MCP server. In dev mode (INTERNAL_API_SECRET empty), this
         check is skipped.
     """
-    # Extract and validate user_id
-    user_id_str = _extract_user_id(request)
-
     # NOTE: _verify_user_exists adds an extra DB round-trip but provides clearer
     # error semantics: "User not found" (404) vs "No snapshot for user" (404).
     # This helps debug MCP server issues (stale user IDs vs missing data).
     # Trade-off accepted: ~1ms indexed PK lookup for better observability.
-    user_uuid = await _verify_user_exists(user_id_str, session)
+    await _verify_user_exists(user_id, session)
 
     # Single-row model: UNIQUE(user_id) guarantees at most one row per user.
     # No ORDER BY or LIMIT needed - there's THE snapshot, not "latest".
     result = await session.execute(
-        select(ClarityCluster).where(ClarityCluster.user_id == user_uuid)
+        select(ClarityCluster).where(ClarityCluster.user_id == user_id)
     )
     cluster = result.scalar_one_or_none()
 
@@ -172,7 +134,7 @@ async def get_clusters(
         "clarity.cluster.retrieved",
         correlation_id=correlation_id,
         cluster_id=str(cluster.id),
-        user_id=str(user_uuid),
+        user_id=str(user_id),
         cluster_count=cluster.cluster_count,
     )
 
@@ -194,6 +156,7 @@ async def get_clusters(
 async def create_cluster(
     payload: CreateClusterRequest,
     request: Request,
+    user_id: UUID = Depends(validate_user_id_header),
     session: AsyncSession = Depends(get_db),
 ) -> CreateClusterResponse:
     """
@@ -214,7 +177,7 @@ async def create_cluster(
     Returns:
         201: {"cluster_id": "...", "created_at": "..."}
         400: Invalid cluster_data structure
-        401: Missing X-User-ID header
+        401: Missing or malformed X-User-ID header
         404: User not found
 
     Security:
@@ -222,9 +185,7 @@ async def create_cluster(
         trusted MCP server. In dev mode (INTERNAL_API_SECRET empty), this
         check is skipped.
     """
-    # Extract and validate user_id
-    user_id_str = _extract_user_id(request)
-    user_uuid = await _verify_user_exists(user_id_str, session)
+    await _verify_user_exists(user_id, session)
 
     # Validation is handled by Pydantic (CreateClusterRequest.validate_cluster_data)
     # which enforces minimal structural viability before we reach here.
@@ -239,7 +200,7 @@ async def create_cluster(
     stmt = (
         insert(ClarityCluster)
         .values(
-            user_id=user_uuid,
+            user_id=user_id,
             cluster_data=payload.cluster_data,
             thoughts_exhausted=payload.thoughts_exhausted,
             correctly_clustered=payload.correctly_clustered,
@@ -272,7 +233,7 @@ async def create_cluster(
         "clarity.cluster.upserted",
         correlation_id=correlation_id,
         cluster_id=str(cluster_id),
-        user_id=str(user_uuid),
+        user_id=str(user_id),
         cluster_count=cluster_count,
     )
 
@@ -289,6 +250,7 @@ async def create_cluster(
 async def delete_data(
     payload: DeleteDataRequest,
     request: Request,
+    user_id: UUID = Depends(validate_user_id_header),
     session: AsyncSession = Depends(get_db),
 ) -> DeleteDataResponse:
     """
@@ -308,7 +270,7 @@ async def delete_data(
         200: {"status": "deleted", "message": "...", "deleted": {"clarity_clusters": N}}
         200: {"status": "no_data", "message": "..."}  (idempotent - no data to delete)
         400: Missing or false confirm parameter
-        401: Missing X-User-ID header
+        401: Missing or malformed X-User-ID header
         403: Invalid internal secret (production only)
         404: User not found
 
@@ -323,9 +285,7 @@ async def delete_data(
             detail="Deletion requires explicit confirmation. Call with confirm=true.",
         )
 
-    # Extract and validate user_id
-    user_id_str = _extract_user_id(request)
-    user_uuid = await _verify_user_exists(user_id_str, session)
+    await _verify_user_exists(user_id, session)
 
     correlation_id = getattr(request.state, "correlation_id", "system")
 
@@ -335,7 +295,7 @@ async def delete_data(
         # 1. Delete user's clarity clusters
         delete_stmt = (
             delete(ClarityCluster)
-            .where(ClarityCluster.user_id == user_uuid)
+            .where(ClarityCluster.user_id == user_id)
             .returning(ClarityCluster.id)
         )
         result = await session.execute(delete_stmt)
@@ -344,7 +304,7 @@ async def delete_data(
 
         # 2. Write audit log (same transaction)
         audit_entry = CoreToolAuditLog(
-            user_id=user_uuid,
+            user_id=user_id,
             app_name="clarity",
             action="delete_my_data",
             result_status="success" if deleted_count > 0 else "no_data",
@@ -365,7 +325,7 @@ async def delete_data(
         logger.info(
             "clarity.data.deleted",
             correlation_id=correlation_id,
-            user_id=str(user_uuid),
+            user_id=str(user_id),
             deleted_count=deleted_count,
         )
         return DeleteDataResponse(
@@ -377,7 +337,7 @@ async def delete_data(
         logger.info(
             "clarity.data.no_data",
             correlation_id=correlation_id,
-            user_id=str(user_uuid),
+            user_id=str(user_id),
         )
         return DeleteDataResponse(
             status="no_data",
