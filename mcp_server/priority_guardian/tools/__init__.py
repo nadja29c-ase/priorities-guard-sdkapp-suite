@@ -18,6 +18,7 @@ from .get_priorities import GET_PRIORITIES
 from .get_weekly_report import GET_WEEKLY_REPORT
 from .get_patterns import GET_PATTERNS
 from .onboarding_calendar_setup import ONBOARDING_CALENDAR_SETUP
+from .inspect_adapt import INSPECT_ADAPT
 # Private widget-only tools (widget can call, LLM cannot see)
 from .widget_tools import (
     ADD_PRIORITY,
@@ -58,6 +59,10 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
         "Analyzing your tracking patterns...",
         "Here's what I found in your history.",
     ),
+    "inspect_adapt": (
+        "Setting up inspect & adapt...",
+        "Ready to reflect.",
+    ),
 }
 
 # Explicit tool registry
@@ -68,6 +73,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     GET_WEEKLY_REPORT.name: GET_WEEKLY_REPORT,
     GET_PATTERNS.name: GET_PATTERNS,
     ONBOARDING_CALENDAR_SETUP.name: ONBOARDING_CALENDAR_SETUP,
+    INSPECT_ADAPT.name: INSPECT_ADAPT,
     # Private widget-only tools (widget can call, LLM cannot see)
     CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,
