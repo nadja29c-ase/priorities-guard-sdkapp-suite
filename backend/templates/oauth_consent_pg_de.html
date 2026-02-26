@@ -14,7 +14,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f1f5f9;
+            background-color: #000000;
             color: #1d1d1f;
             line-height: 1.6;
             min-height: 100vh;
@@ -119,6 +119,23 @@
             text-decoration: underline;
         }
 
+        .website-link {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .website-link a {
+            color: #6e6e73;
+            font-size: 13px;
+            text-decoration: none;
+        }
+
+        .website-link a:hover,
+        .website-link a:focus {
+            text-decoration: underline;
+            color: #1d1d1f;
+        }
+
         .button-group {
             display: flex;
             gap: 12px;
@@ -207,7 +224,7 @@
 <body>
     <main class="container" role="main">
         <header class="header" aria-labelledby="app-title">
-            <img class="app-logo" src="/static/logo-pg.svg" width="64" height="64" alt="" aria-hidden="true">
+            <img class="app-logo" src="/static/logo-pg-64.svg" width="64" height="64" alt="" aria-hidden="true">
             <h1 id="app-title" class="app-name">{{ client_name }}</h1>
         </header>
 
@@ -227,8 +244,14 @@
         </section>
 
         <div class="privacy-notice" role="complementary">
-            Durch die Autorisierung dieser Anwendung stimmen Sie unserer
-            <a href="https://www.priority-guard.com/privacy" target="_blank" rel="noopener noreferrer">Datenschutzerklärung</a> zu.
+            Mit der Autorisierung dieser Anwendung stimmen Sie unserer
+            <a href="https://www.priority-guard.com/privacy" target="_blank" rel="noopener noreferrer">Datenschutzerklärung</a>
+            und unseren
+            <a href="https://www.priority-guard.com/terms" target="_blank" rel="noopener noreferrer">Nutzungsbedingungen</a> zu.
+        </div>
+
+        <div class="website-link">
+            <a href="https://fulfilling-productivity.framer.website/priority-guard" target="_blank" rel="noopener noreferrer">Website besuchen →</a>
         </div>
 
         <form method="POST" action="/oauth/pg/consent" aria-label="Autorisierungsformular" id="consent-form">
