@@ -39,6 +39,12 @@ function App() {
     return widgetState?.addFormOpen ?? false
   })
 
+  // OAuth flow state - persisted to survive widget remounts during redirect
+  const [awaitingOAuth, setAwaitingOAuth] = useState(() => {
+    const widgetState = window.openai?.widgetState as WidgetState | undefined
+    return widgetState?.awaitingOAuth ?? false
+  })
+
   // Display mode state (inline = collapsed sections, fullscreen = expanded)
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
     const mode = (window.openai as { displayMode?: string } | undefined)?.displayMode
@@ -458,9 +464,12 @@ function App() {
       if (isAddingPriority) {
         state.addFormOpen = true
       }
+      if (awaitingOAuth) {
+        state.awaitingOAuth = true
+      }
       window.openai.setWidgetState(state)
     }
-  }, [editingPriorityId, isAddingPriority])
+  }, [editingPriorityId, isAddingPriority, awaitingOAuth])
 
   // Loading state
   if (!isInitialized) {
@@ -601,6 +610,8 @@ function App() {
             connectedAt={dashboardData?.google_connected_at}
             onRefresh={refreshData}
             isRefreshing={isRefreshing}
+            awaitingOAuth={awaitingOAuth}
+            onAwaitingOAuthChange={setAwaitingOAuth}
           />
         </div>
       )}

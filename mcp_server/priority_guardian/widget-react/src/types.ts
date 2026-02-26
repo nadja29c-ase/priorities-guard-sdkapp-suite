@@ -119,6 +119,7 @@ export function isDashboardData(data: ToolOutputData | null | undefined): data i
 export interface WidgetState {
   editingPriorityId?: string
   addFormOpen?: boolean
+  awaitingOAuth?: boolean  // Persists "Check status" button state across widget remounts
   [key: string]: unknown  // Allow any additional keys for Record<string, unknown> compatibility
 }
 

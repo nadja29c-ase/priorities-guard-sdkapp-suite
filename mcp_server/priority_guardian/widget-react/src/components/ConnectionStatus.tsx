@@ -6,13 +6,20 @@ interface ConnectionStatusProps {
   connectedAt?: string
   onRefresh: () => void
   isRefreshing: boolean
+  awaitingOAuth: boolean
+  onAwaitingOAuthChange: (awaiting: boolean) => void
 }
 
-export function ConnectionStatus({ connected, onRefresh, isRefreshing }: ConnectionStatusProps) {
+export function ConnectionStatus({
+  connected,
+  onRefresh,
+  isRefreshing,
+  awaitingOAuth,
+  onAwaitingOAuthChange,
+}: ConnectionStatusProps) {
   const [isConnecting, setIsConnecting] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
-  const [awaitingOAuth, setAwaitingOAuth] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const handleConnect = useCallback(async () => {
@@ -38,7 +45,7 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
         } else {
           window.open(connectUrl, '_blank')
         }
-        setAwaitingOAuth(true)
+        onAwaitingOAuthChange(true)
       }
     } catch (err) {
       console.error('Failed to initiate connection:', err)
@@ -46,12 +53,12 @@ export function ConnectionStatus({ connected, onRefresh, isRefreshing }: Connect
     } finally {
       setIsConnecting(false)
     }
-  }, [])
+  }, [onAwaitingOAuthChange])
 
   const handleCheckStatus = useCallback(() => {
-    setAwaitingOAuth(false)
+    onAwaitingOAuthChange(false)
     onRefresh()
-  }, [onRefresh])
+  }, [onRefresh, onAwaitingOAuthChange])
 
   const handleDisconnect = useCallback(async () => {
     if (!window.openai?.callTool) {
