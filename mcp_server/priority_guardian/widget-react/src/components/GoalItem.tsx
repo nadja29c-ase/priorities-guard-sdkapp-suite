@@ -150,13 +150,13 @@ export function GoalItem({
   }
 
   return (
-    <li className="flex items-start gap-2.5 group">
+    <li>
       {error && (
-        <p className="text-xs text-danger mb-1 w-full" role="alert">{error}</p>
+        <p className="text-xs text-danger mb-1" role="alert">{error}</p>
       )}
-
-      {/* Circular checkbox - 18px diameter, green when achieved */}
-      <button
+      <div className="flex items-start gap-2.5 group">
+        {/* Circular checkbox - 18px diameter, green when achieved */}
+        <button
         type="button"
         onClick={handleToggle}
         disabled={disabled || isLoading}
@@ -240,6 +240,7 @@ export function GoalItem({
           )}
         </div>
       )}
+      </div>
     </li>
   )
 }
