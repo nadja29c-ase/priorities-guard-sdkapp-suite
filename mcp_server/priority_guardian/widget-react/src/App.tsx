@@ -75,9 +75,9 @@ function App() {
 
     setData(parsed)
 
-    // Set timeAllocation if present (from get_priorities response)
+    // Set timeAllocation from get_priorities response (clears when undefined after disconnect)
     // Only DashboardData has timeAllocation; PieChartData doesn't
-    if (parsed && isDashboardData(parsed) && parsed.timeAllocation) {
+    if (parsed && isDashboardData(parsed)) {
       setTimeAllocation(parsed.timeAllocation)
     }
 
@@ -96,9 +96,9 @@ function App() {
       setData(content.data)
       setLoadError(null)
 
-      // Only update timeAllocation if present (get_priorities includes it, CRUD doesn't)
+      // Update timeAllocation (clears when undefined after disconnect)
       // Only DashboardData has timeAllocation; PieChartData doesn't
-      if (isDashboardData(content.data) && content.data.timeAllocation) {
+      if (isDashboardData(content.data)) {
         setTimeAllocation(content.data.timeAllocation)
       }
 
