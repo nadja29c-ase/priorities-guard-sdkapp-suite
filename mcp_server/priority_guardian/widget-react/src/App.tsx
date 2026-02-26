@@ -188,6 +188,7 @@ function App() {
 
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('delete_priority', {
       priority_id: priorityId,
+      confirm: true,
     }) as { isError?: boolean }
 
     // Check for error response
@@ -278,6 +279,7 @@ function App() {
 
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('delete_deliverable', {
       deliverable_id: deliverableId,
+      confirm: true,
     }) as { isError?: boolean }
 
     if (result?.isError) {
@@ -363,6 +365,7 @@ function App() {
 
     const result = await window.openai.callTool<{ data?: ToolOutputData }>('delete_goal', {
       goal_id: goalId,
+      confirm: true,
     }) as { isError?: boolean }
 
     if (result?.isError) {
