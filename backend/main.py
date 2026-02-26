@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 import httpx
 
 from backend.core.config import settings
@@ -328,6 +329,10 @@ async def clarity_landing():
     """Serve the Clarity landing page."""
     file_path = Path(__file__).parent / "static" / "clarity.html"
     return FileResponse(file_path)
+
+
+# Mount static files directory
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
 # Include new modular routers
