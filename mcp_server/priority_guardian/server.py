@@ -123,7 +123,7 @@ def create_app():
     from mcp.server.fastmcp import FastMCP
     from mcp import types as mcp_types
     from starlette.applications import Starlette
-    from starlette.responses import JSONResponse
+    from starlette.responses import JSONResponse, PlainTextResponse
     from starlette.routing import Route
 
     from mcp_server.priority_guardian.config import (
@@ -223,6 +223,18 @@ def create_app():
     ]
     discovery_app = Starlette(routes=discovery_routes)
     fastmcp_app.mount("/.well-known", discovery_app)
+
+    # Health endpoints (for monitoring and reviewer reachability checks)
+    async def health_root(request):  # noqa: ARG001
+        """Root health check - returns JSON for monitoring/reviewers."""
+        return JSONResponse({"status": "ok", "service": "priority-guardian-mcp"})
+
+    async def health_check(request):  # noqa: ARG001
+        """Simple health check endpoint."""
+        return PlainTextResponse("ok")
+
+    fastmcp_app.add_route("/", health_root, methods=["GET"])
+    fastmcp_app.add_route("/health", health_check, methods=["GET"])
 
     logger.info(
         "mcp.app.created",

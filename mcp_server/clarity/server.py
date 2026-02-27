@@ -245,6 +245,18 @@ def create_app():
     # Mount discovery routes
     fastmcp_app.mount("/.well-known", discovery_app)
 
+    # Health endpoints (for monitoring and reviewer reachability checks)
+    async def health_root(_request):
+        """Root health check - returns JSON for monitoring/reviewers."""
+        return JSONResponse({"status": "ok", "service": "clarity-mcp"})
+
+    async def health_check(_request):
+        """Simple health check endpoint."""
+        return PlainTextResponse("ok")
+
+    fastmcp_app.add_route("/", health_root, methods=["GET"])
+    fastmcp_app.add_route("/health", health_check, methods=["GET"])
+
     # Wrap with header-fix middleware
     #
     # IMPORTANT: MCPContentTypeAndAcceptFixMiddleware must run before FastMCP

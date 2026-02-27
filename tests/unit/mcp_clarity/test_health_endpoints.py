@@ -1,0 +1,85 @@
+"""
+Unit tests for Clarity MCP health endpoints.
+
+Tests verify:
+- GET / returns 200 with JSON body {"status": "ok", "service": "clarity-mcp"}
+- GET /health returns 200 with plain text "ok"
+- POST /mcp does not return 404 (regression test)
+"""
+
+import pytest
+import httpx
+from unittest.mock import patch
+
+
+@pytest.fixture
+def clarity_app():
+    """Create Clarity app for testing."""
+    # Patch environment to avoid production config errors
+    with patch.dict("os.environ", {"ENV": "dev"}, clear=False):
+        from mcp_server.clarity.server import create_app
+        return create_app()
+
+
+class TestClarityHealthEndpoints:
+    """Tests for Clarity MCP health endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_root_returns_200_json(self, clarity_app):
+        """GET / should return 200 with JSON health response."""
+        transport = httpx.ASGITransport(app=clarity_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+        assert response.json() == {"status": "ok", "service": "clarity-mcp"}
+
+    @pytest.mark.asyncio
+    async def test_health_returns_200_plain_text(self, clarity_app):
+        """GET /health should return 200 with plain text 'ok'."""
+        transport = httpx.ASGITransport(app=clarity_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/health")
+
+        assert response.status_code == 200
+        assert "text/plain" in response.headers["content-type"]
+        assert response.text == "ok"
+
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_not_404(self, clarity_app):
+        """POST /mcp should not return 404 (regression test).
+
+        A 401 (auth required) or 200 are acceptable - the endpoint must exist.
+        FastMCP returns 400 for malformed requests, which is also acceptable.
+
+        Note: FastMCP may raise RuntimeError if session manager isn't initialized,
+        but this still proves the route exists (404 would come from Starlette router).
+        """
+        transport = httpx.ASGITransport(app=clarity_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            try:
+                # Send minimal MCP initialize request
+                response = await client.post(
+                    "/mcp",
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {},
+                            "clientInfo": {"name": "test", "version": "1.0"},
+                        },
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                # Must NOT be 404 - endpoint must exist
+                assert response.status_code != 404, "POST /mcp returned 404 - endpoint missing"
+            except RuntimeError as e:
+                # RuntimeError from FastMCP session manager means the route exists
+                # and reached the MCP handler - this is acceptable for this test
+                if "Task group is not initialized" in str(e):
+                    pass  # Route exists, MCP handler was reached
+                else:
+                    raise
