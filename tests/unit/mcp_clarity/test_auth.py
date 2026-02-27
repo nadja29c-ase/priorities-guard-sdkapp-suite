@@ -131,15 +131,18 @@ class TestUnknownToolHandling:
                 await authenticate_request("", meta)
 
 
-class TestAzpClientIdValidation:
-    """Test azp (authorized party / client_id) validation.
+class TestAzpClientIdHandling:
+    """Test azp (authorized party / client_id) handling.
 
-    Critical: Per-app OAuth clients require correct azp in JWT.
+    NOTE: azp validation was REMOVED because dynamic client registration
+    assigns different client_ids per user. The azp claim is still extracted
+    and returned for logging/auditing purposes, but is not validated.
+    See remove_azp.md for details.
     """
 
     @pytest.mark.asyncio
     async def test_azp_returned_in_auth_context(self):
-        """Valid auth returns azp in context for downstream use."""
+        """Valid auth returns azp in context for logging/auditing."""
         meta = {"headers": {"authorization": "Bearer validtoken"}}
 
         with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
@@ -156,30 +159,44 @@ class TestAzpClientIdValidation:
             assert result["azp"] == "chatgpt-client-xyz"
 
     @pytest.mark.asyncio
-    async def test_invalid_azp_raises_unauthorized(self):
-        """JWT with wrong azp raises UnauthorizedError when client_id is configured."""
-        meta = {"headers": {"authorization": "Bearer wrongclient"}}
+    async def test_any_azp_value_accepted(self):
+        """Any azp value is accepted (no validation)."""
+        meta = {"headers": {"authorization": "Bearer validtoken"}}
 
         with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
-            # Simulate azp validation failure inside validate_jwt
-            mock_validate.side_effect = jwt.InvalidTokenError(
-                "Invalid azp claim: expected chatgpt-clarity-prod, got chatgpt-focused-prod"
-            )
+            # Any azp value should work - no validation
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": "any-random-client-id-12345"
+            }
 
-            with pytest.raises(UnauthorizedError):
-                await authenticate_request("organize_thoughts", meta)
+            result = await authenticate_request("organize_thoughts", meta)
+
+            # Should succeed with any azp
+            assert result["azp"] == "any-random-client-id-12345"
+            assert result["user_id"] == "user-123"
 
     @pytest.mark.asyncio
-    async def test_missing_azp_in_token_raises_unauthorized(self):
-        """JWT missing required azp claim raises UnauthorizedError."""
-        meta = {"headers": {"authorization": "Bearer noazp"}}
+    async def test_missing_azp_accepted(self):
+        """Token without azp claim is accepted (azp not required)."""
+        meta = {"headers": {"authorization": "Bearer validtoken"}}
 
         with patch("mcp_server.clarity.mcp_auth.validate_jwt") as mock_validate:
-            # Simulate missing required claim
-            mock_validate.side_effect = jwt.InvalidTokenError("Missing required claim: azp")
+            # No azp in return value
+            mock_validate.return_value = {
+                "user_id": "user-123",
+                "scopes": {"clarity.write"},
+                "jti": "token-id",
+                "azp": None  # No azp
+            }
 
-            with pytest.raises(UnauthorizedError):
-                await authenticate_request("organize_thoughts", meta)
+            result = await authenticate_request("organize_thoughts", meta)
+
+            # Should succeed even without azp
+            assert result["azp"] is None
+            assert result["user_id"] == "user-123"
 
 
 class TestJWTValidationFailures:

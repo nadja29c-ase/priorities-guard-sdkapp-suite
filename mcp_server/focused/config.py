@@ -74,13 +74,6 @@ FOCUSED_AUDIENCE = get_env(
     default="https://www.priority-guard.com"
 )
 
-# Expected ChatGPT client ID for azp claim validation
-# Required in production, optional in dev (for testing)
-CHATGPT_CLIENT_ID_FOCUSED = get_env(
-    "CHATGPT_CLIENT_ID_FOCUSED",
-    required=True  # Will fail in prod/staging if not set
-)
-
 # Token expiry grace period (seconds)
 # Reject tokens expiring within this window to prevent race conditions
 TOKEN_EXPIRY_GRACE_SECONDS = int(get_env(

@@ -32,7 +32,6 @@ from mcp_server.clarity.config import (
     CLARITY_JWKS_URL,
     CLARITY_ISSUER,
     CLARITY_AUDIENCE,
-    CHATGPT_CLIENT_ID_CLARITY,
     TOKEN_EXPIRY_GRACE_SECONDS,
     JWKS_CACHE_TTL_SECONDS,
     JWKS_MAX_STALE_SECONDS,
@@ -299,30 +298,14 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 "verify_iat": True,
                 "verify_aud": True,
                 "verify_iss": True,
-                "require": ["exp", "iss", "aud", "sub", "scope", "jti", "azp"],
+                "require": ["exp", "iss", "aud", "sub", "scope", "jti"],
             }
         )
 
-        # Step 5: Validate azp claim (skip in dev/test if not configured)
+        # Step 5: Extract azp claim (logged but not validated - see remove_azp.md)
+        # NOTE: azp validation removed because dynamic client registration assigns
+        # different client_ids per user, making static validation impossible.
         azp = payload.get("azp")
-        if CHATGPT_CLIENT_ID_CLARITY:
-            # Production: strict azp validation
-            if azp != CHATGPT_CLIENT_ID_CLARITY:
-                logger.warning(
-                    "jwt.validation.invalid_azp",
-                    correlation_id=correlation_id,
-                    expected=CHATGPT_CLIENT_ID_CLARITY,
-                    actual=azp
-                )
-                raise jwt.InvalidTokenError(f"Invalid azp claim: expected {CHATGPT_CLIENT_ID_CLARITY}, got {azp}")
-        else:
-            # Dev/test: bypass azp validation, just log
-            logger.debug(
-                "jwt.validation.azp_bypass",
-                correlation_id=correlation_id,
-                azp=azp,
-                reason="CHATGPT_CLIENT_ID_CLARITY not configured"
-            )
 
         # Extract claims
         user_id = payload.get("sub")

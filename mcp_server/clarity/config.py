@@ -84,17 +84,6 @@ CLARITY_AUDIENCE = get_env(
     default="https://www.priority-guard.com"
 )
 
-# Expected ChatGPT client ID for azp claim validation
-# SECURITY: Required in production/staging to prevent unauthorized token use.
-# In dev, empty string skips azp validation for local testing.
-if ENV in ("production", "staging"):
-    CHATGPT_CLIENT_ID_CLARITY = get_env("CHATGPT_CLIENT_ID_CLARITY", required=True)
-else:
-    CHATGPT_CLIENT_ID_CLARITY = get_env(
-        "CHATGPT_CLIENT_ID_CLARITY",
-        default=""  # Empty = skip azp validation (dev only)
-    )
-
 # Token expiry grace period (seconds)
 TOKEN_EXPIRY_GRACE_SECONDS = int(get_env(
     "TOKEN_EXPIRY_GRACE_SECONDS",

@@ -29,7 +29,6 @@ from mcp_server.priority_guardian.config import (
     PG_JWKS_URL,
     PG_ISSUER,
     PG_AUDIENCE,
-    CHATGPT_CLIENT_ID_PG,
     TOKEN_EXPIRY_GRACE_SECONDS,
     JWKS_CACHE_TTL_SECONDS,
     JWKS_MAX_STALE_SECONDS,
@@ -296,7 +295,7 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 "verify_iat": True,
                 "verify_aud": True,
                 "verify_iss": True,
-                "require": ["exp", "iss", "aud", "sub", "scope", "jti", "azp"],
+                "require": ["exp", "iss", "aud", "sub", "scope", "jti"],
             }
         )
 
@@ -312,26 +311,10 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 f"Token expires in less than {TOKEN_EXPIRY_GRACE_SECONDS} seconds"
             )
 
-        # Step 6: Validate azp claim (skip in dev/test if not configured)
+        # Step 6: Extract azp claim (logged but not validated - see remove_azp.md)
+        # NOTE: azp validation removed because dynamic client registration assigns
+        # different client_ids per user, making static validation impossible.
         azp = payload.get("azp")
-        if CHATGPT_CLIENT_ID_PG:
-            # Production: strict azp validation
-            if azp != CHATGPT_CLIENT_ID_PG:
-                logger.warning(
-                    "jwt.validation.invalid_azp",
-                    correlation_id=correlation_id,
-                    expected=CHATGPT_CLIENT_ID_PG,
-                    actual=azp
-                )
-                raise jwt.InvalidTokenError(f"Invalid azp claim: expected {CHATGPT_CLIENT_ID_PG}, got {azp}")
-        else:
-            # Dev/test: bypass azp validation, just log
-            logger.debug(
-                "jwt.validation.azp_bypass",
-                correlation_id=correlation_id,
-                azp=azp,
-                reason="CHATGPT_CLIENT_ID_PG not configured"
-            )
 
         # Extract claims
         user_id = payload.get("sub")
