@@ -176,6 +176,31 @@ TOOL_SCOPES = {
 
 
 # ============================================================================
+# CORS Configuration
+# ============================================================================
+
+# CORS allowed origins for cross-origin requests
+# In production, this must be explicitly set to known ChatGPT/OpenAI domains.
+# In dev, empty string allows all origins.
+CORS_ALLOWED_ORIGINS_RAW = get_env("CORS_ALLOWED_ORIGINS")
+
+if ENV in ("production", "prod", "staging") and not CORS_ALLOWED_ORIGINS_RAW:
+    raise RuntimeError(
+        "CORS_ALLOWED_ORIGINS must be explicitly set in production/staging. "
+        "Example: 'https://chatgpt.com,https://chat.openai.com'"
+    )
+
+CORS_ALLOWED_ORIGINS: list[str] = (
+    [origin.strip() for origin in CORS_ALLOWED_ORIGINS_RAW.split(",") if origin.strip()]
+    if CORS_ALLOWED_ORIGINS_RAW
+    else []  # Empty list in dev = allow all (middleware uses *)
+)
+
+# Development mode flag
+IS_DEV = ENV == "dev"
+
+
+# ============================================================================
 # Logging Configuration
 # ============================================================================
 

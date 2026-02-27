@@ -53,6 +53,61 @@ class LifespanMiddleware:
             await self.app(scope, receive, send)
 
 
+class HeadMcpMiddleware:
+    """
+    ASGI middleware to handle HEAD /mcp requests.
+
+    OpenAI's reachability probe may send HEAD requests to /mcp.
+    FastMCP returns 405 for HEAD (only allows GET, POST, DELETE).
+    This middleware intercepts HEAD /mcp and returns 200 to pass connectivity checks.
+
+    Must be the outermost middleware (applied last in code, runs first at request time)
+    so it short-circuits before other middleware runs.
+    """
+
+    def __init__(self, app, allowed_origins: list[str] | None = None):
+        self.app = app
+        # Store allowed origins for CORS header
+        # If None or empty, defaults to "*"
+        self.allowed_origins = allowed_origins
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope["type"] == "http"
+            and scope.get("method") == "HEAD"
+            and scope.get("path") == "/mcp"
+        ):
+            # Build CORS origin header
+            # Check if request has Origin header and if it's in allowed list
+            origin_header = b"*"
+            if self.allowed_origins:
+                for name, value in scope.get("headers", []):
+                    if name == b"origin":
+                        request_origin = value.decode("utf-8")
+                        if request_origin in self.allowed_origins:
+                            origin_header = value
+                        break
+
+            # Return 200 with empty body
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"cache-control", b"no-store"),
+                    (b"access-control-allow-origin", origin_header),
+                    (b"vary", b"Origin"),
+                ],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
+            return
+
+        await self.app(scope, receive, send)
+
+
 class MCPContentTypeAndAcceptFixMiddleware:
     """
     Fix ChatGPT -> FastMCP header mismatch and capture Authorization header.
@@ -130,6 +185,8 @@ def create_app():
         MCP_SERVER_URL,
         OAUTH_ISSUER_URL,
         BACKEND_URL,
+        CORS_ALLOWED_ORIGINS,
+        IS_DEV,
     )
     from mcp_server.priority_guardian.discovery import (
         openid_configuration,
@@ -176,7 +233,9 @@ def create_app():
     # -------------------------------------------------------------------------
     # Create FastMCP instance and register handlers
     # -------------------------------------------------------------------------
-    mcp = FastMCP("priority-guardian-mcp", streamable_http_path="/mcp")
+    # stateless_http=True: Each request is self-contained, authenticated via JWT.
+    # This avoids session ID issues on deploy (server restart clears in-memory sessions).
+    mcp = FastMCP("priority-guardian-mcp", streamable_http_path="/mcp", stateless_http=True)
 
     @mcp._mcp_server.list_resources()
     async def _list_resources():
@@ -254,8 +313,26 @@ def create_app():
     # -------------------------------------------------------------------------
     # Wrap with middlewares
     # -------------------------------------------------------------------------
-    wrapped_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app, auth_header_var)
-    return LifespanMiddleware(wrapped_app, _cleanup_on_shutdown)
+    # Order matters: outermost runs first at request time
+    # 1. HeadMcpMiddleware (outermost) - intercepts HEAD /mcp for reachability probes
+    # 2. LifespanMiddleware - handles shutdown cleanup
+    # 3. MCPContentTypeAndAcceptFixMiddleware - fixes headers, captures auth
+    # 4. fastmcp_app (innermost) - handles MCP protocol
+
+    # Build allowed origins list for CORS (matches Clarity pattern)
+    allowed_origins = list(CORS_ALLOWED_ORIGINS)
+    if IS_DEV:
+        # Add localhost origins for MCP Inspector during development
+        allowed_origins.extend([
+            "http://localhost:5173",   # MCP Inspector default
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",   # Common dev port
+            "http://127.0.0.1:3000",
+        ])
+
+    content_type_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app, auth_header_var)
+    lifespan_app = LifespanMiddleware(content_type_app, _cleanup_on_shutdown)
+    return HeadMcpMiddleware(lifespan_app, allowed_origins=allowed_origins)
 
 
 # --------------------------------------------------------------------

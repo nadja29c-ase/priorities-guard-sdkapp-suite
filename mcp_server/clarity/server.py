@@ -46,6 +46,66 @@ from mcp_server.clarity.config import CORS_ALLOWED_ORIGINS, IS_DEV
 
 logger = structlog.get_logger(__name__)
 
+
+# ============================================================================
+# HeadMcpMiddleware - Return 200 for HEAD /mcp
+# ============================================================================
+
+class HeadMcpMiddleware:
+    """
+    ASGI middleware to handle HEAD /mcp requests.
+
+    OpenAI's reachability probe may send HEAD requests to /mcp.
+    FastMCP returns 405 for HEAD (only allows GET, POST, DELETE).
+    This middleware intercepts HEAD /mcp and returns 200 to pass connectivity checks.
+
+    Must be the outermost middleware (applied last in code, runs first at request time)
+    so it short-circuits before other middleware runs.
+    """
+
+    def __init__(self, app, allowed_origins: list[str] | None = None):
+        self.app = app
+        # Store allowed origins for CORS header
+        # If None, defaults to "*"
+        self.allowed_origins = allowed_origins
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope["type"] == "http"
+            and scope.get("method") == "HEAD"
+            and scope.get("path") == "/mcp"
+        ):
+            # Build CORS origin header
+            # Check if request has Origin header and if it's in allowed list
+            origin_header = b"*"
+            if self.allowed_origins:
+                for name, value in scope.get("headers", []):
+                    if name == b"origin":
+                        request_origin = value.decode("utf-8")
+                        if request_origin in self.allowed_origins:
+                            origin_header = value
+                        break
+
+            # Return 200 with empty body
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"cache-control", b"no-store"),
+                    (b"access-control-allow-origin", origin_header),
+                    (b"vary", b"Origin"),
+                ],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": b"",
+            })
+            return
+
+        await self.app(scope, receive, send)
+
+
 # Create FastMCP instance
 # stateless_http=True: Each request is self-contained, authenticated via JWT.
 # This avoids session ID issues on deploy (server restart clears in-memory sessions).
@@ -262,7 +322,12 @@ def create_app():
     # IMPORTANT: MCPContentTypeAndAcceptFixMiddleware must run before FastMCP
     # request handling so auth_header_var is set. Do not insert middleware between
     # MCPContentTypeAndAcceptFixMiddleware and fastmcp_app.
-    return MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
+    wrapped_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
+
+    # Wrap with HEAD /mcp middleware (outermost - runs first)
+    # This intercepts HEAD /mcp and returns 200 for OpenAI's reachability probes.
+    # Pass allowed_origins for CORS header consistency.
+    return HeadMcpMiddleware(wrapped_app, allowed_origins=allowed_origins)
 
 
 # ASGI entrypoint
