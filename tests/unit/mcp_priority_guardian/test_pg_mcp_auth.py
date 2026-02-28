@@ -333,17 +333,19 @@ class TestToolScopeMappings:
 
     def test_connect_google_calendar_scope(self):
         """Test connect_google_calendar requires pg.access."""
-        from mcp_server.priority_guardian.config import TOOL_SCOPES
+        from mcp_server.priority_guardian.tools import get_tool
 
-        assert "connect_google_calendar" in TOOL_SCOPES
-        assert TOOL_SCOPES["connect_google_calendar"] == ["pg.access"]
+        tool = get_tool("connect_google_calendar")
+        assert tool is not None
+        assert tool.required_scopes == ["pg.access"]
 
     def test_disconnect_google_calendar_scope(self):
         """Test disconnect_google_calendar requires pg.access."""
-        from mcp_server.priority_guardian.config import TOOL_SCOPES
+        from mcp_server.priority_guardian.tools import get_tool
 
-        assert "disconnect_google_calendar" in TOOL_SCOPES
-        assert TOOL_SCOPES["disconnect_google_calendar"] == ["pg.access"]
+        tool = get_tool("disconnect_google_calendar")
+        assert tool is not None
+        assert tool.required_scopes == ["pg.access"]
 
 
 if __name__ == "__main__":

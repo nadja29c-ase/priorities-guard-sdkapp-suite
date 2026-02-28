@@ -1,24 +1,23 @@
 """
-JWT Authentication and Authorization for Priority Guardian MCP Server (Increment 01).
+JWT Authentication and Authorization for Priority Guardian MCP Server.
 
 Implements OAuth 2.0 Bearer Token Usage (RFC 6750) with:
 - JWT validation using JWKS
 - In-memory JWKS caching with TTL and stale age limits
-- Per-tool scope enforcement
+- Per-tool scope enforcement via TOOL_REGISTRY
 - RFC 6750-compliant error responses with WWW-Authenticate headers
 - Correlation ID handling
 
 Security:
 - Never logs tokens or parts of tokens
 - Fails closed on any validation error
-- Enforces expiry grace period to prevent race conditions
+- Uses PyJWT leeway for clock skew tolerance
 """
 
 import asyncio
 import time
 from typing import Optional, Dict, List, Any, Set
 from uuid import uuid4
-from datetime import datetime, timezone
 
 import httpx
 import jwt
@@ -33,7 +32,6 @@ from mcp_server.priority_guardian.config import (
     JWKS_CACHE_TTL_SECONDS,
     JWKS_MAX_STALE_SECONDS,
     JWKS_FETCH_TIMEOUT_SECONDS,
-    TOOL_SCOPES,
     MCP_SERVER_URL,
 )
 from mcp_server.priority_guardian.request_context import auth_header_var
@@ -238,9 +236,8 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
     1. Decode JWT header to extract kid
     2. Fetch JWKS and lookup signing key
     3. If kid not found, refetch JWKS once and retry
-    4. Verify signature, issuer, audience, expiry, nbf
-    5. Validate azp claim matches expected client_id
-    6. Extract claims: sub (user_id), scope, jti, azp
+    4. Verify signature, issuer, audience, expiry, nbf (with leeway for clock skew)
+    5. Extract claims: sub (user_id), scope, jti, azp
 
     Args:
         token: JWT access token
@@ -279,8 +276,6 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 raise jwt.InvalidTokenError(f"Unknown kid: {kid}")
 
         # Step 4: Verify JWT with all required checks
-        current_time = time.time()
-
         payload = jwt.decode(
             token,
             signing_key.key,
@@ -299,19 +294,7 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
             }
         )
 
-        # Step 5: Additional expiry grace period check
-        exp = payload.get("exp")
-        if exp and (exp - current_time) < TOKEN_EXPIRY_GRACE_SECONDS:
-            logger.warning(
-                "jwt.validation.expiring_soon",
-                correlation_id=correlation_id,
-                seconds_until_expiry=int(exp - current_time)
-            )
-            raise jwt.ExpiredSignatureError(
-                f"Token expires in less than {TOKEN_EXPIRY_GRACE_SECONDS} seconds"
-            )
-
-        # Step 6: Extract azp claim (logged but not validated - see remove_azp.md)
+        # Step 5: Extract azp claim (logged but not validated - see remove_azp.md)
         # NOTE: azp validation removed because dynamic client registration assigns
         # different client_ids per user, making static validation impossible.
         azp = payload.get("azp")
@@ -322,7 +305,7 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
         scopes = set(scope_str.split()) if scope_str else set()
         jti = payload.get("jti")
 
-        logger.info(
+        logger.debug(
             "jwt.validation.success",
             correlation_id=correlation_id,
             user_id=user_id,
@@ -374,15 +357,33 @@ def enforce_tool_scope(tool_name: str, token_scopes: Set[str], correlation_id: s
     """
     Enforce scope requirements for a tool.
 
+    Uses TOOL_REGISTRY as the single source of truth for required scopes.
+    Fails closed on unknown tools (raises UnauthorizedError).
+
     Args:
         tool_name: Name of the tool being called
         token_scopes: Set of scopes from validated token
         correlation_id: Correlation ID for logging
 
     Raises:
+        UnauthorizedError: If tool is not found in registry (fail closed)
         InsufficientScopeError: If required scopes not present
     """
-    required_scopes = TOOL_SCOPES.get(tool_name, [])
+    # Late import to avoid circular imports
+    from mcp_server.priority_guardian.tools import get_tool
+
+    tool_def = get_tool(tool_name)
+
+    # Fail closed: unknown tool is an auth failure
+    if tool_def is None:
+        logger.warning(
+            "scope.enforcement.unknown_tool",
+            correlation_id=correlation_id,
+            tool=tool_name
+        )
+        raise UnauthorizedError("invalid_token", "Token validation failed")
+
+    required_scopes = tool_def.required_scopes
 
     if not required_scopes:
         logger.warning(

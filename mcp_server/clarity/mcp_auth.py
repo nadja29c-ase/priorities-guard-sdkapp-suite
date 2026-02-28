@@ -15,7 +15,7 @@ Implements OAuth 2.0 Bearer Token Usage (RFC 6750) with:
 Security:
 - Never logs tokens or parts of tokens
 - Fails closed on any validation error
-- Enforces expiry grace period to prevent race conditions
+- Uses PyJWT leeway for clock skew tolerance
 """
 
 import asyncio
@@ -243,8 +243,8 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
     2. Fetch JWKS and lookup signing key
     3. If kid not found, refetch JWKS once and retry
     4. Verify signature, issuer, audience, expiry, nbf
-    5. Validate azp claim matches expected client_id
-    6. Extract claims: sub (user_id), scope, jti, azp
+    5. Extract azp claim (not validated — see remove_azp.md)
+    6. Extract claims: sub (user_id), scope, jti
 
     Args:
         token: JWT access token
@@ -655,7 +655,7 @@ async def authenticate_request(
 
     except jwt.InvalidTokenError as e:
         logger.warning("auth.invalid_token", correlation_id=correlation_id, tool=tool_name, error=str(e))
-        raise UnauthorizedError("invalid_token", str(e))
+        raise UnauthorizedError("invalid_token", "Token validation failed")
 
     except Exception as e:
         logger.error("auth.error", correlation_id=correlation_id, tool=tool_name, error=str(e))

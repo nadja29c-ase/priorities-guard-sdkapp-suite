@@ -20,7 +20,7 @@ ENV = os.getenv("ENV", "dev")
 # Helper Functions
 # ============================================================================
 
-def get_env(key: str, default: Optional[str] = None, required: bool = False) -> str:
+def get_env(key: str, default: Optional[str] = None, required: bool = False) -> Optional[str]:
     """
     Get environment variable with optional default and requirement check.
 
@@ -74,8 +74,9 @@ PG_AUDIENCE = get_env(
     default="https://www.priority-guard.com"
 )
 
-# Token expiry grace period (seconds)
-# Reject tokens expiring within this window to prevent race conditions
+# Token expiry clock skew tolerance (seconds).
+# Passed as leeway to PyJWT to tolerate minor clock differences
+# between backend and MCP server.
 TOKEN_EXPIRY_GRACE_SECONDS = int(get_env(
     "TOKEN_EXPIRY_GRACE_SECONDS",
     default="30"
@@ -152,27 +153,6 @@ OAUTH_ISSUER_URL = get_env(
 
 # Supported OAuth scopes for discovery endpoint
 SCOPES_SUPPORTED = ["pg.access"]
-
-
-# ============================================================================
-# Scope Definitions
-# ============================================================================
-
-# Tool → Required scopes mapping
-TOOL_SCOPES = {
-    # Public tools
-    "connect_google_calendar": ["pg.access"],
-    "disconnect_google_calendar": ["pg.access"],
-    "create_priority": ["pg.access"],
-    "get_priorities": ["pg.access"],
-    # Private widget-only tools (Inc B)
-    "add_priority": ["pg.access"],
-    "update_priority": ["pg.access"],
-    "delete_priority": ["pg.access"],
-    "add_deliverable": ["pg.access"],
-    "update_deliverable": ["pg.access"],
-    "delete_deliverable": ["pg.access"],
-}
 
 
 # ============================================================================

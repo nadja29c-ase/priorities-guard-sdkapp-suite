@@ -299,8 +299,8 @@ class TestJWTValidationFailures:
                 await authenticate_request("organize_thoughts", meta)
 
             # The error description should be generic, not expose internal URLs/key IDs
-            # (depends on implementation - this test documents expected behavior)
             assert exc_info.value.error == "invalid_token"
+            assert "internal.example.com" not in exc_info.value.description
 
 
 class TestAuthenticateRequest:
@@ -714,7 +714,8 @@ class TestCorrelationId:
         assert correlation_id is not None
         assert len(correlation_id) == 36
 
-    def test_correlation_id_returned_in_auth_context(self):
+    @pytest.mark.asyncio
+    async def test_correlation_id_returned_in_auth_context(self):
         """authenticate_request returns correlation_id in context."""
         meta = {
             "headers": {"authorization": "Bearer validtoken"},
@@ -729,10 +730,7 @@ class TestCorrelationId:
                 "azp": "client-id"
             }
 
-            import asyncio
-            result = asyncio.get_event_loop().run_until_complete(
-                authenticate_request("organize_thoughts", meta)
-            )
+            result = await authenticate_request("organize_thoughts", meta)
 
         assert "correlation_id" in result
         assert result["correlation_id"] == "request-correlation-456"

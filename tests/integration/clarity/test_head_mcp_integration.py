@@ -52,10 +52,10 @@ class TestHeadMcpIntegration:
         assert response.headers.get("vary") == "Origin"
 
     @pytest.mark.asyncio
-    async def test_head_mcp_cors_matches_post_behavior(self, clarity_app):
-        """HEAD /mcp CORS headers should be consistent with POST /mcp.
+    async def test_head_mcp_cors_echoes_allowed_origin(self, clarity_app):
+        """HEAD /mcp echoes allowed origin in CORS header.
 
-        Both should handle the same Origin in a compatible way.
+        When Origin is in the allowed list, it should be echoed back.
         """
         transport = httpx.ASGITransport(app=clarity_app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

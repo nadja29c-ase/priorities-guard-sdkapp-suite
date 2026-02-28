@@ -3,8 +3,12 @@ Google OAuth token management.
 
 Provides reusable token refresh logic for Google OAuth tokens.
 Shared between Focused and Priority Guardian apps.
+
+Concurrency: Uses per-user asyncio.Lock to prevent redundant refresh
+API calls when multiple coroutines detect an expired token simultaneously.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -17,6 +21,12 @@ from backend.core.models import CoreConnection
 
 logger = logging.getLogger(__name__)
 
+# Per-user locks for token refresh. Prevents concurrent refresh calls
+# for the same user from making redundant Google API calls.
+# NOTE: Only protects within a single process. If scaling to multiple
+# workers/containers, upgrade to Redis distributed lock.
+_user_refresh_locks: dict[str, asyncio.Lock] = {}
+
 
 async def ensure_valid_access_token(
     connection: CoreConnection,
@@ -28,6 +38,10 @@ async def ensure_valid_access_token(
 
     Checks token expiration and auto-refreshes if needed.
     Updates the connection object and database in place.
+
+    Concurrency: Uses per-user lock to prevent redundant refresh API calls.
+    When multiple coroutines detect an expired token for the same user,
+    only the first performs the refresh; others wait and reuse the result.
 
     Args:
         connection: User's Google connection from database
@@ -44,57 +58,83 @@ async def ensure_valid_access_token(
         - REFRESH_TOKEN_INVALID: Refresh token is invalid/revoked
         - API_QUOTA_EXCEEDED: Google API quota exceeded
     """
-    now = datetime.now(timezone.utc)
+    # -----------------------------------------------------------
+    # Get or create per-user lock
+    # -----------------------------------------------------------
+    user_key = str(connection.user_id)
+
+    # Size-based eviction: clear all locks if dict grows too large
+    # This is safe because recreating a lock just means one potential
+    # redundant refresh - acceptable trade-off for simplicity
+    if len(_user_refresh_locks) > 10000:
+        _user_refresh_locks.clear()
+        logger.debug("Cleared user refresh locks (size limit exceeded)")
+
+    # Get-then-set pattern (NOT setdefault to avoid allocating throwaway Lock)
+    lock = _user_refresh_locks.get(user_key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _user_refresh_locks[user_key] = lock
 
     # -----------------------------------------------------------
-    # Check if token needs refresh
+    # Acquire lock and check/refresh token
     # -----------------------------------------------------------
-    if not connection.token_expires_at or connection.token_expires_at <= now:
-        logger.info(f"Access token expired for user {connection.user_id}, refreshing")
+    async with lock:
+        # Refresh connection from database to get latest state
+        # (another coroutine may have already refreshed the token)
+        await session.refresh(connection)
 
-        # Decrypt refresh token
-        try:
-            refresh_token_decrypted = decrypt_token(connection.encrypted_refresh_token)
-        except Exception as e:
-            logger.error(f"Failed to decrypt refresh token for user {connection.user_id}: {e}")
-            return {"error": "TOKEN_DECRYPTION_FAILED"}
-
-        # Call Google refresh API
-        try:
-            result = await refresh_access_token(http_client, refresh_token_decrypted)
-        except ValueError as e:
-            if str(e) == "Refresh token invalid":
-                return {"error": "REFRESH_TOKEN_INVALID"}
-            if str(e) == "API quota exceeded":
-                return {"error": "API_QUOTA_EXCEEDED"}
-            return {"error": "TOKEN_REFRESH_FAILED"}
-        except Exception:
-            return {"error": "TOKEN_REFRESH_FAILED"}
-
-        # Extract new token and expiration
-        new_access_token = result["access_token"]
-        expires_in = result["expires_in"]
-
-        # Recompute now AFTER refresh (API call + retries can take several seconds)
         now = datetime.now(timezone.utc)
 
-        # Update database
-        connection.encrypted_access_token = encrypt_token(new_access_token)
-        connection.token_expires_at = now + timedelta(seconds=expires_in)
-        connection.updated_at = now
-        await session.commit()
+        # -----------------------------------------------------------
+        # Check if token needs refresh (re-check after acquiring lock)
+        # -----------------------------------------------------------
+        if not connection.token_expires_at or connection.token_expires_at <= now:
+            logger.info(f"Access token expired for user {connection.user_id}, refreshing")
 
-        logger.info(f"Access token refreshed for user {connection.user_id}")
+            # Decrypt refresh token
+            try:
+                refresh_token_decrypted = decrypt_token(connection.encrypted_refresh_token)
+            except Exception as e:
+                logger.error(f"Failed to decrypt refresh token for user {connection.user_id}: {e}")
+                return {"error": "TOKEN_DECRYPTION_FAILED"}
 
-        # Return decrypted token
-        return {"access_token": new_access_token}
+            # Call Google refresh API
+            try:
+                result = await refresh_access_token(http_client, refresh_token_decrypted)
+            except ValueError as e:
+                if str(e) == "Refresh token invalid":
+                    return {"error": "REFRESH_TOKEN_INVALID"}
+                if str(e) == "API quota exceeded":
+                    return {"error": "API_QUOTA_EXCEEDED"}
+                return {"error": "TOKEN_REFRESH_FAILED"}
+            except Exception:
+                return {"error": "TOKEN_REFRESH_FAILED"}
 
-    # -----------------------------------------------------------
-    # Token is still valid, just decrypt it
-    # -----------------------------------------------------------
-    try:
-        access_token = decrypt_token(connection.encrypted_access_token)
-        return {"access_token": access_token}
-    except Exception as e:
-        logger.error(f"Failed to decrypt access token for user {connection.user_id}: {e}")
-        return {"error": "TOKEN_DECRYPTION_FAILED"}
+            # Extract new token and expiration
+            new_access_token = result["access_token"]
+            expires_in = result["expires_in"]
+
+            # Recompute now AFTER refresh (API call + retries can take several seconds)
+            now = datetime.now(timezone.utc)
+
+            # Update database
+            connection.encrypted_access_token = encrypt_token(new_access_token)
+            connection.token_expires_at = now + timedelta(seconds=expires_in)
+            connection.updated_at = now
+            await session.commit()
+
+            logger.info(f"Access token refreshed for user {connection.user_id}")
+
+            # Return decrypted token
+            return {"access_token": new_access_token}
+
+        # -----------------------------------------------------------
+        # Token is still valid (possibly refreshed by another coroutine)
+        # -----------------------------------------------------------
+        try:
+            access_token = decrypt_token(connection.encrypted_access_token)
+            return {"access_token": access_token}
+        except Exception as e:
+            logger.error(f"Failed to decrypt access token for user {connection.user_id}: {e}")
+            return {"error": "TOKEN_DECRYPTION_FAILED"}

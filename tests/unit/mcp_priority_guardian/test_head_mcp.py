@@ -184,4 +184,4 @@ class TestHeadMcpMiddleware:
         # Should NOT see session-related logs
         log_text = caplog.text.lower()
         assert "terminating session" not in log_text
-        assert "session manager" not in log_text or "started" not in log_text
+        assert "session manager" not in log_text

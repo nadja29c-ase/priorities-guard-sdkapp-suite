@@ -13,6 +13,7 @@ Or (direct mode - for local development):
 """
 
 import os
+import time
 
 # Minimal imports at module level for fast startup
 # Heavy imports are deferred to create_app() for faster port binding
@@ -53,6 +54,84 @@ class LifespanMiddleware:
             await self.app(scope, receive, send)
 
 
+class RequestLoggingMiddleware:
+    """
+    ASGI middleware to log all HTTP requests with structured fields.
+
+    Logs: method, path, status_code, client_ip, user_agent, origin,
+    response_time_ms, service.
+
+    Must be the outermost middleware to capture all requests including
+    those short-circuited by HeadMcpMiddleware.
+    """
+
+    def __init__(self, app, service_name: str):
+        self.app = app
+        self.service_name = service_name
+
+    async def __call__(self, scope, receive, send):
+        # Only log HTTP requests, skip lifespan/websocket
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        start_time = time.monotonic()
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/")
+
+        # Extract headers
+        headers = {name.decode("utf-8").lower(): value.decode("utf-8")
+                   for name, value in scope.get("headers", [])}
+
+        # Get client IP (X-Forwarded-For first, then ASGI client)
+        client_ip = headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if not client_ip:
+            client = scope.get("client")
+            client_ip = client[0] if client else "unknown"
+
+        # Get User-Agent (truncated to 200 chars)
+        user_agent = headers.get("user-agent", "")[:200]
+
+        # Get Origin header
+        origin = headers.get("origin", "")
+
+        # Capture response status code
+        status_code = 0
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 0)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            # Calculate response time
+            response_time_ms = round((time.monotonic() - start_time) * 1000, 2)
+
+            # Build log entry
+            log_data = {
+                "method": method,
+                "path": path,
+                "status_code": status_code,
+                "client_ip": client_ip,
+                "user_agent": user_agent,
+                "response_time_ms": response_time_ms,
+                "service": self.service_name,
+            }
+            if origin:
+                log_data["origin"] = origin
+
+            # Choose log level based on status code
+            if status_code >= 500:
+                logger.error("http.request", **log_data)
+            elif status_code >= 400:
+                logger.warning("http.request", **log_data)
+            else:
+                logger.info("http.request", **log_data)
+
+
 class HeadMcpMiddleware:
     """
     ASGI middleware to handle HEAD /mcp requests.
@@ -61,8 +140,9 @@ class HeadMcpMiddleware:
     FastMCP returns 405 for HEAD (only allows GET, POST, DELETE).
     This middleware intercepts HEAD /mcp and returns 200 to pass connectivity checks.
 
-    Must be the outermost middleware (applied last in code, runs first at request time)
-    so it short-circuits before other middleware runs.
+    Middleware positioning: inside RequestLoggingMiddleware (so HEAD /mcp requests
+    are logged), outside MCPContentTypeAndAcceptFixMiddleware (short-circuits before
+    header processing for efficiency).
     """
 
     def __init__(self, app, allowed_origins: list[str] | None = None):
@@ -314,12 +394,16 @@ def create_app():
     # Wrap with middlewares
     # -------------------------------------------------------------------------
     # Order matters: outermost runs first at request time
-    # 1. HeadMcpMiddleware (outermost) - intercepts HEAD /mcp for reachability probes
-    # 2. LifespanMiddleware - handles shutdown cleanup
-    # 3. MCPContentTypeAndAcceptFixMiddleware - fixes headers, captures auth
-    # 4. fastmcp_app (innermost) - handles MCP protocol
+    # 1. RequestLoggingMiddleware (outermost) - logs all requests
+    # 2. HeadMcpMiddleware - intercepts HEAD /mcp for reachability probes
+    # 3. LifespanMiddleware - handles shutdown cleanup
+    # 4. MCPContentTypeAndAcceptFixMiddleware - fixes headers, captures auth
+    # 5. fastmcp_app (innermost) - handles MCP protocol
 
-    # Build allowed origins list for CORS (matches Clarity pattern)
+    # NOTE: Unlike Clarity, PG does not use Starlette's CORSMiddleware.
+    # PG MCP server is not accessed directly by browsers - ChatGPT proxies
+    # all widget calls, and server-to-server MCP calls don't require CORS.
+    # HeadMcpMiddleware handles CORS headers only for HEAD /mcp probes.
     allowed_origins = list(CORS_ALLOWED_ORIGINS)
     if IS_DEV:
         # Add localhost origins for MCP Inspector during development
@@ -332,7 +416,8 @@ def create_app():
 
     content_type_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app, auth_header_var)
     lifespan_app = LifespanMiddleware(content_type_app, _cleanup_on_shutdown)
-    return HeadMcpMiddleware(lifespan_app, allowed_origins=allowed_origins)
+    head_mcp_app = HeadMcpMiddleware(lifespan_app, allowed_origins=allowed_origins)
+    return RequestLoggingMiddleware(head_mcp_app, service_name="priority-guardian-mcp")
 
 
 # --------------------------------------------------------------------

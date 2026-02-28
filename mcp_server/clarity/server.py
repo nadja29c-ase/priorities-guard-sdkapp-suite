@@ -14,6 +14,7 @@ Or run directly:
 """
 
 import os
+import time
 
 import uvicorn
 import structlog
@@ -48,6 +49,88 @@ logger = structlog.get_logger(__name__)
 
 
 # ============================================================================
+# RequestLoggingMiddleware - Log all HTTP requests
+# ============================================================================
+
+class RequestLoggingMiddleware:
+    """
+    ASGI middleware to log all HTTP requests with structured fields.
+
+    Logs: method, path, status_code, client_ip, user_agent, origin,
+    response_time_ms, service.
+
+    Must be the outermost middleware to capture all requests including
+    those short-circuited by HeadMcpMiddleware.
+    """
+
+    def __init__(self, app, service_name: str):
+        self.app = app
+        self.service_name = service_name
+
+    async def __call__(self, scope, receive, send):
+        # Only log HTTP requests, skip lifespan/websocket
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        start_time = time.monotonic()
+        method = scope.get("method", "UNKNOWN")
+        path = scope.get("path", "/")
+
+        # Extract headers
+        headers = {name.decode("utf-8").lower(): value.decode("utf-8")
+                   for name, value in scope.get("headers", [])}
+
+        # Get client IP (X-Forwarded-For first, then ASGI client)
+        client_ip = headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if not client_ip:
+            client = scope.get("client")
+            client_ip = client[0] if client else "unknown"
+
+        # Get User-Agent (truncated to 200 chars)
+        user_agent = headers.get("user-agent", "")[:200]
+
+        # Get Origin header
+        origin = headers.get("origin", "")
+
+        # Capture response status code
+        status_code = 0
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 0)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        finally:
+            # Calculate response time
+            response_time_ms = round((time.monotonic() - start_time) * 1000, 2)
+
+            # Build log entry
+            log_data = {
+                "method": method,
+                "path": path,
+                "status_code": status_code,
+                "client_ip": client_ip,
+                "user_agent": user_agent,
+                "response_time_ms": response_time_ms,
+                "service": self.service_name,
+            }
+            if origin:
+                log_data["origin"] = origin
+
+            # Choose log level based on status code
+            if status_code >= 500:
+                logger.error("http.request", **log_data)
+            elif status_code >= 400:
+                logger.warning("http.request", **log_data)
+            else:
+                logger.info("http.request", **log_data)
+
+
+# ============================================================================
 # HeadMcpMiddleware - Return 200 for HEAD /mcp
 # ============================================================================
 
@@ -59,8 +142,9 @@ class HeadMcpMiddleware:
     FastMCP returns 405 for HEAD (only allows GET, POST, DELETE).
     This middleware intercepts HEAD /mcp and returns 200 to pass connectivity checks.
 
-    Must be the outermost middleware (applied last in code, runs first at request time)
-    so it short-circuits before other middleware runs.
+    Middleware positioning: inside RequestLoggingMiddleware (so HEAD /mcp requests
+    are logged), outside MCPContentTypeAndAcceptFixMiddleware (short-circuits before
+    header processing for efficiency).
     """
 
     def __init__(self, app, allowed_origins: list[str] | None = None):
@@ -317,17 +401,18 @@ def create_app():
     fastmcp_app.add_route("/", health_root, methods=["GET"])
     fastmcp_app.add_route("/health", health_check, methods=["GET"])
 
-    # Wrap with header-fix middleware
-    #
-    # IMPORTANT: MCPContentTypeAndAcceptFixMiddleware must run before FastMCP
-    # request handling so auth_header_var is set. Do not insert middleware between
-    # MCPContentTypeAndAcceptFixMiddleware and fastmcp_app.
-    wrapped_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
+    # -------------------------------------------------------------------------
+    # Wrap with middlewares
+    # -------------------------------------------------------------------------
+    # Order matters: outermost runs first at request time
+    # 1. RequestLoggingMiddleware (outermost) - logs all requests
+    # 2. HeadMcpMiddleware - intercepts HEAD /mcp for reachability probes
+    # 3. MCPContentTypeAndAcceptFixMiddleware - fixes headers, captures auth
+    # 4. fastmcp_app (innermost) - handles MCP protocol
 
-    # Wrap with HEAD /mcp middleware (outermost - runs first)
-    # This intercepts HEAD /mcp and returns 200 for OpenAI's reachability probes.
-    # Pass allowed_origins for CORS header consistency.
-    return HeadMcpMiddleware(wrapped_app, allowed_origins=allowed_origins)
+    content_type_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
+    head_mcp_app = HeadMcpMiddleware(content_type_app, allowed_origins=allowed_origins)
+    return RequestLoggingMiddleware(head_mcp_app, service_name="clarity-mcp")
 
 
 # ASGI entrypoint
