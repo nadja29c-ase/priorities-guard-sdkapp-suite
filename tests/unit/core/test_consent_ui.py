@@ -100,7 +100,7 @@ from uuid import uuid4
 from backend.core.models import CoreUser, CoreConnection
 from backend.core.oauth_provider.authorize import (
     _detect_language,
-    _get_or_create_user,
+    _resolve_user_identity,
     _error_redirect,
 )
 from backend.core.oauth_provider.validators.pkce import (
@@ -189,7 +189,7 @@ class TestErrorRedirect:
 # =============================================================================
 
 class TestGetOrCreateUser:
-    """Tests for _get_or_create_user function."""
+    """Tests for _resolve_user_identity function."""
 
     @pytest_asyncio.fixture
     async def setup_existing_user(self, async_session):
@@ -203,7 +203,7 @@ class TestGetOrCreateUser:
     @pytest.mark.asyncio
     async def test_creates_new_user_for_unknown_chatgpt_id(self, async_session):
         """Should create new user when chatgpt_user_id not found."""
-        user = await _get_or_create_user(
+        user = await _resolve_user_identity(
             db=async_session,
             chatgpt_user_id="new-chatgpt-user-456",
             correlation_id="test-correlation-id"
@@ -218,7 +218,7 @@ class TestGetOrCreateUser:
         """Should find existing user by chatgpt_user_id."""
         existing_user = setup_existing_user
 
-        user = await _get_or_create_user(
+        user = await _resolve_user_identity(
             db=async_session,
             chatgpt_user_id="existing-chatgpt-user-123",
             correlation_id="test-correlation-id"
@@ -2126,7 +2126,7 @@ class TestOAuthErrorCompliance:
         """Unexpected exception should return server_error or 500."""
         _ = setup_oauth_client
 
-        with patch("backend.core.oauth_provider.authorize._get_or_create_user", new_callable=AsyncMock) as mock_get_user:
+        with patch("backend.core.oauth_provider.authorize._resolve_user_identity", new_callable=AsyncMock) as mock_get_user:
             # Simulate unexpected exception
             mock_get_user.side_effect = Exception("Unexpected database error")
 

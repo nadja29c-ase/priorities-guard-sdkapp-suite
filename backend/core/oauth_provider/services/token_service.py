@@ -79,10 +79,11 @@ async def exchange_authorization_code(
     request_logger = logger.bind(correlation_id=correlation_id) if correlation_id else logger
 
     # Load authorization code from database
+    # Use FOR UPDATE to acquire row-level lock and prevent concurrent exchange
     result = await db.execute(
-        select(OAuthAuthorizationCode).where(
-            OAuthAuthorizationCode.code == code
-        )
+        select(OAuthAuthorizationCode)
+        .where(OAuthAuthorizationCode.code == code)
+        .with_for_update()
     )
     auth_code = result.scalar_one_or_none()
 
@@ -215,11 +216,16 @@ async def exchange_refresh_token(
     request_logger = logger.bind(correlation_id=correlation_id) if correlation_id else logger
 
     # Find token by refresh_token hash (O(1) indexed lookup!)
+    # Use FOR UPDATE to acquire row-level lock and prevent concurrent exchange
+    # Filter revoked == False in WHERE clause so second concurrent caller sees zero rows
     refresh_token_hashed = hash_refresh_token(refresh_token)
     result = await db.execute(
-        select(OAuthAccessToken).where(
-            OAuthAccessToken.refresh_token_hash == refresh_token_hashed
+        select(OAuthAccessToken)
+        .where(
+            OAuthAccessToken.refresh_token_hash == refresh_token_hashed,
+            OAuthAccessToken.revoked == False,  # noqa: E712
         )
+        .with_for_update()
     )
     matching_token = result.scalar_one_or_none()
 
@@ -229,10 +235,6 @@ async def exchange_refresh_token(
     # Validate not expired
     if not validate_token_not_expired(matching_token.refresh_token_expires_at):
         return ("invalid_grant", "Refresh token expired")
-
-    # Validate not revoked
-    if matching_token.revoked:
-        return ("invalid_grant", "Refresh token revoked")
 
     # Validate client_id matches
     if not validate_client_id_match(matching_token.client_id, client_id):
