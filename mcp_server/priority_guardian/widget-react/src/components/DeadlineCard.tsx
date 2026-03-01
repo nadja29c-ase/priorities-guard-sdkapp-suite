@@ -7,25 +7,14 @@ import { DeleteConfirmation } from './DeleteConfirmation'
 import { ChevronIcon } from './ChevronIcon'
 import { KeywordPicker } from './KeywordPicker'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
 
-// V7 accent colors for deadline banner
-const ACCENT_COLORS: Record<string, { soft: string; accent: string; border: string }> = {
-  P1: {
-    soft: 'var(--color-background-info-soft-alpha, #eff6ff)',
-    accent: 'var(--color-text-info, #0285ff)',
-    border: '#0285ff',
-  },
-  P2: {
-    soft: 'var(--color-background-discovery-soft-alpha, #faf5ff)',
-    accent: 'var(--color-text-discovery, #924ff7)',
-    border: '#924ff7',
-  },
-  P3: {
-    soft: 'var(--color-background-caution-soft-alpha, #fefce8)',
-    accent: 'var(--color-text-caution, #e0ac00)',
-    border: '#ffc300',
-  },
+// Icon stroke colors using SDK CSS variables (compliant with UI guideline #74)
+// Icons can use custom monochromatic colors; these are CSS variables, not hardcoded hex
+const ICON_STROKE_COLORS: Record<string, string> = {
+  P1: 'var(--color-text-info, #0285ff)',
+  P2: 'var(--color-text-discovery, #924ff7)',
+  P3: 'var(--color-text-caution, #e0ac00)',
 }
 
 interface DeadlineCardProps {
@@ -75,7 +64,8 @@ export function DeadlineCard({
 
   const kw = priority.calendarKeyword
   const badgeColorClass = BADGE_COLORS[kw] ?? BADGE_COLORS.P1
-  const colors = ACCENT_COLORS[kw] ?? ACCENT_COLORS.P1
+  const borderColorClass = BORDER_COLORS[kw] ?? BORDER_COLORS.P1
+  const iconStrokeColor = ICON_STROKE_COLORS[kw] ?? ICON_STROKE_COLORS.P1
 
   // Format deadline date for banner (e.g., "Mar 15, 2026")
   const locale = window.openai?.locale || 'en-US'
@@ -207,38 +197,29 @@ export function DeadlineCard({
   return (
     <article
       ref={cardRef}
-      className="rounded-xl overflow-hidden bg-surface border border-default"
-      style={{ borderLeft: `4px solid ${colors.border}` }}
+      className={`rounded-xl overflow-hidden bg-surface border border-default ${borderColorClass}`}
       aria-label={`Priority ${kw}: ${priority.name}`}
     >
-      {/* V7: Colored deadline banner at top */}
-      <div
-        className="px-5 py-2.5 flex items-center justify-between"
-        style={{ background: colors.soft }}
-      >
+      {/* Deadline banner - uses neutral background per UI guideline #41 */}
+      <div className="px-5 py-2.5 flex items-center justify-between bg-surface-secondary">
         <div className="flex items-center gap-2">
-          {/* Calendar icon */}
+          {/* Calendar icon - uses SDK CSS variable for stroke per #74 */}
           <svg
             className="w-3.5 h-3.5 flex-shrink-0"
             viewBox="0 0 16 16"
             fill="none"
-            stroke={colors.accent}
+            stroke={iconStrokeColor}
             strokeWidth="1.5"
+            aria-hidden="true"
           >
             <rect x="2" y="3" width="12" height="11" rx="1.5" />
             <path d="M5 1.5v3M11 1.5v3M2 7h12" />
           </svg>
-          <span
-            className="text-xs font-semibold"
-            style={{ color: colors.accent }}
-          >
+          <span className="text-xs font-semibold text-secondary">
             {deadlineDate}
           </span>
         </div>
-        <span
-          className="text-xs font-bold tabular-nums"
-          style={{ color: colors.accent }}
-        >
+        <span className="text-xs font-bold tabular-nums text-secondary">
           {days !== null && (
             days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`
           )}
@@ -249,10 +230,7 @@ export function DeadlineCard({
       <div className="p-5">
         {/* Header row: Badge + Name + Edit/Trash */}
         <div className="flex items-center gap-2 mb-3">
-          <span
-            className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}
-            style={{ fontSize: '0.65rem' }}
-          >
+          <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} text-2xs`}>
             {kw}
           </span>
           {isEditing ? (
@@ -283,7 +261,7 @@ export function DeadlineCard({
             title="Edit"
             aria-label={`Edit priority: ${priority.name}`}
           >
-            <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
             </svg>
           </button>
@@ -294,7 +272,7 @@ export function DeadlineCard({
             title="Delete priority"
             aria-label={`Delete priority: ${priority.name}`}
           >
-            <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
               <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
               <path d="M6.5 7v5M9.5 7v5" />

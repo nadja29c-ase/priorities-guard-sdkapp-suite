@@ -5,15 +5,8 @@ import { DeleteConfirmation } from './DeleteConfirmation'
 import { GoalSection } from './GoalSection'
 import { KeywordPicker } from './KeywordPicker'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
+import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
 import { HourRing } from './HourRing'
-
-// V7 border colors for card left border
-const BORDER_COLORS: Record<string, string> = {
-  P1: '#0285ff',
-  P2: '#924ff7',
-  P3: '#ffc300',
-}
 
 interface FlexibleCardProps {
   priority: Priority
@@ -63,7 +56,7 @@ export function FlexibleCard({
 
   const kw = priority.calendarKeyword
   const badgeColorClass = BADGE_COLORS[kw] ?? BADGE_COLORS.P1
-  const borderColor = BORDER_COLORS[kw] ?? BORDER_COLORS.P1
+  const borderColorClass = BORDER_COLORS[kw] ?? BORDER_COLORS.P1
 
   const hasAvg = priority.avgTargetAchievement != null
 
@@ -218,16 +211,12 @@ export function FlexibleCard({
   return (
     <article
       ref={cardRef}
-      className="rounded-xl p-5 bg-surface border border-default"
-      style={{ borderLeft: `4px solid ${borderColor}` }}
+      className={`rounded-xl p-5 bg-surface border border-default ${borderColorClass}`}
       aria-label={`Priority ${kw}: ${priority.name}`}
     >
       {/* V7 Header: Badge + Name + Streak pill + Edit/Trash */}
       <div className="flex items-center gap-2 mb-3">
-        <span
-          className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass}`}
-          style={{ fontSize: '0.65rem' }}
-        >
+        <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} text-2xs`}>
           {kw}
         </span>
         {isEditing ? (
@@ -253,10 +242,7 @@ export function FlexibleCard({
         )}
         {/* V7: Streak as pill (not emoji) */}
         {!isEditing && priority.streakCount != null && priority.streakCount > 0 && (
-          <span
-            className="text-xs tabular-nums px-1.5 py-0.5 rounded-full font-medium text-default bg-surface-tertiary"
-            style={{ fontSize: '0.7rem' }}
-          >
+          <span className="text-xs tabular-nums px-1.5 py-0.5 rounded-full font-medium text-default bg-surface-tertiary">
             {priority.streakCount}w streak
           </span>
         )}
@@ -267,7 +253,7 @@ export function FlexibleCard({
           title="Edit"
           aria-label={`Edit priority: ${priority.name}`}
         >
-          <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
             <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
           </svg>
         </button>
@@ -278,7 +264,7 @@ export function FlexibleCard({
           title="Delete priority"
           aria-label={`Delete priority: ${priority.name}`}
         >
-          <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
             <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
             <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
             <path d="M6.5 7v5M9.5 7v5" />
@@ -319,6 +305,7 @@ export function FlexibleCard({
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  aria-hidden="true"
                 >
                   <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                 </svg>
