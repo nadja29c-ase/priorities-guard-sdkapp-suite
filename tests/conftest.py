@@ -122,6 +122,21 @@ async def async_session(async_engine):
         # Session closes normally - no rollback needed
 
 
+@pytest_asyncio.fixture
+async def async_session_factory(async_engine):
+    """
+    Return a session factory for tests that need multiple independent sessions.
+
+    Use this for concurrency tests where each concurrent operation needs
+    its own session/transaction to properly test row locking behavior.
+    """
+    return async_sessionmaker(
+        async_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def cleanup_db(async_engine):
     """
@@ -140,7 +155,7 @@ async def cleanup_db(async_engine):
                 "focused_scheduled_jobs, clarity_clusters, "
                 "pg_weekly_snapshots, pg_goals, pg_deliverables, pg_priorities, "
                 "core_connections, core_users, core_tool_audit_log, core_consents, "
-                "oauth_authorization_codes, oauth_access_tokens, oauth_state "
+                "oauth_authorization_codes, oauth_access_tokens, oauth_sessions, oauth_state "
                 "RESTART IDENTITY CASCADE"
             )
         )

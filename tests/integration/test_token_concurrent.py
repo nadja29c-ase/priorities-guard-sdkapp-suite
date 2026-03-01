@@ -61,7 +61,7 @@ class TestConcurrentTokenExchange:
             )
             setup_session.add(token_record)
             await setup_session.commit()
-            original_token_id = token_record.id
+            original_token_jti = token_record.jti
 
         # Execute: Launch two concurrent exchange_refresh_token calls
         # CRITICAL: Each must use its own session
@@ -113,7 +113,7 @@ class TestConcurrentTokenExchange:
 
             # Verify original is revoked
             original = await verify_session.execute(
-                select(OAuthAccessToken).where(OAuthAccessToken.id == original_token_id)
+                select(OAuthAccessToken).where(OAuthAccessToken.jti == original_token_jti)
             )
             original_token = original.scalar_one()
             assert original_token.revoked is True, "Original token should be revoked"
