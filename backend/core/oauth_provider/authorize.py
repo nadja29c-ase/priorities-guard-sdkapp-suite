@@ -53,7 +53,7 @@ SCOPE_DESCRIPTIONS_DE = {
 }
 
 # Initialize Jinja2 templates
-templates = Jinja2Templates(directory="backend/templates")
+templates = Jinja2Templates(directory="backend/templates", autoescape=True)
 
 
 def _error_redirect(redirect_uri: str, state: str | None, error: str, description: str):
