@@ -13,6 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from backend.core.google_token_management import (
     ensure_valid_access_token,
     _user_refresh_locks,
+    _evict_stale_locks,
+    LOCK_TTL_SECONDS,
+    MAX_LOCK_ENTRIES,
+    EVICTION_TARGET_RATIO,
 )
 
 
@@ -453,12 +457,187 @@ class TestConcurrentRefresh:
 
     @pytest.mark.asyncio
     async def test_lock_cleanup_on_overflow(self, mock_http_client):
-        """Lock dict is cleared when it exceeds 10000 entries."""
-        # Populate with 10001 entries
-        for i in range(10001):
-            _user_refresh_locks[f"user-{i}"] = asyncio.Lock()
+        """Stale locks are evicted when dict exceeds capacity."""
+        # Use small constants for testing
+        with patch("backend.core.google_token_management.MAX_LOCK_ENTRIES", 10), \
+             patch("backend.core.google_token_management.LOCK_TTL_SECONDS", 30), \
+             patch("backend.core.google_token_management.EVICTION_TARGET_RATIO", 0.8):
 
-        assert len(_user_refresh_locks) == 10001
+            # Populate with 10 stale entries (old timestamps)
+            stale_time = 0.0  # Very old timestamp
+            for i in range(10):
+                _user_refresh_locks[f"user-{i}"] = (asyncio.Lock(), stale_time)
+
+            assert len(_user_refresh_locks) == 10
+
+            # Create a connection for a new user
+            connection = MagicMock()
+            connection.user_id = "new-user"
+            connection.encrypted_access_token = b"encrypted_access"
+            connection.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+            session = AsyncMock()
+
+            with patch(
+                "backend.core.google_token_management.decrypt_token",
+                return_value="decrypted_token"
+            ):
+                await ensure_valid_access_token(connection, session, mock_http_client)
+
+            # Stale entries should be evicted, new entry should exist
+            assert "new-user" in _user_refresh_locks
+            # All stale entries should be gone (TTL eviction)
+            assert len(_user_refresh_locks) == 1
+
+
+# =============================================================================
+# Lock Eviction Tests (Increment 35B)
+# =============================================================================
+
+class TestLockEviction:
+    """Tests for TTL-based lock eviction (ADR-002)."""
+
+    @pytest.fixture(autouse=True)
+    def clear_locks(self):
+        """Clear locks before and after each test."""
+        _user_refresh_locks.clear()
+        yield
+        _user_refresh_locks.clear()
+
+    def test_stale_lock_evicted_on_overflow(self, monkeypatch):
+        """Stale entries are evicted when inserting a new key at capacity."""
+        # Use small constants for testing
+        monkeypatch.setattr("backend.core.google_token_management.MAX_LOCK_ENTRIES", 10)
+        monkeypatch.setattr("backend.core.google_token_management.LOCK_TTL_SECONDS", 30)
+        monkeypatch.setattr("backend.core.google_token_management.EVICTION_TARGET_RATIO", 0.8)
+
+        # Mock time.monotonic to return controlled values
+        current_time = 1000.0
+        monkeypatch.setattr("backend.core.google_token_management.time.monotonic", lambda: current_time)
+
+        # Populate with exactly MAX_LOCK_ENTRIES stale entries
+        stale_time = current_time - 100  # 100 seconds old (> 30s TTL)
+        for i in range(10):
+            _user_refresh_locks[f"user-{i}"] = (asyncio.Lock(), stale_time)
+
+        assert len(_user_refresh_locks) == 10
+
+        # Trigger eviction by calling the function directly
+        _evict_stale_locks()
+
+        # All stale entries should be removed
+        assert len(_user_refresh_locks) == 0
+
+    def test_fresh_lock_not_evicted_but_hard_cap_applies(self, monkeypatch):
+        """Fresh entries trigger hard cap fallback when at capacity."""
+        monkeypatch.setattr("backend.core.google_token_management.MAX_LOCK_ENTRIES", 10)
+        monkeypatch.setattr("backend.core.google_token_management.LOCK_TTL_SECONDS", 30)
+        monkeypatch.setattr("backend.core.google_token_management.EVICTION_TARGET_RATIO", 0.8)
+
+        current_time = 1000.0
+        monkeypatch.setattr("backend.core.google_token_management.time.monotonic", lambda: current_time)
+
+        # Populate with exactly MAX_LOCK_ENTRIES fresh entries
+        # (all within TTL, so TTL pass won't evict them)
+        fresh_time = current_time - 10  # 10 seconds old (< 30s TTL)
+        for i in range(10):
+            _user_refresh_locks[f"user-{i}"] = (asyncio.Lock(), fresh_time + i * 0.1)
+
+        assert len(_user_refresh_locks) == 10
+
+        # Trigger eviction
+        _evict_stale_locks()
+
+        # Hard cap pass should evict oldest entries down to 80% (8 entries)
+        assert len(_user_refresh_locks) == 8
+        # Newest entries should survive
+        assert "user-9" in _user_refresh_locks
+        assert "user-8" in _user_refresh_locks
+
+    def test_held_lock_never_evicted(self, monkeypatch):
+        """Locks that are currently held are never evicted."""
+        monkeypatch.setattr("backend.core.google_token_management.MAX_LOCK_ENTRIES", 10)
+        monkeypatch.setattr("backend.core.google_token_management.LOCK_TTL_SECONDS", 30)
+        monkeypatch.setattr("backend.core.google_token_management.EVICTION_TARGET_RATIO", 0.8)
+
+        current_time = 1000.0
+        monkeypatch.setattr("backend.core.google_token_management.time.monotonic", lambda: current_time)
+
+        # Populate with stale entries
+        stale_time = current_time - 100  # Stale
+        for i in range(10):
+            _user_refresh_locks[f"user-{i}"] = (asyncio.Lock(), stale_time)
+
+        # Mark one lock as held (set internal state for testing)
+        held_lock = _user_refresh_locks["user-5"][0]
+        held_lock._locked = True
+
+        try:
+            # Trigger eviction
+            _evict_stale_locks()
+
+            # Held lock should survive, all others evicted
+            assert len(_user_refresh_locks) == 1
+            assert "user-5" in _user_refresh_locks
+        finally:
+            held_lock._locked = False
+
+    def test_timestamp_updated_on_access(self, monkeypatch):
+        """Timestamp is updated when accessing an existing lock entry."""
+        times = [1000.0, 2000.0]
+        time_index = [0]
+
+        def mock_monotonic():
+            result = times[time_index[0]]
+            time_index[0] = min(time_index[0] + 1, len(times) - 1)
+            return result
+
+        monkeypatch.setattr("backend.core.google_token_management.time.monotonic", mock_monotonic)
+
+        # Create initial entry at t=1000.0
+        lock = asyncio.Lock()
+        _user_refresh_locks["user-123"] = (lock, 1000.0)
+
+        # Import and call the function that updates timestamps
+        from backend.core.google_token_management import ensure_valid_access_token
+
+        # Create a mock connection for the same user
+        connection = MagicMock()
+        connection.user_id = "user-123"
+        connection.encrypted_access_token = b"encrypted_access"
+        connection.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        session = AsyncMock()
+        http_client = AsyncMock()
+
+        # Run the function - this should update the timestamp
+        import asyncio as aio
+        with patch(
+            "backend.core.google_token_management.decrypt_token",
+            return_value="decrypted_token"
+        ):
+            aio.get_event_loop().run_until_complete(
+                ensure_valid_access_token(connection, session, http_client)
+            )
+
+        # Timestamp should be updated to 2000.0
+        _, last_used = _user_refresh_locks["user-123"]
+        assert last_used == 2000.0
+
+    def test_eviction_does_not_run_below_threshold(self, monkeypatch):
+        """Eviction is not triggered when dict is below MAX_LOCK_ENTRIES."""
+        monkeypatch.setattr("backend.core.google_token_management.MAX_LOCK_ENTRIES", 10)
+        monkeypatch.setattr("backend.core.google_token_management.LOCK_TTL_SECONDS", 30)
+
+        current_time = 1000.0
+        monkeypatch.setattr("backend.core.google_token_management.time.monotonic", lambda: current_time)
+
+        # Populate with 9 stale entries (below capacity)
+        stale_time = current_time - 100  # Stale
+        for i in range(9):
+            _user_refresh_locks[f"user-{i}"] = (asyncio.Lock(), stale_time)
+
+        assert len(_user_refresh_locks) == 9
 
         # Create a connection for a new user
         connection = MagicMock()
@@ -467,13 +646,70 @@ class TestConcurrentRefresh:
         connection.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
         session = AsyncMock()
+        http_client = AsyncMock()
 
+        # Access should NOT trigger eviction (below threshold)
+        import asyncio as aio
         with patch(
             "backend.core.google_token_management.decrypt_token",
             return_value="decrypted_token"
         ):
-            await ensure_valid_access_token(connection, session, mock_http_client)
+            aio.get_event_loop().run_until_complete(
+                ensure_valid_access_token(connection, session, http_client)
+            )
 
-        # Dict should have been cleared and new lock created
-        assert len(_user_refresh_locks) == 1
+        # All 9 stale entries should still exist + the new entry
+        assert len(_user_refresh_locks) == 10
         assert "new-user" in _user_refresh_locks
+        for i in range(9):
+            assert f"user-{i}" in _user_refresh_locks
+
+    def test_no_insert_when_at_cap_and_all_held(self, monkeypatch):
+        """When all locks are held, new entry uses local lock (not stored)."""
+        monkeypatch.setattr("backend.core.google_token_management.MAX_LOCK_ENTRIES", 5)
+        monkeypatch.setattr("backend.core.google_token_management.LOCK_TTL_SECONDS", 30)
+        monkeypatch.setattr("backend.core.google_token_management.EVICTION_TARGET_RATIO", 0.8)
+
+        current_time = 1000.0
+        monkeypatch.setattr("backend.core.google_token_management.time.monotonic", lambda: current_time)
+
+        # Populate with entries and mark all locks as held
+        fresh_time = current_time - 10  # Fresh (within TTL)
+        held_locks = []
+        for i in range(5):
+            lock = asyncio.Lock()
+            lock._locked = True  # Mark as held for testing
+            held_locks.append(lock)
+            _user_refresh_locks[f"user-{i}"] = (lock, fresh_time)
+
+        assert len(_user_refresh_locks) == 5
+
+        try:
+            # Create a connection for a new user
+            connection = MagicMock()
+            connection.user_id = "new-user"
+            connection.encrypted_access_token = b"encrypted_access"
+            connection.token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+            session = AsyncMock()
+            http_client = AsyncMock()
+
+            import asyncio as aio
+            with patch(
+                "backend.core.google_token_management.decrypt_token",
+                return_value="decrypted_token"
+            ):
+                result = aio.get_event_loop().run_until_complete(
+                    ensure_valid_access_token(connection, session, http_client)
+                )
+
+            # Function should still succeed (uses local lock)
+            assert result == {"access_token": "decrypted_token"}
+
+            # Dict size should be unchanged (no new entry inserted)
+            assert len(_user_refresh_locks) == 5
+            assert "new-user" not in _user_refresh_locks
+        finally:
+            # Clear held state
+            for lock in held_locks:
+                lock._locked = False

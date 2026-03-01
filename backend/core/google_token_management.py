@@ -10,6 +10,7 @@ API calls when multiple coroutines detect an expired token simultaneously.
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -21,11 +22,82 @@ from backend.core.models import CoreConnection
 
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# Lock eviction constants (see ADR-002)
+# =============================================================================
+LOCK_TTL_SECONDS = 1800  # 30 minutes - stale if unused longer than this
+MAX_LOCK_ENTRIES = 10000  # Hard cap on lock dict size
+EVICTION_TARGET_RATIO = 0.8  # Evict down to 80% of max on hard cap
+
+# Type alias for lock entry: (lock, last_used_monotonic_timestamp)
+LockEntry = tuple[asyncio.Lock, float]
+
 # Per-user locks for token refresh. Prevents concurrent refresh calls
 # for the same user from making redundant Google API calls.
 # NOTE: Only protects within a single process. If scaling to multiple
 # workers/containers, upgrade to Redis distributed lock.
-_user_refresh_locks: dict[str, asyncio.Lock] = {}
+_user_refresh_locks: dict[str, LockEntry] = {}
+
+
+def _evict_stale_locks() -> None:
+    """
+    Evict stale lock entries to keep dict bounded.
+
+    Called only when inserting a new key at or above MAX_LOCK_ENTRIES.
+    Must be synchronous (no await) to prevent task-switching mid-mutation.
+
+    Eviction strategy:
+    1. TTL pass: Remove entries older than LOCK_TTL_SECONDS with unheld locks
+    2. Hard cap pass: If still at capacity, evict oldest unheld entries
+       down to EVICTION_TARGET_RATIO of max
+    """
+    now = time.monotonic()
+
+    # -------------------------------------------------------------------------
+    # Pass 1: TTL-based eviction (remove stale unheld locks)
+    # -------------------------------------------------------------------------
+    # Snapshot keys to avoid mutating dict during iteration
+    stale_keys = []
+    for user_key, (lock, last_used) in list(_user_refresh_locks.items()):
+        age = now - last_used
+        if age > LOCK_TTL_SECONDS and not lock.locked():
+            stale_keys.append(user_key)
+
+    for key in stale_keys:
+        del _user_refresh_locks[key]
+
+    if stale_keys:
+        logger.debug(f"Evicted {len(stale_keys)} stale lock entries (TTL pass)")
+
+    # -------------------------------------------------------------------------
+    # Pass 2: Hard cap eviction (if still at capacity)
+    # -------------------------------------------------------------------------
+    if len(_user_refresh_locks) < MAX_LOCK_ENTRIES:
+        return  # TTL pass was sufficient
+
+    # Build list of unheld entries sorted by last_used (oldest first)
+    evictable = [
+        (user_key, last_used)
+        for user_key, (lock, last_used) in _user_refresh_locks.items()
+        if not lock.locked()
+    ]
+    evictable.sort(key=lambda x: x[1])  # Sort by last_used ascending
+
+    # Evict until we reach target ratio or run out of evictable entries
+    target_size = int(MAX_LOCK_ENTRIES * EVICTION_TARGET_RATIO)
+    evicted_count = 0
+
+    for user_key, _ in evictable:
+        if len(_user_refresh_locks) <= target_size:
+            break
+        # Re-check lock is still unheld (defensive)
+        entry = _user_refresh_locks.get(user_key)
+        if entry and not entry[0].locked():
+            del _user_refresh_locks[user_key]
+            evicted_count += 1
+
+    if evicted_count:
+        logger.debug(f"Evicted {evicted_count} lock entries (hard cap pass)")
 
 
 async def ensure_valid_access_token(
@@ -59,22 +131,29 @@ async def ensure_valid_access_token(
         - API_QUOTA_EXCEEDED: Google API quota exceeded
     """
     # -----------------------------------------------------------
-    # Get or create per-user lock
+    # Get or create per-user lock (with TTL-based eviction)
     # -----------------------------------------------------------
     user_key = str(connection.user_id)
+    now = time.monotonic()
 
-    # Size-based eviction: clear all locks if dict grows too large
-    # This is safe because recreating a lock just means one potential
-    # redundant refresh - acceptable trade-off for simplicity
-    if len(_user_refresh_locks) > 10000:
-        _user_refresh_locks.clear()
-        logger.debug("Cleared user refresh locks (size limit exceeded)")
+    entry = _user_refresh_locks.get(user_key)
+    if entry is not None:
+        # Existing entry: update timestamp, reuse lock
+        lock, _ = entry
+        _user_refresh_locks[user_key] = (lock, now)
+    else:
+        # New entry: run eviction if at capacity, then insert
+        if len(_user_refresh_locks) >= MAX_LOCK_ENTRIES:
+            _evict_stale_locks()
 
-    # Get-then-set pattern (NOT setdefault to avoid allocating throwaway Lock)
-    lock = _user_refresh_locks.get(user_key)
-    if lock is None:
-        lock = asyncio.Lock()
-        _user_refresh_locks[user_key] = lock
+        if len(_user_refresh_locks) >= MAX_LOCK_ENTRIES:
+            # Eviction couldn't free space - use local lock (not stored)
+            # User loses cross-coroutine dedup for this call only
+            lock = asyncio.Lock()
+            logger.debug(f"Lock dict at capacity, using local lock for user {user_key}")
+        else:
+            lock = asyncio.Lock()
+            _user_refresh_locks[user_key] = (lock, now)
 
     # -----------------------------------------------------------
     # Acquire lock and check/refresh token
