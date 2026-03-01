@@ -497,6 +497,24 @@ async def authorize_endpoint(
         )
 
     # =========================================================================
+    # VALIDATE STATE LENGTH (Increment 20 - security hardening)
+    # Prevents Redis/redirect URL abuse from megabyte-long state values
+    # =========================================================================
+    if state and len(state) > 512:
+        request_logger.warning(
+            "oauth.authorize.error",
+            error="invalid_request",
+            message="state parameter too long"
+        )
+        # Pass state=None to avoid echoing oversized value in redirect
+        return _error_redirect(
+            redirect_uri,
+            None,
+            error="invalid_request",
+            description="state parameter too long"
+        )
+
+    # =========================================================================
     # VALIDATE SCOPE (OAuth 2.1 REQUIRED)
     # =========================================================================
     if not scope:

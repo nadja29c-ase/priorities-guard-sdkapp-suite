@@ -339,7 +339,19 @@ class OAuthSession(Base):
         String(64),
         nullable=False,
         unique=True,
-        comment="Random token stored in cookie (32 bytes hex)"
+        comment="Random token stored in cookie (32 bytes hex) - DEPRECATED: Phase 2 will drop this column"
+    )
+
+    session_token_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="SHA-256 hash of session token for O(1) indexed lookup"
+    )
+
+    session_token_enc: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Fernet-encrypted session token for audit/recovery"
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -358,6 +370,7 @@ class OAuthSession(Base):
 
     __table_args__ = (
         Index("idx_oauth_sessions_session_token", "session_token", unique=True),
+        Index("idx_oauth_sessions_session_token_hash", "session_token_hash", unique=True),
         Index("idx_oauth_sessions_user_id", "user_id"),
         Index("idx_oauth_sessions_expires_at", "expires_at"),
         {"comment": "Browser sessions for cross-app user identification"}

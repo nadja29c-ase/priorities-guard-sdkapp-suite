@@ -82,16 +82,20 @@ def decrypt_token(encrypted_token: str) -> str:
         raise ValueError(f"Token decryption failed: {e}")
 
 
-def hash_refresh_token(token: str) -> str:
+def hash_token(token: str) -> str:
     """
-    Hash a refresh token using SHA-256 for database indexing.
+    Hash a token using SHA-256 for database indexing.
 
     This allows O(1) indexed lookups instead of O(n) full table scans.
     The encrypted token is still stored for security, but the hash
     enables fast lookups.
 
+    Used for:
+    - Refresh tokens (OAuthAccessToken.refresh_token_hash)
+    - Session tokens (OAuthSession.session_token_hash)
+
     Args:
-        token: Plain text refresh token
+        token: Plain text token
 
     Returns:
         64-character hex string (SHA-256 hash)
@@ -103,10 +107,14 @@ def hash_refresh_token(token: str) -> str:
         - Original encrypted token still stored for security
 
     Example:
-        >>> hash_refresh_token("abc123...")
+        >>> hash_token("abc123...")
         "2c26b46b68ffc68ff99b453c1d30413413422d706..."
     """
     if not token:
         raise ValueError("Token cannot be empty")
 
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+# Backwards compatibility alias
+hash_refresh_token = hash_token

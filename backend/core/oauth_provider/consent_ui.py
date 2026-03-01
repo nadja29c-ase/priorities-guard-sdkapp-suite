@@ -16,6 +16,7 @@ from backend.core.oauth_provider.cookies import get_session_cookie, set_session_
 from backend.core.oauth_provider.services.authorization_service import get_authorization_context
 from backend.core.oauth_provider.services.consent_service import create_authorization_code, record_consent
 from backend.core.oauth_provider.services.session_service import create_session, get_session_user
+from backend.core.rate_limit import check_rate_limit, get_client_ip
 
 logger = get_logger(__name__)
 
@@ -85,6 +86,17 @@ async def consent_endpoint(
     # Get correlation_id for logging
     correlation_id = request.state.correlation_id
     request_logger = logger.bind(correlation_id=correlation_id)
+
+    # Rate limit by IP (Increment 20 - security hardening)
+    # 20/min is more restrictive than /authorize (100/min) because
+    # consent is a lower-frequency action (one click per authorization)
+    ip = get_client_ip(request)
+    await check_rate_limit(
+        key=f"ratelimit:oauth:consent:ip:{ip}",
+        limit=20,
+        window=60,
+        request=request
+    )
 
     # Parse form data
     form_data = await request.form()

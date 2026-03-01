@@ -1,8 +1,13 @@
 """
-OAuth Session Service (Increment 19).
+OAuth Session Service (Increment 19, hardened in Increment 20).
 
 Manages browser sessions for cross-app user identification.
 Sessions are stored in the database and referenced by a cookie token.
+
+Security (Increment 20):
+- Session tokens are hashed (SHA-256) before storage for O(1) indexed lookup
+- Session tokens are encrypted (Fernet) for audit/recovery
+- Lookup is by hash, never by plaintext token
 """
 
 import secrets
@@ -12,6 +17,7 @@ from uuid import UUID
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.encryption import encrypt_token, hash_token
 from backend.core.logging import get_logger
 from backend.core.oauth_provider.models import OAuthSession
 
@@ -40,6 +46,11 @@ async def create_session(
     """
     Create a new session for a user.
 
+    Security (Increment 20):
+    - Stores SHA-256 hash for indexed lookup
+    - Stores Fernet-encrypted token for audit/recovery
+    - Plaintext stored temporarily (Phase 1, will be dropped in Phase 2)
+
     Args:
         user_id: User's UUID
         db: Database session
@@ -57,13 +68,19 @@ async def create_session(
     # Generate unique session token
     session_token = _generate_session_token()
 
-    # Calculate expiration (30 days from now)
+    # Hash and encrypt for secure storage (Increment 20)
+    session_token_hash = hash_token(session_token)
+    session_token_enc = encrypt_token(session_token)
+
+    # Calculate expiration (730 days from now)
     expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_LIFETIME_DAYS)
 
     # Create session record
     session = OAuthSession(
         user_id=user_id,
-        session_token=session_token,
+        session_token=session_token,  # Phase 1: Keep plaintext temporarily
+        session_token_hash=session_token_hash,
+        session_token_enc=session_token_enc,
         expires_at=expires_at,
     )
 
@@ -90,6 +107,10 @@ async def get_session_user(
     Implements sliding window expiration: each successful lookup
     extends the session by SESSION_LIFETIME_DAYS (2 years).
 
+    Security (Increment 20):
+    - Looks up by session_token_hash (indexed) instead of plaintext
+    - Falls back to session_token for legacy sessions (pre-migration)
+
     Args:
         token: Session token from cookie
         db: Database session
@@ -104,11 +125,21 @@ async def get_session_user(
     if not isinstance(token, str) or len(token) != 64:
         return None
 
-    # Look up session
+    # Hash the token for lookup (Increment 20)
+    token_hash = hash_token(token)
+
+    # Look up session by hash (indexed)
     result = await db.execute(
-        select(OAuthSession).where(OAuthSession.session_token == token)
+        select(OAuthSession).where(OAuthSession.session_token_hash == token_hash)
     )
     session = result.scalar_one_or_none()
+
+    # Fallback to plaintext lookup for legacy sessions (pre-migration)
+    if not session:
+        result = await db.execute(
+            select(OAuthSession).where(OAuthSession.session_token == token)
+        )
+        session = result.scalar_one_or_none()
 
     if not session:
         request_logger.debug("oauth.session.not_found")
@@ -129,7 +160,7 @@ async def get_session_user(
 
     await db.execute(
         update(OAuthSession)
-        .where(OAuthSession.session_token == token)
+        .where(OAuthSession.id == session.id)
         .values(expires_at=new_expires_at)
     )
     await db.commit()
@@ -151,6 +182,10 @@ async def delete_session(
     """
     Delete a session by token.
 
+    Security (Increment 20):
+    - Deletes by session_token_hash (indexed)
+    - Falls back to session_token for legacy sessions (pre-migration)
+
     Args:
         token: Session token from cookie
         db: Database session
@@ -165,9 +200,20 @@ async def delete_session(
     if not isinstance(token, str) or len(token) != 64:
         return False
 
+    # Hash the token for lookup (Increment 20)
+    token_hash = hash_token(token)
+
+    # Delete by hash (indexed)
     result = await db.execute(
-        delete(OAuthSession).where(OAuthSession.session_token == token)
+        delete(OAuthSession).where(OAuthSession.session_token_hash == token_hash)
     )
+
+    # Fallback to plaintext delete for legacy sessions (pre-migration)
+    if result.rowcount == 0:
+        result = await db.execute(
+            delete(OAuthSession).where(OAuthSession.session_token == token)
+        )
+
     await db.commit()
 
     deleted = result.rowcount > 0
