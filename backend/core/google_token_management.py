@@ -9,7 +9,6 @@ API calls when multiple coroutines detect an expired token simultaneously.
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -18,9 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.encryption import decrypt_token, encrypt_token
 from backend.core.google_calendar import refresh_access_token
+from backend.core.logging import get_logger
 from backend.core.models import CoreConnection
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # =============================================================================
 # Lock eviction constants (see ADR-002)
@@ -67,7 +67,7 @@ def _evict_stale_locks() -> None:
         del _user_refresh_locks[key]
 
     if stale_keys:
-        logger.debug(f"Evicted {len(stale_keys)} stale lock entries (TTL pass)")
+        logger.debug("google.token.lock_eviction_ttl", evicted=len(stale_keys))
 
     # -------------------------------------------------------------------------
     # Pass 2: Hard cap eviction (if still at capacity)
@@ -97,7 +97,7 @@ def _evict_stale_locks() -> None:
             evicted_count += 1
 
     if evicted_count:
-        logger.debug(f"Evicted {evicted_count} lock entries (hard cap pass)")
+        logger.debug("google.token.lock_eviction_hardcap", evicted=evicted_count)
 
 
 async def ensure_valid_access_token(
@@ -150,7 +150,7 @@ async def ensure_valid_access_token(
             # Eviction couldn't free space - use local lock (not stored)
             # User loses cross-coroutine dedup for this call only
             lock = asyncio.Lock()
-            logger.debug(f"Lock dict at capacity, using local lock for user {user_key}")
+            logger.debug("google.token.lock_capacity_fallback", user_id_prefix=user_key[:8])
         else:
             lock = asyncio.Lock()
             _user_refresh_locks[user_key] = (lock, now)
@@ -169,13 +169,13 @@ async def ensure_valid_access_token(
         # Check if token needs refresh (re-check after acquiring lock)
         # -----------------------------------------------------------
         if not connection.token_expires_at or connection.token_expires_at <= now:
-            logger.info(f"Access token expired for user {connection.user_id}, refreshing")
+            logger.info("google.token.refresh_needed", user_id_prefix=str(connection.user_id)[:8])
 
             # Decrypt refresh token
             try:
                 refresh_token_decrypted = decrypt_token(connection.encrypted_refresh_token)
             except Exception as e:
-                logger.error(f"Failed to decrypt refresh token for user {connection.user_id}: {e}")
+                logger.error("google.token.decrypt_refresh_failed", user_id_prefix=str(connection.user_id)[:8])
                 return {"error": "TOKEN_DECRYPTION_FAILED"}
 
             # Call Google refresh API
@@ -203,7 +203,7 @@ async def ensure_valid_access_token(
             connection.updated_at = now
             await session.commit()
 
-            logger.info(f"Access token refreshed for user {connection.user_id}")
+            logger.info("google.token.refresh_success", user_id_prefix=str(connection.user_id)[:8])
 
             # Return decrypted token
             return {"access_token": new_access_token}
@@ -215,5 +215,5 @@ async def ensure_valid_access_token(
             access_token = decrypt_token(connection.encrypted_access_token)
             return {"access_token": access_token}
         except Exception as e:
-            logger.error(f"Failed to decrypt access token for user {connection.user_id}: {e}")
+            logger.error("google.token.decrypt_access_failed", user_id_prefix=str(connection.user_id)[:8])
             return {"error": "TOKEN_DECRYPTION_FAILED"}

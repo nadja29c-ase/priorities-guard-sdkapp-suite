@@ -158,3 +158,60 @@ class TestHashTokenFunction:
         from backend.core.encryption import hash_refresh_token, hash_token
 
         assert hash_refresh_token is hash_token
+
+
+class TestSessionTokenHexValidation:
+    """Tests for session token hex format validation."""
+
+    @pytest.mark.asyncio
+    async def test_get_session_user_rejects_non_hex_token(self):
+        """get_session_user returns None for non-hex characters without querying DB."""
+        mock_db = AsyncMock()
+
+        # "Z" is not a valid hex character
+        result = await get_session_user("Z" * 64, mock_db)
+
+        assert result is None
+        # DB should never be called
+        assert mock_db.execute.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_get_session_user_rejects_uppercase_hex(self):
+        """get_session_user returns None for uppercase hex (secrets.token_hex produces lowercase)."""
+        mock_db = AsyncMock()
+
+        # Uppercase "A" should be rejected
+        result = await get_session_user("A" * 64, mock_db)
+
+        assert result is None
+        # DB should never be called
+        assert mock_db.execute.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_delete_session_rejects_non_hex_token(self):
+        """delete_session returns False for non-hex characters without querying DB."""
+        mock_db = AsyncMock()
+
+        # "!" is not a valid hex character
+        result = await delete_session("!" * 64, mock_db)
+
+        assert result is False
+        # DB should never be called
+        assert mock_db.execute.call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_get_session_user_accepts_valid_hex(self):
+        """get_session_user queries DB for valid 64-char lowercase hex token."""
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None  # Session not found
+        mock_db.execute.return_value = mock_result
+
+        # Valid lowercase hex token
+        valid_token = "0123456789abcdef" * 4  # 64 chars
+
+        result = await get_session_user(valid_token, mock_db)
+
+        # Session not found, but DB WAS called (guard passed)
+        assert result is None
+        assert mock_db.execute.call_count >= 1

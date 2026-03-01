@@ -8,13 +8,12 @@ The heart of the OAuth provider. Handles:
 """
 
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.config import settings
-from backend.core.encryption import encrypt_token, decrypt_token, hash_refresh_token
+from backend.core.encryption import encrypt_token, hash_refresh_token
 from backend.core.logging import get_logger, mask_client_id
 from backend.core.oauth_provider.jwt.utils import create_refresh_token, calculate_refresh_token_expiry
 from backend.core.oauth_provider.models import OAuthAuthorizationCode, OAuthAccessToken
@@ -112,7 +111,6 @@ async def exchange_authorization_code(
 
     # Mark code as used
     auth_code.used = True
-    await db.commit()
 
     # Create access token (JWT)
     # Convert scope list to space-separated string (OAuth 2.0 standard)

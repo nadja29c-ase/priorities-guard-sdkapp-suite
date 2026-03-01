@@ -5,6 +5,8 @@ Processes user consent decisions (Allow/Deny) and generates authorization codes.
 Sets session cookie for cross-app user identification (Increment 19).
 """
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -195,12 +197,12 @@ async def consent_endpoint(
     existing_session_token = get_session_cookie(request)
     session_token = None
 
-    # Prevalidate token format (64-char hex from secrets.token_hex(32))
-    if existing_session_token and len(existing_session_token) == 64:
+    # Prevalidate token format (64-char lowercase hex from secrets.token_hex(32))
+    if existing_session_token and re.fullmatch(r"[0-9a-f]{64}", existing_session_token):
         # Validate existing session (this also extends expiry via sliding window)
         session_user_id = await get_session_user(existing_session_token, db, correlation_id)
-        if session_user_id:
-            # Existing session is valid - use the same token
+        if session_user_id and str(session_user_id) == str(user_id):
+            # Existing session is valid AND belongs to same user - reuse
             session_token = existing_session_token
             request_logger.debug(
                 "oauth.consent.session_reused",

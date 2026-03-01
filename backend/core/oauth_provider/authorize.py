@@ -8,12 +8,14 @@ Increment 12: OAuth Consent UI Implementation.
 Increment 19: Cross-app user identification via session cookies.
 """
 
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import urlencode, urlparse, urlunparse
 
@@ -225,10 +227,25 @@ async def _resolve_user_identity(
             return user
 
         # Create new user with chatgpt_user_id
-        user = CoreUser(chatgpt_user_id=chatgpt_user_id)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+        # Handle race: concurrent request may have created this user between
+        # our SELECT and INSERT. Catch UNIQUE violation, rollback, re-fetch.
+        try:
+            user = CoreUser(chatgpt_user_id=chatgpt_user_id)
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        except IntegrityError:
+            await db.rollback()
+            result = await db.execute(
+                select(CoreUser).where(CoreUser.chatgpt_user_id == chatgpt_user_id)
+            )
+            user = result.scalar_one()
+            request_logger.info(
+                "oauth.authorize.user_found_after_race",
+                user_id=str(user.id),
+                identity_source="login_hint",
+            )
+            return user
 
         request_logger.info(
             "oauth.authorize.user_created",
@@ -241,8 +258,8 @@ async def _resolve_user_identity(
     # Priority 2: Valid session cookie → get existing user from session
     # =========================================================================
     session_token = get_session_cookie(request)
-    # Prevalidate token format (64-char hex from secrets.token_hex(32))
-    if session_token and len(session_token) == 64:
+    # Prevalidate token format (64-char lowercase hex from secrets.token_hex(32))
+    if session_token and re.fullmatch(r"[0-9a-f]{64}", session_token):
         session_user_id = await get_session_user(session_token, db, correlation_id)
         if session_user_id:
             # Look up the user to return the full CoreUser object

@@ -2425,3 +2425,202 @@ class TestEmptyParameterHandling:
             assert "login_required" in location or "error" in location
         else:
             assert response.status_code in (400, 422)
+
+
+class TestConsentSessionValidation:
+    """Tests for session cookie validation in consent flow."""
+
+    @pytest.mark.asyncio
+    async def test_consent_creates_new_session_when_cookie_belongs_to_different_user(self):
+        """Consent creates new session when existing cookie belongs to different user."""
+        from backend.core.oauth_provider.consent_ui import consent_endpoint
+
+        current_user_id = uuid4()
+        different_user_id = uuid4()
+        valid_token = "a" * 64
+
+        # Mock request
+        mock_request = MagicMock()
+        mock_request.state.correlation_id = "test-correlation"
+        mock_request.form = AsyncMock(return_value={
+            "auth_context_id": "test-context-id",
+            "action": "allow"
+        })
+
+        # Mock db
+        mock_db = AsyncMock()
+
+        with patch(
+            "backend.core.oauth_provider.consent_ui.check_rate_limit",
+            new_callable=AsyncMock
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_client_ip",
+            return_value="127.0.0.1"
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_authorization_context",
+            new_callable=AsyncMock,
+            return_value={
+                "client_id": "test-client",
+                "code_challenge": "test-challenge",
+                "code_challenge_method": "S256",
+                "scope": "focused.read",
+                "redirect_uri": "https://example.com/callback",
+                "user_id": str(current_user_id),
+                "state": "test-state",
+            }
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.create_authorization_code",
+            new_callable=AsyncMock,
+            return_value="auth-code-123"
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.record_consent",
+            new_callable=AsyncMock
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_session_cookie",
+            return_value=valid_token
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_session_user",
+            new_callable=AsyncMock,
+            return_value=different_user_id  # Different user owns the session
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.create_session",
+            new_callable=AsyncMock,
+            return_value="new-session-token"
+        ) as mock_create_session, patch(
+            "backend.core.oauth_provider.consent_ui.set_session_cookie"
+        ):
+            await consent_endpoint(mock_request, mock_db)
+
+        # create_session should be called with current user (not different user)
+        mock_create_session.assert_called_once()
+        call_args = mock_create_session.call_args
+        assert str(call_args[0][0]) == str(current_user_id)
+
+    @pytest.mark.asyncio
+    async def test_consent_reuses_session_when_cookie_belongs_to_same_user(self):
+        """Consent reuses existing session when cookie belongs to same user."""
+        from backend.core.oauth_provider.consent_ui import consent_endpoint
+
+        user_id = uuid4()
+        valid_token = "b" * 64
+
+        # Mock request
+        mock_request = MagicMock()
+        mock_request.state.correlation_id = "test-correlation"
+        mock_request.form = AsyncMock(return_value={
+            "auth_context_id": "test-context-id",
+            "action": "allow"
+        })
+
+        # Mock db
+        mock_db = AsyncMock()
+
+        with patch(
+            "backend.core.oauth_provider.consent_ui.check_rate_limit",
+            new_callable=AsyncMock
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_client_ip",
+            return_value="127.0.0.1"
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_authorization_context",
+            new_callable=AsyncMock,
+            return_value={
+                "client_id": "test-client",
+                "code_challenge": "test-challenge",
+                "code_challenge_method": "S256",
+                "scope": "focused.read",
+                "redirect_uri": "https://example.com/callback",
+                "user_id": str(user_id),
+                "state": "test-state",
+            }
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.create_authorization_code",
+            new_callable=AsyncMock,
+            return_value="auth-code-123"
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.record_consent",
+            new_callable=AsyncMock
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_session_cookie",
+            return_value=valid_token
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_session_user",
+            new_callable=AsyncMock,
+            return_value=user_id  # Same user owns the session
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.create_session",
+            new_callable=AsyncMock,
+            return_value="new-session-token"
+        ) as mock_create_session, patch(
+            "backend.core.oauth_provider.consent_ui.set_session_cookie"
+        ):
+            await consent_endpoint(mock_request, mock_db)
+
+        # create_session should NOT be called (session reused)
+        mock_create_session.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_consent_rejects_non_hex_session_cookie(self):
+        """Consent creates new session when cookie is non-hex (skips get_session_user)."""
+        from backend.core.oauth_provider.consent_ui import consent_endpoint
+
+        user_id = uuid4()
+        invalid_token = "Z" * 64  # Not valid hex
+
+        # Mock request
+        mock_request = MagicMock()
+        mock_request.state.correlation_id = "test-correlation"
+        mock_request.form = AsyncMock(return_value={
+            "auth_context_id": "test-context-id",
+            "action": "allow"
+        })
+
+        # Mock db
+        mock_db = AsyncMock()
+
+        with patch(
+            "backend.core.oauth_provider.consent_ui.check_rate_limit",
+            new_callable=AsyncMock
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_client_ip",
+            return_value="127.0.0.1"
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_authorization_context",
+            new_callable=AsyncMock,
+            return_value={
+                "client_id": "test-client",
+                "code_challenge": "test-challenge",
+                "code_challenge_method": "S256",
+                "scope": "focused.read",
+                "redirect_uri": "https://example.com/callback",
+                "user_id": str(user_id),
+                "state": "test-state",
+            }
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.create_authorization_code",
+            new_callable=AsyncMock,
+            return_value="auth-code-123"
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.record_consent",
+            new_callable=AsyncMock
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_session_cookie",
+            return_value=invalid_token
+        ), patch(
+            "backend.core.oauth_provider.consent_ui.get_session_user",
+            new_callable=AsyncMock,
+            return_value=user_id
+        ) as mock_get_session_user, patch(
+            "backend.core.oauth_provider.consent_ui.create_session",
+            new_callable=AsyncMock,
+            return_value="new-session-token"
+        ) as mock_create_session, patch(
+            "backend.core.oauth_provider.consent_ui.set_session_cookie"
+        ):
+            await consent_endpoint(mock_request, mock_db)
+
+        # get_session_user should NOT be called (hex validation failed)
+        mock_get_session_user.assert_not_called()
+
+        # create_session should be called (new session created)
+        mock_create_session.assert_called_once()

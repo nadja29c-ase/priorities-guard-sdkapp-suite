@@ -82,6 +82,8 @@ def upgrade() -> None:
     for row in rows:
         session_id = row[0]
         session_token = row[1]
+        if not session_token:
+            continue
 
         # Compute SHA-256 hash (inline, not using app code)
         token_hash = hashlib.sha256(session_token.encode()).hexdigest()
