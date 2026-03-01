@@ -22,6 +22,29 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["oauth-provider"])
 
 
+def _derive_app_name_from_scopes(scopes: list[str]) -> str:
+    """
+    Derive app name from OAuth scopes for GDPR audit trail.
+
+    Scope prefixes:
+    - pg.* -> "priority_guardian"
+    - clarity.* -> "clarity"
+    - focused.* -> "focused" (default)
+
+    Args:
+        scopes: List of OAuth scopes
+
+    Returns:
+        App name string for consent records
+    """
+    for scope in scopes:
+        if scope.startswith("pg."):
+            return "priority_guardian"
+        if scope.startswith("clarity."):
+            return "clarity"
+    return "focused"
+
+
 @router.post("/oauth/focused/consent")
 @router.post("/oauth/pg/consent")
 async def consent_endpoint(
@@ -144,7 +167,7 @@ async def consent_endpoint(
     # Record consent for GDPR compliance (Increment 17)
     # Handle both string ("focused.read focused.write") and list formats
     scopes_list = scope.split() if isinstance(scope, str) else scope
-    app_name = auth_context.get("app_name", "focused")  # Default to "focused" for backwards compatibility
+    app_name = _derive_app_name_from_scopes(scopes_list)
     await record_consent(
         db=db,
         user_id=user_id,
