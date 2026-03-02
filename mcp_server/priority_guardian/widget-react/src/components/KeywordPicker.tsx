@@ -65,7 +65,7 @@ export function KeywordPicker({
                 disabled={isDisabled}
                 aria-pressed={isSelected}
                 className={`
-                  ${BADGE_CIRCLE_CLASS} ${badgeColor}
+                  ${BADGE_CIRCLE_CLASS} ${badgeColor} text-2xs
                   transition-all cursor-pointer
                   ${isSelected
                     ? 'ring-2 ring-offset-1 ring-offset-surface'
@@ -73,7 +73,6 @@ export function KeywordPicker({
                   }
                   ${isDisabled ? 'cursor-not-allowed' : ''}
                 `}
-                style={{ fontSize: '0.6rem' }}
                 aria-label={`${isSelected ? 'Current keyword' : 'Switch to'} ${kw}${isHeldByOther ? ` (will swap with ${holderName})` : ''}`}
               >
                 {kw}

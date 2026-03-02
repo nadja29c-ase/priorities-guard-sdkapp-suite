@@ -18,6 +18,7 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
         stroke="currentColor"
         strokeWidth="2"
         strokeLinecap="round"
+        aria-hidden="true"
       >
         <path d="M6 4l4 4-4 4" />
       </svg>

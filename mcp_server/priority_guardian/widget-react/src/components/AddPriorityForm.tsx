@@ -187,7 +187,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               className="text-secondary hover:text-default"
               aria-label="Go back to name"
             >
-              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd"/>
               </svg>
             </button>
@@ -239,7 +239,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               className="text-secondary hover:text-default"
               aria-label="Go back to type selection"
             >
-              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+              <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd"/>
               </svg>
             </button>
@@ -374,7 +374,7 @@ export function AddPriorityButton({ onClick }: { onClick: () => void }) {
       className="w-full p-4 border-2 border-dashed border-default rounded-xl hover:border-strong hover:bg-surface-secondary/50 transition-colors flex items-center justify-center gap-2 text-secondary hover:text-default"
       aria-label="Add a new priority"
     >
-      <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+      <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
         <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd"/>
       </svg>
       <span className="font-medium">Add a new priority</span>

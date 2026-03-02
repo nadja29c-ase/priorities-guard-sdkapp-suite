@@ -171,8 +171,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="p-1 rounded-full hover:bg-surface-secondary transition-colors"
-              style={{ opacity: isRefreshing ? 0.4 : 1 }}
+              className={`p-1 rounded-full hover:bg-surface-secondary transition-colors ${isRefreshing ? 'opacity-40' : ''}`}
               title="Refresh calendar data"
               aria-label="Refresh calendar data"
             >
@@ -182,6 +181,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1.5"
+                aria-hidden="true"
               >
                 <path d="M2.5 8a5.5 5.5 0 019.3-3.9M13.5 8a5.5 5.5 0 01-9.3 3.9" />
                 <path d="M12 1v3.5h-3.5M4 15v-3.5h3.5" />
@@ -220,8 +220,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
         {legendItems.map((item) => (
           <div key={item.key} className="flex items-center gap-1.5">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${item.isOther ? '' : BAR_COLORS[item.key]}`}
-              style={item.isOther ? { backgroundColor: 'var(--color-text-tertiary)' } : undefined}
+              className={`w-1.5 h-1.5 rounded-full ${item.isOther ? BAR_COLORS.other : BAR_COLORS[item.key]}`}
               aria-hidden="true"
             />
             <span

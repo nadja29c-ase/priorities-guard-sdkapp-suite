@@ -170,8 +170,8 @@ class TestAnnotationValues:
         assert tool.read_only_hint is False
 
     @pytest.mark.asyncio
-    async def test_public_tools_with_widget_uri_have_result_can_produce_widget(self):
-        """Public tools with widget_uri set have resultCanProduceWidget in meta."""
+    async def test_public_tools_with_widget_uri_have_ui_resource_uri(self):
+        """Public tools with widget_uri set have ui.resourceUri in meta."""
         from mcp_server.priority_guardian.tools import TOOL_REGISTRY, list_tools
 
         tools = await list_tools()
@@ -179,21 +179,24 @@ class TestAnnotationValues:
 
         for name, tool_def in TOOL_REGISTRY.items():
             meta = tool_metas[name]
+            ui_meta = meta.get("ui", {})
             if tool_def.visibility == "private":
-                # Private tools with widget_uri do NOT get resultCanProduceWidget
-                # They mutate data in an existing widget, not produce a new one
-                assert "openai/resultCanProduceWidget" not in meta, \
-                    f"Private tool {name} should not have resultCanProduceWidget"
+                # Private tools do NOT get resourceUri - they mutate existing widget
+                assert "resourceUri" not in ui_meta, \
+                    f"Private tool {name} should not have ui.resourceUri"
+                assert ui_meta.get("visibility") == ["app"], \
+                    f"Private tool {name} should have ui.visibility: ['app']"
             elif tool_def.widget_uri:
-                # Public tools with widget_uri must have resultCanProduceWidget
-                assert meta.get("openai/resultCanProduceWidget") is True, \
-                    f"{name} has widget_uri but missing resultCanProduceWidget in meta"
+                # Public tools with widget_uri must have ui.resourceUri
+                assert ui_meta.get("resourceUri") == tool_def.widget_uri, \
+                    f"{name} has widget_uri but missing ui.resourceUri in meta"
+                # Also check compat alias
                 assert meta.get("openai/outputTemplate") == tool_def.widget_uri, \
-                    f"{name} meta outputTemplate should match widget_uri"
+                    f"{name} meta openai/outputTemplate should match widget_uri (compat alias)"
             else:
-                # Tools without widget_uri should not have resultCanProduceWidget
-                assert "openai/resultCanProduceWidget" not in meta, \
-                    f"{name} has no widget_uri but has resultCanProduceWidget"
+                # Tools without widget_uri should not have resourceUri
+                assert "resourceUri" not in ui_meta, \
+                    f"{name} has no widget_uri but has ui.resourceUri"
 
     def test_create_priority_has_widget_uri(self):
         """create_priority has widget_uri for rendering dashboard after creation."""
@@ -213,60 +216,62 @@ class TestListToolsMeta:
     """Tests for _meta produced by list_tools()."""
 
     @pytest.mark.asyncio
-    async def test_create_priority_not_widget_accessible_in_meta(self):
-        """create_priority meta does NOT have widgetAccessible (Inc 16 security)."""
+    async def test_create_priority_model_only_visibility(self):
+        """create_priority has ui.visibility: ['model'] (Inc 16 security)."""
         from mcp_server.priority_guardian.tools import list_tools
 
         tools = await list_tools()
         create_priority_tool = next(t for t in tools if t.name == "create_priority")
 
         meta = create_priority_tool.meta
-        # Must have outputTemplate (renders widget after success)
+        ui_meta = meta.get("ui", {})
+        # Must have ui.resourceUri (produces widget)
+        assert ui_meta.get("resourceUri") == "ui://widget/pg-dashboard.html"
+        # Must have ui.visibility: ["model"] (widget cannot call this tool)
+        assert ui_meta.get("visibility") == ["model"], \
+            "create_priority should have ui.visibility: ['model'] - widget cannot call it"
+        # Compat alias should exist
         assert meta.get("openai/outputTemplate") == "ui://widget/pg-dashboard.html"
-        # Must have resultCanProduceWidget
-        assert meta.get("openai/resultCanProduceWidget") is True
-        # Must NOT have widgetAccessible (widget cannot call this tool)
-        assert "openai/widgetAccessible" not in meta
 
     @pytest.mark.asyncio
-    async def test_get_priorities_has_widget_accessible_in_meta(self):
-        """get_priorities meta has widgetAccessible (widget can call it)."""
+    async def test_get_priorities_model_and_app_visibility(self):
+        """get_priorities has ui.visibility: ['model', 'app'] (widget can call it)."""
         from mcp_server.priority_guardian.tools import list_tools
 
         tools = await list_tools()
         get_priorities_tool = next(t for t in tools if t.name == "get_priorities")
 
         meta = get_priorities_tool.meta
-        # Must have outputTemplate
+        ui_meta = meta.get("ui", {})
+        # Must have ui.resourceUri
+        assert ui_meta.get("resourceUri") == "ui://widget/pg-dashboard.html"
+        # Must have ui.visibility: ["model", "app"] (both model and widget can call)
+        assert ui_meta.get("visibility") == ["model", "app"], \
+            "get_priorities should have ui.visibility: ['model', 'app']"
+        # Compat alias should exist
         assert meta.get("openai/outputTemplate") == "ui://widget/pg-dashboard.html"
-        # Must have widgetAccessible
-        assert meta.get("openai/widgetAccessible") is True
-        # Must have resultCanProduceWidget
-        assert meta.get("openai/resultCanProduceWidget") is True
 
     @pytest.mark.asyncio
     async def test_private_tool_meta_has_correct_flags(self):
-        """Private tools have visibility=private, widgetAccessible, no invocation messages."""
+        """Private tools have ui.visibility: ['app'], no invocation messages."""
         from mcp_server.priority_guardian.tools import list_tools
 
         tools = await list_tools()
         add_priority_tool = next(t for t in tools if t.name == "add_priority")
 
         meta = add_priority_tool.meta
-        # Must have private visibility
-        assert meta.get("openai/visibility") == "private", \
-            "Private tool should have openai/visibility: private"
-        # Must have widgetAccessible (widget can call private tools)
-        assert meta.get("openai/widgetAccessible") is True, \
-            "Private tool should have widgetAccessible: true"
+        ui_meta = meta.get("ui", {})
+        # Must have ui.visibility: ["app"] (widget-only)
+        assert ui_meta.get("visibility") == ["app"], \
+            "Private tool should have ui.visibility: ['app']"
+        # Must NOT have ui.resourceUri (private tools mutate existing widget)
+        assert "resourceUri" not in ui_meta, \
+            "Private tool should not have ui.resourceUri"
         # Must NOT have invocation messages (LLM doesn't see private tools)
         assert "openai/toolInvocation/invoking" not in meta, \
             "Private tool should not have invocation messages"
         assert "openai/toolInvocation/invoked" not in meta, \
             "Private tool should not have invocation messages"
-        # Must NOT have resultCanProduceWidget (private tools mutate existing widget)
-        assert "openai/resultCanProduceWidget" not in meta, \
-            "Private tool should not have resultCanProduceWidget"
 
     @pytest.mark.asyncio
     async def test_oauth2_tool_has_security_schemes(self):

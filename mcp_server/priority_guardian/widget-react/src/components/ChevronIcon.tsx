@@ -17,6 +17,7 @@ export function ChevronIcon({ expanded, className = '' }: ChevronIconProps) {
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
+      aria-hidden="true"
       style={{
         transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
         transition: 'transform 150ms ease-out',

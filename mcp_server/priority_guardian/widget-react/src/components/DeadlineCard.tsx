@@ -201,7 +201,7 @@ export function DeadlineCard({
       aria-label={`Priority ${kw}: ${priority.name}`}
     >
       {/* Deadline banner - uses neutral background per UI guideline #41 */}
-      <div className="px-5 py-2.5 flex items-center justify-between bg-surface-secondary">
+      <div data-testid="deadline-banner" className="px-5 py-2.5 flex items-center justify-between bg-surface-secondary">
         <div className="flex items-center gap-2">
           {/* Calendar icon - uses SDK CSS variable for stroke per #74 */}
           <svg
@@ -335,9 +335,9 @@ export function DeadlineCard({
             className="flex items-center gap-1.5 w-full mb-2 hover:opacity-80 transition-opacity bg-transparent p-0"
             aria-expanded={deliverablesExpanded}
           >
-            <h4 className="text-xs font-medium uppercase tracking-wide text-tertiary">
+            <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
               E2E Deliverables
-            </h4>
+            </span>
             <span className="text-xs tabular-nums text-tertiary">
               ({doneCount}/{totalCount})
             </span>

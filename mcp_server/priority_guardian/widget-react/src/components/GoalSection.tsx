@@ -93,9 +93,9 @@ export function GoalSection({
         {isCollapsible && (
           <ChevronIcon expanded={expanded} className="text-tertiary" />
         )}
-        <h4 className="text-xs font-medium text-tertiary uppercase tracking-wide">
+        <span className="text-xs font-medium text-tertiary uppercase tracking-wide">
           {goals.length === 1 ? '1-Month Goal' : '1-Month Goals'}
-        </h4>
+        </span>
         {checkpointDate && (
           <span className="text-xs text-tertiary">
             by {formatDate(checkpointDate)}
@@ -154,7 +154,7 @@ export function GoalSection({
                 onClick={() => setIsAdding(true)}
                 className="text-xs text-secondary hover:text-default flex items-center gap-1"
               >
-                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor">
+                <svg className="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                   <path d="M8 3a.5.5 0 01.5.5v4h4a.5.5 0 010 1h-4v4a.5.5 0 01-1 0v-4h-4a.5.5 0 010-1h4v-4A.5.5 0 018 3z" />
                 </svg>
                 Add goal

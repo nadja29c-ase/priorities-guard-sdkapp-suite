@@ -104,8 +104,7 @@ export function ConnectionStatus({
               <button
                 onClick={handleDisconnect}
                 disabled={isDisconnecting}
-                className="text-xs font-medium px-2 py-1 rounded-lg transition-colors text-danger bg-danger-soft-alpha"
-                style={{ opacity: isDisconnecting ? 0.6 : 1 }}
+                className={`text-xs font-medium px-2 py-1 rounded-lg transition-colors text-danger bg-danger-soft-alpha ${isDisconnecting ? 'opacity-60' : ''}`}
                 aria-label="Confirm disconnect"
               >
                 {isDisconnecting ? '...' : 'Yes'}
@@ -133,8 +132,7 @@ export function ConnectionStatus({
           <button
             onClick={handleCheckStatus}
             disabled={isRefreshing}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft"
-            style={{ opacity: isRefreshing ? 0.6 : 1 }}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft ${isRefreshing ? 'opacity-60' : ''}`}
             aria-label="Check connection status"
           >
             {isRefreshing ? 'Checking...' : 'Check status'}
@@ -143,8 +141,7 @@ export function ConnectionStatus({
           <button
             onClick={handleConnect}
             disabled={isConnecting || isRefreshing}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft"
-            style={{ opacity: (isConnecting || isRefreshing) ? 0.6 : 1 }}
+            className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft ${(isConnecting || isRefreshing) ? 'opacity-60' : ''}`}
             aria-label="Connect Google Calendar"
           >
             {isConnecting ? 'Connecting...' : 'Connect'}
@@ -161,6 +158,7 @@ export function ConnectionStatus({
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
+            aria-hidden="true"
           >
             <rect x="2" y="3" width="12" height="11" rx="1.5" />
             <path d="M5 1.5v3M11 1.5v3M2 7h12" />

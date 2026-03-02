@@ -62,27 +62,56 @@ async def list_tools() -> List[mcp_types.Tool]:
             security_schemes = [{"type": "noauth"}]
 
         # Build _meta based on tool capabilities
-        if tool_def.widget_uri:
-            # Widget-producing tools get full metadata
+        # Use new ui.* keys per OpenAI Apps SDK (March 2026)
+        if tool_def.widget_uri and tool_def.widget_accessible:
+            # Widget-producing AND widget-callable tools
+            # visibility: ["model", "app"] - both model and widget can call
             meta = {
-                "openai/outputTemplate": tool_def.widget_uri,
+                "ui": {
+                    "resourceUri": tool_def.widget_uri,
+                    "visibility": ["model", "app"],
+                },
+                "openai/outputTemplate": tool_def.widget_uri,  # compat alias
                 "openai/toolInvocation/invoking": "Processing...",
                 "openai/toolInvocation/invoked": "Done.",
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
+                "annotations": annotations,
+                "securitySchemes": security_schemes,
+            }
+        elif tool_def.widget_uri:
+            # Widget-producing but NOT widget-callable
+            # visibility: ["model"] - only model can call
+            meta = {
+                "ui": {
+                    "resourceUri": tool_def.widget_uri,
+                    "visibility": ["model"],
+                },
+                "openai/outputTemplate": tool_def.widget_uri,  # compat alias
+                "openai/toolInvocation/invoking": "Processing...",
+                "openai/toolInvocation/invoked": "Done.",
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_accessible:
-            # Widget-callable tools (e.g., save_board) need widgetAccessible
+            # Widget-callable tools without widget output (e.g., save_board)
+            # visibility: ["model", "app"]
             meta = {
-                "openai/widgetAccessible": True,
+                "ui": {
+                    "visibility": ["model", "app"],
+                },
+                "openai/toolInvocation/invoking": "Processing...",
+                "openai/toolInvocation/invoked": "Done.",
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         else:
-            # Data-only tools still need annotations
+            # Model-only tools without widget
+            # visibility: ["model"]
             meta = {
+                "ui": {
+                    "visibility": ["model"],
+                },
+                "openai/toolInvocation/invoking": "Processing...",
+                "openai/toolInvocation/invoked": "Done.",
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }

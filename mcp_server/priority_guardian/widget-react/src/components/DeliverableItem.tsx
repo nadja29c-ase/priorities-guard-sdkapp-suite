@@ -150,7 +150,7 @@ export function DeliverableItem({
         aria-label={`Mark "${deliverable.name}" as ${deliverable.done ? 'not done' : 'done'}`}
       >
         {deliverable.done && (
-          <svg className="w-2.5 h-2.5 text-surface" viewBox="0 0 12 12" fill="none">
+          <svg className="w-2.5 h-2.5 text-surface" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         )}
@@ -188,7 +188,7 @@ export function DeliverableItem({
             className="p-1 text-tertiary hover:text-default"
             aria-label={`Edit "${deliverable.name}"`}
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
             </svg>
           </button>
@@ -198,7 +198,7 @@ export function DeliverableItem({
             className="p-1 text-tertiary hover:text-danger"
             aria-label={`Delete "${deliverable.name}"`}
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
               <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
               <path d="M6.5 7v5M8 7v5M9.5 7v5"/>

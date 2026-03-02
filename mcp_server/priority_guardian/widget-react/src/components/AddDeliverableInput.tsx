@@ -67,7 +67,7 @@ export function AddDeliverableInput({
         className="flex items-center gap-1 text-xs text-secondary hover:text-default disabled:opacity-50"
         aria-label="Add new deliverable"
       >
-        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
           <path d="M8 3v10M3 8h10"/>
         </svg>
         Add deliverable

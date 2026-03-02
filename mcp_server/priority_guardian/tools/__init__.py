@@ -128,49 +128,63 @@ async def list_tools() -> List[mcp_types.Tool]:
         )
 
         # Build _meta based on tool capabilities
+        # Use new ui.* keys per OpenAI Apps SDK (March 2026)
         if tool_def.visibility == "private":
-            # Private tools: widget-accessible but LLM cannot see or call them
-            # NO resultCanProduceWidget (they mutate data in existing widget)
+            # Private tools: widget-only, LLM cannot see or call them
             meta = {
-                "openai/widgetAccessible": True,
-                "openai/visibility": "private",
+                "ui": {
+                    "visibility": ["app"],
+                },
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_uri and tool_def.widget_accessible:
             # Widget-producing AND widget-callable public tools
+            # visibility: ["model", "app"] - both model and widget can call
             meta = {
-                "openai/outputTemplate": tool_def.widget_uri,
+                "ui": {
+                    "resourceUri": tool_def.widget_uri,
+                    "visibility": ["model", "app"],
+                },
+                "openai/outputTemplate": tool_def.widget_uri,  # compat alias
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_uri:
             # Widget-producing but NOT widget-callable (e.g., create_priority)
-            # Can render widget after success, but widget cannot invoke this tool
+            # visibility: ["model"] - only model can call, widget cannot
             meta = {
-                "openai/outputTemplate": tool_def.widget_uri,
+                "ui": {
+                    "resourceUri": tool_def.widget_uri,
+                    "visibility": ["model"],
+                },
+                "openai/outputTemplate": tool_def.widget_uri,  # compat alias
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
-                "openai/resultCanProduceWidget": True,
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_accessible:
-            # Widget-callable public tools need widgetAccessible
+            # Widget-callable public tools without widget output
+            # visibility: ["model", "app"]
             meta = {
+                "ui": {
+                    "visibility": ["model", "app"],
+                },
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
-                "openai/widgetAccessible": True,
                 "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         else:
-            # Public tools without widget access still get invocation messages
+            # Public model-only tools without widget
+            # visibility: ["model"]
             meta = {
+                "ui": {
+                    "visibility": ["model"],
+                },
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
                 "annotations": annotations,

@@ -106,24 +106,33 @@ class TestSaveBoardRegistration:
 
     @pytest.mark.asyncio
     async def test_save_board_widget_accessible_only_meta(self):
-        """save_board should only have widgetAccessible meta (no outputTemplate)."""
+        """save_board has ui.visibility: ['model', 'app'] but no ui.resourceUri."""
         tools = await list_tools()
         save_board_tool = next((t for t in tools if t.name == "save_board"), None)
         assert save_board_tool is not None
-        # Has meta with widgetAccessible (widget can call it)
+        # Has meta with ui.visibility (both model and widget can call it)
         assert save_board_tool.meta is not None
-        assert save_board_tool.meta.get("openai/widgetAccessible") is True
-        # But does NOT have outputTemplate (doesn't produce widget)
+        ui_meta = save_board_tool.meta.get("ui", {})
+        assert ui_meta.get("visibility") == ["model", "app"], \
+            "save_board should have ui.visibility: ['model', 'app']"
+        # But does NOT have ui.resourceUri (doesn't produce widget)
+        assert "resourceUri" not in ui_meta, \
+            "save_board should not have ui.resourceUri"
         assert "openai/outputTemplate" not in save_board_tool.meta
-        assert save_board_tool.meta.get("openai/resultCanProduceWidget") is None
 
     @pytest.mark.asyncio
     async def test_widget_producing_tools_have_full_meta(self):
-        """Tools with widget_uri should have full meta including outputTemplate."""
+        """Tools with widget_uri should have ui.resourceUri and ui.visibility."""
         tools = await list_tools()
         organize_thoughts_tool = next((t for t in tools if t.name == "organize_thoughts"), None)
         assert organize_thoughts_tool is not None
         assert organize_thoughts_tool.meta is not None
+        ui_meta = organize_thoughts_tool.meta.get("ui", {})
+        # Must have ui.resourceUri
+        assert "resourceUri" in ui_meta, \
+            "organize_thoughts should have ui.resourceUri"
+        # Must have ui.visibility
+        assert "visibility" in ui_meta, \
+            "organize_thoughts should have ui.visibility"
+        # Compat alias should exist
         assert "openai/outputTemplate" in organize_thoughts_tool.meta
-        assert organize_thoughts_tool.meta.get("openai/widgetAccessible") is True
-        assert organize_thoughts_tool.meta.get("openai/resultCanProduceWidget") is True

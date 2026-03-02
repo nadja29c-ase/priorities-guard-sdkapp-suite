@@ -41,6 +41,7 @@ const deadlinePriority: Priority = {
     { id: 'd1', name: 'Write tests', done: false },
     { id: 'd2', name: 'Code review', done: true },
   ],
+  goals: [],
   createdAt: '2026-01-01T00:00:00Z',
 }
 
@@ -73,13 +74,14 @@ describe('DeadlineCard UI Compliance', () => {
       />
     )
 
-    // Find text elements in the deadline banner
-    const deadlineDateText = screen.getByText(/Mar 15, 2026/i)
-    const daysLeftText = screen.getByText(/\d+d left|Due today|\d+d overdue/i)
+    // Find text elements in the deadline banner using data-testid (locale-independent)
+    const banner = screen.getByTestId('deadline-banner')
+    const textElements = banner.querySelectorAll('span')
 
-    // Text elements should NOT have inline style attribute
-    expect(deadlineDateText).not.toHaveAttribute('style')
-    expect(daysLeftText).not.toHaveAttribute('style')
+    // All text elements in banner should NOT have inline style attribute
+    textElements.forEach((el) => {
+      expect(el).not.toHaveAttribute('style')
+    })
   })
 
   it('does not have inline style with background on banner div', () => {
@@ -92,12 +94,12 @@ describe('DeadlineCard UI Compliance', () => {
       />
     )
 
-    // Find the banner div (contains the deadline date)
-    const deadlineDateText = screen.getByText(/Mar 15, 2026/i)
-    const bannerDiv = deadlineDateText.closest('div.bg-surface-secondary')
+    // Find the banner div using data-testid (locale-independent)
+    const bannerDiv = screen.getByTestId('deadline-banner')
 
     // Banner should exist with SDK class, not inline background style
     expect(bannerDiv).toBeInTheDocument()
+    expect(bannerDiv).toHaveClass('bg-surface-secondary')
     expect(bannerDiv).not.toHaveAttribute('style')
   })
 
@@ -111,9 +113,9 @@ describe('DeadlineCard UI Compliance', () => {
       />
     )
 
-    // Find the calendar icon SVG (first svg in the banner)
-    const bannerDiv = document.querySelector('.bg-surface-secondary')
-    const calendarSvg = bannerDiv?.querySelector('svg')
+    // Find the calendar icon SVG using data-testid (locale-independent)
+    const bannerDiv = screen.getByTestId('deadline-banner')
+    const calendarSvg = bannerDiv.querySelector('svg')
 
     expect(calendarSvg).toBeInTheDocument()
     const strokeAttr = calendarSvg?.getAttribute('stroke')
@@ -259,16 +261,12 @@ describe('FlexibleCard UI Compliance', () => {
     )
 
     // Find the hourglass icon (in the "Tracking in progress" section)
-    const trackingText = screen.queryByText(/Tracking in progress/)
-    if (trackingText) {
-      const container = trackingText.closest('div')
-      const hourglassSvg = container?.querySelector('svg')
-
-      if (hourglassSvg) {
-        expect(hourglassSvg.getAttribute('stroke')).toBe('currentColor')
-      }
-    }
-    // If no tracking text (has avgTargetAchievement), that's fine - no hourglass to test
+    const trackingText = screen.getByText(/Tracking in progress/)
+    expect(trackingText).toBeInTheDocument()
+    const container = trackingText.closest('div')
+    const hourglassSvg = container?.querySelector('svg')
+    expect(hourglassSvg).toBeInTheDocument()
+    expect(hourglassSvg!.getAttribute('stroke')).toBe('currentColor')
   })
 
   it('badge uses text-2xs class (not inline fontSize)', () => {
@@ -306,5 +304,25 @@ describe('FlexibleCard UI Compliance', () => {
 
     expect(streakPill.className).toMatch(/text-xs/)
     expect(streakPill).not.toHaveAttribute('style')
+  })
+
+  it('GoalItem checkbox has no inline style', () => {
+    // flexiblePriority already has a goal
+    render(
+      <FlexibleCard
+        priority={flexiblePriority}
+        priorities={[flexiblePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    // Find the checkbox button via role="checkbox"
+    const checkbox = screen.getByRole('checkbox')
+    // Get the <span> child (the circle indicator)
+    const span = checkbox.querySelector('span')
+
+    expect(span).toBeInTheDocument()
+    expect(span).not.toHaveAttribute('style')
   })
 })

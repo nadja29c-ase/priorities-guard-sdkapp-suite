@@ -157,32 +157,27 @@ export function GoalItem({
       <div className="flex items-start gap-2.5 group">
         {/* Circular checkbox - 18px diameter, green when achieved */}
         <button
-        type="button"
-        onClick={handleToggle}
-        disabled={disabled || isLoading}
-        className="mt-0.5 flex-shrink-0 transition-all"
-        role="checkbox"
-        aria-checked={goal.achieved}
-        aria-label={`Mark "${goal.text}" as ${goal.achieved ? 'not achieved' : 'achieved'}`}
-      >
-        <span
-          className={`rounded-full flex items-center justify-center ${goal.achieved ? 'bg-success-solid' : ''}`}
-          style={{
-            width: '18px',
-            height: '18px',
-            border: goal.achieved ? 'none' : '1.5px solid var(--color-border-strong)',
-            transition: 'all 150ms ease-out',
-            opacity: (disabled || isLoading) ? 0.5 : 1,
-            cursor: (disabled || isLoading) ? 'not-allowed' : 'pointer',
-          }}
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled || isLoading}
+          className="mt-0.5 flex-shrink-0 transition-all"
+          role="checkbox"
+          aria-checked={goal.achieved}
+          aria-disabled={disabled || isLoading}
+          aria-label={`Mark "${goal.text}" as ${goal.achieved ? 'not achieved' : 'achieved'}`}
         >
-          {goal.achieved && (
-            <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
-              <path d="M2 6l3 3 5-5" />
-            </svg>
-          )}
-        </span>
-      </button>
+          <span
+            className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all duration-150 ease-out ${
+              goal.achieved ? 'bg-success-solid border-0' : 'border-[1.5px] border-strong'
+            } ${(disabled || isLoading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            {goal.achieved && (
+              <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M2 6l3 3 5-5" />
+              </svg>
+            )}
+          </span>
+        </button>
 
       {/* Goal text (editable) */}
       <div className="flex-1 min-w-0">
@@ -219,7 +214,7 @@ export function GoalItem({
               className="p-1 text-tertiary hover:text-default"
               aria-label={`Edit "${goal.text}"`}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
               </svg>
             </button>
@@ -231,7 +226,7 @@ export function GoalItem({
               className="p-1 text-tertiary hover:text-danger"
               aria-label={`Delete "${goal.text}"`}
             >
-              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
                 <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
                 <path d="M6.5 7v5M8 7v5M9.5 7v5"/>

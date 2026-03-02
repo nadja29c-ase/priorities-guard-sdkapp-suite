@@ -27,7 +27,7 @@ from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision = "v2w3x4y5z6a7"
-down_revision = "u1v2w3x4y5z6"
+down_revision = "b9c0d1e2f3g4"  # Rebased to be after keyword_check_constraint
 branch_labels = None
 depends_on = None
 
