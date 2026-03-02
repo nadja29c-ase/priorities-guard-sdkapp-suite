@@ -16,7 +16,7 @@ logger = structlog.get_logger(__name__)
 
 # Canonical User-Agent for all Google API calls
 # Google recommends including UA string for API requests
-GOOGLE_USER_AGENT = "Focused/1.0 (+https://www.priority-guard.com)"
+GOOGLE_USER_AGENT = f"PriorityGuardSuite/1.0 (+{settings.BACKEND_PUBLIC_URL})"
 
 
 async def refresh_access_token(
@@ -153,7 +153,7 @@ async def register_webhook(
     body = {
         "id": channel_id,
         "type": "web_hook",
-        "address": f"https://www.priority-guard.com/webhook/focused/google_calendar/{user_id}",
+        "address": f"{settings.BACKEND_PUBLIC_URL.rstrip('/')}/webhook/focused/google_calendar",
     }
 
     max_retries = 3

@@ -203,11 +203,19 @@ class TestGetOrCreateUser:
     @pytest.mark.asyncio
     async def test_creates_new_user_for_unknown_chatgpt_id(self, async_session):
         """Should create new user when chatgpt_user_id not found."""
-        user = await _resolve_user_identity(
-            db=async_session,
-            chatgpt_user_id="new-chatgpt-user-456",
-            correlation_id="test-correlation-id"
-        )
+        mock_request = MagicMock()
+        mock_request.state.correlation_id = "test-correlation-id"
+
+        with patch(
+            "backend.core.oauth_provider.authorize.get_session_cookie",
+            return_value=None
+        ):
+            user = await _resolve_user_identity(
+                request=mock_request,
+                db=async_session,
+                chatgpt_user_id="new-chatgpt-user-456",
+                correlation_id="test-correlation-id"
+            )
 
         assert user is not None
         assert user.chatgpt_user_id == "new-chatgpt-user-456"
@@ -217,12 +225,19 @@ class TestGetOrCreateUser:
     async def test_finds_existing_user(self, async_session, setup_existing_user):
         """Should find existing user by chatgpt_user_id."""
         existing_user = setup_existing_user
+        mock_request = MagicMock()
+        mock_request.state.correlation_id = "test-correlation-id"
 
-        user = await _resolve_user_identity(
-            db=async_session,
-            chatgpt_user_id="existing-chatgpt-user-123",
-            correlation_id="test-correlation-id"
-        )
+        with patch(
+            "backend.core.oauth_provider.authorize.get_session_cookie",
+            return_value=None
+        ):
+            user = await _resolve_user_identity(
+                request=mock_request,
+                db=async_session,
+                chatgpt_user_id="existing-chatgpt-user-123",
+                correlation_id="test-correlation-id"
+            )
 
         assert user is not None
         assert user.id == existing_user.id

@@ -6,26 +6,33 @@ Handles widget resource discovery and serving.
 
 from pathlib import Path
 from typing import List
+from urllib.parse import urlparse
 
 import structlog
 from mcp import types as mcp_types
 
-from mcp_server.priority_guardian.config import MCP_SERVER_URL
+from mcp_server.priority_guardian.config import BACKEND_URL, MCP_SERVER_URL
 
 logger = structlog.get_logger(__name__)
+
+
+def _extract_origin(url: str) -> str:
+    """
+    Extract pure origin (scheme + host) from URL.
+
+    OpenAI Apps SDK requires ui.domain to be a pure origin without path.
+    Example: https://pg-mcp.priority-guard.com (not https://pg-mcp.priority-guard.com/mcp)
+    """
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
 
 # Widget configuration
 WIDGET_VERSION = ""
 WIDGET_URI = "ui://widget/pg-dashboard.html"
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/pg-dashboard.html")
-
-# CSP configuration for PG widget
-# - connect_domains: Allow callTool communication with ChatGPT runtime
-# - redirect_domains: Allow openExternal to open OAuth URLs on backend without interstitial
-WIDGET_CSP = {
-    "connect_domains": ["https://chatgpt.com"],
-    "redirect_domains": ["https://priorities-guard-sdkapp-suite.onrender.com"],
-}
+WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)
+BACKEND_DOMAIN = _extract_origin(BACKEND_URL)
 
 # Fallback HTML if widget file cannot be loaded
 WIDGET_FALLBACK_HTML = """<!DOCTYPE html>
@@ -61,13 +68,18 @@ async def list_resources() -> List[mcp_types.Resource]:
             title="Priority Guardian Dashboard",
             uri=WIDGET_URI,
             description="Widget for viewing priorities and managing Google Calendar connection",
-            mimeType="text/html+skybridge",
+            mimeType="text/html;profile=mcp-app",
             _meta={
-                "openai/outputTemplate": WIDGET_URI,
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
-                "openai/widgetDomain": MCP_SERVER_URL,
-                "openai/widgetCSP": WIDGET_CSP,
+                "ui": {
+                    "domain": WIDGET_DOMAIN,
+                    "csp": {
+                        "connectDomains": [],  # Widget uses callTool/postMessage, not HTTP
+                    },
+                },
+                # Legacy ChatGPT extension — keep for openExternal support
+                "openai/widgetCSP": {
+                    "redirect_domains": [BACKEND_DOMAIN],
+                },
                 "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
             },
         )
@@ -82,13 +94,17 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
             title="Priority Guardian Dashboard",
             uriTemplate=WIDGET_URI,
             description="Widget for viewing priorities and managing Google Calendar connection",
-            mimeType="text/html+skybridge",
+            mimeType="text/html;profile=mcp-app",
             _meta={
-                "openai/outputTemplate": WIDGET_URI,
-                "openai/widgetAccessible": True,
-                "openai/resultCanProduceWidget": True,
-                "openai/widgetDomain": MCP_SERVER_URL,
-                "openai/widgetCSP": WIDGET_CSP,
+                "ui": {
+                    "domain": WIDGET_DOMAIN,
+                    "csp": {
+                        "connectDomains": [],
+                    },
+                },
+                "openai/widgetCSP": {
+                    "redirect_domains": [BACKEND_DOMAIN],
+                },
                 "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
             },
         )
@@ -115,21 +131,25 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
         )
 
         # Build _meta for the widget resource
+        # Per OpenAI Apps SDK: resource _meta uses ui.domain, ui.csp, openai/widgetDescription
+        # openai/toolInvocation/* belongs on tool descriptors, not resources
         resource_meta = {
-            "openai/outputTemplate": WIDGET_URI,
-            "openai/toolInvocation/invoking": "Loading your priorities...",
-            "openai/toolInvocation/invoked": "Here's your Priority Guardian dashboard.",
-            "openai/widgetAccessible": True,
-            "openai/resultCanProduceWidget": True,
-            "openai/widgetDomain": MCP_SERVER_URL,
-            "openai/widgetCSP": WIDGET_CSP,
+            "ui": {
+                "domain": WIDGET_DOMAIN,
+                "csp": {
+                    "connectDomains": [],
+                },
+            },
+            "openai/widgetCSP": {
+                "redirect_domains": [BACKEND_DOMAIN],
+            },
             "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
         }
 
         contents = [
             mcp_types.TextResourceContents(
                 uri=WIDGET_URI,
-                mimeType="text/html+skybridge",
+                mimeType="text/html;profile=mcp-app",
                 text=WIDGET_HTML,
                 _meta=resource_meta,
             )
@@ -149,7 +169,7 @@ def embedded_widget_resource() -> mcp_types.EmbeddedResource:
         type="resource",
         resource=mcp_types.TextResourceContents(
             uri=WIDGET_URI,
-            mimeType="text/html+skybridge",
+            mimeType="text/html;profile=mcp-app",
             text=WIDGET_HTML,
             title="Priority Guardian Dashboard",
         ),
