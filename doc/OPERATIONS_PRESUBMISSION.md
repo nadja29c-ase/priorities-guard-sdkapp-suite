@@ -84,6 +84,14 @@ curl https://<MCP_SERVER>/\.well-known/oauth-authorization-server
 curl -I https://<MCP_SERVER>/mcp
 ```
 
+## Data Minimization
+
+- [ ] OAuth scopes are minimal (read-only where possible, no unnecessary permissions)
+- [ ] Only essential user data is stored in database
+- [ ] Logs do not contain PII (user IDs truncated, no tokens/secrets)
+- [ ] Session tokens hashed before storage
+- [ ] No unnecessary data retained after user disconnects
+
 ## Submission Artifacts
 
 - [ ] ANNOTATION_JUSTIFICATIONS.md created (one entry per tool annotation)
