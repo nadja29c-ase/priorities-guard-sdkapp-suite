@@ -57,7 +57,6 @@ class TestConcurrentTokenExchange:
                 refresh_token_hash=refresh_token_hashed,
                 refresh_token_expires_at=datetime.now(timezone.utc) + timedelta(days=7),
                 revoked=False,
-                last_used_at=datetime.now(timezone.utc)
             )
             setup_session.add(token_record)
             await setup_session.commit()

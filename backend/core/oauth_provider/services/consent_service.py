@@ -80,6 +80,8 @@ async def create_authorization_code(
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=AUTH_CODE_TTL_MINUTES)
 
     # Store authorization code in database
+    # NOTE: nonce parameter accepted for backward compatibility but not stored
+    # (OpenID Connect is not implemented; column was dropped for data minimization)
     auth_code_record = OAuthAuthorizationCode(
         code=authorization_code,
         user_id=UUID(user_id),
@@ -89,7 +91,6 @@ async def create_authorization_code(
         redirect_uri=redirect_uri,
         scope=scope.split(),  # Convert space-separated string to array
         state=state,
-        nonce=nonce,
         expires_at=expires_at,
         used=False
     )

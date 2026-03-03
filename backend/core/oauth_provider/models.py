@@ -113,12 +113,6 @@ class OAuthAuthorizationCode(Base):
         comment="CSRF protection state (optional)"
     )
 
-    nonce: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True,
-        comment="OpenID Connect nonce (optional)"
-    )
-
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -243,12 +237,6 @@ class OAuthAccessToken(Base):
         comment="Token creation timestamp"
     )
 
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Last time token was used"
-    )
-
     __table_args__ = (
         Index("idx_oauth_access_tokens_user_id", "user_id"),
         Index("idx_oauth_access_tokens_client_id", "client_id"),  # Client-filtered queries
@@ -335,16 +323,9 @@ class OAuthSession(Base):
         comment="User this session belongs to"
     )
 
-    session_token: Mapped[str] = mapped_column(
+    session_token_hash: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
-        unique=True,
-        comment="Random token stored in cookie (32 bytes hex) - DEPRECATED: Phase 2 will drop this column"
-    )
-
-    session_token_hash: Mapped[str | None] = mapped_column(
-        String(64),
-        nullable=True,
         comment="SHA-256 hash of session token for O(1) indexed lookup"
     )
 
@@ -369,7 +350,6 @@ class OAuthSession(Base):
     )
 
     __table_args__ = (
-        Index("idx_oauth_sessions_session_token", "session_token", unique=True),
         Index("idx_oauth_sessions_session_token_hash", "session_token_hash", unique=True),
         Index("idx_oauth_sessions_user_id", "user_id"),
         Index("idx_oauth_sessions_expires_at", "expires_at"),

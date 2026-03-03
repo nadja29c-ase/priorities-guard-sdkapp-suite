@@ -840,23 +840,23 @@ class TestExistingUserLookup:
 # =============================================================================
 
 class TestNoncePropagation:
-    """Test that nonce parameter is propagated through the entire flow."""
+    """Test that nonce parameter is accepted (for backward compatibility)."""
 
     @pytest.mark.asyncio
-    async def test_nonce_stored_in_authorization_code(
+    async def test_nonce_accepted_in_authorize_request(
         self, client, oauth_client, test_db, clear_redis_test_data
     ):
         """
-        Nonce must propagate from authorize → consent → DB:
-        1. GET /authorize with nonce parameter
-        2. POST /consent with allow
-        3. Verify nonce stored in OAuthAuthorizationCode record
+        Nonce parameter is accepted for backward compatibility:
+        1. GET /authorize with nonce parameter succeeds
+        2. POST /consent with allow succeeds
+        3. Authorization code is created (nonce not stored in DB - OpenID Connect not implemented)
         """
         _ = clear_redis_test_data
         test_nonce = f"nonce-{uuid4()}"
         login_hint = f"nonce-user-{uuid4()}"
 
-        # Step 1: GET /authorize with nonce
+        # Step 1: GET /authorize with nonce (should be accepted)
         authorize_response = await client.get(
             "/oauth/focused/authorize",
             params={
@@ -876,7 +876,7 @@ class TestNoncePropagation:
         auth_context_id = extract_auth_context_id(authorize_response.text)
         assert auth_context_id is not None
 
-        # Verify nonce in Redis context
+        # Verify nonce in Redis context (still stored temporarily)
         redis_key = build_auth_context_key(auth_context_id)
         context_json = await redis_client.get(redis_key)
         assert context_json is not None, "Context should exist in Redis"
@@ -895,13 +895,13 @@ class TestNoncePropagation:
         code = extract_code_from_redirect(location)
         assert code is not None
 
-        # Step 3: Verify nonce stored in DB
+        # Step 3: Verify authorization code was created
+        # (nonce is NOT stored in DB - OpenID Connect not implemented)
         result = await test_db.execute(
             select(OAuthAuthorizationCode).where(OAuthAuthorizationCode.code == code)
         )
         auth_code_record = result.scalar_one_or_none()
         assert auth_code_record is not None
-        assert auth_code_record.nonce == test_nonce, f"Expected nonce '{test_nonce}', got '{auth_code_record.nonce}'"
 
 
 # =============================================================================

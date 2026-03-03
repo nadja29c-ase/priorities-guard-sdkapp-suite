@@ -490,7 +490,6 @@ class TestAuthorizationCodeDatabaseState:
             redirect_uri=oauth_client["redirect_uri"],
             scope=scope,
             state="test-state-db",
-            nonce="test-nonce-123",
             correlation_id="test-db-correlation"
         )
 
@@ -510,7 +509,7 @@ class TestAuthorizationCodeDatabaseState:
         assert stored_code.code_challenge == code_challenge
         assert stored_code.code_challenge_method == "S256"
         assert stored_code.state == "test-state-db"
-        assert stored_code.nonce == "test-nonce-123"
+        # nonce column was dropped (OpenID Connect not implemented)
         assert stored_code.used is False
 
         # Expires_at should be ~10 minutes from now

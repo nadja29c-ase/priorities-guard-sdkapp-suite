@@ -267,6 +267,8 @@ async def fetch_events(
         "maxResults": max_results,
         "singleEvents": "true",
         "orderBy": "startTime",
+        # Data minimization (GDPR Art. 5(1)(c)): Request only fields PG uses
+        "fields": "items(id,summary,description,start,end,status,attendees(self,responseStatus))",
     }
 
     max_retries = 3
@@ -388,6 +390,9 @@ async def list_events(
         "maxResults": max_results_per_page,
         "singleEvents": "true",
         "orderBy": "startTime",
+        # Data minimization (GDPR Art. 5(1)(c)): Request only fields PG uses
+        # Include nextPageToken at top level for pagination
+        "fields": "items(id,summary,description,start,end,status,attendees(self,responseStatus)),nextPageToken",
     }
 
     all_events = []

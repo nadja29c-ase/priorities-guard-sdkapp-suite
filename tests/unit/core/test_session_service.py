@@ -47,12 +47,14 @@ class TestSessionTokenHashing:
         assert len(token) == 64
         assert all(c in "0123456789abcdef" for c in token)
 
-        # Assert session object has hash and encrypted values
+        # Assert session object has hash and encrypted values (no plaintext stored)
         assert captured_session is not None
-        assert captured_session.session_token == token
         assert captured_session.session_token_hash is not None
         assert len(captured_session.session_token_hash) == 64  # SHA-256 hex
         assert captured_session.session_token_enc == "encrypted_token_value"
+        # Verify hash matches the returned token
+        from backend.core.encryption import hash_token
+        assert captured_session.session_token_hash == hash_token(token)
 
     @pytest.mark.asyncio
     async def test_session_token_hash_is_deterministic(self):

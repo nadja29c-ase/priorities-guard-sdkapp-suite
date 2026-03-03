@@ -141,10 +141,11 @@ async def get_clusters(
     return GetClusterResponse(
         cluster_id=cluster.id,
         cluster_data=cluster.cluster_data,
-        thoughts_exhausted=cluster.thoughts_exhausted,
-        correctly_clustered=cluster.correctly_clustered,
         created_at=cluster.created_at,
         content_hash=cluster.content_hash,
+        # DEPRECATED fields - return fixed values for backward compatibility
+        thoughts_exhausted=False,
+        correctly_clustered=None,
     )
 
 
@@ -197,21 +198,21 @@ async def create_cluster(
     #
     # On conflict: we update all data fields AND reset created_at to preserve
     # "replace-latest" semantics where each POST represents a fresh snapshot.
+    #
+    # NOTE: thoughts_exhausted and correctly_clustered were dropped from the
+    # database (data minimization). The request schema still accepts them for
+    # backward compatibility but they are not persisted.
     stmt = (
         insert(ClarityCluster)
         .values(
             user_id=user_id,
             cluster_data=payload.cluster_data,
-            thoughts_exhausted=payload.thoughts_exhausted,
-            correctly_clustered=payload.correctly_clustered,
             content_hash=payload.content_hash,
         )
         .on_conflict_do_update(
             index_elements=["user_id"],  # Safer than hardcoding constraint name
             set_={
                 "cluster_data": payload.cluster_data,
-                "thoughts_exhausted": payload.thoughts_exhausted,
-                "correctly_clustered": payload.correctly_clustered,
                 "content_hash": payload.content_hash,
                 "created_at": func.now(),  # Reset timestamp on replace
                 "updated_at": func.now(),

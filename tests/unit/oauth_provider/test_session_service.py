@@ -113,15 +113,17 @@ class TestCreateSession:
 
     @pytest.mark.asyncio
     async def test_creates_session_with_correct_token(self):
-        """create_session should persist the returned token in the session."""
+        """create_session should persist hash of the returned token (no plaintext)."""
         user_id = uuid4()
         mock_db = AsyncMock()
 
         token = await create_session(user_id, mock_db, correlation_id="test-123")
 
         added_session = mock_db.add.call_args[0][0]
-        assert added_session.session_token == token
-        assert len(added_session.session_token) == SESSION_TOKEN_BYTES * 2
+        # Plaintext token is no longer stored, only hash
+        from backend.core.encryption import hash_token
+        assert added_session.session_token_hash == hash_token(token)
+        assert len(added_session.session_token_hash) == 64  # SHA-256 hex
 
     @pytest.mark.asyncio
     async def test_accepts_string_user_id(self):

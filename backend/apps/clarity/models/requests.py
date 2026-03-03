@@ -13,9 +13,10 @@ class CreateClusterRequest(BaseModel):
     """Request body for POST /api/clarity/clusters."""
 
     cluster_data: dict[str, Any]  # Must contain "clusters" key
-    thoughts_exhausted: bool
-    correctly_clustered: bool | None = None
     content_hash: str | None = None  # SHA256 hash for saved state detection
+    # DEPRECATED fields - accepted for backward compatibility but ignored
+    thoughts_exhausted: bool | None = None  # Always ignored, kept for API compat
+    correctly_clustered: bool | None = None  # Always ignored, kept for API compat
 
     @model_validator(mode="after")
     def validate_cluster_data(self) -> "CreateClusterRequest":
@@ -81,10 +82,11 @@ class GetClusterResponse(BaseModel):
 
     cluster_id: UUID
     cluster_data: dict[str, Any]  # {"clusters": [...]}
-    thoughts_exhausted: bool
-    correctly_clustered: bool | None
     created_at: datetime  # Snapshot timestamp (reset on each upsert)
     content_hash: str | None = None  # SHA256 hash for saved state detection
+    # DEPRECATED fields - returned for backward compatibility with fixed values
+    thoughts_exhausted: bool = False  # Always False, kept for API compat
+    correctly_clustered: bool | None = None  # Always None, kept for API compat
 
 
 class DeleteDataRequest(BaseModel):

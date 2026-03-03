@@ -144,7 +144,6 @@ async def exchange_authorization_code(
         refresh_token_hash=refresh_token_hashed,
         refresh_token_expires_at=refresh_token_expires_at,
         revoked=False,
-        last_used_at=datetime.now(timezone.utc)
     )
 
     db.add(access_token_record)
@@ -274,7 +273,6 @@ async def exchange_refresh_token(
         refresh_token_hash=new_refresh_token_hashed,
         refresh_token_expires_at=new_refresh_token_expires_at,
         revoked=False,
-        last_used_at=datetime.now(timezone.utc)
     )
 
     db.add(new_access_token_record)

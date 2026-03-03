@@ -60,8 +60,6 @@ class ClarityCluster(Base):
         cluster = ClarityCluster(
             user_id=UUID("..."),
             cluster_data={"clusters": [{"cluster_name": "Tasks", ...}]},
-            thoughts_exhausted=False,  # DEPRECATED: always False
-            correctly_clustered=None,  # DEPRECATED: always None
             content_hash="abc123...",  # SHA256 of canonical board content
         )
     """
@@ -89,27 +87,6 @@ class ClarityCluster(Base):
         JSONB,
         nullable=False,
         comment="Logical cluster data: {clusters: [...]}",
-    )
-
-    # Metadata from tool call
-    # NOTE: This field is deprecated as of Increment 12 (explicit save model).
-    #       Kept for backward compatibility; always set to False on new saves.
-    thoughts_exhausted: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        comment="DEPRECATED: Always false in explicit save model.",
-    )
-
-    # Tri-state confirmation field:
-    #   NULL  = user hasn't answered yet (in-progress clustering)
-    #   True  = user confirmed clusters are correct
-    #   False = user said clusters are wrong (needs re-clustering)
-    # NOTE: This field is deprecated as of Increment 12 (explicit save model).
-    #       Kept for backward compatibility; always set to None on new saves.
-    correctly_clustered: Mapped[bool | None] = mapped_column(
-        Boolean,
-        nullable=True,
-        comment="DEPRECATED: User confirmation. Always null in explicit save model.",
     )
 
     # SHA256 hash of canonical board content for saved state detection.

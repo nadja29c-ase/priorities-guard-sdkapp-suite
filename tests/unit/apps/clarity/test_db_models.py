@@ -28,8 +28,6 @@ class TestClarityClusterValidation:
                     }
                 ]
             },
-            "thoughts_exhausted": True,
-            "correctly_clustered": None,
         }
         defaults.update(overrides)
         return ClarityCluster(**defaults)
@@ -44,8 +42,6 @@ class TestClarityClusterValidation:
         cluster = ClarityCluster(
             user_id=None,
             cluster_data={"clusters": []},
-            thoughts_exhausted=True,
-            correctly_clustered=None,
         )
         with pytest.raises(ValueError):
             cluster.validate()
@@ -108,8 +104,6 @@ class TestClarityClusterCountProperty:
         cluster = ClarityCluster(
             user_id=uuid4(),
             cluster_data={"clusters": []},
-            thoughts_exhausted=True,
-            correctly_clustered=None,
         )
         assert cluster.cluster_count == 0
 
@@ -122,8 +116,6 @@ class TestClarityClusterCountProperty:
                     {"cluster_name": "Test", "thought_items": ["a"]}
                 ]
             },
-            thoughts_exhausted=True,
-            correctly_clustered=None,
         )
         assert cluster.cluster_count == 1
 
@@ -138,8 +130,6 @@ class TestClarityClusterCountProperty:
                     {"cluster_name": "C3", "thought_items": ["c"]},
                 ]
             },
-            thoughts_exhausted=True,
-            correctly_clustered=None,
         )
         assert cluster.cluster_count == 3
 
@@ -159,8 +149,6 @@ class TestClarityClusterCountProperty:
                     }
                 ]
             },
-            thoughts_exhausted=True,
-            correctly_clustered=None,
         )
         assert cluster.cluster_count == 1  # Only top-level
 
@@ -174,8 +162,6 @@ class TestClarityClusterRepr:
         cluster = ClarityCluster(
             user_id=user_id,
             cluster_data={"clusters": []},
-            thoughts_exhausted=True,
-            correctly_clustered=None,
         )
         repr_str = repr(cluster)
         assert "ClarityCluster" in repr_str
@@ -211,8 +197,6 @@ class TestClarityClusterComplexData:
                     }
                 ]
             },
-            thoughts_exhausted=True,
-            correctly_clustered=True,
         )
         cluster.validate()  # Should not raise
 
@@ -230,8 +214,6 @@ class TestClarityClusterComplexData:
                     }
                 ]
             },
-            thoughts_exhausted=False,
-            correctly_clustered=None,
         )
         cluster.validate()  # Should not raise
 
@@ -261,7 +243,5 @@ class TestClarityClusterComplexData:
                     },
                 ]
             },
-            thoughts_exhausted=True,
-            correctly_clustered=False,
         )
         cluster.validate()  # Should not raise

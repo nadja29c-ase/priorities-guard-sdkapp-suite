@@ -1,13 +1,14 @@
 """
-OAuth Session Service (Increment 19, hardened in Increment 20).
+OAuth Session Service.
 
 Manages browser sessions for cross-app user identification.
 Sessions are stored in the database and referenced by a cookie token.
 
-Security (Increment 20):
+Security:
 - Session tokens are hashed (SHA-256) before storage for O(1) indexed lookup
 - Session tokens are encrypted (Fernet) for audit/recovery
 - Lookup is by hash, never by plaintext token
+- Plaintext tokens are never stored in the database
 """
 
 import re
@@ -47,10 +48,10 @@ async def create_session(
     """
     Create a new session for a user.
 
-    Security (Increment 20):
+    Security:
     - Stores SHA-256 hash for indexed lookup
     - Stores Fernet-encrypted token for audit/recovery
-    - Plaintext stored temporarily (Phase 1, will be dropped in Phase 2)
+    - Plaintext token is returned but never stored
 
     Args:
         user_id: User's UUID
@@ -79,7 +80,6 @@ async def create_session(
     # Create session record
     session = OAuthSession(
         user_id=user_id,
-        session_token=session_token,  # Phase 1: Keep plaintext temporarily
         session_token_hash=session_token_hash,
         session_token_enc=session_token_enc,
         expires_at=expires_at,
@@ -108,9 +108,9 @@ async def get_session_user(
     Implements sliding window expiration: each successful lookup
     extends the session by SESSION_LIFETIME_DAYS (2 years).
 
-    Security (Increment 20):
+    Security:
     - Looks up by session_token_hash (indexed) instead of plaintext
-    - Falls back to session_token for legacy sessions (pre-migration)
+    - Plaintext tokens are never stored
 
     Args:
         token: Session token from cookie
@@ -134,13 +134,6 @@ async def get_session_user(
         select(OAuthSession).where(OAuthSession.session_token_hash == token_hash)
     )
     session = result.scalar_one_or_none()
-
-    # Fallback to plaintext lookup for legacy sessions (pre-migration)
-    if not session:
-        result = await db.execute(
-            select(OAuthSession).where(OAuthSession.session_token == token)
-        )
-        session = result.scalar_one_or_none()
 
     if not session:
         request_logger.debug("oauth.session.not_found")
@@ -183,9 +176,9 @@ async def delete_session(
     """
     Delete a session by token.
 
-    Security (Increment 20):
+    Security:
     - Deletes by session_token_hash (indexed)
-    - Falls back to session_token for legacy sessions (pre-migration)
+    - Plaintext tokens are never stored
 
     Args:
         token: Session token from cookie
@@ -208,12 +201,6 @@ async def delete_session(
     result = await db.execute(
         delete(OAuthSession).where(OAuthSession.session_token_hash == token_hash)
     )
-
-    # Fallback to plaintext delete for legacy sessions (pre-migration)
-    if result.rowcount == 0:
-        result = await db.execute(
-            delete(OAuthSession).where(OAuthSession.session_token == token)
-        )
 
     await db.commit()
 
