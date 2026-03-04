@@ -4,6 +4,8 @@ delete_goal tool for Priority Guardian MCP.
 Private widget-only tool for deleting goals.
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
@@ -12,6 +14,17 @@ from ..base import ToolDefinition, ToolUsageError
 from ..get_priorities import _normalize_priority
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """Wrap a coroutine with timeout."""
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
 # Tool Metadata
@@ -34,6 +47,7 @@ INPUT_SCHEMA = {
         },
     },
     "required": ["goal_id", "confirm"],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -72,14 +86,19 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if not confirm:
         raise ToolUsageError("confirm must be true to delete a goal")
 
-    # Call backend
+    # Call backend with timeout
+    import httpx
     try:
-        import httpx
-        response = await backend_delete(
-            f"/api/priority-guardian/goals/{goal_id}",
-            user_id,
-            correlation_id
+        response = await _call_with_timeout(
+            backend_delete(
+                f"/api/priority-guardian/goals/{goal_id}",
+                user_id,
+                correlation_id
+            ),
+            "Delete goal",
         )
+    except ToolUsageError:
+        raise  # Re-raise timeout errors
     except Exception as e:
         logger.error(
             "tool.delete_goal.backend_error",

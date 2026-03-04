@@ -13,13 +13,26 @@ Called by LLM:
 Implements increment_21 specification.
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get
-from .base import ToolDefinition
+from .base import ToolDefinition, ToolUsageError
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """Wrap a coroutine with timeout."""
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
 # Tool Metadata
@@ -46,6 +59,7 @@ INPUT_SCHEMA = {
     "type": "object",
     "properties": {},
     "required": [],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -303,26 +317,13 @@ async def handle(
         user_id=user_id,
     )
 
-    # Call backend
+    # Call backend with timeout
     endpoint = "/api/priority-guardian/patterns"
 
-    try:
-        result = await backend_get(endpoint, user_id, correlation_id)
-    except Exception as e:
-        logger.error(
-            "tool.get_patterns.backend_error",
-            correlation_id=correlation_id,
-            error=str(e),
-            error_type=type(e).__name__,
-        )
-        # Return generic error - don't expose internal details
-        return mcp_types.CallToolResult(
-            isError=True,
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Unable to analyze patterns at this time. Please try again.",
-            )],
-        )
+    result = await _call_with_timeout(
+        backend_get(endpoint, user_id, correlation_id),
+        "Patterns fetch",
+    )
 
     # Check for error response (backend returns 200 with success: false)
     if not result.get("success"):

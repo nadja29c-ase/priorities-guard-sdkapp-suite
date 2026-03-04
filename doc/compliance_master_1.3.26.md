@@ -208,6 +208,7 @@
 | 63 | Async error handling — wrap all async ops in try-catch | `[OpenAI]` | "Errors...must be well-handled with clear messaging or fallback behaviors" |
 | I1 | **Widget MIME type must be `text/html;profile=mcp-app`** | `[OpenAI]` | Required for widget rendering; host only enables MCP Apps bridge for this MIME type |
 | I2 | **Structured payloads must be trimmed to what the model needs** — oversized payloads degrade performance | `[Recommended]` | MCP Server Guide: Troubleshooting |
+| I3 | **`additionalProperties: false` required in all tool INPUT_SCHEMA objects** — must be set at top level and all nested `type: object` definitions. Missing this causes 400 Bad Request with "additionalProperties is required to be supplied and to be false" | `[OpenAI]` | API enforces at runtime; confirmed via GitHub issues and official examples |
 
 ---
 
@@ -253,7 +254,7 @@
 
 | Enforcer | Count | Impact |
 |----------|-------|--------|
-| `[OpenAI]` | **~49** | **Blocks submission** — fix before submitting |
+| `[OpenAI]` | **~50** | **Blocks submission** — fix before submitting |
 | `[OpenAI UI Guideline]` | 3 | **Likely scrutinized** — "don't" language in guidelines |
 | `[Sandbox]` | 1 | **App will fail** — iframe sandbox blocks cookies |
 | `[Google]` | ~14 | **Blocks OAuth verification** — only for apps using Google APIs |
@@ -327,6 +328,7 @@
 - [ ] Tool responses: no session IDs, trace IDs, timestamps, internal identifiers
 - [ ] Annotation justifications prepared with irreversibility descriptions and safeguards
 - [ ] No tool descriptions that manipulate model selection
+- [ ] `additionalProperties: false` in all INPUT_SCHEMA objects (top-level AND nested)
 
 **Data Minimization (enforceable):**
 - [ ] All tool inputs narrowly scoped to task

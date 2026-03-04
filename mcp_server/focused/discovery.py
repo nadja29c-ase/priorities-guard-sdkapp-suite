@@ -37,6 +37,7 @@ async def oauth_authorization_server():
         "authorization_endpoint": f"{OAUTH_ISSUER_URL}/authorize",
         "token_endpoint": f"{OAUTH_ISSUER_URL}/token",
         "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
+        "registration_endpoint": f"{OAUTH_ISSUER_URL}/register",
         "scopes_supported": SCOPES_SUPPORTED,
     }
 

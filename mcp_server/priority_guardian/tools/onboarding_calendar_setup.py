@@ -10,7 +10,9 @@ Three phases called in sequence:
 3. reflection_setup — introduces dashboard + weekly report, suggests recurring reflection event
 """
 
+import asyncio
 from datetime import date, timedelta
+
 import structlog
 from mcp import types as mcp_types
 
@@ -18,6 +20,30 @@ from mcp_server.priority_guardian.http_client import backend_get
 from .base import ToolDefinition, ToolUsageError
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """
+    Wrap a coroutine with timeout.
+
+    Args:
+        coro: Coroutine to execute
+        op_name: Operation name for error message
+
+    Returns:
+        Result of the coroutine
+
+    Raises:
+        ToolUsageError: On timeout
+    """
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
+
 
 # ============================================================================
 # Tool Metadata
@@ -87,10 +113,13 @@ async def _handle_keyword_education(
     week_start = last_monday.isoformat()
 
     try:
-        past_report = await backend_get(
-            f"/api/priority-guardian/weekly-report?week_start={week_start}",
-            user_id,
-            correlation_id,
+        past_report = await asyncio.wait_for(
+            backend_get(
+                f"/api/priority-guardian/weekly-report?week_start={week_start}",
+                user_id,
+                correlation_id,
+            ),
+            timeout=TIMEOUT_S,
         )
         if past_report.get("success") and past_report.get("data", {}).get("snapshot_saved"):
             logger.info(
@@ -99,7 +128,7 @@ async def _handle_keyword_education(
                 correlation_id=correlation_id,
                 snapshot_saved=True,
             )
-    except Exception as e:
+    except (asyncio.TimeoutError, Exception) as e:
         logger.warning(
             "onboarding.past_check_failed",
             user_id=user_id,
@@ -107,21 +136,15 @@ async def _handle_keyword_education(
             error=str(e),
         )
 
-    # Fetch priorities and connection status
-    try:
-        result = await backend_get(
+    # Fetch priorities and connection status (critical — raise on timeout)
+    result = await _call_with_timeout(
+        backend_get(
             "/api/priority-guardian/priorities",
             user_id,
             correlation_id,
-        )
-    except Exception as e:
-        logger.error(
-            "onboarding.priorities_fetch_failed",
-            user_id=user_id,
-            correlation_id=correlation_id,
-            error=str(e),
-        )
-        raise
+        ),
+        "Priorities fetch",
+    )
 
     if not result.get("success"):
         raise ToolUsageError("Failed to fetch priorities")
@@ -240,10 +263,13 @@ async def _handle_first_weekly_report(
     week_start = last_monday.isoformat()
 
     try:
-        past_report = await backend_get(
-            f"/api/priority-guardian/weekly-report?week_start={week_start}",
-            user_id,
-            correlation_id,
+        past_report = await asyncio.wait_for(
+            backend_get(
+                f"/api/priority-guardian/weekly-report?week_start={week_start}",
+                user_id,
+                correlation_id,
+            ),
+            timeout=TIMEOUT_S,
         )
         if past_report.get("success") and past_report.get("data", {}).get("snapshot_saved"):
             logger.info(
@@ -252,7 +278,7 @@ async def _handle_first_weekly_report(
                 correlation_id=correlation_id,
                 snapshot_saved=True,
             )
-    except Exception as e:
+    except (asyncio.TimeoutError, Exception) as e:
         logger.warning(
             "onboarding.past_check_failed",
             user_id=user_id,
@@ -260,21 +286,15 @@ async def _handle_first_weekly_report(
             error=str(e),
         )
 
-    # Fetch current week report (live computation, no persistence)
-    try:
-        result = await backend_get(
+    # Fetch current week report (critical — raise on timeout)
+    result = await _call_with_timeout(
+        backend_get(
             "/api/priority-guardian/weekly-report",
             user_id,
             correlation_id,
-        )
-    except Exception as e:
-        logger.error(
-            "onboarding.weekly_report_failed",
-            user_id=user_id,
-            correlation_id=correlation_id,
-            error=str(e),
-        )
-        raise
+        ),
+        "Weekly report fetch",
+    )
 
     if not result.get("success"):
         error = result.get("error", {})

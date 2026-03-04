@@ -5,14 +5,28 @@ Private widget-only tool for creating priorities post-onboarding.
 Same backend endpoint as create_priority but with private visibility.
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_post
 from ..base import ToolDefinition, ToolUsageError
+
 from ..get_priorities import _normalize_priority
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """Wrap a coroutine with timeout."""
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
 # Tool Metadata
@@ -62,6 +76,7 @@ INPUT_SCHEMA = {
         },
     },
     "required": ["name", "type"],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -135,36 +150,49 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         payload["checkpoint_date"] = checkpoint_date
         payload["initial_goal_text"] = initial_goal_text
 
-    # Call backend
+    # Call backend with timeout
+    import httpx
     try:
-        response = await backend_post(
-            "/api/priority-guardian/priorities",
-            payload,
-            user_id,
-            correlation_id
+        response = await _call_with_timeout(
+            backend_post(
+                "/api/priority-guardian/priorities",
+                payload,
+                user_id,
+                correlation_id
+            ),
+            "Create priority",
         )
+    except ToolUsageError:
+        raise  # Re-raise timeout errors
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            "tool.add_priority.backend_error",
+            correlation_id=correlation_id,
+            error=str(e),
+        )
+        if e.response.status_code == 409:
+            raise ToolUsageError("You already have 3 active priorities. Retire or delete one to add a new priority.")
+        if e.response.status_code == 404:
+            raise ToolUsageError("Priority not found.")
+        raise ToolUsageError("Failed to create priority. Please try again.")
     except Exception as e:
         logger.error(
             "tool.add_priority.backend_error",
             correlation_id=correlation_id,
             error=str(e),
         )
-        # Check for MAX_PRIORITIES_REACHED using proper httpx error handling
-        import httpx
-        if isinstance(e, httpx.HTTPStatusError):
-            if e.response.status_code == 409:
-                raise ToolUsageError("You already have 3 active priorities. Retire or delete one to add a new priority.")
-            if e.response.status_code == 404:
-                raise ToolUsageError("Priority not found.")
         raise ToolUsageError("Failed to create priority. Please try again.")
 
     # Extract priority data and fetch fresh list
     # Note: create_priority endpoint returns different shape, so we need to fetch fresh
     from mcp_server.priority_guardian.http_client import backend_get
-    fresh_response = await backend_get(
-        "/api/priority-guardian/priorities",
-        user_id,
-        correlation_id
+    fresh_response = await _call_with_timeout(
+        backend_get(
+            "/api/priority-guardian/priorities",
+            user_id,
+            correlation_id
+        ),
+        "Fetch priorities",
     )
 
     data = fresh_response.get("data", {})

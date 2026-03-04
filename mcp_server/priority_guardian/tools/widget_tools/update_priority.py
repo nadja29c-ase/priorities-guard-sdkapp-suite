@@ -4,6 +4,8 @@ update_priority tool for Priority Guardian MCP.
 Private widget-only tool for editing priority fields.
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
@@ -12,6 +14,17 @@ from ..base import ToolDefinition, ToolUsageError
 from ..get_priorities import _normalize_priority
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """Wrap a coroutine with timeout."""
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
 # Tool Metadata
@@ -111,15 +124,20 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if not payload:
         raise ToolUsageError("No fields provided to update.")
 
-    # Call backend - mutation endpoints return full priority list
+    # Call backend with timeout - mutation endpoints return full priority list
     import httpx
     try:
-        response = await backend_put(
-            f"/api/priority-guardian/priorities/{priority_id}",
-            payload,
-            user_id,
-            correlation_id
+        response = await _call_with_timeout(
+            backend_put(
+                f"/api/priority-guardian/priorities/{priority_id}",
+                payload,
+                user_id,
+                correlation_id
+            ),
+            "Update priority",
         )
+    except ToolUsageError:
+        raise  # Re-raise timeout errors
     except httpx.HTTPStatusError as e:
         status_code = e.response.status_code
         logger.warning(

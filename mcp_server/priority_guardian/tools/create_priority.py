@@ -10,14 +10,27 @@ Three-layer validation model:
 3. Backend (domain): Business rules (conditional fields, future dates, max 3)
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_post, backend_get
 from mcp_server.priority_guardian.tools.get_priorities import _normalize_priority
-from .base import ToolDefinition
+from .base import ToolDefinition, ToolUsageError
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """Wrap a coroutine with timeout."""
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
 # Tool Metadata
@@ -481,14 +494,17 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         payload["initial_goal_text"] = initial_goal_text
 
     # -------------------------------------------------------------------------
-    # Step 4: Call backend to create priority
+    # Step 4: Call backend to create priority (with timeout)
     # -------------------------------------------------------------------------
     try:
-        response = await backend_post(
-            "/api/priority-guardian/priorities",
-            payload,
-            user_id,
-            correlation_id
+        response = await _call_with_timeout(
+            backend_post(
+                "/api/priority-guardian/priorities",
+                payload,
+                user_id,
+                correlation_id
+            ),
+            "Create priority",
         )
 
         # Check if backend returned an error (4xx returns JSON, not exception)
@@ -522,13 +538,16 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         )
 
         # -------------------------------------------------------------------------
-        # Step 6: Fetch fresh priorities for widget rendering
+        # Step 6: Fetch fresh priorities for widget rendering (with timeout)
         # -------------------------------------------------------------------------
         try:
-            fresh_response = await backend_get(
-                "/api/priority-guardian/priorities",
-                user_id,
-                correlation_id
+            fresh_response = await _call_with_timeout(
+                backend_get(
+                    "/api/priority-guardian/priorities",
+                    user_id,
+                    correlation_id
+                ),
+                "Fetch priorities",
             )
 
             data = fresh_response.get("data", {})
@@ -539,7 +558,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
             priorities = [_normalize_priority(p) for p in raw_priorities]
 
-        except Exception as get_error:
+        except (ToolUsageError, Exception) as get_error:
             # GET failed after POST succeeded - use POST response data as fallback
             logger.warning(
                 "tool.create_priority.get_after_post_failed",

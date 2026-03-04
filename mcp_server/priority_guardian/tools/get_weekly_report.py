@@ -9,6 +9,8 @@ On second call (with semantic_groupings): Shows priority slices + user-confirmed
 semantic category slices. No persistence - purely conversational refinement.
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
@@ -72,6 +74,7 @@ INPUT_SCHEMA = {
                     },
                 },
                 "required": ["category", "hours", "event_count"],
+                "additionalProperties": False,
             },
         },
         "semantic_target": {
@@ -87,12 +90,37 @@ INPUT_SCHEMA = {
         },
     },
     "required": [],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
 
-# Timeout for backend call (seconds)
-BACKEND_TIMEOUT = 15.0
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+# ============================================================================
+# Helpers
+# ============================================================================
+
+async def _call_with_timeout(coro, op_name: str):
+    """
+    Wrap a coroutine with timeout.
+
+    Args:
+        coro: Coroutine to execute
+        op_name: Operation name for error message
+
+    Returns:
+        Result of the coroutine
+
+    Raises:
+        ToolUsageError: On timeout
+    """
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 
 # ============================================================================
@@ -493,17 +521,11 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if week_start:
         endpoint = f"{endpoint}?week_start={week_start}"
 
-    # Call backend
-    try:
-        result = await backend_get(endpoint, user_id, correlation_id)
-    except Exception as e:
-        logger.error(
-            "tool.get_weekly_report.backend_error",
-            correlation_id=correlation_id,
-            error=str(e),
-            error_type=type(e).__name__,
-        )
-        raise
+    # Call backend with timeout
+    result = await _call_with_timeout(
+        backend_get(endpoint, user_id, correlation_id),
+        "Weekly report fetch",
+    )
 
     # Check for error response
     if not result.get("success"):

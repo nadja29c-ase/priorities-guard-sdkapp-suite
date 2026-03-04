@@ -28,6 +28,7 @@ INPUT_SCHEMA = {
     "type": "object",
     "properties": {},
     "required": [],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]

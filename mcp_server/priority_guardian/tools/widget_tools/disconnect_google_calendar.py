@@ -4,13 +4,26 @@ disconnect_google_calendar tool for Priority Guardian MCP.
 Disconnect Google Calendar and revoke tokens.
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get, backend_post
-from ..base import ToolDefinition
+from ..base import ToolDefinition, ToolUsageError
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """Wrap a coroutine with timeout."""
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
 # Tool Metadata
@@ -29,6 +42,7 @@ INPUT_SCHEMA = {
         },
     },
     "required": [],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -88,11 +102,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             isError=True,
         )
 
-    # Check if connected first (PG backend path)
-    status_response = await backend_get(
-        "/api/priority-guardian/google/connection-status",
-        user_id,
-        correlation_id
+    # Check if connected first (PG backend path) with timeout
+    status_response = await _call_with_timeout(
+        backend_get(
+            "/api/priority-guardian/google/connection-status",
+            user_id,
+            correlation_id
+        ),
+        "Check connection status",
     )
 
     if not status_response.get("connected"):
@@ -118,12 +135,15 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             },
         )
 
-    # Call disconnect endpoint (PG backend path)
-    await backend_post(
-        "/api/priority-guardian/disconnect",
-        {},
-        user_id,
-        correlation_id
+    # Call disconnect endpoint (PG backend path) with timeout
+    await _call_with_timeout(
+        backend_post(
+            "/api/priority-guardian/disconnect",
+            {},
+            user_id,
+            correlation_id
+        ),
+        "Disconnect calendar",
     )
 
     logger.info(

@@ -107,6 +107,11 @@ class TestDiscoveryEndpointsMcpSuffix:
         assert "jwks_uri" in data
         assert isinstance(data["jwks_uri"], str)
 
+        # B2-3: registration_endpoint required for ChatGPT DCR discovery
+        assert "registration_endpoint" in data
+        assert isinstance(data["registration_endpoint"], str)
+        assert data["registration_endpoint"].endswith("/register")
+
     @pytest.mark.asyncio
     async def test_mcp_suffix_matches_root(self, pg_app):
         """Root and /mcp suffixed endpoints return identical JSON.

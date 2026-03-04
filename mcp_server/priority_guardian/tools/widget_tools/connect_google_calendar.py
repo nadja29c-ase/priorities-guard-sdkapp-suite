@@ -4,13 +4,26 @@ connect_google_calendar tool for Priority Guardian MCP.
 Check Google Calendar connection status and provide connect URL if needed.
 """
 
+import asyncio
+
 import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get, backend_post
-from ..base import ToolDefinition
+from ..base import ToolDefinition, ToolUsageError
 
 logger = structlog.get_logger(__name__)
+
+# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
+TIMEOUT_S = 8.0
+
+
+async def _call_with_timeout(coro, op_name: str):
+    """Wrap a coroutine with timeout."""
+    try:
+        return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
+    except asyncio.TimeoutError:
+        raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
 # Tool Metadata
@@ -24,6 +37,7 @@ INPUT_SCHEMA = {
     "type": "object",
     "properties": {},
     "required": [],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["pg.access"]
@@ -55,11 +69,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         user_id=user_id
     )
 
-    # Check current connection status (PG backend path)
-    status_response = await backend_get(
-        "/api/priority-guardian/google/connection-status",
-        user_id,
-        correlation_id
+    # Check current connection status (PG backend path) with timeout
+    status_response = await _call_with_timeout(
+        backend_get(
+            "/api/priority-guardian/google/connection-status",
+            user_id,
+            correlation_id
+        ),
+        "Check connection status",
     )
 
     if status_response.get("connected"):
@@ -86,12 +103,15 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             },
         )
 
-    # Not connected - get connection URL (PG backend path)
-    initiate_response = await backend_post(
-        "/api/priority-guardian/google/initiate-connection",
-        {},
-        user_id,
-        correlation_id
+    # Not connected - get connection URL (PG backend path) with timeout
+    initiate_response = await _call_with_timeout(
+        backend_post(
+            "/api/priority-guardian/google/initiate-connection",
+            {},
+            user_id,
+            correlation_id
+        ),
+        "Initiate connection",
     )
 
     # Extract token prefix for logging (handle missing or non-string tokens safely)
