@@ -14,7 +14,7 @@ from mcp_server.priority_guardian.tools.get_priorities import (
     handle,
     _normalize_priority,
     _fetch_with_timeout,
-    BACKEND_TIMEOUT,
+    TIMEOUT_S,
 )
 
 
@@ -344,7 +344,7 @@ class TestCalendarTimeout:
 
             # Use a shorter timeout for testing
             with patch(
-                "mcp_server.priority_guardian.tools.get_priorities.BACKEND_TIMEOUT",
+                "mcp_server.priority_guardian.tools.get_priorities.TIMEOUT_S",
                 0.1,  # 100ms timeout
             ):
                 result = await handle("user-123", "corr-123", {})
@@ -376,7 +376,7 @@ class TestCalendarTimeout:
             mock_backend.side_effect = mock_get
 
             with patch(
-                "mcp_server.priority_guardian.tools.get_priorities.BACKEND_TIMEOUT",
+                "mcp_server.priority_guardian.tools.get_priorities.TIMEOUT_S",
                 0.1,
             ):
                 result = await handle("user-123", "corr-123", {})
@@ -395,7 +395,9 @@ class TestPrioritiesFailure:
 
     @pytest.mark.asyncio
     async def test_raises_when_priorities_fails(self, mock_calendar_response):
-        """Raises exception when priorities endpoint fails."""
+        """Raises ToolUsageError when priorities endpoint fails."""
+        from mcp_server.priority_guardian.tools.base import ToolUsageError
+
         with patch(
             "mcp_server.priority_guardian.tools.get_priorities.backend_get",
             new_callable=AsyncMock,
@@ -405,14 +407,16 @@ class TestPrioritiesFailure:
                 mock_calendar_response,
             ]
 
-            with pytest.raises(Exception) as exc_info:
+            with pytest.raises(ToolUsageError) as exc_info:
                 await handle("user-123", "corr-123", {})
 
-            assert "Priorities API error" in str(exc_info.value)
+            assert "Unable to load priorities" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_raises_when_priorities_times_out(self, mock_calendar_response):
-        """Raises exception when priorities endpoint times out."""
+        """Raises ToolUsageError when priorities endpoint times out."""
+        from mcp_server.priority_guardian.tools.base import ToolUsageError
+
         with patch(
             "mcp_server.priority_guardian.tools.get_priorities.backend_get",
             new_callable=AsyncMock,
@@ -427,11 +431,13 @@ class TestPrioritiesFailure:
             mock_backend.side_effect = mock_get
 
             with patch(
-                "mcp_server.priority_guardian.tools.get_priorities.BACKEND_TIMEOUT",
+                "mcp_server.priority_guardian.tools.get_priorities.TIMEOUT_S",
                 0.1,
             ):
-                with pytest.raises(TimeoutError):
+                with pytest.raises(ToolUsageError) as exc_info:
                     await handle("user-123", "corr-123", {})
+
+            assert "Unable to load priorities" in str(exc_info.value)
 
 
 # =============================================================================

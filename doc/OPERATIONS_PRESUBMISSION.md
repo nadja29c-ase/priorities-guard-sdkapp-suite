@@ -169,7 +169,9 @@ curl -I https://<MCP_SERVER>/mcp
 
 ## Latency Testing
 
-**Tool calls must complete within 8 seconds (TIMEOUT_S in mcp_auth.py).**
+**Run against production Render services, not localhost. Use `python ops/pg_latency_check.py`.**
+
+Tool calls must complete within 8 seconds (TIMEOUT_S in mcp_auth.py).
 
 - [ ] Each tool responds under 8s on first call (cold start)
 - [ ] Each tool responds under 3s on subsequent calls (warm)

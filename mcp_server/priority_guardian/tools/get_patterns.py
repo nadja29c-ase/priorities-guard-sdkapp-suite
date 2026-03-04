@@ -27,11 +27,17 @@ logger = structlog.get_logger(__name__)
 TIMEOUT_S = 8.0
 
 
-async def _call_with_timeout(coro, op_name: str):
+async def _call_with_timeout(coro, op_name: str, correlation_id: str):
     """Wrap a coroutine with timeout."""
     try:
         return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
     except asyncio.TimeoutError:
+        logger.warning(
+            "tool.get_patterns.timeout",
+            correlation_id=correlation_id,
+            op_name=op_name,
+            timeout=TIMEOUT_S,
+        )
         raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
@@ -323,6 +329,7 @@ async def handle(
     result = await _call_with_timeout(
         backend_get(endpoint, user_id, correlation_id),
         "Patterns fetch",
+        correlation_id,
     )
 
     # Check for error response (backend returns 200 with success: false)

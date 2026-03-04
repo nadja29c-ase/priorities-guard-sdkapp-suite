@@ -103,13 +103,14 @@ TIMEOUT_S = 8.0
 # Helpers
 # ============================================================================
 
-async def _call_with_timeout(coro, op_name: str):
+async def _call_with_timeout(coro, op_name: str, correlation_id: str):
     """
     Wrap a coroutine with timeout.
 
     Args:
         coro: Coroutine to execute
         op_name: Operation name for error message
+        correlation_id: Correlation ID for logging
 
     Returns:
         Result of the coroutine
@@ -120,6 +121,12 @@ async def _call_with_timeout(coro, op_name: str):
     try:
         return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
     except asyncio.TimeoutError:
+        logger.warning(
+            "tool.get_weekly_report.timeout",
+            correlation_id=correlation_id,
+            op_name=op_name,
+            timeout=TIMEOUT_S,
+        )
         raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 
@@ -278,7 +285,7 @@ def _build_pie_slices(
     time_allocation: dict,
     semantic_groupings: list[dict] | None,
     semantic_target: str | None,
-) -> tuple[list[dict], str | None]:
+) -> list[dict]:
     """
     Build pie chart slices from priorities and time allocation.
 
@@ -295,7 +302,7 @@ def _build_pie_slices(
         semantic_target: Which category to explode ("P1", "P2", "P3", or "other")
 
     Returns:
-        Tuple of (slices list, validation error message or None)
+        List of pie chart slices
 
     Raises:
         ToolUsageError: For input validation failures
@@ -411,7 +418,7 @@ def _build_pie_slices(
                 "type": "semantic",
             })
 
-    return slices, None
+    return slices
 
 
 def _build_assistant_guidance(
@@ -525,6 +532,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     result = await _call_with_timeout(
         backend_get(endpoint, user_id, correlation_id),
         "Weekly report fetch",
+        correlation_id,
     )
 
     # Check for error response
@@ -611,27 +619,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         )
 
     # Build pie chart slices (validates semantic_groupings/semantic_target if provided)
-    try:
-        slices, validation_error = _build_pie_slices(
-            priorities, time_allocation, semantic_groupings, semantic_target
-        )
-    except ToolUsageError:
-        # Re-raise ToolUsageError (input validation failures)
-        raise
-
-    if validation_error:
-        logger.warning(
-            "tool.get_weekly_report.validation_error",
-            correlation_id=correlation_id,
-            error=validation_error,
-        )
-        return mcp_types.CallToolResult(
-            isError=True,
-            content=[mcp_types.TextContent(
-                type="text",
-                text=validation_error
-            )],
-        )
+    # ToolUsageError raised on validation failures propagates to dispatcher
+    slices = _build_pie_slices(
+        priorities, time_allocation, semantic_groupings, semantic_target
+    )
 
     # Normalize data for response
     normalized_priorities = [_normalize_priority_report(p) for p in priorities]

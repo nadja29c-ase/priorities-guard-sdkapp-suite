@@ -12,7 +12,7 @@ import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get, backend_post
-from .base import ToolDefinition
+from .base import ToolDefinition, ToolUsageError
 
 logger = structlog.get_logger(__name__)
 
@@ -37,7 +37,7 @@ WIDGET_URI = "ui://widget/pg-dashboard.html"
 
 # Timeout for each backend call (seconds)
 # Must be less than MCP's 10-second tool timeout
-BACKEND_TIMEOUT = 8.0
+TIMEOUT_S = 8.0
 
 
 # ============================================================================
@@ -199,9 +199,9 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     # _fetch_with_timeout already catches exceptions and returns them as values,
     # so we don't need return_exceptions=True on gather
     results = await asyncio.gather(
-        _fetch_with_timeout(priorities_coro, BACKEND_TIMEOUT, "priorities", correlation_id),
-        _fetch_with_timeout(calendar_coro, BACKEND_TIMEOUT, "calendar", correlation_id),
-        _fetch_with_timeout(snapshot_coro, BACKEND_TIMEOUT, "snapshots", correlation_id),
+        _fetch_with_timeout(priorities_coro, TIMEOUT_S, "priorities", correlation_id),
+        _fetch_with_timeout(calendar_coro, TIMEOUT_S, "calendar", correlation_id),
+        _fetch_with_timeout(snapshot_coro, TIMEOUT_S, "snapshots", correlation_id),
     )
 
     priorities_result = results[0]
@@ -236,7 +236,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             correlation_id=correlation_id,
             error=str(priorities_result),
         )
-        raise priorities_result
+        raise ToolUsageError("Unable to load priorities. Please try again.")
 
     # Extract priorities data
     data = priorities_result.get("data", {})

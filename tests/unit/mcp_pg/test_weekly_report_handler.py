@@ -42,9 +42,8 @@ class TestBuildPieSlices:
             "other_hours": 2.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
+        slices = _build_pie_slices(priorities, time_allocation, None, None)
 
-        assert error is None
         priority_slices = [s for s in slices if s["type"] == "priority"]
         assert len(priority_slices) == 2
         assert priority_slices[0]["label"] == "P1: Build PG"
@@ -64,9 +63,8 @@ class TestBuildPieSlices:
             "other_hours": 2.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
+        slices = _build_pie_slices(priorities, time_allocation, None, None)
 
-        assert error is None
         priority_slices = [s for s in slices if s["type"] == "priority"]
         assert len(priority_slices) == 1
         assert priority_slices[0]["keyword"] == "P1"
@@ -79,9 +77,8 @@ class TestBuildPieSlices:
             "other_hours": 5.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
+        slices = _build_pie_slices(priorities, time_allocation, None, None)
 
-        assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
         assert len(semantic_slices) == 1
         assert semantic_slices[0]["label"] == "Other"
@@ -95,9 +92,8 @@ class TestBuildPieSlices:
             "other_hours": 0.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
+        slices = _build_pie_slices(priorities, time_allocation, None, None)
 
-        assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
         assert len(semantic_slices) == 0
 
@@ -114,9 +110,8 @@ class TestBuildPieSlices:
         ]
 
         # Without semantic_target, defaults to "other" (backwards compatible)
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, None)
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, None)
 
-        assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
         assert len(semantic_slices) == 2
         assert semantic_slices[0]["label"] == "Client calls"
@@ -134,9 +129,8 @@ class TestBuildPieSlices:
             "other_hours": 5.0,
         }
 
-        slices, error = _build_pie_slices(priorities, time_allocation, [], None)
+        slices = _build_pie_slices(priorities, time_allocation, [], None)
 
-        assert error is None
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
         assert len(semantic_slices) == 1
         assert semantic_slices[0]["label"] == "Other"
@@ -161,9 +155,8 @@ class TestBuildPieSlices:
             {"category": "Meetings", "hours": 0.0, "event_count": 0},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, None)
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, None)
 
-        assert error is None
         # Priority slices for P1 and P2
         priority_slices = [s for s in slices if s["type"] == "priority"]
         assert len(priority_slices) == 2
@@ -217,9 +210,8 @@ class TestSliceValidation:
             {"category": "Admin", "hours": 4.4, "event_count": 3},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
-        assert error is None
         assert len(slices) == 2
 
     def test_no_normalization_of_user_hours(self):
@@ -234,9 +226,8 @@ class TestSliceValidation:
             {"category": "Admin", "hours": 3.3, "event_count": 3},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
-        assert error is None
         # Hours match exactly what user provided
         assert slices[0]["hours"] == 5.5
         assert slices[1]["hours"] == 3.3
@@ -258,9 +249,8 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.5, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
-        assert error is None
         assert len(slices) == 3
         uncategorized = [s for s in slices if s["label"] == "Uncategorized"]
         assert len(uncategorized) == 1
@@ -280,9 +270,8 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.8, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
-        assert error is None
         assert len(slices) == 2
         assert not any(s["label"] == "Uncategorized" for s in slices)
 
@@ -298,9 +287,8 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.0, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
-        assert error is None
         assert len(slices) == 2
         assert not any(s["label"] == "Uncategorized" for s in slices)
 
@@ -317,9 +305,8 @@ class TestRemainderHandling:
             {"category": "Admin", "hours": 4.4, "event_count": 3},
         ]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
-        assert error is None
         assert len(slices) == 2
         # No Uncategorized slice with negative hours
         assert not any(s["label"] == "Uncategorized" for s in slices)
@@ -800,11 +787,10 @@ class TestPriorityZoom:
             {"category": "Bug fixes", "hours": 4.0, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             priorities, time_allocation, semantic_groupings, "P1"
         )
 
-        assert error is None
 
         # P1 should NOT have a single priority slice
         p1_priority_slices = [s for s in slices if s.get("keyword") == "P1"]
@@ -841,11 +827,10 @@ class TestPriorityZoom:
             {"category": "Deliverables", "hours": 3.0, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             priorities, time_allocation, semantic_groupings, "P2"
         )
 
-        assert error is None
 
         # P2 should NOT have a single priority slice
         p2_priority_slices = [s for s in slices if s.get("keyword") == "P2"]
@@ -872,11 +857,10 @@ class TestPriorityZoom:
             {"category": "Admin", "hours": 3.0, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             priorities, time_allocation, semantic_groupings, "other"
         )
 
-        assert error is None
 
         # P1 should remain as single slice
         p1_slices = [s for s in slices if s.get("keyword") == "P1"]
@@ -904,11 +888,10 @@ class TestPriorityZoom:
             {"category": "Bug fixes", "hours": 3.5, "event_count": 2},
         ]
 
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             priorities, time_allocation, semantic_groupings, "P1"
         )
 
-        assert error is None
         uncategorized = [s for s in slices if s["label"] == "Uncategorized"]
         assert len(uncategorized) == 1
         assert uncategorized[0]["hours"] == 0.5
@@ -931,11 +914,10 @@ class TestPriorityZoom:
             {"category": "Reading", "hours": 0.0, "event_count": 0},
         ]
 
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             priorities, time_allocation, semantic_groupings, "P3"
         )
 
-        assert error is None
         # P3 subcategories present (even if 0h)
         semantic_slices = [s for s in slices if s["type"] == "semantic"]
         # Should have at least the Reading slice (even at 0h)
@@ -960,11 +942,10 @@ class TestBackwardsCompatibility:
         ]
 
         # No semantic_target - should default to "other"
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             priorities, time_allocation, semantic_groupings, None
         )
 
-        assert error is None
 
         # Other should NOT exist, replaced by semantic categories
         other_slices = [s for s in slices if s["label"] == "Other"]

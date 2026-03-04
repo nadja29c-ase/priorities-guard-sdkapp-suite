@@ -430,6 +430,12 @@ class TestTimeoutConstants:
 class TestNoBackendTimeout:
     """Test that BACKEND_TIMEOUT has been removed from all files."""
 
+    def test_get_priorities_no_backend_timeout(self):
+        """get_priorities should not have BACKEND_TIMEOUT."""
+        from mcp_server.priority_guardian.tools import get_priorities
+
+        assert not hasattr(get_priorities, "BACKEND_TIMEOUT")
+
     def test_get_weekly_report_no_backend_timeout(self):
         """get_weekly_report should not have BACKEND_TIMEOUT."""
         from mcp_server.priority_guardian.tools import get_weekly_report

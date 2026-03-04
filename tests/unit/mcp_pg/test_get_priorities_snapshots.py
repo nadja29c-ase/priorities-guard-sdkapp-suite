@@ -153,7 +153,7 @@ class TestSnapshotEndpointIntegration:
         ) as mock_get, patch(
             "mcp_server.priority_guardian.tools.get_priorities.backend_post"
         ) as mock_post, patch(
-            "mcp_server.priority_guardian.tools.get_priorities.BACKEND_TIMEOUT", 0.01
+            "mcp_server.priority_guardian.tools.get_priorities.TIMEOUT_S", 0.01
         ):
             mock_get.side_effect = [priorities_response, calendar_response]
             mock_post.side_effect = slow_snapshot
