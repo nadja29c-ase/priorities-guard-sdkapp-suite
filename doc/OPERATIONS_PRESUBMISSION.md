@@ -105,6 +105,35 @@ If any of these three differ, JWT validation will fail with `invalid_token` on e
 grep -o 'style="[^"]*#[0-9a-fA-F]' dist/pg-dashboard.html
 ```
 
+## Accessibility Testing
+
+**Required for OpenAI store submission (compliance_master item 6).**
+
+- [ ] **Keyboard navigation**: all interactive elements reachable via Tab, activatable via Enter/Space
+- [ ] **Focus indicators**: visible focus ring on all focusable elements
+- [ ] **ARIA labels**: buttons, icons, and interactive elements have `aria-label` or visible text
+- [ ] **Color contrast**: text meets WCAG AA (4.5:1 for normal text, 3:1 for large text)
+- [ ] **No color-only indicators**: status/errors conveyed by more than color alone (icons, text)
+- [ ] **Readable text**: minimum 14px font size, adequate line spacing
+
+### Quick checks
+
+```bash
+# Check for missing aria-labels on buttons/icons in widget HTML
+grep -E '<button[^>]*>' dist/pg-dashboard.html | grep -v 'aria-label'
+
+# Check for images without alt text
+grep -E '<img[^>]*>' dist/pg-dashboard.html | grep -v 'alt='
+```
+
+### Manual verification
+
+1. Open widget in browser, unplug mouse
+2. Tab through all interactive elements — verify focus order is logical
+3. Activate buttons/links with Enter/Space — verify they work
+4. Use browser dev tools accessibility panel to audit ARIA tree
+5. Test with screen reader (VoiceOver on macOS: Cmd+F5)
+
 ## Hardcoded Values Scan
 
 - [ ] Scan codebase for hardcoded production domains that should use config
