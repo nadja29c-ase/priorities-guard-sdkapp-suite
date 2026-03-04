@@ -166,6 +166,32 @@ curl https://<MCP_SERVER>/\.well-known/oauth-authorization-server
 curl -I https://<MCP_SERVER>/mcp
 ```
 
+## Latency Testing
+
+**Tool calls must complete within 8 seconds (TIMEOUT_S in mcp_auth.py).**
+
+- [ ] Each tool responds under 8s on first call (cold start)
+- [ ] Each tool responds under 3s on subsequent calls (warm)
+- [ ] Timeout error message is user-friendly, not stack trace
+- [ ] No tools hang indefinitely under normal conditions
+
+```bash
+# Measure tool latency (requires valid JWT)
+time curl -X POST https://<MCP_SERVER>/mcp \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"method": "tools/call", "params": {"name": "<TOOL_NAME>", "arguments": {}}}'
+
+# Check multiple tools in sequence
+for tool in get_today get_week get_patterns; do
+  echo "Testing $tool..."
+  time curl -s -X POST https://<MCP_SERVER>/mcp \
+    -H "Authorization: Bearer <TOKEN>" \
+    -H "Content-Type: application/json" \
+    -d "{\"method\": \"tools/call\", \"params\": {\"name\": \"$tool\", \"arguments\": {}}}" > /dev/null
+done
+```
+
 ## Data Minimization
 
 - [ ] OAuth scopes are minimal (read-only where possible, no unnecessary permissions)
