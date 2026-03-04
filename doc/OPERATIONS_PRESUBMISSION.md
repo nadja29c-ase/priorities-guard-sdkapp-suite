@@ -9,6 +9,7 @@ Run through this checklist before submitting any SDK app to the OpenAI store.
 - [ ] All `required=True` config values have env vars set (will fail-fast at startup if missing)
 - [ ] `INTERNAL_API_SECRET` set and matching between backend and MCP server(s)
 - [ ] `CORS_ALLOWED_ORIGINS` explicitly set (required in production)
+- [ ] **Upgrade Render from Free to Hobby tier** — free tier spins down after inactivity, causing cold starts that can exceed OpenAI's timeout on first tool call
 
 ## Domain / ui.domain Verification
 
