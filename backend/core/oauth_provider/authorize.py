@@ -311,6 +311,7 @@ async def authorize_endpoint(
     state: str | None = None,
     nonce: str | None = None,
     login_hint: str | None = None,
+    resource: str | None = None,
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -329,6 +330,7 @@ async def authorize_endpoint(
         state: Optional CSRF token
         nonce: Optional OpenID Connect nonce
         login_hint: Optional - ChatGPT user ID for user identification
+        resource: Optional - MCP server URL for JWT aud claim (RFC 9728 B2-5)
 
     Returns:
         HTML consent screen on success
@@ -373,6 +375,8 @@ async def authorize_endpoint(
     # We don't implement full OpenID Connect, and ChatGPT doesn't require nonce validation.
     # It's passed through to the authorization code for clients that want it.
     nonce = _normalize(nonce)
+    # Resource parameter (RFC 9728 B2-5): MCP server URL for JWT aud claim
+    resource = _normalize(resource)
 
     # =========================================================================
     # VALIDATE REQUIRED PARAMETERS BEFORE ANY REDIRECTS
@@ -623,6 +627,7 @@ async def authorize_endpoint(
         user_id=str(user.id),  # Internal UUID, not chatgpt_user_id
         state=state,
         nonce=nonce,
+        resource=resource,  # RFC 9728 B2-5
         correlation_id=correlation_id
     )
 

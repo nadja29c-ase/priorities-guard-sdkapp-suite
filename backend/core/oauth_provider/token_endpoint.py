@@ -64,6 +64,7 @@ async def token_endpoint(
     code_verifier: str | None = Form(None),
     refresh_token: str | None = Form(None),
     client_id: str | None = Form(None),
+    resource: str | None = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -81,6 +82,7 @@ async def token_endpoint(
             code_verifier: PKCE code verifier
             client_id: OAuth client ID
             redirect_uri: Must match original request
+            resource: Optional MCP server URL (RFC 9728 B2-5)
 
         For refresh_token:
             refresh_token: Refresh token from previous /token response
@@ -190,6 +192,7 @@ async def token_endpoint(
             code_verifier=code_verifier,
             client_id=client_id,
             redirect_uri=redirect_uri,
+            resource=resource,  # RFC 9728 B2-5
             correlation_id=correlation_id
         )
 

@@ -5,7 +5,9 @@ All configuration values loaded from environment variables.
 """
 
 import base64
-from pydantic import model_validator
+from typing import ClassVar
+
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -46,6 +48,19 @@ class Settings(BaseSettings):
     OAUTH_ISSUER: str = "https://www.priority-guard.com"
     OAUTH_TOKEN_EXPIRY_SECONDS: int = 3600  # 1 hour
     OAUTH_REFRESH_TOKEN_EXPIRY_DAYS: int = 30
+
+    # RFC 9728 B2-8: Redirect URI allowlist for DCR
+    # Only these URIs are accepted during dynamic client registration.
+    # In dev mode, localhost URIs are also accepted for testing.
+    # ChatGPT redirect URIs (production allowlist):
+    # ClassVar ensures Pydantic v2 treats this as a class constant, not a field
+    _CHATGPT_REDIRECT_URIS: ClassVar[list[str]] = [
+        "https://chatgpt.com/connector_platform_oauth_redirect",
+        "https://platform.openai.com/apps-manage/oauth",
+    ]
+
+    # Populated by build_allowed_redirect_uris validator at startup
+    OAUTH_ALLOWED_REDIRECT_URIS: list[str] = Field(default_factory=list)
 
     # Public URL for browser-facing endpoints (Increment 18)
     # Used for constructing OAuth initiation URLs shown to users
@@ -94,6 +109,25 @@ class Settings(BaseSettings):
         if self.DATABASE_URL and self.DATABASE_URL.startswith("postgresql://"):
             object.__setattr__(self, 'DATABASE_URL',
                 self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1))
+        return self
+
+    @model_validator(mode='after')
+    def build_allowed_redirect_uris(self) -> 'Settings':
+        """Build allowed redirect URIs based on environment.
+
+        In production: Only ChatGPT redirect URIs.
+        In dev mode: ChatGPT URIs + localhost URIs for testing.
+        """
+        allowed = list(self._CHATGPT_REDIRECT_URIS)
+        is_dev = self.ENV.lower() in ("dev", "development", "local", "test")
+        if is_dev:
+            allowed.extend([
+                "http://localhost:3000/callback",
+                "http://localhost:8000/callback",
+                "http://127.0.0.1:3000/callback",
+                "http://127.0.0.1:8000/callback",
+            ])
+        object.__setattr__(self, 'OAUTH_ALLOWED_REDIRECT_URIS', allowed)
         return self
 
     class Config:

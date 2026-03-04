@@ -146,6 +146,7 @@ async def consent_endpoint(
     scope = auth_context["scope"]
     state = auth_context.get("state") or None
     nonce = auth_context.get("nonce") or None
+    resource = auth_context.get("resource") or None  # RFC 9728 B2-5
     redirect_uri = auth_context["redirect_uri"]
     user_id = auth_context["user_id"]
 
@@ -175,6 +176,7 @@ async def consent_endpoint(
         scope=scope,
         state=state,
         nonce=nonce,
+        resource=resource,  # RFC 9728 B2-5
         correlation_id=correlation_id
     )
 

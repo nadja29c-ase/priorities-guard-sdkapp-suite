@@ -33,6 +33,7 @@ async def create_authorization_context(
     user_id: str,
     state: str | None = None,
     nonce: str | None = None,
+    resource: str | None = None,
     correlation_id: str | None = None
 ) -> str:
     """
@@ -51,6 +52,7 @@ async def create_authorization_context(
         user_id: Authenticated user ID
         state: Optional CSRF token
         nonce: Optional OpenID Connect nonce
+        resource: Optional resource parameter (RFC 9728 B2-5)
         correlation_id: Optional correlation ID for logging
 
     Returns:
@@ -78,6 +80,7 @@ async def create_authorization_context(
         "scope": scope,
         "state": state or "",
         "nonce": nonce or "",
+        "resource": resource or "",  # RFC 9728 B2-5
         "redirect_uri": redirect_uri,
         "user_id": user_id,
         "expires_at": int(time.time()) + AUTH_CONTEXT_TTL

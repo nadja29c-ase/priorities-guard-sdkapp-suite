@@ -34,6 +34,7 @@ async def exchange_authorization_code(
     code_verifier: str,
     client_id: str,
     redirect_uri: str,
+    resource: str | None = None,
     correlation_id: str | None = None
 ) -> dict | tuple[str, str]:
     """
@@ -58,6 +59,7 @@ async def exchange_authorization_code(
         code_verifier: PKCE code verifier
         client_id: Client identifier
         redirect_uri: Redirect URI
+        resource: Optional resource parameter (RFC 9728 B2-5)
         correlation_id: Optional correlation ID for logging
 
     Returns:
@@ -109,6 +111,30 @@ async def exchange_authorization_code(
     if not validate_redirect_uri_match(auth_code.redirect_uri, redirect_uri):
         return ("invalid_grant", "redirect_uri mismatch")
 
+    # =========================================================================
+    # RFC 9728 B2-5: Resource resolution rules
+    # Determines final_resource for JWT aud claim and OAuthAccessToken storage
+    # =========================================================================
+    if auth_code.resource:
+        # Auth code has resource set
+        if resource is None:
+            # Rule 1: /token omits resource → use auth_code.resource (downgrade protection)
+            final_resource = auth_code.resource
+        elif resource == auth_code.resource:
+            # Rule 2: /token sends matching resource → use auth_code.resource
+            final_resource = auth_code.resource
+        else:
+            # Rule 3: /token sends different resource → error (cannot change)
+            return ("invalid_request", "resource mismatch")
+    else:
+        # Auth code has no resource
+        if resource:
+            # Rule 4: /token sends resource → accept it
+            final_resource = resource
+        else:
+            # Rule 5: Neither has resource → fall back to OAUTH_ISSUER
+            final_resource = None  # create_access_token will use OAUTH_ISSUER
+
     # Mark code as used
     auth_code.used = True
 
@@ -118,7 +144,8 @@ async def exchange_authorization_code(
     access_token, jti = create_access_token(
         user_id=auth_code.user_id,
         client_id=auth_code.client_id,
-        scope=scope_str
+        scope=scope_str,
+        resource=final_resource  # RFC 9728 B2-5
     )
 
     # Create refresh token
@@ -138,6 +165,7 @@ async def exchange_authorization_code(
         user_id=auth_code.user_id,
         client_id=auth_code.client_id,
         scope=auth_code.scope,
+        resource=final_resource,  # RFC 9728 B2-5: stored for refresh grant
         token_type="Bearer",
         expires_at=access_token_expires_at,
         refresh_token_enc=refresh_token_encrypted,
@@ -241,13 +269,14 @@ async def exchange_refresh_token(
     matching_token.revoked = True
     matching_token.revoked_at = datetime.now(timezone.utc)
 
-    # Create new access token (same scope as old token)
+    # Create new access token (same scope and resource as old token)
     # Convert scope list to space-separated string (OAuth 2.0 standard)
     scope_str = " ".join(matching_token.scope) if isinstance(matching_token.scope, list) else matching_token.scope
     new_access_token, new_jti = create_access_token(
         user_id=matching_token.user_id,
         client_id=matching_token.client_id,
-        scope=scope_str
+        scope=scope_str,
+        resource=matching_token.resource  # RFC 9728 B2-5: preserve resource from original token
     )
 
     # Create new refresh token
@@ -267,6 +296,7 @@ async def exchange_refresh_token(
         user_id=matching_token.user_id,
         client_id=matching_token.client_id,
         scope=matching_token.scope,
+        resource=matching_token.resource,  # RFC 9728 B2-5: carry forward
         token_type="Bearer",
         expires_at=new_access_token_expires_at,
         refresh_token_enc=new_refresh_token_encrypted,

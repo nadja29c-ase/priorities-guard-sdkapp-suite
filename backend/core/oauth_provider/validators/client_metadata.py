@@ -7,16 +7,23 @@ Validates client registration requests per RFC 7591.
 from typing import List
 
 
-def validate_redirect_uris(redirect_uris: List[str]) -> tuple[bool, str | None]:
+def validate_redirect_uris(
+    redirect_uris: List[str],
+    allowed_uris: List[str] | None = None
+) -> tuple[bool, str | None]:
     """
     Validate redirect URIs for client registration.
 
-    OAuth 2.1 Security Requirements:
+    RFC 9728 B2-8 Security Requirements:
     - At least one redirect_uri required
-    - Must use HTTPS (no http:// allowed except localhost for development)
+    - When allowlist is provided, URIs must be in the allowlist (exact match)
+    - When allowlist is None (legacy mode), only HTTPS check is performed
 
     Args:
         redirect_uris: List of redirect URIs to validate
+        allowed_uris: Optional allowlist of permitted redirect URIs.
+            If provided, only exact matches are accepted.
+            If None, falls back to HTTPS-only validation (legacy behavior).
 
     Returns:
         tuple: (is_valid, error_message)
@@ -24,19 +31,28 @@ def validate_redirect_uris(redirect_uris: List[str]) -> tuple[bool, str | None]:
             - (False, error_message) if invalid
 
     Example:
-        >>> validate_redirect_uris(["https://example.com/callback"])
+        >>> allowed = ["https://chatgpt.com/callback"]
+        >>> validate_redirect_uris(["https://chatgpt.com/callback"], allowed)
         (True, None)
+        >>> validate_redirect_uris(["https://evil.com/callback"], allowed)
+        (False, "redirect_uri not in allowlist: https://evil.com/callback")
         >>> validate_redirect_uris([])
         (False, "At least one redirect_uri is required")
-        >>> validate_redirect_uris(["http://example.com/callback"])
-        (False, "redirect_uri must use HTTPS: http://example.com/callback")
     """
     if not redirect_uris or len(redirect_uris) == 0:
         return False, "At least one redirect_uri is required"
 
-    for uri in redirect_uris:
-        if not uri.startswith("https://"):
-            return False, f"redirect_uri must use HTTPS: {uri}"
+    if allowed_uris is not None:
+        # RFC 9728 B2-8: Strict allowlist validation (exact string match)
+        allowed_set = set(allowed_uris)
+        for uri in redirect_uris:
+            if uri not in allowed_set:
+                return False, f"redirect_uri not in allowlist: {uri}"
+    else:
+        # Legacy mode: Only check HTTPS (for backward compatibility)
+        for uri in redirect_uris:
+            if not uri.startswith("https://"):
+                return False, f"redirect_uri must use HTTPS: {uri}"
 
     return True, None
 

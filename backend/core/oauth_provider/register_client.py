@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.rate_limit import rate_limit_register
@@ -75,7 +76,10 @@ async def register_endpoint(
     Security Notes:
         - client_secret is only returned once (never stored in plain text)
         - Client must store client_secret securely
-        - All redirect_uris must use HTTPS
+        - redirect_uris must be in allowlist (RFC 9728 B2-8):
+          - https://chatgpt.com/connector_platform_oauth_redirect
+          - https://platform.openai.com/apps-manage/oauth
+          - (localhost URIs allowed in dev mode only)
         - Rate limited to prevent abuse
         - Least privilege: each route has minimal default scopes
 
@@ -99,8 +103,11 @@ async def register_endpoint(
     if not valid:
         raise HTTPException(status_code=400, detail=error)
 
-    # Validate redirect_uris
-    valid, error = validate_redirect_uris(register_request.redirect_uris)
+    # Validate redirect_uris against allowlist (RFC 9728 B2-8)
+    valid, error = validate_redirect_uris(
+        register_request.redirect_uris,
+        allowed_uris=settings.OAUTH_ALLOWED_REDIRECT_URIS
+    )
     if not valid:
         raise HTTPException(status_code=400, detail=error)
 

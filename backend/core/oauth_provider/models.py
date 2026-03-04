@@ -113,6 +113,12 @@ class OAuthAuthorizationCode(Base):
         comment="CSRF protection state (optional)"
     )
 
+    resource: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        comment="Resource parameter from /authorize (RFC 9728 B2-5)"
+    )
+
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -184,6 +190,12 @@ class OAuthAccessToken(Base):
         ARRAY(String),
         nullable=False,
         comment="Array of scopes (e.g., ['focused.read', 'focused.write'])"
+    )
+
+    resource: Mapped[str | None] = mapped_column(
+        String(512),
+        nullable=True,
+        comment="Resource parameter for JWT aud claim (RFC 9728 B2-5)"
     )
 
     token_type: Mapped[str] = mapped_column(

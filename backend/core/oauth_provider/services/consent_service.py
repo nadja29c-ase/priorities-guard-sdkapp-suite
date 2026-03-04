@@ -31,6 +31,7 @@ async def create_authorization_code(
     scope: str,
     state: str | None = None,
     nonce: str | None = None,
+    resource: str | None = None,
     correlation_id: str | None = None
 ) -> str:
     """
@@ -49,6 +50,7 @@ async def create_authorization_code(
         scope: Space-separated scopes
         state: Optional CSRF token
         nonce: Optional OpenID Connect nonce
+        resource: Optional resource parameter (RFC 9728 B2-5)
         correlation_id: Optional correlation ID for logging
 
     Returns:
@@ -91,6 +93,7 @@ async def create_authorization_code(
         redirect_uri=redirect_uri,
         scope=scope.split(),  # Convert space-separated string to array
         state=state,
+        resource=resource,  # RFC 9728 B2-5
         expires_at=expires_at,
         used=False
     )

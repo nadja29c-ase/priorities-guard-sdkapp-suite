@@ -96,7 +96,7 @@ class CoreConnection(Base):
         comment="Reference to core_users.id (UUID). NULL for oauth_provider connections."
     )
 
-    provider: Mapped[str] = mapped_column(String(50), nullable=False) #OAuth provider.
+    provider: Mapped[str] = mapped_column(String(200), nullable=False)  # OAuth provider or client name
 
     connection_type: Mapped[str] = mapped_column(
         String(50),

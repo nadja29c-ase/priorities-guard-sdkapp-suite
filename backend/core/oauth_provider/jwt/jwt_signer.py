@@ -14,7 +14,8 @@ def create_access_token(
     user_id: UUID,
     client_id: str,
     scope: str,
-    expires_delta: timedelta | None = None
+    expires_delta: timedelta | None = None,
+    resource: str | None = None
 ) -> tuple[str, str]:
     """
     Create a signed JWT access token.
@@ -26,6 +27,8 @@ def create_access_token(
         client_id: OAuth client identifier
         scope: Space-separated scopes (e.g., "focused.read focused.write")
         expires_delta: Token expiration delta (default: 1 hour from config)
+        resource: Optional resource parameter (RFC 9728 B2-5). If provided,
+            used as the JWT aud claim. Falls back to OAUTH_ISSUER when absent.
 
     Returns:
         Tuple of (access_token, jti)
@@ -34,7 +37,7 @@ def create_access_token(
 
     JWT Claims:
         - sub: User ID (UUID as string)
-        - aud: OAuth issuer (audience)
+        - aud: Resource URL if provided, otherwise OAuth issuer
         - iss: OAuth issuer
         - exp: Expiration timestamp (Unix epoch)
         - iat: Issued-at timestamp (Unix epoch)
@@ -55,5 +58,6 @@ def create_access_token(
         user_id=user_id,
         client_id=client_id,
         scope=scope,
-        expires_delta=expires_delta
+        expires_delta=expires_delta,
+        resource=resource
     )

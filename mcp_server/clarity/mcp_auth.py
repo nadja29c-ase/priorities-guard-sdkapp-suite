@@ -283,13 +283,18 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 raise jwt.InvalidTokenError(f"Unknown kid: {kid}")
 
         # Step 4: Verify JWT with all required checks
+        # RFC 9728 B2-5: Accept either MCP server URL or legacy OAUTH_ISSUER as aud
+        # - New tokens (post-B2-5 fix) will have aud = MCP_SERVER_URL
+        # - Legacy tokens (pre-B2-5 fix) will have aud = CLARITY_AUDIENCE (OAUTH_ISSUER)
+        # PyJWT accepts list of valid audiences for exact string matching
         # leeway: accepts tokens expired up to N seconds ago (handles clock skew)
+        valid_audiences = [MCP_SERVER_URL, CLARITY_AUDIENCE]
         payload = jwt.decode(
             token,
             signing_key.key,
             algorithms=["RS256"],
             issuer=CLARITY_ISSUER,
-            audience=CLARITY_AUDIENCE,
+            audience=valid_audiences,
             leeway=TOKEN_EXPIRY_GRACE_SECONDS,
             options={
                 "verify_signature": True,
