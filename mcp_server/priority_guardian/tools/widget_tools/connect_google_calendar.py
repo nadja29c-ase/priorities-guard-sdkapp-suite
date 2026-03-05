@@ -18,11 +18,17 @@ logger = structlog.get_logger(__name__)
 TIMEOUT_S = 8.0
 
 
-async def _call_with_timeout(coro, op_name: str):
+async def _call_with_timeout(coro, op_name: str, correlation_id: str):
     """Wrap a coroutine with timeout."""
     try:
         return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
     except asyncio.TimeoutError:
+        logger.warning(
+            "tool.connect_google_calendar.timeout",
+            correlation_id=correlation_id,
+            op_name=op_name,
+            timeout=TIMEOUT_S,
+        )
         raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
@@ -77,6 +83,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             correlation_id
         ),
         "Check connection status",
+        correlation_id,
     )
 
     if status_response.get("connected"):
@@ -112,7 +119,15 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             correlation_id
         ),
         "Initiate connection",
+        correlation_id,
     )
+
+    # Extract connection URL with safe access
+    connect_url = initiate_response.get("connect_url")
+    expires_in = initiate_response.get("expires_in")
+
+    if not connect_url:
+        raise ToolUsageError("Failed to initiate Google Calendar connection. Please try again.")
 
     # Extract token prefix for logging (handle missing or non-string tokens safely)
     token = initiate_response.get("token")
@@ -134,8 +149,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "success": True,
             "data": {
                 "status": "not_connected",
-                "connect_url": initiate_response["connect_url"],
-                "expires_in": initiate_response["expires_in"],
+                "connect_url": connect_url,
+                "expires_in": expires_in,
                 "message": "Click the link to connect your Google Calendar. The link expires in 10 minutes."
             },
             "_meta": {

@@ -101,9 +101,9 @@ class TestResourceInAuthContext:
             assert context["resource"] == resource_url
 
     @pytest.mark.asyncio
-    async def test_resource_absent_context_has_empty_string(self):
+    async def test_resource_absent_context_has_none(self):
         """
-        Test 2: resource absent -> context has resource="" (empty string), no error.
+        Test 2: resource absent -> context has resource=None (semantically null), no error.
         """
         from backend.core.oauth_provider.services.authorization_service import (
             create_authorization_context,
@@ -141,10 +141,10 @@ class TestResourceInAuthContext:
             # Retrieve context
             context = await get_authorization_context(auth_context_id, delete_after_read=False)
 
-            # Should have resource key with empty string (normalized from None)
+            # Should have resource key with None (absent resource is semantically null)
             assert context is not None
             assert "resource" in context
-            assert context["resource"] == ""
+            assert context["resource"] is None
 
 
 class TestCreateAccessTokenAudience:
@@ -178,6 +178,8 @@ class TestCreateAccessTokenAudience:
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
 
+        # verify_aud=False: we check audience manually via assert below
+        # (PyJWT's audience verification requires passing expected aud upfront)
         decoded = jwt.decode(
             access_token,
             public_pem,

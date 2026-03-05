@@ -35,7 +35,7 @@ def validate_redirect_uris(
         >>> validate_redirect_uris(["https://chatgpt.com/callback"], allowed)
         (True, None)
         >>> validate_redirect_uris(["https://evil.com/callback"], allowed)
-        (False, "redirect_uri not in allowlist: https://evil.com/callback")
+        (False, "redirect_uri not in allowlist")
         >>> validate_redirect_uris([])
         (False, "At least one redirect_uri is required")
     """
@@ -47,12 +47,12 @@ def validate_redirect_uris(
         allowed_set = set(allowed_uris)
         for uri in redirect_uris:
             if uri not in allowed_set:
-                return False, f"redirect_uri not in allowlist: {uri}"
+                return False, "redirect_uri not in allowlist"
     else:
         # Legacy mode: Only check HTTPS (for backward compatibility)
         for uri in redirect_uris:
             if not uri.startswith("https://"):
-                return False, f"redirect_uri must use HTTPS: {uri}"
+                return False, "redirect_uri must use HTTPS"
 
     return True, None
 

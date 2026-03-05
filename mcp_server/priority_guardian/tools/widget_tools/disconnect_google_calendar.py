@@ -18,11 +18,17 @@ logger = structlog.get_logger(__name__)
 TIMEOUT_S = 8.0
 
 
-async def _call_with_timeout(coro, op_name: str):
+async def _call_with_timeout(coro, op_name: str, correlation_id: str):
     """Wrap a coroutine with timeout."""
     try:
         return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
     except asyncio.TimeoutError:
+        logger.warning(
+            "tool.disconnect_google_calendar.timeout",
+            correlation_id=correlation_id,
+            op_name=op_name,
+            timeout=TIMEOUT_S,
+        )
         raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 # ============================================================================
@@ -110,6 +116,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             correlation_id
         ),
         "Check connection status",
+        correlation_id,
     )
 
     if not status_response.get("connected"):
@@ -144,6 +151,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             correlation_id
         ),
         "Disconnect calendar",
+        correlation_id,
     )
 
     logger.info(

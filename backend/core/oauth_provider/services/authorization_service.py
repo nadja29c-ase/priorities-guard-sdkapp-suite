@@ -78,9 +78,9 @@ async def create_authorization_context(
         "code_challenge": code_challenge,
         "code_challenge_method": code_challenge_method,
         "scope": scope,
-        "state": state or "",
-        "nonce": nonce or "",
-        "resource": resource or "",  # RFC 9728 B2-5
+        "state": state,
+        "nonce": nonce,
+        "resource": resource,  # RFC 9728 B2-5
         "redirect_uri": redirect_uri,
         "user_id": user_id,
         "expires_at": int(time.time()) + AUTH_CONTEXT_TTL

@@ -25,13 +25,14 @@ logger = structlog.get_logger(__name__)
 TIMEOUT_S = 8.0
 
 
-async def _call_with_timeout(coro, op_name: str):
+async def _call_with_timeout(coro, op_name: str, correlation_id: str):
     """
     Wrap a coroutine with timeout.
 
     Args:
         coro: Coroutine to execute
         op_name: Operation name for error message
+        correlation_id: Request correlation ID for logging
 
     Returns:
         Result of the coroutine
@@ -42,6 +43,12 @@ async def _call_with_timeout(coro, op_name: str):
     try:
         return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
     except asyncio.TimeoutError:
+        logger.warning(
+            "tool.onboarding_calendar_setup.timeout",
+            correlation_id=correlation_id,
+            op_name=op_name,
+            timeout=TIMEOUT_S,
+        )
         raise ToolUsageError(f"{op_name} timed out. Please try again.")
 
 
@@ -107,6 +114,7 @@ async def _handle_keyword_education(
     )
 
     # Log if user might be returning (past snapshots exist), but don't block
+    # Duplicated intentionally — detects returning users independently per phase without shared state
     today = date.today()
     days_since_monday = today.weekday()
     last_monday = today - timedelta(days=days_since_monday + 7)
@@ -144,6 +152,7 @@ async def _handle_keyword_education(
             correlation_id,
         ),
         "Priorities fetch",
+        correlation_id,
     )
 
     if not result.get("success"):
@@ -257,6 +266,7 @@ async def _handle_first_weekly_report(
     )
 
     # Log if user might be returning (past snapshots exist), but don't block
+    # Duplicated intentionally — detects returning users independently per phase without shared state
     today = date.today()
     days_since_monday = today.weekday()
     last_monday = today - timedelta(days=days_since_monday + 7)
@@ -294,6 +304,7 @@ async def _handle_first_weekly_report(
             correlation_id,
         ),
         "Weekly report fetch",
+        correlation_id,
     )
 
     if not result.get("success"):
@@ -344,7 +355,7 @@ async def _handle_first_weekly_report(
         for kw in ["P1", "P2", "P3"]
     )
     other_hours = time_allocation.get("other_hours", 0)
-    total_hours = time_allocation.get("total_tracked_hours", 0)
+    total_hours = float(time_allocation.get("total_tracked_hours", 0))
 
     if total_hours == 0:
         # Empty week — no events at all

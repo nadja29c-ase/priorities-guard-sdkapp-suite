@@ -6,7 +6,6 @@ Tests:
 - All tool module files are registered in TOOL_REGISTRY (filesystem coverage)
 """
 
-import os
 from pathlib import Path
 
 import pytest

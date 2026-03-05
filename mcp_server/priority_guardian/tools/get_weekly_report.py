@@ -202,7 +202,7 @@ GUIDANCE_SEMANTIC_PROVIDED = (
 
 
 # ============================================================================
-# Helpers
+# Normalization Helpers
 # ============================================================================
 
 def _normalize_priority_report(p: dict) -> dict:
@@ -336,7 +336,7 @@ def _build_pie_slices(
 
     # Validation: grouped hours cannot exceed target's hours by more than 0.5h
     if semantic_groupings and target_hours is not None:
-        grouped_total = sum(g.get("hours", 0) for g in semantic_groupings)
+        grouped_total = sum(float(g.get("hours", 0)) for g in semantic_groupings)
         if grouped_total > target_hours + 0.5:
             raise ToolUsageError(
                 f"Grouped hours ({grouped_total:.1f}h) exceed {semantic_target} time "
@@ -360,7 +360,7 @@ def _build_pie_slices(
 
         if keyword == semantic_target and semantic_groupings:
             # Explode this priority into semantic subcategories
-            grouped_total = sum(g.get("hours", 0) for g in semantic_groupings)
+            grouped_total = sum(float(g.get("hours", 0)) for g in semantic_groupings)
 
             for g in semantic_groupings:
                 slices.append({
@@ -391,7 +391,7 @@ def _build_pie_slices(
     # Build "Other" slice - explode if semantic_target is "other"
     if semantic_target == "other" and semantic_groupings:
         # Explode Other into semantic subcategories
-        grouped_total = sum(g.get("hours", 0) for g in semantic_groupings)
+        grouped_total = sum(float(g.get("hours", 0)) for g in semantic_groupings)
 
         for g in semantic_groupings:
             slices.append({
@@ -641,7 +641,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             semantic_target_label = "Other"
 
     # Calculate total hours for pie chart
-    total_hours = normalized_time_allocation.get("totalTrackedHours", 0)
+    total_hours = float(normalized_time_allocation.get("totalTrackedHours", 0))
 
     logger.info(
         "tool.get_weekly_report.success",
