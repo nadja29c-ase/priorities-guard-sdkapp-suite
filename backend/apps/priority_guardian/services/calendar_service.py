@@ -7,7 +7,7 @@ This is the core business logic for the time tracking pipeline.
 
 import re
 import structlog
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from zoneinfo import ZoneInfo
 from typing import Any
 from uuid import UUID
@@ -383,6 +383,10 @@ async def compute_time_allocation(
     # -------------------------------------------------------------------------
     timezone_str = await get_user_timezone(http_client, access_token, correlation_id)
 
+    # Update last_used_at after successful Google API call (Increment 39)
+    # Per architectural rule: update immediately after each successful response
+    connection.last_used_at = datetime.now(timezone.utc)
+
     # -------------------------------------------------------------------------
     # Step 4: Compute week boundaries
     # -------------------------------------------------------------------------
@@ -416,6 +420,10 @@ async def compute_time_allocation(
 
         if pages_failed > 0:
             logger.warning("calendar.pages_failed", pages_failed=pages_failed, **log_context)
+
+        # Update last_used_at after successful Google API call (Increment 39)
+        # Per architectural rule: update immediately after each successful response
+        connection.last_used_at = datetime.now(timezone.utc)
 
     except ValueError as e:
         # API errors (401, 403, etc.)

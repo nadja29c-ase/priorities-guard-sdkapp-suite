@@ -129,6 +129,45 @@ celery_app.conf.beat_schedule = {
             "retry_backoff_max": 600,
         }
     },
+    # =========================================================================
+    # GDPR Retention Enforcement Tasks (Increment 39)
+    # =========================================================================
+    # OAuth sessions cleanup (existing task, now scheduled)
+    "cleanup-oauth-sessions-weekly": {
+        "task": "backend.jobs.oauth_cleanup.cleanup_expired_oauth_sessions",
+        "schedule": crontab(minute=0, hour=1, day_of_week=0),  # Sunday 01:00 UTC
+        "options": {
+            "queue": "focused",
+            "expires": 86400,  # 24 hours
+        }
+    },
+    # Audit logs: 90-day retention
+    "cleanup-audit-logs-daily": {
+        "task": "backend.jobs.retention_cleanup.cleanup_expired_audit_logs",
+        "schedule": crontab(minute=0, hour=2),  # Daily at 02:00 UTC
+        "options": {
+            "queue": "focused",
+            "expires": 86400,  # 24 hours
+        }
+    },
+    # Google connections: 6-month inactivity soft-revoke
+    "cleanup-idle-google-connections-monthly": {
+        "task": "backend.jobs.retention_cleanup.cleanup_idle_google_connections",
+        "schedule": crontab(minute=0, hour=3, day_of_month=1),  # 1st of month, 03:00 UTC
+        "options": {
+            "queue": "focused",
+            "expires": 604800,  # 7 days (survive worker downtime)
+        }
+    },
+    # Inactive accounts: 6-month inactivity hard-delete
+    "cleanup-inactive-accounts-monthly": {
+        "task": "backend.jobs.retention_cleanup.cleanup_inactive_accounts",
+        "schedule": crontab(minute=0, hour=4, day_of_month=1),  # 1st of month, 04:00 UTC
+        "options": {
+            "queue": "focused",
+            "expires": 604800,  # 7 days (survive worker downtime)
+        }
+    },
 }
 
 

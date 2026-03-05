@@ -187,6 +187,20 @@ class CoreConnection(Base):
         comment="When the connection was revoked/disconnected"
     )
 
+    # GDPR Retention (Increment 39)
+    # ARCHITECTURAL RULE (permanent, enforced from Increment 39 forward):
+    # last_used_at means: "a real Google Calendar API call succeeded for this connection."
+    # Set connection.last_used_at = datetime.now(timezone.utc) immediately after each
+    # successful Google API response — not after all calls succeed together, not on
+    # token refresh, not on DB-only operations. This applies to all apps in the suite.
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Timestamp of last successful Google Calendar API call. "
+                "NULL means the connection has never successfully called the Google API, "
+                "or predates Increment 39 migration."
+    )
+
     __table_args__ = (  # Table-level constraints and indexes
         # For outbound OAuth (user connects to Google/Apple)
         UniqueConstraint("user_id", "provider", name="uq_user_provider"),
