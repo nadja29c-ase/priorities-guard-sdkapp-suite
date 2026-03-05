@@ -35,8 +35,6 @@ const deadlinePriority: Priority = {
     { id: 'd1', name: 'Design doc', done: true },
     { id: 'd2', name: 'Implementation', done: false },
   ],
-  createdAt: '2025-01-01T00:00:00Z',
-  updatedAt: '2025-01-10T00:00:00Z',
 }
 
 const flexiblePriority: Priority = {
@@ -51,8 +49,6 @@ const flexiblePriority: Priority = {
   checkpointDate: '2025-02-28',
   desiredResult: 'Complete first 10 chapters',
   deliverables: [],
-  createdAt: '2025-01-05T00:00:00Z',
-  updatedAt: '2025-01-12T00:00:00Z',
 }
 
 describe('App', () => {

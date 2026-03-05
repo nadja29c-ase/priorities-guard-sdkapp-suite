@@ -118,16 +118,12 @@ class TestNormalizePriority:
         assert goals[0] == {"id": "goal-1", "text": "Complete first 10 chapters", "achieved": False}
         assert goals[1] == {"id": "goal-2", "text": "Build sample project", "achieved": True}
 
-    def test_converts_created_at(self, sample_backend_priority):
-        """Test created_at becomes createdAt."""
+    def test_excludes_timestamps(self, sample_backend_priority):
+        """Test createdAt and updatedAt are excluded from output (output minimization)."""
         result = _normalize_priority(sample_backend_priority)
-        assert result["createdAt"] == "2025-01-01T10:00:00Z"
+        assert "createdAt" not in result
+        assert "updatedAt" not in result
         assert "created_at" not in result
-
-    def test_converts_updated_at(self, sample_backend_priority):
-        """Test updated_at becomes updatedAt."""
-        result = _normalize_priority(sample_backend_priority)
-        assert result["updatedAt"] == "2025-01-10T15:30:00Z"
         assert "updated_at" not in result
 
     def test_preserves_simple_fields(self, sample_backend_priority):
@@ -280,7 +276,7 @@ class TestHandleFunction:
 
     @pytest.mark.asyncio
     async def test_includes_google_connection_status(self, sample_backend_priority):
-        """Test response includes Google connection status."""
+        """Test response includes Google connection status (without connected_at timestamp)."""
         mock_response = {
             "data": {
                 "priorities": [sample_backend_priority],
@@ -304,7 +300,8 @@ class TestHandleFunction:
 
         structured = result.structuredContent
         assert structured["data"]["google_connected"] is True
-        assert structured["data"]["google_connected_at"] == "2025-01-15T10:30:00Z"
+        # google_connected_at excluded for output minimization
+        assert "google_connected_at" not in structured["data"]
 
     @pytest.mark.asyncio
     async def test_google_connected_defaults_to_false(self, sample_backend_priority):
@@ -589,7 +586,8 @@ class TestEdgeCases:
 
         structured = result.structuredContent
         assert structured["data"]["google_connected"] is False
-        assert structured["data"]["google_connected_at"] is None
+        # google_connected_at excluded for output minimization
+        assert "google_connected_at" not in structured["data"]
 
     @pytest.mark.asyncio
     async def test_plural_priorities_text(self):

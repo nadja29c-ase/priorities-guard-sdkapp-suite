@@ -589,7 +589,8 @@ class TestResponseShape:
         # Data keys
         data = sc["data"]
         assert "google_connected" in data
-        assert "google_connected_at" in data
+        # google_connected_at excluded for output minimization
+        assert "google_connected_at" not in data
         assert "priorities" in data
         assert "available_keywords" in data
         assert "timeAllocation" in data

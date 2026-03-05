@@ -48,8 +48,8 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
     """
     Normalize priority fields from backend snake_case to spec camelCase.
 
-    Backend returns: calendar_keyword, created_at, weekly_hour_target, etc.
-    Spec expects: calendarKeyword, createdAt, weeklyHourTarget, etc.
+    Backend returns: calendar_keyword, weekly_hour_target, checkpoint_date, etc.
+    Spec expects: calendarKeyword, weeklyHourTarget, checkpointDate, etc.
 
     Args:
         p: Priority dict from backend
@@ -99,8 +99,6 @@ def _normalize_priority(p: dict, calendar_hours: dict | None = None) -> dict:
         "checkpointDate": p.get("checkpoint_date"),
         "deliverables": normalized_deliverables,
         "goals": normalized_goals,
-        "createdAt": p.get("created_at"),
-        "updatedAt": p.get("updated_at"),
         # Include all aggregates for all priority types (Inc 08)
         "streakCount": p.get("streak_count", 0),
         "totalHoursInvested": p.get("total_hours_invested", 0.0),
@@ -345,7 +343,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         "success": True,
         "data": {
             "google_connected": google_connection.get("connected", False),
-            "google_connected_at": google_connection.get("connected_at"),
             "priorities": priorities,
             "available_keywords": available_keywords,
         },

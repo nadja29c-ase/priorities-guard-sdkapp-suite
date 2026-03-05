@@ -3,7 +3,6 @@ import { extractStructuredContent } from '../utils'
 
 interface ConnectionStatusProps {
   connected: boolean
-  connectedAt?: string
   onRefresh: () => void
   isRefreshing: boolean
   awaitingOAuth: boolean

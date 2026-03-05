@@ -117,6 +117,11 @@ grep -o 'style="[^"]*#[0-9a-fA-F]' dist/pg-dashboard.html
 - [ ] **No color-only indicators**: status/errors conveyed by more than color alone (icons, text)
 - [ ] **Readable text**: minimum 14px font size, adequate line spacing
 
+### Widget a11y Tests
+
+- [ ] **Keyboard accessibility** (compliance #10): run `npm test` in widget-react, then perform full keyboard/manual audit
+- [ ] **Screen reader semantics/labels** (compliance #11): verify all interactive controls have proper ARIA attributes end-to-end
+
 ### Quick checks
 
 ```bash
@@ -221,3 +226,39 @@ After deploying to production but before submitting:
 4. Verify OAuth connect/disconnect flow
 5. Verify data persists across conversations
 6. Test on mobile (ChatGPT iOS app)
+
+## Text Scaling Test (OpenAI UI Guideline #13)
+
+OpenAI requires the widget layout to not break when users increase browser font size.
+
+- [ ] Widget tested at default, large, and very large font sizes
+- [ ] No text overflow, clipping, or broken layout at any size
+- [ ] Tested on mobile at iOS largest accessibility font size
+
+### How to test — desktop
+
+1. Open the widget in Chrome (served locally or via production URL)
+2. Chrome Settings → Appearance → **Font size** → test at: Medium → Large → Very Large
+3. Alternatively paste into Chrome DevTools Console:
+```javascript
+   document.body.style.fontSize = '20px'  // Large
+   document.body.style.fontSize = '24px'  // Very Large
+   document.body.style.fontSize = ''      // Reset
+```
+4. At each size verify:
+   - [ ] No text overflows or gets clipped in any container
+   - [ ] No buttons or interactive elements overlap or disappear
+   - [ ] No horizontal scrollbar appears inside the widget
+   - [ ] Priority names, deliverable text, goal text wrap cleanly
+   - [ ] Hour targets and actual values remain readable
+   - [ ] Weekly report pie chart labels do not overflow
+
+### How to test — mobile (iOS)
+
+1. iOS Settings → Accessibility → Display & Text Size → **Larger Text** → drag to maximum
+2. Open ChatGPT iOS app → trigger widget
+3. Apply same checks as desktop above
+
+**Pass criteria:** Widget fully readable and usable at all font sizes. No clipped content, no broken layout.
+
+On WCAG AA specifically: Given you're using Apps SDK UI system tokens throughout, you almost certainly pass for the main content. The only risk areas to eyeball are secondary/tertiary text (the greyed-out supporting text under priority names) and any status colors (the colored left borders on P1/P2/P3). Check those two things visually and you're done.

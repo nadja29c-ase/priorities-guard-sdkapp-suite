@@ -227,7 +227,7 @@ describe('FlexibleCard + HourRing Integration', () => {
     calendarKeyword: 'P2',
     status: 'active',
     deliverables: [],
-    createdAt: '2025-01-01T00:00:00Z',
+    goals: [],
   }
 
   const mockHandlers = {

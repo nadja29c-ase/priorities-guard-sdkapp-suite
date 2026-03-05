@@ -74,6 +74,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                     "domain": WIDGET_DOMAIN,
                     "csp": {
                         "connectDomains": [],  # Widget uses callTool/postMessage, not HTTP
+                        "resourceDomains": [],  # Self-contained HTML, no external assets
                     },
                 },
                 # Legacy ChatGPT extension — keep for openExternal support
@@ -100,6 +101,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                     "domain": WIDGET_DOMAIN,
                     "csp": {
                         "connectDomains": [],
+                        "resourceDomains": [],
                     },
                 },
                 "openai/widgetCSP": {
@@ -138,6 +140,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 "domain": WIDGET_DOMAIN,
                 "csp": {
                     "connectDomains": [],
+                    "resourceDomains": [],
                 },
             },
             "openai/widgetCSP": {

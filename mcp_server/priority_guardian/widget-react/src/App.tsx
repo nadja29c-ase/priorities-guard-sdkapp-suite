@@ -607,7 +607,6 @@ function App() {
         <div className="mt-6">
           <ConnectionStatus
             connected={dashboardData?.google_connected ?? false}
-            connectedAt={dashboardData?.google_connected_at}
             onRefresh={refreshData}
             isRefreshing={isRefreshing}
             awaitingOAuth={awaitingOAuth}

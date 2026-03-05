@@ -29,8 +29,6 @@ export interface Priority {
   streakCount?: number // For flexible type: consecutive weeks meeting target
   deliverables: Deliverable[]
   goals: Goal[] // For flexible type (Inc D)
-  createdAt: string
-  updatedAt?: string
   // Aggregate fields from snapshot pipeline (Inc 08)
   totalHoursInvested?: number // Cumulative hours invested across all time
   avgTargetAchievement?: number | null // Cumulative % of weekly target. NULL when < 2 snapshotted weeks.
@@ -38,7 +36,6 @@ export interface Priority {
 
 export interface GoogleConnection {
   connected: boolean
-  connectedAt?: string
   scopes?: string[]
 }
 
@@ -69,7 +66,6 @@ export interface TimeAllocation {
 // Dashboard view data (from get_priorities)
 export interface DashboardData {
   google_connected: boolean
-  google_connected_at?: string
   priorities: Priority[]
   available_keywords?: string[]
   timeAllocation?: TimeAllocation

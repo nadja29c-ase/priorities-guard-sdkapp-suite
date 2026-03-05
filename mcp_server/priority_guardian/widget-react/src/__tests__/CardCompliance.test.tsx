@@ -42,7 +42,6 @@ const deadlinePriority: Priority = {
     { id: 'd2', name: 'Code review', done: true },
   ],
   goals: [],
-  createdAt: '2026-01-01T00:00:00Z',
 }
 
 const flexiblePriority: Priority = {
@@ -56,7 +55,6 @@ const flexiblePriority: Priority = {
   checkpointDate: '2026-04-01',
   deliverables: [],
   goals: [{ id: 'g1', text: 'Build CLI tool', achieved: false }],
-  createdAt: '2026-01-01T00:00:00Z',
 }
 
 beforeEach(() => {

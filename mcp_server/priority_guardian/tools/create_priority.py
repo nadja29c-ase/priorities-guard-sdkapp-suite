@@ -659,7 +659,7 @@ def _build_backend_error_response(error_code: str, error_message: str) -> mcp_ty
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
-            text=f"Error: {error_message}"
+            text="Unable to create priority. Please try again.",  # Static; raw backend message stays in structuredContent only
         )],
         structuredContent={
             "success": False,

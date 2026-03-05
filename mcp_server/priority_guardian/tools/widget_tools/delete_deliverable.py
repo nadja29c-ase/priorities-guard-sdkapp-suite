@@ -137,7 +137,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         "success": True,
         "data": {
             "google_connected": google_connection.get("connected", False),
-            "google_connected_at": google_connection.get("connected_at"),
             "priorities": priorities,
             "available_keywords": available_keywords,
         },
