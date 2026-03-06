@@ -15,7 +15,6 @@ OAuth requests to the backend (www.priority-guard.com) transparently.
 from mcp_server.priority_guardian.config import (
     MCP_SERVER_URL,
     MCP_RESOURCE_URL,
-    OAUTH_ISSUER_BASE,
     SCOPES_SUPPORTED,
 )
 
@@ -56,6 +55,6 @@ async def oauth_protected_resource():
     """OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
     return {
         "resource": MCP_RESOURCE_URL,
-        "authorization_servers": [OAUTH_ISSUER_BASE],
+        "authorization_servers": [MCP_SERVER_URL],
         "scopes_supported": SCOPES_SUPPORTED,
     }
