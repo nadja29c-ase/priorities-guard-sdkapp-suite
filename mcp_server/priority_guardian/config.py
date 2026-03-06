@@ -136,12 +136,23 @@ if ENV in ("production", "prod", "staging") and not INTERNAL_API_SECRET:
 # OAuth Discovery Configuration
 # ============================================================================
 
-# MCP Server public URL (used in discovery endpoint)
-# Must match the actual public entrypoint for the MCP server
-# Trailing slash stripped to prevent double-slash in discovery URLs
+# MCP Server origin URL (scheme + host only, no path)
+# Used as the `issuer` in AS metadata — must match the host ChatGPT fetches discovery from.
+# Per MCP spec: authorization base URL is derived by discarding path from MCP server URL.
+# In production: https://pg.priority-guard.com (set via PG_MCP_SERVER_URL env var)
 MCP_SERVER_URL = get_env(
     "PG_MCP_SERVER_URL",
     default="http://localhost:8003"
+).rstrip("/")
+
+# MCP Server resource URL (full URL including /mcp path)
+# Used as the `resource` in protected resource metadata — must exactly match
+# the URL ChatGPT uses to connect to the MCP server.
+# In production: https://pg.priority-guard.com/mcp (set via PG_MCP_RESOURCE_URL env var)
+# Falls back to MCP_SERVER_URL + /mcp if not explicitly set.
+MCP_RESOURCE_URL = get_env(
+    "PG_MCP_RESOURCE_URL",
+    default=f"{MCP_SERVER_URL}/mcp"
 ).rstrip("/")
 
 # OAuth Authorization Server URL (must include /oauth/pg path)

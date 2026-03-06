@@ -10,6 +10,7 @@ Provides all required OAuth discovery endpoints:
 
 from mcp_server.priority_guardian.config import (
     MCP_SERVER_URL,
+    MCP_RESOURCE_URL,
     OAUTH_ISSUER_BASE,
     OAUTH_ISSUER_URL,
     SCOPES_SUPPORTED,
@@ -47,7 +48,7 @@ async def oauth_authorization_server():
 async def oauth_protected_resource():
     """OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
     return {
-        "resource": MCP_SERVER_URL,
+        "resource": MCP_RESOURCE_URL,
         "authorization_servers": [OAUTH_ISSUER_BASE],
         "scopes_supported": SCOPES_SUPPORTED,
     }
