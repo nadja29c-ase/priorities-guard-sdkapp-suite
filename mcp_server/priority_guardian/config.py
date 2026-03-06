@@ -151,6 +151,22 @@ OAUTH_ISSUER_URL = get_env(
     default="http://localhost:8000/oauth/pg"
 )
 
+# Authorization server base URL (issuer identifier and authorization_servers reference)
+# Must match backend's OAUTH_ISSUER env var exactly.
+# Used for: issuer claim, authorization_servers in protected resource metadata.
+# Do NOT derive from OAUTH_ISSUER_URL — define explicitly to avoid path-change fragility.
+OAUTH_ISSUER_BASE = get_env(
+    "PG_OAUTH_ISSUER_BASE",
+    default="http://localhost:8000"
+)
+
+# Fail-fast: warn if OAUTH_ISSUER_BASE contains localhost in production
+if ENV in ("production", "prod", "staging") and "localhost" in OAUTH_ISSUER_BASE:
+    raise RuntimeError(
+        "PG_OAUTH_ISSUER_BASE contains 'localhost' in production. "
+        "Set to production URL (e.g., https://www.priority-guard.com)."
+    )
+
 # Supported OAuth scopes for discovery endpoint
 SCOPES_SUPPORTED = ["pg.access"]
 
