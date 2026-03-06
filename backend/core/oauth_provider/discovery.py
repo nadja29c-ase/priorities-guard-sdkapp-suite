@@ -3,6 +3,7 @@ Discovery Endpoints - OAuth 2.1 and OpenID Connect discovery.
 
 Provides metadata endpoints for OAuth client discovery:
 - OpenID Connect Discovery (/.well-known/openid-configuration)
+- OAuth Authorization Server Metadata (/.well-known/oauth-authorization-server)
 
 NOTE: oauth-protected-resource is NOT served here. Each MCP server
 publishes its own /.well-known/oauth-protected-resource with the
@@ -31,6 +32,27 @@ SCOPES_SUPPORTED = sorted([
 ])
 
 
+def _authorization_server_metadata() -> dict:
+    """
+    Build OAuth authorization server metadata dict.
+
+    Shared by both openid-configuration and oauth-authorization-server
+    endpoints to guarantee they never drift.
+    """
+    return {
+        "issuer": settings.OAUTH_ISSUER,
+        "authorization_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/authorize",
+        "token_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/token",
+        "jwks_uri": f"{settings.OAUTH_ISSUER}/oauth/pg/jwks",
+        "registration_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/register",
+        "scopes_supported": SCOPES_SUPPORTED,
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none"],
+    }
+
+
 @router.get("/.well-known/openid-configuration")
 async def openid_configuration():
     """
@@ -50,15 +72,19 @@ async def openid_configuration():
             ...
         }
     """
-    return JSONResponse({
-        "issuer": settings.OAUTH_ISSUER,
-        "authorization_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/authorize",
-        "token_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/token",
-        "jwks_uri": f"{settings.OAUTH_ISSUER}/oauth/pg/jwks",
-        "registration_endpoint": f"{settings.OAUTH_ISSUER}/oauth/pg/register",
-        "scopes_supported": SCOPES_SUPPORTED,
-        "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code", "refresh_token"],
-        "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["none"]
-    })
+    return JSONResponse(_authorization_server_metadata())
+
+
+@router.get("/.well-known/oauth-authorization-server")
+async def oauth_authorization_server():
+    """
+    OAuth 2.0 Authorization Server Metadata endpoint (RFC 8414).
+
+    Returns the same metadata as openid-configuration. Both endpoints
+    use the shared _authorization_server_metadata() helper to guarantee
+    they never drift.
+
+    Returns:
+        JSONResponse: OAuth authorization server metadata document
+    """
+    return JSONResponse(_authorization_server_metadata())
