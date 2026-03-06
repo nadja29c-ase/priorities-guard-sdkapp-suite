@@ -545,9 +545,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "tool.get_weekly_report.error_response",
             correlation_id=correlation_id,
             error_code=error_code,
+            backend_message=error_message,
         )
 
-        raise ToolUsageError(error_message)
+        raise ToolUsageError("Unable to generate your weekly report. Please try again.")
 
     # Extract data
     data = result.get("data", {})

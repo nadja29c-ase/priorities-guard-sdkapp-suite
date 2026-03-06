@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.config import WWW_AUTHENTICATE_VALUE
 from backend.core.database import get_db
 from backend.core.logging import get_logger, mask_client_id
 from backend.core.rate_limit import rate_limit_token
@@ -203,16 +204,22 @@ async def token_endpoint(
                 "oauth.token.error",
                 grant_type="authorization_code",
                 error=error_code,
-                error_description=error_description
+                error_description=error_description,
+                client_id=mask_client_id(client_id)
             )
             # OAuth 2.1: invalid_client → 401, invalid_grant → 400
             status_code = 401 if error_code == "invalid_client" else 400
+            # B2-7: Add WWW-Authenticate header for 401 responses
+            headers = {}
+            if status_code == 401 and "WWW-Authenticate" not in headers:
+                headers["WWW-Authenticate"] = WWW_AUTHENTICATE_VALUE
             return JSONResponse(
                 status_code=status_code,
                 content={
                     "error": error_code,
                     "error_description": error_description
-                }
+                },
+                headers=headers or None
             )
 
         return JSONResponse(result)
@@ -248,16 +255,22 @@ async def token_endpoint(
                 "oauth.token.error",
                 grant_type="refresh_token",
                 error=error_code,
-                error_description=error_description
+                error_description=error_description,
+                client_id=mask_client_id(client_id)
             )
             # OAuth 2.1: invalid_client → 401, invalid_grant → 400
             status_code = 401 if error_code == "invalid_client" else 400
+            # B2-7: Add WWW-Authenticate header for 401 responses
+            headers = {}
+            if status_code == 401 and "WWW-Authenticate" not in headers:
+                headers["WWW-Authenticate"] = WWW_AUTHENTICATE_VALUE
             return JSONResponse(
                 status_code=status_code,
                 content={
                     "error": error_code,
                     "error_description": error_description
-                }
+                },
+                headers=headers or None
             )
 
         return JSONResponse(result)

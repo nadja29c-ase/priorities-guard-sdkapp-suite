@@ -55,8 +55,9 @@ class Settings(BaseSettings):
     # ChatGPT redirect URIs (production allowlist):
     # ClassVar ensures Pydantic v2 treats this as a class constant, not a field
     _CHATGPT_REDIRECT_URIS: ClassVar[list[str]] = [
-        "https://chatgpt.com/connector_platform_oauth_redirect",
-        "https://platform.openai.com/apps-manage/oauth",
+        "https://chatgpt.com/connector/oauth/YBf91qGED3L6",  # production
+        "https://chatgpt.com/connector_platform_oauth_redirect",  # legacy
+        "https://platform.openai.com/apps-manage/oauth",  # review
     ]
 
     # Populated by build_allowed_redirect_uris validator at startup
@@ -69,6 +70,10 @@ class Settings(BaseSettings):
     # Internal API secret for MCP server -> backend communication
     # MCP servers send this in X-Internal-Secret header to authenticate internal calls
     INTERNAL_API_SECRET: str = ""  # Empty = disabled (dev only)
+
+    # MCP Server URL for Priority Guardian (used for OAuth protected resource metadata)
+    # This env var is shared with the MCP server deployment
+    PG_MCP_SERVER_URL: str = "http://localhost:8003"
 
     @model_validator(mode='after')
     def validate_production_security(self) -> 'Settings':
@@ -137,3 +142,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Derived constants for OAuth WWW-Authenticate header (B2-7 compliance)
+# Used by main.py oauth_exception_handler and token_endpoint.py
+RESOURCE_METADATA_URL = f"{settings.PG_MCP_SERVER_URL.rstrip('/')}/.well-known/oauth-protected-resource"
+WWW_AUTHENTICATE_VALUE = f'Bearer resource_metadata="{RESOURCE_METADATA_URL}"'

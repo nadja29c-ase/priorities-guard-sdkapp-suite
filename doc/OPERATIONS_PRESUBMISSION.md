@@ -1,5 +1,7 @@
 # Pre-Submission Operations Checklist
 
+**Purpose:** Prepare the app for successful OpenAI store review. This checklist covers configuration, compliance, and verification steps that prevent common rejection causes.
+
 Run through this checklist before submitting any SDK app to the OpenAI store.
 
 ## Render Environment
@@ -144,6 +146,7 @@ grep -E '<img[^>]*>' dist/pg-dashboard.html | grep -v 'alt='
 
 - [ ] Scan codebase for hardcoded production domains that should use config
 - [ ] Check `redirect_domains`, `ui.domain`, webhook URLs use env-based config
+- [ ] Verify callback URLs and CORS are not hardcoded to your own domain/user
 - [ ] Verify no hardcoded API keys, secrets, or credentials
 - [ ] Docstring examples use placeholder domains (not real production URLs)
 
@@ -199,6 +202,53 @@ for tool in get_today get_week get_patterns; do
     -d "{\"method\": \"tools/call\", \"params\": {\"name\": \"$tool\", \"arguments\": {}}}" > /dev/null
 done
 ```
+
+## Error Handling Audit
+
+**Required for OpenAI store compliance (compliance_master item 10).**
+
+Errors must be well-handled with clear messaging or fallback behavior across all layers.
+
+### MCP Server Layer
+
+- [ ] All tool handlers use `_call_with_timeout` wrapper (already implemented)
+- [ ] Timeout errors return clear message ("Request timed out, please try again")
+- [ ] Backend unreachable returns graceful error, not stack trace
+- [ ] Invalid/expired token returns `invalid_token` OAuth error (not 500)
+
+### Backend Layer
+
+- [ ] Global exception handler catches unhandled errors (main.py `global_exception_handler`)
+- [ ] Database errors logged but not exposed to user (no SQL in response)
+- [ ] External API failures (Google, etc.) return user-friendly message
+- [ ] OAuth errors follow RFC 6749 format (`error`, `error_description`)
+
+### Widget Layer
+
+- [ ] React Error Boundary wraps main component tree (main.tsx lines 15-42, wraps App)
+- [ ] `loadError` state displays alert on failures (App.tsx line 22, rendered at 535-538)
+- [ ] All CRUD handlers check `isError` and missing data (already implemented)
+- [ ] Empty states have clear messaging (EmptyState component)
+
+### Quick verification
+
+```bash
+# Verify MCP tools use timeout wrapper
+grep -rn "_call_with_timeout" mcp_server/priority_guardian/tools/ | wc -l
+# Expected: 15+ files
+
+# Check for bare except clauses (anti-pattern)
+grep -rn "except:" --include="*.py" mcp_server/ backend/ | grep -v test
+
+# Verify widget has Error Boundary
+grep -rn "class ErrorBoundary" mcp_server/priority_guardian/widget-react/src/main.tsx
+```
+
+### Manual verification
+
+1. Disconnect network, trigger tool call → verify graceful error
+2. Use expired token → verify `invalid_token` response
+3. Trigger backend 500 → verify no stack trace in response
 
 ## Data Minimization
 
@@ -262,3 +312,35 @@ OpenAI requires the widget layout to not break when users increase browser font 
 **Pass criteria:** Widget fully readable and usable at all font sizes. No clipped content, no broken layout.
 
 On WCAG AA specifically: Given you're using Apps SDK UI system tokens throughout, you almost certainly pass for the main content. The only risk areas to eyeball are secondary/tertiary text (the greyed-out supporting text under priority names) and any status colors (the colored left borders on P1/P2/P3). Check those two things visually and you're done.
+
+---
+
+## Pre-Submission: Production Redirect URI (B2-8)
+
+**Status: ✅ DONE** (06 March 2026)
+
+The `callback_id` is assigned at app creation and visible in the app management page before submission.
+
+PG callback_id: `YBf91qGED3L6`
+Production redirect URI: `https://chatgpt.com/connector/oauth/YBf91qGED3L6`
+
+**Completed steps:**
+
+- [x] Locate the assigned callback URI in app management page
+- [x] Add it to `_CHATGPT_REDIRECT_URIS` in `backend/core/config.py`:
+
+```python
+_CHATGPT_REDIRECT_URIS: ClassVar[list[str]] = [
+    "https://chatgpt.com/connector/oauth/YBf91qGED3L6",  # production
+    "https://chatgpt.com/connector_platform_oauth_redirect",  # legacy
+    "https://platform.openai.com/apps-manage/oauth",  # review
+]
+```
+
+**Remaining steps after code change:**
+
+- [ ] Deploy the backend to Render
+- [ ] Verify deployment is healthy
+- [ ] Trigger a fresh OAuth flow via ChatGPT and confirm it completes without redirect URI mismatch error
+
+**Compliance reference:** `compliance_master_1.3.26.md` B2-8

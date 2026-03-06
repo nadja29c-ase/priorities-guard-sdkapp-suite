@@ -13,6 +13,8 @@
 **⚠️ SOURCE: App Submission Guidelines, UI Guidelines, UX Principles, Security & Privacy, API Reference, State Management, MCP Server Guide, Submission FAQs, Authentication Guide**
 **⚠️ PREVIOUS VERSION: 01 March 2026**
 **⚠️ THIS VERSION: 04 March 2026 — full re-verification against live docs + two rounds of ChatGPT feedback validation. Changes: added 11c, B2-16, E5, K6, K7; updated D5 (side-channel clarification + wording), B2-3 (DCR as implementation expectation not spec mandate); label corrections: F3→Recommended, I4→Recommended, I63→Recommended, G3→Recommended; wording corrections: 64, 28b, 11c, 65c; rejected fabricated graceful-degradation requirement; confirmed A10, 11b, commerce wording, B2-3 enforcer label all stand**
+**⚠️ PATCH 05 March 2026 — Section B rewritten: corrected scope from `calendar.readonly` to actual PG scopes (`calendar.events.readonly` + `calendar.settings.readonly`); fixed item 15 (Search Console, not Cloud Console); added 14b, 16b, 16c, 16d, 26b, 27b–27h; expanded 16 (app logo + home page URI); expanded 21 (accurate storage policy — necessity+disclosure+retention, not blanket prohibition); expanded 23 (full Limited Use policy incl. data brokers, surveillance, credit/lending, human access prohibition); expanded 26 (why-narrower-scope justification field); updated 26b (confirmed `calendar.settings.readonly` = Sensitive tier, added example justification + video demonstration requirement); added 27c (Google-specific privacy policy disclosure), 27d (separate GCP projects), 27e (ToS policy compliance), 27f (scope-to-feature consistency), 27g (Google reviewer test account), 27h (consent screen English requirement); added scope reference block**
+**⚠️ PATCH 06 March 2026 — Item 25: removed incorrect "≤30 days" ceiling (no such rule in Google policy or GDPR); replaced with "no longer than necessary + disclose"; added PG implementation note (audit logs 90 days disclosed; HTTP access logs go to Render stdout only, not persisted in application database; Render listed as processor)**
 
 ---
 
@@ -48,22 +50,41 @@
 
 > **Note:** This entire section only applies to apps using Google APIs (Priority Guardian Calendar apps). **Skip for non-Google apps.**
 
-| # | Requirement | Enforcer |
-|---|-------------|----------|
-| 14 | Implement Google OAuth 2.0 with `calendar.readonly`; handle redirects, token exchange, refresh | `[Google]` |
-| 15 | Complete domain verification in Google Cloud Console | `[Google]` |
-| 16 | Configure OAuth consent screen (External app type) with app name, contact info, privacy-policy URL | `[Google]` |
-| 17 | Complete Google OAuth verification before public release | `[Google]` |
-| 18 | Use minimal scopes only; prefer read-only access | `[Google]` |
-| 19 | Encrypt access and refresh tokens; store short-term only; never log or hard-code | `[Google]` + `[GDPR]` |
-| 20 | Provide `/disconnect` endpoint that calls Google's revoke endpoint | `[Google]` |
-| 21 | Do not permanently store Google Calendar data; keep only in temporary encrypted cache | `[Google]` |
-| 22 | Offer visible "Disconnect Google Calendar" or "Delete my data" button | `[Google]` + `[GDPR]` |
-| 23 | Follow Google's Limited-Use policy: no advertising, analytics, profiling, or model training | `[Google]` |
-| 24 | HTTPS for all redirects, endpoints, and webhooks | `[Google]` + `[OpenAI]` |
-| 25 | Log anonymized technical events only; no tokens or user data; retain ≤30 days | `[Google]` + `[GDPR]` |
-| 26 | Sensitive-scope justification PDF explaining why scope is needed | `[Google]` |
-| 27 | Google branding compliance screenshots in verification package | `[Google]` |
+> **⚠️ SCOPE REFERENCE — Priority Guardian uses exactly two Google Calendar scopes (both read-only, both sensitive tier):**
+> - `https://www.googleapis.com/auth/calendar.events.readonly` — reads calendar events for time tracking
+> - `https://www.googleapis.com/auth/calendar.settings.readonly` — reads user timezone for accurate week boundaries
+> - Source of truth: `backend/apps/priority_guardian/pg_config.py` → `GOOGLE_CALENDAR_SCOPE`
+> - Both are **sensitive** scopes (not restricted) → no CASA security assessment required; sensitive-scope verification path applies (~3–5 business days)
+> - **Do not request `calendar.readonly` or any broader scope** — it violates least-privilege and will be challenged during verification
+
+| # | Requirement | Enforcer | Notes |
+|---|-------------|----------|-------|
+| 14 | Implement Google OAuth 2.0 with scopes `calendar.events.readonly` + `calendar.settings.readonly`; handle redirects, token exchange, refresh | `[Google]` | These are the only two scopes. Any change requires re-verification. |
+| 14b | **Scope changes after initial verification reset status** — adding or removing any scope requires full re-submission of brand verification + scope justification + demo video. Finalize scope list before first submission | `[Google]` | Common operational gotcha |
+| 15 | Verify `priority-guard.com` domain ownership in **Google Search Console** (not Cloud Console — Cloud Console only reads Search Console status). The GCP project owner or editor account must hold Search Console verification for the domain | `[Google]` | Verification lives in Search Console; Cloud Console checks it |
+| 16 | Configure OAuth consent screen (External app type) with: app name, **app logo**, support email, **home page URI**, privacy-policy URL, Terms of Service URI (optional but recommended) | `[Google]` | App logo and home page URI are consent screen fields — missing them is a common incomplete-submission flag |
+| 16b | **Brand verification is Phase 1** (~2–3 business days) — must complete before sensitive-scope verification (Phase 2). Submit Phase 1 as soon as homepage and privacy policy are live on `priority-guard.com` | `[Google]` | Two-phase process; Phase 1 gates Phase 2 |
+| 16c | **Homepage must be on your own verified domain** — `priority-guard.com` must be the serving domain (not `*.framer.app` or any third-party subdomain). Custom Framer domain mapped to `priority-guard.com` is acceptable. Homepage must describe PG's functionality and must NOT be only a login page | `[Google]` | Common rejection cause; third-party subdomains are rejected even if Search Console-verified |
+| 16d | **Privacy policy must be visibly linked on the homepage** (footer link is sufficient) and hosted on the same domain as the homepage (`priority-guard.com/privacy`). The URL on the homepage and on the OAuth consent screen must match exactly | `[Google]` | |
+| 17 | Complete Google OAuth verification (both phases) before public release | `[Google]` | |
+| 18 | Use minimal scopes only — `calendar.events.readonly` and `calendar.settings.readonly` are the ceiling, not a floor. Do not add broader scopes without a justified feature need | `[Google]` | |
+| 19 | Encrypt access and refresh tokens; store short-term only; never log or hard-code | `[Google]` + `[GDPR]` | |
+| 20 | Provide `/disconnect` endpoint that calls Google's revoke endpoint | `[Google]` | |
+| 21 | **Limit storage of Google user data to what is strictly necessary for the user-facing feature.** Permanent storage is permitted if disclosed in the privacy policy and compliant with the Google API Services User Data Policy. Data must not be retained longer than necessary for the feature. — *PG implementation note: PG does not permanently store Calendar events; only a temporary encrypted cache is used. This exceeds the minimum policy requirement.* | `[Google]` | Do not claim Google forbids storage entirely — it does not; it requires necessity + disclosure + limited retention |
+| 22 | Offer visible "Disconnect Google Calendar" or "Delete my data" button | `[Google]` + `[GDPR]` | |
+| 23 | Follow Google's **Limited Use policy** (Google API Services User Data Policy) — Google user data may ONLY be used for user-facing features directly requested by the user. Prohibited uses: advertising/retargeting, analytics, profiling, model training, **selling or transferring to data brokers**, **selling or transferring to surveillance entities**, **use for credit-worthiness or lending determinations**. Human access to Google user data is prohibited unless the user has given explicit affirmative consent for that specific access | `[Google]` | All prohibited uses are distinct grounds for verification rejection or API access revocation |
+| 24 | HTTPS for all redirects, endpoints, and webhooks | `[Google]` + `[OpenAI]` | |
+| 25 | Log anonymized technical events only; no tokens or user data in logs; retain only as long as necessary and disclose the retention period in the privacy policy. No fixed maximum is mandated by Google policy or GDPR — both require "no longer than necessary" (GDPR Art. 5(1)(e)). — *PG implementation: `core_tool_audit_log` retains 90 days (disclosed in privacy policy §5). HTTP access logs may include IP address and user-agent but are written only to stdout and handled by the hosting provider (Render). IP addresses are not stored in the application database. Render is listed as a data processor in the privacy policy.* | `[Google]` + `[GDPR]` | Previous wording "≤30 days" was incorrect — no such ceiling exists in Google API Services User Data Policy or GDPR. Corrected 06 March 2026. |
+| 26 | **Per-scope justification** (submitted in Cloud Console Verification Center, not as a PDF): one entry per sensitive scope in the format: **Scope → Purpose → Feature → Data Usage → Why narrower scope is insufficient**. Vague or combined justifications are a rejection cause. Example for `calendar.events.readonly`: *"Used to read the user's calendar events. Enables the time-tracking feature that matches events against user-defined priorities and generates a weekly priority-hour breakdown. Only event title, start/end time, and calendar ID are used. No event data is stored permanently. A narrower scope is not available — `calendar.freebusy` provides no event titles needed for priority matching."* | `[Google]` | Google explicitly asks why a narrower scope is insufficient; missing this is a documented rejection reason |
+| 26b | **`calendar.settings.readonly` is classified as a Sensitive scope** and must be declared in the Cloud Console Data Access page and justified separately in the verification form. It must also be demonstrated in the verification video (e.g., show that timezone is read and used for week boundary calculation). Justification format: Scope → Purpose → Feature → Data Usage → Why narrower scope is insufficient. Example: *"`calendar.settings.readonly` is used to read the user's timezone setting. This ensures weekly priority reports reflect the user's local week boundaries, not UTC. No calendar settings other than timezone are read or stored. No narrower scope exists for reading timezone only."* | `[Google]` | Confirmed Sensitive tier — not non-sensitive. Requires same justification + video treatment as `calendar.events.readonly` |
+| 27 | **Demo video (YouTube, Unlisted)** — upload before submitting for sensitive-scope verification. Must show: (1) end-to-end OAuth grant flow with consent screen **in English**, (2) app name visible on consent screen, (3) OAuth client ID visible in browser address bar during consent, (4) the specific feature that uses each requested scope (calendar events matched to priorities → weekly breakdown visible to user). Record on production domain `priority-guard.com`, not localhost | `[Google]` | Hard requirement for sensitive-scope verification; missing or incomplete video is a top rejection cause |
+| 27b | **N/A — not applicable to PG's architecture.** PG uses Google Calendar OAuth (API authorization via OAuth redirect), not "Sign in with Google" (Google Identity Services authentication product). Google's button branding guidelines are scoped exclusively to the Sign in with Google identity product. No Google-branded button is required. Best practice: button text should read "Connect Google Calendar" (not "Sign in with Google" or "Login with Google") to avoid implying Google identity login. | `[Google]` | Verified against developers.google.com/identity/branding-guidelines — guidelines explicitly scoped to Sign in with Google product, not general OAuth |
+| 27c | **Privacy policy must explicitly disclose Google-specific data handling** — in addition to general GDPR disclosures, the privacy policy must state specifically: what Google Calendar data is accessed (`calendar.events.readonly`: event title, start/end time, calendar ID; `calendar.settings.readonly`: timezone), how it is used (priority time tracking, week boundary calculation), how long it is retained (temporary cache only, not permanently stored), and that it is not shared with third parties. Generic data policy language is a rejection cause | `[Google]` | Google verifies this independently of GDPR compliance — both Item 28 and this item must be satisfied |
+| 27d | **Separate Google Cloud projects for production vs development/testing** — production OAuth client must be in its own GCP project. Test/development OAuth clients must not be in the production project. Remove any non-production OAuth clients from the production project before submitting for verification | `[Google]` | Google explicitly requires this separation; mixed projects with test clients delay or block verification |
+| 27e | **Comply with Google APIs Terms of Service and Google API Services User Data Policy** — these are the governing policy documents for all Google API usage. Verify your integration against both before submitting. Changes to these policies require re-evaluation | `[Google]` | Named prerequisite in Google's verification submission flow |
+| 27f | **Scope-to-feature consistency** — every scope declared in the OAuth consent screen must map to a user-visible feature demonstrated in the verification video. Scopes without a demonstrable feature will be rejected. Conversely, do not show app features in the video that require scopes you have not declared | `[Google]` | Common rejection cause; Google reviewers cross-check declared scopes against video content |
+| 27g | **Google reviewer test account** — if Google's verification team requests access to test the app, the account must allow login without MFA or additional approval steps. Prepare a dedicated reviewer account with pre-populated Calendar data before submitting | `[Google]` | Distinct from OpenAI reviewer account (item 54b) — Google verification team accesses the app independently |
+| 27h | **OAuth consent screen must be in English during verification video** — even if PG supports other languages, the consent screen language must be toggled to English before recording. Language setting is in the bottom-left corner of the consent screen. Non-English consent screens are a documented rejection cause | `[Google]` | Common rejection; language toggle is easy to miss |
 
 ---
 
@@ -280,7 +301,7 @@
 | `[OpenAI Guideline]` | 3 | **Review risk** — enforcement section or "avoid" language, not guaranteed blockers (D5, F2, 13c) |
 | `[OpenAI UI Guideline]` | 3 | **Likely scrutinized** — "don't" language in UI guidelines |
 | `[Sandbox]` | 2 | **App will fail** — iframe sandbox blocks cookies and privileged browser APIs |
-| `[Google]` | ~14 | **Blocks OAuth verification** — only for apps using Google APIs |
+| `[Google]` | ~20 | **Blocks OAuth verification** — only for apps using Google APIs (Section B expanded 05 March 2026) |
 | `[GDPR]` | ~15 | **Legal risk** — required for EU/DE market, not platform-enforced |
 | `[Recommended]` | ~26 | **Speeds approval** — defer if time-constrained (added B2-11, G1, G5) |
 
@@ -386,9 +407,38 @@
 
 ## PG Calendar apps (Google OAuth): ALSO fix
 
-- [ ] All Section B items (14–27)
-- [ ] Google OAuth verification completed
-- [ ] Test credentials with NO MFA requirement
+**Scopes (source of truth: `pg_config.py` → `GOOGLE_CALENDAR_SCOPE`):**
+- [ ] Only `calendar.events.readonly` + `calendar.settings.readonly` requested — no broader scopes
+- [ ] Both scopes declared in Cloud Console Data Access page
+- [ ] `calendar.settings.readonly` sensitivity tier confirmed in Cloud Console
+
+**Domain & Homepage (Phase 1 — Brand Verification):**
+- [ ] `priority-guard.com` verified in **Google Search Console** by GCP project owner account
+- [ ] Homepage served on `priority-guard.com` (not `*.framer.app` — custom Framer domain required)
+- [ ] Homepage describes PG functionality and is NOT only a login page
+- [ ] Privacy policy linked on homepage (footer sufficient); URL matches OAuth consent screen exactly
+- [ ] Submit for brand verification as soon as above are ready (≈2–3 days)
+
+**Scope Verification (Phase 2 — after Phase 1 approved):**
+- [ ] Per-scope justification written for each sensitive scope (Scope → Purpose → Feature → Data Usage → Why narrower scope is insufficient)
+- [ ] Demo video recorded on `priority-guard.com` (not localhost), uploaded to YouTube as Unlisted
+- [ ] Consent screen language toggled to English before recording (bottom-left of consent screen)
+- [ ] Demo video shows: consent screen in English, app name + client ID visible, feature using EACH scope (both `calendar.events.readonly` AND `calendar.settings.readonly`)
+- [ ] Button text reads "Connect Google Calendar" (not "Sign in with Google") — no Google logo or branded button required for OAuth API integrations
+- [ ] Privacy policy explicitly discloses Google Calendar data handling (see item 27c): data fields accessed, usage purpose, retention, no third-party sharing
+
+**GCP Project hygiene:**
+- [ ] Production OAuth client is in its own dedicated GCP project
+- [ ] No test/development OAuth clients present in the production project
+- [ ] App logo configured in OAuth consent screen
+- [ ] Home page URI configured in OAuth consent screen
+- [ ] Compliance with Google APIs ToS and API Services User Data Policy confirmed
+
+**Operational:**
+- [ ] Google OAuth verification (both phases) completed before public release
+- [ ] Scope list finalized before first submission (changes trigger full re-verification)
+- [ ] Dedicated Google reviewer account prepared (pre-populated Calendar data, no MFA)
+- [ ] Scope-to-feature consistency verified: every declared scope has a demonstrable feature in the video
 - [ ] OpenAI Platform project set to **global data residency** (not EU) before submitting (H6)
 
 ## German market launch: ALSO fix

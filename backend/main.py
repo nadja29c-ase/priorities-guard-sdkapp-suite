@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
-from backend.core.config import settings
+from backend.core.config import settings, WWW_AUTHENTICATE_VALUE
 from backend.core.logging import configure_logging, get_logger
 from backend.core.middleware import CorrelationIDMiddleware, SecurityHeadersMiddleware
 from backend.core.database import test_connection
@@ -227,6 +227,7 @@ async def oauth_exception_handler(request: Request, exc: OAuthError):
     Handle OAuth errors with RFC 6749-compliant responses.
 
     Returns JSON error responses per OAuth 2.1 specification.
+    Adds WWW-Authenticate header for 401 responses on /oauth/* paths (B2-7 compliance).
     """
     # Extract correlation_id for logging
     correlation_id = getattr(request.state, 'correlation_id', 'system')
@@ -239,12 +240,22 @@ async def oauth_exception_handler(request: Request, exc: OAuthError):
         status_code=exc.status_code
     )
 
+    # Build headers dict - add WWW-Authenticate for 401 on OAuth endpoints (B2-7)
+    headers = {}
+    if (
+        exc.status_code == 401
+        and request.url.path.startswith("/oauth/")
+        and "WWW-Authenticate" not in headers
+    ):
+        headers["WWW-Authenticate"] = WWW_AUTHENTICATE_VALUE
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": exc.error,
             "error_description": exc.description
-        }
+        },
+        headers=headers
     )
 
 
