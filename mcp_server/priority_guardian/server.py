@@ -557,11 +557,27 @@ def create_app():
         backend_url = f"{BACKEND_URL}/oauth/pg/register"
         forward_headers = {
             k: v for k, v in request.headers.items()
-            if k.lower() not in ("host", "content-length")
+            if k.lower() not in ("host", "content-length", "accept-encoding")
         }
+        # Force identity encoding: prevent brotli/gzip compressed responses
+        # httpx decompresses gzip automatically but brotli requires optional dep.
+        # Safest: ask backend for uncompressed response.
+        forward_headers["accept-encoding"] = "identity"
         body = await request.body()
         resp = await client.post(backend_url, headers=forward_headers, content=body)
-        return JSONResponse(content=resp.json(), status_code=resp.status_code)
+        logger.info(
+            "oauth.proxy.register_debug",
+            status_code=resp.status_code,
+            content_type=resp.headers.get("content-type", "MISSING"),
+            content_encoding=resp.headers.get("content-encoding", "NONE"),
+            body_hex=resp.content[:60].hex(),
+        )
+        try:
+            return JSONResponse(content=resp.json(), status_code=resp.status_code)
+        except Exception as e:
+            logger.error("oauth.proxy.register_parse_failed", error=str(e), body_hex=resp.content[:120].hex())
+            # Return raw content with explicit JSON content-type as last resort
+            return Response(content=resp.content, status_code=resp.status_code, headers={"content-type": "application/json; charset=utf-8"})
 
     # Register OAuth proxy routes
     fastmcp_app.add_route("/oauth/jwks", oauth_jwks, methods=["GET"])
