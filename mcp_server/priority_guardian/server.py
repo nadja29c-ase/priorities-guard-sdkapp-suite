@@ -343,7 +343,7 @@ def create_app():
     # understand required permissions during the discovery path
     _scopes = " ".join(SCOPES_SUPPORTED)
     WWW_AUTHENTICATE_VALUE = (
-        f'Bearer resource_metadata="{_mcp_origin}/.well-known/oauth-protected-resource", '
+        f'Bearer resource_metadata="{_mcp_origin}/.well-known/oauth-protected-resource/mcp", '
         f'scope="{_scopes}"'
     )
     from mcp_server.priority_guardian.discovery import (
