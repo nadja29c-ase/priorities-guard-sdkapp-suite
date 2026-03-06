@@ -16,13 +16,16 @@ def validate_redirect_uris(
 
     RFC 9728 B2-8 Security Requirements:
     - At least one redirect_uri required
-    - When allowlist is provided, URIs must be in the allowlist (exact match)
+    - When allowlist is provided, URIs must match an allowlist entry
+    - Entries ending with "/" are prefix matches (for dynamic callback IDs)
+    - Other entries are exact string matches
     - When allowlist is None (legacy mode), only HTTPS check is performed
 
     Args:
         redirect_uris: List of redirect URIs to validate
         allowed_uris: Optional allowlist of permitted redirect URIs.
-            If provided, only exact matches are accepted.
+            Entries ending with "/" are treated as prefix matches.
+            Other entries require exact match.
             If None, falls back to HTTPS-only validation (legacy behavior).
 
     Returns:
@@ -31,22 +34,35 @@ def validate_redirect_uris(
             - (False, error_message) if invalid
 
     Example:
-        >>> allowed = ["https://chatgpt.com/callback"]
-        >>> validate_redirect_uris(["https://chatgpt.com/callback"], allowed)
-        (True, None)
+        >>> allowed = ["https://chatgpt.com/connector/oauth/", "https://example.com/cb"]
+        >>> validate_redirect_uris(["https://chatgpt.com/connector/oauth/ABC123"], allowed)
+        (True, None)  # prefix match
+        >>> validate_redirect_uris(["https://example.com/cb"], allowed)
+        (True, None)  # exact match
         >>> validate_redirect_uris(["https://evil.com/callback"], allowed)
         (False, "redirect_uri not in allowlist")
-        >>> validate_redirect_uris([])
-        (False, "At least one redirect_uri is required")
     """
     if not redirect_uris or len(redirect_uris) == 0:
         return False, "At least one redirect_uri is required"
 
     if allowed_uris is not None:
-        # RFC 9728 B2-8: Strict allowlist validation (exact string match)
-        allowed_set = set(allowed_uris)
+        # RFC 9728 B2-8: Allowlist validation
+        # Entries ending with "/" are prefix matches (e.g., connector/oauth/)
+        # All other entries are exact string matches
+        def _is_allowed(uri: str) -> bool:
+            for allowed in allowed_uris:
+                if allowed.endswith("/"):
+                    # Prefix match for entries like "https://chatgpt.com/connector/oauth/"
+                    if uri.startswith(allowed):
+                        return True
+                else:
+                    # Exact match for other entries
+                    if uri == allowed:
+                        return True
+            return False
+
         for uri in redirect_uris:
-            if uri not in allowed_set:
+            if not _is_allowed(uri):
                 return False, "redirect_uri not in allowlist"
     else:
         # Legacy mode: Only check HTTPS (for backward compatibility)

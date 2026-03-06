@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # ChatGPT redirect URIs (production allowlist):
     # ClassVar ensures Pydantic v2 treats this as a class constant, not a field
     _CHATGPT_REDIRECT_URIS: ClassVar[list[str]] = [
-        "https://chatgpt.com/connector/oauth/YBf91qGED3L6",  # production
+        "https://chatgpt.com/connector/oauth/",  # prefix — any connector callback_id
         "https://chatgpt.com/connector_platform_oauth_redirect",  # legacy
         "https://platform.openai.com/apps-manage/oauth",  # review
     ]

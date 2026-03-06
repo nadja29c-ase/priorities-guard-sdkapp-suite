@@ -29,6 +29,15 @@ B2-8 Tests:
 6. validate_redirect_uris() with empty list -> rejected
 7. Custom allowlist passed in -> only those URIs accepted
 8. Subdomain of allowed URI (e.g. https://sub.chatgpt.com/...) -> rejected
+
+B2-8 Prefix Matching Tests (for dynamic callback IDs):
+1. Prefix match accepts URIs with dynamic callback IDs (e.g., connector/oauth/YBf91qGED3L6)
+2. Prefix match accepts different callback IDs (any suffix after prefix)
+3. Exact match still works when mixed with prefix entries
+4. Prefix match rejects URIs with different path
+5. Prefix match rejects URIs with different host
+6. Prefix match rejects subdomain attack (chatgpt.com.evil.com)
+7. Both prefix and exact match in single registration -> valid
 """
 
 import pytest
@@ -966,3 +975,135 @@ class TestRedirectURIAllowlist:
         )
 
         assert valid is False, "Path variation should be rejected (exact match only)"
+
+
+class TestRedirectURIPrefixMatching:
+    """Test prefix matching for redirect URIs with dynamic callback IDs (RFC 9728 B2-8)."""
+
+    # Prefix URI ends with "/" to enable prefix matching
+    CONNECTOR_PREFIX = "https://chatgpt.com/connector/oauth/"
+    # Exact match URIs (no trailing slash)
+    EXACT_MATCH_URI = "https://example.com/callback"
+    # Combined allowlist with prefix and exact match entries
+    MIXED_ALLOWLIST = [CONNECTOR_PREFIX, EXACT_MATCH_URI]
+
+    def test_prefix_match_accepts_dynamic_callback_id(self):
+        """
+        Test that prefix matching accepts URIs with dynamic callback IDs.
+
+        ChatGPT assigns a unique callback_id per connector, e.g., YBf91qGED3L6.
+        The allowlist entry "https://chatgpt.com/connector/oauth/" should match
+        any URI starting with that prefix.
+        """
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+
+        # Simulate ChatGPT's dynamic callback URI
+        dynamic_callback_uri = "https://chatgpt.com/connector/oauth/YBf91qGED3L6"
+
+        valid, error = validate_redirect_uris(
+            redirect_uris=[dynamic_callback_uri],
+            allowed_uris=self.MIXED_ALLOWLIST
+        )
+
+        assert valid is True, f"Dynamic callback URI should match prefix, error: {error}"
+        assert error is None
+
+    def test_prefix_match_accepts_different_callback_ids(self):
+        """
+        Test that prefix matching works for any callback ID, not just one specific value.
+        """
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+
+        callback_ids = ["ABC123", "xyz789", "FooBar42", "a" * 50]
+
+        for callback_id in callback_ids:
+            uri = f"https://chatgpt.com/connector/oauth/{callback_id}"
+            valid, error = validate_redirect_uris(
+                redirect_uris=[uri],
+                allowed_uris=self.MIXED_ALLOWLIST
+            )
+            assert valid is True, f"Callback ID '{callback_id}' should match prefix, error: {error}"
+
+    def test_exact_match_still_works_with_mixed_allowlist(self):
+        """
+        Test that exact match URIs still work when mixed with prefix entries.
+        """
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+
+        valid, error = validate_redirect_uris(
+            redirect_uris=[self.EXACT_MATCH_URI],
+            allowed_uris=self.MIXED_ALLOWLIST
+        )
+
+        assert valid is True, f"Exact match URI should be accepted, error: {error}"
+        assert error is None
+
+    def test_prefix_match_rejects_different_path(self):
+        """
+        Test that prefix matching only matches URIs that start with the exact prefix.
+        """
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+
+        # Different path that doesn't start with the prefix
+        wrong_path_uri = "https://chatgpt.com/oauth/callback/ABC123"
+
+        valid, error = validate_redirect_uris(
+            redirect_uris=[wrong_path_uri],
+            allowed_uris=self.MIXED_ALLOWLIST
+        )
+
+        assert valid is False, "Wrong path should be rejected"
+        assert "not in allowlist" in error.lower()
+
+    def test_prefix_match_rejects_different_host(self):
+        """
+        Test that prefix matching requires exact host match.
+        """
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+
+        # Different host
+        wrong_host_uri = "https://evil.com/connector/oauth/ABC123"
+
+        valid, error = validate_redirect_uris(
+            redirect_uris=[wrong_host_uri],
+            allowed_uris=self.MIXED_ALLOWLIST
+        )
+
+        assert valid is False, "Wrong host should be rejected"
+        assert "not in allowlist" in error.lower()
+
+    def test_prefix_match_rejects_subdomain_attack(self):
+        """
+        Test that prefix matching doesn't match subdomains.
+
+        Security: https://chatgpt.com.evil.com/connector/oauth/X should NOT match.
+        """
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+
+        # Subdomain attack
+        subdomain_attack_uri = "https://chatgpt.com.evil.com/connector/oauth/ABC123"
+
+        valid, error = validate_redirect_uris(
+            redirect_uris=[subdomain_attack_uri],
+            allowed_uris=self.MIXED_ALLOWLIST
+        )
+
+        assert valid is False, "Subdomain attack should be rejected"
+        assert "not in allowlist" in error.lower()
+
+    def test_both_prefix_and_exact_match_in_registration(self):
+        """
+        Test that a registration can include both prefix-matched and exact-matched URIs.
+        """
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+
+        valid, error = validate_redirect_uris(
+            redirect_uris=[
+                "https://chatgpt.com/connector/oauth/DynamicID123",  # Prefix match
+                self.EXACT_MATCH_URI  # Exact match
+            ],
+            allowed_uris=self.MIXED_ALLOWLIST
+        )
+
+        assert valid is True, f"Mixed registration should be accepted, error: {error}"
+        assert error is None

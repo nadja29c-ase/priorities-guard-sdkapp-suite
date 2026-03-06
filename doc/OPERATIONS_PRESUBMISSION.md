@@ -319,28 +319,30 @@ On WCAG AA specifically: Given you're using Apps SDK UI system tokens throughout
 
 **Status: ✅ DONE** (06 March 2026)
 
-The `callback_id` is assigned at app creation and visible in the app management page before submission.
+ChatGPT assigns a unique `callback_id` per connector (e.g., `YBf91qGED3L6`). Rather than hardcoding each callback_id, we use **prefix matching** to accept any callback_id under the `/connector/oauth/` path.
 
-PG callback_id: `YBf91qGED3L6`
-Production redirect URI: `https://chatgpt.com/connector/oauth/YBf91qGED3L6`
+**Implementation:**
 
-**Completed steps:**
-
-- [x] Locate the assigned callback URI in app management page
-- [x] Add it to `_CHATGPT_REDIRECT_URIS` in `backend/core/config.py`:
+Allowlist entries ending with `/` are treated as prefix matches. This allows dynamic callback IDs without code changes per connector.
 
 ```python
 _CHATGPT_REDIRECT_URIS: ClassVar[list[str]] = [
-    "https://chatgpt.com/connector/oauth/YBf91qGED3L6",  # production
-    "https://chatgpt.com/connector_platform_oauth_redirect",  # legacy
-    "https://platform.openai.com/apps-manage/oauth",  # review
+    "https://chatgpt.com/connector/oauth/",  # prefix — any connector callback_id
+    "https://chatgpt.com/connector_platform_oauth_redirect",  # legacy (exact match)
+    "https://platform.openai.com/apps-manage/oauth",  # review (exact match)
 ]
 ```
 
-**Remaining steps after code change:**
+**How prefix matching works:**
 
-- [ ] Deploy the backend to Render
-- [ ] Verify deployment is healthy
-- [ ] Trigger a fresh OAuth flow via ChatGPT and confirm it completes without redirect URI mismatch error
+- `https://chatgpt.com/connector/oauth/YBf91qGED3L6` → ✅ matches prefix
+- `https://chatgpt.com/connector/oauth/ABC123` → ✅ matches prefix
+- `https://chatgpt.com/connector_platform_oauth_redirect` → ✅ exact match
+- `https://evil.com/connector/oauth/ABC123` → ❌ rejected (wrong host)
+
+**Validation:**
+
+- Unit tests: `tests/unit/oauth_provider/test_b2_compliance_unit.py::TestRedirectURIPrefixMatching`
+- Validator: `backend/core/oauth_provider/validators/client_metadata.py`
 
 **Compliance reference:** `compliance_master_1.3.26.md` B2-8
