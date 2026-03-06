@@ -217,3 +217,43 @@ Before merging any new tool or modifying an existing one, verify all of the foll
 - [ ] No auth logic inside the handler
 - [ ] No internal error details surfaced to the LLM
 - [ ] `ToolUsageError` used for intentional rejections; unhandled exceptions fall through to dispatcher
+
+---
+
+## OAuth Discovery Configuration
+
+This section governs OAuth discovery endpoint configuration for authenticated MCP servers. Non-compliance causes ChatGPT connector creation to fail silently.
+
+### Two Distinct Config Values
+
+| Config Variable | Purpose | Example Value |
+|-----------------|---------|---------------|
+| `OAUTH_ISSUER_BASE` | Authorization server identifier. Used for `issuer` claim in discovery and `authorization_servers` in protected resource metadata. | `https://www.priority-guard.com` |
+| `OAUTH_ISSUER_URL` | Endpoint path prefix. Used to construct `authorization_endpoint`, `token_endpoint`, `jwks_uri`, `registration_endpoint`. | `https://www.priority-guard.com/oauth/pg` |
+
+**Why they must be separate:**
+- `issuer` in OAuth/OIDC discovery must be the root domain of the authorization server, not a path prefix
+- ChatGPT fetches `{authorization_servers[0]}/.well-known/oauth-authorization-server` — if `authorization_servers` contains a path, this fetch fails
+- Endpoint URLs legitimately include path prefixes (e.g., `/oauth/pg/authorize`)
+
+**Never derive one from the other.** Parsing a URL to strip paths is fragile and fails silently when paths change. Define both explicitly via separate environment variables.
+
+### Invariants
+
+1. **`issuer` must equal the root domain** — In all discovery documents (`oauth-authorization-server`, `openid-configuration`), the `issuer` field must be the authorization server's root domain (e.g., `https://www.priority-guard.com`), not an endpoint path prefix (e.g., `https://www.priority-guard.com/oauth/pg`).
+
+2. **`authorization_servers` must match `issuer`** — In `oauth-protected-resource`, the `authorization_servers` array must contain the same value as `issuer`. ChatGPT uses this to fetch `{authorization_servers[0]}/.well-known/oauth-authorization-server`.
+
+3. **MCP `OAUTH_ISSUER_BASE` must equal backend `OAUTH_ISSUER`** — These are separate environment variables on separate services (MCP server vs backend). They must always contain the same value. Divergence breaks JWT validation: the backend signs tokens with `iss` = `OAUTH_ISSUER`, and the MCP server validates against `OAUTH_ISSUER_BASE`.
+
+### Environment Variable Sync Table
+
+| MCP Server Env Var | Backend Env Var | Must Match? |
+|--------------------|-----------------|-------------|
+| `PG_OAUTH_ISSUER_BASE` | `OAUTH_ISSUER` | **Yes — exactly** |
+| `PG_ISSUER` (JWT validation) | `OAUTH_ISSUER` | **Yes — exactly** |
+| `PG_AUDIENCE` (JWT validation) | `OAUTH_ISSUER` | **Yes — exactly** |
+
+### Production Bug Reference
+
+Increment 41 (March 2026): MCP discovery returned `issuer: "https://www.priority-guard.com/oauth/pg"` instead of `issuer: "https://www.priority-guard.com"`. ChatGPT connector creation failed silently. Root cause: single config variable used for both issuer identifier and endpoint prefix. Fix: separate `OAUTH_ISSUER_BASE` and `OAUTH_ISSUER_URL` with explicit env vars.

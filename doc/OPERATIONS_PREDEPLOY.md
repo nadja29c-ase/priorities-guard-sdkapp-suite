@@ -48,6 +48,24 @@ pg_dump --schema-only "$PRODUCTION_DATABASE_URL" > /tmp/prod_schema.sql
 psql "$PRODUCTION_DATABASE_URL" -c "\d+ pg_priorities"
 ```
 
+### OAuth Discovery Sanity Check
+
+After any change to OAuth config or MCP discovery code, verify:
+
+```bash
+curl https://pg.priority-guard.com/.well-known/oauth-authorization-server
+# "issuer" must equal "https://www.priority-guard.com" (matches backend OAUTH_ISSUER)
+# "authorization_servers" is not present here — only in oauth-protected-resource
+
+curl https://pg.priority-guard.com/.well-known/oauth-protected-resource
+# "authorization_servers[0]" must equal "https://www.priority-guard.com"
+# "resource" must equal "https://pg.priority-guard.com" (no /mcp suffix)
+```
+
+**Critical invariant:** `issuer` must be the root domain (`https://www.priority-guard.com`), not a path prefix (`https://www.priority-guard.com/oauth/pg`). ChatGPT fetches `{authorization_servers[0]}/.well-known/oauth-authorization-server` — path prefixes break this.
+
+See `ADR_MCP Server Implementation Standard.md` → OAuth Discovery Configuration for full documentation.
+
 ## Deploy Reminder
 
 **After pushing changes to the shared backend**, manually redeploy the service on Render.
