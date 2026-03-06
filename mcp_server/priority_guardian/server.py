@@ -453,20 +453,128 @@ def create_app():
     fastmcp_app.add_route("/", health_root, methods=["GET"])
     fastmcp_app.add_route("/health", health_check, methods=["GET"])
 
+    # -------------------------------------------------------------------------
+    # OAuth Proxy Routes
+    # -------------------------------------------------------------------------
+    # ChatGPT requires issuer and all OAuth endpoints to share the same origin.
+    # These routes transparently proxy OAuth requests to the backend.
+    # No business logic added — just forward request/response unchanged.
+    import httpx
+    from starlette.requests import Request
+    from starlette.responses import Response
+
+    # Lazy-init proxy client (shares lifecycle with http_client)
+    _proxy_client: httpx.AsyncClient | None = None
+
+    async def _get_proxy_client() -> httpx.AsyncClient:
+        nonlocal _proxy_client
+        if _proxy_client is None:
+            _proxy_client = httpx.AsyncClient(timeout=30.0)
+        return _proxy_client
+
+    async def _proxy_to_backend(request: Request, backend_path: str) -> Response:
+        """
+        Transparent proxy to backend OAuth endpoint.
+
+        Forwards all headers (except host), query params, and body unchanged.
+        Returns backend's status, headers, and body verbatim.
+        """
+        client = await _get_proxy_client()
+        backend_url = f"{BACKEND_URL}{backend_path}"
+
+        # Forward headers except host (which must be the backend's host)
+        forward_headers = {}
+        for key, value in request.headers.items():
+            if key.lower() not in ("host", "content-length"):
+                forward_headers[key] = value
+
+        # Log proxy call (no body logging for security)
+        logger.info(
+            "oauth.proxy",
+            method=request.method,
+            path=str(request.url.path),
+            backend_url=backend_path,
+        )
+
+        # Forward request based on method
+        if request.method == "GET":
+            resp = await client.get(
+                backend_url,
+                headers=forward_headers,
+                params=dict(request.query_params),
+            )
+        elif request.method == "POST":
+            body = await request.body()
+            resp = await client.post(
+                backend_url,
+                headers=forward_headers,
+                params=dict(request.query_params),
+                content=body,
+            )
+        else:
+            # Shouldn't happen, but handle gracefully
+            return Response(content=b"Method not allowed", status_code=405)
+
+        # Log response status
+        logger.info(
+            "oauth.proxy.response",
+            method=request.method,
+            backend_url=backend_path,
+            status_code=resp.status_code,
+        )
+
+        # Forward response headers (except transfer-encoding which Starlette handles)
+        response_headers = {}
+        for key, value in resp.headers.items():
+            if key.lower() not in ("transfer-encoding", "content-encoding", "content-length"):
+                response_headers[key] = value
+
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            headers=response_headers,
+        )
+
+    # OAuth proxy route handlers
+    async def oauth_jwks(request: Request) -> Response:
+        return await _proxy_to_backend(request, "/oauth/pg/jwks")
+
+    async def oauth_authorize(request: Request) -> Response:
+        return await _proxy_to_backend(request, "/oauth/pg/authorize")
+
+    async def oauth_token(request: Request) -> Response:
+        return await _proxy_to_backend(request, "/oauth/pg/token")
+
+    async def oauth_register(request: Request) -> Response:
+        return await _proxy_to_backend(request, "/oauth/pg/register")
+
+    # Register OAuth proxy routes
+    fastmcp_app.add_route("/oauth/jwks", oauth_jwks, methods=["GET"])
+    fastmcp_app.add_route("/oauth/authorize", oauth_authorize, methods=["GET"])
+    fastmcp_app.add_route("/oauth/token", oauth_token, methods=["POST"])
+    fastmcp_app.add_route("/oauth/register", oauth_register, methods=["GET", "POST"])
+
     logger.info(
         "mcp.app.created",
         fastmcp_name=mcp.name,
         mcp_endpoint="/mcp",
         discovery_mount="/.well-known",
+        oauth_proxy_routes=["/oauth/jwks", "/oauth/authorize", "/oauth/token", "/oauth/register"],
     )
 
     # -------------------------------------------------------------------------
     # Cleanup function
     # -------------------------------------------------------------------------
     async def _cleanup_on_shutdown():
+        nonlocal _proxy_client
         logger.info("mcp.server.shutdown")
         await cleanup_jwks_cache()
         await cleanup_http_client()
+        # Close proxy client
+        if _proxy_client is not None:
+            await _proxy_client.aclose()
+            _proxy_client = None
+            logger.info("oauth.proxy_client.closed")
 
     # -------------------------------------------------------------------------
     # Wrap with middlewares
