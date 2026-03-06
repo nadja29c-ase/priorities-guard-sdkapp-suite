@@ -19,7 +19,7 @@ from mcp_server.priority_guardian.config import (
 async def openid_configuration():
     """OpenID Connect Discovery (RFC 8414)."""
     return {
-        "issuer": OAUTH_ISSUER_BASE,
+        "issuer": MCP_SERVER_URL,
         "authorization_endpoint": f"{OAUTH_ISSUER_URL}/authorize",
         "token_endpoint": f"{OAUTH_ISSUER_URL}/token",
         "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
@@ -33,7 +33,7 @@ async def openid_configuration():
 async def oauth_authorization_server():
     """OAuth 2.0 Authorization Server Metadata (RFC 8414)."""
     return {
-        "issuer": OAUTH_ISSUER_BASE,
+        "issuer": MCP_SERVER_URL,
         "authorization_endpoint": f"{OAUTH_ISSUER_URL}/authorize",
         "token_endpoint": f"{OAUTH_ISSUER_URL}/token",
         "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
