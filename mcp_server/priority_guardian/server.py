@@ -546,7 +546,22 @@ def create_app():
         return await _proxy_to_backend(request, "/oauth/pg/token")
 
     async def oauth_register(request: Request) -> Response:
-        return await _proxy_to_backend(request, "/oauth/pg/register")
+        """Proxy DCR requests. POST uses JSONResponse for proper JSON serialization."""
+        from starlette.responses import JSONResponse
+
+        if request.method == "GET":
+            return await _proxy_to_backend(request, "/oauth/pg/register")
+
+        # POST: Use JSONResponse to ensure proper JSON content-type
+        client = await _get_proxy_client()
+        backend_url = f"{BACKEND_URL}/oauth/pg/register"
+        forward_headers = {
+            k: v for k, v in request.headers.items()
+            if k.lower() not in ("host", "content-length")
+        }
+        body = await request.body()
+        resp = await client.post(backend_url, headers=forward_headers, content=body)
+        return JSONResponse(content=resp.json(), status_code=resp.status_code)
 
     # Register OAuth proxy routes
     fastmcp_app.add_route("/oauth/jwks", oauth_jwks, methods=["GET"])
