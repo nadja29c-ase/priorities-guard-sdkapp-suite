@@ -6,6 +6,7 @@ All configuration values loaded from environment variables.
 
 import base64
 from typing import ClassVar
+from urllib.parse import urlparse
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
@@ -145,5 +146,8 @@ settings = Settings()
 
 # Derived constants for OAuth WWW-Authenticate header (B2-7 compliance)
 # Used by main.py oauth_exception_handler and token_endpoint.py
-RESOURCE_METADATA_URL = f"{settings.PG_MCP_SERVER_URL.rstrip('/')}/.well-known/oauth-protected-resource"
+# Extract origin only (scheme + host) - /.well-known/* URLs must be at the root
+_parsed_mcp_url = urlparse(settings.PG_MCP_SERVER_URL)
+_MCP_ORIGIN = f"{_parsed_mcp_url.scheme}://{_parsed_mcp_url.netloc}"
+RESOURCE_METADATA_URL = f"{_MCP_ORIGIN}/.well-known/oauth-protected-resource"
 WWW_AUTHENTICATE_VALUE = f'Bearer resource_metadata="{RESOURCE_METADATA_URL}"'

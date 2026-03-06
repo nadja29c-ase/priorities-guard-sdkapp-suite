@@ -17,6 +17,7 @@ Security:
 import asyncio
 import time
 from typing import Optional, Dict, List, Any, Set
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import httpx
@@ -35,6 +36,22 @@ from mcp_server.priority_guardian.config import (
     MCP_SERVER_URL,
 )
 from mcp_server.priority_guardian.request_context import auth_header_var
+
+
+def _extract_origin(url: str) -> str:
+    """
+    Extract origin (scheme + host) from URL, stripping any path.
+
+    Used for constructing /.well-known/* URLs which must be at the root.
+    Example: https://pg.priority-guard.com/mcp -> https://pg.priority-guard.com
+    """
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+# Origin for resource_metadata URLs (/.well-known/oauth-protected-resource)
+# Must use host only, not full MCP_SERVER_URL which may include /mcp path
+_MCP_ORIGIN = _extract_origin(MCP_SERVER_URL)
 
 logger = structlog.get_logger(__name__)
 
@@ -497,7 +514,7 @@ def build_unauthorized_meta() -> Dict[str, Any]:
     """
     return {
         "mcp/www_authenticate": [
-            f'Bearer resource_metadata="{MCP_SERVER_URL}/.well-known/oauth-protected-resource", '
+            f'Bearer resource_metadata="{_MCP_ORIGIN}/.well-known/oauth-protected-resource", '
             f'error="invalid_token", error_description="Authentication required"'
         ]
     }
@@ -518,7 +535,7 @@ def build_forbidden_meta() -> Dict[str, Any]:
     """
     return {
         "mcp/www_authenticate": [
-            f'Bearer resource_metadata="{MCP_SERVER_URL}/.well-known/oauth-protected-resource", '
+            f'Bearer resource_metadata="{_MCP_ORIGIN}/.well-known/oauth-protected-resource", '
             f'error="insufficient_scope", error_description="Insufficient permissions"'
         ]
     }

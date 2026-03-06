@@ -348,5 +348,74 @@ class TestToolScopeMappings:
         assert tool.required_scopes == ["pg.access"]
 
 
+# =============================================================================
+# Test: Resource Metadata URL Construction
+# =============================================================================
+
+class TestResourceMetadataURL:
+    """
+    Test resource_metadata URL in WWW-Authenticate is always at root.
+
+    The /.well-known/oauth-protected-resource endpoint is served at the host root,
+    not under any path prefix. If MCP_SERVER_URL includes a path (e.g., /mcp),
+    the resource_metadata URL must still point to the root.
+
+    Bug reference: If MCP_SERVER_URL is https://pg.priority-guard.com/mcp,
+    the resource_metadata URL must be https://pg.priority-guard.com/.well-known/oauth-protected-resource,
+    NOT https://pg.priority-guard.com/mcp/.well-known/oauth-protected-resource.
+    """
+
+    def test_extract_origin_strips_path(self):
+        """Test _extract_origin removes path from URL."""
+        from mcp_server.priority_guardian.mcp_auth import _extract_origin
+
+        # URL with path
+        assert _extract_origin("https://pg.priority-guard.com/mcp") == "https://pg.priority-guard.com"
+
+        # URL without path
+        assert _extract_origin("https://pg.priority-guard.com") == "https://pg.priority-guard.com"
+
+        # URL with trailing slash
+        assert _extract_origin("https://pg.priority-guard.com/") == "https://pg.priority-guard.com"
+
+        # URL with deep path
+        assert _extract_origin("https://example.com/a/b/c") == "https://example.com"
+
+    def test_unauthorized_meta_uses_origin_not_full_url(self):
+        """Test build_unauthorized_meta uses origin, not full MCP_SERVER_URL."""
+        result = build_unauthorized_meta()
+        www_auth = result["mcp/www_authenticate"][0]
+
+        # Must contain /.well-known/oauth-protected-resource at root
+        assert "/.well-known/oauth-protected-resource" in www_auth
+
+        # Must NOT contain /mcp/.well-known (broken path)
+        assert "/mcp/.well-known" not in www_auth
+
+    def test_forbidden_meta_uses_origin_not_full_url(self):
+        """Test build_forbidden_meta uses origin, not full MCP_SERVER_URL."""
+        result = build_forbidden_meta()
+        www_auth = result["mcp/www_authenticate"][0]
+
+        # Must contain /.well-known/oauth-protected-resource at root
+        assert "/.well-known/oauth-protected-resource" in www_auth
+
+        # Must NOT contain /mcp/.well-known (broken path)
+        assert "/mcp/.well-known" not in www_auth
+
+    def test_resource_metadata_url_format(self):
+        """Test resource_metadata URL has correct format regardless of MCP_SERVER_URL path."""
+        from mcp_server.priority_guardian.mcp_auth import _MCP_ORIGIN
+
+        # _MCP_ORIGIN should be scheme://host only
+        assert "/.well-known" not in _MCP_ORIGIN
+        assert _MCP_ORIGIN.count("/") == 2  # Only scheme:// slashes
+
+        # Constructed URL should be valid
+        resource_metadata_url = f"{_MCP_ORIGIN}/.well-known/oauth-protected-resource"
+        assert resource_metadata_url.endswith("/.well-known/oauth-protected-resource")
+        assert "/mcp/.well-known" not in resource_metadata_url
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
