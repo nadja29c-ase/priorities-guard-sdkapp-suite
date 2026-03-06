@@ -188,6 +188,73 @@ class HeadMcpMiddleware:
         await self.app(scope, receive, send)
 
 
+class BearerAuthMiddleware:
+    """
+    ASGI middleware to enforce Bearer token presence on /mcp requests.
+
+    When ChatGPT initiates connector creation, it probes /mcp without a token.
+    FastMCP cannot handle unauthenticated MCP protocol requests gracefully —
+    it closes the internal memory stream, producing a ClosedResourceError
+    instead of a clean HTTP 401. ChatGPT interprets the broken connection
+    as a DCR failure.
+
+    FastMCP streamable HTTP uses:
+    - GET /mcp for SSE stream initiation
+    - POST /mcp for messages
+    - DELETE /mcp for session close
+
+    This middleware intercepts GET/POST/DELETE /mcp requests with no
+    Authorization header and returns a standards-compliant HTTP 401 with
+    WWW-Authenticate challenge BEFORE FastMCP sees the request. ChatGPT
+    reads the WWW-Authenticate header, follows the resource_metadata pointer
+    to /.well-known/oauth-protected-resource, discovers the AS, and initiates DCR.
+
+    Positioning: between HeadMcpMiddleware and MCPContentTypeAndAcceptFixMiddleware.
+    Requests with a valid Authorization header pass through unchanged.
+    """
+
+    def __init__(self, app, www_authenticate_value: str):
+        self.app = app
+        self.www_authenticate_value = www_authenticate_value
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope["type"] == "http"
+            and scope.get("method") in ("GET", "POST", "DELETE")
+            and scope.get("path") == "/mcp"
+        ):
+            # Check for Authorization header
+            has_auth = any(
+                name == b"authorization"
+                for name, _ in scope.get("headers", [])
+            )
+
+            if not has_auth:
+                # Return 401 with WWW-Authenticate challenge
+                # ChatGPT reads this and initiates OAuth discovery + DCR
+                # Must intercept GET/POST/DELETE - FastMCP streamable HTTP uses:
+                # - GET for SSE stream initiation
+                # - POST for messages
+                # - DELETE for session close
+                body = b'{"error": "unauthorized", "error_description": "Bearer token required"}'
+                await send({
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"www-authenticate", self.www_authenticate_value.encode()),
+                        (b"cache-control", b"no-store"),
+                    ],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": body,
+                })
+                return
+
+        await self.app(scope, receive, send)
+
+
 class MCPContentTypeAndAcceptFixMiddleware:
     """
     Fix ChatGPT -> FastMCP header mismatch and capture Authorization header.
@@ -263,10 +330,21 @@ def create_app():
 
     from mcp_server.priority_guardian.config import (
         MCP_SERVER_URL,
+        MCP_RESOURCE_URL,
         OAUTH_ISSUER_URL,
         BACKEND_URL,
         CORS_ALLOWED_ORIGINS,
+        SCOPES_SUPPORTED,
         IS_DEV,
+    )
+    from urllib.parse import urlparse as _urlparse
+    _mcp_origin = f"{_urlparse(MCP_SERVER_URL).scheme}://{_urlparse(MCP_SERVER_URL).netloc}"
+    # Per OpenAI docs: include scope in WWW-Authenticate to help ChatGPT
+    # understand required permissions during the discovery path
+    _scopes = " ".join(SCOPES_SUPPORTED)
+    WWW_AUTHENTICATE_VALUE = (
+        f'Bearer resource_metadata="{_mcp_origin}/.well-known/oauth-protected-resource", '
+        f'scope="{_scopes}"'
     )
     from mcp_server.priority_guardian.discovery import (
         openid_configuration,
@@ -415,7 +493,8 @@ def create_app():
         ])
 
     content_type_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app, auth_header_var)
-    lifespan_app = LifespanMiddleware(content_type_app, _cleanup_on_shutdown)
+    bearer_auth_app = BearerAuthMiddleware(content_type_app, WWW_AUTHENTICATE_VALUE)
+    lifespan_app = LifespanMiddleware(bearer_auth_app, _cleanup_on_shutdown)
     head_mcp_app = HeadMcpMiddleware(lifespan_app, allowed_origins=allowed_origins)
     return RequestLoggingMiddleware(head_mcp_app, service_name="priority-guardian-mcp")
 
