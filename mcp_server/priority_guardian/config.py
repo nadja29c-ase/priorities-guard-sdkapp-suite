@@ -171,6 +171,17 @@ OAUTH_ISSUER_BASE = get_env(
     default="http://localhost:8000"
 )
 
+# Fail-fast: OAUTH_ISSUER_URL must start with OAUTH_ISSUER_BASE (RFC 8414 compliance)
+# Without this check, discovery could return issuer=www but token_endpoint=api,
+# which causes silent OAuth failures in ChatGPT.
+if not OAUTH_ISSUER_URL.startswith(OAUTH_ISSUER_BASE):
+    raise RuntimeError(
+        f"OAUTH_ISSUER_URL must start with OAUTH_ISSUER_BASE. "
+        f"Got OAUTH_ISSUER_BASE={OAUTH_ISSUER_BASE!r}, "
+        f"OAUTH_ISSUER_URL={OAUTH_ISSUER_URL!r}. "
+        f"These must share the same origin (RFC 8414)."
+    )
+
 # Fail-fast: warn if OAUTH_ISSUER_BASE contains localhost in production
 if ENV in ("production", "prod", "staging") and "localhost" in OAUTH_ISSUER_BASE:
     raise RuntimeError(
