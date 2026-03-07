@@ -5,8 +5,11 @@ The heart of the OAuth provider. Handles:
 - Authorization code → token exchange
 - Refresh token rotation
 - Token storage and revocation
+- Idempotent replay for duplicate token requests (Increment 43)
 """
 
+import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -24,8 +27,19 @@ from backend.core.oauth_provider.validators.token_validators import (
     validate_client_id_match,
     validate_redirect_uri_match
 )
+from backend.core.redis_client import redis_client
+
+# Redis key prefix and TTL for idempotent token replay
+TOKEN_REPLAY_KEY_PREFIX = "token_replay:"
+TOKEN_REPLAY_TTL_SECONDS = 30
 
 logger = get_logger(__name__)
+
+
+def _token_replay_key(code: str) -> str:
+    """Generate Redis key for token replay cache."""
+    code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()
+    return f"{TOKEN_REPLAY_KEY_PREFIX}{code_hash}"
 
 
 async def exchange_authorization_code(
@@ -97,6 +111,32 @@ async def exchange_authorization_code(
 
     # Validate not already used
     if auth_code.used:
+        # =====================================================================
+        # Insertion Point A: Idempotent replay from Redis cache
+        # ChatGPT sends duplicate /token requests within ~2s. First succeeds,
+        # duplicates should return cached response instead of invalid_grant.
+        # =====================================================================
+        replay_key = _token_replay_key(code)
+        try:
+            cached_data = await redis_client.get(replay_key)
+            if cached_data:
+                wrapper = json.loads(cached_data)
+                # Verify client_id matches (security: prevent cross-client replay)
+                if wrapper.get("client_id") == client_id:
+                    # Calculate replay age for logging
+                    cached_at = datetime.fromisoformat(wrapper["cached_at"])
+                    replay_age_seconds = (datetime.now(timezone.utc) - cached_at).total_seconds()
+                    request_logger.info(
+                        "oauth.token.idempotent_replay",
+                        client_id=mask_client_id(client_id),
+                        jti=wrapper.get("jti"),
+                        replay_age_seconds=round(replay_age_seconds, 2)
+                    )
+                    return wrapper["token_response"]
+                # client_id mismatch: fall through to invalid_grant
+        except Exception:
+            # Redis error: fail-open to invalid_grant (existing behavior)
+            pass
         return ("invalid_grant", "Authorization code already used")
 
     # Verify PKCE
@@ -175,7 +215,44 @@ async def exchange_authorization_code(
     )
 
     db.add(access_token_record)
-    await db.commit()
+
+    # Build token response (standard OAuth format)
+    token_response = {
+        "access_token": access_token,
+        "refresh_token": refresh_token_plain,
+        "token_type": "Bearer",
+        "expires_in": settings.OAUTH_TOKEN_EXPIRY_SECONDS,
+        "scope": scope_str  # Return as space-separated string (OAuth 2.0 standard)
+    }
+
+    # =========================================================================
+    # Insertion Point B: Write to Redis BEFORE db.commit()
+    # Must be before commit so concurrent requests see the cached response
+    # before the row lock is released. Row lock is held until commit.
+    # =========================================================================
+    replay_key = _token_replay_key(code)
+    replay_wrapper = {
+        "client_id": auth_code.client_id,
+        "cached_at": datetime.now(timezone.utc).isoformat(),
+        "jti": jti,
+        "token_response": token_response
+    }
+    try:
+        await redis_client.set(replay_key, json.dumps(replay_wrapper), ex=TOKEN_REPLAY_TTL_SECONDS)
+    except Exception as e:
+        # Fail-open: Redis error must not block token issuance
+        request_logger.warning("oauth.token.replay_write_failed", error=str(e))
+
+    # Commit with rollback handling for Redis cleanup
+    try:
+        await db.commit()
+    except Exception:
+        # Best-effort delete Redis key if commit fails
+        try:
+            await redis_client.delete(replay_key)
+        except Exception:
+            pass
+        raise  # Re-raise the original commit exception
 
     # Log success (mask client_id for privacy)
     request_logger.info(
@@ -187,13 +264,7 @@ async def exchange_authorization_code(
         scope=auth_code.scope
     )
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token_plain,
-        "token_type": "Bearer",
-        "expires_in": settings.OAUTH_TOKEN_EXPIRY_SECONDS,
-        "scope": scope_str  # Return as space-separated string (OAuth 2.0 standard)
-    }
+    return token_response
 
 
 async def exchange_refresh_token(
