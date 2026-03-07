@@ -7,9 +7,9 @@ Provides all required OAuth discovery endpoints:
 - oauth-protected-resource (RFC 9728)
 - openid-configuration (OpenID Connect Discovery)
 
-ChatGPT queries the MCP server directly for AS metadata and requires
-issuer + all endpoints to share the same origin. The MCP server proxies
-OAuth requests to the backend (www.priority-guard.com) transparently.
+www.priority-guard.com is the Authorization Server (AS).
+pg.priority-guard.com is the Resource Server (RS).
+All AS metadata endpoints point to www for consistency.
 """
 
 from mcp_server.priority_guardian.config import (
@@ -24,13 +24,10 @@ async def openid_configuration():
     """OpenID Connect Discovery (RFC 8414)."""
     return {
         "issuer": OAUTH_ISSUER_BASE,
-        # authorization_endpoint points directly to backend — it's opened in a browser
-        # popup and has no same-origin restriction. Proxying HTML through MCP server
-        # causes encoding issues; backend serves it correctly.
         "authorization_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/authorize",
-        "token_endpoint": f"{MCP_SERVER_URL}/oauth/token",
-        "jwks_uri": f"{MCP_SERVER_URL}/oauth/jwks",
-        "registration_endpoint": f"{MCP_SERVER_URL}/oauth/register",
+        "token_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/token",
+        "jwks_uri": f"{OAUTH_ISSUER_BASE}/oauth/pg/jwks",
+        "registration_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/register",
         "scopes_supported": SCOPES_SUPPORTED,
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
@@ -43,13 +40,10 @@ async def oauth_authorization_server():
     """OAuth 2.0 Authorization Server Metadata (RFC 8414)."""
     return {
         "issuer": OAUTH_ISSUER_BASE,
-        # authorization_endpoint points directly to backend — it's opened in a browser
-        # popup and has no same-origin restriction. Proxying HTML through MCP server
-        # causes encoding issues; backend serves it correctly.
         "authorization_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/authorize",
-        "token_endpoint": f"{MCP_SERVER_URL}/oauth/token",
-        "jwks_uri": f"{MCP_SERVER_URL}/oauth/jwks",
-        "registration_endpoint": f"{MCP_SERVER_URL}/oauth/register",
+        "token_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/token",
+        "jwks_uri": f"{OAUTH_ISSUER_BASE}/oauth/pg/jwks",
+        "registration_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/register",
         "scopes_supported": SCOPES_SUPPORTED,
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
@@ -62,6 +56,6 @@ async def oauth_protected_resource():
     """OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
     return {
         "resource": MCP_RESOURCE_URL,
-        "authorization_servers": [MCP_SERVER_URL],
+        "authorization_servers": [OAUTH_ISSUER_BASE],
         "scopes_supported": SCOPES_SUPPORTED,
     }
