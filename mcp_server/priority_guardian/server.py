@@ -537,7 +537,20 @@ def create_app():
 
     # OAuth proxy route handlers
     async def oauth_jwks(request: Request) -> Response:
-        return await _proxy_to_backend(request, "/oauth/pg/jwks")
+        """Proxy JWKS requests with forced identity encoding to prevent compression issues."""
+        client = await _get_proxy_client()
+        backend_url = f"{BACKEND_URL}/oauth/pg/jwks"
+        forward_headers = {
+            k: v for k, v in request.headers.items()
+            if k.lower() not in ("host", "content-length", "accept-encoding")
+        }
+        forward_headers["accept-encoding"] = "identity"
+        resp = await client.get(backend_url, headers=forward_headers)
+        response_headers = {
+            k: v for k, v in resp.headers.items()
+            if k.lower() not in ("transfer-encoding", "content-encoding", "content-length")
+        }
+        return Response(content=resp.content, status_code=resp.status_code, headers=response_headers)
 
     async def oauth_authorize(request: Request) -> Response:
         return await _proxy_to_backend(request, "/oauth/pg/authorize")
