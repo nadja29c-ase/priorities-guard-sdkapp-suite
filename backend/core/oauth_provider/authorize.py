@@ -420,7 +420,8 @@ async def authorize_endpoint(
         scope=scope,
         redirect_uri=redirect_uri,
         code_challenge_method=code_challenge_method,
-        has_login_hint=login_hint is not None
+        has_login_hint=login_hint is not None,
+        resource=resource,  # Increment 44: may be None, that is valid
     )
 
     # =========================================================================

@@ -188,6 +188,19 @@ async def exchange_authorization_code(
         resource=final_resource  # RFC 9728 B2-5
     )
 
+    # Diagnostic log for token claims (Increment 44)
+    request_logger.info(
+        "oauth.token.claims_debug",
+        jti=jti,
+        token_iss=settings.OAUTH_ISSUER,
+        token_aud=final_resource if final_resource else settings.OAUTH_ISSUER,
+        resource_from_auth_code=auth_code.resource,
+        resource_from_request=resource,
+        final_resource=final_resource,
+        scope=scope_str,
+        client_id=mask_client_id(auth_code.client_id),
+    )
+
     # Create refresh token
     refresh_token_plain = create_refresh_token()
     refresh_token_encrypted = encrypt_token(refresh_token_plain)
