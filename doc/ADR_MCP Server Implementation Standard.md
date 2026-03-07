@@ -257,3 +257,157 @@ This section governs OAuth discovery endpoint configuration for authenticated MC
 ### Production Bug Reference
 
 Increment 41 (March 2026): MCP discovery returned `issuer: "https://www.priority-guard.com/oauth/pg"` instead of `issuer: "https://www.priority-guard.com"`. ChatGPT connector creation failed silently. Root cause: single config variable used for both issuer identifier and endpoint prefix. Fix: separate `OAUTH_ISSUER_BASE` and `OAUTH_ISSUER_URL` with explicit env vars.
+
+---
+
+### Authorization Server / Resource Server Separation
+
+**The MCP server is a Resource Server. It is not an Authorization Server.**
+
+In the Priority Guard Suite, these roles are assigned to separate domains:
+
+| Role | Domain | Responsibility |
+|------|--------|----------------|
+| Authorization Server (AS) | `www.priority-guard.com` | Issues tokens, hosts OAuth endpoints, signs JWTs |
+| Resource Server / MCP Server (RS) | `pg.priority-guard.com` | Validates tokens, exposes MCP tools, serves widget |
+
+This separation is valid per OAuth 2.1 and the MCP authorization spec. The AS and RS may live on different origins. However, the discovery documents must reflect this separation cleanly — never mix origins within a single document.
+
+#### The Hybrid Document Anti-Pattern
+
+**Never do this.** This is what caused the Increment 46 production failure:
+
+```json
+{
+  "issuer": "https://www.priority-guard.com",
+  "token_endpoint": "https://pg.priority-guard.com/oauth/token",
+  "jwks_uri": "https://pg.priority-guard.com/oauth/jwks"
+}
+```
+
+`issuer` is on `www`, endpoints are on `pg`. This document is served from `pg`. ChatGPT completed the full OAuth flow (DCR → authorize → token) but silently aborted before calling `/mcp`. The root cause: RFC 8414 requires that the AS metadata document served at `{origin}/.well-known/oauth-authorization-server` is internally consistent — all endpoints must belong to the same AS that the `issuer` identifies.
+
+**Symptom signature of this failure:**
+- DCR succeeds
+- Authorize + consent succeeds
+- Token issued successfully
+- No `GET /oauth/jwks` in MCP logs
+- No `POST /mcp` in MCP logs
+- Silent abort after token exchange — no error logged anywhere
+
+This is indistinguishable from a JWKS or audience failure from log inspection alone. The distinguishing factor is: if token claims are correct and JWKS is valid JSON, suspect AS metadata consistency.
+
+#### Correct Pattern: Two Clean Documents
+
+The MCP server (`pg`) serves TWO distinct documents:
+
+**1. Protected Resource Metadata (`/.well-known/oauth-protected-resource`) — served by pg**
+
+This is the RS document. It tells ChatGPT where the real AS lives:
+
+```json
+{
+  "resource": "https://pg.priority-guard.com/mcp",
+  "authorization_servers": ["https://www.priority-guard.com"],
+  "scopes_supported": ["pg.access"]
+}
+```
+
+`authorization_servers` must point to `www` (the real AS). ChatGPT fetches `{authorization_servers[0]}/.well-known/oauth-authorization-server` to discover OAuth endpoints.
+
+**2. AS Metadata (`/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration`) — mirrored on pg**
+
+ChatGPT may also fetch these directly from `pg` based on the MCP server origin. These documents must be **identical to what `www` serves** — fully consistent, all endpoints pointing to `www`:
+
+```json
+{
+  "issuer": "https://www.priority-guard.com",
+  "authorization_endpoint": "https://www.priority-guard.com/oauth/pg/authorize",
+  "token_endpoint": "https://www.priority-guard.com/oauth/pg/token",
+  "jwks_uri": "https://www.priority-guard.com/oauth/pg/jwks",
+  "registration_endpoint": "https://www.priority-guard.com/oauth/pg/register"
+}
+```
+
+No `pg` endpoints appear in this document. The MCP server is a transparent mirror of the AS metadata, not a proxy or hybrid.
+
+#### Implementation Rule for `discovery.py`
+
+All three functions in `discovery.py` follow a single rule:
+
+- `oauth_protected_resource()`: use `OAUTH_ISSUER_BASE` for `authorization_servers`
+- `openid_configuration()`: use `OAUTH_ISSUER_BASE` for `issuer` and all endpoint base URLs
+- `oauth_authorization_server()`: identical to `openid_configuration()`
+
+`MCP_SERVER_URL` must **not** appear in any endpoint URL in `discovery.py`. It belongs in `server.py` for route wiring and in `mcp_auth.py` for token audience validation — not in discovery.
+
+#### Verification Checklist — After Any Discovery Change
+
+- [ ] `GET pg/.well-known/oauth-authorization-server` → all endpoints on `www`, `issuer=www`
+- [ ] `GET pg/.well-known/openid-configuration` → all endpoints on `www`, `issuer=www`
+- [ ] `GET pg/.well-known/oauth-protected-resource` → `authorization_servers: ["https://www.priority-guard.com"]`
+- [ ] `GET www/.well-known/oauth-authorization-server` → consistent with pg mirror
+- [ ] Trigger fresh ChatGPT auth flow → `POST /mcp` appears in MCP server logs
+
+---
+
+### Multi-App OAuth: One Shared AS, Multiple MCP Servers
+
+The shared backend AS on `www.priority-guard.com` is designed to serve multiple SDK apps simultaneously. Each app gets its own route prefix on the backend and its own MCP server domain. The AS itself is untouched when adding a new app.
+
+#### How It Works
+
+Each SDK app has:
+1. Its own MCP server domain (e.g. `pg.priority-guard.com`, `unpack.priority-guard.com`)
+2. Its own backend route prefix (e.g. `/oauth/pg/*`, `/oauth/unpack/*`)
+3. Its own `discovery.py` with `oauth_protected_resource` pointing `authorization_servers` to `www`
+4. Its own scopes declared in the backend `SCOPES_SUPPORTED` list
+
+The shared AS on `www` handles all DCR, authorize, and token requests. Each app's MCP server is purely a resource server — it validates tokens but does not issue them.
+
+#### Current Route Map
+
+| App | Backend Route Prefix | MCP Server Domain | Default Scopes |
+|-----|---------------------|-------------------|----------------|
+| Priority Guardian | `/oauth/pg/*` | `pg.priority-guard.com` | `pg.access` |
+| Focused | `/oauth/focused/*` | (deprecated) | `focused.read`, `focused.write`, `focused.notify` |
+
+Each route prefix has independent:
+- `POST /oauth/{app}/register` — DCR, assigns default scopes for that app
+- `GET /oauth/{app}/authorize` — consent screen (app-specific template)
+- `POST /oauth/{app}/token` — token issuance
+- `GET /oauth/{app}/jwks` — JWKS (shared signing key, per-app path)
+
+#### Adding a New App: What Changes
+
+**Backend (`www`):**
+- Add new scopes to `SCOPES_SUPPORTED` in `discovery.py`
+- Add `DEFAULT_SCOPES_{APP}` and route detection in `register_client.py`
+- Add `@router.post("/oauth/{app}/register")` etc. across token, authorize, jwks endpoints
+- Add consent screen template (HTML, EN + DE)
+- Add scope descriptions to `SCOPE_DESCRIPTIONS_EN` and `SCOPE_DESCRIPTIONS_DE` in `authorize.py`
+
+**New MCP server:**
+- New service on its own domain (e.g. `unpack.priority-guard.com`)
+- `discovery.py`: `authorization_servers: [OAUTH_ISSUER_BASE]`, all AS endpoints pointing to `www`
+- `config.py`: `PG_OAUTH_ISSUER_BASE` = `https://www.priority-guard.com` (same value, different env var name per service)
+- Token validation: `issuer=www`, `audience=<new MCP resource URL>`
+
+**What does NOT change:**
+- Backend `OAUTH_ISSUER` env var — stays `https://www.priority-guard.com`
+- JWT signing key — shared across all apps (same `kid`)
+- Any existing app's routes or config
+
+#### Invariant: Never Change `OAUTH_ISSUER` for a Single App
+
+`OAUTH_ISSUER` is a global backend setting. Changing it to accommodate one app breaks token validation for all other apps. Each new app gets a new route prefix — the issuer stays fixed.
+
+#### Client Namespace Isolation
+
+DCR creates clients per app route. A client registered at `/oauth/pg/register` gets `client_id` prefixed `pg-client-*` and default scopes `pg.access`. A client registered at `/oauth/focused/register` gets `focused.client-*` scopes. Client IDs do not cross app boundaries.
+
+---
+
+#### Production Bug Reference
+
+Increment 46 (March 2026): ChatGPT completed full OAuth flow but never called `/mcp`. All prior hypotheses (JWKS compression, issuer mismatch in JWT, Redis replay, audience claim) were ruled out over ~10 increments. Root cause: `pg/.well-known/oauth-authorization-server` and `pg/.well-known/openid-configuration` served hybrid documents (`issuer=www`, endpoints=`pg`). Fix: all three discovery functions in `discovery.py` made fully consistent with `www`. `authorization_servers` in protected resource metadata changed from `[MCP_SERVER_URL]` to `[OAUTH_ISSUER_BASE]`. The proxy OAuth routes on `pg` (`/oauth/token`, `/oauth/jwks`, `/oauth/register`) became unused by ChatGPT but were left in place.
