@@ -15,6 +15,7 @@ OAuth requests to the backend (www.priority-guard.com) transparently.
 from mcp_server.priority_guardian.config import (
     MCP_SERVER_URL,
     MCP_RESOURCE_URL,
+    OAUTH_ISSUER_BASE,
     SCOPES_SUPPORTED,
 )
 
@@ -23,7 +24,10 @@ async def openid_configuration():
     """OpenID Connect Discovery (RFC 8414)."""
     return {
         "issuer": MCP_SERVER_URL,
-        "authorization_endpoint": f"{MCP_SERVER_URL}/oauth/authorize",
+        # authorization_endpoint points directly to backend — it's opened in a browser
+        # popup and has no same-origin restriction. Proxying HTML through MCP server
+        # causes encoding issues; backend serves it correctly.
+        "authorization_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/authorize",
         "token_endpoint": f"{MCP_SERVER_URL}/oauth/token",
         "jwks_uri": f"{MCP_SERVER_URL}/oauth/jwks",
         "registration_endpoint": f"{MCP_SERVER_URL}/oauth/register",
@@ -39,7 +43,10 @@ async def oauth_authorization_server():
     """OAuth 2.0 Authorization Server Metadata (RFC 8414)."""
     return {
         "issuer": MCP_SERVER_URL,
-        "authorization_endpoint": f"{MCP_SERVER_URL}/oauth/authorize",
+        # authorization_endpoint points directly to backend — it's opened in a browser
+        # popup and has no same-origin restriction. Proxying HTML through MCP server
+        # causes encoding issues; backend serves it correctly.
+        "authorization_endpoint": f"{OAUTH_ISSUER_BASE}/oauth/pg/authorize",
         "token_endpoint": f"{MCP_SERVER_URL}/oauth/token",
         "jwks_uri": f"{MCP_SERVER_URL}/oauth/jwks",
         "registration_endpoint": f"{MCP_SERVER_URL}/oauth/register",
