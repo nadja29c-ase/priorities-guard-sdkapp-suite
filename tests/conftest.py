@@ -354,6 +354,7 @@ async def fake_redis_client():
     with patch("backend.core.redis_client.redis_client", fake):
         with patch("backend.core.rate_limit.redis_client", fake):
             with patch("backend.core.oauth_provider.services.authorization_service.redis_client", fake):
-                yield fake
+                with patch("backend.core.oauth_provider.services.token_service.redis_client", fake):
+                    yield fake
 
     fake.clear()
