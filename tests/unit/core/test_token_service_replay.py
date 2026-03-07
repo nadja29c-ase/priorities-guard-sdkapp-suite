@@ -556,3 +556,414 @@ class TestTokenReplayResponseFormat:
         assert "cached_at" not in result, "cached_at should not be in token_response"
         assert "jti" not in result, "jti should not be in token_response"
         assert "token_response" not in result, "nested token_response should not exist"
+
+
+# =============================================================================
+# Increment 48 — Additional test coverage
+# =============================================================================
+
+class TestTokenReplayKeyFormat:
+    """Tests for Redis key format correctness (Increment 48)."""
+
+    @pytest.mark.asyncio
+    async def test_redis_key_format_correct(self):
+        """
+        Test A: Redis key format is token_replay:{sha256_hex}.
+
+        Key must start with 'token_replay:' and have 64-char sha256 hex suffix.
+        """
+        from backend.core.oauth_provider.services.token_service import exchange_authorization_code
+
+        user_id = uuid4()
+        client_id = "test-client"
+
+        cached_wrapper = {
+            "client_id": client_id,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "jti": str(uuid4()),
+            "token_response": {"access_token": "token", "refresh_token": "refresh"}
+        }
+
+        mock_code = MagicMock()
+        mock_code.user_id = user_id
+        mock_code.client_id = client_id
+        mock_code.used = True
+        mock_code.expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        mock_db = AsyncMock()
+
+        async def mock_execute(stmt):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = mock_code
+            return mock_result
+
+        mock_db.execute = mock_execute
+
+        mock_redis = MagicMock()
+        mock_redis.get = AsyncMock(return_value=json.dumps(cached_wrapper))
+
+        with patch(
+            "backend.core.oauth_provider.services.token_service.redis_client",
+            mock_redis
+        ):
+            await exchange_authorization_code(
+                db=mock_db,
+                code="test_auth_code",
+                code_verifier="test_verifier",
+                client_id=client_id,
+                redirect_uri="https://example.com/callback"
+            )
+
+        # Extract the key used in Redis.get call
+        mock_redis.get.assert_called_once()
+        key = mock_redis.get.call_args[0][0]
+
+        # Verify key format
+        assert key.startswith("token_replay:"), f"Key should start with 'token_replay:', got: {key}"
+        assert len(key) == len("token_replay:") + 64, (
+            f"Key should be 'token_replay:' + 64 hex chars, got length {len(key)}"
+        )
+
+    def test_sha256_case_sensitivity(self):
+        """
+        Test B: sha256 hash is case-sensitive — no normalization applied.
+
+        'ABCdef' and 'abcdef' must produce different keys.
+        """
+        from backend.core.oauth_provider.services.token_service import _token_replay_key
+
+        key_upper = _token_replay_key("ABCdef")
+        key_lower = _token_replay_key("abcdef")
+
+        assert key_upper != key_lower, (
+            "Different case codes should produce different keys (no normalization)"
+        )
+        # Both should still have correct format
+        assert key_upper.startswith("token_replay:")
+        assert key_lower.startswith("token_replay:")
+
+
+class TestTokenReplayTTLWithFakeRedis:
+    """Tests for TTL expiry using FakeRedisClient (Increment 48)."""
+
+    @pytest.mark.asyncio
+    async def test_ttl_expiry_with_fake_redis(self, fake_redis):
+        """
+        Test C: TTL expiry using FakeRedis advance_time.
+
+        Write a cached wrapper with 30s TTL, advance time by 31s,
+        then verify invalid_grant is returned (key expired).
+        """
+        from backend.core.oauth_provider.services.token_service import (
+            exchange_authorization_code,
+            _token_replay_key,
+            TOKEN_REPLAY_TTL_SECONDS,
+        )
+
+        user_id = uuid4()
+        client_id = "test-client"
+        code = "test_auth_code_ttl"
+
+        # Pre-populate fake_redis with a cached wrapper
+        cached_wrapper = {
+            "client_id": client_id,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "jti": str(uuid4()),
+            "token_response": {"access_token": "token", "refresh_token": "refresh"}
+        }
+
+        replay_key = _token_replay_key(code)
+        # Write directly to fake_redis (simulating first successful exchange)
+        await fake_redis.set(replay_key, json.dumps(cached_wrapper), ex=TOKEN_REPLAY_TTL_SECONDS)
+
+        # Verify key exists
+        assert await fake_redis.get(replay_key) is not None
+
+        # Advance time past TTL
+        fake_redis.advance_time(31)
+
+        # Verify key is now expired
+        assert await fake_redis.get(replay_key) is None
+
+        # Now simulate a duplicate request with used=True auth code
+        mock_code = MagicMock()
+        mock_code.user_id = user_id
+        mock_code.client_id = client_id
+        mock_code.used = True
+        mock_code.expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        mock_db = AsyncMock()
+
+        async def mock_execute(stmt):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = mock_code
+            return mock_result
+
+        mock_db.execute = mock_execute
+
+        with patch(
+            "backend.core.oauth_provider.services.token_service.redis_client",
+            fake_redis
+        ):
+            result = await exchange_authorization_code(
+                db=mock_db,
+                code=code,
+                code_verifier="test_verifier",
+                client_id=client_id,
+                redirect_uri="https://example.com/callback"
+            )
+
+        # Should return invalid_grant (TTL expired, key gone)
+        assert isinstance(result, tuple)
+        assert result[0] == "invalid_grant"
+
+
+class TestTokenReplayConcurrency:
+    """Tests for concurrent duplicate requests (Increment 48)."""
+
+    @pytest.mark.asyncio
+    async def test_concurrent_duplicates_no_crash(self, fake_redis):
+        """
+        Test D: Concurrent duplicate requests must not crash.
+
+        Two concurrent requests with same code: one should succeed or return
+        cached response, the other should return cached or invalid_grant.
+        Neither should raise an exception.
+        """
+        import asyncio
+        from backend.core.oauth_provider.services.token_service import exchange_authorization_code
+
+        user_id = uuid4()
+        client_id = "test-client"
+        code = "test_concurrent_code"
+
+        # Track whether code has been "used" - shared state across calls
+        code_used = {"value": False}
+
+        def create_mock_code():
+            """Create a mock auth code with dynamic used status."""
+            mock_code = MagicMock()
+            mock_code.user_id = user_id
+            mock_code.client_id = client_id
+            mock_code.redirect_uri = "https://example.com/callback"
+            mock_code.scope = ["pg.access"]
+            mock_code.code_challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+            mock_code.expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+            mock_code.resource = None
+            # Use current value at time of access
+            mock_code.used = code_used["value"]
+            return mock_code
+
+        call_count = {"value": 0}
+
+        async def mock_execute(stmt):
+            call_count["value"] += 1
+            mock_result = MagicMock()
+            mock_code = create_mock_code()
+            mock_result.scalar_one_or_none.return_value = mock_code
+            return mock_result
+
+        def make_mock_db():
+            mock_db = AsyncMock()
+            mock_db.execute = mock_execute
+            mock_db.add = MagicMock()
+
+            async def mock_commit():
+                # First commit marks code as used
+                code_used["value"] = True
+
+            mock_db.commit = mock_commit
+            return mock_db
+
+        async def do_exchange():
+            mock_db = make_mock_db()
+            with patch(
+                "backend.core.oauth_provider.services.token_service.redis_client",
+                fake_redis
+            ), patch(
+                "backend.core.oauth_provider.services.token_service.verify_pkce",
+                return_value=True
+            ), patch(
+                "backend.core.oauth_provider.services.token_service.create_access_token",
+                return_value=("mock_access_token", str(uuid4()))
+            ), patch(
+                "backend.core.oauth_provider.services.token_service.create_refresh_token",
+                return_value="mock_refresh_token"
+            ), patch(
+                "backend.core.oauth_provider.services.token_service.encrypt_token",
+                return_value="encrypted"
+            ):
+                return await exchange_authorization_code(
+                    db=mock_db,
+                    code=code,
+                    code_verifier="test_verifier",
+                    client_id=client_id,
+                    redirect_uri="https://example.com/callback"
+                )
+
+        # Run two concurrent exchanges
+        results = await asyncio.gather(
+            do_exchange(),
+            do_exchange(),
+            return_exceptions=True
+        )
+
+        # Neither should raise an exception
+        for i, result in enumerate(results):
+            assert not isinstance(result, Exception), (
+                f"Exchange {i} raised exception: {result}"
+            )
+
+        # Categorize results
+        successes = [r for r in results if isinstance(r, dict)]
+        failures = [r for r in results if isinstance(r, tuple)]
+
+        # At least one should succeed
+        assert len(successes) >= 1, "At least one exchange should succeed"
+
+        # Failures should be invalid_grant
+        for failure in failures:
+            assert failure[0] == "invalid_grant"
+
+
+class TestTokenReplaySecurityBehavior:
+    """Tests documenting security behavior on replay path (Increment 48)."""
+
+    @pytest.mark.asyncio
+    async def test_redirect_uri_mismatch_on_replay_returns_cached(self):
+        """
+        Test E: redirect_uri mismatch on replay still returns cached token.
+
+        SECURITY NOTE: This is CORRECT behavior. redirect_uri is validated at
+        authorization code creation time, not on replay. The replay path only
+        verifies client_id matches the cached wrapper. A different redirect_uri
+        in the replay request does not block replay because:
+        1. The code is already used=True (validated on first exchange)
+        2. The replay cache is keyed on code hash, gated on client_id only
+        3. redirect_uri validation happened on first exchange
+
+        This test documents and locks in this behavior.
+        """
+        from backend.core.oauth_provider.services.token_service import exchange_authorization_code
+
+        user_id = uuid4()
+        client_id = "test-client"
+        original_redirect = "https://example.com/callback"
+        different_redirect = "https://attacker.com/callback"
+
+        cached_token_response = {
+            "access_token": "cached_token",
+            "refresh_token": "cached_refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "scope": "pg.access"
+        }
+
+        cached_wrapper = {
+            "client_id": client_id,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "jti": str(uuid4()),
+            "token_response": cached_token_response
+        }
+
+        mock_code = MagicMock()
+        mock_code.user_id = user_id
+        mock_code.client_id = client_id
+        mock_code.redirect_uri = original_redirect  # Original redirect
+        mock_code.used = True
+        mock_code.expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        mock_db = AsyncMock()
+
+        async def mock_execute(stmt):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = mock_code
+            return mock_result
+
+        mock_db.execute = mock_execute
+
+        mock_redis = MagicMock()
+        mock_redis.get = AsyncMock(return_value=json.dumps(cached_wrapper))
+
+        with patch(
+            "backend.core.oauth_provider.services.token_service.redis_client",
+            mock_redis
+        ):
+            result = await exchange_authorization_code(
+                db=mock_db,
+                code="test_auth_code",
+                code_verifier="test_verifier",
+                client_id=client_id,
+                redirect_uri=different_redirect,  # Different redirect_uri
+            )
+
+        # Should return cached token (redirect_uri not re-validated on replay)
+        assert result == cached_token_response
+
+    @pytest.mark.asyncio
+    async def test_pkce_verifier_mismatch_on_replay_returns_cached(self):
+        """
+        Test F: PKCE verifier mismatch on replay still returns cached token.
+
+        SECURITY NOTE: This is CORRECT behavior. PKCE is a one-time gate on
+        first exchange only. On the replay path (used=True), PKCE is not
+        re-verified because:
+        1. The code is already used=True (PKCE was verified on first exchange)
+        2. The replay cache is keyed on code hash, gated on client_id only
+        3. A different code_verifier cannot "replay" to a different client
+           because client_id is still checked against the wrapper
+
+        This test documents and locks in this behavior.
+        """
+        from backend.core.oauth_provider.services.token_service import exchange_authorization_code
+
+        user_id = uuid4()
+        client_id = "test-client"
+
+        cached_token_response = {
+            "access_token": "cached_token",
+            "refresh_token": "cached_refresh",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "scope": "pg.access"
+        }
+
+        cached_wrapper = {
+            "client_id": client_id,
+            "cached_at": datetime.now(timezone.utc).isoformat(),
+            "jti": str(uuid4()),
+            "token_response": cached_token_response
+        }
+
+        mock_code = MagicMock()
+        mock_code.user_id = user_id
+        mock_code.client_id = client_id
+        mock_code.used = True
+        mock_code.expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+        mock_db = AsyncMock()
+
+        async def mock_execute(stmt):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = mock_code
+            return mock_result
+
+        mock_db.execute = mock_execute
+
+        mock_redis = MagicMock()
+        mock_redis.get = AsyncMock(return_value=json.dumps(cached_wrapper))
+
+        with patch(
+            "backend.core.oauth_provider.services.token_service.redis_client",
+            mock_redis
+        ):
+            result = await exchange_authorization_code(
+                db=mock_db,
+                code="test_auth_code",
+                code_verifier="WRONG_VERIFIER_completely_invalid",  # Wrong verifier
+                client_id=client_id,
+                redirect_uri="https://example.com/callback",
+            )
+
+        # Should return cached token (PKCE not re-verified on replay)
+        assert result == cached_token_response
