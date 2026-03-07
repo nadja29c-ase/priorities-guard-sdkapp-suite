@@ -7,6 +7,7 @@ JWKS fetching, and OAuth client configuration.
 
 import os
 from typing import Optional
+from urllib.parse import urlparse
 
 
 # ============================================================================
@@ -171,15 +172,19 @@ OAUTH_ISSUER_BASE = get_env(
     default="http://localhost:8000"
 )
 
-# Fail-fast: OAUTH_ISSUER_URL must start with OAUTH_ISSUER_BASE (RFC 8414 compliance)
+# Fail-fast: OAUTH_ISSUER_URL must share the same origin as OAUTH_ISSUER_BASE (RFC 8414)
 # Without this check, discovery could return issuer=www but token_endpoint=api,
 # which causes silent OAuth failures in ChatGPT.
-if not OAUTH_ISSUER_URL.startswith(OAUTH_ISSUER_BASE):
+# Note: startswith() is insufficient — "https://www.example.com.evil.com" starts with
+# "https://www.example.com" but has a completely different origin.
+_base_parsed = urlparse(OAUTH_ISSUER_BASE)
+_url_parsed = urlparse(OAUTH_ISSUER_URL)
+
+if (_base_parsed.scheme, _base_parsed.netloc) != (_url_parsed.scheme, _url_parsed.netloc):
     raise RuntimeError(
-        f"OAUTH_ISSUER_URL must start with OAUTH_ISSUER_BASE. "
-        f"Got OAUTH_ISSUER_BASE={OAUTH_ISSUER_BASE!r}, "
-        f"OAUTH_ISSUER_URL={OAUTH_ISSUER_URL!r}. "
-        f"These must share the same origin (RFC 8414)."
+        f"OAUTH_ISSUER_URL must share the same origin as OAUTH_ISSUER_BASE (RFC 8414). "
+        f"Got OAUTH_ISSUER_BASE={OAUTH_ISSUER_BASE!r} (origin: {_base_parsed.scheme}://{_base_parsed.netloc}), "
+        f"OAUTH_ISSUER_URL={OAUTH_ISSUER_URL!r} (origin: {_url_parsed.scheme}://{_url_parsed.netloc})."
     )
 
 # Fail-fast: warn if OAUTH_ISSUER_BASE contains localhost in production

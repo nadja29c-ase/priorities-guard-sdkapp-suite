@@ -1,7 +1,7 @@
 """
 Unit tests for MCP server config invariants (Increment 49).
 
-Tests the startup invariant: OAUTH_ISSUER_URL must start with OAUTH_ISSUER_BASE.
+Tests the startup invariant: OAUTH_ISSUER_URL must share the same origin as OAUTH_ISSUER_BASE.
 """
 
 import importlib
@@ -51,7 +51,7 @@ def reload_config_with_env(env_overrides: dict[str, str]):
 
 
 class TestOAuthIssuerInvariant:
-    """Tests for OAUTH_ISSUER_URL must start with OAUTH_ISSUER_BASE invariant."""
+    """Tests for OAUTH_ISSUER_URL must share the same origin as OAUTH_ISSUER_BASE invariant."""
 
     def test_mismatched_hosts_raises_runtime_error(self):
         """
@@ -65,10 +65,30 @@ class TestOAuthIssuerInvariant:
             })
 
         error_msg = str(exc_info.value)
-        assert "OAUTH_ISSUER_URL must start with OAUTH_ISSUER_BASE" in error_msg
+        assert "OAUTH_ISSUER_URL must share the same origin" in error_msg
         assert "www.priority-guard.com" in error_msg
         assert "api.priority-guard.com" in error_msg
         assert "RFC 8414" in error_msg
+
+    def test_evil_subdomain_bypass_rejected(self):
+        """
+        Reject URLs where the host is a prefix match but not the same origin.
+
+        Example: BASE=https://www.priority-guard.com
+                 URL=https://www.priority-guard.com.evil.com/oauth/pg
+
+        A naive startswith() check would pass this, but origin comparison rejects it.
+        This is the exact vulnerability the origin check is designed to prevent.
+        """
+        with pytest.raises(RuntimeError) as exc_info:
+            reload_config_with_env({
+                "PG_OAUTH_ISSUER_BASE": "https://www.priority-guard.com",
+                "PG_OAUTH_ISSUER_URL": "https://www.priority-guard.com.evil.com/oauth/pg",
+            })
+
+        error_msg = str(exc_info.value)
+        assert "must share the same origin" in error_msg
+        assert "www.priority-guard.com.evil.com" in error_msg
 
     def test_matching_values_no_error(self):
         """
@@ -87,7 +107,7 @@ class TestOAuthIssuerInvariant:
     def test_url_equals_base_no_error(self):
         """
         Edge case: when OAUTH_ISSUER_URL equals OAUTH_ISSUER_BASE (no path),
-        startswith is satisfied and no error should be raised.
+        origins match and no error should be raised.
         """
         # Should not raise
         config = reload_config_with_env({
@@ -120,7 +140,11 @@ class TestOAuthIssuerInvariant:
             import mcp_server.priority_guardian.config as config_module
 
             # Defaults: BASE=http://localhost:8000, URL=http://localhost:8000/oauth/pg
-            assert config_module.OAUTH_ISSUER_URL.startswith(config_module.OAUTH_ISSUER_BASE)
+            # Verify same origin (scheme + netloc match)
+            from urllib.parse import urlparse
+            base_parsed = urlparse(config_module.OAUTH_ISSUER_BASE)
+            url_parsed = urlparse(config_module.OAUTH_ISSUER_URL)
+            assert (base_parsed.scheme, base_parsed.netloc) == (url_parsed.scheme, url_parsed.netloc)
         finally:
             # Restore original env
             for key, value in original_values.items():
