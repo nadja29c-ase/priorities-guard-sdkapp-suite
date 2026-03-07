@@ -98,10 +98,9 @@ async def list_tools() -> List[mcp_types.Tool]:
     """
     Build MCP Tool list from registry.
 
-    Each tool gets _meta with:
-    - annotations (readOnlyHint, destructiveHint, openWorldHint)
-    - securitySchemes (oauth2 with scopes)
-    - openai/outputTemplate if widget_uri is set
+    Each tool gets:
+    - annotations (ToolAnnotations with readOnlyHint, destructiveHint, openWorldHint)
+    - _meta with securitySchemes, ui visibility, openai/outputTemplate if widget_uri is set
 
     Sorted by name for deterministic output.
     """
@@ -109,13 +108,6 @@ async def list_tools() -> List[mcp_types.Tool]:
 
     # Sort by name for deterministic output
     for tool_def in sorted(TOOL_REGISTRY.values(), key=lambda t: t.name):
-        # Build annotations from tool definition
-        annotations = {
-            "readOnlyHint": tool_def.read_only_hint,
-            "destructiveHint": tool_def.destructive_hint,
-            "openWorldHint": tool_def.open_world_hint,
-        }
-
         # Build securitySchemes based on required_scopes
         if tool_def.required_scopes:
             security_schemes = [{"type": "oauth2", "scopes": tool_def.required_scopes}]
@@ -135,7 +127,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "ui": {
                     "visibility": ["app"],
                 },
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_uri and tool_def.widget_accessible:
@@ -149,7 +140,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "openai/outputTemplate": tool_def.widget_uri,  # compat alias
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_uri:
@@ -163,7 +153,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "openai/outputTemplate": tool_def.widget_uri,  # compat alias
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_accessible:
@@ -175,7 +164,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 },
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         else:
@@ -187,7 +175,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 },
                 "openai/toolInvocation/invoking": invoking_msg,
                 "openai/toolInvocation/invoked": invoked_msg,
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
 
@@ -198,9 +185,12 @@ async def list_tools() -> List[mcp_types.Tool]:
             _meta=meta,
         )
 
-        # Future-proof: mirror annotations at top level if SDK supports it
-        if hasattr(tool, "annotations"):
-            tool.annotations = annotations
+        # Set annotations at Tool level (proper ToolAnnotations object, not dict)
+        tool.annotations = mcp_types.ToolAnnotations(
+            readOnlyHint=tool_def.read_only_hint,
+            destructiveHint=tool_def.destructive_hint,
+            openWorldHint=tool_def.open_world_hint,
+        )
 
         tools.append(tool)
 
