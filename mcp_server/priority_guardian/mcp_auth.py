@@ -34,6 +34,7 @@ from mcp_server.priority_guardian.config import (
     JWKS_MAX_STALE_SECONDS,
     JWKS_FETCH_TIMEOUT_SECONDS,
     MCP_SERVER_URL,
+    MCP_RESOURCE_URL,
 )
 from mcp_server.priority_guardian.request_context import auth_header_var
 
@@ -293,11 +294,13 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 raise jwt.InvalidTokenError(f"Unknown kid: {kid}")
 
         # Step 4: Verify JWT with all required checks
-        # RFC 9728 B2-5: Accept either MCP server URL or legacy OAUTH_ISSUER as aud
-        # - New tokens (post-B2-5 fix) will have aud = MCP_SERVER_URL
-        # - Legacy tokens (pre-B2-5 fix) will have aud = PG_AUDIENCE (OAUTH_ISSUER)
+        # RFC 9728 B2-5: Accept any valid audience for this resource
+        # - aud = MCP_RESOURCE_URL (https://pg.priority-guard.com/mcp) — current: ChatGPT
+        #   sends resource= in authorize, backend echoes it into aud
+        # - aud = MCP_SERVER_URL (https://pg.priority-guard.com) — origin without /mcp path
+        # - aud = PG_AUDIENCE (https://www.priority-guard.com) — legacy fallback
         # PyJWT accepts list of valid audiences for exact string matching
-        valid_audiences = [MCP_SERVER_URL, PG_AUDIENCE]
+        valid_audiences = [MCP_RESOURCE_URL, MCP_SERVER_URL, PG_AUDIENCE]
         payload = jwt.decode(
             token,
             signing_key.key,
