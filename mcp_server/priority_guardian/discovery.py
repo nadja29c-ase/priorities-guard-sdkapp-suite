@@ -23,7 +23,7 @@ from mcp_server.priority_guardian.config import (
 async def openid_configuration():
     """OpenID Connect Discovery (RFC 8414)."""
     return {
-        "issuer": MCP_SERVER_URL,
+        "issuer": OAUTH_ISSUER_BASE,
         # authorization_endpoint points directly to backend — it's opened in a browser
         # popup and has no same-origin restriction. Proxying HTML through MCP server
         # causes encoding issues; backend serves it correctly.
@@ -42,7 +42,7 @@ async def openid_configuration():
 async def oauth_authorization_server():
     """OAuth 2.0 Authorization Server Metadata (RFC 8414)."""
     return {
-        "issuer": MCP_SERVER_URL,
+        "issuer": OAUTH_ISSUER_BASE,
         # authorization_endpoint points directly to backend — it's opened in a browser
         # popup and has no same-origin restriction. Proxying HTML through MCP server
         # causes encoding issues; backend serves it correctly.
