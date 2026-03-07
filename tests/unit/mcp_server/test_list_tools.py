@@ -67,3 +67,24 @@ async def test_list_tools_annotations_match_tool_definitions():
             f"Tool '{tool.name}' openWorldHint mismatch: "
             f"expected {tool_def.open_world_hint}, got {tool.annotations.openWorldHint}"
         )
+
+
+@pytest.mark.asyncio
+async def test_list_tools_serialization_no_pydantic_warnings():
+    """
+    Serializing ListToolsResult must not produce Pydantic warnings.
+
+    The original bug (Increment 47) caused PydanticSerializationUnexpectedValue
+    warnings when Tool.annotations was a dict instead of ToolAnnotations.
+    This test catches any regression in the serialization path.
+    """
+    import warnings
+    from mcp.types import ListToolsResult
+    from mcp_server.priority_guardian.tools import list_tools
+
+    tools = await list_tools()
+
+    # Wrap only model_dump() to catch serialization warnings specifically
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # promote all warnings to exceptions
+        ListToolsResult(tools=tools).model_dump()
