@@ -302,23 +302,6 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
         # PyJWT accepts list of valid audiences for exact string matching
         valid_audiences = [MCP_RESOURCE_URL, MCP_SERVER_URL, PG_AUDIENCE]
 
-        # --- DIAGNOSTIC LOG (Increment 43 debug — remove after root cause confirmed) ---
-        try:
-            _unverified = jwt.decode(token, options={"verify_signature": False})
-            logger.info(
-                "jwt.validation.claims_debug",
-                correlation_id=correlation_id,
-                token_aud=_unverified.get("aud"),
-                token_iss=_unverified.get("iss"),
-                token_kid=kid,
-                expected_audiences=valid_audiences,
-                expected_issuer=PG_ISSUER,
-                jwks_url=PG_JWKS_URL,
-            )
-        except Exception:
-            pass  # Never block validation for debug logging
-        # --- END DIAGNOSTIC LOG ---
-
         payload = jwt.decode(
             token,
             signing_key.key,
