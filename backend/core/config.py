@@ -93,6 +93,52 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode='after')
+    def validate_production_urls(self) -> 'Settings':
+        """Validate production URL requirements (Increment 52).
+
+        In production only:
+        - OAUTH_ISSUER must use HTTPS and have no path component (B2-2 invariant)
+        - BACKEND_PUBLIC_URL must use HTTPS
+        - PG_MCP_SERVER_URL must use HTTPS
+        """
+        is_production = self.ENV.lower() in ("production", "prod")
+        if not is_production:
+            return self
+
+        # OAUTH_ISSUER: must be HTTPS
+        issuer_parsed = urlparse(self.OAUTH_ISSUER)
+        if issuer_parsed.scheme != "https":
+            raise ValueError(
+                f"OAUTH_ISSUER must use HTTPS in production. "
+                f"Got: {self.OAUTH_ISSUER!r} (scheme: {issuer_parsed.scheme})"
+            )
+
+        # OAUTH_ISSUER: must have no path component (B2-2: issuer must be root domain)
+        if issuer_parsed.path not in ("", "/"):
+            raise ValueError(
+                f"OAUTH_ISSUER must be a root domain with no path component (RFC 8414 B2-2). "
+                f"Got: {self.OAUTH_ISSUER!r} (path: {issuer_parsed.path!r})"
+            )
+
+        # BACKEND_PUBLIC_URL: must be HTTPS
+        backend_parsed = urlparse(self.BACKEND_PUBLIC_URL)
+        if backend_parsed.scheme != "https":
+            raise ValueError(
+                f"BACKEND_PUBLIC_URL must use HTTPS in production. "
+                f"Got: {self.BACKEND_PUBLIC_URL!r} (scheme: {backend_parsed.scheme})"
+            )
+
+        # PG_MCP_SERVER_URL: must be HTTPS
+        mcp_parsed = urlparse(self.PG_MCP_SERVER_URL)
+        if mcp_parsed.scheme != "https":
+            raise ValueError(
+                f"PG_MCP_SERVER_URL must use HTTPS in production. "
+                f"Got: {self.PG_MCP_SERVER_URL!r} (scheme: {mcp_parsed.scheme})"
+            )
+
+        return self
+
+    @model_validator(mode='after')
     def validate_oauth_keys(self) -> 'Settings':
         """Validate OAuth keys are base64-encoded strings."""
         if self.OAUTH_RSA_PRIVATE_KEY:
