@@ -86,7 +86,7 @@ export function ConnectionStatus({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span
-            className={`w-2 h-2 rounded-full ${connected ? 'bg-success-solid' : 'bg-outline-default'}`}
+            className={`w-2 h-2 rounded-full ${connected ? 'bg-success-solid' : 'bg-surface-tertiary'}`}
             aria-hidden="true"
           />
           <span className="text-sm font-medium text-default">
