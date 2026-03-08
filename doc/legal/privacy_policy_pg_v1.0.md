@@ -59,6 +59,8 @@ OAuth Session — Hashed and encrypted session token — Cross-app authenticatio
 
 Priority Guardian reads your Google Calendar events to compute how many hours you spent on each priority during a given week. Here is exactly what is read, why, and what happens to it:
 
+Data read via calendar.events.readonly:
+
 Event title (summary) — Used to match your priority keywords (P1, P2, P3). Only the computed hours are stored, never the title itself.
 
 Event description — Used for semantic grouping of non-priority time in the current week's report. Passed to ChatGPT's language model so it can propose categories like "Client calls ~3h, Admin ~2h." Never stored by our backend.
@@ -70,6 +72,12 @@ Event status — Used to filter out cancelled events. Not stored.
 Attendee response status — Only your own acceptance status (accepted, declined, tentative) is read to filter out events you declined. No attendee names, emails, or identifiers are ever received from Google. Our API request explicitly restricts the response to only your own status.
 
 Event ID — Used for in-memory deduplication within a single computation. Never stored.
+
+Calendar ID — Used to identify which calendar an event belongs to during priority matching. Never stored.
+
+Data read via calendar.settings.readonly:
+
+Timezone  — We read your Google Calendar timezone setting to determine the boundaries of your local week (Monday 00:00 to Sunday 23:59 in your timezone. This ensures weekly reports reflect your actual work week, not UTC. We do not store this value - it is read at report generation time and discarded immediately after use.
 
 After processing, all calendar event data is discarded. The only thing that persists is aggregated hours per priority per week.
 
@@ -221,7 +229,7 @@ Only one person (the developer and data controller) has access to production sys
 
 12. Google Limited-Use Compliance
 
-Priority Guardian accesses Google Calendar data solely for its declared purpose: computing per-priority time allocation and enabling conversational semantic grouping of non-priority time. No calendar data is used for advertising, analytics, profiling, or model training. We comply with Google's Limited Use Requirements.
+Priority Guardian accesses Google Calendar data solely for its declared purpose: computing per-priority time allocation and enabling conversational semantic grouping of non-priority time. No calendar data is used for advertising, analytics, profiling, or model training. We do not sell or transfer Google user data to data brokers or surveillance entities. We do not use Google user data for credit, lending, or insurance decisions. No employee or contractor accesses Google user data except with explicit user consent.We comply with Google's Limited Use Requirements.
 
 13. Children
 
