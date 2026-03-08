@@ -9,9 +9,7 @@ NOTE: oauth-protected-resource is NOT served here. Each MCP server
 publishes its own /.well-known/oauth-protected-resource with the
 correct resource URL for that specific MCP server.
 
-Supports scopes for all Priority Guardian apps:
-- focused.* (Focused app)
-- clarity.* (Clarity app)
+Supports scopes for Priority Guardian (pg.access).
 """
 
 from fastapi import APIRouter
@@ -22,14 +20,8 @@ from backend.core.config import settings
 router = APIRouter(tags=["oauth-provider"])
 
 # Supported scopes advertised in discovery (exported for testing)
-# Sorted alphabetically for stable diffs and cleaner ordering
-SCOPES_SUPPORTED = sorted([
-    "clarity.write",
-    "focused.notify",
-    "focused.read",
-    "focused.write",
-    "pg.access",
-])
+# Only Priority Guardian scope - Focused deprecated, Clarity rejected
+SCOPES_SUPPORTED = ["pg.access"]
 
 
 def _authorization_server_metadata() -> dict:
