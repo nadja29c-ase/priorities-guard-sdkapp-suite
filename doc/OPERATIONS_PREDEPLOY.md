@@ -53,18 +53,37 @@ psql "$PRODUCTION_DATABASE_URL" -c "\d+ pg_priorities"
 After any change to OAuth config or MCP discovery code, verify:
 
 ```bash
+# Backend AS discovery (source of truth)
+curl https://www.priority-guard.com/.well-known/oauth-authorization-server | python3 -m json.tool
+# Verify: "issuer" == "https://www.priority-guard.com" (no path, no trailing slash)
+
+# MCP server proxied discovery (must match backend)
 curl https://pg.priority-guard.com/.well-known/oauth-authorization-server
 # "issuer" must equal "https://www.priority-guard.com" (matches backend OAUTH_ISSUER)
 # "authorization_servers" is not present here — only in oauth-protected-resource
 
 curl https://pg.priority-guard.com/.well-known/oauth-protected-resource
 # "authorization_servers[0]" must equal "https://www.priority-guard.com"
-# "resource" must equal "https://pg.priority-guard.com" (no /mcp suffix)
+# "resource" must equal "https://pg.priority-guard.com/mcp"
 ```
 
 **Critical invariant:** `issuer` must be the root domain (`https://www.priority-guard.com`), not a path prefix (`https://www.priority-guard.com/oauth/pg`). ChatGPT fetches `{authorization_servers[0]}/.well-known/oauth-authorization-server` — path prefixes break this.
 
+**Run after every backend deploy** — takes 10 seconds, prevents silent OAuth failures.
+
 See `ADR_MCP Server Implementation Standard.md` → OAuth Discovery Configuration for full documentation.
+
+### Pre-Submission Env Var Verification
+
+Before OpenAI submission, verify Render env vars match exactly:
+
+| Variable | Required Value |
+|----------|----------------|
+| `OAUTH_ISSUER` | `https://www.priority-guard.com` |
+| `BACKEND_PUBLIC_URL` | `https://www.priority-guard.com` |
+| `PG_MCP_SERVER_URL` | `https://pg.priority-guard.com` |
+
+With Increment 52 deployed, wrong values cause startup failure rather than silent misbehavior.
 
 ## Deploy Reminder
 
