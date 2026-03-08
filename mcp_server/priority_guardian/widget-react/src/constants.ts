@@ -20,7 +20,7 @@ export const BAR_COLORS: Record<string, string> = {
   P1: 'bg-info-solid',
   P2: 'bg-discovery-solid',
   P3: 'bg-caution-solid',
-  other: 'bg-surface-tertiary',
+  other: 'bg-[var(--gray-500)]',
 }
 
 // SVG stroke colors for HourRing (Widget C+) — CSS custom properties from SDK tokens
