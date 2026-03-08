@@ -18,22 +18,22 @@ const PRIORITY_COLORS: Record<CalendarKeyword, string> = {
 }
 
 // Colorful semantic slice colors (non-priority categories)
-// Distinct from P1 (blue), P2 (purple), P3 (yellow) - uses greens, teals, pinks, oranges
-// SDK-compliant colors that work in both light and dark themes
+// Distinct from P1 (blue), P2 (purple), P3 (yellow) - uses SDK primitives only
+// All values are CSS variables from variables-primitive.css or variables-semantic.css
 const SEMANTIC_COLORS = [
-  'var(--color-background-success-solid, #00a240)',  // green - SDK success
-  'var(--color-background-danger-solid, #e02e2a)',   // red - SDK danger
-  '#14b8a6',  // teal-500
-  '#f97316',  // orange-500
-  '#ec4899',  // pink-500
-  '#06b6d4',  // cyan-500
-  '#84cc16',  // lime-500
-  '#a855f7',  // violet-500 (distinct from P2 purple)
+  'var(--color-background-success-solid)',  // green
+  'var(--color-background-danger-solid)',   // red
+  'var(--color-background-warning-solid)',  // orange
+  'var(--green-300)',                       // light green - SDK primitive
+  'var(--pink-400)',                        // pink - SDK primitive
+  'var(--blue-300)',                        // light blue - SDK primitive
+  'var(--orange-300)',                      // light orange - SDK primitive
+  'var(--red-300)',                         // light red - SDK primitive
 ]
 
-// Muted grey for unmatched "other" - visible but subordinate (SDK semantic token)
-// Using border-strong instead of border-default for better visibility in legend
-const OTHER_GREY = 'var(--color-border-strong)'
+// Muted grey for unmatched "other" - visible but subordinate
+// gray-500 (#5d5d5d) is identical in both light/dark modes, provides consistent contrast
+const OTHER_GREY = 'var(--gray-500)'
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTargetLabel }: PieChartProps) {
   // Filter out zero-hour slices
