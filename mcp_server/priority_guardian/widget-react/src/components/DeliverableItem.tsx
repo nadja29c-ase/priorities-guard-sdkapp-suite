@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Deliverable } from '../types'
+import { t } from '../i18n'
 
 interface DeliverableItemProps {
   deliverable: Deliverable
@@ -52,7 +53,7 @@ export function DeliverableItem({
     try {
       await onToggle(deliverable.id, !deliverable.done)
     } catch (e) {
-      showError(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      showError(e instanceof Error ? e.message : t('couldntSave'))
     } finally {
       setIsLoading(false)
     }
@@ -70,7 +71,7 @@ export function DeliverableItem({
       await onRename(deliverable.id, editName.trim())
       setIsEditing(false)
     } catch (e) {
-      showError(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      showError(e instanceof Error ? e.message : t('couldntSave'))
       setEditName(deliverable.name) // Revert
     } finally {
       setIsLoading(false)
@@ -97,7 +98,7 @@ export function DeliverableItem({
     try {
       await onDelete(deliverable.id)
     } catch (e) {
-      showError(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      showError(e instanceof Error ? e.message : t('couldntSave'))
       setShowDeleteConfirm(false)
     } finally {
       setIsLoading(false)
@@ -107,15 +108,15 @@ export function DeliverableItem({
   if (showDeleteConfirm) {
     return (
       <li className="flex items-center gap-2 p-2 bg-surface-secondary rounded">
-        <span className="text-xs text-default flex-1">Remove "{deliverable.name}"?</span>
+        <span className="text-xs text-default flex-1">{t('removeItem').replace('{name}', deliverable.name)}</span>
         <button
           type="button"
           onClick={handleDelete}
           disabled={isLoading}
           className="text-xs text-danger hover:text-danger font-medium"
-          aria-label="Confirm remove"
+          aria-label={t('confirmRemove')}
         >
-          {isLoading ? '...' : 'Yes'}
+          {isLoading ? '...' : t('yes')}
         </button>
         <button
           type="button"
@@ -123,7 +124,7 @@ export function DeliverableItem({
           disabled={isLoading}
           className="text-xs text-secondary hover:text-default"
         >
-          No
+          {t('no')}
         </button>
       </li>
     )

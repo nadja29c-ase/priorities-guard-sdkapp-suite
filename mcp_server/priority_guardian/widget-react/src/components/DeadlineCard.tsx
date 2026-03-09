@@ -8,6 +8,7 @@ import { ChevronIcon } from './ChevronIcon'
 import { KeywordPicker } from './KeywordPicker'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
+import { t } from '../i18n'
 
 // Icon stroke colors using SDK CSS variables (compliant with UI guideline #74)
 // Icons can use custom monochromatic colors; these are CSS variables, not hardcoded hex
@@ -99,12 +100,12 @@ export function DeadlineCard({
 
   const autoSave = async (field: 'name' | 'deadline', value: string) => {
     if (field === 'name' && !value.trim()) {
-      setError('Name is required')
+      setError(t('nameRequired'))
       setEditName(priority.name)
       return
     }
     if (field === 'deadline' && !value) {
-      setError('Deadline is required')
+      setError(t('deadlineRequired'))
       setEditDeadline(priority.deadline || '')
       return
     }
@@ -157,7 +158,7 @@ export function DeadlineCard({
       await onDelete(priority.id)
     } catch (e) {
       console.error('Delete error:', e)
-      const errorMsg = e instanceof Error ? e.message : "Couldn't save. Try again."
+      const errorMsg = e instanceof Error ? e.message : t('couldntSave')
       setError(errorMsg)
       setShowDeleteConfirm(false)
       errorTimeoutRef.current = setTimeout(() => {
@@ -221,7 +222,11 @@ export function DeadlineCard({
         </div>
         <span className="text-xs font-bold tabular-nums text-secondary">
           {days !== null && (
-            days > 0 ? `${days}d left` : days === 0 ? 'Due today' : `${Math.abs(days)}d overdue`
+            days > 0
+              ? t('dDaysLeft').replace('{n}', String(days))
+              : days === 0
+                ? t('dueToday')
+                : t('dDaysOverdue').replace('{n}', String(Math.abs(days)))
           )}
         </span>
       </div>
@@ -294,7 +299,7 @@ export function DeadlineCard({
             </span>
           </span>
           <span className="text-sm text-secondary">
-            Deliverables done
+            {t('deliverablesDone')}
           </span>
         </div>
 
@@ -311,7 +316,7 @@ export function DeadlineCard({
 
             <div>
               <label htmlFor={`deadline-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
-                Deadline
+                {t('deadlineLabel')}
               </label>
               <input
                 id={`deadline-${priority.id}`}
@@ -336,7 +341,7 @@ export function DeadlineCard({
             aria-expanded={deliverablesExpanded}
           >
             <span className="text-xs font-medium uppercase tracking-wide text-tertiary">
-              E2E Deliverables
+              {t('e2eDeliverables')}
             </span>
             <span className="text-xs tabular-nums text-tertiary">
               ({doneCount}/{totalCount})
@@ -363,7 +368,7 @@ export function DeadlineCard({
                 </ul>
               ) : (
                 <p className="text-xs mb-2 italic text-secondary">
-                  Without E2E deliverables, you only see hours spent — add them to track real progress.
+                  {t('noDeliverablesHint')}
                 </p>
               )}
               <AddDeliverableInput
@@ -378,7 +383,7 @@ export function DeadlineCard({
         {isEditing && (
           <div className="mt-4 flex items-center justify-between">
             <p className="text-xs text-tertiary">
-              Changes save automatically
+              {t('changesAutoSave')}
             </p>
             <Button
               color="secondary"
@@ -387,7 +392,7 @@ export function DeadlineCard({
               onClick={onCancelEdit}
               disabled={isSaving}
             >
-              Done
+              {t('done')}
             </Button>
           </div>
         )}

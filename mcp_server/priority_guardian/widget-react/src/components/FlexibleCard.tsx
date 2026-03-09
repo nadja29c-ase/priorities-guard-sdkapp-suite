@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Priority, CalendarKeyword } from '../types'
-import { daysUntil } from '../utils'
 import { DeleteConfirmation } from './DeleteConfirmation'
 import { GoalSection } from './GoalSection'
 import { KeywordPicker } from './KeywordPicker'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS, BORDER_COLORS } from '../constants'
 import { HourRing } from './HourRing'
+import { t } from '../i18n'
 
 interface FlexibleCardProps {
   priority: Priority
@@ -87,14 +87,14 @@ export function FlexibleCard({
   ) => {
     // Validate based on field
     if (field === 'name' && !value.trim()) {
-      setError('Name is required')
+      setError(t('nameRequired'))
       setEditName(priority.name)
       return
     }
     if (field === 'weekly_hour_target') {
       const numVal = parseFloat(value)
       if (!value || isNaN(numVal) || numVal <= 0) {
-        setError('Weekly hours must be > 0')
+        setError(t('weeklyHoursPositive'))
         setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
         return
       }
@@ -171,7 +171,7 @@ export function FlexibleCard({
       await onDelete(priority.id)
     } catch (e) {
       console.error('Delete error:', e)
-      const errorMsg = e instanceof Error ? e.message : "Couldn't save. Try again."
+      const errorMsg = e instanceof Error ? e.message : t('couldntSave')
       setError(errorMsg)
       setShowDeleteConfirm(false)
       errorTimeoutRef.current = setTimeout(() => {
@@ -243,7 +243,7 @@ export function FlexibleCard({
         {/* V7: Streak as pill (not emoji) */}
         {!isEditing && priority.streakCount != null && priority.streakCount > 0 && (
           <span className="text-xs tabular-nums px-1.5 py-0.5 rounded-full font-medium text-default bg-surface-tertiary">
-            {priority.streakCount}w streak
+            {t('weekStreak').replace('{n}', String(priority.streakCount))}
           </span>
         )}
         <button
@@ -292,7 +292,7 @@ export function FlexibleCard({
                   ~{Math.round(priority.avgTargetAchievement!)}%
                 </span>
                 <p className="text-xs mt-0.5 text-secondary">
-                  of weekly target on avg
+                  {t('ofWeeklyTargetOnAvg')}
                 </p>
               </>
             ) : (
@@ -310,7 +310,7 @@ export function FlexibleCard({
                   <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                 </svg>
                 <span className="text-sm italic text-tertiary">
-                  Tracking in progress — your average builds after this week.
+                  {t('trackingInProgress')}
                 </span>
               </div>
             )}
@@ -331,7 +331,7 @@ export function FlexibleCard({
 
           <div>
             <label htmlFor={`hours-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
-              Weekly Hour Target
+              {t('weeklyHourTarget')}
             </label>
             <input
               id={`hours-${priority.id}`}
@@ -348,7 +348,7 @@ export function FlexibleCard({
 
           <div>
             <label htmlFor={`checkpoint-${priority.id}`} className="block text-xs font-medium text-secondary mb-1">
-              Checkpoint Date
+              {t('checkpointDate')}
             </label>
             <input
               id={`checkpoint-${priority.id}`}
@@ -379,7 +379,7 @@ export function FlexibleCard({
       {isEditing && (
         <div className="mt-4 flex items-center justify-between">
           <p className="text-xs text-tertiary">
-            Changes save automatically
+            {t('changesAutoSave')}
           </p>
           <Button
             color="secondary"
@@ -388,7 +388,7 @@ export function FlexibleCard({
             onClick={onCancelEdit}
             disabled={isSaving}
           >
-            Done
+            {t('done')}
           </Button>
         </div>
       )}

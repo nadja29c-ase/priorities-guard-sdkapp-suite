@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { extractStructuredContent } from '../utils'
+import { t } from '../i18n'
 
 interface ConnectionStatusProps {
   connected: boolean
@@ -23,7 +24,7 @@ export function ConnectionStatus({
 
   const handleConnect = useCallback(async () => {
     if (!window.openai?.callTool) {
-      setError('Connection not available')
+      setError(t('connectionNotAvailable'))
       return
     }
 
@@ -48,7 +49,7 @@ export function ConnectionStatus({
       }
     } catch (err) {
       console.error('Failed to initiate connection:', err)
-      setError('Failed to start connection. Please try again.')
+      setError(t('failedToConnect'))
     } finally {
       setIsConnecting(false)
     }
@@ -61,7 +62,7 @@ export function ConnectionStatus({
 
   const handleDisconnect = useCallback(async () => {
     if (!window.openai?.callTool) {
-      setError('Disconnection not available')
+      setError(t('connectionNotAvailable'))
       return
     }
 
@@ -74,7 +75,7 @@ export function ConnectionStatus({
       onRefresh()
     } catch (err) {
       console.error('Failed to disconnect:', err)
-      setError('Failed to disconnect. Please try again.')
+      setError(t('failedToDisconnect'))
     } finally {
       setIsDisconnecting(false)
     }
@@ -90,7 +91,7 @@ export function ConnectionStatus({
             aria-hidden="true"
           />
           <span className="text-sm font-medium text-default">
-            Google Calendar
+            {t('googleCalendar')}
           </span>
         </div>
 
@@ -98,23 +99,23 @@ export function ConnectionStatus({
           showDisconnectConfirm ? (
             <div className="flex items-center gap-2">
               <span className="text-xs text-secondary">
-                Disconnect?
+                {t('disconnectConfirm')}
               </span>
               <button
                 onClick={handleDisconnect}
                 disabled={isDisconnecting}
                 className={`text-xs font-medium px-2 py-1 rounded-lg transition-colors text-danger bg-danger-soft-alpha ${isDisconnecting ? 'opacity-60' : ''}`}
-                aria-label="Confirm disconnect"
+                aria-label={t('disconnectYes')}
               >
-                {isDisconnecting ? '...' : 'Yes'}
+                {isDisconnecting ? '...' : t('disconnectYes')}
               </button>
               <button
                 onClick={() => setShowDisconnectConfirm(false)}
                 disabled={isDisconnecting}
                 className="text-xs font-medium px-2 py-1 rounded-lg transition-colors text-secondary bg-surface-secondary"
-                aria-label="Cancel disconnect"
+                aria-label={t('disconnectNo')}
               >
-                No
+                {t('disconnectNo')}
               </button>
             </div>
           ) : (
@@ -122,9 +123,9 @@ export function ConnectionStatus({
               onClick={() => setShowDisconnectConfirm(true)}
               disabled={isRefreshing}
               className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-danger bg-danger-soft-alpha"
-              aria-label="Disconnect Google Calendar"
+              aria-label={t('disconnect')}
             >
-              Disconnect
+              {t('disconnect')}
             </button>
           )
         ) : awaitingOAuth ? (
@@ -132,18 +133,18 @@ export function ConnectionStatus({
             onClick={handleCheckStatus}
             disabled={isRefreshing}
             className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft ${isRefreshing ? 'opacity-60' : ''}`}
-            aria-label="Check connection status"
+            aria-label={t('checkStatus')}
           >
-            {isRefreshing ? 'Checking...' : 'Check status'}
+            {isRefreshing ? t('checking') : t('checkStatus')}
           </button>
         ) : (
           <button
             onClick={handleConnect}
             disabled={isConnecting || isRefreshing}
             className={`text-xs font-medium px-3 py-1.5 rounded-lg transition-colors text-info bg-info-soft ${(isConnecting || isRefreshing) ? 'opacity-60' : ''}`}
-            aria-label="Connect Google Calendar"
+            aria-label={t('connect')}
           >
-            {isConnecting ? 'Connecting...' : 'Connect'}
+            {isConnecting ? t('connecting') : t('connect')}
           </button>
         )}
       </div>
@@ -166,7 +167,7 @@ export function ConnectionStatus({
             Add <strong className="text-default">P1</strong>,{' '}
             <strong className="text-default">P2</strong>, or{' '}
             <strong className="text-default">P3</strong>{' '}
-            to your calendar event titles to track time toward each priority.
+            {t('calendarInstructionSuffix')}
           </p>
         </div>
       )}
@@ -175,7 +176,7 @@ export function ConnectionStatus({
       {awaitingOAuth && !connected && (
         <div className="rounded-lg px-3 py-2.5 mt-3 bg-surface-secondary">
           <p className="text-xs text-secondary">
-            Complete the authorization in the opened window, then click "Check status".
+            {t('awaitingOAuth')}
           </p>
         </div>
       )}

@@ -10,6 +10,7 @@ type ToolOutput = {
 // Mock window.openai
 const mockOpenai = {
   theme: 'light' as 'light' | 'dark' | undefined,
+  locale: 'en-US' as string | undefined,
   toolOutput: undefined as ToolOutput,
   callTool: vi.fn(),
   openExternal: vi.fn(),
@@ -46,12 +47,18 @@ export function setMockPriorities(
 export function resetMocks() {
   mockOpenai.toolOutput = undefined
   mockOpenai.theme = 'light'
+  mockOpenai.locale = 'en-US'
   mockOpenai.callTool.mockReset()
   mockOpenai.openExternal.mockReset()
   mockOpenai.notifyIntrinsicHeight.mockReset()
   mockOpenai.setWidgetState.mockReset()
   mockOpenai.widgetState = undefined
   document.documentElement.removeAttribute('data-theme')
+}
+
+// Helper to set mock locale for i18n testing
+export function setMockLocale(locale: string) {
+  mockOpenai.locale = locale
 }
 
 // Set document theme (what useDocumentTheme reads)

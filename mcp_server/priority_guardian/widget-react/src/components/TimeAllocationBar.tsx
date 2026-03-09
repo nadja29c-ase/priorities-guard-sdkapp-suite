@@ -1,6 +1,7 @@
 import type { TimeAllocation, CalendarKeyword } from '../types'
 import { BAR_COLORS } from '../constants'
 import { formatHours } from '../utils'
+import { t } from '../i18n'
 
 interface TimeAllocationBarProps {
   timeAllocation: TimeAllocation | undefined
@@ -80,10 +81,10 @@ function buildAriaLabel(
   }
 
   if (parts.length === 0) {
-    return 'Time allocation: no tracked hours this week'
+    return t('noTrackedHours')
   }
 
-  return `Time allocation: ${parts.join(', ')}`
+  return t('timeAllocationPrefix') + parts.join(', ')
 }
 
 export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, isRefreshing }: TimeAllocationBarProps) {
@@ -161,7 +162,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
           id="time-allocation-heading"
           className="text-xs font-medium uppercase tracking-wide text-secondary"
         >
-          Time allocation this week
+          {t('timeAllocationHeading')}
         </span>
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold tabular-nums text-default">
@@ -172,8 +173,8 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
               onClick={onRefresh}
               disabled={isRefreshing}
               className={`p-1 rounded-full hover:bg-surface-secondary transition-colors ${isRefreshing ? 'opacity-40' : ''}`}
-              title="Refresh calendar data"
-              aria-label="Refresh calendar data"
+              title={t('refreshCalendar')}
+              aria-label={t('refreshCalendar')}
             >
               <svg
                 className="w-3 h-3 text-tertiary"

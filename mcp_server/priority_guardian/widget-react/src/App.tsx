@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
+import { t } from './i18n'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { DeadlineCard } from './components/DeadlineCard'
 import { FlexibleCard } from './components/FlexibleCard'
@@ -475,7 +476,7 @@ function App() {
   if (!isInitialized) {
     return (
       <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
-        Loading...
+        {t('loading')}
       </div>
     )
   }
@@ -707,9 +708,9 @@ function PriorityCardWrapper({
 function EmptyState() {
   return (
     <div className="p-6 text-center bg-surface rounded-xl border border-default">
-      <p className="text-base font-medium text-default mb-2">No Priorities Yet</p>
+      <p className="text-base font-medium text-default mb-2">{t('noPriorities')}</p>
       <p className="text-sm text-secondary">
-        Ask the assistant to help you set up your top priorities.
+        {t('noPrioritiesHint')}
       </p>
     </div>
   )

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
+import { t } from '../i18n'
 
 interface DeleteConfirmationProps {
   itemName: string
@@ -47,12 +48,12 @@ export function DeleteConfirmation({
 
   // Format message based on item type
   const title = itemType === 'priority' && calendarKeyword
-    ? `Delete ${calendarKeyword}: ${itemName}?`
-    : `Delete ${itemName}?`
+    ? t('deleteWithKeyword').replace('{keyword}', calendarKeyword).replace('{name}', itemName)
+    : t('deleteItem').replace('{name}', itemName)
 
   const subtitle = itemType === 'priority'
-    ? 'This will also delete all deliverables. This cannot be undone.'
-    : 'This cannot be undone.'
+    ? t('deleteSubtitlePriority')
+    : t('deleteSubtitleDeliverable')
 
   return (
     <div
@@ -77,7 +78,7 @@ export function DeleteConfirmation({
             onClick={onCancel}
             disabled={isDeleting}
           >
-            Cancel
+            {t('cancel')}
           </Button>
           <Button
             color="danger"
@@ -85,9 +86,9 @@ export function DeleteConfirmation({
             size="sm"
             onClick={onConfirm}
             disabled={isDeleting}
-            aria-label={`Confirm delete ${itemType}`}
+            aria-label={t('confirmDeleteType').replace('{type}', itemType)}
           >
-            {isDeleting ? 'Deleting...' : 'Delete'}
+            {isDeleting ? t('deleting') : t('delete')}
           </Button>
         </div>
       </div>

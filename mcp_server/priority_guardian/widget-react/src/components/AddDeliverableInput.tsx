@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
+import { t } from '../i18n'
 
 interface AddDeliverableInputProps {
   priorityId: string
@@ -26,7 +27,7 @@ export function AddDeliverableInput({
 
   const handleAdd = async () => {
     if (!name.trim()) {
-      setError('Name is required')
+      setError(t('deliverableNameRequired'))
       return
     }
     setError(null)
@@ -36,7 +37,7 @@ export function AddDeliverableInput({
       setName('')
       setIsOpen(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      setError(e instanceof Error ? e.message : t('couldntSave'))
     } finally {
       setIsAdding(false)
     }
@@ -65,12 +66,12 @@ export function AddDeliverableInput({
         onClick={() => setIsOpen(true)}
         disabled={disabled}
         className="flex items-center gap-1 text-xs text-secondary hover:text-default disabled:opacity-50"
-        aria-label="Add new deliverable"
+        aria-label={t('addDeliverable')}
       >
         <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
           <path d="M8 3v10M3 8h10"/>
         </svg>
-        Add deliverable
+        {t('addDeliverable')}
       </button>
     )
   }
@@ -88,9 +89,9 @@ export function AddDeliverableInput({
           }}
           onKeyDown={handleKeyDown}
           disabled={isAdding}
-          placeholder="Deliverable name"
+          placeholder={t('deliverableNamePlaceholder')}
           className="flex-1 text-sm text-default bg-surface border border-default rounded-lg px-3 py-2 focus:outline-none focus:border-tertiary"
-          aria-label="New deliverable name"
+          aria-label={t('deliverableNamePlaceholder')}
           aria-describedby={error ? 'deliverable-error' : undefined}
         />
         <Button
@@ -100,7 +101,7 @@ export function AddDeliverableInput({
           onClick={handleAdd}
           disabled={isAdding || !name.trim()}
         >
-          {isAdding ? 'Adding...' : 'Add'}
+          {isAdding ? t('adding') : t('add')}
         </Button>
         <Button
           color="secondary"
@@ -109,7 +110,7 @@ export function AddDeliverableInput({
           onClick={handleCancel}
           disabled={isAdding}
         >
-          Cancel
+          {t('cancel')}
         </Button>
       </div>
       {error && (

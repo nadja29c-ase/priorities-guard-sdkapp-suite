@@ -1,6 +1,7 @@
 import type { CalendarKeyword } from '../types'
 import { RING_STROKE_COLORS } from '../constants'
 import { formatHours } from '../utils'
+import { t } from '../i18n'
 
 interface HourRingProps {
   actual: number        // weeklyHourActual (0 if null/undefined)
@@ -32,7 +33,9 @@ export function HourRing({ actual, target, keyword }: HourRingProps) {
   const strokeColor = RING_STROKE_COLORS[keyword] ?? RING_STROKE_COLORS.P1
 
   // Build accessible aria-label
-  const ariaLabel = `${formatHours(actual)} of ${formatHours(target)} this week`
+  const ariaLabel = t('hourRingAria')
+    .replace('{hours}', formatHours(actual))
+    .replace('{target}', formatHours(target))
 
   return (
     <div className="relative w-16 h-16 flex-shrink-0">

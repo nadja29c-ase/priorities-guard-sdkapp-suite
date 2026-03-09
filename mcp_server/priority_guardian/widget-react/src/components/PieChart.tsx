@@ -1,5 +1,16 @@
 import type { PieSlice, CalendarKeyword } from '../types'
 import { RING_STROKE_COLORS } from '../constants'
+import { t } from '../i18n'
+
+/**
+ * Parse date components from ISO string directly (timezone-safe).
+ * Avoids Date object local-timezone conversion issues.
+ */
+function parseDateParts(isoString: string): { year: number; month: number; day: number } {
+  const [datePart] = isoString.split('T')
+  const [year, month, day] = datePart.split('-').map(Number)
+  return { year, month, day }
+}
 
 interface PieChartProps {
   slices: PieSlice[]
@@ -42,7 +53,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
   if (validSlices.length === 0) {
     return (
       <div className="p-6 text-center bg-surface rounded-xl border border-default">
-        <p className="text-sm text-secondary">No time data to display</p>
+        <p className="text-sm text-secondary">{t('noTimeData')}</p>
       </div>
     )
   }
@@ -91,15 +102,21 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
     }
   })
 
-  // Format week dates for display
+  // Format week dates for display (timezone-safe)
   const formatWeekRange = () => {
     try {
-      const start = new Date(weekStart)
-      const end = new Date(weekEnd)
+      const locale = window.openai?.locale ?? 'en-US'
+      const start = parseDateParts(weekStart)
+      const end = parseDateParts(weekEnd)
+
+      // weekEnd is exclusive (Monday 00:00), so subtract 1 day for display
+      const startDate = new Date(start.year, start.month - 1, start.day)
+      const endDate = new Date(end.year, end.month - 1, end.day - 1)
+
       const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-      return `${start.toLocaleDateString(undefined, options)} - ${end.toLocaleDateString(undefined, options)}`
+      return `${startDate.toLocaleDateString(locale, options)} – ${endDate.toLocaleDateString(locale, options)}`
     } catch {
-      return `${weekStart} - ${weekEnd}`
+      return `${weekStart} – ${weekEnd}`
     }
   }
 
@@ -108,7 +125,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
       {/* Header */}
       <div className="text-center mb-4">
         <h2 className="text-base font-semibold text-default">
-          {semanticTargetLabel ? `Breakdown: ${semanticTargetLabel}` : 'Time Allocation'}
+          {semanticTargetLabel ? t('breakdown') + semanticTargetLabel : t('timeAllocationTitle')}
         </h2>
         <p className="text-xs text-tertiary">{formatWeekRange()}</p>
       </div>
@@ -119,7 +136,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
           width={size}
           height={size}
           viewBox={`0 0 ${size} ${size}`}
-          aria-label={`Pie chart showing ${totalHours} total hours across ${validSlices.length} categories`}
+          aria-label={t('pieChartAria').replace('{hours}', totalHours.toFixed(1)).replace('{n}', String(validSlices.length))}
           role="img"
         >
           {/* Background circle */}
@@ -166,7 +183,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             className="text-xs"
             fill="var(--color-text-tertiary)"
           >
-            total
+            {t('totalHours')}
           </text>
         </svg>
       </div>
@@ -196,7 +213,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
       {/* CTA to break down categories - shown when not already zoomed in */}
       {!semanticTargetLabel && (
         <p className="mt-4 text-xs text-center text-secondary">
-          Ask ChatGPT to break down any category to see where the time went.
+          {t('breakdownCta')}
         </p>
       )}
     </div>

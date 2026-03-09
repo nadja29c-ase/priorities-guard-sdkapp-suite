@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Priority, CalendarKeyword } from '../types'
 import { BADGE_COLORS, BADGE_CIRCLE_CLASS } from '../constants'
+import { t } from '../i18n'
 
 interface KeywordPickerProps {
   currentKeyword: CalendarKeyword
@@ -47,7 +48,7 @@ export function KeywordPicker({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs text-secondary">Badge:</span>
+      <span className="text-xs text-secondary">{t('badgeLabel')}</span>
       <div className="flex gap-1.5">
         {ALL_KEYWORDS.map((kw) => {
           const isSelected = kw === currentKeyword
@@ -73,14 +74,14 @@ export function KeywordPicker({
                   }
                   ${isDisabled ? 'cursor-not-allowed' : ''}
                 `}
-                aria-label={`${isSelected ? 'Current keyword' : 'Switch to'} ${kw}${isHeldByOther ? ` (will swap with ${holderName})` : ''}`}
+                aria-label={`${isSelected ? t('currentKeyword') : t('switchTo')} ${kw}${isHeldByOther ? ` (${t('willSwapWith').replace('{name}', holderName!)})` : ''}`}
               >
                 {kw}
               </button>
               {/* Tooltip on hover for swap hint */}
               {isHeldByOther && (
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-xs bg-surface-tertiary text-secondary rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                  Swap with {holderName}
+                  {t('swapWith').replace('{name}', holderName)}
                 </div>
               )}
             </div>

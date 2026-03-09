@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../App'
-import { setMockPriorities, resetMocks, mockOpenai } from '../test/setup'
+import { setMockPriorities, resetMocks, mockOpenai, setMockLocale } from '../test/setup'
 import type { Priority } from '../types'
 
 // Sample priorities for testing
@@ -904,6 +904,36 @@ describe('App', () => {
     })
 
 
+  })
+
+  describe('i18n Locale Rendering', () => {
+    it('renders "Loading…" for English locale (en-US)', () => {
+      setMockLocale('en-US')
+      // Don't set toolOutput - App will show loading state
+      render(<App />)
+      expect(screen.getByText('Loading…')).toBeInTheDocument()
+    })
+
+    it('renders "Lädt…" for German locale (de-DE)', () => {
+      setMockLocale('de-DE')
+      // Don't set toolOutput - App will show loading state
+      render(<App />)
+      expect(screen.getByText('Lädt…')).toBeInTheDocument()
+    })
+
+    it('renders "No priorities yet" for English locale', () => {
+      setMockLocale('en-US')
+      setMockPriorities([], false)
+      render(<App />)
+      expect(screen.getByText('No priorities yet')).toBeInTheDocument()
+    })
+
+    it('renders "Noch keine Prioritäten vorhanden" for German locale', () => {
+      setMockLocale('de-DE')
+      setMockPriorities([], false)
+      render(<App />)
+      expect(screen.getByText('Noch keine Prioritäten vorhanden')).toBeInTheDocument()
+    })
   })
 
   describe('widgetState Persistence (Widget B)', () => {

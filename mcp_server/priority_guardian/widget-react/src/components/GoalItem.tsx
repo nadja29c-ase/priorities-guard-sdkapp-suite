@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Goal } from '../types'
+import { t } from '../i18n'
 
 interface GoalItemProps {
   goal: Goal
@@ -59,7 +60,7 @@ export function GoalItem({
     try {
       await onToggle(goal.id, !goal.achieved)
     } catch (e) {
-      showErrorMessage(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      showErrorMessage(e instanceof Error ? e.message : t('couldntSave'))
     } finally {
       setIsLoading(false)
     }
@@ -88,7 +89,7 @@ export function GoalItem({
       await onRename(goal.id, trimmedText)
       setIsEditing(false)
     } catch (e) {
-      showErrorMessage(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      showErrorMessage(e instanceof Error ? e.message : t('couldntSave'))
       setEditText(goal.text) // Revert
     } finally {
       setIsLoading(false)
@@ -115,7 +116,7 @@ export function GoalItem({
     try {
       await onDelete(goal.id)
     } catch (e) {
-      showErrorMessage(e instanceof Error ? e.message : "Couldn't save. Try again.")
+      showErrorMessage(e instanceof Error ? e.message : t('couldntSave'))
       setShowDeleteConfirm(false)
     } finally {
       setIsLoading(false)
@@ -126,24 +127,24 @@ export function GoalItem({
   if (showDeleteConfirm) {
     return (
       <li className="flex items-center gap-2 p-2 bg-surface-secondary rounded">
-        <span className="text-xs text-default flex-1">Remove "{goal.text}"?</span>
+        <span className="text-xs text-default flex-1">{t('removeItem').replace('{name}', goal.text)}</span>
         <button
           type="button"
           onClick={handleDelete}
           disabled={isLoading}
           className="text-xs text-danger hover:text-danger font-medium"
-          aria-label="Confirm remove"
+          aria-label={t('confirmRemove')}
         >
-          {isLoading ? '...' : 'Yes'}
+          {isLoading ? '...' : t('yes')}
         </button>
         <button
           type="button"
           onClick={() => setShowDeleteConfirm(false)}
           disabled={isLoading}
           className="text-xs text-secondary hover:text-default"
-          aria-label="Cancel remove"
+          aria-label={t('cancelRemove')}
         >
-          No
+          {t('no')}
         </button>
       </li>
     )

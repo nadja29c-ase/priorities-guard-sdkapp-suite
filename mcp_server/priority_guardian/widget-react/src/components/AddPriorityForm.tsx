@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@openai/apps-sdk-ui/components/Button'
 import type { PriorityType } from '../types'
+import { t } from '../i18n'
 
 interface AddPriorityFormProps {
   availableKeywords: string[]
@@ -60,28 +61,28 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
 
   const validateForm = (): boolean => {
     if (!name.trim()) {
-      setError('Name is required')
+      setError(t('nameRequired'))
       return false
     }
     if (priorityType === 'deadline' && !deadline) {
-      setError('Deadline is required')
+      setError(t('deadlineRequired'))
       return false
     }
     if (priorityType === 'flexible') {
       if (!weeklyHourTarget) {
-        setError('Weekly hour target is required')
+        setError(t('weeklyHoursRequired'))
         return false
       }
       if (parseFloat(weeklyHourTarget) <= 0) {
-        setError('Weekly hour target must be greater than 0')
+        setError(t('weeklyHoursPositive'))
         return false
       }
       if (!checkpointDate) {
-        setError('Checkpoint date is required')
+        setError(t('checkpointRequired'))
         return false
       }
       if (!initialGoalText.trim()) {
-        setError('Initial goal is required')
+        setError(t('initialGoalRequired'))
         return false
       }
     }
@@ -112,7 +113,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
 
       await onAdd(data)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create priority')
+      setError(e instanceof Error ? e.message : t('failedToCreate'))
     } finally {
       setIsSubmitting(false)
     }
@@ -127,12 +128,12 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
     <div className="bg-surface rounded-xl border border-default p-4">
       {step === 'name' && (
         <div>
-          <h3 className="text-base font-semibold text-default mb-3">Add Priority</h3>
+          <h3 className="text-base font-semibold text-default mb-3">{t('addPriorityTitle')}</h3>
 
           <div className="space-y-4">
             <div>
               <label htmlFor="priority-name" className="block text-xs font-medium text-secondary mb-1">
-                What do you want to track?
+                {t('whatToTrack')}
               </label>
               <input
                 id="priority-name"
@@ -143,7 +144,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                   if (error) setError(null)
                 }}
                 maxLength={100}
-                placeholder="e.g., Ship v1.0, Client outreach"
+                placeholder={t('namePlaceholder')}
                 className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
                 autoFocus
               />
@@ -164,14 +165,14 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                 onClick={handleNameNext}
                 disabled={!name.trim()}
               >
-                Next
+                {t('next')}
               </Button>
               <Button
                 color="secondary"
                 variant="outline"
                 onClick={onCancel}
               >
-                Cancel
+                {t('cancel')}
               </Button>
             </div>
           </div>
@@ -185,13 +186,13 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               type="button"
               onClick={handleBack}
               className="text-secondary hover:text-default"
-              aria-label="Go back to name"
+              aria-label={t('goBack')}
             >
               <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd"/>
               </svg>
             </button>
-            <h3 className="text-base font-semibold text-default">What kind of priority?</h3>
+            <h3 className="text-base font-semibold text-default">{t('whatKindOfPriority')}</h3>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -199,22 +200,22 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               type="button"
               onClick={() => handleTypeSelect('deadline')}
               className="p-4 border border-default rounded-lg hover:border-strong hover:bg-surface-secondary text-left transition-colors"
-              aria-label="Create deadline priority"
+              aria-label={t('deadlinePriority')}
             >
               <div className="text-lg mb-1">{'\u23F1'}</div>
-              <div className="font-medium text-default">Deadline</div>
-              <div className="text-xs text-secondary">Has a hard end date</div>
+              <div className="font-medium text-default">{t('deadlineType')}</div>
+              <div className="text-xs text-secondary">{t('deadlineTypeHint')}</div>
             </button>
 
             <button
               type="button"
               onClick={() => handleTypeSelect('flexible')}
               className="p-4 border border-default rounded-lg hover:border-strong hover:bg-surface-secondary text-left transition-colors"
-              aria-label="Create flexible priority"
+              aria-label={t('flexiblePriority')}
             >
               <div className="text-lg mb-1">{'\u21BB'}</div>
-              <div className="font-medium text-default">Flexible</div>
-              <div className="text-xs text-secondary">Ongoing weekly commitment</div>
+              <div className="font-medium text-default">{t('flexibleType')}</div>
+              <div className="text-xs text-secondary">{t('flexibleTypeHint')}</div>
             </button>
           </div>
 
@@ -224,7 +225,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               variant="outline"
               onClick={onCancel}
             >
-              Cancel
+              {t('cancel')}
             </Button>
           </div>
         </div>
@@ -237,14 +238,14 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               type="button"
               onClick={handleBack}
               className="text-secondary hover:text-default"
-              aria-label="Go back to type selection"
+              aria-label={t('goBack')}
             >
               <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd"/>
               </svg>
             </button>
             <h3 className="text-base font-semibold text-default">
-              {priorityType === 'deadline' ? 'Deadline Priority' : 'Flexible Priority'}
+              {priorityType === 'deadline' ? t('deadlinePriority') : t('flexiblePriority')}
             </h3>
           </div>
 
@@ -253,7 +254,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
             {priorityType === 'deadline' && (
               <div>
                 <label htmlFor="priority-deadline" className="block text-xs font-medium text-secondary mb-1">
-                  Deadline <span className="text-danger">*</span>
+                  {t('deadlineLabel')} <span className="text-danger">*</span>
                 </label>
                 <input
                   id="priority-deadline"
@@ -275,7 +276,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               <>
                 <div>
                   <label htmlFor="priority-hours" className="block text-xs font-medium text-secondary mb-1">
-                    Weekly Hour Target <span className="text-danger">*</span>
+                    {t('weeklyHourTarget')} <span className="text-danger">*</span>
                   </label>
                   <input
                     id="priority-hours"
@@ -295,7 +296,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
 
                 <div>
                   <label htmlFor="priority-checkpoint" className="block text-xs font-medium text-secondary mb-1">
-                    Checkpoint Date <span className="text-danger">*</span>
+                    {t('checkpointDate')} <span className="text-danger">*</span>
                   </label>
                   <input
                     id="priority-checkpoint"
@@ -313,7 +314,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
 
                 <div>
                   <label htmlFor="priority-goal" className="block text-xs font-medium text-secondary mb-1">
-                    Initial Goal <span className="text-danger">*</span>
+                    {t('initialGoal')} <span className="text-danger">*</span>
                   </label>
                   <textarea
                     id="priority-goal"
@@ -325,7 +326,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                     disabled={isSubmitting}
                     maxLength={200}
                     rows={2}
-                    placeholder="What do you want to achieve in ~1 month?"
+                    placeholder={t('initialGoalPlaceholder')}
                     className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary resize-none"
                   />
                 </div>
@@ -347,7 +348,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                 onClick={handleSubmit}
                 disabled={isSubmitting}
               >
-                {isSubmitting ? 'Creating...' : 'Create Priority'}
+                {isSubmitting ? t('creating') : t('createPriority')}
               </Button>
               <Button
                 color="secondary"
@@ -355,7 +356,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                 onClick={onCancel}
                 disabled={isSubmitting}
               >
-                Cancel
+                {t('cancel')}
               </Button>
             </div>
           </div>
@@ -372,12 +373,12 @@ export function AddPriorityButton({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       className="w-full p-4 border-2 border-dashed border-default rounded-xl hover:border-strong hover:bg-surface-secondary/50 transition-colors flex items-center justify-center gap-2 text-secondary hover:text-default"
-      aria-label="Add a new priority"
+      aria-label={t('addNewPriority')}
     >
       <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
         <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd"/>
       </svg>
-      <span className="font-medium">Add a new priority</span>
+      <span className="font-medium">{t('addNewPriority')}</span>
     </button>
   )
 }

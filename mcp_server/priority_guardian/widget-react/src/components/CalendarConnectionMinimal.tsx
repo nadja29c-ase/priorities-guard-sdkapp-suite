@@ -1,3 +1,5 @@
+import { t } from '../i18n'
+
 interface CalendarConnectionMinimalProps {
   connected: boolean
 }
@@ -15,7 +17,7 @@ export function CalendarConnectionMinimal({ connected }: CalendarConnectionMinim
         aria-hidden="true"
       />
       <span className="text-xs text-tertiary">
-        Google Calendar connected
+        {t('calendarConnected')}
       </span>
     </div>
   )

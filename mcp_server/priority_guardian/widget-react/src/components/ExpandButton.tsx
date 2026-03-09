@@ -1,3 +1,5 @@
+import { t } from '../i18n'
+
 interface ExpandButtonProps {
   onClick: () => void
 }
@@ -8,9 +10,9 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
       type="button"
       onClick={onClick}
       className="w-full mt-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors hover:opacity-80 text-inverse bg-primary-solid"
-      aria-label="Open full dashboard"
+      aria-label={t('openFullDashboard')}
     >
-      Open full dashboard
+      {t('openFullDashboard')}
       <svg
         className="w-3 h-3"
         viewBox="0 0 16 16"
