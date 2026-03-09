@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { DeadlineCard } from '../components/DeadlineCard'
 import { FlexibleCard } from '../components/FlexibleCard'
 import type { Priority } from '../types'
@@ -322,5 +322,160 @@ describe('FlexibleCard UI Compliance', () => {
 
     expect(span).toBeInTheDocument()
     expect(span).not.toHaveAttribute('style')
+  })
+})
+
+describe('DeadlineCard Keyboard Accessibility', () => {
+  it('priority name h3 has tabIndex={0}', () => {
+    render(
+      <DeadlineCard
+        priority={deadlinePriority}
+        priorities={[deadlinePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    // Use aria-label pattern that only matches the h3 (includes "click to edit")
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    expect(h3.tagName).toBe('H3')
+    expect(h3).toHaveAttribute('tabIndex', '0')
+  })
+
+  it('priority name h3 has role="button"', () => {
+    render(
+      <DeadlineCard
+        priority={deadlinePriority}
+        priorities={[deadlinePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    expect(h3.tagName).toBe('H3')
+    expect(h3).toHaveAttribute('role', 'button')
+  })
+
+  it('priority name h3 aria-label contains priority name', () => {
+    render(
+      <DeadlineCard
+        priority={deadlinePriority}
+        priorities={[deadlinePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    expect(h3).toHaveAttribute('aria-label')
+    expect(h3.getAttribute('aria-label')).toContain('Ship Feature X')
+  })
+
+  it('pressing Enter on h3 calls onStartEdit', () => {
+    render(
+      <DeadlineCard
+        priority={deadlinePriority}
+        priorities={[deadlinePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    fireEvent.keyDown(h3, { key: 'Enter' })
+    expect(mockHandlers.onStartEdit).toHaveBeenCalled()
+  })
+
+  it('pressing Space on h3 calls onStartEdit', () => {
+    render(
+      <DeadlineCard
+        priority={deadlinePriority}
+        priorities={[deadlinePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    fireEvent.keyDown(h3, { key: ' ' })
+    expect(mockHandlers.onStartEdit).toHaveBeenCalled()
+  })
+})
+
+describe('FlexibleCard Keyboard Accessibility', () => {
+  it('priority name h3 has tabIndex={0}', () => {
+    render(
+      <FlexibleCard
+        priority={flexiblePriority}
+        priorities={[flexiblePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    expect(h3.tagName).toBe('H3')
+    expect(h3).toHaveAttribute('tabIndex', '0')
+  })
+
+  it('priority name h3 has role="button"', () => {
+    render(
+      <FlexibleCard
+        priority={flexiblePriority}
+        priorities={[flexiblePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    expect(h3.tagName).toBe('H3')
+    expect(h3).toHaveAttribute('role', 'button')
+  })
+
+  it('priority name h3 aria-label contains priority name', () => {
+    render(
+      <FlexibleCard
+        priority={flexiblePriority}
+        priorities={[flexiblePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    expect(h3).toHaveAttribute('aria-label')
+    expect(h3.getAttribute('aria-label')).toContain('Learn Rust')
+  })
+
+  it('pressing Enter on h3 calls onStartEdit', () => {
+    render(
+      <FlexibleCard
+        priority={flexiblePriority}
+        priorities={[flexiblePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    fireEvent.keyDown(h3, { key: 'Enter' })
+    expect(mockHandlers.onStartEdit).toHaveBeenCalled()
+  })
+
+  it('pressing Space on h3 calls onStartEdit', () => {
+    render(
+      <FlexibleCard
+        priority={flexiblePriority}
+        priorities={[flexiblePriority]}
+        isEditing={false}
+        {...mockHandlers}
+      />
+    )
+
+    const h3 = screen.getByRole('button', { name: /click to edit/i })
+    fireEvent.keyDown(h3, { key: ' ' })
+    expect(mockHandlers.onStartEdit).toHaveBeenCalled()
   })
 })

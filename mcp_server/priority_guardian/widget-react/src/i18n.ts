@@ -42,6 +42,7 @@ const messages = {
     done: 'Done',
     delete: 'Delete',
     deleting: 'Deleting…',
+    clickToEdit: 'click to edit',
 
     // Connection status
     disconnect: 'Disconnect',
@@ -178,6 +179,7 @@ const messages = {
     done: 'Fertig',
     delete: 'Löschen',
     deleting: 'Wird gelöscht…',
+    clickToEdit: 'zum Bearbeiten klicken',
 
     // Connection status
     disconnect: 'Verbindung trennen',

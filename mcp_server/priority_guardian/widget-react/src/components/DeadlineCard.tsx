@@ -252,8 +252,12 @@ export function DeadlineCard({
             />
           ) : (
             <h3
-              className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80 text-default"
+              className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80 text-default focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-border-focus,currentColor)] rounded"
               onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onStartEdit(); } }}
+              tabIndex={0}
+              role="button"
+              aria-label={`${priority.name} — ${t('clickToEdit')}`}
               title="Click to edit"
             >
               {priority.name}
