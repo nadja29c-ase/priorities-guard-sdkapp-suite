@@ -90,6 +90,7 @@ export function GoalSection({
         className={`flex items-center gap-2 mb-2 w-full text-left ${isCollapsible ? 'cursor-pointer' : ''}`}
         onClick={() => isCollapsible && setExpanded(!expanded)}
         aria-expanded={expanded}
+        aria-label={goals.length === 1 ? t('oneMonthGoal') : t('oneMonthGoals')}
       >
         {isCollapsible && (
           <ChevronIcon expanded={expanded} className="text-tertiary" />
