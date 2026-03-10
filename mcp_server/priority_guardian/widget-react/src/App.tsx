@@ -486,12 +486,22 @@ function App() {
     }
   }, [editingPriorityId, isAddingPriority, awaitingOAuth])
 
+  // TEMPORARY DEBUG - renders in ALL views
+  const debugThemeIndicator = (
+    <div style={{ fontSize: 10, color: 'red', position: 'fixed', top: 0, left: 0, zIndex: 9999 }}>
+      theme: {String((window.openai as {theme?: string} | undefined)?.theme)}
+    </div>
+  )
+
   // Loading state
   if (!isInitialized) {
     return (
-      <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
-        {t('loading')}
-      </div>
+      <>
+        {debugThemeIndicator}
+        <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
+          {t('loading')}
+        </div>
+      </>
     )
   }
 
@@ -500,19 +510,22 @@ function App() {
   // Empty slices (week before priorities existed) falls through to dashboard
   if (isPieChartData(data) && data.slices.length > 0) {
     return (
-      <main
-        role="main"
-        aria-label="Time Allocation Pie Chart"
-        className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
-      >
-        <PieChart
-          slices={data.slices}
-          totalHours={data.totalHours}
-          weekStart={data.weekStart}
-          weekEnd={data.weekEnd}
-          semanticTargetLabel={data.semanticTargetLabel}
-        />
-      </main>
+      <>
+        {debugThemeIndicator}
+        <main
+          role="main"
+          aria-label="Time Allocation Pie Chart"
+          className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+        >
+          <PieChart
+            slices={data.slices}
+            totalHours={data.totalHours}
+            weekStart={data.weekStart}
+            weekEnd={data.weekEnd}
+            semanticTargetLabel={data.semanticTargetLabel}
+          />
+        </main>
+      </>
     )
   }
 
@@ -537,17 +550,14 @@ function App() {
   const canEdit = !editingPriorityId && !isAddingPriority
 
   return (
-    <main
-      role="main"
-      aria-label="Priority Guardian Dashboard"
-      className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
-    >
-      {/* TEMPORARY DEBUG - remove after fixing dark mode */}
-      <div style={{ fontSize: 10, color: 'red', position: 'absolute', top: 0, left: 0, zIndex: 9999 }}>
-        theme: {String((window.openai as {theme?: string} | undefined)?.theme)}
-      </div>
-
-      {/* Fullscreen header - only in fullscreen mode */}
+    <>
+      {debugThemeIndicator}
+      <main
+        role="main"
+        aria-label="Priority Guardian Dashboard"
+        className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+      >
+        {/* Fullscreen header - only in fullscreen mode */}
       {!isInline && (
         <FullscreenHeader onMinimize={handleMinimizeToInline} />
       )}
@@ -634,7 +644,8 @@ function App() {
           />
         </div>
       )}
-    </main>
+      </main>
+    </>
   )
 }
 
