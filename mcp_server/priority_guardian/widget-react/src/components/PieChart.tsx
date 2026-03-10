@@ -171,7 +171,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             x={center}
             y={center - 8}
             textAnchor="middle"
-            style={{ fill: 'var(--color-text-default)', fontSize: '1.25rem', fontWeight: 700 }}
+            style={{ fill: 'var(--color-text)', fontSize: '1.25rem', fontWeight: 700 }}
           >
             {totalHours.toFixed(1)}h
           </text>
