@@ -18,9 +18,18 @@ type DisplayMode = 'inline' | 'fullscreen'
 
 function App() {
   // Set data-theme attribute on <html> for SDK CSS token resolution
+  // Must listen for openai:set_globals since window.openai.theme may not be set at mount
   useEffect(() => {
-    const theme = (window.openai as { theme?: 'light' | 'dark' } | undefined)?.theme ?? 'light'
-    applyDocumentTheme(theme)
+    const applyTheme = () => {
+      const theme = (window.openai as { theme?: 'light' | 'dark' } | undefined)?.theme ?? 'light'
+      applyDocumentTheme(theme)
+    }
+
+    applyTheme() // apply immediately in case already available
+    window.addEventListener('openai:set_globals', applyTheme, { passive: true })
+    return () => {
+      window.removeEventListener('openai:set_globals', applyTheme)
+    }
   }, [])
 
   const [data, setData] = useState<ToolOutputData | null>(null)
