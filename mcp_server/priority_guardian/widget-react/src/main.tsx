@@ -24,6 +24,14 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('PG widget error:', error, errorInfo.componentStack)
+    // DEBUG: store full error info on window for post-crash inspection
+    ;(window as Record<string, unknown>).__PG_LAST_ERROR__ = {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      ts: new Date().toISOString(),
+    }
   }
 
   render(): ReactNode {
@@ -35,7 +43,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
             Unable to display dashboard. Please refresh or try again later.
           </p>
           <p className="text-xs text-tertiary mt-1" style={{wordBreak:'break-all'}}>
-            {this.state.error?.message}
+            {this.state.error?.name}: {this.state.error?.message || '(no message)'}
+          </p>
+          <p className="text-xs text-tertiary mt-1" style={{wordBreak:'break-all',fontSize:'10px',opacity:0.7}}>
+            {this.state.error?.stack?.split('\n').slice(0,3).join(' | ')}
           </p>
         </div>
       )
