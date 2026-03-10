@@ -3,6 +3,17 @@ import { RING_STROKE_COLORS } from '../constants'
 import { t } from '../i18n'
 
 /**
+ * Translate known sentinel labels from backend data.
+ * These are system-generated labels, not user content.
+ */
+function translateSliceLabel(label: string): string {
+  const lower = label.toLowerCase()
+  if (lower === 'other') return t('otherLabel')
+  if (lower === 'uncategorized') return t('uncategorized')
+  return label
+}
+
+/**
  * Parse date components from ISO string directly (timezone-safe).
  * Avoids Date object local-timezone conversion issues.
  */
@@ -162,7 +173,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
               strokeDasharray={seg.strokeDasharray}
               strokeDashoffset={0}
               transform={`rotate(${seg.rotation} ${center} ${center})`}
-              aria-label={`${seg.slice.label}: ${seg.slice.hours}h (${seg.percent.toFixed(0)}%)`}
+              aria-label={`${translateSliceLabel(seg.slice.label)}: ${seg.slice.hours}h (${seg.percent.toFixed(0)}%)`}
             />
           ))}
 
@@ -196,7 +207,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
                 style={{ backgroundColor: seg.color }}
                 aria-hidden="true"
               />
-              <span className="text-default truncate">{seg.slice.label}</span>
+              <span className="text-default truncate">{translateSliceLabel(seg.slice.label)}</span>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0 ml-2">
               <span className="text-secondary">{seg.slice.hours.toFixed(1)}h</span>

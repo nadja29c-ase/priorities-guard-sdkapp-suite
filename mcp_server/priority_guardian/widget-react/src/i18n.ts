@@ -142,6 +142,10 @@ const messages = {
     currentKeyword: 'Current keyword',
     switchTo: 'Switch to',
     willSwapWith: 'will swap with {name}',
+
+    // PieChart sentinel labels (from backend data)
+    otherLabel: 'Other',
+    uncategorized: 'Uncategorized',
   },
   de: {
     // Loading states
@@ -279,6 +283,10 @@ const messages = {
     currentKeyword: 'Aktuelles Schlagwort',
     switchTo: 'Wechseln zu',
     willSwapWith: 'tauscht mit {name}',
+
+    // PieChart sentinel labels (from backend data)
+    otherLabel: 'Sonstige',
+    uncategorized: 'Nicht kategorisiert',
   },
 } as const
 
