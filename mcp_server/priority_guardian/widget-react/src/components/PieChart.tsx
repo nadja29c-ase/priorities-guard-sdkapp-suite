@@ -166,23 +166,17 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             />
           ))}
 
-          {/* Center text */}
-          <text
-            x={center}
-            y={center - 8}
-            textAnchor="middle"
-            style={{ fill: 'var(--color-text-default)', fontSize: '1.25rem', fontWeight: 700 }}
-          >
-            {totalHours.toFixed(1)}h
-          </text>
-          <text
-            x={center}
-            y={center + 12}
-            textAnchor="middle"
-            style={{ fill: 'var(--color-text-tertiary)', fontSize: '0.75rem' }}
-          >
-            {t('totalHours')}
-          </text>
+          {/* Center text - use foreignObject for reliable CSS variable resolution */}
+          <foreignObject x={center - 50} y={center - 28} width="100" height="56">
+            <div className="flex flex-col items-center justify-center h-full">
+              <span className="text-xl font-bold text-default leading-none">
+                {totalHours.toFixed(1)}h
+              </span>
+              <span className="text-xs text-tertiary mt-1">
+                {t('totalHours')}
+              </span>
+            </div>
+          </foreignObject>
         </svg>
       </div>
 
