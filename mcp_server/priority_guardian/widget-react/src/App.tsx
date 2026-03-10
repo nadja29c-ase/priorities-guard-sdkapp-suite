@@ -21,12 +21,9 @@ function App() {
   // Must listen for openai:set_globals since window.openai.theme may not be set at mount
   useEffect(() => {
     const applyTheme = () => {
-      const rawTheme = (window.openai as { theme?: string } | undefined)?.theme
-      const theme = (rawTheme === 'light' || rawTheme === 'dark') ? rawTheme : 'light'
-      console.log('[PG] theme effect fired. window.openai?.theme =', rawTheme, '→ applying:', theme)
-      applyDocumentTheme(theme)
+      const theme = (window.openai as { theme?: string } | undefined)?.theme
+      applyDocumentTheme(theme === 'dark' ? 'dark' : 'light')
     }
-
     applyTheme()
     window.addEventListener('openai:set_globals', applyTheme, { passive: true })
     return () => window.removeEventListener('openai:set_globals', applyTheme)
@@ -486,22 +483,12 @@ function App() {
     }
   }, [editingPriorityId, isAddingPriority, awaitingOAuth])
 
-  // TEMPORARY DEBUG - renders in ALL views
-  const debugThemeIndicator = (
-    <div style={{ fontSize: 10, color: 'red', position: 'fixed', top: 0, left: 0, zIndex: 9999 }}>
-      theme: {String((window.openai as {theme?: string} | undefined)?.theme)}
-    </div>
-  )
-
   // Loading state
   if (!isInitialized) {
     return (
-      <>
-        {debugThemeIndicator}
-        <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
-          {t('loading')}
-        </div>
-      </>
+      <div className="p-6 text-center text-sm text-secondary bg-surface-secondary rounded-xl">
+        {t('loading')}
+      </div>
     )
   }
 
@@ -510,22 +497,19 @@ function App() {
   // Empty slices (week before priorities existed) falls through to dashboard
   if (isPieChartData(data) && data.slices.length > 0) {
     return (
-      <>
-        {debugThemeIndicator}
-        <main
-          role="main"
-          aria-label="Time Allocation Pie Chart"
-          className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
-        >
-          <PieChart
-            slices={data.slices}
-            totalHours={data.totalHours}
-            weekStart={data.weekStart}
-            weekEnd={data.weekEnd}
-            semanticTargetLabel={data.semanticTargetLabel}
-          />
-        </main>
-      </>
+      <main
+        role="main"
+        aria-label="Time Allocation Pie Chart"
+        className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+      >
+        <PieChart
+          slices={data.slices}
+          totalHours={data.totalHours}
+          weekStart={data.weekStart}
+          weekEnd={data.weekEnd}
+          semanticTargetLabel={data.semanticTargetLabel}
+        />
+      </main>
     )
   }
 
@@ -550,14 +534,12 @@ function App() {
   const canEdit = !editingPriorityId && !isAddingPriority
 
   return (
-    <>
-      {debugThemeIndicator}
-      <main
-        role="main"
-        aria-label="Priority Guardian Dashboard"
-        className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
-      >
-        {/* Fullscreen header - only in fullscreen mode */}
+    <main
+      role="main"
+      aria-label="Priority Guardian Dashboard"
+      className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+    >
+      {/* Fullscreen header - only in fullscreen mode */}
       {!isInline && (
         <FullscreenHeader onMinimize={handleMinimizeToInline} />
       )}
@@ -644,8 +626,7 @@ function App() {
           />
         </div>
       )}
-      </main>
-    </>
+    </main>
   )
 }
 
