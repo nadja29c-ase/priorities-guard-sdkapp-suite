@@ -620,10 +620,35 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         )
 
     # Build pie chart slices (validates semantic_groupings/semantic_target if provided)
-    # ToolUsageError raised on validation failures propagates to dispatcher
-    slices = _build_pie_slices(
-        priorities, time_allocation, semantic_groupings, semantic_target
-    )
+    try:
+        slices = _build_pie_slices(
+            priorities, time_allocation, semantic_groupings, semantic_target
+        )
+    except ToolUsageError as e:
+        logger.warning(
+            "tool.get_weekly_report.slice_validation_error",
+            correlation_id=correlation_id,
+            error=str(e),
+        )
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=str(e),
+            )],
+            structuredContent={
+                "success": False,
+                "error": "slice_validation_error",
+                "assistant_guidance": (
+                    "The semantic groupings were rejected because the hours do not add up correctly. "
+                    "Recalculate the groupings so they total exactly the target hours. "
+                    "Then call get_weekly_report again immediately with the corrected groupings. "
+                    "Do NOT present the breakdown in text. "
+                    "Do NOT ask the user to confirm again. "
+                    "Just fix the numbers and call the tool."
+                ),
+            },
+            isError=True,
+        )
 
     # Normalize data for response
     normalized_priorities = [_normalize_priority_report(p) for p in priorities]
