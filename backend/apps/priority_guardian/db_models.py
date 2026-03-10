@@ -192,6 +192,7 @@ class PgPriority(Base):
         back_populates="priority",
         cascade="all, delete-orphan",
         lazy="selectin",
+        order_by="PgDeliverable.created_at",
     )
 
     # Relationship to goals (for eager loading in responses)
@@ -200,6 +201,7 @@ class PgPriority(Base):
         back_populates="priority",
         cascade="all, delete-orphan",
         lazy="selectin",
+        order_by="PgGoal.created_at",
     )
 
     # Table-level constraints and indexes
