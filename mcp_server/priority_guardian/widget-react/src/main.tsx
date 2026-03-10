@@ -34,6 +34,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
           <p className="text-xs text-secondary">
             Unable to display dashboard. Please refresh or try again later.
           </p>
+          <p className="text-xs text-tertiary mt-1" style={{wordBreak:'break-all'}}>
+            {this.state.error?.message}
+          </p>
         </div>
       )
     }
