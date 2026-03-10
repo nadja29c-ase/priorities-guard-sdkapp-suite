@@ -542,6 +542,11 @@ function App() {
       aria-label="Priority Guardian Dashboard"
       className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
     >
+      {/* TEMPORARY DEBUG - remove after fixing dark mode */}
+      <div style={{ fontSize: 10, color: 'red', position: 'absolute', top: 0, left: 0, zIndex: 9999 }}>
+        theme: {String((window.openai as {theme?: string} | undefined)?.theme)}
+      </div>
+
       {/* Fullscreen header - only in fullscreen mode */}
       {!isInline && (
         <FullscreenHeader onMinimize={handleMinimizeToInline} />
