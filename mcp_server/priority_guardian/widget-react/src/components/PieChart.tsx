@@ -198,27 +198,31 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
         </svg>
       </div>
 
-      {/* Legend */}
-      <div className="space-y-2">
+      {/* Legend - semantic list for screen readers */}
+      <ul className="space-y-2" aria-label={t('timeAllocationTitle')}>
         {segments.map((seg, index) => (
-          <div key={index} className="flex items-center justify-between text-sm">
+          <li
+            key={index}
+            className="flex items-center justify-between text-sm"
+            aria-label={`${translateSliceLabel(seg.slice.label)}: ${seg.slice.hours.toFixed(1)} hours, ${seg.percent.toFixed(0)}%`}
+          >
             <div className="flex items-center gap-2 min-w-0">
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: seg.color }}
                 aria-hidden="true"
               />
-              <span className="text-default truncate">{translateSliceLabel(seg.slice.label)}</span>
+              <span aria-hidden="true" className="text-default truncate">{translateSliceLabel(seg.slice.label)}</span>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+            <div className="flex items-center gap-2 flex-shrink-0 ml-2" aria-hidden="true">
               <span className="text-secondary">{seg.slice.hours.toFixed(1)}h</span>
               <span className="text-tertiary text-xs w-10 text-right">
                 {seg.percent.toFixed(0)}%
               </span>
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
 
       {/* CTA to break down categories - shown when not already zoomed in */}
       {!semanticTargetLabel && (
