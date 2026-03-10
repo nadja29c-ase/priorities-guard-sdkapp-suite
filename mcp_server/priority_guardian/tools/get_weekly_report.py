@@ -37,7 +37,7 @@ DESCRIPTION = (
     "- When the user is asking about patterns or trends over time (use get_patterns instead)"
 )
 
-WIDGET_URI = "ui://widget/pg-dashboard.html"
+WIDGET_URI = "ui://widget/pg-dashboard-v2.html"
 
 INPUT_SCHEMA = {
     "type": "object",

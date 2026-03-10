@@ -79,7 +79,7 @@ INPUT_SCHEMA = {
 
 REQUIRED_SCOPES = ["pg.access"]
 
-WIDGET_URI = "ui://widget/pg-dashboard.html"
+WIDGET_URI = "ui://widget/pg-dashboard-v2.html"
 
 
 # ============================================================================
