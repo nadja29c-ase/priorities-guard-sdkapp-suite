@@ -196,6 +196,10 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             {t('totalHours')}
           </text>
         </svg>
+        {/* Visually hidden total for screen readers (SVG text is inaccessible with role="img") */}
+        <p className="sr-only">
+          {totalHours.toFixed(1)} {t('totalHours')}
+        </p>
       </div>
 
       {/* Legend - semantic list for screen readers */}
