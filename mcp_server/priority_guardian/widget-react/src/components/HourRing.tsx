@@ -77,7 +77,7 @@ export function HourRing({ actual, target, keyword }: HourRingProps) {
       </svg>
 
       {/* Center text (HTML overlay for font inheritance) */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      <div className="absolute inset-0 flex flex-col items-center justify-center" aria-hidden="true">
         <span className="font-semibold text-sm text-default leading-tight">
           {formatHours(actual)}
         </span>

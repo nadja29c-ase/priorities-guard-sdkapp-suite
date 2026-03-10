@@ -126,9 +126,9 @@ const messages = {
     cancelRemove: 'Cancel remove',
 
     // Interpolated (caller replaces {n})
-    dDaysLeft: '{n}d left',
+    dDaysLeft: '{n} days left',
     dueToday: 'Due today',
-    dDaysOverdue: '{n}d overdue',
+    dDaysOverdue: '{n} days overdue',
     weekStreak: '{n}w streak',
 
     // Pie chart, HourRing, KeywordPicker
@@ -136,6 +136,7 @@ const messages = {
     timeAllocationTitle: 'Time Allocation',
     breakdown: 'Breakdown: ',
     totalHours: 'total',
+    hoursUnit: 'hours',
     pieChartAria: 'Pie chart showing {hours} total hours across {n} categories',
     breakdownCta: 'Ask ChatGPT to break down any category to see where the time went.',
     hourRingAria: '{hours} of {target} hours this week',
@@ -280,6 +281,7 @@ const messages = {
     timeAllocationTitle: 'Zeitaufteilung',
     breakdown: 'Aufschlüsselung: ',
     totalHours: 'gesamt',
+    hoursUnit: 'Stunden',
     pieChartAria: 'Kreisdiagramm mit {hours} Gesamtstunden in {n} Kategorien',
     breakdownCta: 'Bitte ChatGPT, eine Kategorie aufzuschlüsseln, um zu sehen, wie die Zeit genutzt wurde.',
     hourRingAria: '{hours} von {target} Stunden diese Woche',
