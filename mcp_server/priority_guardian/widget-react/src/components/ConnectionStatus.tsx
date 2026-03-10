@@ -164,8 +164,10 @@ export function ConnectionStatus({
             <path d="M5 1.5v3M11 1.5v3M2 7h12" />
           </svg>
           <p className="text-xs leading-relaxed text-secondary">
-            Add <strong className="text-default">P1</strong>,{' '}
-            <strong className="text-default">P2</strong>, or{' '}
+            {t('calendarInstructionPrefix')}{' '}
+            <strong className="text-default">P1</strong>,{' '}
+            <strong className="text-default">P2</strong>,{' '}
+            {t('calendarInstructionOr')}{' '}
             <strong className="text-default">P3</strong>{' '}
             {t('calendarInstructionSuffix')}
           </p>
