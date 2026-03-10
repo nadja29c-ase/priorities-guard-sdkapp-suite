@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { applyDocumentTheme } from '@openai/apps-sdk-ui/theme'
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
@@ -16,7 +17,11 @@ import { CalendarConnectionMinimal } from './components/CalendarConnectionMinima
 type DisplayMode = 'inline' | 'fullscreen'
 
 function App() {
-  // Theme is handled automatically by SDK CSS via data-theme attribute
+  // Set data-theme attribute on <html> for SDK CSS token resolution
+  useEffect(() => {
+    const theme = (window.openai as { theme?: 'light' | 'dark' } | undefined)?.theme ?? 'light'
+    applyDocumentTheme(theme)
+  }, [])
 
   const [data, setData] = useState<ToolOutputData | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
