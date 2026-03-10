@@ -146,6 +146,7 @@ const messages = {
     // PieChart sentinel labels (from backend data)
     otherLabel: 'Other',
     uncategorized: 'Uncategorized',
+    unnamed: 'Unnamed',
   },
   de: {
     // Loading states
@@ -287,6 +288,7 @@ const messages = {
     // PieChart sentinel labels (from backend data)
     otherLabel: 'Sonstige',
     uncategorized: 'Nicht kategorisiert',
+    unnamed: 'Unbenannt',
   },
 } as const
 

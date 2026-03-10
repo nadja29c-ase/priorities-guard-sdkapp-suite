@@ -10,6 +10,7 @@ function translateSliceLabel(label: string): string {
   const lower = label.toLowerCase()
   if (lower === 'other') return t('otherLabel')
   if (lower === 'uncategorized') return t('uncategorized')
+  if (lower === 'unnamed') return t('unnamed')
   return label
 }
 
