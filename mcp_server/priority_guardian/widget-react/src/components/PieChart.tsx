@@ -137,7 +137,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
       {/* Header */}
       <div className="text-center mb-4">
         <h2 className="text-base font-semibold text-default">
-          {semanticTargetLabel ? t('breakdown') + semanticTargetLabel : t('timeAllocationTitle')}
+          {semanticTargetLabel ? t('breakdown') + translateSliceLabel(semanticTargetLabel) : t('timeAllocationTitle')}
         </h2>
         <p className="text-xs text-tertiary">{formatWeekRange()}</p>
       </div>
