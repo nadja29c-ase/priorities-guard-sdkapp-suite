@@ -77,7 +77,7 @@ function buildAriaLabel(
   }
 
   if (timeAllocation.otherHours > 0) {
-    parts.push(`other ${formatHours(timeAllocation.otherHours)}`)
+    parts.push(`${t('otherLabel')} ${formatHours(timeAllocation.otherHours)}`)
   }
 
   if (parts.length === 0) {
@@ -147,7 +147,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
 
   legendItems.push({
     key: 'other',
-    label: 'other',
+    label: t('otherLabel'),
     hours: otherHours,
     isOther: true,
   })
