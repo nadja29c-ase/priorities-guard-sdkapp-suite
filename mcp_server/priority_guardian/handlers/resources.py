@@ -29,7 +29,7 @@ def _extract_origin(url: str) -> str:
 
 # Widget configuration
 WIDGET_VERSION = ""
-WIDGET_URI = "ui://widget/pg-dashboard-v4.html"
+WIDGET_URI = "ui://widget/pg-dashboard-v5.html"
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/pg-dashboard.html")
 WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)
 BACKEND_DOMAIN = _extract_origin(BACKEND_URL)

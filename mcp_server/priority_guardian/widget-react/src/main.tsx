@@ -55,9 +55,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
     if (this.state.hasError) {
       return (
         <div style={{padding:'24px',textAlign:'center',background:'#f9f9f9',borderRadius:'12px',fontFamily:'system-ui,sans-serif'}}>
-          <p style={{fontSize:'14px',color:'#dc2626',fontWeight:600,marginBottom:'8px'}}>Something went wrong</p>
+          <p style={{fontSize:'14px',color:'#dc2626',fontWeight:600,marginBottom:'8px'}}>PG_DEBUG_BOUNDARY_FIRED</p>
           <p style={{fontSize:'12px',color:'#666',marginBottom:'8px'}}>
-            Unable to display dashboard. Please refresh or try again later.
+            BOUNDARY_ACTIVE_v5
           </p>
           <p style={{fontSize:'11px',color:'#999',wordBreak:'break-all',marginBottom:'4px'}}>
             {this.state.error?.name || 'UnknownError'}: {this.state.error?.message || '(no message)'}
