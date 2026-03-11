@@ -16,6 +16,7 @@ from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get
 from .base import ToolDefinition, ToolUsageError
+from .widget_tools.constants import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
@@ -36,8 +37,6 @@ DESCRIPTION = (
     "- During onboarding or priority setup\n"
     "- When the user is asking about patterns or trends over time (use get_patterns instead)"
 )
-
-WIDGET_URI = "ui://widget/pg-dashboard-v8.html"
 
 INPUT_SCHEMA = {
     "type": "object",

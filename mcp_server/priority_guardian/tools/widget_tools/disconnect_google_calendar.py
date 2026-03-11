@@ -11,6 +11,7 @@ from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_get, backend_post
 from ..base import ToolDefinition, ToolUsageError
+from .constants import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
@@ -52,8 +53,6 @@ INPUT_SCHEMA = {
 }
 
 REQUIRED_SCOPES = ["pg.access"]
-
-WIDGET_URI = "ui://widget/pg-dashboard-v8.html"
 
 
 # ============================================================================
