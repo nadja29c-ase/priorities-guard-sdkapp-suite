@@ -108,6 +108,12 @@ function App() {
     // Only run if widget is already initialized
     if (!isInitializedRef.current) return
 
+    console.log('[PG] handleToolOutputUpdate fired', {
+      hasCurrentToolOutput: !!window.openai?.toolOutput,
+      isSameRef: window.openai?.toolOutput === lastToolOutputRef.current,
+      displayMode,
+    })
+
     // Guard: if toolOutput is absent or same reference, do nothing
     // (openai:set_globals fires for theme, displayMode, locale changes too)
     const currentToolOutput = window.openai?.toolOutput
@@ -149,12 +155,16 @@ function App() {
 
     // Update ref to current toolOutput
     lastToolOutputRef.current = currentToolOutput
-  }, [])
+    console.log('[PG] handleToolOutputUpdate: state overwritten with toolOutput')
+  }, [displayMode])
 
   // Update data from tool response
   // Note: CRUD responses don't include timeAllocation or weeklyHourActual,
   // only get_priorities does. Preserve calendar-derived data across CRUD operations.
   const updateDataFromResponse = useCallback((content: { data?: ToolOutputData } | null | undefined) => {
+    console.log('[PG] updateDataFromResponse called', {
+      hasData: !!content?.data,
+    })
     if (content?.data) {
       // Use functional setData to access previous state and preserve weeklyHourActual
       setData(prevData => {
@@ -488,6 +498,7 @@ function App() {
 
   // Display mode handlers - request host container change + update internal layout state
   const handleExpandToFullscreen = useCallback(async () => {
+    console.log('[PG] handleExpandToFullscreen fired')
     try {
       await window.openai?.requestDisplayMode?.({ mode: 'fullscreen' })
     } catch {
