@@ -24,26 +24,13 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('PG widget error:', error, errorInfo.componentStack)
-    // DEBUG: store full error info on window for post-crash inspection
+    // Store full error info on window for post-crash inspection
     ;(window as Record<string, unknown>).__PG_LAST_ERROR__ = {
       message: error.message,
       name: error.name,
       stack: error.stack,
       componentStack: errorInfo.componentStack,
       ts: new Date().toISOString(),
-    }
-    // Phone home via callTool so we can see crash details in MCP server logs
-    try {
-      window.openai?.callTool?.('log_client_error', {
-        error_name: error?.name ?? null,
-        error_message: error?.message ?? null,
-        stack: error?.stack?.slice(0, 800) ?? null,
-        component_stack: errorInfo?.componentStack?.slice(0, 400) ?? null,
-        ua: navigator?.userAgent ?? null,
-        phase: 'error_boundary',
-      })?.catch?.(() => {})
-    } catch (_) {
-      // Never let telemetry throw
     }
   }
 
