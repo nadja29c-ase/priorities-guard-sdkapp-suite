@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import type { Goal } from '../types'
 import { GoalItem } from './GoalItem'
 import { ChevronIcon } from './ChevronIcon'
+import { normalizeLocale } from '../utils'
 import { t } from '../i18n'
 
 interface GoalSectionProps {
@@ -75,7 +76,7 @@ export function GoalSection({
 
   // Format checkpoint date using SDK locale
   const formatDate = (dateStr: string) => {
-    const locale = window.openai?.locale || 'en-US'
+    const locale = normalizeLocale(window.openai?.locale || 'en-US')
     const date = new Date(dateStr + 'T00:00:00')
     return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
   }
