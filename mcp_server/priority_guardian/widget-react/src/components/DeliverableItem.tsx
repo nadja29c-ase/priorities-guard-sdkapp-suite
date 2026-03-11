@@ -54,6 +54,7 @@ export function DeliverableItem({
   }, [deliverable.done])
 
   const showError = (message: string) => {
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
     setError(message)
     errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
   }
@@ -180,6 +181,7 @@ export function DeliverableItem({
         }`}
         role="checkbox"
         aria-checked={displayedDone}
+        aria-disabled={disabled}
         aria-label={`Mark "${deliverable.name}" as ${displayedDone ? 'not done' : 'done'}`}
       >
         {displayedDone && (

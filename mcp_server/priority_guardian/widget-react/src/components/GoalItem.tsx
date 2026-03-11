@@ -61,6 +61,7 @@ export function GoalItem({
   }, [goal.achieved])
 
   const showErrorMessage = (message: string) => {
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
     setError(message)
     errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
   }

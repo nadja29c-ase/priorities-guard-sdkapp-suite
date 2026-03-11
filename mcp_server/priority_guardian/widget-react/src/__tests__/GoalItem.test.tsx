@@ -412,6 +412,29 @@ describe('GoalItem', () => {
       })
     })
 
+    it('clears optimistic state when achieved prop changes', () => {
+      const { rerender } = render(
+        <GoalItem
+          goal={baseGoal}
+          onToggle={mockOnToggle}
+        />
+      )
+
+      const checkbox = screen.getByRole('checkbox')
+      expect(checkbox).toHaveAttribute('aria-checked', 'false')
+
+      // Simulate prop change from parent (server confirmed toggle)
+      rerender(
+        <GoalItem
+          goal={{ ...baseGoal, achieved: true }}
+          onToggle={mockOnToggle}
+        />
+      )
+
+      // Should reflect the new prop value
+      expect(checkbox).toHaveAttribute('aria-checked', 'true')
+    })
+
     it('checkbox is not visually disabled during toggle', async () => {
       let resolveToggle!: () => void
       const slowToggle = vi.fn().mockImplementation(

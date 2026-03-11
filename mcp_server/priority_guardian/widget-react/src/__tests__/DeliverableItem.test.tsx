@@ -166,6 +166,33 @@ describe('DeliverableItem', () => {
       await waitFor(() => expect(slowToggle).toHaveBeenCalledTimes(1))
     })
 
+    it('clears optimistic state when done prop changes', () => {
+      const { rerender } = render(
+        <DeliverableItem
+          deliverable={baseDeliverable}
+          onToggle={mockOnToggle}
+          onRename={mockOnRename}
+          onDelete={mockOnDelete}
+        />
+      )
+
+      const checkbox = screen.getByRole('checkbox')
+      expect(checkbox).toHaveAttribute('aria-checked', 'false')
+
+      // Simulate prop change from parent (server confirmed toggle)
+      rerender(
+        <DeliverableItem
+          deliverable={{ ...baseDeliverable, done: true }}
+          onToggle={mockOnToggle}
+          onRename={mockOnRename}
+          onDelete={mockOnDelete}
+        />
+      )
+
+      // Should reflect the new prop value
+      expect(checkbox).toHaveAttribute('aria-checked', 'true')
+    })
+
     it('checkbox is not visually disabled (no opacity class) during toggle', async () => {
       let resolveToggle!: () => void
       const slowToggle = vi.fn().mockImplementation(
