@@ -32,6 +32,13 @@ export function GoalItem({
   const inputRef = useRef<HTMLInputElement>(null)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Optimistic toggle state
+  const [optimisticAchieved, setOptimisticAchieved] = useState<boolean | null>(null)
+  const isPendingRef = useRef(false)
+
+  // Displayed value: optimistic when set, otherwise prop
+  const displayedAchieved = optimisticAchieved !== null ? optimisticAchieved : goal.achieved
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus()
@@ -48,21 +55,36 @@ export function GoalItem({
     }
   }, [])
 
+  // Reset optimistic state when server prop changes
+  useEffect(() => {
+    setOptimisticAchieved(null)
+  }, [goal.achieved])
+
   const showErrorMessage = (message: string) => {
     setError(message)
     errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
   }
 
   const handleToggle = async () => {
-    if (isLoading || disabled) return
-    setIsLoading(true)
+    if (isPendingRef.current || disabled) return
+
+    // Capture current displayed value and flip optimistically
+    const currentValue = displayedAchieved
+    const newValue = !currentValue
+    setOptimisticAchieved(newValue)
     setError(null)
+
+    isPendingRef.current = true
     try {
-      await onToggle(goal.id, !goal.achieved)
+      await onToggle(goal.id, newValue)
+      // Success: clear optimistic state (prop-sync useEffect is safety net)
+      setOptimisticAchieved(null)
     } catch (e) {
+      // Revert optimistic state to original value
+      setOptimisticAchieved(currentValue)
       showErrorMessage(e instanceof Error ? e.message : t('couldntSave'))
     } finally {
-      setIsLoading(false)
+      isPendingRef.current = false
     }
   }
 
@@ -160,19 +182,19 @@ export function GoalItem({
         <button
           type="button"
           onClick={handleToggle}
-          disabled={disabled || isLoading}
+          disabled={disabled}
           className="mt-0.5 flex-shrink-0 transition-all"
           role="checkbox"
-          aria-checked={goal.achieved}
-          aria-disabled={disabled || isLoading}
-          aria-label={`Mark "${goal.text}" as ${goal.achieved ? 'not achieved' : 'achieved'}`}
+          aria-checked={displayedAchieved}
+          aria-disabled={disabled}
+          aria-label={`Mark "${goal.text}" as ${displayedAchieved ? 'not achieved' : 'achieved'}`}
         >
           <span
             className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all duration-150 ease-out ${
-              goal.achieved ? 'bg-success-solid border-0' : 'border-[1.5px] border-strong'
-            } ${(disabled || isLoading) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+              displayedAchieved ? 'bg-success-solid border-0' : 'border-[1.5px] border-strong'
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
-            {goal.achieved && (
+            {displayedAchieved && (
               <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                 <path d="M2 6l3 3 5-5" />
               </svg>
@@ -196,7 +218,7 @@ export function GoalItem({
           />
         ) : (
           <p
-            className={`text-sm transition-colors cursor-pointer ${goal.achieved ? 'line-through text-tertiary' : 'text-default'}`}
+            className={`text-sm transition-colors cursor-pointer ${displayedAchieved ? 'line-through text-tertiary' : 'text-default'}`}
             onDoubleClick={() => !disabled && onRename && setIsEditing(true)}
             title={onRename ? "Double-click to edit" : undefined}
           >

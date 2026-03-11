@@ -25,6 +25,13 @@ export function DeliverableItem({
   const inputRef = useRef<HTMLInputElement>(null)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Optimistic toggle state
+  const [optimisticDone, setOptimisticDone] = useState<boolean | null>(null)
+  const isPendingRef = useRef(false)
+
+  // Displayed value: optimistic when set, otherwise prop
+  const displayedDone = optimisticDone !== null ? optimisticDone : deliverable.done
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus()
@@ -41,21 +48,36 @@ export function DeliverableItem({
     }
   }, [])
 
+  // Reset optimistic state when server prop changes
+  useEffect(() => {
+    setOptimisticDone(null)
+  }, [deliverable.done])
+
   const showError = (message: string) => {
     setError(message)
     errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
   }
 
   const handleToggle = async () => {
-    if (isLoading || disabled) return
-    setIsLoading(true)
+    if (isPendingRef.current || disabled) return
+
+    // Capture current displayed value and flip optimistically
+    const currentValue = displayedDone
+    const newValue = !currentValue
+    setOptimisticDone(newValue)
     setError(null)
+
+    isPendingRef.current = true
     try {
-      await onToggle(deliverable.id, !deliverable.done)
+      await onToggle(deliverable.id, newValue)
+      // Success: clear optimistic state (prop-sync useEffect is safety net)
+      setOptimisticDone(null)
     } catch (e) {
+      // Revert optimistic state to original value
+      setOptimisticDone(currentValue)
       showError(e instanceof Error ? e.message : t('couldntSave'))
     } finally {
-      setIsLoading(false)
+      isPendingRef.current = false
     }
   }
 
@@ -140,17 +162,17 @@ export function DeliverableItem({
       <button
         type="button"
         onClick={handleToggle}
-        disabled={isLoading || disabled}
+        disabled={disabled}
         className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-          deliverable.done
+          displayedDone
             ? 'bg-tertiary border-tertiary'
             : 'border-default hover:border-strong'
-        } ${isLoading ? 'opacity-50' : ''}`}
+        }`}
         role="checkbox"
-        aria-checked={deliverable.done}
-        aria-label={`Mark "${deliverable.name}" as ${deliverable.done ? 'not done' : 'done'}`}
+        aria-checked={displayedDone}
+        aria-label={`Mark "${deliverable.name}" as ${displayedDone ? 'not done' : 'done'}`}
       >
-        {deliverable.done && (
+        {displayedDone && (
           <svg className="w-2.5 h-2.5 text-surface" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
@@ -172,7 +194,7 @@ export function DeliverableItem({
         />
       ) : (
         <span
-          className={`flex-1 text-sm cursor-pointer ${deliverable.done ? 'text-tertiary line-through' : 'text-default'}`}
+          className={`flex-1 text-sm cursor-pointer ${displayedDone ? 'text-tertiary line-through' : 'text-default'}`}
           onDoubleClick={() => !disabled && setIsEditing(true)}
           title="Double-click to edit"
         >
