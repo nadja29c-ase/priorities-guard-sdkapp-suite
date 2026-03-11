@@ -103,9 +103,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     "connected_at": status_response.get("connected_at"),
                     "message": "Google Calendar is already connected."
                 },
-                "_meta": {
-                    "openai/outputTemplate": WIDGET_URI,
-                },
             },
         )
 
@@ -151,9 +148,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 "connect_url": connect_url,
                 "expires_in": expires_in,
                 "message": "Click the link to connect your Google Calendar. The link expires in 10 minutes."
-            },
-            "_meta": {
-                "openai/outputTemplate": WIDGET_URI,
             },
         },
     )

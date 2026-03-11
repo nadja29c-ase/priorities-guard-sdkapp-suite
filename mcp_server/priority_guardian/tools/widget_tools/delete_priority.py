@@ -139,9 +139,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "priorities": priorities,
             "available_keywords": available_keywords,
         },
-        "_meta": {
-            "openai/outputTemplate": WIDGET_URI,
-        },
         "assistant_guidance": "Priority deleted. The dashboard shows the updated list.",
     }
 

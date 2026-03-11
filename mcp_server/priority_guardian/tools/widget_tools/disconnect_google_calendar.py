@@ -100,9 +100,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     "code": "CONFIRMATION_REQUIRED",
                     "message": "Please confirm disconnection by setting confirm=true. This will revoke Google Calendar access. No user data is deleted."
                 },
-                "_meta": {
-                    "openai/outputTemplate": WIDGET_URI,
-                },
             },
             isError=True,
         )
@@ -135,9 +132,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     "status": "not_connected",
                     "message": "Google Calendar is not connected."
                 },
-                "_meta": {
-                    "openai/outputTemplate": WIDGET_URI,
-                },
             },
         )
 
@@ -169,9 +163,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "data": {
                 "status": "disconnected",
                 "message": "Google Calendar has been disconnected. You can reconnect anytime."
-            },
-            "_meta": {
-                "openai/outputTemplate": WIDGET_URI,
             },
         },
     )
