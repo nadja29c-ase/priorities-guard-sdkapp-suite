@@ -11,9 +11,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), viteSingleFile({ removeViteModuleLoader: true })],
-  // removeViteModuleLoader: removes `crossorigin` attr and modulepreload IIFE from inline script.
-  // Both are invalid/problematic in ChatGPT iOS WKWebView sandbox and cause pre-React crashes.
+  plugins: [react(), tailwindcss(), viteSingleFile()],
   build: {
     target: 'esnext',
     outDir: '../widgets',
