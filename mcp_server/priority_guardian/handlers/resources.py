@@ -122,7 +122,8 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     """
     uri_str = str(req.params.uri)
 
-    logger.debug("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
+    # TEMP: INFO level to verify iOS loads v7 - revert to debug after confirmation
+    logger.info("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
 
     if uri_str == WIDGET_URI:
         logger.debug(
