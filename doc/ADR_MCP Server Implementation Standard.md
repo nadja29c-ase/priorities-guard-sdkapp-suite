@@ -411,3 +411,43 @@ DCR creates clients per app route. A client registered at `/oauth/pg/register` g
 #### Production Bug Reference
 
 Increment 46 (March 2026): ChatGPT completed full OAuth flow but never called `/mcp`. All prior hypotheses (JWKS compression, issuer mismatch in JWT, Redis replay, audience claim) were ruled out over ~10 increments. Root cause: `pg/.well-known/oauth-authorization-server` and `pg/.well-known/openid-configuration` served hybrid documents (`issuer=www`, endpoints=`pg`). Fix: all three discovery functions in `discovery.py` made fully consistent with `www`. `authorization_servers` in protected resource metadata changed from `[MCP_SERVER_URL]` to `[OAUTH_ISSUER_BASE]`. The proxy OAuth routes on `pg` (`/oauth/token`, `/oauth/jwks`, `/oauth/register`) became unused by ChatGPT but were left in place.
+
+---
+
+## Widget URI Consistency — All Mutation Tools
+
+Every widget mutation tool (any private tool that returns `structuredContent` with `_meta["openai/outputTemplate"]`) must reference the **same `WIDGET_URI` version** as `handlers/resources.py`.
+
+### Rule
+
+Each widget mutation tool file defines a module-level constant:
+
+```python
+WIDGET_URI = "ui://widget/pg-dashboard-v7.html"
+```
+
+This value is embedded in `structuredContent._meta["openai/outputTemplate"]` on every successful response. ChatGPT uses it to decide which widget to render after the tool call completes. If any mutation tool references a stale version, ChatGPT loads the old cached widget — bypassing any widget changes in the current deploy.
+
+### Invariant
+
+**Every widget mutation tool `WIDGET_URI` must equal `resources.WIDGET_URI` at all times.**
+
+This applies to all files under `tools/widget_tools/` that return `structuredContent` with an `openai/outputTemplate` key.
+
+### On Every Widget URI Bump
+
+When bumping the widget version (e.g. v7 → v8), update **all** of the following in a single commit:
+1. `handlers/resources.py` — `WIDGET_URI`
+2. Every tool file under `tools/widget_tools/` that contains a `WIDGET_URI` constant
+
+Partial bumps are silent failures. The widget renders correctly on fresh sessions but loads the stale build after any mutation tool fires.
+
+### Future Improvement (Post-Submission)
+
+Centralize `WIDGET_URI` in a single `tools/widget_tools/constants.py` file and import it everywhere. Add a unit test asserting that every registered widget mutation tool's `WIDGET_URI` matches `resources.WIDGET_URI`. This eliminates the per-file update requirement entirely.
+
+Not done yet — introduced as a post-submission cleanup task to avoid pre-submission refactor risk.
+
+### Production Bug Reference
+
+Increment 47 (March 2026): Widget URI bumped to v7 in `resources.py` and `add_priority.py` but not in the remaining 7 mutation tools (`update_priority`, `delete_priority`, `add_deliverable`, `update_deliverable`, `delete_deliverable`, `add_goal`, `update_goal`, `delete_goal`). Caught during review before deploy. Root cause: briefing specified "update `add_priority.py`" without accounting for the full set of mutation tools. Fix: all 7 remaining files updated manually before Render deploy.

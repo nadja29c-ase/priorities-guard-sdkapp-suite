@@ -16,8 +16,8 @@ import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.http_client import backend_post, backend_get
-from mcp_server.priority_guardian.tools.get_priorities import _normalize_priority
 from .base import ToolDefinition, ToolUsageError
+from .normalize import _normalize_priority
 from .widget_tools.constants import WIDGET_URI
 
 logger = structlog.get_logger(__name__)

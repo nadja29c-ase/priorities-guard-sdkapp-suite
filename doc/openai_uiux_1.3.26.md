@@ -285,6 +285,14 @@ These use explicit prohibition language and will likely be scrutinized in review
 
 ---
 
+## Known Gotchas & Implementation Notes
+
+| # | Note |
+|---|------|
+| G1 | **SVG inline styles — CSS variable names ≠ Tailwind class names.** When using CSS variables in SVG `<text>` or other SVG elements via `style={{ fill: 'var(--...)' }}`, always verify the exact token name against the reference doc. Tailwind class `text-default` maps to CSS variable `--color-text` (not `--color-text-default`). An invalid variable name silently resolves to nothing and the browser falls back to inherited color (black), which breaks dark mode. |
+
+---
+
 ## Design System Reference
 
 OpenAI provides the [Apps SDK UI](https://openai.github.io/apps-sdk-ui/) design system with:

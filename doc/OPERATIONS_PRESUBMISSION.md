@@ -1,4 +1,4 @@
-# Pre-Submission Operations Checklist
+# Pre-Submission Operations Checklist 03/26
 
 **Purpose:** Prepare the app for successful OpenAI store review. This checklist covers configuration, compliance, and verification steps that prevent common rejection causes.
 
@@ -181,10 +181,10 @@ curl -I https://<MCP_SERVER>/mcp
 
 Tool calls must complete within 8 seconds (TIMEOUT_S in mcp_auth.py).
 
-- [ ] Each tool responds under 8s on first call (cold start)
-- [ ] Each tool responds under 3s on subsequent calls (warm)
-- [ ] Timeout error message is user-friendly, not stack trace
-- [ ] No tools hang indefinitely under normal conditions
+- [X] Each tool responds under 8s on first call (cold start)
+- [X] Each tool responds under 3s on subsequent calls (warm)
+- [X] Timeout error message is user-friendly, not stack trace
+- [X] No tools hang indefinitely under normal conditions
 
 ```bash
 # Measure tool latency (requires valid JWT)
