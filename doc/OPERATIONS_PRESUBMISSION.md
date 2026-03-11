@@ -99,9 +99,9 @@ If any of these three differ, JWT validation will fail with `invalid_token` on e
 
 ## Widget Build
 
-- [ ] Widget built and HTML copied to `widgets/` directory
-- [ ] Built HTML is the production build (not dev mode)
-- [ ] No `style=` attributes containing hardcoded hex colors (run grep check below)
+- [X] Widget built and HTML copied to `widgets/` directory
+- [X] Built HTML is the production build (not dev mode)
+- [X] No `style=` attributes containing hardcoded hex colors (run grep check below)
 
 ```bash
 # Should return NO matches
@@ -225,10 +225,10 @@ Errors must be well-handled with clear messaging or fallback behavior across all
 
 ### Widget Layer
 
-- [ ] React Error Boundary wraps main component tree (main.tsx lines 15-42, wraps App)
-- [ ] `loadError` state displays alert on failures (App.tsx line 22, rendered at 535-538)
-- [ ] All CRUD handlers check `isError` and missing data (already implemented)
-- [ ] Empty states have clear messaging (EmptyState component)
+- [X] React Error Boundary wraps main component tree (main.tsx lines 15-42, wraps App)
+- [X] `loadError` state displays alert on failures (App.tsx line 22, rendered at 535-538)
+- [X] All CRUD handlers check `isError` and missing data (already implemented)
+- [X] Empty states have clear messaging (EmptyState component)
 
 ### Quick verification
 
