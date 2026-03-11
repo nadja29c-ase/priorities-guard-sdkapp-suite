@@ -10,7 +10,7 @@ import asyncio
 import structlog
 from mcp import types as mcp_types
 
-from mcp_server.priority_guardian.http_client import backend_post
+from mcp_server.priority_guardian.http_client import backend_get, backend_post
 from ..base import ToolDefinition, ToolUsageError
 from ..normalize import _normalize_priority
 from .constants import WIDGET_URI
@@ -190,7 +190,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Extract priority data and fetch fresh list
     # Note: create_priority endpoint returns different shape, so we need to fetch fresh
-    from mcp_server.priority_guardian.http_client import backend_get
     fresh_response = await _call_with_timeout(
         backend_get(
             "/api/priority-guardian/priorities",
