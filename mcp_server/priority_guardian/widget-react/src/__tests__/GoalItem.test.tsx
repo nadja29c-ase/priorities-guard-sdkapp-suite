@@ -1,5 +1,5 @@
 /**
- * Unit tests for GoalItem component (Increment 32)
+ * Unit tests for GoalItem component (Increment 32, updated Inc 49)
  *
  * Tests:
  * 1. Renders goal text and toggle — baseline
@@ -11,12 +11,15 @@
  * 7. Delete confirmation flow
  * 8. Delete cancel
  * 9. Hover shows action buttons
- * 10. Loading state disables interactions
+ * 10. Optimistic toggle — checkbox updates immediately before onToggle resolves
+ * 11. Double-tap while request in flight is ignored
+ * 12. On error: checkbox reverts to pre-tap value
+ * 13. Checkbox not visually disabled during toggle
+ * 14. disabled prop blocks toggle
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { GoalItem } from '../components/GoalItem'
 import type { Goal } from '../types'
 
