@@ -97,6 +97,9 @@ function App() {
 
     // Track last toolOutput reference for subsequent update detection
     lastToolOutputRef.current = window.openai?.toolOutput
+    console.log('[PG:loadData] initialized, toolOutput ref set', {
+      ref: lastToolOutputRef.current
+    })
 
     // Notify host of new content height
     notifyHeight()
@@ -108,10 +111,10 @@ function App() {
     // Only run if widget is already initialized
     if (!isInitializedRef.current) return
 
-    console.log('[PG] handleToolOutputUpdate fired', {
-      hasCurrentToolOutput: !!window.openai?.toolOutput,
+    console.log('[PG:handleToolOutputUpdate] fired', {
+      hasToolOutput: !!window.openai?.toolOutput,
       isSameRef: window.openai?.toolOutput === lastToolOutputRef.current,
-      displayMode,
+      willOverwrite: !!(window.openai?.toolOutput && window.openai.toolOutput !== lastToolOutputRef.current),
     })
 
     // Guard: if toolOutput is absent or same reference, do nothing
@@ -155,16 +158,12 @@ function App() {
 
     // Update ref to current toolOutput
     lastToolOutputRef.current = currentToolOutput
-    console.log('[PG] handleToolOutputUpdate: state overwritten with toolOutput')
-  }, [displayMode])
+  }, [])
 
   // Update data from tool response
   // Note: CRUD responses don't include timeAllocation or weeklyHourActual,
   // only get_priorities does. Preserve calendar-derived data across CRUD operations.
   const updateDataFromResponse = useCallback((content: { data?: ToolOutputData } | null | undefined) => {
-    console.log('[PG] updateDataFromResponse called', {
-      hasData: !!content?.data,
-    })
     if (content?.data) {
       // Use functional setData to access previous state and preserve weeklyHourActual
       setData(prevData => {
@@ -194,11 +193,11 @@ function App() {
 
       notifyHeight()
 
-      // Sync ref so subsequent set_globals events don't re-parse a now-stale toolOutput
-      const currentToolOutput = window.openai?.toolOutput
-      if (currentToolOutput) {
-        lastToolOutputRef.current = currentToolOutput
-      }
+      console.log('[PG:updateDataFromResponse] data state updated, toolOutput ref NOT updated', {
+        lastRef: lastToolOutputRef.current,
+        currentToolOutput: window.openai?.toolOutput,
+        isSameRef: window.openai?.toolOutput === lastToolOutputRef.current,
+      })
     }
   }, [notifyHeight])
 
@@ -504,7 +503,11 @@ function App() {
 
   // Display mode handlers - request host container change + update internal layout state
   const handleExpandToFullscreen = useCallback(async () => {
-    console.log('[PG] handleExpandToFullscreen fired')
+    console.log('[PG:handleExpandToFullscreen] fired', {
+      lastRef: lastToolOutputRef.current,
+      currentToolOutput: window.openai?.toolOutput,
+      isSameRef: window.openai?.toolOutput === lastToolOutputRef.current,
+    })
     try {
       await window.openai?.requestDisplayMode?.({ mode: 'fullscreen' })
     } catch {
