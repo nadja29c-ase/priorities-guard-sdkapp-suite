@@ -108,9 +108,18 @@ function App() {
     // Only run if widget is already initialized
     if (!isInitializedRef.current) return
 
+    // Diagnostic logging (enable with: window.__PG_DEBUG__ = true)
+    const currentToolOutput = window.openai?.toolOutput
+    if ((window as { __PG_DEBUG__?: boolean }).__PG_DEBUG__) {
+      console.log('[PG:set_globals]', {
+        toolOutputChanged: currentToolOutput !== lastToolOutputRef.current,
+        hasToolOutput: !!currentToolOutput,
+        hostDisplayMode: (window.openai as { displayMode?: string } | undefined)?.displayMode,
+      })
+    }
+
     // Guard: if toolOutput is absent or same reference, do nothing
     // (openai:set_globals fires for theme, displayMode, locale changes too)
-    const currentToolOutput = window.openai?.toolOutput
     if (!currentToolOutput || currentToolOutput === lastToolOutputRef.current) return
 
     // Parse new toolOutput using shared utility
@@ -492,18 +501,35 @@ function App() {
 
   // ============ Display Mode Handlers ============
 
+  type OpenAIHost = {
+    displayMode?: 'inline' | 'fullscreen'
+    requestDisplayMode?: (opts: { mode: 'inline' | 'fullscreen' }) => void
+    toolOutput?: unknown
+  }
+
   // Display mode handlers - request host container change + update internal layout state
-  const handleExpandToFullscreen = useCallback(async () => {
+  const handleExpandToFullscreen = useCallback(() => {
     try {
-      await window.openai?.requestDisplayMode?.({ mode: 'fullscreen' })
-    } catch {
-      // Host may not support requestDisplayMode — fall through
-    }
+      if (
+        window.openai?.requestDisplayMode &&
+        (window.openai as OpenAIHost).displayMode !== 'fullscreen'
+      ) {
+        window.openai.requestDisplayMode({ mode: 'fullscreen' })
+      }
+    } catch { /* noop */ }
     setDisplayMode('fullscreen')
     notifyHeight()
   }, [notifyHeight])
 
   const handleMinimizeToInline = useCallback(() => {
+    try {
+      if (
+        window.openai?.requestDisplayMode &&
+        (window.openai as OpenAIHost).displayMode !== 'inline'
+      ) {
+        window.openai.requestDisplayMode({ mode: 'inline' })
+      }
+    } catch { /* noop */ }
     setDisplayMode('inline')
     notifyHeight()
   }, [notifyHeight])
@@ -515,6 +541,14 @@ function App() {
     loadData()
 
     const handleSetGlobals = () => {
+      // Sync displayMode from host (only after init to avoid layout flicker)
+      if (isInitializedRef.current) {
+        const hostMode = (window.openai as OpenAIHost | undefined)?.displayMode
+        if (hostMode === 'fullscreen' || hostMode === 'inline') {
+          setDisplayMode(prev => prev !== hostMode ? hostMode : prev)
+        }
+      }
+
       if (isInitializedRef.current) {
         handleToolOutputUpdate()
       } else {
