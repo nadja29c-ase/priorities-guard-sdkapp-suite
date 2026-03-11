@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { GoalItem } from '../components/GoalItem'
 import type { Goal } from '../types'
@@ -338,13 +338,12 @@ describe('GoalItem', () => {
     })
   })
 
-  describe('Loading State', () => {
-    it('disables toggle during loading', async () => {
-      // Create a promise that we can control
-      let resolveToggle: () => void
-      const slowToggle = vi.fn().mockImplementation(() => new Promise<void>(resolve => {
-        resolveToggle = resolve
-      }))
+  describe('Optimistic Toggle', () => {
+    it('updates aria-checked immediately before onToggle resolves', async () => {
+      let resolveToggle!: () => void
+      const slowToggle = vi.fn().mockImplementation(
+        () => new Promise<void>(resolve => { resolveToggle = resolve })
+      )
 
       render(
         <GoalItem
@@ -354,18 +353,82 @@ describe('GoalItem', () => {
       )
 
       const checkbox = screen.getByRole('checkbox')
+      expect(checkbox).toHaveAttribute('aria-checked', 'false')
 
-      // First click starts loading
       fireEvent.click(checkbox)
 
-      // Second click should be ignored (loading)
-      fireEvent.click(checkbox)
+      // Immediately — before server responds — should already show true
+      expect(checkbox).toHaveAttribute('aria-checked', 'true')
 
-      // Only one call should have been made
+      act(() => resolveToggle())
+      await waitFor(() => expect(slowToggle).toHaveBeenCalledTimes(1))
+    })
+
+    it('ignores double-tap while request is in flight', async () => {
+      let resolveToggle!: () => void
+      const slowToggle = vi.fn().mockImplementation(
+        () => new Promise<void>(resolve => { resolveToggle = resolve })
+      )
+
+      render(
+        <GoalItem
+          goal={baseGoal}
+          onToggle={slowToggle}
+        />
+      )
+
+      const checkbox = screen.getByRole('checkbox')
+      fireEvent.click(checkbox)
+      fireEvent.click(checkbox) // second tap while in flight
+
       expect(slowToggle).toHaveBeenCalledTimes(1)
 
-      // Resolve to clean up
-      resolveToggle!()
+      act(() => resolveToggle())
+      await waitFor(() => expect(slowToggle).toHaveBeenCalledTimes(1))
+    })
+
+    it('reverts aria-checked to pre-tap value on toggle error', async () => {
+      const failingToggle = vi.fn().mockRejectedValue(new Error('Network error'))
+
+      render(
+        <GoalItem
+          goal={baseGoal}
+          onToggle={failingToggle}
+        />
+      )
+
+      const checkbox = screen.getByRole('checkbox')
+      fireEvent.click(checkbox)
+
+      // Optimistic: immediately true
+      expect(checkbox).toHaveAttribute('aria-checked', 'true')
+
+      // After error: reverted to false
+      await waitFor(() => {
+        expect(checkbox).toHaveAttribute('aria-checked', 'false')
+      })
+    })
+
+    it('checkbox is not visually disabled during toggle', async () => {
+      let resolveToggle!: () => void
+      const slowToggle = vi.fn().mockImplementation(
+        () => new Promise<void>(resolve => { resolveToggle = resolve })
+      )
+
+      render(
+        <GoalItem
+          goal={baseGoal}
+          onToggle={slowToggle}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('checkbox'))
+
+      // The inner span should not have opacity-50 during toggle
+      const span = screen.getByRole('checkbox').querySelector('span')
+      expect(span).not.toHaveClass('opacity-50')
+
+      act(() => resolveToggle())
     })
 
     it('disables checkbox when disabled prop is true', () => {
@@ -377,9 +440,7 @@ describe('GoalItem', () => {
         />
       )
 
-      const checkbox = screen.getByRole('checkbox')
-      fireEvent.click(checkbox)
-
+      fireEvent.click(screen.getByRole('checkbox'))
       expect(mockOnToggle).not.toHaveBeenCalled()
     })
   })

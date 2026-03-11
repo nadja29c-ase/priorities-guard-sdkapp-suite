@@ -82,15 +82,25 @@ export function DeliverableItem({
   }
 
   const handleSaveEdit = async () => {
-    if (isLoading || !editName.trim()) return
-    if (editName.trim() === deliverable.name) {
+    if (isLoading) return
+    const trimmedName = editName.trim()
+
+    // Empty text - revert to original
+    if (!trimmedName) {
+      setEditName(deliverable.name)
+      setIsEditing(false)
+      return
+    }
+
+    // No change - just close
+    if (trimmedName === deliverable.name) {
       setIsEditing(false)
       return
     }
     setIsLoading(true)
     setError(null)
     try {
-      await onRename(deliverable.id, editName.trim())
+      await onRename(deliverable.id, trimmedName)
       setIsEditing(false)
     } catch (e) {
       showError(e instanceof Error ? e.message : t('couldntSave'))
