@@ -305,10 +305,15 @@ type TranslationKey = keyof typeof messages['en']
  * Get the current locale from window.openai.locale.
  * Returns 'de' for any German variant, 'en' for everything else.
  * Must be called inside functions, not at module import time.
+ *
+ * Note: iOS may return underscored locales (e.g., "en_DE"). We normalize
+ * to BCP 47 (hyphens) for consistency, though this function only checks
+ * the language prefix so underscores don't affect it directly.
  */
 export function getLocale(): Locale {
   if (typeof window === 'undefined') return 'en'
-  const raw = window.openai?.locale ?? 'en'
+  // Normalize underscores to hyphens (iOS sends en_DE, BCP 47 uses en-DE)
+  const raw = (window.openai?.locale ?? 'en').replace(/_/g, '-')
   return raw.toLowerCase().startsWith('de') ? 'de' : 'en'
 }
 

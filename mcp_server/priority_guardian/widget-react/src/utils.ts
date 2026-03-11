@@ -99,11 +99,20 @@ export function daysUntil(dateStr: string): number {
 }
 
 /**
+ * Normalize locale string to BCP 47 format (replace underscores with hyphens).
+ * iOS returns "en_DE" but WebKit's toLocaleDateString requires "en-DE".
+ */
+function normalizeLocale(raw: string): string {
+  return raw.replace(/_/g, '-')
+}
+
+/**
  * Format a date string for display (locale-aware)
  */
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
-  const locale = window.openai?.locale ?? 'en-US'
+  const rawLocale = window.openai?.locale ?? 'en-US'
+  const locale = normalizeLocale(rawLocale)
   return date.toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
