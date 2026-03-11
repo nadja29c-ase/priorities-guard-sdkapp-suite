@@ -335,14 +335,20 @@ function App() {
       done,
     }) as { isError?: boolean }
 
+    // TODO: REMOVE BEFORE SUBMISSION — diagnostic only
     if (result?.isError) {
-      throw new Error(`[isError=true] keys: ${Object.keys(result as object).join(',')} | ${JSON.stringify(result).slice(0, 300)}`)
+      let safe = '[unserializable]'
+      try { safe = JSON.stringify(result).slice(0, 200) } catch { /* noop */ }
+      throw new Error(`[isError=true] keys: ${Object.keys(result as object).join(',')} | ${safe}`)
     }
 
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
 
+    // TODO: REMOVE BEFORE SUBMISSION — diagnostic only
     if (!content?.data) {
-      throw new Error(`[noData] keys: ${Object.keys(result as object ?? {}).join(',')} | ${JSON.stringify(result).slice(0, 300)}`)
+      let safe = '[unserializable]'
+      try { safe = JSON.stringify(result).slice(0, 200) } catch { /* noop */ }
+      throw new Error(`[noData] keys: ${Object.keys(result as object ?? {}).join(',')} | ${safe}`)
     }
 
     updateDataFromResponse(content)
