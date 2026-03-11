@@ -486,9 +486,13 @@ function App() {
 
   // ============ Display Mode Handlers ============
 
-  // Display mode handlers - only manage internal layout state
-  // The host manages its own fullscreen container; we just expand/collapse content
-  const handleExpandToFullscreen = useCallback(() => {
+  // Display mode handlers - request host container change + update internal layout state
+  const handleExpandToFullscreen = useCallback(async () => {
+    try {
+      await window.openai?.requestDisplayMode?.({ mode: 'fullscreen' })
+    } catch {
+      // Host may not support requestDisplayMode — fall through to local state
+    }
     setDisplayMode('fullscreen')
     notifyHeight()
   }, [notifyHeight])
