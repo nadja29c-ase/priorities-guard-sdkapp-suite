@@ -193,6 +193,12 @@ function App() {
       }
 
       notifyHeight()
+
+      // Sync ref so subsequent set_globals events don't re-parse a now-stale toolOutput
+      const currentToolOutput = window.openai?.toolOutput
+      if (currentToolOutput) {
+        lastToolOutputRef.current = currentToolOutput
+      }
     }
   }, [notifyHeight])
 
