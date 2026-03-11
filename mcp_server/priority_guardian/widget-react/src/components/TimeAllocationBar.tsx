@@ -1,6 +1,6 @@
 import type { TimeAllocation, CalendarKeyword } from '../types'
 import { BAR_COLORS } from '../constants'
-import { formatHours } from '../utils'
+import { formatHours, normalizeLocale } from '../utils'
 import { t } from '../i18n'
 
 interface TimeAllocationBarProps {
@@ -26,7 +26,7 @@ function parseDateParts(isoString: string): { year: number; month: number; day: 
  * weekEnd is exclusive (next Monday 00:00), so we subtract 1 day for display.
  */
 function formatDateRange(weekStart: string, weekEnd: string): string {
-  const locale = window.openai?.locale ?? 'en-US'
+  const locale = normalizeLocale(window.openai?.locale ?? 'en-US')
 
   const start = parseDateParts(weekStart)
   const end = parseDateParts(weekEnd)

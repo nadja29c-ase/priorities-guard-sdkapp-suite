@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Priority, CalendarKeyword } from '../types'
-import { daysUntil } from '../utils'
+import { daysUntil, normalizeLocale } from '../utils'
 import { DeliverableItem } from './DeliverableItem'
 import { AddDeliverableInput } from './AddDeliverableInput'
 import { DeleteConfirmation } from './DeleteConfirmation'
@@ -69,7 +69,7 @@ export function DeadlineCard({
   const iconStrokeColor = ICON_STROKE_COLORS[kw] ?? ICON_STROKE_COLORS.P1
 
   // Format deadline date for banner (e.g., "Mar 15, 2026")
-  const locale = window.openai?.locale || 'en-US'
+  const locale = normalizeLocale(window.openai?.locale || 'en-US')
   const deadlineDate = priority.deadline
     ? new Date(priority.deadline + 'T00:00:00').toLocaleDateString(locale, {
         month: 'short',

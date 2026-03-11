@@ -1,5 +1,6 @@
 import type { PieSlice, CalendarKeyword } from '../types'
 import { RING_STROKE_COLORS } from '../constants'
+import { normalizeLocale } from '../utils'
 import { t } from '../i18n'
 
 /**
@@ -117,7 +118,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
   // Format week dates for display (timezone-safe)
   const formatWeekRange = () => {
     try {
-      const locale = window.openai?.locale ?? 'en-US'
+      const locale = normalizeLocale(window.openai?.locale ?? 'en-US')
       const start = parseDateParts(weekStart)
       const end = parseDateParts(weekEnd)
 
