@@ -336,13 +336,13 @@ function App() {
     }) as { isError?: boolean }
 
     if (result?.isError) {
-      throw new Error("Couldn't save. Try again.")
+      throw new Error(`[isError=true] keys: ${Object.keys(result as object).join(',')} | ${JSON.stringify(result).slice(0, 300)}`)
     }
 
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
 
     if (!content?.data) {
-      throw new Error("Couldn't save. Try again.")
+      throw new Error(`[noData] keys: ${Object.keys(result as object ?? {}).join(',')} | ${JSON.stringify(result).slice(0, 300)}`)
     }
 
     updateDataFromResponse(content)
