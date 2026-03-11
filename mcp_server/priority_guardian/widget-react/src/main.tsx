@@ -37,16 +37,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="p-6 text-center bg-surface-secondary rounded-xl">
-          <p className="text-sm text-danger font-medium mb-2">Something went wrong</p>
-          <p className="text-xs text-secondary">
+        <div style={{padding:'24px',textAlign:'center',background:'#f9f9f9',borderRadius:'12px',fontFamily:'system-ui,sans-serif'}}>
+          <p style={{fontSize:'14px',color:'#dc2626',fontWeight:600,marginBottom:'8px'}}>Something went wrong</p>
+          <p style={{fontSize:'12px',color:'#666',marginBottom:'8px'}}>
             Unable to display dashboard. Please refresh or try again later.
           </p>
-          <p className="text-xs text-tertiary mt-1" style={{wordBreak:'break-all'}}>
-            {this.state.error?.name}: {this.state.error?.message || '(no message)'}
+          <p style={{fontSize:'11px',color:'#999',wordBreak:'break-all',marginBottom:'4px'}}>
+            {this.state.error?.name || 'UnknownError'}: {this.state.error?.message || '(no message)'}
           </p>
-          <p className="text-xs text-tertiary mt-1" style={{wordBreak:'break-all',fontSize:'10px',opacity:0.7}}>
-            {this.state.error?.stack?.split('\n').slice(0,3).join(' | ')}
+          <p style={{fontSize:'10px',color:'#bbb',wordBreak:'break-all'}}>
+            {this.state.error?.stack?.split('\n').slice(0,4).join(' | ')}
           </p>
         </div>
       )

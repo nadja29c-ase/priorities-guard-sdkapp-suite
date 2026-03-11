@@ -33,7 +33,7 @@ INPUT_SCHEMA = {
 
 REQUIRED_SCOPES = ["pg.access"]
 
-WIDGET_URI = "ui://widget/pg-dashboard-v2.html"
+WIDGET_URI = "ui://widget/pg-dashboard-v3.html"
 
 # Timeout for each backend call (seconds)
 # Must be less than MCP's 10-second tool timeout
