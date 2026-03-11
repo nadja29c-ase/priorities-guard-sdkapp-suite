@@ -58,6 +58,9 @@ function App() {
   // Ref to avoid re-running effect on data change
   const isInitializedRef = useRef(false)
 
+  // Ref to detect whether toolOutput has actually changed on each openai:set_globals event
+  const lastToolOutputRef = useRef<unknown>(null)
+
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
     requestAnimationFrame(() => {
@@ -65,7 +68,7 @@ function App() {
     })
   }, [])
 
-  // Load data from window.openai.toolOutput
+  // Load data from window.openai.toolOutput (first load only)
   const loadData = useCallback(() => {
     if (isInitializedRef.current) return
 
@@ -92,9 +95,46 @@ function App() {
     setIsInitialized(true)
     isInitializedRef.current = true
 
+    // Track last toolOutput reference for subsequent update detection
+    lastToolOutputRef.current = window.openai?.toolOutput
+
     // Notify host of new content height
     notifyHeight()
   }, [notifyHeight])
+
+  // Handle subsequent toolOutput updates after initial load
+  // Called on every openai:set_globals event after widget is initialized
+  const handleToolOutputUpdate = useCallback(() => {
+    // Only run if widget is already initialized
+    if (!isInitializedRef.current) return
+
+    // Guard: if toolOutput is absent or same reference, do nothing
+    // (openai:set_globals fires for theme, displayMode, locale changes too)
+    const currentToolOutput = window.openai?.toolOutput
+    if (!currentToolOutput || currentToolOutput === lastToolOutputRef.current) return
+
+    // Parse new toolOutput using shared utility
+    const { data: parsed, error } = getToolOutput()
+
+    if (error) {
+      setLoadError(error)
+      console.error('PG widget update error:', error)
+    } else {
+      setLoadError(null)
+    }
+
+    if (parsed) {
+      setData(parsed)
+
+      // Update timeAllocation if present (only DashboardData has it)
+      if (isDashboardData(parsed)) {
+        setTimeAllocation(parsed.timeAllocation)
+      }
+    }
+
+    // Update ref to current toolOutput
+    lastToolOutputRef.current = currentToolOutput
+  }, [])
 
   // Update data from tool response
   // Note: CRUD responses don't include timeAllocation, only get_priorities does
@@ -433,14 +473,18 @@ function App() {
     loadData()
 
     const handleSetGlobals = () => {
-      loadData()
+      if (isInitializedRef.current) {
+        handleToolOutputUpdate()
+      } else {
+        loadData()
+      }
     }
 
     window.addEventListener('openai:set_globals', handleSetGlobals, { passive: true })
     return () => {
       window.removeEventListener('openai:set_globals', handleSetGlobals)
     }
-  }, [loadData])
+  }, [loadData, handleToolOutputUpdate])
 
   // Notify host when error state changes (affects widget height)
   useEffect(() => {
