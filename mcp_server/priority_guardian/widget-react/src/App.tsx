@@ -124,7 +124,22 @@ function App() {
     }
 
     if (parsed) {
-      setData(parsed)
+      // Use functional setData to preserve weeklyHourActual if not in new response
+      setData(prevData => {
+        if (isDashboardData(parsed) && isDashboardData(prevData)) {
+          const existingById = Object.fromEntries(
+            prevData.priorities.map(p => [p.id, p])
+          )
+          return {
+            ...parsed,
+            priorities: parsed.priorities.map(p => ({
+              ...p,
+              weeklyHourActual: p.weeklyHourActual ?? existingById[p.id]?.weeklyHourActual ?? null,
+            })),
+          }
+        }
+        return parsed
+      })
 
       // Update timeAllocation only if present (only DashboardData has it)
       if (isDashboardData(parsed) && parsed.timeAllocation !== undefined) {
@@ -137,11 +152,28 @@ function App() {
   }, [])
 
   // Update data from tool response
-  // Note: CRUD responses don't include timeAllocation, only get_priorities does
-  // So we only update timeAllocation when it's present in the response
+  // Note: CRUD responses don't include timeAllocation or weeklyHourActual,
+  // only get_priorities does. Preserve calendar-derived data across CRUD operations.
   const updateDataFromResponse = useCallback((content: { data?: ToolOutputData } | null | undefined) => {
     if (content?.data) {
-      setData(content.data)
+      // Use functional setData to access previous state and preserve weeklyHourActual
+      setData(prevData => {
+        if (isDashboardData(content.data) && isDashboardData(prevData)) {
+          // Build lookup of existing priorities by ID
+          const existingById = Object.fromEntries(
+            prevData.priorities.map(p => [p.id, p])
+          )
+          // Merge weeklyHourActual from existing state (CRUD responses have null)
+          return {
+            ...content.data,
+            priorities: content.data.priorities.map(p => ({
+              ...p,
+              weeklyHourActual: p.weeklyHourActual ?? existingById[p.id]?.weeklyHourActual ?? null,
+            })),
+          }
+        }
+        return content.data!
+      })
       setLoadError(null)
 
       // Only update timeAllocation when present in response
