@@ -24,14 +24,6 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('PG widget error:', error, errorInfo.componentStack)
-    // Store full error info on window for post-crash inspection
-    ;(window as Record<string, unknown>).__PG_LAST_ERROR__ = {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      componentStack: errorInfo.componentStack,
-      ts: new Date().toISOString(),
-    }
   }
 
   render(): ReactNode {
