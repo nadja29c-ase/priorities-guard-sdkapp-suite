@@ -32,20 +32,16 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
       componentStack: errorInfo.componentStack,
       ts: new Date().toISOString(),
     }
-    // Phone home: POST error to backend so we can see it in Render logs
-    // Fire and forget — must not throw
+    // Phone home via callTool so we can see crash details in MCP server logs
     try {
-      fetch('https://priorities-guard-sdkapp-suite.onrender.com/api/priority-guardian/widget-error', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: error?.name ?? null,
-          message: error?.message ?? null,
-          stack: error?.stack?.slice(0, 800) ?? null,
-          componentStack: errorInfo?.componentStack?.slice(0, 400) ?? null,
-          ua: navigator?.userAgent ?? null,
-        }),
-      }).catch(() => {})
+      window.openai?.callTool?.('log_client_error', {
+        error_name: error?.name ?? null,
+        error_message: error?.message ?? null,
+        stack: error?.stack?.slice(0, 800) ?? null,
+        component_stack: errorInfo?.componentStack?.slice(0, 400) ?? null,
+        ua: navigator?.userAgent ?? null,
+        phase: 'error_boundary',
+      })?.catch?.(() => {})
     } catch (_) {
       // Never let telemetry throw
     }
@@ -55,9 +51,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
     if (this.state.hasError) {
       return (
         <div style={{padding:'24px',textAlign:'center',background:'#f9f9f9',borderRadius:'12px',fontFamily:'system-ui,sans-serif'}}>
-          <p style={{fontSize:'14px',color:'#dc2626',fontWeight:600,marginBottom:'8px'}}>PG_DEBUG_BOUNDARY_FIRED</p>
+          <p style={{fontSize:'14px',color:'#dc2626',fontWeight:600,marginBottom:'8px'}}>Dashboard unavailable</p>
           <p style={{fontSize:'12px',color:'#666',marginBottom:'8px'}}>
-            BOUNDARY_ACTIVE_v5
+            Please refresh to try again.
           </p>
           <p style={{fontSize:'11px',color:'#999',wordBreak:'break-all',marginBottom:'4px'}}>
             {this.state.error?.name || 'UnknownError'}: {this.state.error?.message || '(no message)'}
