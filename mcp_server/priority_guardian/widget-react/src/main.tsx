@@ -32,6 +32,23 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
       componentStack: errorInfo.componentStack,
       ts: new Date().toISOString(),
     }
+    // Phone home: POST error to backend so we can see it in Render logs
+    // Fire and forget — must not throw
+    try {
+      fetch('https://priorities-guard-sdkapp-suite.onrender.com/api/priority-guardian/widget-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: error?.name ?? null,
+          message: error?.message ?? null,
+          stack: error?.stack?.slice(0, 800) ?? null,
+          componentStack: errorInfo?.componentStack?.slice(0, 400) ?? null,
+          ua: navigator?.userAgent ?? null,
+        }),
+      }).catch(() => {})
+    } catch (_) {
+      // Never let telemetry throw
+    }
   }
 
   render(): ReactNode {

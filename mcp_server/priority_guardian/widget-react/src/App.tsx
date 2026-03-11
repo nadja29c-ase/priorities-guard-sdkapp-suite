@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { applyDocumentTheme } from '@openai/apps-sdk-ui/theme'
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
@@ -17,17 +16,8 @@ import { CalendarConnectionMinimal } from './components/CalendarConnectionMinima
 type DisplayMode = 'inline' | 'fullscreen'
 
 function App() {
-  // Set data-theme attribute on <html> for SDK CSS token resolution
-  // Must listen for openai:set_globals since window.openai.theme may not be set at mount
-  useEffect(() => {
-    const applyTheme = () => {
-      const theme = (window.openai as { theme?: string } | undefined)?.theme
-      applyDocumentTheme(theme === 'dark' ? 'dark' : 'light')
-    }
-    applyTheme()
-    window.addEventListener('openai:set_globals', applyTheme, { passive: true })
-    return () => window.removeEventListener('openai:set_globals', applyTheme)
-  }, [])
+  // Theme is handled automatically by SDK CSS via data-theme attribute
+  // (same approach as Clarity widget — applyDocumentTheme not needed)
 
   const [data, setData] = useState<ToolOutputData | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
