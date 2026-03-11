@@ -97,9 +97,6 @@ function App() {
 
     // Track last toolOutput reference for subsequent update detection
     lastToolOutputRef.current = window.openai?.toolOutput
-    console.log('[PG:loadData] initialized, toolOutput ref set', {
-      ref: lastToolOutputRef.current
-    })
 
     // Notify host of new content height
     notifyHeight()
@@ -110,12 +107,6 @@ function App() {
   const handleToolOutputUpdate = useCallback(() => {
     // Only run if widget is already initialized
     if (!isInitializedRef.current) return
-
-    console.log('[PG:handleToolOutputUpdate] fired', {
-      hasToolOutput: !!window.openai?.toolOutput,
-      isSameRef: window.openai?.toolOutput === lastToolOutputRef.current,
-      willOverwrite: !!(window.openai?.toolOutput && window.openai.toolOutput !== lastToolOutputRef.current),
-    })
 
     // Guard: if toolOutput is absent or same reference, do nothing
     // (openai:set_globals fires for theme, displayMode, locale changes too)
@@ -193,11 +184,11 @@ function App() {
 
       notifyHeight()
 
-      console.log('[PG:updateDataFromResponse] data state updated, toolOutput ref NOT updated', {
-        lastRef: lastToolOutputRef.current,
-        currentToolOutput: window.openai?.toolOutput,
-        isSameRef: window.openai?.toolOutput === lastToolOutputRef.current,
-      })
+      // Advance ref to prevent handleToolOutputUpdate from overwriting CRUD result on next set_globals
+      const currentToolOutput = window.openai?.toolOutput
+      if (currentToolOutput) {
+        lastToolOutputRef.current = currentToolOutput
+      }
     }
   }, [notifyHeight])
 
@@ -335,20 +326,14 @@ function App() {
       done,
     }) as { isError?: boolean }
 
-    // TODO: REMOVE BEFORE SUBMISSION — diagnostic only
     if (result?.isError) {
-      let safe = '[unserializable]'
-      try { safe = JSON.stringify(result).slice(0, 200) } catch { /* noop */ }
-      throw new Error(`[isError=true] keys: ${Object.keys(result as object).join(',')} | ${safe}`)
+      throw new Error("Couldn't save. Try again.")
     }
 
     const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
 
-    // TODO: REMOVE BEFORE SUBMISSION — diagnostic only
     if (!content?.data) {
-      let safe = '[unserializable]'
-      try { safe = JSON.stringify(result).slice(0, 200) } catch { /* noop */ }
-      throw new Error(`[noData] keys: ${Object.keys(result as object ?? {}).join(',')} | ${safe}`)
+      throw new Error("Couldn't save. Try again.")
     }
 
     updateDataFromResponse(content)
@@ -509,15 +494,10 @@ function App() {
 
   // Display mode handlers - request host container change + update internal layout state
   const handleExpandToFullscreen = useCallback(async () => {
-    console.log('[PG:handleExpandToFullscreen] fired', {
-      lastRef: lastToolOutputRef.current,
-      currentToolOutput: window.openai?.toolOutput,
-      isSameRef: window.openai?.toolOutput === lastToolOutputRef.current,
-    })
     try {
       await window.openai?.requestDisplayMode?.({ mode: 'fullscreen' })
     } catch {
-      // Host may not support requestDisplayMode — fall through to local state
+      // Host may not support requestDisplayMode — fall through
     }
     setDisplayMode('fullscreen')
     notifyHeight()
