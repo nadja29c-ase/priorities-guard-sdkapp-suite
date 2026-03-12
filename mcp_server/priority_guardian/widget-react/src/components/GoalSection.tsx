@@ -26,14 +26,20 @@ export function GoalSection({
   onAddGoal,
   maxGoals = 3,
 }: GoalSectionProps) {
-  // If only 1 goal, always show it. If 2-3 goals, collapsible.
-  const isCollapsible = goals.length > 1
-  const [expanded, setExpanded] = useState(defaultExpanded || goals.length <= 1)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [newGoalText, setNewGoalText] = useState('')
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Collapsible if multiple goals OR currently collapsed (allows re-expand)
+  const isCollapsible = goals.length > 1 || !expanded
+
+  // Sync expanded state when display mode changes
+  useEffect(() => {
+    setExpanded(defaultExpanded)
+  }, [defaultExpanded])
 
   const canAddMore = goals.length < maxGoals
 
