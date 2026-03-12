@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+
+// ============ DEBUG FLAG — flip to false before production ============
+const PG_DEBUG = true
+
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
@@ -55,6 +59,14 @@ function App() {
 
   const isInline = displayMode !== 'fullscreen'
 
+  // ============ Debug State (Inc 58) ============
+  const [debugLog, setDebugLog] = useState<Array<{
+    n: number
+    toolOutputChanged: boolean
+    hostDisplayMode: string | undefined
+  }>>([])
+  const debugCounterRef = useRef(0)
+
   // Ref to avoid re-running effect on data change
   const isInitializedRef = useRef(false)
 
@@ -108,13 +120,28 @@ function App() {
     // Only run if widget is already initialized
     if (!isInitializedRef.current) return
 
-    // Diagnostic logging (enable with: window.__PG_DEBUG__ = true)
+    // Capture values for logging
     const currentToolOutput = window.openai?.toolOutput
+    const toolOutputChanged = currentToolOutput !== lastToolOutputRef.current
+    const hostDisplayMode = (window.openai as { displayMode?: string } | undefined)?.displayMode
+
+    // Debug overlay logging (Inc 58) — BEFORE guard check to capture all events
+    if (PG_DEBUG) {
+      debugCounterRef.current += 1
+      const entry = {
+        n: debugCounterRef.current,
+        toolOutputChanged,
+        hostDisplayMode,
+      }
+      setDebugLog(prev => [entry, ...prev].slice(0, 5))
+    }
+
+    // Console logging (enable with: window.__PG_DEBUG__ = true)
     if ((window as { __PG_DEBUG__?: boolean }).__PG_DEBUG__) {
       console.log('[PG:set_globals]', {
-        toolOutputChanged: currentToolOutput !== lastToolOutputRef.current,
+        toolOutputChanged,
         hasToolOutput: !!currentToolOutput,
-        hostDisplayMode: (window.openai as { displayMode?: string } | undefined)?.displayMode,
+        hostDisplayMode,
       })
     }
 
@@ -619,6 +646,7 @@ function App() {
           weekEnd={data.weekEnd}
           semanticTargetLabel={data.semanticTargetLabel}
         />
+        <DebugOverlay displayMode={displayMode} debugLog={debugLog} />
       </main>
     )
   }
@@ -736,6 +764,8 @@ function App() {
           />
         </div>
       )}
+
+      <DebugOverlay displayMode={displayMode} debugLog={debugLog} />
     </main>
   )
 }
@@ -833,6 +863,56 @@ function EmptyState() {
       <p className="text-sm text-secondary">
         {t('noPrioritiesHint')}
       </p>
+    </div>
+  )
+}
+
+// ============ Debug Overlay (Inc 58) — remove before production ============
+interface DebugOverlayProps {
+  displayMode: DisplayMode
+  debugLog: Array<{
+    n: number
+    toolOutputChanged: boolean
+    hostDisplayMode: string | undefined
+  }>
+}
+
+function DebugOverlay({ displayMode, debugLog }: DebugOverlayProps) {
+  if (!PG_DEBUG) return null
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 8,
+        left: 8,
+        right: 8,
+        background: 'rgba(0, 0, 0, 0.85)',
+        color: '#0f0',
+        fontFamily: 'monospace',
+        fontSize: '10px',
+        lineHeight: 1.4,
+        padding: '8px',
+        borderRadius: '6px',
+        zIndex: 9999,
+        maxHeight: '150px',
+        overflow: 'auto',
+      }}
+    >
+      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>[PG DEBUG]</div>
+      <div>displayMode: {displayMode}</div>
+      <div style={{ borderTop: '1px solid #333', marginTop: '4px', paddingTop: '4px' }}>
+        ── set_globals log ──
+      </div>
+      {debugLog.length === 0 ? (
+        <div style={{ color: '#666' }}>(no events yet)</div>
+      ) : (
+        debugLog.map((entry) => (
+          <div key={entry.n}>
+            #{entry.n}  toolOutputChanged:{entry.toolOutputChanged ? 'true' : 'false'}  hostMode:{entry.hostDisplayMode ?? 'undefined'}
+          </div>
+        ))
+      )}
     </div>
   )
 }
