@@ -39,6 +39,39 @@ export function DeleteConfirmation({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [onCancel, isDeleting])
 
+  // Focus trap — Tab/Shift+Tab stay within modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      if (!modalRef.current) return
+      if (!modalRef.current.contains(document.activeElement)) return
+
+      // Query all focusable elements
+      const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      const allFocusable = modalRef.current.querySelectorAll<HTMLElement>(focusableSelector)
+
+      // Filter to visible elements only
+      const focusable = Array.from(allFocusable).filter(el => el.offsetParent !== null)
+      if (focusable.length === 0) return
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+
+      if (e.shiftKey && document.activeElement === first) {
+        // Shift+Tab on first → wrap to last
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        // Tab on last → wrap to first
+        e.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   // Handle backdrop click
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget && !isDeleting) {
