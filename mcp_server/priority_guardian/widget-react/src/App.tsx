@@ -585,8 +585,10 @@ function App() {
   // ============ Effects ============
 
   // Set document language for VoiceOver on mount (Inc 62)
+  // Use full locale (e.g., 'de-DE') for precise voice selection, not just 'de'
   useEffect(() => {
-    document.documentElement.lang = getLocale()
+    const rawLocale = (window.openai?.locale ?? 'en').replace(/_/g, '-')
+    document.documentElement.lang = rawLocale
   }, [])
 
   // Initial load and listen for openai:set_globals
@@ -595,7 +597,8 @@ function App() {
 
     const handleSetGlobals = () => {
       // Sync document language for VoiceOver (Inc 62)
-      document.documentElement.lang = getLocale()
+      const rawLocale = (window.openai?.locale ?? 'en').replace(/_/g, '-')
+      document.documentElement.lang = rawLocale
 
       // Sync displayMode from host (only after init to avoid layout flicker)
       if (isInitializedRef.current) {
