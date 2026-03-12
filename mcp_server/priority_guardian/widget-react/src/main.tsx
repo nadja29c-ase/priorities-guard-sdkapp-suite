@@ -3,6 +3,13 @@ import { createRoot } from 'react-dom/client'
 import { Component, type ReactNode, type ErrorInfo } from 'react'
 import App from './App'
 
+// Set document language BEFORE React renders (for VoiceOver)
+// Must run synchronously before createRoot to ensure correct voice from start
+;(() => {
+  const rawLocale = ((window as { openai?: { locale?: string } }).openai?.locale ?? 'en').replace(/_/g, '-')
+  document.documentElement.lang = rawLocale
+})()
+
 /**
  * Error Boundary to catch React rendering errors
  * Prevents entire widget from crashing on component errors
