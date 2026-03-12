@@ -6,7 +6,7 @@ const PG_DEBUG = false
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
 import { getToolOutput, sortPrioritiesByKeyword, extractStructuredContent } from './utils'
-import { t } from './i18n'
+import { t, getLocale } from './i18n'
 import { ConnectionStatus } from './components/ConnectionStatus'
 import { DeadlineCard } from './components/DeadlineCard'
 import { FlexibleCard } from './components/FlexibleCard'
@@ -584,11 +584,19 @@ function App() {
 
   // ============ Effects ============
 
+  // Set document language for VoiceOver on mount (Inc 62)
+  useEffect(() => {
+    document.documentElement.lang = getLocale()
+  }, [])
+
   // Initial load and listen for openai:set_globals
   useEffect(() => {
     loadData()
 
     const handleSetGlobals = () => {
+      // Sync document language for VoiceOver (Inc 62)
+      document.documentElement.lang = getLocale()
+
       // Sync displayMode from host (only after init to avoid layout flicker)
       if (isInitializedRef.current) {
         const hostMode = (window.openai as OpenAIHost | undefined)?.displayMode
