@@ -59,6 +59,11 @@ function App() {
 
   const isInline = displayMode !== 'fullscreen'
 
+  // Mobile detection — only mobile gets host requestDisplayMode calls
+  const isMobile = /iPhone|iPad|iPod|Android/.test(
+    (window.openai as { userAgent?: string } | undefined)?.userAgent ?? navigator.userAgent
+  )
+
   // ============ Debug State (Inc 58) ============
   const [debugLog, setDebugLog] = useState<Array<{
     n: number
@@ -546,31 +551,36 @@ function App() {
   }
 
   // Display mode handlers - request host container change + update internal layout state
+  // Mobile: request host fullscreen takeover. Desktop: CSS-only layout change (no host call).
   const handleExpandToFullscreen = useCallback(() => {
-    try {
-      if (
-        window.openai?.requestDisplayMode &&
-        (window.openai as OpenAIHost).displayMode !== 'fullscreen'
-      ) {
-        window.openai.requestDisplayMode({ mode: 'fullscreen' })
-      }
-    } catch { /* noop */ }
+    if (isMobile) {
+      try {
+        if (
+          window.openai?.requestDisplayMode &&
+          (window.openai as OpenAIHost).displayMode !== 'fullscreen'
+        ) {
+          window.openai.requestDisplayMode({ mode: 'fullscreen' })
+        }
+      } catch { /* noop */ }
+    }
     setDisplayMode('fullscreen')
     notifyHeight()
-  }, [notifyHeight])
+  }, [isMobile, notifyHeight])
 
   const handleMinimizeToInline = useCallback(() => {
-    try {
-      if (
-        window.openai?.requestDisplayMode &&
-        (window.openai as OpenAIHost).displayMode !== 'inline'
-      ) {
-        window.openai.requestDisplayMode({ mode: 'inline' })
-      }
-    } catch { /* noop */ }
+    if (isMobile) {
+      try {
+        if (
+          window.openai?.requestDisplayMode &&
+          (window.openai as OpenAIHost).displayMode !== 'inline'
+        ) {
+          window.openai.requestDisplayMode({ mode: 'inline' })
+        }
+      } catch { /* noop */ }
+    }
     setDisplayMode('inline')
     notifyHeight()
-  }, [notifyHeight])
+  }, [isMobile, notifyHeight])
 
   // ============ Effects ============
 
