@@ -1,6 +1,6 @@
 import type { PieSlice, CalendarKeyword } from '../types'
 import { RING_STROKE_COLORS } from '../constants'
-import { normalizeLocale } from '../utils'
+import { normalizeLocale, formatHoursA11y } from '../utils'
 import { t } from '../i18n'
 
 /**
@@ -175,7 +175,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
               strokeDasharray={seg.strokeDasharray}
               strokeDashoffset={0}
               transform={`rotate(${seg.rotation} ${center} ${center})`}
-              aria-label={`${translateSliceLabel(seg.slice.label)}: ${seg.slice.hours}h (${seg.percent.toFixed(0)}%)`}
+              aria-label={`${translateSliceLabel(seg.slice.label)}: ${formatHoursA11y(seg.slice.hours)} (${seg.percent.toFixed(0)}%)`}
             />
           ))}
 
@@ -199,7 +199,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
         </svg>
         {/* Visually hidden total for screen readers (SVG text is inaccessible with role="img") */}
         <p className="sr-only">
-          {totalHours.toFixed(1)} {t('hoursUnit')} {t('totalHours')}
+          {formatHoursA11y(totalHours)} {t('totalHours')}
         </p>
       </div>
 

@@ -1,6 +1,6 @@
 import type { TimeAllocation, CalendarKeyword } from '../types'
 import { BAR_COLORS } from '../constants'
-import { formatHours, normalizeLocale } from '../utils'
+import { formatHours, formatHoursA11y, normalizeLocale } from '../utils'
 import { t } from '../i18n'
 
 interface TimeAllocationBarProps {
@@ -62,6 +62,7 @@ function formatDateRange(weekStart: string, weekEnd: string): string {
 
 /**
  * Build aria-label for accessibility.
+ * Uses formatHoursA11y for localized unit words.
  */
 function buildAriaLabel(
   timeAllocation: TimeAllocation,
@@ -72,12 +73,12 @@ function buildAriaLabel(
   for (const kw of activeKeywords) {
     const hours = timeAllocation.keywords[kw].hours
     if (hours > 0) {
-      parts.push(`${kw} ${formatHours(hours)}`)
+      parts.push(`${kw} ${formatHoursA11y(hours)}`)
     }
   }
 
   if (timeAllocation.otherHours > 0) {
-    parts.push(`${t('otherLabel')} ${formatHours(timeAllocation.otherHours)}`)
+    parts.push(`${t('otherLabel')} ${formatHoursA11y(timeAllocation.otherHours)}`)
   }
 
   if (parts.length === 0) {

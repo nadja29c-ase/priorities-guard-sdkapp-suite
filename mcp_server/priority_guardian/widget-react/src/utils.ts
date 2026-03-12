@@ -1,4 +1,5 @@
 import type { Priority, ToolOutputData, CalendarKeyword } from './types'
+import { t } from './i18n'
 
 /**
  * Extract structuredContent from callTool result (tries multiple paths)
@@ -130,4 +131,16 @@ export function formatHours(hours: number): string {
   const rounded = Math.round(hours * 10) / 10
   const formatted = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)
   return `${formatted}h`
+}
+
+/**
+ * Format hours for accessibility (aria-labels only).
+ * Uses full localized unit word ("hours" / "Stunden") instead of "h" abbreviation
+ * to prevent VoiceOver from switching to English voice for German content.
+ */
+export function formatHoursA11y(hours: number): string {
+  // Round to 1 decimal place, remove trailing .0
+  const rounded = Math.round(hours * 10) / 10
+  const formatted = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)
+  return `${formatted} ${t('hoursUnit')}`
 }
