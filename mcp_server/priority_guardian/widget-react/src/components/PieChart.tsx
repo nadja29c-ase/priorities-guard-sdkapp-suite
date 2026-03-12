@@ -209,7 +209,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
           <li
             key={index}
             className="flex items-center justify-between text-sm"
-            aria-label={`${translateSliceLabel(seg.slice.label)}: ${seg.slice.hours.toFixed(1)} hours, ${seg.percent.toFixed(0)}%`}
+            aria-label={`${translateSliceLabel(seg.slice.label)}: ${formatHoursA11y(seg.slice.hours)}, ${seg.percent.toFixed(0)}%`}
           >
             <div className="flex items-center gap-2 min-w-0">
               <span
