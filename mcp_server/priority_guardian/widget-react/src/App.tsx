@@ -73,6 +73,9 @@ function App() {
   // Ref to detect whether toolOutput has actually changed on each openai:set_globals event
   const lastToolOutputRef = useRef<unknown>(null)
 
+  // Ref to block set_globals after CRUD — iOS fires with new toolOutput reference (Inc 59)
+  const hasCrudDataRef = useRef(false)
+
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
     requestAnimationFrame(() => {
@@ -82,6 +85,7 @@ function App() {
 
   // Load data from window.openai.toolOutput (first load only)
   const loadData = useCallback(() => {
+    hasCrudDataRef.current = false  // Reset on load/remount (Inc 59)
     if (isInitializedRef.current) return
 
     const t = window.openai?.toolOutput
@@ -119,6 +123,9 @@ function App() {
   const handleToolOutputUpdate = useCallback(() => {
     // Only run if widget is already initialized
     if (!isInitializedRef.current) return
+
+    // Block stale host toolOutput after CRUD (Inc 59) — CRUD data wins
+    if (hasCrudDataRef.current) return
 
     // Capture values for logging
     const currentToolOutput = window.openai?.toolOutput
@@ -225,11 +232,15 @@ function App() {
       if (currentToolOutput) {
         lastToolOutputRef.current = currentToolOutput
       }
+
+      // Mark that we have CRUD data — block subsequent set_globals (Inc 59)
+      hasCrudDataRef.current = true
     }
   }, [notifyHeight])
 
   // Refresh data by calling get_priorities
   const refreshData = useCallback(async () => {
+    hasCrudDataRef.current = false  // Allow set_globals after explicit refresh (Inc 59)
     if (!window.openai?.callTool) return
 
     setIsRefreshing(true)
