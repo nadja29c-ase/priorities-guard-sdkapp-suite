@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
 // ============ DEBUG FLAG — flip to false before production ============
-const PG_DEBUG = true
+const PG_DEBUG = false
 
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
