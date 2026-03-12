@@ -94,8 +94,8 @@ describe('i18n', () => {
 
     it('returns interpolation-ready strings', () => {
       window.openai = { locale: 'en-US' } as typeof window.openai
-      expect(t('dDaysLeft')).toBe('{n}d left')
-      expect(t('dDaysLeft').replace('{n}', '5')).toBe('5d left')
+      expect(t('dDaysLeft')).toBe('{n} days left')
+      expect(t('dDaysLeft').replace('{n}', '5')).toBe('5 days left')
     })
 
     it('returns German interpolation-ready strings', () => {

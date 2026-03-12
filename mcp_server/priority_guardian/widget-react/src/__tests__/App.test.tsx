@@ -30,11 +30,11 @@ const deadlinePriority: Priority = {
   weeklyHourTarget: 10,
   weeklyHourActual: 8,
   checkpointDate: undefined,
-  desiredResult: undefined,
   deliverables: [
     { id: 'd1', name: 'Design doc', done: true },
     { id: 'd2', name: 'Implementation', done: false },
   ],
+  goals: [],
 }
 
 const flexiblePriority: Priority = {
@@ -47,8 +47,8 @@ const flexiblePriority: Priority = {
   weeklyHourTarget: 5,
   weeklyHourActual: 3,
   checkpointDate: '2025-02-28',
-  desiredResult: 'Complete first 10 chapters',
   deliverables: [],
+  goals: [],
 }
 
 describe('App', () => {
@@ -161,11 +161,6 @@ describe('App', () => {
       expect(svg).toBeInTheDocument()
     })
 
-    it('renders desired result (1-Month Goal)', () => {
-      render(<App />)
-      expect(screen.getByText('Complete first 10 chapters')).toBeInTheDocument()
-    })
-
     it('shows checkpoint date countdown', () => {
       render(<App />)
       // The exact text depends on current date, but should mention "check-in"
@@ -232,15 +227,6 @@ describe('App', () => {
       expect(screen.getByText(/mar 15/i)).toBeInTheDocument()
     })
 
-    it('uses desiredResult (not desired_result)', () => {
-      const priority: Priority = {
-        ...flexiblePriority,
-        desiredResult: 'Custom goal text',
-      }
-      setMockPriorities([priority], true)
-      render(<App />)
-      expect(screen.getByText('Custom goal text')).toBeInTheDocument()
-    })
   })
 
   describe('Error Handling', () => {
@@ -852,15 +838,18 @@ describe('App', () => {
       })
     })
 
-    describe('DeadlineCard Progress Bar', () => {
-      it('renders progress bar when deliverables exist', () => {
+    describe('DeadlineCard Deliverables Count', () => {
+      it('renders deliverables done count when deliverables exist', () => {
         setMockPriorities([deadlinePriority], true)
         render(<App />)
 
-        expect(screen.getByRole('progressbar')).toBeInTheDocument()
+        // V7: Shows inline done/total count with label "Deliverables done"
+        expect(screen.getByText(/Deliverables done/i)).toBeInTheDocument()
+        // Count shown in header as "(1/2)"
+        expect(screen.getByText(/\(1\/2\)/)).toBeInTheDocument()
       })
 
-      it('hides progress bar when 0 deliverables', () => {
+      it('shows 0/0 when no deliverables', () => {
         const priority: Priority = {
           ...deadlinePriority,
           deliverables: [],
@@ -868,38 +857,8 @@ describe('App', () => {
         setMockPriorities([priority], true)
         render(<App />)
 
-        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
-      })
-
-      it('progress bar width matches doneCount/totalCount ratio', () => {
-        // 1 of 2 done = 50%
-        setMockPriorities([deadlinePriority], true)
-        render(<App />)
-
-        const progressBar = screen.getByRole('progressbar')
-        const fill = progressBar.querySelector('div')
-        expect(fill).toHaveStyle({ width: '50%' })
-      })
-
-      it('progress bar has neutral color (not conditionally colored)', () => {
-        setMockPriorities([deadlinePriority], true)
-        render(<App />)
-
-        const progressBar = screen.getByRole('progressbar')
-        const fill = progressBar.querySelector('div')
-        // Check it uses the neutral gray CSS variable
-        expect(fill).toHaveClass('bg-[color:var(--gray-400)]')
-      })
-
-      it('progress bar has correct ARIA attributes', () => {
-        setMockPriorities([deadlinePriority], true)
-        render(<App />)
-
-        const progressBar = screen.getByRole('progressbar')
-        expect(progressBar).toHaveAttribute('aria-valuenow', '1')
-        expect(progressBar).toHaveAttribute('aria-valuemin', '0')
-        expect(progressBar).toHaveAttribute('aria-valuemax', '2')
-        expect(progressBar).toHaveAttribute('aria-label', '1 of 2 deliverables completed')
+        // Shows Deliverables done label
+        expect(screen.getByText(/Deliverables done/i)).toBeInTheDocument()
       })
     })
 

@@ -46,6 +46,8 @@ export function ConnectionStatus({
           window.open(connectUrl, '_blank')
         }
         onAwaitingOAuthChange(true)
+      } else {
+        setError(t('failedToConnect'))
       }
     } catch (err) {
       console.error('Failed to initiate connection:', err)

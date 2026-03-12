@@ -389,8 +389,7 @@ describe('TimeAllocationBar', () => {
         />
       )
 
-      const section = screen.getByRole('region', { hidden: true }) ||
-                      document.querySelector('section[aria-labelledby]')
+      const section = document.querySelector('section[aria-labelledby]')
       expect(section).toHaveAttribute('aria-labelledby', 'time-allocation-heading')
     })
 
@@ -407,7 +406,8 @@ describe('TimeAllocationBar', () => {
 
       expect(ariaLabel).toContain('Time allocation')
       expect(ariaLabel).toContain('P1')
-      expect(ariaLabel).toContain('10.5h')
+      // Increment 61: accessibility labels use full "hours" word for VoiceOver
+      expect(ariaLabel).toContain('10.5 hours')
     })
 
     it('legend dots are aria-hidden', () => {

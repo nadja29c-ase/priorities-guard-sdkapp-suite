@@ -64,8 +64,9 @@ describe('SVG Accessibility', () => {
         const svg = screen.getByRole('img')
         const ariaLabel = svg.getAttribute('aria-label')
 
-        expect(ariaLabel).toContain('2h')
-        expect(ariaLabel).toContain('5h')
+        // Increment 61: accessibility labels use full "hours" word for VoiceOver
+        expect(ariaLabel).toContain('2 hours')
+        expect(ariaLabel).toContain('5 hours')
       })
 
       it('aria-label reflects actual values', () => {
@@ -74,8 +75,9 @@ describe('SVG Accessibility', () => {
         const svg = screen.getByRole('img')
         const ariaLabel = svg.getAttribute('aria-label')
 
-        expect(ariaLabel).toContain('3.5h')
-        expect(ariaLabel).toContain('10h')
+        // Increment 61: accessibility labels use full "hours" word for VoiceOver
+        expect(ariaLabel).toContain('3.5 hours')
+        expect(ariaLabel).toContain('10 hours')
       })
 
       it('does NOT have aria-hidden', () => {

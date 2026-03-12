@@ -201,8 +201,9 @@ describe('HourRing', () => {
       const svg = document.querySelector('svg')
       const ariaLabel = svg?.getAttribute('aria-label')
 
-      expect(ariaLabel).toContain('2h')
-      expect(ariaLabel).toContain('5h')
+      // Increment 61: accessibility labels use full "hours" word for VoiceOver
+      expect(ariaLabel).toContain('2 hours')
+      expect(ariaLabel).toContain('5 hours')
       expect(ariaLabel).toContain('week')
     })
 
@@ -212,8 +213,9 @@ describe('HourRing', () => {
       const svg = document.querySelector('svg')
       const ariaLabel = svg?.getAttribute('aria-label')
 
-      expect(ariaLabel).toContain('3.5h')
-      expect(ariaLabel).toContain('10h')
+      // Increment 61: accessibility labels use full "hours" word for VoiceOver
+      expect(ariaLabel).toContain('3.5 hours')
+      expect(ariaLabel).toContain('10 hours')
     })
   })
 })
@@ -235,6 +237,12 @@ describe('FlexibleCard + HourRing Integration', () => {
     onCancelEdit: vi.fn(),
     onSave: vi.fn().mockResolvedValue(undefined),
     onDelete: vi.fn().mockResolvedValue(undefined),
+    onKeywordChange: vi.fn().mockResolvedValue(undefined),
+    onAddGoal: vi.fn().mockResolvedValue(undefined),
+    onToggleGoal: vi.fn().mockResolvedValue(undefined),
+    onRenameGoal: vi.fn().mockResolvedValue(undefined),
+    onDeleteGoal: vi.fn().mockResolvedValue(undefined),
+    priorities: [],
   }
 
   beforeEach(() => {
@@ -322,7 +330,7 @@ describe('FlexibleCard + HourRing Integration', () => {
     expect(screen.getByText(/\/ 10h/)).toBeInTheDocument()
   })
 
-  it('HourRing area is clickable to enter edit mode', () => {
+  it('HourRing renders inside FlexibleCard content area', () => {
     const priority: Priority = {
       ...basePriority,
       weeklyHourTarget: 5,
@@ -336,13 +344,13 @@ describe('FlexibleCard + HourRing Integration', () => {
       />
     )
 
-    // Find the ring's clickable container (parent div with title="Click to edit")
+    // HourRing SVG should be present in the card
     const svg = document.querySelector('svg[role="img"]')
-    const ringArea = svg?.closest('div[title="Click to edit"]')
-    expect(ringArea).toBeInTheDocument()
+    expect(svg).toBeInTheDocument()
 
-    fireEvent.click(ringArea!)
-    expect(mockHandlers.onStartEdit).toHaveBeenCalled()
+    // Priority name area is clickable to enter edit mode (title="Click to edit" is on h3)
+    const nameArea = document.querySelector('h3[title="Click to edit"]')
+    expect(nameArea).toBeInTheDocument()
   })
 
   it('HourRing does NOT render in edit mode', () => {

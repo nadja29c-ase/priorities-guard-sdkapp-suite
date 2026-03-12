@@ -11,6 +11,7 @@ type ToolOutput = {
 const mockOpenai = {
   theme: 'light' as 'light' | 'dark' | undefined,
   locale: 'en-US' as string | undefined,
+  displayMode: 'fullscreen' as 'inline' | 'fullscreen' | undefined, // Default to fullscreen for tests (sections expanded)
   toolOutput: undefined as ToolOutput,
   callTool: vi.fn(),
   openExternal: vi.fn(),
@@ -48,6 +49,7 @@ export function resetMocks() {
   mockOpenai.toolOutput = undefined
   mockOpenai.theme = 'light'
   mockOpenai.locale = 'en-US'
+  mockOpenai.displayMode = 'fullscreen' // Default to fullscreen for tests (sections expanded)
   mockOpenai.callTool.mockReset()
   mockOpenai.openExternal.mockReset()
   mockOpenai.notifyIntrinsicHeight.mockReset()
