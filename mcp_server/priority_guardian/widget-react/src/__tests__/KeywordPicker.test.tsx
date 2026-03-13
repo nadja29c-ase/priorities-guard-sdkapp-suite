@@ -146,7 +146,7 @@ describe('KeywordPicker', () => {
     it('"Change" dismisses the dialog before onKeywordChange is called', async () => {
       // Make onKeywordChange take some time to resolve
       let resolveChange: () => void
-      mockOnKeywordChange.mockImplementationOnce(() => new Promise(resolve => {
+      mockOnKeywordChange.mockImplementationOnce(() => new Promise<void>(resolve => {
         resolveChange = resolve
       }))
 
