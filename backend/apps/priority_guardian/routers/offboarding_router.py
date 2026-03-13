@@ -105,18 +105,25 @@ async def disconnect(
             if connection.encrypted_refresh_token:
                 try:
                     refresh_token = decrypt_token(connection.encrypted_refresh_token)
-                    http_client = request.app.state.http_client
-                    revoke_result = await revoke_google_token(
-                        refresh_token=refresh_token,
-                        http_client=http_client,
-                    )
-                    details["google_token_revoked"] = revoke_result.get("success", False)
-                    if not revoke_result["success"]:
+                    http_client = getattr(request.app.state, "http_client", None)
+                    if http_client is None:
                         logger.warning(
-                            "pg_offboarding.google_revoke_failed",
+                            "pg_offboarding.no_http_client",
                             user_id=str(user_id),
-                            error=revoke_result.get("error"),
                         )
+                        # Continue without revoking - can't call Google without client
+                    else:
+                        revoke_result = await revoke_google_token(
+                            refresh_token=refresh_token,
+                            http_client=http_client,
+                        )
+                        details["google_token_revoked"] = revoke_result.get("success", False)
+                        if not revoke_result.get("success"):
+                            logger.warning(
+                                "pg_offboarding.google_revoke_failed",
+                                user_id=str(user_id),
+                                error=revoke_result.get("error"),
+                            )
                 except Exception as e:
                     logger.warning(
                         "pg_offboarding.google_revoke_error",
