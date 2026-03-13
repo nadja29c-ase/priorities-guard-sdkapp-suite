@@ -62,10 +62,7 @@ function App() {
   const isInline = displayMode !== 'fullscreen'
 
   // Mobile detection — only mobile gets host requestDisplayMode calls
-  // Add temporary diagnostic log — remove after confirming on device (Inc 68)
   const ua = (window.openai as any)?.userAgent
-  console.log('[PG] window.openai.userAgent:', JSON.stringify(ua))
-
   const isMobile =
     ua?.device?.type === 'mobile' ||
     /iPhone|iPad|iPod|Android/.test(navigator.userAgent)
