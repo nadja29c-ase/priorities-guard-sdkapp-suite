@@ -77,7 +77,7 @@ export function KeywordPicker({
     if (pendingKeyword === null) return
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && loadingKeyword === null) {
-        handleCancel()
+        setPendingKeyword(null)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
