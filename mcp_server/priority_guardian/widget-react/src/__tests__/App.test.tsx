@@ -932,4 +932,118 @@ describe('App', () => {
       })
     })
   })
+
+  describe('TimeAllocationBar visibility (Inc 65)', () => {
+    // Sample time allocation fixture (from TimeAllocationBar.test.tsx)
+    const sampleTimeAllocation = {
+      weekStart: '2026-02-09T00:00:00+00:00',
+      weekEnd: '2026-02-16T00:00:00+00:00',
+      totalTrackedHours: 31.75,
+      keywords: {
+        P1: { hours: 10.5, eventCount: 6 },
+        P2: { hours: 3.0, eventCount: 2 },
+        P3: { hours: 0.0, eventCount: 0 },
+      },
+      otherHours: 18.25,
+      barSegments: {
+        P1: 10.5,
+        P2: 3.0,
+        P3: 0.0,
+        other: 18.25,
+      },
+    }
+
+    it('hides bar when google_connected is false', () => {
+      setMockPriorities([], false, [], undefined)
+      render(<App />)
+
+      // Time allocation bar heading should not be present
+      expect(screen.queryByText(/time allocation this week/i)).not.toBeInTheDocument()
+    })
+
+    it('shows bar when google_connected is true and timeAllocation is present', () => {
+      setMockPriorities([], true, [], sampleTimeAllocation)
+      render(<App />)
+
+      // Time allocation bar heading should be visible
+      expect(screen.getByText(/time allocation this week/i)).toBeInTheDocument()
+    })
+
+    it('CRUD response does not clear the bar', async () => {
+      // Initial state: connected with timeAllocation
+      setMockPriorities([deadlinePriority], true, [], sampleTimeAllocation)
+      render(<App />)
+
+      // Bar should be visible initially
+      expect(screen.getByText(/time allocation this week/i)).toBeInTheDocument()
+
+      // Mock CRUD response (no timeAllocation, but google_connected: true)
+      mockOpenai.callTool.mockResolvedValue({
+        structuredContent: {
+          data: {
+            google_connected: true,
+            priorities: [{
+              ...deadlinePriority,
+              deliverables: [
+                { id: 'd1', name: 'Design doc', done: false }, // toggled
+                { id: 'd2', name: 'Implementation', done: false },
+              ]
+            }]
+            // Note: no timeAllocation in CRUD response
+          }
+        }
+      })
+
+      // Toggle a deliverable to trigger CRUD
+      const checkboxes = screen.getAllByRole('checkbox')
+      await userEvent.click(checkboxes[0])
+
+      // Wait for the call to complete
+      await waitFor(() => {
+        expect(mockOpenai.callTool).toHaveBeenCalled()
+      })
+
+      // Bar should still be visible (not cleared by CRUD)
+      expect(screen.getByText(/time allocation this week/i)).toBeInTheDocument()
+    })
+
+    it('disconnect clears the bar', async () => {
+      // Initial state: connected with timeAllocation
+      setMockPriorities([deadlinePriority], true, [], sampleTimeAllocation)
+      render(<App />)
+
+      // Bar should be visible initially
+      expect(screen.getByText(/time allocation this week/i)).toBeInTheDocument()
+
+      // Mock disconnect response (google_connected: false, no timeAllocation)
+      mockOpenai.callTool.mockResolvedValue({
+        structuredContent: {
+          data: {
+            google_connected: false,
+            priorities: [deadlinePriority]
+            // Note: no timeAllocation after disconnect
+          }
+        }
+      })
+
+      // Click disconnect button
+      await userEvent.click(screen.getByRole('button', { name: /disconnect/i }))
+
+      // Confirm disconnect
+      await userEvent.click(screen.getByRole('button', { name: /yes/i }))
+
+      // Wait for the call to complete
+      await waitFor(() => {
+        expect(mockOpenai.callTool).toHaveBeenCalledWith(
+          'disconnect_google_calendar',
+          expect.objectContaining({ confirm: true })
+        )
+      })
+
+      // Bar should be hidden after disconnect
+      await waitFor(() => {
+        expect(screen.queryByText(/time allocation this week/i)).not.toBeInTheDocument()
+      })
+    })
+  })
 })

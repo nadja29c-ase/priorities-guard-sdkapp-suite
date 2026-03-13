@@ -96,10 +96,18 @@ function App() {
 
     setData(parsed)
 
-    // Set timeAllocation from get_priorities response (clears when undefined after disconnect)
+    // Set timeAllocation from get_priorities response
     // Only DashboardData has timeAllocation; PieChartData doesn't
     if (parsed && isDashboardData(parsed)) {
-      setTimeAllocation(parsed.timeAllocation)
+      if (parsed.timeAllocation !== undefined) {
+        setTimeAllocation(parsed.timeAllocation)
+      } else if (
+        parsed.timeAllocation === undefined &&
+        parsed.google_connected === false
+      ) {
+        // Clear timeAllocation when disconnected (Inc 65)
+        setTimeAllocation(undefined)
+      }
     }
 
     setIsInitialized(true)
@@ -154,9 +162,17 @@ function App() {
         return parsed
       })
 
-      // Update timeAllocation only if present (only DashboardData has it)
-      if (isDashboardData(parsed) && parsed.timeAllocation !== undefined) {
-        setTimeAllocation(parsed.timeAllocation)
+      // Update timeAllocation (only DashboardData has it)
+      if (isDashboardData(parsed)) {
+        if (parsed.timeAllocation !== undefined) {
+          setTimeAllocation(parsed.timeAllocation)
+        } else if (
+          parsed.timeAllocation === undefined &&
+          parsed.google_connected === false
+        ) {
+          // Clear timeAllocation when disconnected (Inc 65)
+          setTimeAllocation(undefined)
+        }
       }
     }
 
@@ -189,10 +205,18 @@ function App() {
       })
       setLoadError(null)
 
-      // Only update timeAllocation when present in response
+      // Update timeAllocation when present, or clear when disconnected
       // CRUD responses don't include it; only get_priorities does
-      if (isDashboardData(content.data) && content.data.timeAllocation !== undefined) {
-        setTimeAllocation(content.data.timeAllocation)
+      if (isDashboardData(content.data)) {
+        if (content.data.timeAllocation !== undefined) {
+          setTimeAllocation(content.data.timeAllocation)
+        } else if (
+          content.data.timeAllocation === undefined &&
+          content.data.google_connected === false
+        ) {
+          // Clear timeAllocation when disconnected (Inc 65)
+          setTimeAllocation(undefined)
+        }
       }
 
       notifyHeight()
@@ -685,12 +709,15 @@ function App() {
       )}
 
       {/* Time Allocation Bar (shows calendar hours breakdown) */}
-      <TimeAllocationBar
-        timeAllocation={timeAllocation}
-        activeKeywords={activeKeywords}
-        onRefresh={refreshData}
-        isRefreshing={isRefreshing}
-      />
+      {/* Only render when Google Calendar is connected (Inc 65) */}
+      {dashboardData?.google_connected && (
+        <TimeAllocationBar
+          timeAllocation={timeAllocation}
+          activeKeywords={activeKeywords}
+          onRefresh={refreshData}
+          isRefreshing={isRefreshing}
+        />
+      )}
 
       {/* Priority Cards (primary content) */}
       {sortedPriorities.length > 0 ? (
