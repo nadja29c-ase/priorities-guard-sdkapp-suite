@@ -70,8 +70,12 @@ function App() {
   // Ref to block set_globals after CRUD — iOS fires with new toolOutput reference (Inc 59)
   const hasCrudDataRef = useRef(false)
 
-  // Tracks previous isAddingPriority for transition detection (iOS scroll fix, Inc 66)
+  // Tracks previous isAddingPriority for transition detection (iOS scroll fix)
   const wasAddingRef = useRef(false)
+
+  // Tracks whether fullscreen was entered specifically for the add form (mobile only).
+  // Used to reverse the fullscreen on form close without affecting user-initiated fullscreen.
+  const enteredFullscreenForAddRef = useRef(false)
 
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
@@ -574,6 +578,18 @@ function App() {
     notifyHeight()
   }, [isMobile, notifyHeight])
 
+  // On mobile: go fullscreen before opening the add form to avoid iOS host scroll-off-screen.
+  // On desktop: open the form inline — no display mode change.
+  // enteredFullscreenForAddRef is only set when we actually trigger the transition,
+  // so user-initiated fullscreen is not affected.
+  const handleOpenAddForm = useCallback(() => {
+    if (isMobile && displayMode !== 'fullscreen') {
+      enteredFullscreenForAddRef.current = true  // set before calling handler
+      handleExpandToFullscreen()
+    }
+    setIsAddingPriority(true)
+  }, [isMobile, displayMode, handleExpandToFullscreen])
+
   // ============ Effects ============
 
   // Set document language for VoiceOver on mount (Inc 62)
@@ -620,32 +636,22 @@ function App() {
     }
   }, [loadError, isInitialized, notifyHeight])
 
-  // Notify height when add form closes — immediate is safe (height shrinks, no scroll risk).
-  // wasAddingRef guards against firing on unrelated re-renders where isAddingPriority === false.
+  // On mobile: when add form closes, return to inline — but only if fullscreen was entered
+  // specifically for the add form. Does not collapse user-initiated fullscreen. (Inc 67)
   useEffect(() => {
     if (!isInitialized) return
-    if (!isAddingPriority && wasAddingRef.current) {
-      notifyHeight()
+    // Only act on true → false transition
+    if (!wasAddingRef.current || isAddingPriority) {
+      wasAddingRef.current = isAddingPriority
+      return
     }
     wasAddingRef.current = isAddingPriority
-  }, [isAddingPriority, isInitialized, notifyHeight])
 
-  // Notify height when add form opens — mobile only, delayed (Inc 66).
-  // On iOS the host may react to intrinsic height changes during the same layout cycle,
-  // scrolling the conversation before the user can see the form.
-  // Delay gives the host time to settle before receiving the height notification.
-  // Desktop: no delay needed, this behaviour does not occur there.
-  useEffect(() => {
-    if (!isInitialized) return
-    if (!isAddingPriority) return
-    if (!isMobile) return
-
-    const id = setTimeout(() => {
-      notifyHeight()
-    }, 300)
-
-    return () => clearTimeout(id)
-  }, [isAddingPriority, isInitialized, isMobile, notifyHeight])
+    if (isMobile && enteredFullscreenForAddRef.current) {
+      enteredFullscreenForAddRef.current = false
+      handleMinimizeToInline()
+    }
+  }, [isAddingPriority, isInitialized, isMobile, handleMinimizeToInline])
 
   // Persist edit state to widgetState (survives widget re-renders)
   useEffect(() => {
@@ -785,7 +791,7 @@ function App() {
       ) : (
         availableKeywords.length > 0 && canEdit && (
           <div className="mt-4">
-            <AddPriorityButton onClick={() => setIsAddingPriority(true)} />
+            <AddPriorityButton onClick={handleOpenAddForm} />
           </div>
         )
       )}
