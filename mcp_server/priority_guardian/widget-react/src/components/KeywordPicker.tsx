@@ -189,8 +189,7 @@ export function KeywordPicker({
             {/* Body paragraph */}
             <p className="text-sm text-secondary mb-3">
               {t('keywordChangeBody')
-                .replace('{oldKeyword}', currentKeyword)
-                .replace('{newKeyword}', pendingKeyword)}
+                .replaceAll('{oldKeyword}', currentKeyword)}
             </p>
 
             {/* Best time line */}
