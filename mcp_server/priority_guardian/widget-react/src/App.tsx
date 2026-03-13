@@ -54,6 +54,11 @@ function App() {
     return mode === 'fullscreen' ? 'fullscreen' : 'inline'
   })
 
+  // Bottom safe area inset from host (iOS input bar clearance, Inc 69)
+  const [hostBottomInset, setHostBottomInset] = useState<number>(
+    () => (window.openai as any)?.safeArea?.insets?.bottom ?? 0
+  )
+
   const isInline = displayMode !== 'fullscreen'
 
   // Mobile detection — only mobile gets host requestDisplayMode calls
@@ -620,6 +625,10 @@ function App() {
         }
       }
 
+      // Sync bottom safe area inset (iOS input bar clearance, Inc 69)
+      const bottom = (window.openai as any)?.safeArea?.insets?.bottom ?? 0
+      setHostBottomInset(bottom)
+
       if (isInitializedRef.current) {
         handleToolOutputUpdate()
       } else {
@@ -692,6 +701,7 @@ function App() {
         role="main"
         aria-label="Time Allocation Pie Chart"
         className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+        style={!isInline ? { paddingBottom: `calc(2rem + ${hostBottomInset}px)` } : undefined}
       >
         <PieChart
           slices={data.slices}
@@ -729,6 +739,7 @@ function App() {
       role="main"
       aria-label="Priority Guardian Dashboard"
       className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+      style={!isInline ? { paddingBottom: `calc(2rem + ${hostBottomInset}px)` } : undefined}
     >
       {/* Fullscreen header - only in fullscreen mode */}
       {!isInline && (
