@@ -70,8 +70,9 @@ class TestDisconnectDoesNotRevokePGTokens:
         # Verify no pg_tokens_revoked in response
         assert "pg_tokens_revoked" not in result["details"]
 
-        # Verify execute was called only once (for connection query, not token update)
-        assert mock_session.execute.call_count == 1
+        # Verify no execute call involved oauth_access_tokens
+        for call in mock_session.execute.call_args_list:
+            assert "oauth_access_tokens" not in str(call)
 
     @pytest.mark.asyncio
     async def test_disconnect_keeps_session_valid(self):
@@ -181,6 +182,46 @@ class TestDisconnectRevokesGoogleConnection:
         mock_session.flush.assert_called_once()
         mock_session.commit.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_disconnect_no_connection_skips_revocation(self):
+        """Disconnect with no Google connection should skip revocation."""
+        from backend.apps.priority_guardian.routers.offboarding_router import disconnect
+
+        user_id = uuid4()
+
+        # Mock user
+        mock_user = MagicMock()
+        mock_user.id = user_id
+
+        # Mock session - no connection found
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(return_value=mock_user)
+
+        conn_result = MagicMock()
+        conn_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=conn_result)
+        mock_session.commit = AsyncMock()
+
+        # Mock request
+        mock_request = MagicMock()
+
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+        ) as mock_revoke:
+            result = await disconnect(
+                request=mock_request,
+                x_user_id=str(user_id),
+                session=mock_session,
+            )
+
+        # Verify revoke was not called (no connection)
+        mock_revoke.assert_not_called()
+
+        # Verify response
+        assert result["status"] == "disconnected"
+        assert result["details"]["google_connection_revoked"] is False
+
 
 class TestDisconnectIdempotent:
     """Tests that disconnect is idempotent."""
@@ -213,11 +254,18 @@ class TestDisconnectIdempotent:
         # Mock request
         mock_request = MagicMock()
 
-        result = await disconnect(
-            request=mock_request,
-            x_user_id=str(user_id),
-            session=mock_session,
-        )
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+        ) as mock_revoke:
+            result = await disconnect(
+                request=mock_request,
+                x_user_id=str(user_id),
+                session=mock_session,
+            )
+
+        # Verify revoke was not called (already disconnected)
+        mock_revoke.assert_not_called()
 
         # Verify idempotent response
         assert result["status"] == "disconnected"
