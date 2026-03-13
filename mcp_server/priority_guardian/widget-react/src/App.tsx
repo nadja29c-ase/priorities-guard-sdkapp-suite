@@ -57,9 +57,13 @@ function App() {
   const isInline = displayMode !== 'fullscreen'
 
   // Mobile detection — only mobile gets host requestDisplayMode calls
-  const isMobile = /iPhone|iPad|iPod|Android/.test(
-    (window.openai as { userAgent?: string } | undefined)?.userAgent ?? navigator.userAgent
-  )
+  // Add temporary diagnostic log — remove after confirming on device (Inc 68)
+  const ua = (window.openai as any)?.userAgent
+  console.log('[PG] window.openai.userAgent:', JSON.stringify(ua))
+
+  const isMobile =
+    ua?.device?.type === 'mobile' ||
+    /iPhone|iPad|iPod|Android/.test(navigator.userAgent)
 
   // Ref to avoid re-running effect on data change
   const isInitializedRef = useRef(false)
