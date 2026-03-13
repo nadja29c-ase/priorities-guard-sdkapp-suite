@@ -156,8 +156,8 @@ const messages = {
     keywordChangeBody: 'Hours already tagged {oldKeyword} this week will shift to whichever priority now holds {oldKeyword} — current week tracking will be off.',
     keywordChangeBestTime: 'Best time to change: Monday morning, before tagging any events.',
     keywordChangeHowTo: 'Tag calendar events with {keyword} to track time toward this priority.',
-    keywordChangeConfirm: 'Change now',
-    keywordChangeCancel: 'Keep current badge',
+    keywordChangeConfirm: 'Change',
+    keywordChangeCancel: 'Cancel',
   },
   de: {
     // Loading states
@@ -309,8 +309,8 @@ const messages = {
     keywordChangeBody: 'Bereits mit {oldKeyword} getaggte Termine dieser Woche werden der Priorität zugeordnet, die jetzt {oldKeyword} trägt — das aktuelle Tracking stimmt dann nicht mehr.',
     keywordChangeBestTime: 'Bester Zeitpunkt: Montag früh, bevor du Termine für die Woche erstellst.',
     keywordChangeHowTo: 'Tagge Kalendertermine mit {keyword}, um Zeit für diese Priorität zu erfassen.',
-    keywordChangeConfirm: 'Jetzt ändern',
-    keywordChangeCancel: 'Badge beibehalten',
+    keywordChangeConfirm: 'Ändern',
+    keywordChangeCancel: 'Abbrechen',
   },
 } as const
 
