@@ -150,6 +150,14 @@ const messages = {
     otherLabel: 'Other',
     uncategorized: 'Uncategorized',
     unnamed: 'Unnamed',
+
+    // Keyword change confirmation
+    keywordChangeTitle: 'Change badge?',
+    keywordChangeBody: 'Hours are counted by scanning your calendar events for the badge label. Changing mid-week means hours already tracked this week under {oldKeyword} may no longer count for this priority — the snapshot at week\'s end will only see {newKeyword} events.',
+    keywordChangeBestTime: 'Best time to change: Monday morning, before any events for the week.',
+    keywordChangeHowTo: 'From Monday, tag your calendar events with {keyword} to track time toward this priority.',
+    keywordChangeConfirm: 'Change now',
+    keywordChangeCancel: 'Keep current badge',
   },
   de: {
     // Loading states
@@ -295,6 +303,14 @@ const messages = {
     otherLabel: 'Sonstige',
     uncategorized: 'Nicht kategorisiert',
     unnamed: 'Unbenannt',
+
+    // Keyword change confirmation
+    keywordChangeTitle: 'Badge ändern?',
+    keywordChangeBody: 'Stunden werden erfasst, indem Kalendertermine nach dem Badge-Label durchsucht werden. Ein Wechsel mitten in der Woche bedeutet, dass bereits erfasste Stunden unter {oldKeyword} möglicherweise nicht mehr für diese Priorität zählen — der wöchentliche Snapshot sieht nur noch {newKeyword}-Termine.',
+    keywordChangeBestTime: 'Bester Zeitpunkt: Montag früh, bevor Termine für die Woche erstellt wurden.',
+    keywordChangeHowTo: 'Ab Montag kannst du Kalendertermine mit {keyword} markieren, um Zeit für diese Priorität zu erfassen.',
+    keywordChangeConfirm: 'Jetzt ändern',
+    keywordChangeCancel: 'Badge beibehalten',
   },
 } as const
 
