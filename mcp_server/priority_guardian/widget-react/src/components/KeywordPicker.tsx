@@ -30,6 +30,7 @@ export function KeywordPicker({
   const [pendingKeyword, setPendingKeyword] = useState<CalendarKeyword | null>(null)
 
   const modalRef = useRef<HTMLDivElement>(null)
+  const cancelButtonRef = useRef<HTMLDivElement>(null)
 
   // Build map of keyword -> priority name (only active priorities)
   const keywordHolders = new Map<string, string>()
@@ -65,11 +66,10 @@ export function KeywordPicker({
     setPendingKeyword(null)
   }
 
-  // Auto-focus "Keep current badge" button on open (safe default)
+  // Auto-focus cancel button on open (safe default)
   useEffect(() => {
     if (pendingKeyword === null) return
-    const cancelButton = modalRef.current?.querySelector<HTMLButtonElement>('[data-color="secondary"]')
-    cancelButton?.focus()
+    cancelButtonRef.current?.querySelector('button')?.focus()
   }, [pendingKeyword])
 
   // ESC key closes modal
@@ -199,18 +199,20 @@ export function KeywordPicker({
 
             {/* How-to line (actionable, slightly more prominent) */}
             <p className="text-sm text-default mb-6">
-              {t('keywordChangeHowTo').replace('{keyword}', pendingKeyword)}
+              {t('keywordChangeHowTo').replace(/{keyword}/g, pendingKeyword)}
             </p>
 
             <div className="flex gap-3 justify-end">
-              <Button
-                color="secondary"
-                variant="ghost"
-                size="sm"
-                onClick={handleCancel}
-              >
-                {t('keywordChangeCancel')}
-              </Button>
+              <div ref={cancelButtonRef}>
+                <Button
+                  color="secondary"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancel}
+                >
+                  {t('keywordChangeCancel')}
+                </Button>
+              </div>
               <Button
                 color="primary"
                 variant="solid"

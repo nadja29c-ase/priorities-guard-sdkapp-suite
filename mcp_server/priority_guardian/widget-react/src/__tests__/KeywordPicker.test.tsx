@@ -6,12 +6,12 @@
  * 2. Dialog trigger: clicking current badge does nothing (no dialog, no call)
  * 3. Dialog content: body contains both old and new keyword labels
  * 4. Dialog content: how-to line contains the new keyword
- * 5. Confirm path: "Change now" calls onKeywordChange with correct pending keyword
- * 6. Confirm path: "Change now" dismisses dialog before onKeywordChange is called
- * 7. Cancel paths: "Keep current badge" does not call onKeywordChange and dismisses dialog
+ * 5. Confirm path: "Change" calls onKeywordChange with correct pending keyword
+ * 6. Confirm path: "Change" dismisses dialog before onKeywordChange is called
+ * 7. Cancel paths: "Cancel" does not call onKeywordChange and dismisses dialog
  * 8. Cancel paths: ESC does not call onKeywordChange and dismisses dialog
  * 9. Cancel paths: Backdrop click does not call onKeywordChange and dismisses dialog
- * 10. Focus & keyboard: "Keep current badge" receives focus on mount
+ * 10. Focus & keyboard: "Cancel" receives focus on mount
  * 11. Focus & keyboard: Tab on last button wraps focus to first
  * 12. Focus & keyboard: Shift+Tab on first button wraps focus to last
  *
@@ -103,10 +103,9 @@ describe('KeywordPicker', () => {
       const p2Button = screen.getByRole('button', { name: /P2/i })
       fireEvent.click(p2Button)
 
-      // Check body text contains both P1 (old) and P2 (new)
-      const bodyText = screen.getByText(/hours already tracked this week under P1/i)
+      // Check body text contains oldKeyword (P1) twice
+      const bodyText = screen.getByText(/Hours already tagged P1 this week will shift to whichever priority now holds P1/i)
       expect(bodyText).toBeInTheDocument()
-      expect(bodyText.textContent).toContain('P2')
     })
 
     it('how-to line contains the new keyword', () => {
@@ -116,8 +115,8 @@ describe('KeywordPicker', () => {
       const p3Button = screen.getByRole('button', { name: /P3/i })
       fireEvent.click(p3Button)
 
-      // Check how-to line contains P3 (new keyword)
-      const howToText = screen.getByText(/tag your calendar events with P3/i)
+      // Check how-to line contains P3 (pending keyword)
+      const howToText = screen.getByText(/Tag calendar events with P3 to track time toward this priority/i)
       expect(howToText).toBeInTheDocument()
     })
   })
@@ -127,7 +126,7 @@ describe('KeywordPicker', () => {
   // ============================================================
 
   describe('Confirm Path', () => {
-    it('"Change now" calls onKeywordChange with the correct pending keyword', async () => {
+    it('"Change" calls onKeywordChange with the correct pending keyword', async () => {
       mockOnKeywordChange.mockResolvedValueOnce(undefined)
       render(<KeywordPicker {...defaultProps} />)
 
@@ -135,8 +134,8 @@ describe('KeywordPicker', () => {
       const p2Button = screen.getByRole('button', { name: /P2/i })
       fireEvent.click(p2Button)
 
-      // Click "Change now"
-      const confirmButton = screen.getByRole('button', { name: /Change now/i })
+      // Click "Change"
+      const confirmButton = screen.getByRole('button', { name: /Change/i })
       fireEvent.click(confirmButton)
 
       await waitFor(() => {
@@ -144,7 +143,7 @@ describe('KeywordPicker', () => {
       })
     })
 
-    it('"Change now" dismisses the dialog before onKeywordChange is called', async () => {
+    it('"Change" dismisses the dialog before onKeywordChange is called', async () => {
       // Make onKeywordChange take some time to resolve
       let resolveChange: () => void
       mockOnKeywordChange.mockImplementationOnce(() => new Promise(resolve => {
@@ -160,8 +159,8 @@ describe('KeywordPicker', () => {
       // Dialog is visible
       expect(screen.getByRole('dialog')).toBeInTheDocument()
 
-      // Click "Change now"
-      const confirmButton = screen.getByRole('button', { name: /Change now/i })
+      // Click "Change"
+      const confirmButton = screen.getByRole('button', { name: /Change/i })
       fireEvent.click(confirmButton)
 
       // Dialog should be dismissed immediately
@@ -179,7 +178,7 @@ describe('KeywordPicker', () => {
   // ============================================================
 
   describe('Cancel Paths', () => {
-    it('"Keep current badge" does not call onKeywordChange and dismisses the dialog', () => {
+    it('"Cancel" does not call onKeywordChange and dismisses the dialog', () => {
       render(<KeywordPicker {...defaultProps} />)
 
       // Click on P2 to open dialog
@@ -189,8 +188,8 @@ describe('KeywordPicker', () => {
       // Dialog is visible
       expect(screen.getByRole('dialog')).toBeInTheDocument()
 
-      // Click "Keep current badge"
-      const cancelButton = screen.getByRole('button', { name: /Keep current badge/i })
+      // Click "Cancel"
+      const cancelButton = screen.getByRole('button', { name: /Cancel/i })
       fireEvent.click(cancelButton)
 
       // Dialog should be dismissed
@@ -247,15 +246,15 @@ describe('KeywordPicker', () => {
   // ============================================================
 
   describe('Focus & Keyboard', () => {
-    it('"Keep current badge" receives focus on mount', () => {
+    it('"Cancel" receives focus on mount', () => {
       render(<KeywordPicker {...defaultProps} />)
 
       // Click on P2 to open dialog
       const p2Button = screen.getByRole('button', { name: /P2/i })
       fireEvent.click(p2Button)
 
-      // "Keep current badge" should have focus
-      const cancelButton = screen.getByRole('button', { name: /Keep current badge/i })
+      // "Cancel" should have focus
+      const cancelButton = screen.getByRole('button', { name: /Cancel/i })
       expect(document.activeElement).toBe(cancelButton)
     })
 
@@ -266,10 +265,10 @@ describe('KeywordPicker', () => {
       const p2Button = screen.getByRole('button', { name: /P2/i })
       fireEvent.click(p2Button)
 
-      const cancelButton = screen.getByRole('button', { name: /Keep current badge/i })
-      const confirmButton = screen.getByRole('button', { name: /Change now/i })
+      const cancelButton = screen.getByRole('button', { name: /Cancel/i })
+      const confirmButton = screen.getByRole('button', { name: /Change/i })
 
-      // Focus the last button (Change now)
+      // Focus the last button (Change)
       confirmButton.focus()
       expect(document.activeElement).toBe(confirmButton)
 
@@ -295,10 +294,10 @@ describe('KeywordPicker', () => {
       const p2Button = screen.getByRole('button', { name: /P2/i })
       fireEvent.click(p2Button)
 
-      const cancelButton = screen.getByRole('button', { name: /Keep current badge/i })
-      const confirmButton = screen.getByRole('button', { name: /Change now/i })
+      const cancelButton = screen.getByRole('button', { name: /Cancel/i })
+      const confirmButton = screen.getByRole('button', { name: /Change/i })
 
-      // Focus the first button (Keep current badge) - it should already be focused on mount
+      // Focus the first button (Cancel) - it should already be focused on mount
       expect(document.activeElement).toBe(cancelButton)
 
       // Create and dispatch Shift+Tab event
