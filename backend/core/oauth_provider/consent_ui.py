@@ -90,12 +90,13 @@ async def consent_endpoint(
     request_logger = logger.bind(correlation_id=correlation_id)
 
     # Rate limit by IP (Increment 20 - security hardening)
-    # 20/min is more restrictive than /authorize (100/min) because
-    # consent is a lower-frequency action (one click per authorization)
+    # Limit raised to 100/min (matching /authorize). Rationale: consent is
+    # user-initiated and a single OAuth flow can generate multiple hits from
+    # the same IP, especially during testing and review.
     ip = get_client_ip(request)
     await check_rate_limit(
         key=f"ratelimit:oauth:consent:ip:{ip}",
-        limit=20,
+        limit=100,
         window=60,
         request=request
     )
