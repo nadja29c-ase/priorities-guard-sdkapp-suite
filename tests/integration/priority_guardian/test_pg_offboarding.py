@@ -287,7 +287,7 @@ class TestDisconnectIntegration:
         assert data["already_disconnected"] is False
         assert data["details"]["google_token_revoked"] is True
         assert data["details"]["google_connection_revoked"] is True
-        assert data["details"]["pg_tokens_revoked"] == 2
+        # pg_tokens_revoked no longer returned - disconnect doesn't revoke PG session tokens
 
         # Verify connection is marked as revoked in DB
         await async_session.refresh(connection)
@@ -323,7 +323,7 @@ class TestDisconnectIntegration:
         assert data["already_disconnected"] is False
         assert data["details"]["google_token_revoked"] is False
         assert data["details"]["google_connection_revoked"] is True
-        assert data["details"]["pg_tokens_revoked"] == 2
+        # pg_tokens_revoked no longer returned - disconnect doesn't revoke PG session tokens
 
         # Verify connection is marked as revoked in DB
         await async_session.refresh(connection)
@@ -497,13 +497,13 @@ class TestDisconnectDBStateVerification:
         assert row[0] is not None, "revoked_at should be set after disconnect"
 
     @pytest.mark.asyncio
-    async def test_disconnect_revokes_pg_oauth_tokens_in_db(
+    async def test_disconnect_does_not_revoke_pg_tokens(
         self,
         client: AsyncClient,
         async_session: AsyncSession,
         pg_user_with_tokens: dict,
     ):
-        """5b. Disconnect revokes PG OAuth tokens (verified via raw SQL)."""
+        """5b. Disconnect does NOT revoke PG OAuth tokens (Inc 63 fix)."""
         from sqlalchemy import text
 
         user = pg_user_with_tokens["user"]
@@ -518,8 +518,8 @@ class TestDisconnectDBStateVerification:
             """),
             {"uid": user.id},
         )
-        unrevoked_count = result.scalar()
-        assert unrevoked_count == 2, "Should have 2 unrevoked PG tokens before disconnect"
+        unrevoked_count_before = result.scalar()
+        assert unrevoked_count_before == 2, "Should have 2 unrevoked PG tokens before disconnect"
 
         with patch(
             "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
@@ -533,7 +533,8 @@ class TestDisconnectDBStateVerification:
 
         assert response.status_code == 200
 
-        # Verify all PG tokens are revoked after disconnect
+        # Verify PG tokens are still NOT revoked after disconnect
+        # (disconnect only revokes Google Calendar access, not PG session)
         result = await async_session.execute(
             text("""
                 SELECT COUNT(*)
@@ -542,20 +543,50 @@ class TestDisconnectDBStateVerification:
             """),
             {"uid": user.id},
         )
-        unrevoked_count = result.scalar()
-        assert unrevoked_count == 0, "All PG tokens should be revoked after disconnect"
+        unrevoked_count_after = result.scalar()
+        assert unrevoked_count_after == 2, "PG tokens should remain unrevoked after disconnect"
 
-        # Verify tokens still exist (just marked as revoked, not deleted)
+    @pytest.mark.asyncio
+    async def test_disconnect_keeps_session_valid(
+        self,
+        client: AsyncClient,
+        async_session: AsyncSession,
+        pg_user_with_tokens: dict,
+    ):
+        """5b2. After disconnect, user's active access token is still valid."""
+        from sqlalchemy import text
+
+        user = pg_user_with_tokens["user"]
+        tokens = pg_user_with_tokens["tokens"]
+        user_id = str(user.id)
+
+        # Get the first token's jti
+        token_jti = tokens[0].jti
+
+        with patch(
+            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            new_callable=AsyncMock,
+            return_value={"success": True, "error": None},
+        ):
+            response = await client.post(
+                "/api/priority-guardian/disconnect",
+                headers={"X-User-ID": user_id},
+            )
+
+        assert response.status_code == 200
+
+        # Verify the specific token is still valid (not revoked)
         result = await async_session.execute(
             text("""
-                SELECT COUNT(*)
+                SELECT revoked
                 FROM oauth_access_tokens
-                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = true
+                WHERE jti = :jti
             """),
-            {"uid": user.id},
+            {"jti": token_jti},
         )
-        revoked_count = result.scalar()
-        assert revoked_count == 2, "Tokens should be marked revoked, not deleted"
+        row = result.fetchone()
+        assert row is not None, "Token should still exist"
+        assert row[0] is False, "Token should NOT be revoked after disconnect"
 
     @pytest.mark.asyncio
     async def test_disconnect_preserves_priority_data_in_db(
@@ -736,16 +767,6 @@ class TestDisconnectDBStateVerification:
         )
         revoked_at_after_first = result.fetchone()[0]
 
-        result = await async_session.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM oauth_access_tokens
-                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = true
-            """),
-            {"uid": user.id},
-        )
-        revoked_tokens_after_first = result.scalar()
-
         # Second disconnect
         with patch(
             "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
@@ -771,18 +792,6 @@ class TestDisconnectDBStateVerification:
         )
         revoked_at_after_second = result.fetchone()[0]
 
-        result = await async_session.execute(
-            text("""
-                SELECT COUNT(*)
-                FROM oauth_access_tokens
-                WHERE user_id = :uid AND 'pg.access' = ANY(scope) AND revoked = true
-            """),
-            {"uid": user.id},
-        )
-        revoked_tokens_after_second = result.scalar()
-
         # DB state should be identical
         assert revoked_at_after_first == revoked_at_after_second, \
             "revoked_at should not change on second disconnect"
-        assert revoked_tokens_after_first == revoked_tokens_after_second, \
-            "Token revocation count should not change on second disconnect"

@@ -17,14 +17,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from backend.apps.priority_guardian.dependencies import verify_internal_call
-from sqlalchemy import select, update, any_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.database import get_db
 from backend.core.encryption import decrypt_token
 from backend.core.google_oauth import revoke_google_token
 from backend.core.models import CoreConnection, CoreUser
-from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizationCode
 
 logger = structlog.get_logger(__name__)
 
@@ -51,7 +50,9 @@ async def disconnect(
     Just:
     1. Revoke Google OAuth token at Google (best-effort)
     2. Mark Google connection as revoked in core_connections
-    3. Mark PG OAuth tokens as revoked
+
+    Note: PG OAuth session tokens are NOT revoked here. Disconnect only revokes
+    Google Calendar access. PG token revocation belongs in delete-account flows.
 
     Idempotent: calling twice returns 200 (already disconnected).
 
@@ -75,7 +76,6 @@ async def disconnect(
         details = {
             "google_token_revoked": False,
             "google_connection_revoked": False,
-            "pg_tokens_revoked": 0,
         }
 
         # 1. Load Google connection
@@ -136,28 +136,6 @@ async def disconnect(
             details["google_connection_revoked"] = True
             await session.flush()
 
-        # 2. Mark PG OAuth tokens as revoked (pg.* scoped tokens only)
-        try:
-            stmt = (
-                update(OAuthAccessToken)
-                .where(
-                    OAuthAccessToken.user_id == user_id,
-                    OAuthAccessToken.revoked == False,  # noqa: E712
-                    "pg.access" == any_(OAuthAccessToken.scope),  # PG-scoped
-                )
-                .values(revoked=True, revoked_at=now)
-            )
-            result = await session.execute(stmt)
-            details["pg_tokens_revoked"] = result.rowcount
-
-        except Exception as e:
-            logger.error(
-                "pg_offboarding.token_revocation_error",
-                user_id=str(user_id),
-                error=str(e),
-            )
-            # Continue - non-blocking
-
         await session.commit()
 
         logger.info(
@@ -165,7 +143,6 @@ async def disconnect(
             user_id=str(user_id),
             google_token_revoked=details["google_token_revoked"],
             google_connection_revoked=details["google_connection_revoked"],
-            pg_tokens_revoked=details["pg_tokens_revoked"],
         )
 
         return {
