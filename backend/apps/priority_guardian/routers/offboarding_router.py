@@ -88,7 +88,6 @@ async def disconnect(
 
         if connection is None:
             logger.info("pg_offboarding.no_google_connection", user_id=str(user_id))
-            # Still mark tokens as revoked even if no connection
         elif connection.revoked_at is not None:
             logger.info(
                 "pg_offboarding.already_disconnected",
