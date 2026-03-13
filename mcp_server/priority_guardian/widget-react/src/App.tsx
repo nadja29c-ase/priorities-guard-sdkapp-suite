@@ -170,7 +170,7 @@ function App() {
               ...p,
               weeklyHourActual: p.weeklyHourActual ?? existingById[p.id]?.weeklyHourActual ?? null,
             })),
-          }
+          } as DashboardData
         }
         return parsed
       })
@@ -212,7 +212,7 @@ function App() {
               ...p,
               weeklyHourActual: p.weeklyHourActual ?? existingById[p.id]?.weeklyHourActual ?? null,
             })),
-          }
+          } as DashboardData
         }
         return content.data!
       })
