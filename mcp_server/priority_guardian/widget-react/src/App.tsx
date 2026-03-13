@@ -70,6 +70,9 @@ function App() {
   // Ref to block set_globals after CRUD — iOS fires with new toolOutput reference (Inc 59)
   const hasCrudDataRef = useRef(false)
 
+  // Tracks previous isAddingPriority for transition detection (iOS scroll fix, Inc 66)
+  const wasAddingRef = useRef(false)
+
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
     requestAnimationFrame(() => {
@@ -617,12 +620,32 @@ function App() {
     }
   }, [loadError, isInitialized, notifyHeight])
 
-  // Notify height when add form state changes
+  // Notify height when add form closes — immediate is safe (height shrinks, no scroll risk).
+  // wasAddingRef guards against firing on unrelated re-renders where isAddingPriority === false.
   useEffect(() => {
-    if (isInitialized) {
+    if (!isInitialized) return
+    if (!isAddingPriority && wasAddingRef.current) {
       notifyHeight()
     }
+    wasAddingRef.current = isAddingPriority
   }, [isAddingPriority, isInitialized, notifyHeight])
+
+  // Notify height when add form opens — mobile only, delayed (Inc 66).
+  // On iOS the host may react to intrinsic height changes during the same layout cycle,
+  // scrolling the conversation before the user can see the form.
+  // Delay gives the host time to settle before receiving the height notification.
+  // Desktop: no delay needed, this behaviour does not occur there.
+  useEffect(() => {
+    if (!isInitialized) return
+    if (!isAddingPriority) return
+    if (!isMobile) return
+
+    const id = setTimeout(() => {
+      notifyHeight()
+    }, 300)
+
+    return () => clearTimeout(id)
+  }, [isAddingPriority, isInitialized, isMobile, notifyHeight])
 
   // Persist edit state to widgetState (survives widget re-renders)
   useEffect(() => {
