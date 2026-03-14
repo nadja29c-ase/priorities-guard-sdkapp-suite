@@ -141,7 +141,7 @@ const messages = {
     totalHours: 'total',
     hoursUnit: 'hours',
     pieChartAria: 'Pie chart showing {hours} total hours across {n} categories',
-    breakdownCta: 'Ask ChatGPT to break down any category to see where the time went.',
+    breakdownCta: 'Ask the assistant to break down any category to see where the time went.',
     hourRingAria: '{hours} of {target} hours this week',
     badgeLabel: 'Badge:',
     swapWith: 'Swap with {name}',
@@ -169,7 +169,7 @@ const messages = {
 
     // Empty states
     noPriorities: 'Noch keine Prioritäten vorhanden',
-    noPrioritiesHint: 'Bitte ChatGPT, dir beim Einrichten deiner Prioritäten zu helfen',
+    noPrioritiesHint: 'Bitte den Assistenten, dir beim Einrichten deiner Prioritäten zu helfen',
 
     // Add priority flow
     addNewPriority: 'Neue Priorität hinzufügen',
@@ -297,7 +297,7 @@ const messages = {
     totalHours: 'gesamt',
     hoursUnit: 'Stunden',
     pieChartAria: 'Kreisdiagramm mit {hours} Gesamtstunden in {n} Kategorien',
-    breakdownCta: 'Bitte ChatGPT, eine Kategorie aufzuschlüsseln, um zu sehen, wie die Zeit genutzt wurde.',
+    breakdownCta: 'Bitte den Assistenten, eine Kategorie aufzuschlüsseln, um zu sehen, wie die Zeit genutzt wurde.',
     hourRingAria: '{hours} von {target} Stunden diese Woche',
     badgeLabel: 'Schlagwort:',
     swapWith: 'Tauschen mit {name}',
@@ -342,10 +342,28 @@ export function getLocale(): Locale {
 /**
  * Get a translated string by key.
  * Falls back to English if key is missing in current locale.
+ * Supports interpolation: t('dDaysLeft', { n: 5 }) → "5 days left"
  */
-export function t(key: TranslationKey): string {
+export function t(key: TranslationKey, vars?: Record<string, string | number>): string {
   const locale = getLocale()
-  return messages[locale][key] ?? messages['en'][key]
+  let str: string = messages[locale][key] ?? messages['en'][key]
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      str = str.replaceAll(`{${k}}`, String(v))
+    }
+  }
+  return str
 }
 
 export type { TranslationKey }
+
+// Dev-mode parity check: warn if DE is missing any EN keys
+if (import.meta.env.DEV) {
+  const enKeys = Object.keys(messages.en) as TranslationKey[]
+  const deKeys = new Set(Object.keys(messages.de))
+  for (const k of enKeys) {
+    if (!deKeys.has(k)) {
+      console.warn(`[i18n] Missing DE key: "${k}"`)
+    }
+  }
+}
