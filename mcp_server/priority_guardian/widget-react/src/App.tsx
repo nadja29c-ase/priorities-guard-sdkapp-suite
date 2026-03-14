@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-// Build trigger: 2026-03-14T12:00
 
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
@@ -94,49 +93,6 @@ function App() {
       window.openai?.notifyIntrinsicHeight?.()
     })
   }, [])
-
-  // Load data from window.openai.toolOutput (first load only)
-  const loadData = useCallback(() => {
-    hasCrudDataRef.current = false  // Reset on load/remount (Inc 59)
-    if (isInitializedRef.current) return
-
-    const t = window.openai?.toolOutput
-    if (!t) return // No data yet, wait for event
-
-    const { data: parsed, error } = getToolOutput()
-
-    if (error) {
-      setLoadError(error)
-      console.error('PG widget load error:', error)
-    } else {
-      setLoadError(null)
-    }
-
-    setData(parsed)
-
-    // Set timeAllocation from get_priorities response
-    // Only DashboardData has timeAllocation; PieChartData doesn't
-    if (parsed && isDashboardData(parsed)) {
-      if (parsed.timeAllocation !== undefined) {
-        setTimeAllocation(parsed.timeAllocation)
-      } else if (
-        parsed.timeAllocation === undefined &&
-        parsed.google_connected === false
-      ) {
-        // Clear timeAllocation when disconnected (Inc 65)
-        setTimeAllocation(undefined)
-      }
-    }
-
-    setIsInitialized(true)
-    isInitializedRef.current = true
-
-    // Track last toolOutput reference for subsequent update detection
-    lastToolOutputRef.current = window.openai?.toolOutput
-
-    // Notify host of new content height
-    notifyHeight()
-  }, [notifyHeight])
 
   // Handle subsequent toolOutput updates after initial load
   // Called on every openai:set_globals event after widget is initialized
@@ -249,6 +205,71 @@ function App() {
       hasCrudDataRef.current = true
     }
   }, [notifyHeight])
+
+  // Backfill timeAllocation when widget mounts with CRUD response lacking it (Inc 73)
+  // Fire-and-forget: silently fetches get_priorities to restore progress bar
+  const backfillTimeAllocation = useCallback(async () => {
+    if (!window.openai?.callTool) return
+    try {
+      const result = await window.openai.callTool<{ data?: ToolOutputData }>('get_priorities', {})
+      const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
+      updateDataFromResponse(content)
+    } catch {
+      // Silently ignore — user can use refresh button as manual recovery
+    }
+  }, [updateDataFromResponse])
+
+  // Load data from window.openai.toolOutput (first load only)
+  const loadData = useCallback(() => {
+    hasCrudDataRef.current = false  // Reset on load/remount (Inc 59)
+    if (isInitializedRef.current) return
+
+    const t = window.openai?.toolOutput
+    if (!t) return // No data yet, wait for event
+
+    const { data: parsed, error } = getToolOutput()
+
+    if (error) {
+      setLoadError(error)
+      console.error('PG widget load error:', error)
+    } else {
+      setLoadError(null)
+    }
+
+    setData(parsed)
+
+    // Set timeAllocation from get_priorities response
+    // Only DashboardData has timeAllocation; PieChartData doesn't
+    if (parsed && isDashboardData(parsed)) {
+      if (parsed.timeAllocation !== undefined) {
+        setTimeAllocation(parsed.timeAllocation)
+      } else if (
+        parsed.timeAllocation === undefined &&
+        parsed.google_connected === false
+      ) {
+        // Clear timeAllocation when disconnected (Inc 65)
+        setTimeAllocation(undefined)
+      } else if (
+        parsed.timeAllocation === undefined &&
+        parsed.google_connected === true &&
+        parsed.priorities.length > 0 &&
+        window.openai?.callTool
+      ) {
+        // Backfill timeAllocation when missing but Google connected (Inc 73)
+        // Fire-and-forget — does not block loadData
+        backfillTimeAllocation()
+      }
+    }
+
+    setIsInitialized(true)
+    isInitializedRef.current = true
+
+    // Track last toolOutput reference for subsequent update detection
+    lastToolOutputRef.current = window.openai?.toolOutput
+
+    // Notify host of new content height
+    notifyHeight()
+  }, [notifyHeight, backfillTimeAllocation])
 
   // Refresh data by calling get_priorities
   const refreshData = useCallback(async () => {
