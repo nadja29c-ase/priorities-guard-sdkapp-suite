@@ -10,7 +10,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from backend.core.database import get_db
 from backend.core.logging import get_logger, mask_client_id
@@ -227,6 +227,15 @@ async def consent_endpoint(
         params["state"] = state
 
     success_url = f"{redirect_uri}?{urlencode(params)}"
+    request_logger.info(
+        "oauth.consent.redirect_prepared",
+        user_id=user_id,
+        auth_context_id=auth_context_id,
+        redirect_host=urlparse(redirect_uri).netloc,
+        redirect_path=urlparse(redirect_uri).path,
+        state_present=state is not None,
+        code_prefix=authorization_code[:8],
+    )
     response = RedirectResponse(url=success_url, status_code=302)
 
     # Set session cookie on response
