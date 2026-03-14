@@ -13,6 +13,7 @@ import { DeadlineCard } from '../components/DeadlineCard'
 import { FlexibleCard } from '../components/FlexibleCard'
 import type { Priority } from '../types'
 import { setMockLocale } from '../test/setup'
+import { t } from '../i18n'
 
 // Mock handlers
 const mockHandlers = {
@@ -60,6 +61,7 @@ const flexiblePriority: Priority = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  setMockLocale('en-US')
 })
 
 describe('DeadlineCard UI Compliance', () => {
@@ -260,7 +262,7 @@ describe('FlexibleCard UI Compliance', () => {
     )
 
     // Find the hourglass icon (in the "Tracking in progress" section)
-    const trackingText = screen.getByText(/Tracking in progress/)
+    const trackingText = screen.getByText(t('trackingInProgress'))
     expect(trackingText).toBeInTheDocument()
     const container = trackingText.closest('div')
     const hourglassSvg = container?.querySelector('svg')
@@ -405,7 +407,7 @@ describe('DeadlineCard Keyboard Accessibility', () => {
 
   it('edit pencil button aria-label contains priority name in English', () => {
     render(<DeadlineCard priority={deadlinePriority} priorities={[deadlinePriority]} isEditing={false} {...mockHandlers} />)
-    const editBtn = screen.getByRole('button', { name: new RegExp(`Edit priority: ${deadlinePriority.name}`, 'i') })
+    const editBtn = screen.getByRole('button', { name: new RegExp(t('editPriority').replace('{name}', deadlinePriority.name), 'i') })
     expect(editBtn).toBeInTheDocument()
   })
 
@@ -495,7 +497,7 @@ describe('FlexibleCard Keyboard Accessibility', () => {
 
   it('edit pencil button aria-label contains priority name in English', () => {
     render(<FlexibleCard priority={flexiblePriority} priorities={[flexiblePriority]} isEditing={false} {...mockHandlers} />)
-    const editBtn = screen.getByRole('button', { name: new RegExp(`Edit priority: ${flexiblePriority.name}`, 'i') })
+    const editBtn = screen.getByRole('button', { name: new RegExp(t('editPriority').replace('{name}', flexiblePriority.name), 'i') })
     expect(editBtn).toBeInTheDocument()
   })
 
