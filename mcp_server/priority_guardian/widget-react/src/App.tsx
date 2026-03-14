@@ -83,6 +83,10 @@ function App() {
   // Used to reverse the fullscreen on form close without affecting user-initiated fullscreen.
   const enteredFullscreenForAddRef = useRef(false)
 
+  // Tracks whether fullscreen was entered specifically for editing (mobile only). (Inc 71)
+  const enteredFullscreenForEditRef = useRef(false)
+  const wasEditingRef = useRef<string | null>(null)
+
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
     requestAnimationFrame(() => {
@@ -663,6 +667,25 @@ function App() {
     }
   }, [isAddingPriority, isInitialized, isMobile, handleMinimizeToInline])
 
+  // On mobile: when edit mode closes, return to inline — only if fullscreen was entered
+  // specifically for editing. Does not collapse user-initiated fullscreen. (Inc 71)
+  useEffect(() => {
+    if (!isInitialized) return
+
+    // Only act on non-null → null transition
+    if (wasEditingRef.current === null || editingPriorityId !== null) {
+      wasEditingRef.current = editingPriorityId
+      return
+    }
+
+    wasEditingRef.current = editingPriorityId
+
+    if (isMobile && enteredFullscreenForEditRef.current) {
+      enteredFullscreenForEditRef.current = false
+      handleMinimizeToInline()
+    }
+  }, [editingPriorityId, isInitialized, isMobile, handleMinimizeToInline])
+
   // Persist edit state to widgetState (survives widget re-renders)
   useEffect(() => {
     if (window.openai?.setWidgetState) {
@@ -771,7 +794,13 @@ function App() {
               isEditing={editingPriorityId === priority.id}
               canStartEdit={canEdit}
               defaultSectionsExpanded={!isInline}
-              onStartEdit={() => setEditingPriorityId(priority.id)}
+              onStartEdit={() => {
+                if (isMobile && displayMode !== 'fullscreen') {
+                  enteredFullscreenForEditRef.current = true
+                  handleExpandToFullscreen()
+                }
+                setEditingPriorityId(priority.id)
+              }}
               onCancelEdit={() => setEditingPriorityId(null)}
               onSavePriority={handleUpdatePriority}
               onDeletePriority={handleDeletePriority}
