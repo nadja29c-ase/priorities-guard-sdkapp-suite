@@ -199,11 +199,13 @@ describe('i18n', () => {
         .toBe('Tauschen mit Ship v1.0')
     })
 
-    it('returns breakdownCta as non-empty string in both locales', () => {
+    it('returns breakdownCta without "ChatGPT" in both locales', () => {
       window.openai = { locale: 'en-US' } as typeof window.openai
+      expect(t('breakdownCta')).not.toContain('ChatGPT')
       expect(t('breakdownCta').length).toBeGreaterThan(0)
 
       window.openai = { locale: 'de-DE' } as typeof window.openai
+      expect(t('breakdownCta')).not.toContain('ChatGPT')
       expect(t('breakdownCta').length).toBeGreaterThan(0)
     })
 
