@@ -12,16 +12,22 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { HourRing } from '../components/HourRing'
 import { FlexibleCard } from '../components/FlexibleCard'
 import type { Priority } from '../types'
+import { setMockLocale } from '../test/setup'
+import { t } from '../i18n'
 
 // Ring geometry constants (must match component)
 const RADIUS = 26
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS  // ~163.36
 
 describe('HourRing', () => {
+  beforeEach(() => {
+    setMockLocale('en-US')
+  })
+
   describe('Rendering', () => {
     it('renders SVG with track and progress circles', () => {
       render(<HourRing actual={2.5} target={5} keyword="P1" />)
@@ -247,6 +253,7 @@ describe('FlexibleCard + HourRing Integration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    setMockLocale('en-US')
   })
 
   it('renders HourRing when weeklyHourTarget is set', () => {
@@ -349,7 +356,7 @@ describe('FlexibleCard + HourRing Integration', () => {
     expect(svg).toBeInTheDocument()
 
     // Priority name area is clickable to enter edit mode (title uses t('clickToEdit'))
-    const nameArea = document.querySelector('h3[title="click to edit"]')
+    const nameArea = document.querySelector(`h3[title="${t('clickToEdit')}"]`)
     expect(nameArea).toBeInTheDocument()
   })
 
@@ -373,6 +380,6 @@ describe('FlexibleCard + HourRing Integration', () => {
     expect(svg).not.toBeInTheDocument()
 
     // Instead, edit fields should be visible
-    expect(screen.getByLabelText(/weekly hour target/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(t('weeklyHourTarget'))).toBeInTheDocument()
   })
 })
