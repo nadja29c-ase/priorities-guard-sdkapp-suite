@@ -208,16 +208,20 @@ function App() {
 
   // Backfill timeAllocation when widget mounts with CRUD response lacking it (Inc 73)
   // Fire-and-forget: silently fetches get_priorities to restore progress bar
+  // Only extracts timeAllocation — does NOT use updateDataFromResponse (which sets hasCrudDataRef)
   const backfillTimeAllocation = useCallback(async () => {
     if (!window.openai?.callTool) return
     try {
       const result = await window.openai.callTool<{ data?: ToolOutputData }>('get_priorities', {})
       const content = extractStructuredContent<{ data?: ToolOutputData }>(result)
-      updateDataFromResponse(content)
+      // Only extract timeAllocation — priorities already set from create_priority response
+      if (content?.data && isDashboardData(content.data) && content.data.timeAllocation !== undefined) {
+        setTimeAllocation(content.data.timeAllocation)
+      }
     } catch {
       // Silently ignore — user can use refresh button as manual recovery
     }
-  }, [updateDataFromResponse])
+  }, [])
 
   // Load data from window.openai.toolOutput (first load only)
   const loadData = useCallback(() => {
