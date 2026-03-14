@@ -136,6 +136,7 @@ export function FlexibleCard({
       else if (field === 'weekly_hour_target') setEditHourTarget(priority.weeklyHourTarget?.toString() || '')
       else if (field === 'checkpoint_date') setEditCheckpointDate(priority.checkpointDate || '')
 
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
@@ -174,6 +175,7 @@ export function FlexibleCard({
       const errorMsg = e instanceof Error ? e.message : t('couldntSave')
       setError(errorMsg)
       setShowDeleteConfirm(false)
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
@@ -212,7 +214,7 @@ export function FlexibleCard({
     <article
       ref={cardRef}
       className={`rounded-xl p-5 bg-surface border border-default ${borderColorClass}`}
-      aria-label={`Priority ${kw}: ${priority.name}`}
+      aria-label={priority.name}
     >
       {/* V7 Header: Badge + Name + Streak pill + Edit/Trash */}
       <div className="flex items-center gap-2 mb-3">
@@ -265,8 +267,8 @@ export function FlexibleCard({
           type="button"
           onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
           className="p-1 rounded hover:bg-danger-soft-alpha transition-colors"
-          title="Delete priority"
-          aria-label={`Delete priority: ${priority.name}`}
+          title={t('delete')}
+          aria-label={t('deleteItem').replace('{name}', priority.name)}
         >
           <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
             <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />

@@ -69,7 +69,9 @@ export function DeadlineCard({
   const iconStrokeColor = ICON_STROKE_COLORS[kw] ?? ICON_STROKE_COLORS.P1
 
   // Format deadline date for banner (e.g., "Mar 15, 2026")
-  const locale = normalizeLocale(window.openai?.locale || 'en-US')
+  const locale = normalizeLocale(
+    (typeof window !== 'undefined' && window.openai?.locale) || 'en-US'
+  )
   const deadlineDate = priority.deadline
     ? new Date(priority.deadline + 'T00:00:00').toLocaleDateString(locale, {
         month: 'short',
@@ -132,6 +134,7 @@ export function DeadlineCard({
       } else {
         setEditDeadline(priority.deadline || '')
       }
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
@@ -161,6 +164,7 @@ export function DeadlineCard({
       const errorMsg = e instanceof Error ? e.message : t('couldntSave')
       setError(errorMsg)
       setShowDeleteConfirm(false)
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
       errorTimeoutRef.current = setTimeout(() => {
         setError(null)
       }, 3000)
@@ -199,7 +203,7 @@ export function DeadlineCard({
     <article
       ref={cardRef}
       className={`rounded-xl overflow-hidden bg-surface border border-default ${borderColorClass}`}
-      aria-label={`Priority ${kw}: ${priority.name}`}
+      aria-label={priority.name}
     >
       {/* Deadline banner - uses neutral background per UI guideline #41 */}
       <div data-testid="deadline-banner" className="px-5 py-2.5 flex items-center justify-between bg-surface-secondary">
@@ -278,8 +282,8 @@ export function DeadlineCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true); }}
             className="p-1 rounded hover:bg-danger-soft-alpha transition-colors"
-            title="Delete priority"
-            aria-label={`Delete priority: ${priority.name}`}
+            title={t('delete')}
+            aria-label={t('deleteItem').replace('{name}', priority.name)}
           >
             <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />

@@ -39,6 +39,7 @@ export interface ToolOutputResult {
  */
 export function getToolOutput(): ToolOutputResult {
   try {
+    if (typeof window === 'undefined') return { data: null, error: null }
     const t = window.openai?.toolOutput
     if (!t) return { data: null, error: null }
 
@@ -112,7 +113,7 @@ export function normalizeLocale(raw: string): string {
  */
 export function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
-  const rawLocale = window.openai?.locale ?? 'en-US'
+  const rawLocale = (typeof window !== 'undefined' && window.openai?.locale) || 'en-US'
   const locale = normalizeLocale(rawLocale)
   return date.toLocaleDateString(locale, {
     month: 'short',
