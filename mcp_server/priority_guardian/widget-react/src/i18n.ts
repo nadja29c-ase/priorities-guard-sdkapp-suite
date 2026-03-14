@@ -43,6 +43,9 @@ const messages = {
     delete: 'Delete',
     deleting: 'Deleting…',
     clickToEdit: 'click to edit',
+    edit: 'Edit',
+    editPriority: 'Edit priority: {name}',
+    hourTargetPlaceholder: 'e.g., 10',
 
     // Connection status
     disconnect: 'Disconnect',
@@ -196,6 +199,9 @@ const messages = {
     delete: 'Löschen',
     deleting: 'Wird gelöscht…',
     clickToEdit: 'zum Bearbeiten klicken',
+    edit: 'Bearbeiten',
+    editPriority: 'Priorität bearbeiten: {name}',
+    hourTargetPlaceholder: 'z. B. 10',
 
     // Connection status
     disconnect: 'Verbindung trennen',

@@ -348,8 +348,8 @@ describe('FlexibleCard + HourRing Integration', () => {
     const svg = document.querySelector('svg[role="img"]')
     expect(svg).toBeInTheDocument()
 
-    // Priority name area is clickable to enter edit mode (title="Click to edit" is on h3)
-    const nameArea = document.querySelector('h3[title="Click to edit"]')
+    // Priority name area is clickable to enter edit mode (title uses t('clickToEdit'))
+    const nameArea = document.querySelector('h3[title="click to edit"]')
     expect(nameArea).toBeInTheDocument()
   })
 

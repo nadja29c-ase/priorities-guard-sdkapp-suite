@@ -258,7 +258,7 @@ export function DeadlineCard({
               tabIndex={0}
               role="button"
               aria-label={`${priority.name} — ${t('clickToEdit')}`}
-              title="Click to edit"
+              title={t('clickToEdit')}
             >
               {priority.name}
             </h3>
@@ -267,8 +267,8 @@ export function DeadlineCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
             className="p-1 rounded hover:bg-surface-secondary transition-colors"
-            title="Edit"
-            aria-label={`Edit priority: ${priority.name}`}
+            title={t('edit')}
+            aria-label={t('editPriority').replace('{name}', priority.name)}
           >
             <svg className="w-3.5 h-3.5 text-tertiary" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />

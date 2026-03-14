@@ -143,6 +143,12 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                   setName(e.target.value)
                   if (error) setError(null)
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && name.trim()) {
+                    e.preventDefault()
+                    handleNameNext()
+                  }
+                }}
                 maxLength={100}
                 placeholder={t('namePlaceholder')}
                 className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
@@ -264,6 +270,12 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                     setDeadline(e.target.value)
                     if (error) setError(null)
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleSubmit()
+                    }
+                  }}
                   disabled={isSubmitting}
                   min={minDate}
                   className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
@@ -286,10 +298,16 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                       setWeeklyHourTarget(e.target.value)
                       if (error) setError(null)
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        handleSubmit()
+                      }
+                    }}
                     disabled={isSubmitting}
                     min="0.5"
                     step="0.5"
-                    placeholder="e.g., 10"
+                    placeholder={t('hourTargetPlaceholder')}
                     className="w-full text-sm text-default bg-surface border border-default rounded-md px-3 py-2 focus:outline-none focus:border-tertiary"
                   />
                 </div>

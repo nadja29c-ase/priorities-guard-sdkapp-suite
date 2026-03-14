@@ -206,5 +206,26 @@ describe('i18n', () => {
       window.openai = { locale: 'de-DE' } as typeof window.openai
       expect(t('breakdownCta').length).toBeGreaterThan(0)
     })
+
+    it('returns edit in both locales', () => {
+      window.openai = { locale: 'en-US' } as typeof window.openai
+      expect(t('edit')).toBe('Edit')
+      window.openai = { locale: 'de-DE' } as typeof window.openai
+      expect(t('edit')).toBe('Bearbeiten')
+    })
+
+    it('returns editPriority with interpolation in both locales', () => {
+      window.openai = { locale: 'en-US' } as typeof window.openai
+      expect(t('editPriority').replace('{name}', 'Ship v1.0')).toBe('Edit priority: Ship v1.0')
+      window.openai = { locale: 'de-DE' } as typeof window.openai
+      expect(t('editPriority').replace('{name}', 'Ship v1.0')).toBe('Priorität bearbeiten: Ship v1.0')
+    })
+
+    it('returns hourTargetPlaceholder in both locales', () => {
+      window.openai = { locale: 'en-US' } as typeof window.openai
+      expect(t('hourTargetPlaceholder')).toBe('e.g., 10')
+      window.openai = { locale: 'de-DE' } as typeof window.openai
+      expect(t('hourTargetPlaceholder')).toBe('z. B. 10')
+    })
   })
 })

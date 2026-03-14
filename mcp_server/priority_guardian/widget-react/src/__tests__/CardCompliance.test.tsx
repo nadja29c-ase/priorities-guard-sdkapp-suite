@@ -12,6 +12,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { DeadlineCard } from '../components/DeadlineCard'
 import { FlexibleCard } from '../components/FlexibleCard'
 import type { Priority } from '../types'
+import { setMockLocale } from '../test/setup'
 
 // Mock handlers
 const mockHandlers = {
@@ -401,6 +402,19 @@ describe('DeadlineCard Keyboard Accessibility', () => {
     fireEvent.keyDown(h3, { key: ' ' })
     expect(mockHandlers.onStartEdit).toHaveBeenCalled()
   })
+
+  it('edit pencil button aria-label contains priority name in English', () => {
+    render(<DeadlineCard priority={deadlinePriority} priorities={[deadlinePriority]} isEditing={false} {...mockHandlers} />)
+    const editBtn = screen.getByRole('button', { name: new RegExp(`Edit priority: ${deadlinePriority.name}`, 'i') })
+    expect(editBtn).toBeInTheDocument()
+  })
+
+  it('edit pencil button aria-label renders in German', () => {
+    setMockLocale('de-DE')
+    render(<DeadlineCard priority={deadlinePriority} priorities={[deadlinePriority]} isEditing={false} {...mockHandlers} />)
+    const editBtn = screen.getByRole('button', { name: new RegExp(`Priorität bearbeiten: ${deadlinePriority.name}`, 'i') })
+    expect(editBtn).toBeInTheDocument()
+  })
 })
 
 describe('FlexibleCard Keyboard Accessibility', () => {
@@ -477,5 +491,18 @@ describe('FlexibleCard Keyboard Accessibility', () => {
     const h3 = screen.getByRole('button', { name: /click to edit/i })
     fireEvent.keyDown(h3, { key: ' ' })
     expect(mockHandlers.onStartEdit).toHaveBeenCalled()
+  })
+
+  it('edit pencil button aria-label contains priority name in English', () => {
+    render(<FlexibleCard priority={flexiblePriority} priorities={[flexiblePriority]} isEditing={false} {...mockHandlers} />)
+    const editBtn = screen.getByRole('button', { name: new RegExp(`Edit priority: ${flexiblePriority.name}`, 'i') })
+    expect(editBtn).toBeInTheDocument()
+  })
+
+  it('edit pencil button aria-label renders in German', () => {
+    setMockLocale('de-DE')
+    render(<FlexibleCard priority={flexiblePriority} priorities={[flexiblePriority]} isEditing={false} {...mockHandlers} />)
+    const editBtn = screen.getByRole('button', { name: new RegExp(`Priorität bearbeiten: ${flexiblePriority.name}`, 'i') })
+    expect(editBtn).toBeInTheDocument()
   })
 })
