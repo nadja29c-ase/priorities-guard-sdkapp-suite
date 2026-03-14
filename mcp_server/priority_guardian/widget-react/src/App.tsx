@@ -87,6 +87,9 @@ function App() {
   const enteredFullscreenForEditRef = useRef(false)
   const wasEditingRef = useRef<string | null>(null)
 
+  // Guard against double backfillTimeAllocation calls (race between mount and set_globals)
+  const backfillCalledRef = useRef(false)
+
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
     requestAnimationFrame(() => {
@@ -226,6 +229,7 @@ function App() {
   // Load data from window.openai.toolOutput (first load only)
   const loadData = useCallback(() => {
     hasCrudDataRef.current = false  // Reset on load/remount (Inc 59)
+    backfillCalledRef.current = false  // Reset backfill guard
     if (isInitializedRef.current) return
 
     const t = window.openai?.toolOutput
@@ -257,10 +261,12 @@ function App() {
         parsed.timeAllocation === undefined &&
         parsed.google_connected === true &&
         parsed.priorities.length > 0 &&
-        window.openai?.callTool
+        window.openai?.callTool &&
+        !backfillCalledRef.current  // Guard against double call (race between mount and set_globals)
       ) {
         // Backfill timeAllocation when missing but Google connected (Inc 73)
         // Fire-and-forget — does not block loadData
+        backfillCalledRef.current = true
         backfillTimeAllocation()
       }
     }
