@@ -242,6 +242,12 @@ async def consent_endpoint(
         success_url_prefix=success_url[:80],
     )
     response = RedirectResponse(url=success_url, status_code=302)
+    request_logger.info(
+        "oauth.consent.redirect_sent",
+        status_code=302,
+        location=success_url[:80],
+        has_set_cookie=True,
+    )
 
     # Set session cookie on response
     set_session_cookie(response, session_token)
