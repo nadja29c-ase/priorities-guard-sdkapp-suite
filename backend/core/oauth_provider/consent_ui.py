@@ -235,6 +235,11 @@ async def consent_endpoint(
         redirect_path=urlparse(redirect_uri).path,
         state_present=state is not None,
         code_prefix=authorization_code[:8],
+        has_session_cookie=True,
+    )
+    request_logger.info(
+        "oauth.consent.redirect_url",
+        success_url_prefix=success_url[:80],
     )
     response = RedirectResponse(url=success_url, status_code=302)
 
