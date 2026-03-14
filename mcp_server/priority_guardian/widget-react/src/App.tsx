@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+// Build trigger: 2026-03-14T12:00
 
 import type { Priority, ToolOutputData, WidgetState, TimeAllocation, CalendarKeyword, DashboardData } from './types'
 import { isPieChartData, isDashboardData } from './types'
@@ -959,3 +960,4 @@ function EmptyState() {
 }
 
 export default App
+
