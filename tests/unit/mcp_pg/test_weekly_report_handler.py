@@ -417,9 +417,7 @@ class TestBuildAssistantGuidanceMode1:
 
         assert "5.5 hours of non-priority time" in guidance
         assert "semantic" in guidance.lower() or "categories" in guidance.lower()
-        # New guidance: immediately call tool, no confirmation step
-        assert "IMMEDIATELY call get_weekly_report again" in guidance
-        assert "semantic_groupings" in guidance
+        assert "call get_weekly_report again with the semantic_groupings" in guidance
 
     def test_instructs_not_to_repeat_displayed_data(self):
         """Mode 1 guidance instructs LLM not to repeat data the report already displays."""
@@ -977,8 +975,7 @@ class TestGuidanceIncrement10:
             data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
         )
 
-        # New guidance: drill into priority's time, call tool immediately
-        assert "drill into a specific priority" in guidance.lower()
+        assert "within-priority breakdown" in guidance.lower()
 
     def test_mode2_uses_neutral_wording(self):
         """MODE 2 guidance uses neutral wording, not 'coaching'."""
@@ -1216,8 +1213,7 @@ class TestSemanticBreakdownGuard:
             data, priorities, all_events=[], has_semantic_groupings=False
         )
 
-        # New guidance wording: "drill into a specific priority"
-        assert "drill into a specific priority" not in guidance.lower()
+        assert "within-priority breakdown" not in guidance.lower()
 
     def test_within_priority_breakdown_offered_when_events_exist(self):
         """guidance with non-empty all_events DOES contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
@@ -1232,5 +1228,4 @@ class TestSemanticBreakdownGuard:
             data, priorities, all_events=all_events, has_semantic_groupings=False
         )
 
-        # New guidance wording: "drill into a specific priority"
-        assert "drill into a specific priority" in guidance.lower()
+        assert "within-priority breakdown" in guidance.lower()

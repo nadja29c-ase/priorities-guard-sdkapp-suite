@@ -4,11 +4,9 @@ get_weekly_report tool for Priority Guardian MCP.
 Returns weekly report data with per-priority hours, status indicators,
 and pie chart visualization of time allocation.
 
-On first call: Shows P1/P2/P3 + "Other" slice. If other_hours > 0, LLM immediately
-groups allEvents into semantic categories and calls the tool again with semantic_groupings.
-No confirmation step — the user's intent to see the report is sufficient.
-On second call (with semantic_groupings): Shows priority slices + semantic subcategory
-slices. No persistence - purely conversational refinement.
+On first call: Shows P1/P2/P3 + "Other" slice. LLM proposes semantic groupings.
+On second call (with semantic_groupings): Shows priority slices + user-confirmed
+semantic category slices. No persistence - purely conversational refinement.
 """
 
 import asyncio
@@ -54,10 +52,9 @@ INPUT_SCHEMA = {
         "semantic_groupings": {
             "type": "array",
             "description": (
-                "Semantic categories for the target slice, derived from allEvents. "
+                "User-confirmed semantic categories for the target slice. "
                 "When provided, replaces the target category's slice in the pie chart "
-                "with these subcategory slices. Pass immediately after grouping allEvents — "
-                "no user confirmation step required."
+                "with these subcategory slices. Only pass this after user confirms groupings."
             ),
             "items": {
                 "type": "object",
@@ -165,14 +162,13 @@ GUIDANCE_PRIORITY_INSIGHTS = (
 # Template with {other_hours} placeholder
 GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE = (
     "The user has {other_hours:.1f} hours of non-priority time. "
-    "Group the non-priority events from allEvents into approximate semantic categories "
-    "(e.g. 'Client calls', 'Admin', 'Unclassified'). "
-    "IMMEDIATELY call get_weekly_report again with semantic_target='other' and "
-    "semantic_groupings containing your grouped categories (category name, hours, event_count). "
-    "Do NOT propose the groupings in text first. Do NOT ask the user to confirm. "
-    "Just compute and call the tool. "
-    "CRITICAL: NEVER interpret non-priority time as wasted, unfocused, or dilutive. "
-    "NEVER assume non-priority time should be strategic or priority-related."
+    "Based on the event titles and descriptions in allEvents, propose approximate "
+    "semantic categories. Frame it as a NEUTRAL observation: 'Your non-priority time looks like "
+    "it breaks down to roughly: Client calls ~Xh, Admin ~Yh, etc.' "
+    "Ask if this grouping looks right or if they'd adjust it. "
+    "CRITICAL: NEVER interpret/ judge non-priority time f.e. as wasted, unfocused, or dilutive. NEVER assume non-priority time should be strategic or priority-related. "
+    "If they confirm, call get_weekly_report again with the semantic_groupings parameter "
+    "containing the confirmed categories (category name, hours, event_count for each)."
 )
 
 # Template with {other_hours} placeholder
@@ -185,11 +181,7 @@ GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE = (
 )
 
 GUIDANCE_WITHIN_PRIORITY_BREAKDOWN = (
-    "If the user asks to drill into a specific priority's time, "
-    "group that priority's events from allEvents into subcategories and immediately call "
-    "get_weekly_report again with semantic_target set to that priority's keyword (e.g. 'P1') "
-    "and semantic_groupings containing the breakdown. "
-    "Do NOT ask for confirmation first."
+    "You can also propose a within-priority breakdown for any single priority. "
 )
 
 GUIDANCE_CLOSING = (
@@ -461,10 +453,10 @@ def _build_assistant_guidance(
     guidance_parts = []
 
     if has_semantic_groupings:
-        # Semantic groupings already applied — brief neutral observation
+        # MODE 2: Semantic groupings provided (second call)
         guidance_parts.append(GUIDANCE_SEMANTIC_PROVIDED)
     else:
-        # Initial report — LLM will immediately group and re-call if other_hours > 0
+        # MODE 1: No semantic groupings (first call)
         # Opening context based on week status
         if is_current:
             guidance_parts.append(GUIDANCE_CURRENT_WEEK)
