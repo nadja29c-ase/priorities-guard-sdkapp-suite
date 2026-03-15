@@ -328,23 +328,6 @@ def _build_pie_slices(
     if semantic_target in ("P1", "P2", "P3") and semantic_target not in active_keywords:
         raise ToolUsageError(f"No active priority found for {semantic_target}.")
 
-    # Determine target hours for validation
-    if semantic_target == "other":
-        target_hours = other_hours
-    elif semantic_target in ("P1", "P2", "P3"):
-        target_hours = keywords.get(semantic_target, {}).get("hours", 0.0)
-    else:
-        target_hours = None
-
-    # Validation: grouped hours cannot exceed target's hours by more than 0.5h
-    if semantic_groupings and target_hours is not None:
-        grouped_total = sum(float(g.get("hours", 0)) for g in semantic_groupings)
-        if grouped_total > target_hours + 0.5:
-            raise ToolUsageError(
-                f"Grouped hours ({grouped_total:.1f}h) exceed {semantic_target} time "
-                f"({target_hours:.1f}h) by more than rounding tolerance. Please adjust."
-            )
-
     slices = []
 
     # Build priority slices - explode if this priority is the semantic target
@@ -641,12 +624,9 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 "success": False,
                 "error": "slice_validation_error",
                 "assistant_guidance": (
-                    "The semantic groupings were rejected because the hours do not add up correctly. "
-                    "Recalculate the groupings so they total exactly the target hours. "
-                    "Then call get_weekly_report again immediately with the corrected groupings. "
-                    "Do NOT present the breakdown in text. "
-                    "Do NOT ask the user to confirm again. "
-                    "Just fix the numbers and call the tool."
+                    "The semantic groupings call was invalid — either semantic_target was "
+                    "provided without semantic_groupings, or the targeted keyword has no "
+                    "active priority. Check the parameters and retry."
                 ),
             },
             isError=True,

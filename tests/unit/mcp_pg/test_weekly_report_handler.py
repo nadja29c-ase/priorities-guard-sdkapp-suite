@@ -176,43 +176,25 @@ class TestBuildPieSlices:
 class TestSliceValidation:
     """Tests for semantic_groupings validation in _build_pie_slices()."""
 
-    def test_over_allocation_raises_error(self):
-        """Grouped hours > other_hours + 0.5 raises ToolUsageError."""
+    def test_over_allocation_renders_slices(self):
+        """Grouped hours exceeding other_hours renders without error (no validation)."""
         priorities = []
         time_allocation = {
             "keywords": {},
             "other_hours": 10.0,
         }
-        # Total: 12.0h, exceeds 10.0 + 0.5 = 10.5h
+        # Total: 15.0h, significantly exceeds 10.0h — should still render
         semantic_groupings = [
             {"category": "Client calls", "hours": 8.0, "event_count": 5},
-            {"category": "Admin", "hours": 4.0, "event_count": 3},
-        ]
-
-        with pytest.raises(ToolUsageError) as exc_info:
-            _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
-
-        error_msg = str(exc_info.value)
-        assert "exceed" in error_msg.lower()
-        assert "12.0" in error_msg  # Grouped total
-        assert "10.0" in error_msg  # Other hours
-
-    def test_within_tolerance_accepted(self):
-        """Grouped hours <= other_hours + 0.5 is accepted."""
-        priorities = []
-        time_allocation = {
-            "keywords": {},
-            "other_hours": 10.0,
-        }
-        # Total: 10.4h, within 10.0 + 0.5 = 10.5h tolerance
-        semantic_groupings = [
-            {"category": "Client calls", "hours": 6.0, "event_count": 5},
-            {"category": "Admin", "hours": 4.4, "event_count": 3},
+            {"category": "Admin", "hours": 7.0, "event_count": 3},
         ]
 
         slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "other")
 
+        # Both slices rendered, no error raised
         assert len(slices) == 2
+        assert slices[0]["label"] == "Client calls"
+        assert slices[1]["label"] == "Admin"
 
     def test_no_normalization_of_user_hours(self):
         """User-confirmed hours are never modified (no normalization)."""
@@ -745,25 +727,27 @@ class TestSemanticTargetValidation:
 
         assert "No active priority found for P3" in str(exc_info.value)
 
-    def test_priority_over_allocation_raises_error(self):
-        """Grouped hours exceeding priority hours by > 0.5h raises ToolUsageError."""
+    def test_priority_over_allocation_renders_slices(self):
+        """Grouped hours exceeding priority hours renders without error (no validation)."""
         priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
         time_allocation = {
             "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
             "other_hours": 5.0,
         }
-        # Total: 12.0h, exceeds P1's 10.0 + 0.5 = 10.5h
+        # Total: 15.0h, significantly exceeds P1's 10.0h — should still render
         semantic_groupings = [
             {"category": "Feature work", "hours": 8.0, "event_count": 3},
-            {"category": "Bug fixes", "hours": 4.0, "event_count": 2},
+            {"category": "Bug fixes", "hours": 7.0, "event_count": 2},
         ]
 
-        with pytest.raises(ToolUsageError) as exc_info:
-            _build_pie_slices(priorities, time_allocation, semantic_groupings, "P1")
+        slices = _build_pie_slices(priorities, time_allocation, semantic_groupings, "P1")
 
-        error_msg = str(exc_info.value)
-        assert "exceed" in error_msg.lower()
-        assert "P1" in error_msg
+        # Both semantic slices for P1 rendered, no error raised
+        # (Also includes "Other" slice from other_hours)
+        p1_slices = [s for s in slices if s["label"] in ("Feature work", "Bug fixes")]
+        assert len(p1_slices) == 2
+        assert p1_slices[0]["label"] == "Feature work"
+        assert p1_slices[1]["label"] == "Bug fixes"
 
 
 class TestPriorityZoom:
