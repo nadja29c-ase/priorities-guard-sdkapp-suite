@@ -237,24 +237,12 @@ export function DeadlineCard({
 
       {/* Main content area */}
       <div className="p-5">
-        {/* Header row: Badge + Name + Edit/Trash */}
+        {/* Header row: Badge + Name (read mode) or Badge + Edit/Trash (edit mode) */}
         <div className="flex items-center gap-2 mb-3">
           <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} text-2xs`}>
             {kw}
           </span>
-          {isEditing ? (
-            <input
-              type="text"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={handleNameBlur}
-              disabled={isSaving}
-              maxLength={100}
-              autoFocus
-              className="flex-1 text-sm font-semibold text-default bg-surface border border-default rounded-lg px-2 py-1 focus:outline-none focus:border-tertiary"
-              aria-label="Priority name"
-            />
-          ) : (
+          {!isEditing && (
             <h3
               className="text-sm font-semibold flex-1 truncate cursor-pointer hover:opacity-80 text-default focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-border-focus,currentColor)] rounded"
               onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
@@ -267,6 +255,7 @@ export function DeadlineCard({
               {priority.name}
             </h3>
           )}
+          {isEditing && <div className="flex-1" />}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onStartEdit(); }}
@@ -292,6 +281,21 @@ export function DeadlineCard({
             </svg>
           </button>
         </div>
+
+        {/* Edit mode: Full-width name input (separate row to avoid mobile squeeze) */}
+        {isEditing && (
+          <input
+            type="text"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleNameBlur}
+            disabled={isSaving}
+            maxLength={100}
+            autoFocus
+            className="w-full text-sm font-semibold text-default bg-surface border border-default rounded-lg px-2 py-1 mb-3 focus:outline-none focus:border-tertiary"
+            aria-label="Priority name"
+          />
+        )}
 
         {/* Error message */}
         {error && (
