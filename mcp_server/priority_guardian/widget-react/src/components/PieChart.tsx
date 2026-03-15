@@ -41,23 +41,19 @@ const PRIORITY_COLORS: Record<CalendarKeyword, string> = {
   P3: RING_STROKE_COLORS.P3,
 }
 
-// Colorful semantic slice colors (non-priority categories)
-// Distinct from P1 (blue), P2 (purple), P3 (yellow) - uses SDK primitives only
-// All values are CSS variables from variables-primitive.css or variables-semantic.css
+// Semantic slice colors for non-priority categories.
+// All theme-adaptive SDK tokens. Distinct from P1 (blue), P2 (purple), P3 (yellow).
+// 5 colors covers typical breakdown slices; cycles if more needed.
 const SEMANTIC_COLORS = [
-  'var(--color-background-success-solid)',  // green
-  'var(--color-background-danger-solid)',   // red
-  'var(--color-background-warning-solid)',  // orange
-  'var(--green-300)',                       // light green - SDK primitive
-  'var(--pink-400)',                        // pink - SDK primitive
-  'var(--blue-300)',                        // light blue - SDK primitive
-  'var(--orange-300)',                      // light orange - SDK primitive
-  'var(--red-300)',                         // light red - SDK primitive
+  'var(--color-background-success-solid)',    // green
+  'var(--color-background-danger-solid)',     // red
+  'var(--color-background-warning-solid)',    // orange/amber
+  'var(--color-background-primary-solid)',    // ChatGPT brand accent (teal)
+  'var(--color-background-secondary-solid)',  // neutral dark
 ]
 
-// Muted grey for unmatched "other" - visible but subordinate
-// gray-500 (#5d5d5d) is identical in both light/dark modes, provides consistent contrast
-const OTHER_GREY = 'var(--gray-500)'
+// Muted neutral for "Other"/"Uncategorized" — subordinate to named categories
+const OTHER_GREY = 'var(--color-background-secondary-solid)'
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTargetLabel }: PieChartProps) {
   // Filter out zero-hour slices

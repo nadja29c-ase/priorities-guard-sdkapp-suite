@@ -15,12 +15,12 @@ export const BADGE_CIRCLE_CLASS = 'w-6 h-6 rounded-full flex items-center justif
 
 // Bar segment and legend dot colors for TimeAllocationBar (Widget C)
 // Uses solid midtone tokens for better visibility on 12px height bar
-// P1: info (blue), P2: discovery (purple), P3: caution (yellow), other: visible neutral gray
+// P1: info (blue), P2: discovery (purple), P3: caution (yellow), other: theme-adaptive neutral
 export const BAR_COLORS: Record<string, string> = {
   P1: 'bg-info-solid',
   P2: 'bg-discovery-solid',
   P3: 'bg-caution-solid',
-  other: 'bg-[var(--gray-500)]',
+  other: 'bg-[var(--color-background-secondary-solid)]',
 }
 
 // SVG stroke colors for HourRing (Widget C+) — CSS custom properties from SDK tokens
