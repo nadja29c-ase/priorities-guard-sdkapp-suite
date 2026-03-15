@@ -219,7 +219,7 @@ export function GoalItem({
           />
         ) : (
           <p
-            className={`text-sm transition-colors cursor-pointer ${displayedAchieved ? 'line-through text-tertiary' : 'text-default'}`}
+            className={`text-sm transition-colors cursor-pointer break-words ${displayedAchieved ? 'line-through text-tertiary' : 'text-default'}`}
             onDoubleClick={() => !disabled && onRename && setIsEditing(true)}
             title={onRename ? "Double-click to edit" : undefined}
           >
