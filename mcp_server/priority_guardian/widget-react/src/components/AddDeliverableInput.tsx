@@ -78,22 +78,24 @@ export function AddDeliverableInput({
 
   return (
     <div className="space-y-2">
+      {/* Row 1: Input full width */}
+      <input
+        ref={inputRef}
+        type="text"
+        value={name}
+        onChange={(e) => {
+          setName(e.target.value)
+          if (error) setError(null)
+        }}
+        onKeyDown={handleKeyDown}
+        disabled={isAdding}
+        placeholder={t('deliverableNamePlaceholder')}
+        className="w-full text-sm text-default bg-surface border border-default rounded-lg px-3 py-2 focus:outline-none focus:border-tertiary"
+        aria-label={t('deliverableNamePlaceholder')}
+        aria-describedby={error ? 'deliverable-error' : undefined}
+      />
+      {/* Row 2: Add + Cancel buttons */}
       <div className="flex gap-2">
-        <input
-          ref={inputRef}
-          type="text"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value)
-            if (error) setError(null)
-          }}
-          onKeyDown={handleKeyDown}
-          disabled={isAdding}
-          placeholder={t('deliverableNamePlaceholder')}
-          className="flex-1 text-sm text-default bg-surface border border-default rounded-lg px-3 py-2 focus:outline-none focus:border-tertiary"
-          aria-label={t('deliverableNamePlaceholder')}
-          aria-describedby={error ? 'deliverable-error' : undefined}
-        />
         <Button
           color="primary"
           variant="solid"
