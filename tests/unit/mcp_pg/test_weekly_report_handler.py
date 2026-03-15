@@ -690,7 +690,7 @@ class TestWidgetUri:
 
     def test_widget_uri_is_pg_dashboard(self):
         """WIDGET_URI points to pg-dashboard widget."""
-        assert WIDGET_URI == "ui://widget/pg-dashboard.html"
+        assert WIDGET_URI == "ui://widget/pg-dashboard-v9.html"
 
 
 # ============================================================================
