@@ -272,7 +272,7 @@ class TestHandleFunction:
             )
 
         structured = result.structuredContent
-        assert structured["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard-v11.html"
+        assert structured["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard-v12.html"
 
     @pytest.mark.asyncio
     async def test_includes_google_connection_status(self, sample_backend_priority):
@@ -517,8 +517,8 @@ class TestToolDefinition:
 
     def test_widget_uri_is_correct(self):
         """Test widget URI points to dashboard."""
-        assert WIDGET_URI == "ui://widget/pg-dashboard-v11.html"
-        assert GET_PRIORITIES.widget_uri == "ui://widget/pg-dashboard-v11.html"
+        assert WIDGET_URI == "ui://widget/pg-dashboard-v12.html"
+        assert GET_PRIORITIES.widget_uri == "ui://widget/pg-dashboard-v12.html"
 
     def test_read_only_hint_is_false(self):
         """Test read_only_hint is False (triggers snapshot writes)."""

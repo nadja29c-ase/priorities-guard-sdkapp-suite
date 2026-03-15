@@ -206,7 +206,7 @@ export function DeliverableItem({
         />
       ) : (
         <span
-          className={`flex-1 text-sm cursor-pointer break-words ${displayedDone ? 'text-tertiary line-through' : 'text-default'}`}
+          className={`flex-1 text-sm cursor-pointer [overflow-wrap:break-word] ${displayedDone ? 'text-tertiary line-through' : 'text-default'}`}
           onDoubleClick={() => !disabled && setIsEditing(true)}
           title="Double-click to edit"
         >
