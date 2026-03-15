@@ -36,15 +36,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div style={{padding:'24px',textAlign:'center',background:'#f9f9f9',borderRadius:'12px',fontFamily:'system-ui,sans-serif'}}>
-          <p style={{fontSize:'14px',color:'#dc2626',fontWeight:600,marginBottom:'8px'}}>Dashboard unavailable</p>
-          <p style={{fontSize:'12px',color:'#666',marginBottom:'8px'}}>
+        <div style={{padding:'24px',textAlign:'center',background:'var(--color-surface-secondary)',borderRadius:'12px',fontFamily:'var(--font-sans)'}}>
+          <p style={{fontSize:'14px',color:'var(--color-text-danger)',fontWeight:600,marginBottom:'8px'}}>Dashboard unavailable</p>
+          <p style={{fontSize:'12px',color:'var(--color-text-secondary)',marginBottom:'8px'}}>
             Please refresh to try again.
           </p>
-          <p style={{fontSize:'11px',color:'#999',wordBreak:'break-all',marginBottom:'4px'}}>
+          <p style={{fontSize:'11px',color:'var(--color-text-tertiary)',wordBreak:'break-all',marginBottom:'4px'}}>
             {this.state.error?.name || 'UnknownError'}: {this.state.error?.message || '(no message)'}
           </p>
-          <p style={{fontSize:'10px',color:'#bbb',wordBreak:'break-all'}}>
+          <p style={{fontSize:'10px',color:'var(--color-text-tertiary)',wordBreak:'break-all'}}>
             {this.state.error?.stack?.split('\n').slice(0,4).join(' | ')}
           </p>
         </div>

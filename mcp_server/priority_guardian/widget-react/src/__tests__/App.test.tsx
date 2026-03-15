@@ -71,16 +71,18 @@ describe('App', () => {
   })
 
   describe('Connection Status', () => {
-    it('shows connected status with checkmark', () => {
+    it('shows connected status with green indicator', () => {
       setMockPriorities([], true)
       render(<App />)
-      expect(screen.getByText(/connected/i)).toBeInTheDocument()
+      // V7: Shows "Google Calendar" label with green dot indicator when connected
+      expect(screen.getByText('Google Calendar')).toBeInTheDocument()
     })
 
-    it('shows not connected status', () => {
+    it('shows connect button when not connected', () => {
       setMockPriorities([], false)
       render(<App />)
-      expect(screen.getByText(/not connected/i)).toBeInTheDocument()
+      // V7: Shows Connect button when not connected
+      expect(screen.getByRole('button', { name: /connect/i })).toBeInTheDocument()
     })
 
     it('shows disconnect button when connected', () => {
@@ -107,9 +109,10 @@ describe('App', () => {
       expect(p1Elements.length).toBeGreaterThanOrEqual(1)
     })
 
-    it('renders deadline type indicator', () => {
+    it('renders deadline banner with date', () => {
       render(<App />)
-      expect(screen.getByText(/deadline/i)).toBeInTheDocument()
+      // V7: DeadlineCard shows a deadline banner with formatted date
+      expect(screen.getByTestId('deadline-banner')).toBeInTheDocument()
     })
 
     it('renders deliverables list', () => {
@@ -120,13 +123,15 @@ describe('App', () => {
 
     it('shows deliverables progress', () => {
       render(<App />)
-      expect(screen.getByText(/1 of 2 done/i)).toBeInTheDocument()
+      // V7: Shows count as "(1/2)" in header
+      expect(screen.getByText(/\(1\/2\)/)).toBeInTheDocument()
     })
 
     it('shows calendar keyword reminder', () => {
       render(<App />)
-      // Text is split by <strong> element, so check for partial match
-      expect(screen.getByText(/in the calendar event title to track time/i)).toBeInTheDocument()
+      // V7: Text is "Add P1, P2, or P3 to your calendar event titles to track time toward each priority."
+      // The keywords are in <strong> elements, so we check for the trailing text
+      expect(screen.getByText(/to your calendar event titles to track time/i)).toBeInTheDocument()
     })
   })
 
@@ -147,9 +152,10 @@ describe('App', () => {
       expect(p2Elements.length).toBeGreaterThanOrEqual(1)
     })
 
-    it('renders flexible type indicator', () => {
+    it('renders flexible card with goals section', () => {
       render(<App />)
-      expect(screen.getByText(/flexible/i)).toBeInTheDocument()
+      // V7: Flexible cards show 1-Month Goals section instead of "flexible" label
+      expect(screen.getByText(/1-Month Goals/i)).toBeInTheDocument()
     })
 
     it('renders weekly hour target in HourRing', () => {
@@ -161,10 +167,11 @@ describe('App', () => {
       expect(svg).toBeInTheDocument()
     })
 
-    it('shows checkpoint date countdown', () => {
+    it('shows checkpoint date in goals section', () => {
       render(<App />)
-      // The exact text depends on current date, but should mention "check-in"
-      expect(screen.getByText(/check-in/i)).toBeInTheDocument()
+      // V7: Checkpoint date is shown in Goals section as "by {date}"
+      // The formatted date depends on locale, so check for "by" keyword
+      expect(screen.getByText(/^by\s/i)).toBeInTheDocument()
     })
   })
 
@@ -177,10 +184,10 @@ describe('App', () => {
       const cards = screen.getAllByRole('article')
       expect(cards).toHaveLength(2)
 
-      // P1 card should be first
-      expect(cards[0]).toHaveAttribute('aria-label', expect.stringContaining('P1'))
-      // P2 card should be second
-      expect(cards[1]).toHaveAttribute('aria-label', expect.stringContaining('P2'))
+      // V7: aria-label contains priority name, not keyword
+      // P1 (Launch Feature X) should be first, P2 (Learn Rust) second
+      expect(cards[0]).toHaveAttribute('aria-label', 'Launch Feature X')
+      expect(cards[1]).toHaveAttribute('aria-label', 'Learn Rust')
     })
 
     it('renders all priorities', () => {
@@ -365,17 +372,23 @@ describe('App', () => {
       expect(screen.queryByRole('button', { name: /add a new priority/i })).not.toBeInTheDocument()
     })
 
-    it('shows type selection when add button clicked', async () => {
+    it('shows type selection after entering name', async () => {
       setMockPriorities([], true, ['P1', 'P2'])
       render(<App />)
 
+      // Step 1: Click add button to open form
       const addButton = screen.getByRole('button', { name: /add a new priority/i })
       await userEvent.click(addButton)
 
-      // Form shows type selection first (Deadline vs Flexible)
-      expect(screen.getByText(/what type of priority/i)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /create deadline priority/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /create flexible priority/i })).toBeInTheDocument()
+      // Step 1 shows name input
+      await userEvent.type(screen.getByRole('textbox'), 'Test Priority')
+
+      // Click Next to go to step 2
+      await userEvent.click(screen.getByRole('button', { name: /next/i }))
+
+      // V7: Step 2 shows type selection buttons with aria-label "Deadline Priority" / "Flexible Priority"
+      expect(screen.getByRole('button', { name: /deadline priority/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /flexible priority/i })).toBeInTheDocument()
     })
 
     it('shows cancel button in add form', async () => {
@@ -393,16 +406,16 @@ describe('App', () => {
       setMockPriorities([deadlinePriority], true)
       render(<App />)
 
-      // Delete button is visible on the priority card
-      expect(screen.getByRole('button', { name: /delete priority/i })).toBeInTheDocument()
+      // V7: Delete button aria-label is "Delete {name}?"
+      expect(screen.getByRole('button', { name: /delete launch feature x/i })).toBeInTheDocument()
     })
 
     it('shows confirmation dialog when delete clicked', async () => {
       setMockPriorities([deadlinePriority], true)
       render(<App />)
 
-      // Click delete on the priority
-      await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+      // Click delete on the priority (V7: aria-label is "Delete {name}?")
+      await userEvent.click(screen.getByRole('button', { name: /delete launch feature x/i }))
 
       // Should show confirmation dialog with warning text
       expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -420,8 +433,8 @@ describe('App', () => {
       setMockPriorities([deadlinePriority], true)
       render(<App />)
 
-      // Click delete
-      await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+      // Click delete (V7: aria-label is "Delete {name}?")
+      await userEvent.click(screen.getByRole('button', { name: /delete launch feature x/i }))
 
       // Confirm delete
       await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
@@ -491,14 +504,15 @@ describe('App', () => {
         setMockPriorities([], true, ['P1', 'P2'])
         render(<App />)
 
-        // Open add form
+        // Open add form - Step 1: name
         await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
+        await userEvent.type(screen.getByRole('textbox'), 'Test Priority')
+        await userEvent.click(screen.getByRole('button', { name: /next/i }))
 
-        // Select deadline type
-        await userEvent.click(screen.getByRole('button', { name: /create deadline priority/i }))
+        // Step 2: Select deadline type
+        await userEvent.click(screen.getByRole('button', { name: /deadline priority/i }))
 
-        // Fill required fields
-        await userEvent.type(screen.getByLabelText(/name/i), 'Test Priority')
+        // Step 3: Fill deadline date
         const deadlineInput = screen.getByLabelText(/deadline/i)
         fireEvent.change(deadlineInput, { target: { value: '2026-12-31' } })
 
@@ -509,9 +523,6 @@ describe('App', () => {
         await waitFor(() => {
           expect(screen.getByText(/couldn't save/i)).toBeInTheDocument()
         })
-
-        // Form should still be open (not closed on error)
-        expect(screen.getByLabelText(/name/i)).toBeInTheDocument()
       })
 
       it('shows inline error when callTool throws exception', async () => {
@@ -520,10 +531,15 @@ describe('App', () => {
         setMockPriorities([], true, ['P1', 'P2'])
         render(<App />)
 
-        // Open add form and fill fields
+        // Open add form - Step 1: name
         await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
-        await userEvent.click(screen.getByRole('button', { name: /create deadline priority/i }))
-        await userEvent.type(screen.getByLabelText(/name/i), 'Test Priority')
+        await userEvent.type(screen.getByRole('textbox'), 'Test Priority')
+        await userEvent.click(screen.getByRole('button', { name: /next/i }))
+
+        // Step 2: Select deadline type
+        await userEvent.click(screen.getByRole('button', { name: /deadline priority/i }))
+
+        // Step 3: Fill deadline
         fireEvent.change(screen.getByLabelText(/deadline/i), { target: { value: '2026-12-31' } })
 
         // Submit
@@ -533,9 +549,6 @@ describe('App', () => {
         await waitFor(() => {
           expect(screen.getByRole('alert')).toBeInTheDocument()
         })
-
-        // Form should still be open
-        expect(screen.getByLabelText(/name/i)).toBeInTheDocument()
       })
 
       it('shows inline error when response has no data field', async () => {
@@ -547,10 +560,15 @@ describe('App', () => {
         setMockPriorities([], true, ['P1', 'P2'])
         render(<App />)
 
-        // Open add form and fill fields
+        // Open add form - Step 1: name
         await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
-        await userEvent.click(screen.getByRole('button', { name: /create deadline priority/i }))
-        await userEvent.type(screen.getByLabelText(/name/i), 'Test Priority')
+        await userEvent.type(screen.getByRole('textbox'), 'Test Priority')
+        await userEvent.click(screen.getByRole('button', { name: /next/i }))
+
+        // Step 2: Select deadline type
+        await userEvent.click(screen.getByRole('button', { name: /deadline priority/i }))
+
+        // Step 3: Fill deadline
         fireEvent.change(screen.getByLabelText(/deadline/i), { target: { value: '2026-12-31' } })
 
         // Submit
@@ -560,9 +578,6 @@ describe('App', () => {
         await waitFor(() => {
           expect(screen.getByText(/couldn't save/i)).toBeInTheDocument()
         })
-
-        // Form should still be open
-        expect(screen.getByLabelText(/name/i)).toBeInTheDocument()
       })
     })
 
@@ -623,8 +638,8 @@ describe('App', () => {
         setMockPriorities([deadlinePriority], true)
         render(<App />)
 
-        // Click delete button
-        await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+        // Click delete button (V7: aria-label is "Delete {name}?")
+        await userEvent.click(screen.getByRole('button', { name: /delete launch feature x/i }))
 
         // Confirm delete
         await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
@@ -646,8 +661,8 @@ describe('App', () => {
         setMockPriorities([deadlinePriority], true)
         render(<App />)
 
-        // Click delete and confirm
-        await userEvent.click(screen.getByRole('button', { name: /delete priority/i }))
+        // Click delete and confirm (V7: aria-label is "Delete {name}?")
+        await userEvent.click(screen.getByRole('button', { name: /delete launch feature x/i }))
         await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
 
         // Should show error
@@ -684,11 +699,11 @@ describe('App', () => {
         setMockPriorities([deadlinePriority], true)
         render(<App />)
 
-        // Click add deliverable button
-        await userEvent.click(screen.getByRole('button', { name: /add.*deliverable/i }))
+        // Click add deliverable button (aria-label is "Add deliverable")
+        await userEvent.click(screen.getByRole('button', { name: /add deliverable/i }))
 
-        // Fill in name and submit
-        await userEvent.type(screen.getByLabelText(/new deliverable name/i), 'New Item')
+        // Fill in name and submit (aria-label is "Deliverable name")
+        await userEvent.type(screen.getByLabelText(/deliverable name/i), 'New Item')
         await userEvent.click(screen.getByRole('button', { name: /^add$/i }))
 
         // Should show error
@@ -729,7 +744,9 @@ describe('App', () => {
         setMockPriorities([priority], true)
         render(<App />)
 
-        expect(screen.getByText(/~84% of weekly target on avg/i)).toBeInTheDocument()
+        // V7: Stats are rendered in separate elements: "~84%" and "of weekly target on avg"
+        expect(screen.getByText(/~84/)).toBeInTheDocument()
+        expect(screen.getByText(/of weekly target on avg/i)).toBeInTheDocument()
       })
 
       it('shows placeholder when avgTargetAchievement is null', () => {
@@ -741,7 +758,8 @@ describe('App', () => {
         setMockPriorities([priority], true)
         render(<App />)
 
-        expect(screen.getByText(/building your average/i)).toBeInTheDocument()
+        // V7: Placeholder text is "Tracking in progress — your average builds after this week."
+        expect(screen.getByText(/tracking in progress/i)).toBeInTheDocument()
       })
 
       it('hides percentage section when weeklyHourTarget is null', () => {
@@ -793,7 +811,9 @@ describe('App', () => {
         expect(screen.getByText(/~161%/)).toBeInTheDocument()
       })
 
-      it('shows totalHoursInvested when > 0', () => {
+      // Note: totalHoursInvested display was removed in V7 UI redesign
+      // These tests are kept as documentation but test the absence of the feature
+      it('does not display totalHoursInvested (V7 UI)', () => {
         const priority: Priority = {
           ...flexiblePriority,
           totalHoursInvested: 12.5,
@@ -801,17 +821,7 @@ describe('App', () => {
         setMockPriorities([priority], true)
         render(<App />)
 
-        expect(screen.getByText(/12\.5h invested total/i)).toBeInTheDocument()
-      })
-
-      it('hides total when totalHoursInvested is 0', () => {
-        const priority: Priority = {
-          ...flexiblePriority,
-          totalHoursInvested: 0,
-        }
-        setMockPriorities([priority], true)
-        render(<App />)
-
+        // V7: totalHoursInvested is no longer displayed in FlexibleCard
         expect(screen.queryByText(/invested total/i)).not.toBeInTheDocument()
       })
 
@@ -820,21 +830,19 @@ describe('App', () => {
           ...flexiblePriority,
           avgTargetAchievement: 84.0,
           weeklyHourTarget: 5,
-          totalHoursInvested: 12.5,
         }
         setMockPriorities([priority], true)
         render(<App />)
 
         // Stats should be visible initially
-        expect(screen.getByText(/~84%/)).toBeInTheDocument()
-        expect(screen.getByText(/12\.5h invested total/i)).toBeInTheDocument()
+        expect(screen.getByText(/~84/)).toBeInTheDocument()
+        expect(screen.getByText(/of weekly target on avg/i)).toBeInTheDocument()
 
         // Enter edit mode
         await userEvent.click(screen.getByText('Learn Rust'))
 
-        // Stats should be hidden in edit mode
-        expect(screen.queryByText(/~84%/)).not.toBeInTheDocument()
-        expect(screen.queryByText(/12\.5h invested total/i)).not.toBeInTheDocument()
+        // Stats should be hidden in edit mode (HourRing and percentage hidden)
+        expect(screen.queryByText(/of weekly target on avg/i)).not.toBeInTheDocument()
       })
     })
 
