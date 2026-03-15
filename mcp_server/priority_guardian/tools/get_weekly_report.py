@@ -167,8 +167,11 @@ GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE = (
     "it breaks down to roughly: Client calls ~Xh, Admin ~Yh, etc.' "
     "Ask if this grouping looks right or if they'd adjust it. "
     "CRITICAL: NEVER interpret/ judge non-priority time f.e. as wasted, unfocused, or dilutive. NEVER assume non-priority time should be strategic or priority-related. "
-    "If they confirm, call get_weekly_report again with the semantic_groupings parameter "
-    "containing the confirmed categories (category name, hours, event_count for each)."
+    "If they confirm OR express any intent to see the breakdown — including 'yes', 'sure', "
+    "'show me', 'break it down', 'what's in Other', 'go ahead', or any similar phrasing — "
+    "IMMEDIATELY call get_weekly_report again with the semantic_groupings parameter "
+    "containing your proposed categories (category name, hours, event_count for each). "
+    "Do NOT ask again. Do NOT re-propose. Just call the tool."
 )
 
 # Template with {other_hours} placeholder
