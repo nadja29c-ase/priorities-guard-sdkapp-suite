@@ -439,7 +439,7 @@ def create_app():
         Route("/oauth-protected-resource/mcp", wellknown_oauth_protected_resource, methods=["GET", "HEAD", "OPTIONS"]),
         Route(
             "/openai-apps-challenge",
-            lambda request: PlainTextResponse("gmxOleNMeuqOBZjXdRcGbfcqBHeZnhYV1GAFnn9KORk"),
+            lambda request: PlainTextResponse("gmxOIeNMeuqOBZjXdRcGbfcqBHeZnhYV1GAFnn9KORk"),
             methods=["GET"]
         ),
     ]
