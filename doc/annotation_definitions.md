@@ -1,4 +1,4 @@
-# MCP Tool Annotation Definitions — Interpretation
+# MCP Tool Annotation Definitions — Priority Guardian
 
 **Date last updated:** 2026-03-16
 
@@ -6,7 +6,7 @@
 
 ## Purpose
 
-This document defines how MCP tool annotations are applied, the rationale behind each value, and the authoritative source definitions. It serves as the canonical reference for any future tool additions or annotation reviews.
+This document defines how MCP tool annotations are applied in Priority Guardian, the rationale behind each value, and the authoritative source definitions. It serves as the canonical reference for any future tool additions or annotation reviews.
 
 ---
 
@@ -43,9 +43,6 @@ Sources: [MCP Spec](https://modelcontextprotocol.io/legacy/concepts/tools), [Ope
 **Definition:** Tool may perform irreversible or destructive updates — data the user cannot recover.
 
 **Only meaningful when `readOnlyHint=false`.** A read-only tool is by definition non-destructive.
-
-**Critical distinction — overwrite vs. delete:**
-`destructiveHint=true` applies to **permanent removal** of data (delete operations, access revocation requiring re-authorization). It does NOT apply to update/overwrite operations, even when the previous field values are lost. An update that replaces a value leaves the record intact and the user can change it again — that is not destructive. Only use `destructiveHint=true` when the previous state cannot be recovered at all.
 
 ### `openWorldHint`
 

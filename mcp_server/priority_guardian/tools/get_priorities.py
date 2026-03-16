@@ -24,7 +24,13 @@ logger = structlog.get_logger(__name__)
 
 NAME = "get_priorities"
 
-DESCRIPTION = "Get your current priorities and Google Calendar connection status."
+DESCRIPTION = "Get user's saved and guarded goals/priorities and their progress." \
+"Call this tool: " \
+"- When the user asks to see their priorities or dashboard " \
+"- When the user wants to check their progress or time tracking" \
+"Do NOT call this tool: " \
+"- When the user is asking for advice on how to prioritize or what to work on " \
+"- When the user wants to plan, break down, or organize tasks or projects"
 
 INPUT_SCHEMA = {
     "type": "object",
