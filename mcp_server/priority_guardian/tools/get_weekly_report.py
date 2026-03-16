@@ -722,7 +722,7 @@ GET_WEEKLY_REPORT = ToolDefinition(
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,  # Pie chart renders in pg-dashboard widget
     handle=handle,
-    read_only_hint=False,  # Token refresh can write to core_connections
+    read_only_hint=True,   # openWorldHint=True covers Google Calendar API call; token refresh is invisible backend detail
     destructive_hint=False,
     open_world_hint=True,  # Calls Google Calendar API via backend
     widget_accessible=True,  # Widget can call this tool (for future 3-week nav)

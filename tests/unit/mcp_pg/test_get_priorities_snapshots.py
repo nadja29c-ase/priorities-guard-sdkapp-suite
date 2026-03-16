@@ -4,7 +4,7 @@ Unit tests for get_priorities MCP handler snapshot integration (Increment 08).
 Tests:
 - Snapshot endpoint called in parallel
 - Snapshot failures don't break dashboard
-- read_only_hint is False
+- read_only_hint is True (invisible bookkeeping, not user-visible state)
 """
 
 import pytest
@@ -168,11 +168,11 @@ class TestSnapshotEndpointIntegration:
 class TestToolAnnotations:
     """Tests for tool annotation changes."""
 
-    def test_read_only_hint_is_false(self):
-        """get_priorities has read_only_hint=False (triggers writes)."""
+    def test_read_only_hint_is_true(self):
+        """get_priorities has read_only_hint=True (snapshot writes are invisible bookkeeping)."""
         from mcp_server.priority_guardian.tools.get_priorities import GET_PRIORITIES
 
-        assert GET_PRIORITIES.read_only_hint is False
+        assert GET_PRIORITIES.read_only_hint is True
 
 
 class TestAggregateFieldMapping:

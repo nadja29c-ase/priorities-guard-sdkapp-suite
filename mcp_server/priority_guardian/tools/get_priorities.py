@@ -316,7 +316,7 @@ GET_PRIORITIES = ToolDefinition(
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,  # Points to the widget this tool produces
     handle=handle,
-    read_only_hint=False,   # Triggers snapshot writes as side effect (Inc 08)
+    read_only_hint=True,    # openWorldHint=True covers Google Calendar API call; snapshot write is invisible bookkeeping
     destructive_hint=False,
     open_world_hint=True,   # Calls Google Calendar API via backend
     widget_accessible=True, # Widget can call this tool
