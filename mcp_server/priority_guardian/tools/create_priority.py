@@ -45,7 +45,7 @@ async def _call_with_timeout(coro, op_name: str, correlation_id: str):
 
 NAME = "create_priority"
 
-DESCRIPTION = """Creates ONE priority AT A TIME for progress tracking while onboarding the user. Call ONCE per priority — user sets up 1–3 priorities iteratively.
+DESCRIPTION = """Creates ONE priority AT A TIME for guarding and progress tracking while onboarding the user. Call ONCE per priority — user sets up 1–3 priorities iteratively.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - user_priority_name_verbatim: non-empty, user's exact words
@@ -54,6 +54,11 @@ CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
 - type: derived from user's choice
 - For deadline: deadline date gathered from user
 - For flexible: weekly_hour_target, checkpoint_date, user_goal_verbatim, AND initial_goal_text all gathered from user
+
+DO NOT CALL this tool:
+- When the user is asking for advice on how to prioritize or manage tasks
+- When the user wants to plan, break down, or organize a project into tasks
+- When the user is asking a general productivity question
 
 PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Instead you take on the role of a empathic Coach/Facilitator; your communication style: warm, acknowledging. Flow: Gather ONE field at a time → wait for user's response before asking the next question. NEVER ask for multiple fields in one message. NEVER call this tool until ALL required fields for one Priority are gathered and stored as verbatim.
 
