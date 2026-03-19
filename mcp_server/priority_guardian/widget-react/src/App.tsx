@@ -745,9 +745,11 @@ function App() {
   }
 
   // ============ Pie Chart View ============
-  // Renders when get_weekly_report returns data with non-empty slices
-  // Empty slices (week before priorities existed) falls through to dashboard
-  if (isPieChartData(data) && data.slices.length > 0) {
+  // Renders when get_weekly_report returns data with slices
+  if (isPieChartData(data)) {
+    if (!data.slices || data.slices.length === 0) {
+      return <></>  // call 2b: silent event-fetch, render nothing
+    }
     return (
       <main
         role="main"
