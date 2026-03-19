@@ -112,17 +112,17 @@ grep -o 'style="[^"]*#[0-9a-fA-F]' dist/pg-dashboard.html
 
 **Required for OpenAI store submission (compliance_master item 6).**
 
-- [ ] **Keyboard navigation**: all interactive elements reachable via Tab, activatable via Enter/Space
-- [ ] **Focus indicators**: visible focus ring on all focusable elements
-- [ ] **ARIA labels**: buttons, icons, and interactive elements have `aria-label` or visible text
-- [ ] **Color contrast**: text meets WCAG AA (4.5:1 for normal text, 3:1 for large text)
-- [ ] **No color-only indicators**: status/errors conveyed by more than color alone (icons, text)
-- [ ] **Readable text**: minimum 14px font size, adequate line spacing
+- [X] **Keyboard navigation**: all interactive elements reachable via Tab, activatable via Enter/Space
+- [X] **Focus indicators**: visible focus ring on all focusable elements
+- [X] **ARIA labels**: buttons, icons, and interactive elements have `aria-label` or visible text
+- [X] **Color contrast**: text meets WCAG AA (4.5:1 for normal text, 3:1 for large text)
+- [X] **No color-only indicators**: status/errors conveyed by more than color alone (icons, text)
+- [X] **Readable text**: minimum 14px font size, adequate line spacing
 
 ### Widget a11y Tests
 
-- [ ] **Keyboard accessibility** (compliance #10): run `npm test` in widget-react, then perform full keyboard/manual audit
-- [ ] **Screen reader semantics/labels** (compliance #11): verify all interactive controls have proper ARIA attributes end-to-end
+- [X] **Keyboard accessibility** (compliance #10): run `npm test` in widget-react, then perform full keyboard/manual audit
+- [X] **Screen reader semantics/labels** (compliance #11): verify all interactive controls have proper ARIA attributes end-to-end
 
 ### Quick checks
 
@@ -144,11 +144,11 @@ grep -E '<img[^>]*>' dist/pg-dashboard.html | grep -v 'alt='
 
 ## Hardcoded Values Scan
 
-- [ ] Scan codebase for hardcoded production domains that should use config
-- [ ] Check `redirect_domains`, `ui.domain`, webhook URLs use env-based config
-- [ ] Verify callback URLs and CORS are not hardcoded to your own domain/user
-- [ ] Verify no hardcoded API keys, secrets, or credentials
-- [ ] Docstring examples use placeholder domains (not real production URLs)
+- [X] Scan codebase for hardcoded production domains that should use config
+- [X] Check `redirect_domains`, `ui.domain`, webhook URLs use env-based config
+- [X] Verify callback URLs and CORS are not hardcoded to your own domain/user
+- [X] Verify no hardcoded API keys, secrets, or credentials
+- [X] Docstring examples use placeholder domains (not real production URLs)
 
 ```bash
 # Search for hardcoded production domains
@@ -161,10 +161,10 @@ grep -rn "redirect_domains" mcp_server/
 
 ## MCP Server Connectivity
 
-- [ ] `/.well-known/oauth-protected-resource` returns valid JSON
-- [ ] `/.well-known/oauth-authorization-server` returns valid JSON
-- [ ] `HEAD /mcp` returns 200 (reachability probe)
-- [ ] Tool calls work with valid JWT (test via MCP Inspector against production)
+- [X]  `/.well-known/oauth-protected-resource` returns valid JSON
+- [X] `/.well-known/oauth-authorization-server` returns valid JSON
+- [X]  `HEAD /mcp` returns 200 (reachability probe)
+- [X]  Tool calls work with valid JWT (test via MCP Inspector against production)
 
 ```bash
 # Discovery endpoints
@@ -211,17 +211,17 @@ Errors must be well-handled with clear messaging or fallback behavior across all
 
 ### MCP Server Layer
 
-- [ ] All tool handlers use `_call_with_timeout` wrapper (already implemented)
-- [ ] Timeout errors return clear message ("Request timed out, please try again")
-- [ ] Backend unreachable returns graceful error, not stack trace
-- [ ] Invalid/expired token returns `invalid_token` OAuth error (not 500)
+- [X] All tool handlers use `_call_with_timeout` wrapper (already implemented)
+- [X] Timeout errors return clear message ("Request timed out, please try again")
+- [X] Backend unreachable returns graceful error, not stack trace
+- [X] Invalid/expired token returns `invalid_token` OAuth error (not 500)
 
 ### Backend Layer
 
-- [ ] Global exception handler catches unhandled errors (main.py `global_exception_handler`)
-- [ ] Database errors logged but not exposed to user (no SQL in response)
-- [ ] External API failures (Google, etc.) return user-friendly message
-- [ ] OAuth errors follow RFC 6749 format (`error`, `error_description`)
+- [X] Global exception handler catches unhandled errors (main.py `global_exception_handler`)
+- [X] Database errors logged but not exposed to user (no SQL in response)
+- [X] External API failures (Google, etc.) return user-friendly message
+- [X] OAuth errors follow RFC 6749 format (`error`, `error_description`)
 
 ### Widget Layer
 
@@ -252,19 +252,19 @@ grep -rn "class ErrorBoundary" mcp_server/priority_guardian/widget-react/src/mai
 
 ## Data Minimization
 
-- [ ] OAuth scopes are minimal (read-only where possible, no unnecessary permissions)
-- [ ] Only essential user data is stored in database
-- [ ] Logs do not contain PII (user IDs truncated, no tokens/secrets)
-- [ ] Session tokens hashed before storage
-- [ ] No unnecessary data retained after user disconnects
+- [X] OAuth scopes are minimal (read-only where possible, no unnecessary permissions)
+- [X] Only essential user data is stored in database
+- [X] Logs do not contain PII (user IDs truncated, no tokens/secrets)
+- [X] Session tokens hashed before storage
+- [X] No unnecessary data retained after user disconnects
 
 ## Submission Artifacts
 
-- [ ] ANNOTATION_JUSTIFICATIONS.md created (one entry per tool annotation)
+- [X] ANNOTATION_JUSTIFICATIONS.md created (one entry per tool annotation)
 - [ ] Screenshots: inline card + fullscreen, light mode + dark mode
-- [ ] Support email configured in store listing
-- [ ] Privacy policy URL accessible and accurate
-- [ ] App name and description finalized
+- [X] Support email configured in store listing
+- [X] Privacy policy URL accessible and accurate
+- [X] App name and description finalized
 
 ## Post-Deploy Smoke Test
 
@@ -281,9 +281,9 @@ After deploying to production but before submitting:
 
 OpenAI requires the widget layout to not break when users increase browser font size.
 
-- [ ] Widget tested at default, large, and very large font sizes
-- [ ] No text overflow, clipping, or broken layout at any size
-- [ ] Tested on mobile at iOS largest accessibility font size
+- [X] Widget tested at default, large, and very large font sizes
+- [X] No text overflow, clipping, or broken layout at any size
+- [X] Tested on mobile at iOS largest accessibility font size
 
 ### How to test — desktop
 
@@ -296,12 +296,12 @@ OpenAI requires the widget layout to not break when users increase browser font 
    document.body.style.fontSize = ''      // Reset
 ```
 4. At each size verify:
-   - [ ] No text overflows or gets clipped in any container
-   - [ ] No buttons or interactive elements overlap or disappear
-   - [ ] No horizontal scrollbar appears inside the widget
-   - [ ] Priority names, deliverable text, goal text wrap cleanly
-   - [ ] Hour targets and actual values remain readable
-   - [ ] Weekly report pie chart labels do not overflow
+   - [X] No text overflows or gets clipped in any container
+   - [X] No buttons or interactive elements overlap or disappear
+   - [X] No horizontal scrollbar appears inside the widget
+   - [X] Priority names, deliverable text, goal text wrap cleanly
+   - [X] Hour targets and actual values remain readable
+   - [X] Weekly report pie chart labels do not overflow
 
 ### How to test — mobile (iOS)
 

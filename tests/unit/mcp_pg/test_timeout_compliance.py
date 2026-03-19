@@ -96,7 +96,9 @@ class TestGetPriorityEventsTimeout:
                     arguments={"semantic_target": "P1"},
                 )
 
-            assert "timed out" in str(exc_info.value).lower()
+            # User-friendly message (no "timed out" jargon)
+            assert "unable to fetch" in str(exc_info.value).lower()
+            assert "try again" in str(exc_info.value).lower()
 
 
 # =============================================================================

@@ -377,11 +377,10 @@ async def test_first_weekly_report_returns_weekly_data(
             assert "flexStatus" not in priority
             assert "pacingStatus" not in priority
 
-        # Verify widget_instruction structure
-        assert "widget_instruction" in guidance
-        assert guidance["widget_instruction"]["required"] is True
-        assert guidance["widget_instruction"]["tool"] == "get_weekly_report"
-        assert "week_start" in guidance["widget_instruction"]["arguments"]
+        # Verify instruction tells model to call render_weekly_report first
+        assert "instruction" in guidance
+        assert "render_weekly_report" in guidance["instruction"]
+        assert "week_start" in guidance["instruction"]
 
         # Verify transition_prompt structure
         assert "transition_prompt" in guidance

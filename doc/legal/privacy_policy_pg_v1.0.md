@@ -25,7 +25,7 @@ Data Controller: Nadja Carabulea
 
 Email: support@priority-guard.com
 
-Website: priority-guard.com
+Website: https://www.fulfilling-productivity.com/priority-guard
 
 For any privacy-related questions, data access requests, or deletion requests, contact us at the email above. We respond within 30 days per GDPR Art. 12(3).
 
@@ -163,6 +163,12 @@ Render Services, Inc. (hosting) — Hosts our backend, PostgreSQL database, and 
 
 IONOS SE (email forwarding) — Forwards support emails. Located in Germany (EU).
 
+
+
+Google LLC (Google Calendar API) — Provides read-only access to your Google Calendar events via OAuth 2.0, subject to your consent. Google's use of data is governed by Google's Privacy Policy: policies.google.com/privacy and Google API Services User Data Policy.
+
+
+
 We do not sell your data. We do not share your data with advertisers. We do not use your data for model training.
 
 7. International Data Transfers
@@ -172,6 +178,8 @@ All storage (database, cache, backups) is in the EU (Frankfurt, Germany).
 Data is transferred to the US only when ChatGPT processes your requests. This happens during normal app usage when the language model receives your priority data and current-week calendar summaries via tool responses. This transfer includes only pseudonymous data (priority names, goal text, deliverable names, aggregated hours, event titles and descriptions for the current week). No direct identifiers (names, emails, IP addresses) are included.
 
 This EU-to-US transfer is governed by OpenAI's Standard Contractual Clauses (SCCs) included in their Data Processing Terms.
+
+When you connect your Google Calendar, Google may also process your data in the US as an independent data controller, subject to Google's own Privacy Policy and Google's participation in the EU-US Data Privacy Framework.
 
 8. Your Rights (GDPR Art. 12–22)
 

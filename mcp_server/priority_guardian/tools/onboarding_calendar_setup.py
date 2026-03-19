@@ -469,13 +469,8 @@ async def _handle_first_weekly_report(
         },
         "assistant_guidance": {
             "action": "FIRST_WEEKLY_REPORT",
-            "widget_instruction": {
-                "required": True,
-                "tool": "get_weekly_report",
-                "arguments": {"week_start": data.get("week_start")},
-                "purpose": "Call get_weekly_report FIRST to render the pie chart before presenting any data. The chart is the visual anchor — narrate the data while the user is looking at it.",
-            },
             "instruction": (
+                "Call render_weekly_report with week_start before presenting any data — the chart is the visual anchor. "
                 "Present the weekly snapshot. Show how time splits across priorities. "
                 "Explain other time: total calendar hours minus keyword hours. This is non-priority work. "
                 "Present it as useful context, not a gap to fix: 'You have ~Xh in non-priority events — "
@@ -629,7 +624,7 @@ ONBOARDING_CALENDAR_SETUP = ToolDefinition(
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
-    widget_uri=None,  # Widget rendered by get_weekly_report tool call, not this tool
+    widget_uri=None,  # Widget rendered by render_weekly_report tool call, not this tool
     handle=handle,
     read_only_hint=True,  # Never mutates state
     destructive_hint=False,
