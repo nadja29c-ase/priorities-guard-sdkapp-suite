@@ -691,12 +691,81 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             },
         )
 
-    # Build pie chart slices (validates semantic_groupings/semantic_target if provided)
-    # For Call 2b (priority breakdown), pass None to show normal chart (no slice explosion)
-    slice_semantic_target = None if has_priority_breakdown else semantic_target
+    # Normalize data for response
+    normalized_priorities = [_normalize_priority_report(p) for p in priorities]
+    normalized_time_allocation = _normalize_time_allocation(time_allocation)
+    normalized_events = [_normalize_event(e) for e in all_events]
+
+    # -------------------------------------------------------------------------
+    # Call 2b: priority event fetch — silent intermediate call, no widget
+    # Returns only priorityEvents + aggregates for the model to read and
+    # immediately call back with semantic_groupings. No slices, no _meta.
+    # -------------------------------------------------------------------------
+    if has_priority_breakdown:
+        priority_events = [
+            e for e in normalized_events
+            if semantic_target in e.get("matchedKeywords", [])
+        ]
+
+        assistant_guidance = _build_assistant_guidance(
+            data, priorities, [], priority_events,
+            has_semantic_groupings=False,
+            has_priority_breakdown=True,
+            semantic_target=semantic_target,
+        )
+
+        logger.info(
+            "tool.get_weekly_report.call2b",
+            correlation_id=correlation_id,
+            user_id=user_id,
+            semantic_target=semantic_target,
+            priority_event_count=len(priority_events),
+        )
+
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Fetched {len(priority_events)} events for {semantic_target}.",
+            )],
+            structuredContent={
+                "success": True,
+                "data": {
+                    # Pie chart fields — empty, no widget rendered
+                    "weekStart": data.get("week_start"),
+                    "weekEnd": data.get("week_end"),
+                    "slices": [],
+                    "totalHours": float(normalized_time_allocation.get("totalTrackedHours", 0)),
+                    # Aggregates — model needs these to not lose context
+                    "isCurrentWeek": data.get("is_current_week"),
+                    "priorities": normalized_priorities,
+                    "timeAllocation": normalized_time_allocation,
+                    # Events for the model to categorise
+                    "priorityEvents": priority_events,
+                    "otherEvents": [],
+                },
+                # No _meta — no widget render
+                "assistant_guidance": assistant_guidance,
+            },
+        )
+
+    # -------------------------------------------------------------------------
+    # Call 1 and Call 2: build pie chart slices and render widget
+    # -------------------------------------------------------------------------
+
+    # Filter events by call type (data minimization - Inc 75)
+    if is_call1:
+        # Call 1: Only non-priority events for semantic grouping proposal
+        other_events = [e for e in normalized_events if not e.get("matchedKeywords")]
+        priority_events = []
+    else:
+        # Call 2: Groupings already provided, no events needed
+        other_events = []
+        priority_events = []
+
+    # Build pie chart slices
     try:
         slices = _build_pie_slices(
-            priorities, time_allocation, semantic_groupings, slice_semantic_target
+            priorities, time_allocation, semantic_groupings, semantic_target
         )
     except ToolUsageError as e:
         logger.warning(
@@ -713,35 +782,12 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 "success": False,
                 "error": "slice_validation_error",
                 "assistant_guidance": (
-                    "The semantic groupings call was invalid — either semantic_target was "
-                    "provided without semantic_groupings, or the targeted keyword has no "
+                    "The semantic groupings call was invalid — the targeted keyword has no "
                     "active priority. Check the parameters and retry."
                 ),
             },
             isError=True,
         )
-
-    # Normalize data for response
-    normalized_priorities = [_normalize_priority_report(p) for p in priorities]
-    normalized_time_allocation = _normalize_time_allocation(time_allocation)
-    normalized_events = [_normalize_event(e) for e in all_events]
-
-    # Filter events by call type (data minimization - Inc 75)
-    if is_call1:
-        # Call 1: Only non-priority events for semantic grouping proposal
-        other_events = [e for e in normalized_events if not e.get("matchedKeywords")]
-        priority_events = []
-    elif has_priority_breakdown:
-        # Call 2b: Only events matching the requested priority keyword
-        other_events = []
-        priority_events = [
-            e for e in normalized_events
-            if semantic_target in e.get("matchedKeywords", [])
-        ]
-    else:
-        # Call 2: Groupings already provided, no events needed
-        other_events = []
-        priority_events = []
 
     # Compute semantic target label for widget subtitle
     semantic_target_label = None
@@ -766,66 +812,49 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         priority_count=len(priorities),
         slice_count=len(slices),
         has_semantic_groupings=has_semantic_groupings,
-        has_priority_breakdown=has_priority_breakdown,
         semantic_target=semantic_target,
         other_event_count=len(other_events),
-        priority_event_count=len(priority_events),
     )
 
     # Build human-readable summary
-    # Note: empty priorities case handled by early return above
     week_label = "This week" if data.get("is_current_week") else f"Week of {data.get('week_start')}"
 
     if has_semantic_groupings:
         text = f"{week_label}: {total_hours:.1f}h tracked with refined time breakdown."
-    elif has_priority_breakdown:
-        text = f"{week_label}: Breakdown for {semantic_target} ({len(priority_events)} events)."
     else:
         text = f"{week_label}: {total_hours:.1f}h tracked across {len(priorities)} priorities."
 
-    # Build assistant guidance based on call type
+    # Build assistant guidance
     assistant_guidance = _build_assistant_guidance(
         data, priorities, other_events, priority_events,
         has_semantic_groupings, has_priority_breakdown, semantic_target
     )
-
-    # Build structured content with pie chart data
-    # Widget reads: slices, totalHours, weekStart, weekEnd
-    # LLM reads: priorities, otherEvents/priorityEvents, isCurrentWeek via assistant_guidance context
-    structured_content = {
-        "success": True,
-        "data": {
-            # Pie chart fields (widget uses these)
-            "weekStart": data.get("week_start"),
-            "weekEnd": data.get("week_end"),
-            "slices": slices,
-            "totalHours": total_hours,
-            "semanticTarget": semantic_target,  # "P1", "P2", "P3", "other", or None
-            "semanticTargetLabel": semantic_target_label,  # "P1: Ship v1.0" or "Other" or None
-            # Aggregate fields (always present — widget and model need these on every call)
-            "isCurrentWeek": data.get("is_current_week"),
-            "priorities": normalized_priorities,
-            "timeAllocation": normalized_time_allocation,
-            # Event fields — fixed keys, populated only for relevant call type
-            "otherEvents": other_events,       # non-empty on call 1 only
-            "priorityEvents": priority_events, # non-empty on call 2b only
-        },
-        "assistant_guidance": assistant_guidance,
-    }
-
-    # Only include _meta widget render when there is something to show
-    # Call 2b (has_priority_breakdown=True) is a data-fetch only — no widget render
-    if not has_priority_breakdown:
-        structured_content["_meta"] = {
-            "openai/outputTemplate": WIDGET_URI,
-        }
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
             text=text
         )],
-        structuredContent=structured_content,
+        structuredContent={
+            "success": True,
+            "data": {
+                "weekStart": data.get("week_start"),
+                "weekEnd": data.get("week_end"),
+                "slices": slices,
+                "totalHours": total_hours,
+                "semanticTarget": semantic_target,
+                "semanticTargetLabel": semantic_target_label,
+                "isCurrentWeek": data.get("is_current_week"),
+                "priorities": normalized_priorities,
+                "timeAllocation": normalized_time_allocation,
+                "otherEvents": other_events,
+                "priorityEvents": priority_events,
+            },
+            "_meta": {
+                "openai/outputTemplate": WIDGET_URI,
+            },
+            "assistant_guidance": assistant_guidance,
+        },
     )
 
 
