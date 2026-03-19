@@ -2,7 +2,7 @@
 render_weekly_report tool for Priority Guardian MCP.
 
 Render tool (HAS widget) for displaying weekly report with pie chart.
-This tool always produces a widget card when successful.
+Produces a widget when priorities exist and data is valid.
 
 Two call types:
 - Call 1: Basic weekly report (no semantic_groupings)
@@ -410,7 +410,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     """
     Render weekly report with pie chart visualization.
 
-    This is a render tool — always produces a widget when successful.
+    This is a render tool — produces a widget when priorities exist.
 
     Args:
         user_id: Validated user ID from JWT token
@@ -476,9 +476,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     time_allocation = data.get("time_allocation", {})
     all_events = data.get("all_events", [])
 
-    # Guard: reject semantic_groupings when no event data available
-    # (past weeks have empty all_events, can't break down)
-    if has_semantic_groupings and not all_events:
+    # Guard: reject semantic_groupings for past weeks (no event data available)
+    if has_semantic_groupings and not data.get("is_current_week"):
         logger.info(
             "tool.render_weekly_report.semantic_breakdown_unavailable",
             correlation_id=correlation_id,
