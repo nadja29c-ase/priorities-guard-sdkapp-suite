@@ -32,8 +32,6 @@ DESCRIPTION = (
     "a single priority (e.g. \"break down my P1 time\", \"what's in my P2 this week?\").\n\n"
     "After calling this tool, read the priorityEvents and IMMEDIATELY call "
     "render_weekly_report with semantic_groupings and semantic_target to render the chart. "
-    "Do NOT propose groupings to the user first. Do NOT ask for confirmation. Just call "
-    "render_weekly_report.\n\n"
     "Do NOT call this tool for the initial weekly report — use render_weekly_report directly.\n"
     "Do NOT call this tool for past weeks (no event data available)."
 )
@@ -98,7 +96,7 @@ async def _call_with_timeout(coro, op_name: str, correlation_id: str):
             op_name=op_name,
             timeout=TIMEOUT_S,
         )
-        raise ToolUsageError(f"{op_name} timed out. Please try again.")
+        raise ToolUsageError("Unable to fetch events right now. Please try again.")
 
 
 # ============================================================================
@@ -181,8 +179,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     time_allocation = data.get("time_allocation", {})
     all_events = data.get("all_events", [])
 
-    # Guard: reject call when no event data available (past weeks)
-    if not all_events:
+    # Guard: reject call for past weeks (event data only available for current week)
+    if not data.get("is_current_week"):
         logger.info(
             "tool.get_priority_events.breakdown_unavailable",
             correlation_id=correlation_id,
