@@ -143,8 +143,8 @@ class TestGetPriorityEventsHandler:
         assert len(result.structuredContent["data"]["priorityEvents"]) == 1
 
     @pytest.mark.asyncio
-    async def test_error_response_has_no_meta(self):
-        """Error responses also have no _meta — critical for data tools."""
+    async def test_past_week_error_has_no_meta(self):
+        """Past week error responses have no _meta — critical for data tools."""
         mock_response = {
             "success": True,
             "data": {
@@ -235,6 +235,53 @@ class TestGetPriorityEventsHandler:
         assert result.structuredContent["error"] == "priority_breakdown_unavailable"
         assert "P1" in result.structuredContent["assistant_guidance"]
         assert "past weeks" in result.structuredContent["assistant_guidance"]
+
+    @pytest.mark.asyncio
+    async def test_current_week_with_no_events_succeeds(self):
+        """Current week with no events should succeed (not blocked)."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,  # Current week
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 0.0,
+                        "event_count": 0,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 0.0,
+                    "keywords": {"P1": {"hours": 0.0, "event_count": 0}},
+                    "other_hours": 0.0,
+                },
+                "all_events": [],  # No events but current week
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_priority_events.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={"semantic_target": "P1"},
+            )
+
+        # Should succeed - current week is allowed even with no events
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        # priorityEvents will be empty but that's OK
+        assert result.structuredContent["data"]["priorityEvents"] == []
 
     @pytest.mark.asyncio
     async def test_guidance_references_render_weekly_report(self):

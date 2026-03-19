@@ -1182,8 +1182,8 @@ class TestSemanticBreakdownGuard:
     """Tests for preventing semantic breakdown on snapshot data (Increment 31)."""
 
     @pytest.mark.asyncio
-    async def test_semantic_groupings_rejected_when_no_events(self):
-        """semantic_groupings provided but all_events empty returns isError: true."""
+    async def test_semantic_groupings_rejected_for_past_week(self):
+        """semantic_groupings rejected for past week (is_current_week=False)."""
         mock_response = {
             "success": True,
             "data": {
@@ -1233,6 +1233,55 @@ class TestSemanticBreakdownGuard:
         assert result.structuredContent["error"] == "semantic_breakdown_unavailable"
         assert "not available for past weeks" in result.structuredContent["assistant_guidance"]
         assert "Do NOT propose" in result.structuredContent["assistant_guidance"]
+
+    @pytest.mark.asyncio
+    async def test_semantic_groupings_allowed_for_current_week_with_no_events(self):
+        """semantic_groupings allowed for current week even with no events."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,  # Current week
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 0.0,
+                        "event_count": 0,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 0.0,
+                    "keywords": {"P1": {"hours": 0.0, "event_count": 0}},
+                    "other_hours": 0.0,
+                },
+                "all_events": [],  # No events but current week
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.render_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "semantic_groupings": [
+                        {"category": "Planning", "hours": 0.0, "event_count": 0},
+                    ],
+                },
+            )
+
+        # Should succeed - current week allows semantic groupings
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
 
     def test_no_within_priority_breakdown_offered_for_past_week(self):
         """guidance for past week does NOT contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
