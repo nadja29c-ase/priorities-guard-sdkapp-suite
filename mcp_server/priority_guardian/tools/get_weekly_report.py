@@ -52,9 +52,12 @@ INPUT_SCHEMA = {
         "semantic_groupings": {
             "type": "array",
             "description": (
-                "User-confirmed semantic categories for the target slice. "
-                "When provided, replaces the target category's slice in the pie chart "
-                "with these subcategory slices. Only pass this after user confirms groupings."
+                "Semantic categories for the target slice. "
+                "When provided together with semantic_target, replaces that category's slice "
+                "in the pie chart with these subcategory slices. "
+                "For 'other' breakdown: pass after user confirms your proposed groupings. "
+                "For priority breakdown (P1/P2/P3): pass immediately after reading priorityEvents — "
+                "no user confirmation needed."
             ),
             "items": {
                 "type": "object",
@@ -80,14 +83,12 @@ INPUT_SCHEMA = {
             "type": "string",
             "enum": ["P1", "P2", "P3", "other"],
             "description": (
-                "Dual role: (1) With semantic_groupings provided, specifies which "
-                "category to explode into subcategories — the named category is "
-                "replaced by its semantic_groupings while all other categories "
-                "remain as single slices. (2) Without semantic_groupings, "
-                "setting semantic_target to 'P1', 'P2', or 'P3' requests that "
-                "priority's events be returned in priorityEvents for you to "
-                "propose a breakdown. Do NOT combine a priority semantic_target "
-                "with semantic_groupings — use one role at a time."
+                "Specifies which category to target. Two usage patterns: "
+                "(1) Without semantic_groupings: setting to 'P1', 'P2', or 'P3' fetches that "
+                "priority's events into priorityEvents for grouping. No widget rendered. "
+                "(2) With semantic_groupings: the named category is replaced by its subcategory "
+                "slices in the chart. For 'other', pass after user confirms. "
+                "For P1/P2/P3, pass immediately after reading priorityEvents."
             ),
         },
     },
@@ -188,23 +189,22 @@ GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE = (
 )
 
 GUIDANCE_WITHIN_PRIORITY_BREAKDOWN = (
-    "You can also propose a within-priority breakdown for any single priority. "
-    "To do so, call get_weekly_report again with semantic_target set to the priority keyword "
-    "(e.g. 'P1'). The tool will return that priority's events in priorityEvents for you to categorise."
+    "You can also break down any single priority's time into subcategories. "
+    "To do so, call get_weekly_report with semantic_target set to the priority keyword "
+    "(e.g. 'P1'). The tool will return that priority's events — immediately group them "
+    "and call get_weekly_report again with semantic_groupings to render the breakdown. "
+    "No confirmation needed."
 )
 
 # Template with {keyword} placeholder for priority breakdown (call 2b)
 GUIDANCE_PRIORITY_BREAKDOWN_TEMPLATE = (
-    "The user wants to see how their {keyword} time breaks down. "
-    "Based on the event titles and descriptions in priorityEvents, propose approximate "
-    "semantic subcategories. Frame it as a NEUTRAL observation: "
-    "'Your {keyword} time looks like it breaks down to roughly: [category] ~Xh, etc.' "
-    "Ask if this grouping looks right. "
-    "CRITICAL: NEVER interpret or judge priority time. "
-    "If they confirm OR express any intent to see the breakdown, "
+    "The user asked to break down their {keyword} time. "
+    "Based on the event titles and descriptions in priorityEvents, group the events into "
+    "semantic subcategories and assign approximate hours to each (category, hours, event_count). "
     "IMMEDIATELY call get_weekly_report again with semantic_groupings containing your "
-    "proposed categories and semantic_target='{keyword}'. "
-    "Do NOT ask again. Just call the tool."
+    "categories and semantic_target='{keyword}'. "
+    "Do NOT propose first. Do NOT ask for confirmation. Do NOT narrate the groupings. "
+    "Just call the tool — the chart will show the breakdown."
 )
 
 GUIDANCE_CLOSING = (
@@ -554,29 +554,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     # Note: semantic_target="other" with no semantic_groupings falls into is_call1 (correct —
     # "other" without groupings means no breakdown has been requested yet)
 
-    # Mutual exclusion validation: semantic_groupings + priority semantic_target is invalid
-    if has_semantic_groupings and semantic_target in ("P1", "P2", "P3"):
-        logger.warning(
-            "tool.get_weekly_report.invalid_parameters",
-            correlation_id=correlation_id,
-            user_id=user_id,
-            semantic_target=semantic_target,
-            has_semantic_groupings=has_semantic_groupings,
-        )
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(type="text", text="Invalid parameters.")],
-            structuredContent={
-                "success": False,
-                "error": "invalid_parameters",
-                "assistant_guidance": (
-                    "semantic_groupings and a priority semantic_target cannot be used together. "
-                    "Use semantic_target alone to request priority events for breakdown, "
-                    "then semantic_groupings to confirm the categorisation."
-                ),
-            },
-            isError=True,
-        )
-
     logger.info(
         "tool.get_weekly_report.start",
         correlation_id=correlation_id,
@@ -833,11 +810,15 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "otherEvents": other_events,       # non-empty on call 1 only
             "priorityEvents": priority_events, # non-empty on call 2b only
         },
-        "_meta": {
-            "openai/outputTemplate": WIDGET_URI,
-        },
         "assistant_guidance": assistant_guidance,
     }
+
+    # Only include _meta widget render when there is something to show
+    # Call 2b (has_priority_breakdown=True) is a data-fetch only — no widget render
+    if not has_priority_breakdown:
+        structured_content["_meta"] = {
+            "openai/outputTemplate": WIDGET_URI,
+        }
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(

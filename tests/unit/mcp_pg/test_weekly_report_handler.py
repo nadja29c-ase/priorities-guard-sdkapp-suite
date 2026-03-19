@@ -999,7 +999,7 @@ class TestGuidanceIncrement10:
             has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
-        assert "within-priority breakdown" in guidance.lower()
+        assert "break down any single priority" in guidance.lower()
 
     def test_mode2_uses_neutral_wording(self):
         """MODE 2 guidance uses neutral wording, not 'coaching'."""
@@ -1244,7 +1244,7 @@ class TestSemanticBreakdownGuard:
             has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
-        assert "within-priority breakdown" not in guidance.lower()
+        assert "break down any single priority" not in guidance.lower()
 
     def test_no_within_priority_breakdown_offered_when_no_priority_hours(self):
         """guidance with 0 priority hours does NOT contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
@@ -1263,7 +1263,7 @@ class TestSemanticBreakdownGuard:
             has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
-        assert "within-priority breakdown" not in guidance.lower()
+        assert "break down any single priority" not in guidance.lower()
 
     def test_within_priority_breakdown_offered_when_priority_hours_exist(self):
         """guidance with priority hours DOES contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN (current week only)."""
@@ -1282,7 +1282,7 @@ class TestSemanticBreakdownGuard:
             has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
-        assert "within-priority breakdown" in guidance.lower()
+        assert "break down any single priority" in guidance.lower()
 
 
 # ============================================================================
@@ -1631,8 +1631,62 @@ class TestDataMinimizationIncrement75:
         assert data["otherEvents"] == []
 
     @pytest.mark.asyncio
-    async def test_mutual_exclusion_returns_error(self):
-        """semantic_groupings + priority semantic_target together returns structured error."""
+    async def test_call2b_has_no_meta_widget_render(self):
+        """Call 2b (priority breakdown request) has no _meta — no widget flash."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [
+                    {"title": "P1: Feature work", "start": "2026-03-16T10:00:00",
+                     "end": "2026-03-16T12:00:00", "matched_keywords": ["P1"]},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_target": "P1",  # Call 2b: fetch events, no widget
+                },
+            )
+
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        # Call 2b should NOT have _meta — no widget render
+        assert "_meta" not in result.structuredContent
+        # But should have priorityEvents for the model to read
+        assert len(result.structuredContent["data"]["priorityEvents"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_call1_has_meta_widget_render(self):
+        """Call 1 (basic report) has _meta — widget renders."""
         mock_response = {
             "success": True,
             "data": {
@@ -1668,19 +1722,134 @@ class TestDataMinimizationIncrement75:
             result = await handle(
                 user_id="test-user",
                 correlation_id="test-corr",
+                arguments={"week_start": "2026-03-16"},  # Call 1: basic report
+            )
+
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        # Call 1 should have _meta — widget renders
+        assert "_meta" in result.structuredContent
+        assert "openai/outputTemplate" in result.structuredContent["_meta"]
+
+    @pytest.mark.asyncio
+    async def test_priority_groupings_confirmed_has_meta(self):
+        """Final priority breakdown call (groupings + target) has _meta and exploded slices."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [
+                    {"title": "P1: Feature work", "start": "2026-03-16T10:00:00",
+                     "end": "2026-03-16T16:00:00", "matched_keywords": ["P1"]},
+                    {"title": "P1: Code review", "start": "2026-03-17T10:00:00",
+                     "end": "2026-03-17T14:00:00", "matched_keywords": ["P1"]},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_groupings": [
+                        {"category": "Feature work", "hours": 6.0, "event_count": 3},
+                        {"category": "Code review", "hours": 4.0, "event_count": 2},
+                    ],
+                    "semantic_target": "P1",  # Final call: render exploded chart
+                },
+            )
+
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        # Final call should have _meta — widget renders
+        assert "_meta" in result.structuredContent
+        # Slices should be exploded (P1 replaced with subcategories)
+        slices = result.structuredContent["data"]["slices"]
+        slice_labels = [s["label"] for s in slices]
+        assert "Feature work" in slice_labels
+        assert "Code review" in slice_labels
+        # P1 slice should not be present (replaced by subcategories)
+        assert "P1: Ship v1.0" not in slice_labels
+
+    @pytest.mark.asyncio
+    async def test_priority_groupings_no_longer_blocked(self):
+        """semantic_groupings + priority semantic_target is now valid (not an error)."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [
+                    {"title": "P1: Feature work", "start": "2026-03-16T10:00:00",
+                     "end": "2026-03-16T15:00:00", "matched_keywords": ["P1"]},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
                 arguments={
                     "week_start": "2026-03-16",
                     "semantic_groupings": [
                         {"category": "Feature work", "hours": 5.0, "event_count": 3},
                     ],
-                    "semantic_target": "P1",  # Invalid: can't combine groupings with priority target
+                    "semantic_target": "P1",  # Was invalid in Inc 75, now valid
                 },
             )
 
-        assert result.isError is True
-        assert result.structuredContent["success"] is False
-        assert result.structuredContent["error"] == "invalid_parameters"
-        assert "cannot be used together" in result.structuredContent["assistant_guidance"]
+        # Should NOT be an error — mutual exclusion removed in Increment 76
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        assert "error" not in result.structuredContent
 
     @pytest.mark.asyncio
     async def test_other_target_with_groupings_not_blocked(self):
