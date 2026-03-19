@@ -18,7 +18,7 @@ from uuid import uuid4
 from backend.apps.priority_guardian.services.weekly_report_service import (
     generate_weekly_report,
 )
-from mcp_server.priority_guardian.tools.get_weekly_report import (
+from mcp_server.priority_guardian.tools.render_weekly_report import (
     _build_pie_slices,
 )
 
@@ -593,10 +593,7 @@ class TestPieChartIntegration:
         priorities = data["priorities"]
         time_allocation = data["time_allocation"]
 
-        slices, error = _build_pie_slices(priorities, time_allocation, None, None)
-
-        # No error
-        assert error is None
+        slices = _build_pie_slices(priorities, time_allocation, None, None)
 
         # Should have P1 slice, P2 slice, and Other slice
         slice_labels = [s["label"] for s in slices]
@@ -666,15 +663,12 @@ class TestPieChartIntegration:
         ]
 
         # Build slices with semantic groupings
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             data["priorities"],
             data["time_allocation"],
             semantic_groupings,
             None,
         )
-
-        # No error
-        assert error is None
 
         # Should NOT have "Other" slice when semantic groupings provided
         slice_labels = [s["label"] for s in slices]
@@ -690,7 +684,7 @@ class TestPieChartIntegration:
                 assert s["type"] == "semantic"
 
     @pytest.mark.asyncio
-    async def test_over_allocation_returns_error(
+    async def test_over_allocation_clamps_remainder_to_zero(
         self,
         mock_session,
         mock_http_client,
@@ -699,7 +693,10 @@ class TestPieChartIntegration:
         mock_calendar_events,
     ):
         """
-        Round-trip: Semantic groupings exceeding other_hours + 0.5h returns validation error.
+        Round-trip: Semantic groupings exceeding other_hours clamps remainder to 0 (no error).
+
+        Changed in Inc 77: Instead of raising ToolUsageError, over-allocation
+        is handled gracefully by clamping the remainder to 0.
         """
         user_id = uuid4()
 
@@ -731,23 +728,26 @@ class TestPieChartIntegration:
         data = result["data"]
         other_hours = data["time_allocation"]["other_hours"]
 
-        # Semantic groupings that exceed other_hours by more than 0.5h tolerance
+        # Semantic groupings that exceed other_hours
         semantic_groupings = [
             {"category": "Meetings", "hours": other_hours + 1.0, "event_count": 3},
         ]
 
-        # Build slices - should raise ToolUsageError
-        from mcp_server.priority_guardian.tools.base import ToolUsageError
-        with pytest.raises(ToolUsageError) as exc_info:
-            _build_pie_slices(
-                data["priorities"],
-                data["time_allocation"],
-                semantic_groupings,
-                None,
-            )
+        # Build slices - should succeed (clamped, no error)
+        slices = _build_pie_slices(
+            data["priorities"],
+            data["time_allocation"],
+            semantic_groupings,
+            None,
+        )
 
-        # Should contain "exceed" in error message
-        assert "exceed" in str(exc_info.value).lower()
+        # No Uncategorized slice (remainder clamped to 0)
+        slice_labels = [s["label"] for s in slices]
+        assert "Uncategorized" not in slice_labels
+
+        # All slice hours are non-negative
+        for s in slices:
+            assert s["hours"] >= 0, f"Slice {s['label']} has negative hours: {s['hours']}"
 
     @pytest.mark.asyncio
     async def test_total_hours_mathematically_correct(
@@ -806,8 +806,7 @@ class TestPieChartIntegration:
         assert abs(total_hours - (priority_hours + other_hours)) < 0.01
 
         # Build slices and verify slice sum equals total_hours
-        slices, error = _build_pie_slices(data["priorities"], time_allocation, None, None)
-        assert error is None
+        slices = _build_pie_slices(data["priorities"], time_allocation, None, None)
         slice_sum = sum(s["hours"] for s in slices)
         assert abs(total_hours - slice_sum) < 0.01
 
@@ -860,15 +859,12 @@ class TestPieChartIntegration:
             {"category": "Client calls", "hours": other_hours * 0.4 + 0.15, "event_count": 1},
         ]
 
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             data["priorities"],
             data["time_allocation"],
             semantic_groupings,
             None,
         )
-
-        # Should succeed (within tolerance)
-        assert error is None
 
         # No Uncategorized slice (remainder clamped to 0)
         assert not any(s["label"] == "Uncategorized" for s in slices)
@@ -973,14 +969,12 @@ class TestPieChartIntegration:
             {"category": "Team meetings", "hours": other_hours - 0.5, "event_count": 1},
         ]
 
-        slices, error = _build_pie_slices(
+        slices = _build_pie_slices(
             data["priorities"],
             data["time_allocation"],
             semantic_groupings,
             None,
         )
-
-        assert error is None
 
         # Should have Uncategorized slice
         slice_labels = [s["label"] for s in slices]

@@ -2,7 +2,7 @@
 Integration tests for timeout handling in Priority Guardian MCP tools.
 
 Tests:
-- get_weekly_report returns error result on timeout via dispatcher
+- render_weekly_report returns error result on timeout via dispatcher
 - onboarding_calendar_setup critical paths return error on timeout
 - Widget tools return error results on timeout
 """
@@ -18,24 +18,24 @@ from mcp_server.priority_guardian.tools.base import ToolUsageError
 
 
 # =============================================================================
-# get_weekly_report Integration Tests
+# render_weekly_report Integration Tests
 # =============================================================================
 
 
-class TestGetWeeklyReportTimeoutIntegration:
-    """Integration tests for get_weekly_report timeout handling."""
+class TestRenderWeeklyReportTimeoutIntegration:
+    """Integration tests for render_weekly_report timeout handling."""
 
     @pytest.mark.asyncio
     async def test_timeout_returns_error_via_handler(self):
         """Backend timeout should raise ToolUsageError that dispatcher can catch."""
-        tool_def = TOOL_REGISTRY.get("get_weekly_report")
+        tool_def = TOOL_REGISTRY.get("render_weekly_report")
         assert tool_def is not None
 
         async def raise_timeout(*args, **kwargs):
             raise asyncio.TimeoutError()
 
         with patch(
-            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            "mcp_server.priority_guardian.tools.render_weekly_report.backend_get",
             side_effect=raise_timeout,
         ):
             with pytest.raises(ToolUsageError) as exc_info:

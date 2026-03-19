@@ -132,10 +132,12 @@ class TestFilesystemCoverage:
         # Get the tools directory
         tools_dir = Path(__file__).parent.parent.parent.parent / "mcp_server" / "priority_guardian" / "tools"
 
-        # Files to exclude (infrastructure, not tools)
+        # Files to exclude (infrastructure and helpers, not tools)
         excluded_files = {
             "__init__.py",
             "base.py",
+            "normalize.py",  # Helper module for field normalization
+            "constants.py",  # Widget tools constants (WIDGET_URI, etc.)
         }
 
         # Get expected tool module names from filesystem
@@ -162,7 +164,8 @@ class TestFilesystemCoverage:
             # Main tools
             "create_priority": "create_priority",
             "get_priorities": "get_priorities",
-            "get_weekly_report": "get_weekly_report",
+            "render_weekly_report": "render_weekly_report",
+            "get_priority_events": "get_priority_events",
             "get_patterns": "get_patterns",
             "onboarding_calendar_setup": "onboarding_calendar_setup",
             "inspect_adapt": "inspect_adapt",
@@ -217,7 +220,8 @@ class TestFilesystemCoverage:
         tool_to_module_mapping = {
             "create_priority": "create_priority",
             "get_priorities": "get_priorities",
-            "get_weekly_report": "get_weekly_report",
+            "render_weekly_report": "render_weekly_report",
+            "get_priority_events": "get_priority_events",
             "get_patterns": "get_patterns",
             "onboarding_calendar_setup": "onboarding_calendar_setup",
             "inspect_adapt": "inspect_adapt",

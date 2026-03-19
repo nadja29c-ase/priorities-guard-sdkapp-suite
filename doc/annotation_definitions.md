@@ -67,3 +67,27 @@ When adding a new tool, answer these three questions:
 1. **Does it write user-visible state?** (creates, updates, deletes records the user sees) → `readOnly=false`. If only invisible bookkeeping → `readOnly=true`.
 2. **Is the write irreversible?** (delete, revoke, permanent change) → `destructive=true`.
 3. **Does it call an external system?** (Google API, any third-party API, OAuth provider) → `openWorld=true`.
+
+---
+
+## Tool Annotations
+
+### `get_priority_events`
+
+| Annotation | Value | Rationale |
+|---|---|---|
+| `readOnlyHint` | `true` | Fetches calendar events for a specific priority. No user-visible state mutation. |
+| `destructiveHint` | `false` | No mutations, therefore non-destructive. |
+| `openWorldHint` | `true` | Calls Google Calendar API via backend. |
+
+**Widget:** `None` — Data-only tool with no widget card. This is intentional to prevent double-widget rendering during the priority breakdown flow.
+
+### `render_weekly_report`
+
+| Annotation | Value | Rationale |
+|---|---|---|
+| `readOnlyHint` | `true` | Renders pie chart from backend data. No user-visible state mutation. |
+| `destructiveHint` | `false` | No mutations, therefore non-destructive. |
+| `openWorldHint` | `true` | Calls Google Calendar API via backend. |
+
+**Widget:** `ui://widget/pg-dashboard-v12.html` — Renders the weekly report pie chart. `widget_accessible=True` for future 3-week navigation.

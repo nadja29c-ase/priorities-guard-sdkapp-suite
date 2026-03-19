@@ -575,7 +575,7 @@ class TestSuccessResponse:
                 arguments=valid_deadline_args,
             )
 
-            assert result.structuredContent["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard.html"
+            assert result.structuredContent["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard-v12.html"
 
     @pytest.mark.asyncio
     async def test_success_guidance_has_remaining_slots_when_under_3(

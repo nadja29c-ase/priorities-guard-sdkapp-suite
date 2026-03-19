@@ -45,23 +45,23 @@ class TestGetPatternsTimeout:
 
 
 # =============================================================================
-# get_weekly_report Timeout Tests
+# render_weekly_report / get_priority_events Timeout Tests
 # =============================================================================
 
 
-class TestGetWeeklyReportTimeout:
-    """Test timeout handling in get_weekly_report."""
+class TestRenderWeeklyReportTimeout:
+    """Test timeout handling in render_weekly_report."""
 
     @pytest.mark.asyncio
     async def test_backend_timeout_raises_tool_usage_error(self):
         """Backend timeout should raise ToolUsageError."""
-        from mcp_server.priority_guardian.tools.get_weekly_report import handle
+        from mcp_server.priority_guardian.tools.render_weekly_report import handle
 
         async def raise_timeout(*args, **kwargs):
             raise asyncio.TimeoutError()
 
         with patch(
-            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            "mcp_server.priority_guardian.tools.render_weekly_report.backend_get",
             side_effect=raise_timeout,
         ):
             with pytest.raises(ToolUsageError) as exc_info:
@@ -69,6 +69,31 @@ class TestGetWeeklyReportTimeout:
                     user_id="user-123",
                     correlation_id="corr-456",
                     arguments={},
+                )
+
+            assert "timed out" in str(exc_info.value).lower()
+
+
+class TestGetPriorityEventsTimeout:
+    """Test timeout handling in get_priority_events."""
+
+    @pytest.mark.asyncio
+    async def test_backend_timeout_raises_tool_usage_error(self):
+        """Backend timeout should raise ToolUsageError."""
+        from mcp_server.priority_guardian.tools.get_priority_events import handle
+
+        async def raise_timeout(*args, **kwargs):
+            raise asyncio.TimeoutError()
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_priority_events.backend_get",
+            side_effect=raise_timeout,
+        ):
+            with pytest.raises(ToolUsageError) as exc_info:
+                await handle(
+                    user_id="user-123",
+                    correlation_id="corr-456",
+                    arguments={"semantic_target": "P1"},
                 )
 
             assert "timed out" in str(exc_info.value).lower()
@@ -373,12 +398,19 @@ class TestTimeoutConstants:
         assert hasattr(get_patterns, "TIMEOUT_S")
         assert get_patterns.TIMEOUT_S == 8.0
 
-    def test_get_weekly_report_timeout_constant(self):
-        """get_weekly_report should have TIMEOUT_S = 8.0."""
-        from mcp_server.priority_guardian.tools import get_weekly_report
+    def test_render_weekly_report_timeout_constant(self):
+        """render_weekly_report should have TIMEOUT_S = 8.0."""
+        from mcp_server.priority_guardian.tools import render_weekly_report
 
-        assert hasattr(get_weekly_report, "TIMEOUT_S")
-        assert get_weekly_report.TIMEOUT_S == 8.0
+        assert hasattr(render_weekly_report, "TIMEOUT_S")
+        assert render_weekly_report.TIMEOUT_S == 8.0
+
+    def test_get_priority_events_timeout_constant(self):
+        """get_priority_events should have TIMEOUT_S = 8.0."""
+        from mcp_server.priority_guardian.tools import get_priority_events
+
+        assert hasattr(get_priority_events, "TIMEOUT_S")
+        assert get_priority_events.TIMEOUT_S == 8.0
 
     def test_onboarding_calendar_setup_timeout_constant(self):
         """onboarding_calendar_setup should have TIMEOUT_S = 8.0."""
@@ -436,11 +468,17 @@ class TestNoBackendTimeout:
 
         assert not hasattr(get_priorities, "BACKEND_TIMEOUT")
 
-    def test_get_weekly_report_no_backend_timeout(self):
-        """get_weekly_report should not have BACKEND_TIMEOUT."""
-        from mcp_server.priority_guardian.tools import get_weekly_report
+    def test_render_weekly_report_no_backend_timeout(self):
+        """render_weekly_report should not have BACKEND_TIMEOUT."""
+        from mcp_server.priority_guardian.tools import render_weekly_report
 
-        assert not hasattr(get_weekly_report, "BACKEND_TIMEOUT")
+        assert not hasattr(render_weekly_report, "BACKEND_TIMEOUT")
+
+    def test_get_priority_events_no_backend_timeout(self):
+        """get_priority_events should not have BACKEND_TIMEOUT."""
+        from mcp_server.priority_guardian.tools import get_priority_events
+
+        assert not hasattr(get_priority_events, "BACKEND_TIMEOUT")
 
     def test_onboarding_calendar_setup_no_backend_timeout(self):
         """onboarding_calendar_setup should not have BACKEND_TIMEOUT."""

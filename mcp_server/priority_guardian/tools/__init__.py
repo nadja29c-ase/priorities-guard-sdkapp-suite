@@ -15,7 +15,8 @@ from .base import ToolDefinition
 # Public tools (LLM can see and call)
 from .create_priority import CREATE_PRIORITY
 from .get_priorities import GET_PRIORITIES
-from .get_weekly_report import GET_WEEKLY_REPORT
+from .get_priority_events import GET_PRIORITY_EVENTS
+from .render_weekly_report import RENDER_WEEKLY_REPORT
 from .get_patterns import GET_PATTERNS
 from .onboarding_calendar_setup import ONBOARDING_CALENDAR_SETUP
 from .inspect_adapt import INSPECT_ADAPT
@@ -47,7 +48,11 @@ TOOL_INVOCATION_MESSAGES: dict[str, tuple[str, str]] = {
         "Setting up your priority...",
         "Here's your Priority Guardian dashboard.",
     ),
-    "get_weekly_report": (
+    "get_priority_events": (
+        "Fetching priority events...",
+        "Events retrieved.",
+    ),
+    "render_weekly_report": (
         "Generating your weekly report...",
         "Here's your weekly time allocation.",
     ),
@@ -70,7 +75,8 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     # Public tools (LLM can see and call)
     CREATE_PRIORITY.name: CREATE_PRIORITY,
     GET_PRIORITIES.name: GET_PRIORITIES,
-    GET_WEEKLY_REPORT.name: GET_WEEKLY_REPORT,
+    GET_PRIORITY_EVENTS.name: GET_PRIORITY_EVENTS,
+    RENDER_WEEKLY_REPORT.name: RENDER_WEEKLY_REPORT,
     GET_PATTERNS.name: GET_PATTERNS,
     ONBOARDING_CALENDAR_SETUP.name: ONBOARDING_CALENDAR_SETUP,
     INSPECT_ADAPT.name: INSPECT_ADAPT,

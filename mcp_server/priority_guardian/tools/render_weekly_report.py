@@ -1,12 +1,15 @@
 """
-get_weekly_report tool for Priority Guardian MCP.
+render_weekly_report tool for Priority Guardian MCP.
 
-Returns weekly report data with per-priority hours, status indicators,
-and pie chart visualization of time allocation.
+Render tool (HAS widget) for displaying weekly report with pie chart.
+This tool always produces a widget card when successful.
 
-On first call: Shows P1/P2/P3 + "Other" slice. LLM proposes semantic groupings.
-On second call (with semantic_groupings): Shows priority slices + user-confirmed
-semantic category slices. No persistence - purely conversational refinement.
+Two call types:
+- Call 1: Basic weekly report (no semantic_groupings)
+- Call 2: Confirmed groupings for other or priority → exploded chart
+
+For priority breakdown, use get_priority_events first to fetch events,
+then call this tool with semantic_groupings to render the exploded chart.
 """
 
 import asyncio
@@ -17,6 +20,7 @@ from mcp import types as mcp_types
 from mcp_server.priority_guardian.http_client import backend_get
 from .base import ToolDefinition, ToolUsageError
 from .widget_tools.constants import WIDGET_URI
+from .normalize import normalize_priority_report, normalize_time_allocation, normalize_event
 
 logger = structlog.get_logger(__name__)
 
@@ -24,18 +28,20 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-NAME = "get_weekly_report"
+NAME = "render_weekly_report"
 
 DESCRIPTION = (
-    "Get your weekly report showing time invested in each priority. "
-    "Returns hours worked and a pie chart breakdown of how your week was spent.\n\n"
+    "Get your weekly report showing time invested in each priority, rendered as a pie chart.\n\n"
     "Call this tool:\n"
     "- When the user asks about their week, progress, or hours\n"
     "- When the user says \"how did I do?\", \"show my report\", \"weekly summary\"\n"
-    "- At the start of a reflection or check-in conversation\n\n"
+    "- At the start of a reflection or check-in conversation\n"
+    "- After calling get_priority_events: immediately call this tool with semantic_groupings "
+    "and semantic_target to render the P1/P2/P3 breakdown chart\n\n"
     "Do NOT call this tool:\n"
     "- During onboarding or priority setup\n"
-    "- When the user is asking about patterns or trends over time (use get_patterns instead)"
+    "- When the user is asking about patterns or trends over time (use get_patterns instead)\n"
+    "- To fetch events for a breakdown — use get_priority_events first, then call this tool"
 )
 
 INPUT_SCHEMA = {
@@ -56,8 +62,8 @@ INPUT_SCHEMA = {
                 "When provided together with semantic_target, replaces that category's slice "
                 "in the pie chart with these subcategory slices. "
                 "For 'other' breakdown: pass after user confirms your proposed groupings. "
-                "For priority breakdown (P1/P2/P3): pass immediately after reading priorityEvents — "
-                "no user confirmation needed."
+                "For priority breakdown (P1/P2/P3): pass immediately after calling "
+                "get_priority_events — no user confirmation needed."
             ),
             "items": {
                 "type": "object",
@@ -83,12 +89,10 @@ INPUT_SCHEMA = {
             "type": "string",
             "enum": ["P1", "P2", "P3", "other"],
             "description": (
-                "Specifies which category to target. Two usage patterns: "
-                "(1) Without semantic_groupings: setting to 'P1', 'P2', or 'P3' fetches that "
-                "priority's events into priorityEvents for grouping. No widget rendered. "
-                "(2) With semantic_groupings: the named category is replaced by its subcategory "
-                "slices in the chart. For 'other', pass after user confirms. "
-                "For P1/P2/P3, pass immediately after reading priorityEvents."
+                "With semantic_groupings: replaces that category's slice in the chart with "
+                "subcategory slices. For 'other', pass after user confirms your proposed groupings. "
+                "For P1/P2/P3, pass immediately after calling get_priority_events — no user "
+                "confirmation needed."
             ),
         },
     },
@@ -125,7 +129,7 @@ async def _call_with_timeout(coro, op_name: str, correlation_id: str):
         return await asyncio.wait_for(coro, timeout=TIMEOUT_S)
     except asyncio.TimeoutError:
         logger.warning(
-            "tool.get_weekly_report.timeout",
+            "tool.render_weekly_report.timeout",
             correlation_id=correlation_id,
             op_name=op_name,
             timeout=TIMEOUT_S,
@@ -173,7 +177,7 @@ GUIDANCE_SEMANTIC_PROPOSAL_TEMPLATE = (
     "CRITICAL: NEVER interpret/ judge non-priority time f.e. as wasted, unfocused, or dilutive. NEVER assume non-priority time should be strategic or priority-related. "
     "If they confirm OR express any intent to see the breakdown — including 'yes', 'sure', "
     "'show me', 'break it down', 'what's in Other', 'go ahead', or any similar phrasing — "
-    "IMMEDIATELY call get_weekly_report again with the semantic_groupings parameter "
+    "IMMEDIATELY call render_weekly_report again with the semantic_groupings parameter "
     "containing your proposed categories (category name, hours, event_count for each) "
     "and semantic_target='other'. "
     "Do NOT ask again. Do NOT re-propose. Just call the tool."
@@ -190,21 +194,10 @@ GUIDANCE_SEMANTIC_NO_EVENTS_TEMPLATE = (
 
 GUIDANCE_WITHIN_PRIORITY_BREAKDOWN = (
     "You can also break down any single priority's time into subcategories. "
-    "To do so, call get_weekly_report with semantic_target set to the priority keyword "
+    "To do so, call get_priority_events with semantic_target set to the priority keyword "
     "(e.g. 'P1'). The tool will return that priority's events — immediately group them "
-    "and call get_weekly_report again with semantic_groupings to render the breakdown. "
+    "and call render_weekly_report with semantic_groupings to render the breakdown. "
     "No confirmation needed."
-)
-
-# Template with {keyword} placeholder for priority breakdown (call 2b)
-GUIDANCE_PRIORITY_BREAKDOWN_TEMPLATE = (
-    "The user asked to break down their {keyword} time. "
-    "Based on the event titles and descriptions in priorityEvents, group the events into "
-    "semantic subcategories and assign approximate hours to each (category, hours, event_count). "
-    "IMMEDIATELY call get_weekly_report again with semantic_groupings containing your "
-    "categories and semantic_target='{keyword}'. "
-    "Do NOT propose first. Do NOT ask for confirmation. Do NOT narrate the groupings. "
-    "Just call the tool — the chart will show the breakdown."
 )
 
 GUIDANCE_CLOSING = (
@@ -221,85 +214,6 @@ GUIDANCE_SEMANTIC_PROVIDED = (
     "Ask what stands out to them. "
     "Keep it short — the visual does the heavy lifting."
 )
-
-
-# ============================================================================
-# Normalization Helpers
-# ============================================================================
-
-def _normalize_priority_report(p: dict) -> dict:
-    """
-    Normalize priority report fields from backend snake_case to spec camelCase.
-
-    Args:
-        p: Priority report dict from backend
-
-    Returns:
-        Normalized priority dict
-    """
-    result = {
-        "id": p.get("id"),
-        "name": p.get("name"),
-        "type": p.get("type"),
-        "calendarKeyword": p.get("calendar_keyword"),
-        "actualHours": p.get("actual_hours"),
-        "eventCount": p.get("event_count"),
-    }
-
-    # Deadline-specific fields
-    if p.get("type") == "deadline":
-        result["deadlineDate"] = p.get("deadline_date")
-        result["daysRemaining"] = p.get("days_remaining")
-        result["deliverablesCompleted"] = p.get("deliverables_completed")
-        result["deliverablesTotal"] = p.get("deliverables_total")
-        # pacingStatus intentionally excluded - LLM should not use computed status
-
-    # Flexible-specific fields
-    elif p.get("type") == "flexible":
-        result["targetHours"] = p.get("target_hours")
-        # flexStatus intentionally excluded - LLM should not use computed status
-        # Aggregates are placeholders (always 0/null until persistence ships)
-        result["streakCount"] = p.get("streak_count", 0)
-        result["totalHoursInvested"] = p.get("total_hours_invested", 0.0)
-
-    # Previous week comparison (always null until persistence ships)
-    result["previousWeek"] = None
-
-    return result
-
-
-def _normalize_time_allocation(ta: dict) -> dict:
-    """Normalize time allocation fields."""
-    keywords = ta.get("keywords", {})
-    return {
-        "totalTrackedHours": ta.get("total_tracked_hours"),
-        "keywords": {
-            "P1": {
-                "hours": keywords.get("P1", {}).get("hours", 0.0),
-                "eventCount": keywords.get("P1", {}).get("event_count", 0),
-            },
-            "P2": {
-                "hours": keywords.get("P2", {}).get("hours", 0.0),
-                "eventCount": keywords.get("P2", {}).get("event_count", 0),
-            },
-            "P3": {
-                "hours": keywords.get("P3", {}).get("hours", 0.0),
-                "eventCount": keywords.get("P3", {}).get("event_count", 0),
-            },
-        },
-        "otherHours": ta.get("other_hours", 0.0),
-    }
-
-
-def _normalize_event(e: dict) -> dict:
-    """Normalize event fields for LLM semantic grouping."""
-    return {
-        "title": e.get("title", ""),
-        "description": e.get("description", ""),
-        "start": e.get("start"),
-        "end": e.get("end"),
-        "matchedKeywords": e.get("matched_keywords", []),
-    }
 
 
 def _build_pie_slices(
@@ -336,11 +250,6 @@ def _build_pie_slices(
     # (backwards compatibility)
     if semantic_groupings and len(semantic_groupings) > 0 and not semantic_target:
         semantic_target = "other"
-
-    # Note: semantic_target without semantic_groupings is valid — handler passes
-    # slice_semantic_target=None for call 2b, so this function sees None and renders
-    # normal chart. Validation of semantic_target + groupings combinations happens
-    # at handler level (mutual exclusion check).
 
     # Build map of active priority keywords
     active_keywords = {p.get("calendar_keyword") for p in priorities if p.get("calendar_keyword")}
@@ -431,28 +340,21 @@ def _build_assistant_guidance(
     data: dict,
     priorities: list[dict],
     other_events: list[dict],
-    priority_events: list[dict],
     has_semantic_groupings: bool,
-    has_priority_breakdown: bool,
-    semantic_target: str | None,
 ) -> str:
     """
     Build assistant guidance for presenting the weekly report.
 
-    Four modes:
+    Two modes (simplified from three after two-tool split):
     1. No priorities: Tracking hadn't started for this week
-    2. Call 1 (no groupings, no priority breakdown): Propose other groupings
+    2. Call 1 (no groupings): Propose other groupings, offer priority breakdown
     3. Call 2 (semantic_groupings provided): Brief neutral observation
-    4. Call 2b (priority breakdown requested): Propose priority subcategories
 
     Args:
         data: Backend response data
         priorities: List of priority dicts
         other_events: Non-priority events (for call 1)
-        priority_events: Events for specific priority (for call 2b)
         has_semantic_groupings: Whether semantic_groupings parameter was provided
-        has_priority_breakdown: Whether this is a priority breakdown request (call 2b)
-        semantic_target: Target keyword for breakdown ("P1", "P2", "P3", or "other")
     """
     # Defense in depth: if handle() early return is bypassed, still return safe guidance
     if not priorities:
@@ -466,23 +368,6 @@ def _build_assistant_guidance(
     if has_semantic_groupings:
         # Call 2: Semantic groupings provided — brief observation only
         guidance_parts.append(GUIDANCE_SEMANTIC_PROVIDED)
-    elif has_priority_breakdown:
-        # Call 2b: Priority breakdown requested — propose subcategories
-        if is_current:
-            guidance_parts.append(GUIDANCE_CURRENT_WEEK)
-        else:
-            guidance_parts.append(GUIDANCE_COMPLETED_WEEK)
-
-        if priority_events and semantic_target:
-            guidance_parts.append(
-                GUIDANCE_PRIORITY_BREAKDOWN_TEMPLATE.format(keyword=semantic_target)
-            )
-        else:
-            # No events for this priority
-            guidance_parts.append(
-                f"No event data available for {semantic_target} breakdown. "
-                "Breakdowns require event-level data from the current week."
-            )
     else:
         # Call 1: Basic weekly report — propose other groupings
         if is_current:
@@ -523,7 +408,9 @@ def _build_assistant_guidance(
 
 async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_types.CallToolResult:
     """
-    Get weekly report for the user with pie chart visualization.
+    Render weekly report with pie chart visualization.
+
+    This is a render tool — always produces a widget when successful.
 
     Args:
         user_id: Validated user ID from JWT token
@@ -531,7 +418,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         arguments: Tool arguments (optional week_start, semantic_groupings, semantic_target)
 
     Returns:
-        CallToolResult with weekly report data and pie chart slices
+        CallToolResult with weekly report data and pie chart slices (always includes _meta)
     """
     week_start = arguments.get("week_start")
     semantic_groupings = arguments.get("semantic_groupings")
@@ -541,26 +428,16 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if semantic_groupings is not None and len(semantic_groupings) == 0:
         semantic_groupings = None
 
-    # Call type detection (three-way, mutually exclusive)
+    # Call type detection (simplified to two states after two-tool split)
     has_semantic_groupings = semantic_groupings is not None and len(semantic_groupings) > 0
-    has_priority_breakdown = (
-        semantic_target in ("P1", "P2", "P3")
-        and not has_semantic_groupings
-    )
-    is_call1 = (
-        not has_semantic_groupings
-        and not has_priority_breakdown
-    )
-    # Note: semantic_target="other" with no semantic_groupings falls into is_call1 (correct —
-    # "other" without groupings means no breakdown has been requested yet)
+    is_call1 = not has_semantic_groupings
 
     logger.info(
-        "tool.get_weekly_report.start",
+        "tool.render_weekly_report.start",
         correlation_id=correlation_id,
         user_id=user_id,
         week_start=week_start,
         has_semantic_groupings=has_semantic_groupings,
-        has_priority_breakdown=has_priority_breakdown,
         is_call1=is_call1,
         grouping_count=len(semantic_groupings) if semantic_groupings else 0,
         semantic_target=semantic_target,
@@ -585,7 +462,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         error_message = error.get("message", "Failed to generate weekly report")
 
         logger.warning(
-            "tool.get_weekly_report.error_response",
+            "tool.render_weekly_report.error_response",
             correlation_id=correlation_id,
             error_code=error_code,
             backend_message=error_message,
@@ -603,7 +480,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     # (past weeks have empty all_events, can't break down)
     if has_semantic_groupings and not all_events:
         logger.info(
-            "tool.get_weekly_report.semantic_breakdown_unavailable",
+            "tool.render_weekly_report.semantic_breakdown_unavailable",
             correlation_id=correlation_id,
             user_id=user_id,
             week_start=data.get("week_start"),
@@ -627,35 +504,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             isError=True,
         )
 
-    # Guard: reject call 2b (priority breakdown request) when no event data available
-    # (past weeks have empty all_events, can't break down priorities either)
-    if has_priority_breakdown and not all_events:
-        logger.info(
-            "tool.get_weekly_report.priority_breakdown_unavailable",
-            correlation_id=correlation_id,
-            user_id=user_id,
-            week_start=data.get("week_start"),
-            semantic_target=semantic_target,
-        )
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text=f"Priority breakdown for {semantic_target} not available for this week.",
-            )],
-            structuredContent={
-                "success": False,
-                "error": "priority_breakdown_unavailable",
-                "assistant_guidance": (
-                    f"Priority breakdown for {semantic_target} is not available for past weeks — "
-                    "detailed event data is only available for the current week. "
-                    "Do NOT propose or offer any breakdown. "
-                    "Suggest looking at the current week instead where event-level data is available. "
-                    "Do NOT suggest any other workarounds, sub-tags, naming patterns, or tracking changes."
-                ),
-            },
-            isError=True,
-        )
-
     # Early return when no priorities existed during this week
     # Prevents empty pie chart widget and incorrect LLM guidance
     if not priorities:
@@ -665,7 +513,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         )
 
         logger.info(
-            "tool.get_weekly_report.no_priorities",
+            "tool.render_weekly_report.no_priorities",
             correlation_id=correlation_id,
             user_id=user_id,
             week_start=data.get("week_start"),
@@ -692,67 +540,15 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         )
 
     # Normalize data for response
-    normalized_priorities = [_normalize_priority_report(p) for p in priorities]
-    normalized_time_allocation = _normalize_time_allocation(time_allocation)
-    normalized_events = [_normalize_event(e) for e in all_events]
-
-    # -------------------------------------------------------------------------
-    # Call 2b: priority event fetch — silent intermediate call, no widget
-    # Returns only priorityEvents + aggregates for the model to read and
-    # immediately call back with semantic_groupings. No slices, no _meta.
-    # -------------------------------------------------------------------------
-    if has_priority_breakdown:
-        priority_events = [
-            e for e in normalized_events
-            if semantic_target in e.get("matchedKeywords", [])
-        ]
-
-        assistant_guidance = _build_assistant_guidance(
-            data, priorities, [], priority_events,
-            has_semantic_groupings=False,
-            has_priority_breakdown=True,
-            semantic_target=semantic_target,
-        )
-
-        logger.info(
-            "tool.get_weekly_report.call2b",
-            correlation_id=correlation_id,
-            user_id=user_id,
-            semantic_target=semantic_target,
-            priority_event_count=len(priority_events),
-        )
-
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text=f"Fetched {len(priority_events)} events for {semantic_target}.",
-            )],
-            structuredContent={
-                "success": True,
-                "data": {
-                    # Pie chart fields — empty, no widget rendered
-                    "weekStart": data.get("week_start"),
-                    "weekEnd": data.get("week_end"),
-                    "slices": [],
-                    "totalHours": float(normalized_time_allocation.get("totalTrackedHours", 0)),
-                    # Aggregates — model needs these to not lose context
-                    "isCurrentWeek": data.get("is_current_week"),
-                    "priorities": normalized_priorities,
-                    "timeAllocation": normalized_time_allocation,
-                    # Events for the model to categorise
-                    "priorityEvents": priority_events,
-                    "otherEvents": [],
-                },
-                # No _meta — no widget render
-                "assistant_guidance": assistant_guidance,
-            },
-        )
+    normalized_priorities = [normalize_priority_report(p) for p in priorities]
+    normalized_time_allocation = normalize_time_allocation(time_allocation)
+    normalized_events = [normalize_event(e) for e in all_events]
 
     # -------------------------------------------------------------------------
     # Call 1 and Call 2: build pie chart slices and render widget
     # -------------------------------------------------------------------------
 
-    # Filter events by call type (data minimization - Inc 75)
+    # Filter events by call type (data minimization)
     if is_call1:
         # Call 1: Only non-priority events for semantic grouping proposal
         other_events = [e for e in normalized_events if not e.get("matchedKeywords")]
@@ -769,7 +565,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         )
     except ToolUsageError as e:
         logger.warning(
-            "tool.get_weekly_report.slice_validation_error",
+            "tool.render_weekly_report.slice_validation_error",
             correlation_id=correlation_id,
             error=str(e),
         )
@@ -804,7 +600,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     total_hours = float(normalized_time_allocation.get("totalTrackedHours", 0))
 
     logger.info(
-        "tool.get_weekly_report.success",
+        "tool.render_weekly_report.success",
         correlation_id=correlation_id,
         user_id=user_id,
         week_start=data.get("week_start"),
@@ -826,10 +622,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Build assistant guidance
     assistant_guidance = _build_assistant_guidance(
-        data, priorities, other_events, priority_events,
-        has_semantic_groupings, has_priority_breakdown, semantic_target
+        data, priorities, other_events, has_semantic_groupings
     )
 
+    # ALWAYS include _meta — render tool always produces widget
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
@@ -862,14 +658,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 # Tool Definition
 # ============================================================================
 
-GET_WEEKLY_REPORT = ToolDefinition(
+RENDER_WEEKLY_REPORT = ToolDefinition(
     name=NAME,
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,  # Pie chart renders in pg-dashboard widget
     handle=handle,
-    read_only_hint=True,   # openWorldHint=True covers Google Calendar API call; token refresh is invisible backend detail
+    read_only_hint=True,
     destructive_hint=False,
     open_world_hint=True,  # Calls Google Calendar API via backend
     widget_accessible=True,  # Widget can call this tool (for future 3-week nav)

@@ -6,7 +6,8 @@ Verifies:
 - save_semantic_grouping NOT in TOOL_INVOCATION_MESSAGES
 - Tool file does NOT exist on disk (deleted in Increment 07)
 - list_tools does not include save_semantic_grouping
-- get_weekly_report IS still registered with widget_uri and widget_accessible=True
+- render_weekly_report IS still registered with widget_uri and widget_accessible=True
+- get_priority_events IS registered with widget_uri=None (data tool, no widget)
 """
 
 import os
@@ -57,53 +58,109 @@ class TestSaveSemanticGroupingDeleted:
         assert tool is None
 
 
-class TestGetWeeklyReportRegistration:
-    """Verify get_weekly_report is properly registered with widget support."""
+class TestRenderWeeklyReportRegistration:
+    """Verify render_weekly_report is properly registered with widget support."""
 
     def test_in_tool_registry(self):
-        """get_weekly_report is in TOOL_REGISTRY."""
+        """render_weekly_report is in TOOL_REGISTRY."""
         from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 
-        assert "get_weekly_report" in TOOL_REGISTRY
+        assert "render_weekly_report" in TOOL_REGISTRY
 
     def test_in_tool_invocation_messages(self):
-        """get_weekly_report is in TOOL_INVOCATION_MESSAGES."""
+        """render_weekly_report is in TOOL_INVOCATION_MESSAGES."""
         from mcp_server.priority_guardian.tools import TOOL_INVOCATION_MESSAGES
 
-        assert "get_weekly_report" in TOOL_INVOCATION_MESSAGES
+        assert "render_weekly_report" in TOOL_INVOCATION_MESSAGES
 
     @pytest.mark.asyncio
     async def test_in_list_tools(self):
-        """list_tools includes get_weekly_report."""
+        """list_tools includes render_weekly_report."""
         from mcp_server.priority_guardian.tools import list_tools
 
         tools = await list_tools()
         tool_names = [t.name for t in tools]
 
-        assert "get_weekly_report" in tool_names
+        assert "render_weekly_report" in tool_names
 
     def test_has_widget_uri(self):
-        """get_weekly_report has widget_uri set (not None)."""
+        """render_weekly_report has widget_uri set (not None)."""
         from mcp_server.priority_guardian.tools import get_tool
 
-        tool = get_tool("get_weekly_report")
+        tool = get_tool("render_weekly_report")
 
         assert tool.widget_uri is not None
-        assert tool.widget_uri == "ui://widget/pg-dashboard.html"
+        assert tool.widget_uri == "ui://widget/pg-dashboard-v12.html"
 
     def test_has_widget_accessible_true(self):
-        """get_weekly_report has widget_accessible=True."""
+        """render_weekly_report has widget_accessible=True."""
         from mcp_server.priority_guardian.tools import get_tool
 
-        tool = get_tool("get_weekly_report")
+        tool = get_tool("render_weekly_report")
 
         assert tool.widget_accessible is True
 
-    def test_has_semantic_groupings_in_schema(self):
-        """get_weekly_report input schema includes semantic_groupings parameter."""
+
+class TestGetPriorityEventsRegistration:
+    """Verify get_priority_events is properly registered (data tool, NO widget)."""
+
+    def test_in_tool_registry(self):
+        """get_priority_events is in TOOL_REGISTRY."""
+        from mcp_server.priority_guardian.tools import TOOL_REGISTRY
+
+        assert "get_priority_events" in TOOL_REGISTRY
+
+    def test_in_tool_invocation_messages(self):
+        """get_priority_events is in TOOL_INVOCATION_MESSAGES."""
+        from mcp_server.priority_guardian.tools import TOOL_INVOCATION_MESSAGES
+
+        assert "get_priority_events" in TOOL_INVOCATION_MESSAGES
+
+    @pytest.mark.asyncio
+    async def test_in_list_tools(self):
+        """list_tools includes get_priority_events."""
+        from mcp_server.priority_guardian.tools import list_tools
+
+        tools = await list_tools()
+        tool_names = [t.name for t in tools]
+
+        assert "get_priority_events" in tool_names
+
+    def test_has_no_widget_uri(self):
+        """get_priority_events has widget_uri=None (data tool, no widget)."""
         from mcp_server.priority_guardian.tools import get_tool
 
-        tool = get_tool("get_weekly_report")
+        tool = get_tool("get_priority_events")
+
+        assert tool.widget_uri is None
+
+    def test_has_widget_accessible_false(self):
+        """get_priority_events has widget_accessible=False."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("get_priority_events")
+
+        assert tool.widget_accessible is False
+
+    def test_has_semantic_target_in_schema(self):
+        """get_priority_events input schema includes semantic_target parameter."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("get_priority_events")
+        properties = tool.input_schema.get("properties", {})
+
+        assert "semantic_target" in properties
+        assert properties["semantic_target"]["enum"] == ["P1", "P2", "P3"]
+
+
+class TestRenderWeeklyReportSchema:
+    """Verify render_weekly_report schema includes semantic_groupings."""
+
+    def test_has_semantic_groupings_in_schema(self):
+        """render_weekly_report input schema includes semantic_groupings parameter."""
+        from mcp_server.priority_guardian.tools import get_tool
+
+        tool = get_tool("render_weekly_report")
         properties = tool.input_schema.get("properties", {})
 
         assert "semantic_groupings" in properties
