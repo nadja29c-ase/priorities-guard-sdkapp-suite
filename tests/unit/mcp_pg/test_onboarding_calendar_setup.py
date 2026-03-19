@@ -756,3 +756,86 @@ async def test_reflection_setup_instruction_no_motivational_filler():
     assert "big leverage" not in instruction_lower
     assert "real insight" not in instruction_lower
     assert "game changer" not in instruction_lower
+
+
+# ============================================================================
+# Increment 75: Data Minimization Tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_onboarding_returns_all_events(mock_priorities_response):
+    """first_weekly_report phase returns all events in allEvents (no filtering)."""
+    mock_weekly_report = {
+        "success": True,
+        "data": {
+            "week_start": "2026-02-17",
+            "week_end": "2026-02-23",
+            "is_current_week": True,
+            "snapshot_saved": False,
+            "priorities": [
+                {
+                    "id": "p1",
+                    "name": "Ship PG V1.0",
+                    "type": "deadline",
+                    "calendar_keyword": "P1",
+                    "actual_hours": 8.0,
+                    "event_count": 5,
+                },
+            ],
+            "time_allocation": {
+                "total_tracked_hours": 24.5,
+                "keywords": {
+                    "P1": {"hours": 8.0, "event_count": 5},
+                },
+                "other_hours": 12.5,
+            },
+            "all_events": [
+                {"title": "P1: Design review", "start": "2026-02-17T10:00:00", "end": "2026-02-17T12:00:00", "matched_keywords": ["P1"]},
+                {"title": "P1: Sprint planning", "start": "2026-02-17T14:00:00", "end": "2026-02-17T15:00:00", "matched_keywords": ["P1"]},
+                {"title": "Team standup", "start": "2026-02-17T09:00:00", "end": "2026-02-17T09:30:00", "matched_keywords": []},
+                {"title": "Client call", "start": "2026-02-17T16:00:00", "end": "2026-02-17T17:00:00", "matched_keywords": []},
+            ],
+        },
+    }
+
+    # Mock past week as already snapshotted so it uses this week's data
+    mock_past_week = {
+        "success": True,
+        "data": {
+            "week_start": "2026-02-10",
+            "week_end": "2026-02-16",
+            "is_current_week": False,
+            "snapshot_saved": True,  # Already snapshotted
+            "priorities": [],
+            "time_allocation": {},
+            "all_events": [],
+        },
+    }
+
+    with patch(
+        "mcp_server.priority_guardian.tools.onboarding_calendar_setup.backend_get",
+        new_callable=AsyncMock,
+    ) as mock_get:
+        # First call gets past week (snapshotted), second call gets current week
+        mock_get.side_effect = [mock_past_week, mock_weekly_report]
+
+        result = await handle("user-123", "corr-123", {"phase": "first_weekly_report"})
+
+    data = result.structuredContent["data"]
+    all_events = data["allEvents"]
+
+    # All events should be included (no filtering during onboarding)
+    assert len(all_events) == 4
+
+    # Verify all events are present
+    titles = [e["title"] for e in all_events]
+    assert "Team standup" in titles
+    assert "Client call" in titles
+    assert "P1: Design review" in titles
+    assert "P1: Sprint planning" in titles
+
+    # Verify priority events have matchedKeywords preserved
+    p1_events = [e for e in all_events if e.get("matchedKeywords")]
+    assert len(p1_events) == 2
+    assert all("P1" in e["matchedKeywords"] for e in p1_events)

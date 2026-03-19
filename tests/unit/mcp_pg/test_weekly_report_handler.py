@@ -306,7 +306,10 @@ class TestBuildAssistantGuidanceNoPriorities:
             "time_allocation": {"other_hours": 0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [], [], [], has_semantic_groupings=False,
+            has_priority_breakdown=False, semantic_target=None
+        )
 
         assert "No priorities were being tracked" in guidance
         assert "Do not mention P1, P2, or P3" in guidance
@@ -319,7 +322,10 @@ class TestBuildAssistantGuidanceNoPriorities:
             "time_allocation": {"other_hours": 0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [], [], [], has_semantic_groupings=False,
+            has_priority_breakdown=False, semantic_target=None
+        )
 
         assert "first full week after creation" in guidance
 
@@ -330,7 +336,10 @@ class TestBuildAssistantGuidanceNoPriorities:
             "time_allocation": {"other_hours": 0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [], [], [], has_semantic_groupings=False,
+            has_priority_breakdown=False, semantic_target=None
+        )
 
         assert "Do not mention P1" in guidance
 
@@ -341,7 +350,10 @@ class TestBuildAssistantGuidanceNoPriorities:
             "time_allocation": {"other_hours": 0},
         }
 
-        guidance = _build_assistant_guidance(data, [], [], has_semantic_groupings=False)
+        guidance = _build_assistant_guidance(
+            data, [], [], [], has_semantic_groupings=False,
+            has_priority_breakdown=False, semantic_target=None
+        )
 
         assert "Narrate ALL" not in guidance
         # Also should not reference individual keywords in a way that suggests narrating them
@@ -362,7 +374,8 @@ class TestBuildAssistantGuidanceMode1:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=False
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "CURRENT WEEK in progress" in guidance
@@ -376,7 +389,8 @@ class TestBuildAssistantGuidanceMode1:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=False
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "COMPLETED WEEK reflection" in guidance
@@ -388,13 +402,14 @@ class TestBuildAssistantGuidanceMode1:
             "is_current_week": False,
             "time_allocation": {"other_hours": 5.5},
         }
-        all_events = [
+        other_events = [
             {"title": "Team lunch", "matched_keywords": []},
             {"title": "Client call", "matched_keywords": []},
         ]
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+            data, [self.SAMPLE_PRIORITY], other_events, [],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "5.5 hours of non-priority time" in guidance
@@ -409,27 +424,29 @@ class TestBuildAssistantGuidanceMode1:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=False
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "Do not repeat" in guidance or "report displays" in guidance
 
     def test_does_not_contain_raw_event_titles_in_guidance(self):
-        """Mode 1 guidance references allEvents abstractly, doesn't embed raw titles."""
+        """Mode 1 guidance references otherEvents abstractly, doesn't embed raw titles."""
         data = {
             "is_current_week": False,
             "time_allocation": {"other_hours": 5.0},
         }
-        all_events = [
+        other_events = [
             {"title": "Specific Event Title ABC123", "matched_keywords": []},
         ]
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+            data, [self.SAMPLE_PRIORITY], other_events, [],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         # Should reference events abstractly
-        assert "allEvents" in guidance or "event titles" in guidance.lower()
+        assert "otherEvents" in guidance or "event titles" in guidance.lower()
         # Should NOT embed the specific title directly
         assert "Specific Event Title ABC123" not in guidance
 
@@ -439,10 +456,11 @@ class TestBuildAssistantGuidanceMode1:
             "is_current_week": False,
             "time_allocation": {"other_hours": 5.0},
         }
-        all_events = [{"title": "Meeting", "matched_keywords": []}]
+        other_events = [{"title": "Meeting", "matched_keywords": []}]
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+            data, [self.SAMPLE_PRIORITY], other_events, [],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         guidance_lower = guidance.lower()
@@ -467,7 +485,8 @@ class TestBuildAssistantGuidanceMode2:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "NOT repeat" in guidance or "NOT list" in guidance
@@ -481,7 +500,8 @@ class TestBuildAssistantGuidanceMode2:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "brief" in guidance.lower()
@@ -495,7 +515,8 @@ class TestBuildAssistantGuidanceMode2:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "stands out" in guidance.lower()
@@ -508,7 +529,8 @@ class TestBuildAssistantGuidanceMode2:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "short" in guidance.lower() or "heavy lifting" in guidance.lower()
@@ -521,7 +543,8 @@ class TestBuildAssistantGuidanceMode2:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         guidance_lower = guidance.lower()
@@ -681,33 +704,46 @@ class TestWidgetUri:
 
 
 class TestSemanticTargetValidation:
-    """Tests for semantic_target parameter validation (Increment 10)."""
+    """Tests for semantic_target parameter validation (Increment 10 + 75)."""
 
-    def test_semantic_target_requires_semantic_groupings(self):
-        """semantic_target without semantic_groupings raises ToolUsageError."""
+    def test_semantic_target_without_groupings_renders_normal_chart(self):
+        """semantic_target without semantic_groupings renders normal chart (no explosion).
+
+        Post-Increment 75: This is valid for Call 2b (priority breakdown request).
+        The handler intercepts this case; _build_pie_slices just renders normally.
+        """
         priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
         time_allocation = {
             "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
             "other_hours": 5.0,
         }
 
-        with pytest.raises(ToolUsageError) as exc_info:
-            _build_pie_slices(priorities, time_allocation, None, "P1")
+        # Should NOT raise - renders normal chart without explosion
+        slices = _build_pie_slices(priorities, time_allocation, None, "P1")
 
-        assert "semantic_target requires semantic_groupings" in str(exc_info.value)
+        # P1 should be a single priority slice (not exploded)
+        p1_slices = [s for s in slices if s.get("keyword") == "P1"]
+        assert len(p1_slices) == 1
+        assert p1_slices[0]["type"] == "priority"
 
-    def test_semantic_target_with_empty_groupings_raises_error(self):
-        """semantic_target with empty semantic_groupings raises ToolUsageError."""
+    def test_semantic_target_with_empty_groupings_renders_normal_chart(self):
+        """semantic_target with empty semantic_groupings renders normal chart.
+
+        Post-Increment 75: Empty groupings means nothing to explode.
+        """
         priorities = [{"name": "Build PG", "calendar_keyword": "P1"}]
         time_allocation = {
             "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
             "other_hours": 5.0,
         }
 
-        with pytest.raises(ToolUsageError) as exc_info:
-            _build_pie_slices(priorities, time_allocation, [], "P1")
+        # Should NOT raise - renders normal chart without explosion
+        slices = _build_pie_slices(priorities, time_allocation, [], "P1")
 
-        assert "semantic_target requires semantic_groupings" in str(exc_info.value)
+        # P1 should be a single priority slice (not exploded)
+        p1_slices = [s for s in slices if s.get("keyword") == "P1"]
+        assert len(p1_slices) == 1
+        assert p1_slices[0]["type"] == "priority"
 
     def test_semantic_target_unconfigured_priority_raises_error(self):
         """semantic_target referencing unconfigured priority raises ToolUsageError."""
@@ -948,15 +984,19 @@ class TestGuidanceIncrement10:
     SAMPLE_PRIORITY = {"calendar_keyword": "P1", "name": "Test Priority"}
 
     def test_mode1_includes_within_priority_breakdown(self):
-        """MODE 1 guidance includes within-priority breakdown instruction."""
+        """MODE 1 guidance includes within-priority breakdown instruction (current week only)."""
         data = {
-            "is_current_week": False,
-            "time_allocation": {"other_hours": 5.0},
+            "is_current_week": True,  # Current week has event data available
+            "time_allocation": {
+                "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                "other_hours": 5.0,
+            },
         }
-        all_events = [{"title": "Meeting", "matched_keywords": []}]
+        other_events = [{"title": "Meeting", "matched_keywords": []}]
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], all_events, has_semantic_groupings=False
+            data, [self.SAMPLE_PRIORITY], other_events, [],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "within-priority breakdown" in guidance.lower()
@@ -969,7 +1009,8 @@ class TestGuidanceIncrement10:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         # Should say "neutral observation" not "coaching observation"
@@ -984,7 +1025,8 @@ class TestGuidanceIncrement10:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "without evaluation" in guidance.lower() or "without" in guidance.lower() and "recommendation" in guidance.lower()
@@ -997,7 +1039,8 @@ class TestGuidanceIncrement10:
         }
 
         guidance = _build_assistant_guidance(
-            data, [self.SAMPLE_PRIORITY], [], has_semantic_groupings=True
+            data, [self.SAMPLE_PRIORITY], [], [],
+            has_semantic_groupings=True, has_priority_breakdown=False, semantic_target=None
         )
 
         # Should mention generic "selected category" not just "Other"
@@ -1185,31 +1228,567 @@ class TestSemanticBreakdownGuard:
         assert "not available for past weeks" in result.structuredContent["assistant_guidance"]
         assert "Do NOT propose" in result.structuredContent["assistant_guidance"]
 
-    def test_no_within_priority_breakdown_offered_when_no_events(self):
-        """guidance with all_events=[] does NOT contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
+    def test_no_within_priority_breakdown_offered_for_past_week(self):
+        """guidance for past week does NOT contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
         data = {
             "is_current_week": False,
-            "time_allocation": {"other_hours": 5.0},
+            "time_allocation": {
+                "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                "other_hours": 5.0,
+            },
         }
         priorities = [{"calendar_keyword": "P1", "name": "Test Priority"}]
 
         guidance = _build_assistant_guidance(
-            data, priorities, all_events=[], has_semantic_groupings=False
+            data, priorities, other_events=[], priority_events=[],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "within-priority breakdown" not in guidance.lower()
 
-    def test_within_priority_breakdown_offered_when_events_exist(self):
-        """guidance with non-empty all_events DOES contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
+    def test_no_within_priority_breakdown_offered_when_no_priority_hours(self):
+        """guidance with 0 priority hours does NOT contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN."""
         data = {
-            "is_current_week": False,
-            "time_allocation": {"other_hours": 5.0},
+            "is_current_week": True,
+            "time_allocation": {
+                "keywords": {"P1": {"hours": 0.0, "event_count": 0}},
+                "other_hours": 5.0,
+            },
         }
         priorities = [{"calendar_keyword": "P1", "name": "Test Priority"}]
-        all_events = [{"title": "Meeting", "matched_keywords": []}]
+        other_events = [{"title": "Meeting", "matched_keywords": []}]
 
         guidance = _build_assistant_guidance(
-            data, priorities, all_events=all_events, has_semantic_groupings=False
+            data, priorities, other_events=other_events, priority_events=[],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
+        )
+
+        assert "within-priority breakdown" not in guidance.lower()
+
+    def test_within_priority_breakdown_offered_when_priority_hours_exist(self):
+        """guidance with priority hours DOES contain GUIDANCE_WITHIN_PRIORITY_BREAKDOWN (current week only)."""
+        data = {
+            "is_current_week": True,
+            "time_allocation": {
+                "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                "other_hours": 5.0,
+            },
+        }
+        priorities = [{"calendar_keyword": "P1", "name": "Test Priority"}]
+        other_events = [{"title": "Meeting", "matched_keywords": []}]
+
+        guidance = _build_assistant_guidance(
+            data, priorities, other_events=other_events, priority_events=[],
+            has_semantic_groupings=False, has_priority_breakdown=False, semantic_target=None
         )
 
         assert "within-priority breakdown" in guidance.lower()
+
+
+# ============================================================================
+# Increment 75: Data Minimization Tests
+# ============================================================================
+
+
+class TestDataMinimizationIncrement75:
+    """Tests for data minimization in get_weekly_report (Increment 75)."""
+
+    @pytest.mark.asyncio
+    async def test_call1_returns_other_events_only(self):
+        """Call 1 (no semantic_groupings, no priority semantic_target) returns only non-priority events in otherEvents."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [
+                    {"title": "P1 Meeting", "matched_keywords": ["P1"], "start": "2026-03-16T10:00:00Z", "end": "2026-03-16T11:00:00Z"},
+                    {"title": "Team Lunch", "matched_keywords": [], "start": "2026-03-16T12:00:00Z", "end": "2026-03-16T13:00:00Z"},
+                    {"title": "Client Call", "matched_keywords": [], "start": "2026-03-16T14:00:00Z", "end": "2026-03-16T15:00:00Z"},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={"week_start": "2026-03-16"},
+            )
+
+        data = result.structuredContent["data"]
+        # otherEvents should only contain non-priority events
+        assert len(data["otherEvents"]) == 2
+        assert all(not e.get("matchedKeywords") for e in data["otherEvents"])
+        # priorityEvents should be empty for Call 1
+        assert data["priorityEvents"] == []
+
+    @pytest.mark.asyncio
+    async def test_call1_always_includes_aggregates(self):
+        """Call 1 includes priorities and timeAllocation aggregates."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={"week_start": "2026-03-16"},
+            )
+
+        data = result.structuredContent["data"]
+        # Aggregates always present
+        assert "priorities" in data
+        assert len(data["priorities"]) == 1
+        assert "timeAllocation" in data
+        assert data["timeAllocation"]["totalTrackedHours"] == 15.0
+
+    @pytest.mark.asyncio
+    async def test_call2_returns_no_events(self):
+        """Call 2 (with semantic_groupings) returns empty otherEvents and priorityEvents."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [
+                    {"title": "P1 Meeting", "matched_keywords": ["P1"], "start": "2026-03-16T10:00:00Z", "end": "2026-03-16T11:00:00Z"},
+                    {"title": "Team Lunch", "matched_keywords": [], "start": "2026-03-16T12:00:00Z", "end": "2026-03-16T13:00:00Z"},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_groupings": [
+                        {"category": "Social", "hours": 3.0, "event_count": 1},
+                        {"category": "Admin", "hours": 2.0, "event_count": 1},
+                    ],
+                    "semantic_target": "other",
+                },
+            )
+
+        data = result.structuredContent["data"]
+        # Both event lists should be empty
+        assert data["otherEvents"] == []
+        assert data["priorityEvents"] == []
+
+    @pytest.mark.asyncio
+    async def test_call2_always_includes_aggregates(self):
+        """Call 2 includes priorities and timeAllocation aggregates."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                # Must have events for semantic breakdown to be available (Increment 31)
+                "all_events": [
+                    {"title": "Team Lunch", "matched_keywords": [], "start": "2026-03-16T12:00:00Z", "end": "2026-03-16T13:00:00Z"},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_groupings": [
+                        {"category": "Social", "hours": 3.0, "event_count": 1},
+                    ],
+                    "semantic_target": "other",
+                },
+            )
+
+        data = result.structuredContent["data"]
+        # Aggregates always present
+        assert "priorities" in data
+        assert len(data["priorities"]) == 1
+        assert "timeAllocation" in data
+
+    @pytest.mark.asyncio
+    async def test_call2b_returns_priority_events_only(self):
+        """Call 2b (semantic_target='P1', no groupings) returns only P1-matched events in priorityEvents."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 3,
+                        "target_hours": 10.0,
+                    },
+                    {
+                        "id": "p2",
+                        "name": "Client Work",
+                        "type": "flexible",
+                        "calendar_keyword": "P2",
+                        "actual_hours": 5.0,
+                        "event_count": 2,
+                        "target_hours": 5.0,
+                    },
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 18.0,
+                    "keywords": {
+                        "P1": {"hours": 10.0, "event_count": 3},
+                        "P2": {"hours": 5.0, "event_count": 2},
+                    },
+                    "other_hours": 3.0,
+                },
+                "all_events": [
+                    {"title": "P1 Feature work", "matched_keywords": ["P1"], "start": "2026-03-16T09:00:00Z", "end": "2026-03-16T12:00:00Z"},
+                    {"title": "P1 Bug fixes", "matched_keywords": ["P1"], "start": "2026-03-16T13:00:00Z", "end": "2026-03-16T15:00:00Z"},
+                    {"title": "P2 Client call", "matched_keywords": ["P2"], "start": "2026-03-16T15:00:00Z", "end": "2026-03-16T16:00:00Z"},
+                    {"title": "Team Lunch", "matched_keywords": [], "start": "2026-03-16T12:00:00Z", "end": "2026-03-16T13:00:00Z"},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_target": "P1",  # Request P1 breakdown, no groupings
+                },
+            )
+
+        data = result.structuredContent["data"]
+        # priorityEvents should only contain P1-matched events
+        assert len(data["priorityEvents"]) == 2
+        assert all("P1" in e.get("matchedKeywords", []) for e in data["priorityEvents"])
+        # otherEvents should be empty
+        assert data["otherEvents"] == []
+
+    @pytest.mark.asyncio
+    async def test_call2b_always_includes_aggregates(self):
+        """Call 2b includes priorities and timeAllocation aggregates."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                # Must have P1 events for call 2b to return real data
+                "all_events": [
+                    {"title": "P1 Feature work", "matched_keywords": ["P1"], "start": "2026-03-16T09:00:00Z", "end": "2026-03-16T12:00:00Z"},
+                    {"title": "Team Lunch", "matched_keywords": [], "start": "2026-03-16T12:00:00Z", "end": "2026-03-16T13:00:00Z"},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_target": "P1",
+                },
+            )
+
+        data = result.structuredContent["data"]
+        # Aggregates always present
+        assert "priorities" in data
+        assert len(data["priorities"]) == 1
+        assert "timeAllocation" in data
+        # Call 2b should have P1 events in priorityEvents, not otherEvents
+        assert len(data["priorityEvents"]) == 1
+        assert data["otherEvents"] == []
+
+    @pytest.mark.asyncio
+    async def test_mutual_exclusion_returns_error(self):
+        """semantic_groupings + priority semantic_target together returns structured error."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_groupings": [
+                        {"category": "Feature work", "hours": 5.0, "event_count": 3},
+                    ],
+                    "semantic_target": "P1",  # Invalid: can't combine groupings with priority target
+                },
+            )
+
+        assert result.isError is True
+        assert result.structuredContent["success"] is False
+        assert result.structuredContent["error"] == "invalid_parameters"
+        assert "cannot be used together" in result.structuredContent["assistant_guidance"]
+
+    @pytest.mark.asyncio
+    async def test_other_target_with_groupings_not_blocked(self):
+        """semantic_groupings + semantic_target='other' is valid (existing Call 2 behaviour)."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-16",
+                "week_end": "2026-03-22",
+                "is_current_week": True,
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                # Must have events for semantic breakdown to be available (Increment 31)
+                "all_events": [
+                    {"title": "Social lunch", "matched_keywords": [], "start": "2026-03-16T12:00:00Z", "end": "2026-03-16T13:00:00Z"},
+                    {"title": "Admin tasks", "matched_keywords": [], "start": "2026-03-16T14:00:00Z", "end": "2026-03-16T15:00:00Z"},
+                ],
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-16",
+                    "semantic_groupings": [
+                        {"category": "Social", "hours": 3.0, "event_count": 1},
+                        {"category": "Admin", "hours": 2.0, "event_count": 1},
+                    ],
+                    "semantic_target": "other",  # Valid: other with groupings is Call 2
+                },
+            )
+
+        # Should succeed (not an error)
+        assert result.isError is not True
+        assert result.structuredContent["success"] is True
+        # Call 2 should have empty event lists (data minimization)
+        data = result.structuredContent["data"]
+        assert data["otherEvents"] == []
+        assert data["priorityEvents"] == []
+
+    @pytest.mark.asyncio
+    async def test_call2b_on_past_week_returns_error(self):
+        """Call 2b on past week (no event data) returns clean structured error."""
+        mock_response = {
+            "success": True,
+            "data": {
+                "week_start": "2026-03-09",
+                "week_end": "2026-03-15",
+                "is_current_week": False,  # Past week
+                "priorities": [
+                    {
+                        "id": "p1",
+                        "name": "Ship v1.0",
+                        "type": "flexible",
+                        "calendar_keyword": "P1",
+                        "actual_hours": 10.0,
+                        "event_count": 5,
+                        "target_hours": 10.0,
+                    }
+                ],
+                "time_allocation": {
+                    "total_tracked_hours": 15.0,
+                    "keywords": {"P1": {"hours": 10.0, "event_count": 5}},
+                    "other_hours": 5.0,
+                },
+                "all_events": [],  # Past week has no events
+            },
+        }
+
+        with patch(
+            "mcp_server.priority_guardian.tools.get_weekly_report.backend_get",
+            new_callable=AsyncMock,
+        ) as mock_backend:
+            mock_backend.return_value = mock_response
+
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "week_start": "2026-03-09",
+                    "semantic_target": "P1",  # Call 2b on past week
+                },
+            )
+
+        # Should return structured error, not silent success
+        assert result.isError is True
+        assert result.structuredContent["success"] is False
+        assert result.structuredContent["error"] == "priority_breakdown_unavailable"
+        assert "P1" in result.structuredContent["assistant_guidance"]
+        assert "past weeks" in result.structuredContent["assistant_guidance"]
