@@ -24,20 +24,6 @@ Optional Render env vars (have sensible defaults):
 """
 
 import os
-
-# =============================================================================
-# Shim: Set ChatGPT env vars to satisfy priority_guardian/config.py
-# =============================================================================
-# Shared tools (mcp_server/priority_guardian/tools/) import from
-# mcp_server/priority_guardian/http_client.py and other modules that read
-# these env vars at module load time. We set them here before any tool imports.
-# Values must match the shared backend — tools call the same backend as ChatGPT.
-os.environ.setdefault("INTERNAL_API_SECRET", os.getenv("PG_CLAUDE_INTERNAL_API_SECRET", ""))
-os.environ.setdefault("PG_BACKEND_URL", os.getenv("PG_CLAUDE_BACKEND_URL", "http://localhost:8000"))
-os.environ.setdefault("PG_OAUTH_ISSUER_BASE", "https://www.priority-guard.com")
-os.environ.setdefault("PG_OAUTH_ISSUER_URL", "https://www.priority-guard.com/oauth/pg")
-os.environ.setdefault("CORS_ALLOWED_ORIGINS", "https://chatgpt.com")  # non-empty; Claude server ignores
-
 from typing import Optional
 from urllib.parse import urlparse
 
