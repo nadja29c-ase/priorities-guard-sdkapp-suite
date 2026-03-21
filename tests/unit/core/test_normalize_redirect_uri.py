@@ -80,3 +80,39 @@ class TestNormalizeRedirectUri:
         """Relative URIs are rejected."""
         result = _normalize_redirect_uri("/callback")
         assert result is None
+
+
+class TestRedirectUriAllowlist:
+    """Tests for redirect_uri allowlist validation."""
+
+    def test_claude_callback_uri_accepted(self):
+        """Claude callback URI is accepted by the production allowlist."""
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+        from backend.core.config import Settings
+
+        # Use the production allowlist from Settings class
+        allowed = list(Settings._CHATGPT_REDIRECT_URIS)
+
+        valid, error = validate_redirect_uris(
+            ["https://claude.ai/api/mcp/auth_callback"],
+            allowed_uris=allowed
+        )
+        assert valid is True, f"Claude URI should be accepted: {error}"
+
+    def test_chatgpt_uris_still_accepted(self):
+        """All existing ChatGPT URIs still pass (regression guard)."""
+        from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris
+        from backend.core.config import Settings
+
+        allowed = list(Settings._CHATGPT_REDIRECT_URIS)
+
+        # Test all three original ChatGPT URIs
+        chatgpt_uris = [
+            "https://chatgpt.com/connector/oauth/ABC123",  # prefix match
+            "https://chatgpt.com/connector_platform_oauth_redirect",  # exact
+            "https://platform.openai.com/apps-manage/oauth",  # exact
+        ]
+
+        for uri in chatgpt_uris:
+            valid, error = validate_redirect_uris([uri], allowed_uris=allowed)
+            assert valid is True, f"ChatGPT URI should be accepted: {uri} - {error}"

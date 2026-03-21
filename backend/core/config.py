@@ -50,15 +50,19 @@ class Settings(BaseSettings):
     OAUTH_TOKEN_EXPIRY_SECONDS: int = 3600  # 1 hour
     OAUTH_REFRESH_TOKEN_EXPIRY_DAYS: int = 30
 
-    # RFC 9728 B2-8: Redirect URI allowlist for DCR
-    # Only these URIs are accepted during dynamic client registration.
-    # In dev mode, localhost URIs are also accepted for testing.
-    # ChatGPT redirect URIs (production allowlist):
+    # Connector redirect URIs (ChatGPT + Claude) — production allowlist for DCR
+    # In dev mode, localhost callback URIs are additionally accepted.
     # ClassVar ensures Pydantic v2 treats this as a class constant, not a field
     _CHATGPT_REDIRECT_URIS: ClassVar[list[str]] = [
+        # ChatGPT (existing — do not modify)
         "https://chatgpt.com/connector/oauth/",  # prefix — any connector callback_id
         "https://chatgpt.com/connector_platform_oauth_redirect",  # legacy
         "https://platform.openai.com/apps-manage/oauth",  # review
+        # Claude (new)
+        "https://claude.ai/api/mcp/auth_callback",
+        "https://claude.com/api/mcp/auth_callback",
+        "http://localhost:6274/oauth/callback",       # MCP Inspector + Claude Code
+        "http://localhost:6274/oauth/callback/debug",  # MCP Inspector debug
     ]
 
     # Populated by build_allowed_redirect_uris validator at startup
@@ -167,8 +171,8 @@ class Settings(BaseSettings):
     def build_allowed_redirect_uris(self) -> 'Settings':
         """Build allowed redirect URIs based on environment.
 
-        In production: Only ChatGPT redirect URIs.
-        In dev mode: ChatGPT URIs + localhost URIs for testing.
+        In production: ChatGPT + Claude redirect URIs (including localhost:6274 for MCP Inspector).
+        In dev mode: above + additional localhost callback URIs for testing.
         """
         allowed = list(self._CHATGPT_REDIRECT_URIS)
         is_dev = self.ENV.lower() in ("dev", "development", "local", "test")
