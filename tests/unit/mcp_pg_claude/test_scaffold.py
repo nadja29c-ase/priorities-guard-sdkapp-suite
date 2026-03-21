@@ -90,18 +90,17 @@ async def test_post_mcp_without_token_returns_401(set_dev_env):
 
 def test_config_isolation(set_dev_env):
     """
-    Test config module isolation and document monkeypatch behavior.
+    Test config module isolation — both config and _dupl modules are independent.
 
     Part 1: Config module isolation
     - priority_guardian.config.BACKEND_URL and priority_guardian_claude.config.BACKEND_URL
       are independent module-level variables.
 
-    Part 2: Monkeypatch documentation
-    - Importing mcp_auth_dupl patches priority_guardian.mcp_auth's globals.
-    - This is INTENTIONAL and SAFE — in production, each platform runs as a
-      separate Render service (separate process), so there is no conflict.
-    - This documents the known limitation and why the post-OpenAI refactor
-      into mcp_server/shared/ with proper config injection is needed.
+    Part 2: Self-contained _dupl module verification
+    - The _dupl files (mcp_auth_dupl, http_client_dupl) are complete copies that
+      import from priority_guardian_claude.config instead of priority_guardian.config.
+    - This ensures complete isolation — no cross-module patching or contamination.
+    - In production, each platform runs as a separate Render service anyway.
     """
     # Part 1: Config isolation
     import mcp_server.priority_guardian.config as pg_config
@@ -121,47 +120,30 @@ def test_config_isolation(set_dev_env):
     # Restore
     claude_config.BACKEND_URL = original_claude_backend
 
-    # Part 2: Monkeypatch behavior documentation
-    # After importing mcp_auth_dupl, priority_guardian.mcp_auth's globals
-    # reflect the Claude config values. This is expected and intentional.
+    # Part 2: Self-contained module verification
+    # mcp_auth_dupl.py is now fully self-contained — it imports from
+    # priority_guardian_claude.config instead of monkeypatching priority_guardian.
+    # This means both modules have their own independent config values.
     import mcp_server.priority_guardian.mcp_auth as pg_mcp_auth
+    import mcp_server.priority_guardian_claude.mcp_auth_dupl as claude_mcp_auth
 
-    # Save original values before the import triggers monkeypatching
-    original_mcp_origin = pg_mcp_auth._MCP_ORIGIN
-    original_pg_jwks_url = pg_mcp_auth.PG_JWKS_URL
-    original_pg_issuer = pg_mcp_auth.PG_ISSUER
-    original_pg_audience = pg_mcp_auth.PG_AUDIENCE
-    original_mcp_server_url = pg_mcp_auth.MCP_SERVER_URL
-    original_mcp_resource_url = pg_mcp_auth.MCP_RESOURCE_URL
-    original_jwks_cache_ttl = pg_mcp_auth.JWKS_CACHE_TTL_SECONDS
-    original_jwks_max_stale = pg_mcp_auth.JWKS_MAX_STALE_SECONDS
-    original_jwks_fetch_timeout = pg_mcp_auth.JWKS_FETCH_TIMEOUT_SECONDS
-    original_token_expiry_grace = pg_mcp_auth.TOKEN_EXPIRY_GRACE_SECONDS
+    # Verify each module uses its own config values (no cross-contamination)
+    pg_expected_origin = pg_mcp_auth._extract_origin(pg_config.MCP_SERVER_URL)
+    claude_expected_origin = claude_mcp_auth._extract_origin(claude_config.MCP_SERVER_URL)
 
-    import mcp_server.priority_guardian_claude.mcp_auth_dupl  # noqa: F401 - import for side effect
-
-    # The monkeypatch in mcp_auth_dupl.py sets _MCP_ORIGIN to Claude's URL.
-    # This is the expected behavior — verify it happened.
-    # NOTE: This is intentional and safe in production (separate processes).
-    # The post-OpenAI refactor will move shared logic to mcp_server/shared/
-    # with proper config injection to eliminate this coupling.
-    expected_origin = pg_mcp_auth._extract_origin(claude_config.MCP_SERVER_URL)
-    assert pg_mcp_auth._MCP_ORIGIN == expected_origin, (
-        f"Expected _MCP_ORIGIN to be patched to Claude config value {expected_origin}, "
-        f"got {pg_mcp_auth._MCP_ORIGIN}. This is the expected monkeypatch behavior."
+    assert pg_mcp_auth._MCP_ORIGIN == pg_expected_origin, (
+        f"PG mcp_auth should use PG config. Expected {pg_expected_origin}, "
+        f"got {pg_mcp_auth._MCP_ORIGIN}."
+    )
+    assert claude_mcp_auth._MCP_ORIGIN == claude_expected_origin, (
+        f"Claude mcp_auth_dupl should use Claude config. Expected {claude_expected_origin}, "
+        f"got {claude_mcp_auth._MCP_ORIGIN}."
     )
 
-    # Restore all patched globals to prevent test session pollution
-    pg_mcp_auth._MCP_ORIGIN = original_mcp_origin
-    pg_mcp_auth.PG_JWKS_URL = original_pg_jwks_url
-    pg_mcp_auth.PG_ISSUER = original_pg_issuer
-    pg_mcp_auth.PG_AUDIENCE = original_pg_audience
-    pg_mcp_auth.MCP_SERVER_URL = original_mcp_server_url
-    pg_mcp_auth.MCP_RESOURCE_URL = original_mcp_resource_url
-    pg_mcp_auth.JWKS_CACHE_TTL_SECONDS = original_jwks_cache_ttl
-    pg_mcp_auth.JWKS_MAX_STALE_SECONDS = original_jwks_max_stale
-    pg_mcp_auth.JWKS_FETCH_TIMEOUT_SECONDS = original_jwks_fetch_timeout
-    pg_mcp_auth.TOKEN_EXPIRY_GRACE_SECONDS = original_token_expiry_grace
+    # Verify complete isolation — no shared module globals
+    # (This is the clean architecture post-refactor benefit)
+    assert pg_mcp_auth.PG_JWKS_URL == pg_config.PG_JWKS_URL
+    assert claude_mcp_auth.PG_JWKS_URL == claude_config.PG_JWKS_URL
 
 
 # =============================================================================
