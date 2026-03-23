@@ -415,3 +415,114 @@ async def test_adapter_data_preserved_in_structured_content(set_dev_env):
     assert adapted.structuredContent["data"] == {"priorities": [{"name": "Test"}]}
     # Data also in content (serialized)
     assert "Test" in adapted.content[0].text
+
+
+# =============================================================================
+# Increment Claude-05: Size-Based Data Trimming Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_adapter_strips_large_lists_from_content(set_dev_env):
+    """Adapter strips lists with >10 items from content serialization."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": {
+                "priorities": [{"name": "Ship PG"}],
+                "otherEvents": [{"title": f"Event {i}"} for i in range(23)],
+            },
+            "assistant_guidance": "guidance",
+        },
+    )
+    adapted = adapt_tool_result(result)
+    # Priority data present — small list passes through
+    assert "Ship PG" in adapted.content[0].text
+    # Large event list stripped from content
+    assert "Event 0" not in adapted.content[0].text
+    assert "Event 22" not in adapted.content[0].text
+    # structuredContent.data unchanged — large list still there for any downstream consumer
+    assert len(adapted.structuredContent["data"]["otherEvents"]) == 23
+
+
+@pytest.mark.asyncio
+async def test_adapter_keeps_small_lists_in_content(set_dev_env):
+    """Adapter keeps lists with <=10 items in content serialization."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    # Simulates get_priority_events returning 4 priorityEvents — must pass through
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": {
+                "priorityEvents": [
+                    {"title": "P1: Deep work", "matchedKeywords": ["P1"]},
+                    {"title": "P1: Planning", "matchedKeywords": ["P1"]},
+                    {"title": "P1: Review", "matchedKeywords": ["P1"]},
+                    {"title": "P1: Build", "matchedKeywords": ["P1"]},
+                ],
+            },
+            "assistant_guidance": "Group events and call render_weekly_report.",
+        },
+    )
+    adapted = adapt_tool_result(result)
+    # Small list (4 items) passes through — Claude needs these to group
+    assert "P1: Deep work" in adapted.content[0].text
+    assert "P1: Build" in adapted.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_adapter_threshold_boundary(set_dev_env):
+    """Adapter threshold is >10, not >=10."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    # Exactly 10 items — should pass through (threshold is > 10, not >= 10)
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": {"items": [{"id": i} for i in range(10)]},
+            "assistant_guidance": "guidance",
+        },
+    )
+    adapted = adapt_tool_result(result)
+    assert '"id": 0' in adapted.content[0].text  # 10 items passes through
+
+    # 11 items — should be stripped
+    result2 = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": {"items": [{"id": i} for i in range(11)]},
+            "assistant_guidance": "guidance",
+        },
+    )
+    adapted2 = adapt_tool_result(result2)
+    assert '"id": 0' not in adapted2.content[0].text  # 11 items stripped
+
+
+@pytest.mark.asyncio
+async def test_adapter_handles_non_dict_data(set_dev_env):
+    """Adapter handles non-dict data without crash."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    # data is a list, not a dict — adapter must not crash
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": [{"id": 1}, {"id": 2}],
+            "assistant_guidance": "guidance",
+        },
+    )
+    adapted = adapt_tool_result(result)
+    # No crash — serialized as-is
+    assert "guidance" in adapted.content[0].text
