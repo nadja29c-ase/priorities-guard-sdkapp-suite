@@ -318,3 +318,100 @@ async def test_list_tools_for_claude_directly(set_dev_env):
     assert all(isinstance(t, mcp_types.Tool) for t in tools)
     names = [t.name for t in tools]
     assert names == sorted(names)
+
+
+# =============================================================================
+# Increment Claude-04: Data Serialization Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_adapter_includes_data_in_content(set_dev_env):
+    """Adapter serializes structuredContent.data into content for Claude."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": {
+                "priorities": [{"name": "Ship PG", "calendarKeyword": "P1", "actualHours": 7.0}],
+                "timeAllocation": {"totalTrackedHours": 40.25},
+            },
+            "assistant_guidance": "Do not repeat priority names.",
+        },
+    )
+    adapted = adapt_tool_result(result)
+    # Guidance present
+    assert "Do not repeat priority names." in adapted.content[0].text
+    # Data present — Claude can read priority name and hours
+    assert "Ship PG" in adapted.content[0].text
+    assert "7.0" in adapted.content[0].text
+    assert "40.25" in adapted.content[0].text
+    # Summary present
+    assert "Summary." in adapted.content[0].text
+    # Order: guidance before data
+    guidance_pos = adapted.content[0].text.index("Do not repeat priority names.")
+    summary_pos = adapted.content[0].text.index("Summary.")
+    data_pos = adapted.content[0].text.index("Ship PG")
+    assert guidance_pos < summary_pos < data_pos
+
+
+@pytest.mark.asyncio
+async def test_adapter_handles_empty_data(set_dev_env):
+    """Adapter handles empty data dict without crash."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": {},
+            "assistant_guidance": "Some guidance.",
+        },
+    )
+    adapted = adapt_tool_result(result)
+    assert "Some guidance." in adapted.content[0].text
+    # No crash on empty data
+
+
+@pytest.mark.asyncio
+async def test_adapter_handles_missing_data_key(set_dev_env):
+    """Adapter handles missing data key without crash."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "assistant_guidance": "Some guidance.",
+            # no "data" key at all
+        },
+    )
+    adapted = adapt_tool_result(result)
+    assert "Some guidance." in adapted.content[0].text
+    # No crash
+
+
+@pytest.mark.asyncio
+async def test_adapter_data_preserved_in_structured_content(set_dev_env):
+    """Adapter preserves data in structuredContent while also serializing to content."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Summary.")],
+        structuredContent={
+            "success": True,
+            "data": {"priorities": [{"name": "Test"}]},
+            "assistant_guidance": "guidance",
+        },
+    )
+    adapted = adapt_tool_result(result)
+    # Data still in structuredContent (unchanged)
+    assert adapted.structuredContent["data"] == {"priorities": [{"name": "Test"}]}
+    # Data also in content (serialized)
+    assert "Test" in adapted.content[0].text

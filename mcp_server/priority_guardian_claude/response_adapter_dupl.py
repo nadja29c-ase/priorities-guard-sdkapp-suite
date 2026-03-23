@@ -50,8 +50,21 @@ def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolRes
         guidance_str = str(assistant_guidance)
 
     # Step 4: Build new content
-    existing_text = result.content[0].text if result.content else ""
-    new_text = f"{guidance_str}\n\n{existing_text}".strip() if existing_text else guidance_str
+    # Safely extract existing text — guard for empty list and non-text first block
+    existing_text = ""
+    if result.content:
+        first = result.content[0]
+        if getattr(first, "text", None):
+            existing_text = first.text
+
+    # Serialize data for Claude's model channel
+    data = result.structuredContent.get("data")
+    data_str = json.dumps(data, ensure_ascii=False, indent=2) if data else ""
+
+    # Compose content: guidance first (behavior), then summary (natural language), then data (raw facts)
+    # This order produces better narration — Claude reads guidance before encountering JSON
+    parts = [p for p in [guidance_str, existing_text, data_str] if p]
+    new_text = "\n\n".join(parts)
     new_content = [mcp_types.TextContent(type="text", text=new_text)]
 
     # Step 5: Build clean structuredContent
