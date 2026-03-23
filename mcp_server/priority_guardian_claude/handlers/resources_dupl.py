@@ -74,6 +74,7 @@ WIDGET_HTML = _load_widget_html()
 
 async def list_resources() -> List[mcp_types.Resource]:
     """List available resources (widgets) for discovery."""
+    logger.info("resource.list.called")
     return [
         mcp_types.Resource(
             name="pg_dashboard_widget",
@@ -96,6 +97,7 @@ async def list_resources() -> List[mcp_types.Resource]:
 
 async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
     """List resource templates (widget templates) for discovery."""
+    logger.info("resource.list_templates.called")
     return [
         mcp_types.ResourceTemplate(
             name="Priority Guardian Dashboard",
@@ -123,6 +125,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     Called by Claude to load widget HTML for display.
     """
     uri_str = str(req.params.uri)
+    logger.info("resource.read.called", uri=uri_str)
 
     logger.debug("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
 
