@@ -6,6 +6,20 @@ import json
 from mcp import types as mcp_types
 
 
+_GET_PRIORITIES_TOOL_NAME = "get_priorities"
+
+_GET_PRIORITIES_CLAUDE_GUIDANCE = (
+    "Create an artifact that displays the priorities dashboard. "
+    "Use the pg-dashboard-claude.html template structure defined in the codebase. "
+    "Inside the artifact, embed the JSON data from the 'data' field as: "
+    "const DASHBOARD_DATA = <exact JSON>; "
+    "Render the dashboard using this data. "
+    "Do not list or repeat the priorities in text — the artifact displays them. "
+    "If the user wants to edit, tell them editing will be available soon and "
+    "they can ask you to make changes conversationally in the meantime."
+)
+
+
 def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolResult:
     """
     Adapt tool result for Claude.
@@ -91,6 +105,36 @@ def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolRes
     return mcp_types.CallToolResult(
         content=new_content,
         structuredContent=clean_structured,
+        isError=result.isError,
+        _meta=result.meta,
+    )
+
+
+def adapt_get_priorities_guidance(result: mcp_types.CallToolResult) -> mcp_types.CallToolResult:
+    """
+    Override assistant_guidance for get_priorities to reference Claude artifact instead of widget.
+
+    Called by the dispatcher after adapt_tool_result() for get_priorities only.
+    Replaces the guidance portion of content with Claude-specific artifact instructions.
+    Operates on the already-adapted result (guidance already moved to content by adapt_tool_result).
+    """
+    if not result.content:
+        return result
+
+    first = result.content[0]
+    if not getattr(first, "text", None):
+        return result
+
+    # Guidance is prepended first in content by adapt_tool_result.
+    # Split on first "\n\n" to isolate guidance from summary + data.
+    parts = first.text.split("\n\n", 1)
+    rest = parts[1] if len(parts) > 1 else ""
+
+    new_text = (_GET_PRIORITIES_CLAUDE_GUIDANCE + "\n\n" + rest).strip() if rest else _GET_PRIORITIES_CLAUDE_GUIDANCE
+
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text=new_text)],
+        structuredContent=result.structuredContent,
         isError=result.isError,
         _meta=result.meta,
     )
