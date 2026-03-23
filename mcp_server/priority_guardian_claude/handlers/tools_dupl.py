@@ -145,11 +145,6 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         # Adapt result for Claude (move assistant_guidance to content)
         result = adapt_tool_result(result)
 
-        # Apply tool-specific guidance overrides after general adaptation
-        if name == "get_priorities":
-            from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_get_priorities_guidance
-            result = adapt_get_priorities_guidance(result)
-
     except ToolUsageError as e:
         # Step 7: Handle intentional rejection
         tool_ms = (time.perf_counter() - start_tool) * 1000

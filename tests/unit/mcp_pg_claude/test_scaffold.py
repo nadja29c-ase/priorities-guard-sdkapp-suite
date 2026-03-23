@@ -526,34 +526,3 @@ async def test_adapter_handles_non_dict_data(set_dev_env):
     adapted = adapt_tool_result(result)
     # No crash — serialized as-is
     assert "guidance" in adapted.content[0].text
-
-
-# =============================================================================
-# Increment Claude-07A: get_priorities Guidance Override Tests
-# =============================================================================
-
-
-@pytest.mark.asyncio
-async def test_adapt_get_priorities_guidance_replaces_guidance(set_dev_env):
-    """adapt_get_priorities_guidance replaces widget guidance with artifact instruction."""
-    from mcp import types as mcp_types
-    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_get_priorities_guidance
-
-    result = mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(
-            type="text",
-            text="Original widget guidance.\n\nYou have 3 active priorities.\n\n{\"priorities\": []}"
-        )],
-        structuredContent={"success": True, "data": {"priorities": []}},
-    )
-    adapted = adapt_get_priorities_guidance(result)
-    # Artifact instruction present
-    assert "Create an artifact" in adapted.content[0].text
-    assert "DASHBOARD_DATA" in adapted.content[0].text
-    # Summary and data preserved
-    assert "You have 3 active priorities." in adapted.content[0].text
-    assert "{\"priorities\": []}" in adapted.content[0].text
-    # Original widget guidance replaced
-    assert "Original widget guidance." not in adapted.content[0].text
-    # structuredContent unchanged
-    assert adapted.structuredContent == result.structuredContent
