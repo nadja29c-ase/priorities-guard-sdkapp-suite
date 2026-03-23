@@ -151,6 +151,10 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         # Add widget link for get_priorities (triggers Claude to display dashboard widget)
         if name == "get_priorities":
             result = adapt_get_priorities_meta(result)
+            logger.debug(
+                "tool.get_priorities.wire_payload",
+                payload=result.model_dump(by_alias=True, mode="json", exclude_none=True),
+            )
 
     except ToolUsageError as e:
         # Step 7: Handle intentional rejection
