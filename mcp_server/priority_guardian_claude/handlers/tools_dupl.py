@@ -24,7 +24,10 @@ from mcp_server.priority_guardian_claude.mcp_auth_dupl import (
     build_unauthorized_meta,
     build_forbidden_meta,
 )
-from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_tool_result
+from mcp_server.priority_guardian_claude.response_adapter_dupl import (
+    adapt_tool_result,
+    adapt_get_priorities_meta,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -144,6 +147,10 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
 
         # Adapt result for Claude (move assistant_guidance to content)
         result = adapt_tool_result(result)
+
+        # Add widget link for get_priorities (triggers Claude to display dashboard widget)
+        if name == "get_priorities":
+            result = adapt_get_priorities_meta(result)
 
     except ToolUsageError as e:
         # Step 7: Handle intentional rejection

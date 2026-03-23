@@ -5,6 +5,9 @@
 import json
 from mcp import types as mcp_types
 
+# Widget resource URI (matches resources_dupl.py)
+WIDGET_URI = "ui://pg-claude/dashboard-v1.html"
+
 
 def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolResult:
     """
@@ -93,4 +96,41 @@ def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolRes
         structuredContent=clean_structured,
         isError=result.isError,
         _meta=result.meta,
+    )
+
+
+def adapt_get_priorities_meta(result: mcp_types.CallToolResult) -> mcp_types.CallToolResult:
+    """
+    Add _meta.ui.resourceUri to get_priorities result for widget display.
+
+    MCP Apps standard: tool results with _meta.ui.resourceUri trigger
+    the host to fetch and display the corresponding widget resource.
+    Claude uses this pattern to show interactive UI after tool calls.
+
+    Only adds metadata if the result is not an error.
+
+    Args:
+        result: The CallToolResult from get_priorities (already adapted)
+
+    Returns:
+        New CallToolResult with _meta.ui.resourceUri added
+    """
+    # Don't add widget link to error results
+    if result.isError:
+        return result
+
+    # Build new _meta with ui.resourceUri nested structure
+    existing_meta = result.meta or {}
+    new_meta = {
+        **existing_meta,
+        "ui": {
+            "resourceUri": WIDGET_URI,
+        },
+    }
+
+    return mcp_types.CallToolResult(
+        content=result.content,
+        structuredContent=result.structuredContent,
+        isError=result.isError,
+        _meta=new_meta,
     )

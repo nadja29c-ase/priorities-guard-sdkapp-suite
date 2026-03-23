@@ -526,3 +526,60 @@ async def test_adapter_handles_non_dict_data(set_dev_env):
     adapted = adapt_tool_result(result)
     # No crash — serialized as-is
     assert "guidance" in adapted.content[0].text
+
+
+# =============================================================================
+# Increment Claude-06: Dashboard Widget Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_adapt_get_priorities_meta_sets_widget_uri(set_dev_env):
+    """adapt_get_priorities_meta sets _meta.ui.resourceUri for widget linking."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_get_priorities_meta
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="3 priorities")],
+        structuredContent={"success": True, "data": {"priorities": []}},
+    )
+    adapted = adapt_get_priorities_meta(result)
+    assert adapted.meta is not None
+    # Correct nested structure per MCP Apps spec
+    assert adapted.meta.get("ui", {}).get("resourceUri") == "ui://pg-claude/dashboard-v1.html"
+    # Content and structuredContent unchanged
+    assert adapted.content == result.content
+    assert adapted.structuredContent == result.structuredContent
+
+
+@pytest.mark.asyncio
+async def test_adapt_get_priorities_meta_preserves_existing_meta(set_dev_env):
+    """adapt_get_priorities_meta preserves existing _meta fields."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_get_priorities_meta
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="3 priorities")],
+        structuredContent={"success": True},
+        _meta={"existing_key": "existing_value"},
+    )
+    adapted = adapt_get_priorities_meta(result)
+    # resourceUri added to ui dict
+    assert adapted.meta["ui"]["resourceUri"] == "ui://pg-claude/dashboard-v1.html"
+    # Non-ui keys preserved
+    assert adapted.meta["existing_key"] == "existing_value"
+
+
+@pytest.mark.asyncio
+async def test_adapt_get_priorities_meta_skips_error_results(set_dev_env):
+    """adapt_get_priorities_meta does not modify error results."""
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_get_priorities_meta
+
+    result = mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(type="text", text="Error occurred")],
+        isError=True,
+    )
+    adapted = adapt_get_priorities_meta(result)
+    # Error result returned unchanged
+    assert adapted is result

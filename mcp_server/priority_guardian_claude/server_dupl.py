@@ -360,10 +360,11 @@ def create_app():
     from mcp_server.priority_guardian_claude.mcp_auth_dupl import cleanup_jwks_cache
     from mcp_server.priority_guardian.request_context import auth_header_var
     from mcp_server.priority_guardian_claude.handlers.tools_dupl import call_tool_request
-    # NOTE: Do NOT import from priority_guardian.handlers.resources here.
-    # That module computes WIDGET_DOMAIN and BACKEND_DOMAIN at import time
-    # using priority_guardian.config (ChatGPT values). Until a resources_dupl.py
-    # exists for Claude, return empty lists inline.
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import (
+        list_resources,
+        list_resource_templates,
+        handle_read_resource,
+    )
 
     # Log resolved config at startup
     logger.info(
@@ -400,17 +401,14 @@ def create_app():
 
     @mcp._mcp_server.list_resources()
     async def _list_resources():
-        # Empty list — no resources registered in Increment Claude-01
-        # Future: create resources_dupl.py with Claude-specific WIDGET_DOMAIN
-        return []
+        return await list_resources()
 
     @mcp._mcp_server.list_resource_templates()
     async def _list_resource_templates():
-        # Empty list — no resource templates registered in Increment Claude-01
-        return []
+        return await list_resource_templates()
 
-    # NOTE: handle_read_resource not registered — no resources to read yet.
-    # Add resources_dupl.py when Claude widget is implemented.
+    # Register read_resource handler directly (same pattern as ChatGPT server)
+    mcp._mcp_server.request_handlers[mcp_types.ReadResourceRequest] = handle_read_resource
 
     @mcp._mcp_server.list_tools()
     async def _list_tools():

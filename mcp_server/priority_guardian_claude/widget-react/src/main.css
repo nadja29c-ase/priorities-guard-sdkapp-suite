@@ -1,0 +1,64 @@
+/* MCP Apps Claude Widget - Base Styles */
+
+/* Reset and base */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  padding: 16px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: transparent;
+  color: var(--color-text-primary, #0d0d0d);
+}
+
+#root {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Remove default button styles */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* Remove default list styles */
+ul, ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Remove default paragraph margins */
+p {
+  margin: 0;
+}
+
+/* Remove default heading margins */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
