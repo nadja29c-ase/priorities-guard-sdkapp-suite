@@ -41,7 +41,6 @@ CALL PRECONDITION: user_thoughts_exhausted_verbatim must be non-empty.
 Do NOT call this tool until the user has explicitly confirmed they have no more thoughts to add.
 Never infer this from silence, a pause, or the number of items provided.
 
-AFTER TOOL RETURNS: ALWAYS follow the ASSISTANT_GUIDANCE in structuredContent for what to say.
 """
 
 INPUT_SCHEMA = {
@@ -70,7 +69,13 @@ INPUT_SCHEMA = {
                 "properties": {
                     "cluster_name": {
                         "type": "string",
-                        "description": "Cluster titel describing the common theme of its thought items, ideally as an intention or outcome."
+                        "description": (
+                            "Cluster name describing the common theme of its thought items. "
+                            "Use descriptive, specific names — not generic categories. "
+                            "BAD: 'Marketing & PR', 'Work', 'Personal', 'Health'. "
+                            "GOOD: 'Launch Q2 campaign', 'Finish client deliverables', 'Plan birthday weekend'. "
+                            "When unsure, use the user's exact phrasing."
+                        ),
                     },
                     "thought_items": {
                         "type": "array",
