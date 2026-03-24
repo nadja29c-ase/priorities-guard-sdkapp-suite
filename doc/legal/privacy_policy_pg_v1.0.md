@@ -7,7 +7,7 @@ Effective Date: March 3, 2026
 
 Version: 2.0
 
-Last Updated: March 3, 2026
+Last Updated: March 16, 2026
 
 
 
@@ -81,7 +81,7 @@ Timezone  — We read your Google Calendar timezone setting to determine the bou
 
 After processing, all calendar event data is discarded. The only thing that persists is aggregated hours per priority per week.
 
-For the current week, event titles, descriptions, and times are included in the report sent to ChatGPT so the language model can propose semantic groupings of your non-priority time. For past weeks, no event-level data is transferred — only stored aggregates are used.
+For the current week, event titles, descriptions, and times may be included in the report sent to ChatGPT in two scenarios: (1) to propose semantic groupings of your non-priority time, and (2) when you request a breakdown of time within a specific priority (P1, P2, or P3), that priority's event titles and descriptions are sent to the model to generate subcategory groupings. For past weeks, no event-level data is transferred — only stored aggregates are used.
 
 2.3 We Only Ask Google for What We Need
 
@@ -119,7 +119,7 @@ Generating weekly progress reports with status indicators (on track, ahead, behi
 
 Detecting patterns in your time allocation over multiple weeks.
 
-Enabling ChatGPT to propose semantic groupings of your non-priority calendar time.
+Enabling ChatGPT to propose semantic groupings of your calendar time — including non-priority time and, on request, time within individual priorities.
 
 We do NOT use your data for advertising, analytics, profiling, model training, or any purpose other than the features described above.
 
