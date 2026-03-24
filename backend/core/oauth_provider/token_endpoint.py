@@ -57,6 +57,7 @@ def _extract_basic_auth(request: Request) -> tuple[str | None, str | None]:
 
 @router.post("/oauth/focused/token")
 @router.post("/oauth/pg/token")
+@router.post("/oauth/mindsort/token")
 async def token_endpoint(
     request: Request,
     grant_type: str = Form(...),

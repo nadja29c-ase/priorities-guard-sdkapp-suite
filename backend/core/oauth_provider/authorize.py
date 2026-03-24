@@ -42,7 +42,7 @@ SCOPE_DESCRIPTIONS_EN = {
     "focused.read": "Read your calendar events to detect focus sessions and provide insights.",
     "focused.write": "Toggle Apple Focus (the built-in Do Not Disturb mode) on your iPhone during your focus sessions.",
     "focused.notify": "Send notifications related to your focus schedule.",
-    "clarity.write": "Save and organize your boards.",
+    "clarity.write": "Save and organize your MindSort AI boards.",
     "pg.access": "Allow Priority Guardian to connect your Google Calendar and read events to track time on your priorities.",
 }
 
@@ -50,7 +50,7 @@ SCOPE_DESCRIPTIONS_DE = {
     "focused.read": "Deine Kalendertermine lesen, um Fokus-Zeiten zu erkennen und dir hilfreiche Einblicke zu geben.",
     "focused.write": "Apple Fokus (den integrierten \"Nicht stören\"-Modus) auf deinem iPhone waehrend deiner Fokus-Zeiten ein- und ausschalten.",
     "focused.notify": "Relevante Benachrichtigungen senden",
-    "clarity.write": "Deine Boards speichern und organisieren.",
+    "clarity.write": "Deine MindSort AI Boards speichern und organisieren.",
     "pg.access": "Priority Guardian erlauben, deinen Google Kalender zu verbinden und Termine zu lesen, um die Zeit für deine Prioritäten zu erfassen.",
 }
 
@@ -300,6 +300,7 @@ async def _resolve_user_identity(
 
 @router.get("/oauth/focused/authorize", response_class=HTMLResponse)
 @router.get("/oauth/pg/authorize", response_class=HTMLResponse)
+@router.get("/oauth/mindsort/authorize", response_class=HTMLResponse)
 async def authorize_endpoint(
     request: Request,
     response_type: str,
@@ -638,11 +639,11 @@ async def authorize_endpoint(
     # Select template based on app (determined by scopes)
     # Filter displayed scopes to only show relevant ones for each app
     # Override client_name to show APP name, not OAuth CLIENT name
-    # (ChatGPT = OAuth client, Clarity = app being authorized)
+    # (ChatGPT = OAuth client, MindSort AI = app being authorized)
     if any(s.startswith("clarity.") for s in requested_scopes):
-        template_name = f"oauth_consent_clarity_{language}.html"
-        client_name = "Clarity"  # App name, not OAuth client name
-        # Only show clarity.* scopes on Clarity consent page
+        template_name = f"oauth_consent_mindsort_{language}.html"
+        client_name = "MindSort AI"  # App name, not OAuth client name
+        # Only show clarity.* scopes on MindSort AI consent page
         display_scopes = {s for s in requested_scopes if s.startswith("clarity.")}
     elif any(s.startswith("pg.") for s in requested_scopes):
         template_name = f"oauth_consent_pg_{language}.html"

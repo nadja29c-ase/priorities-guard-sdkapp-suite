@@ -31,7 +31,7 @@ def _derive_app_name_from_scopes(scopes: list[str]) -> str:
 
     Scope prefixes:
     - pg.* -> "priority_guardian"
-    - clarity.* -> "clarity"
+    - clarity.* -> "mindsort"
     - focused.* -> "focused" (default)
 
     Args:
@@ -44,12 +44,13 @@ def _derive_app_name_from_scopes(scopes: list[str]) -> str:
         if scope.startswith("pg."):
             return "priority_guardian"
         if scope.startswith("clarity."):
-            return "clarity"
+            return "mindsort"
     return "focused"
 
 
 @router.post("/oauth/focused/consent")
 @router.post("/oauth/pg/consent")
+@router.post("/oauth/mindsort/consent")
 async def consent_endpoint(
     request: Request,
     db: AsyncSession = Depends(get_db)

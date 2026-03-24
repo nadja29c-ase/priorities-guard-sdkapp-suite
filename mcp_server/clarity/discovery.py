@@ -51,6 +51,6 @@ async def oauth_protected_resource():
     """OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
     return {
         "resource": f"{MCP_SERVER_URL}/mcp",
-        "authorization_servers": [CLARITY_ISSUER],
+        "authorization_servers": [OAUTH_ISSUER_URL],
         "scopes_supported": SCOPES_SUPPORTED,
     }

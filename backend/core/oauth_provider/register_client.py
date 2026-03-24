@@ -36,17 +36,22 @@ class RegisterRequest(BaseModel):
 
 # Supported scopes derived from discovery (single source of truth)
 # Prevents drift between what's advertised and what's accepted
-SUPPORTED_SCOPES = set(SCOPES_SUPPORTED)
+# Union with clarity.write for MindSort AI route validation
+# (safe: shared discovery.py SCOPES_SUPPORTED untouched, per-app discovery separated)
+SUPPORTED_SCOPES = set(SCOPES_SUPPORTED) | {"clarity.write"}
 
 # Route-specific defaults (least privilege principle)
 # - /oauth/focused/register: Focused app scopes only (backward compatibility)
 # - /oauth/pg/register: PG suite scopes (each MCP server advertises only its own scopes)
+# - /oauth/mindsort/register: MindSort AI scopes
 DEFAULT_SCOPES_FOCUSED = ["focused.read", "focused.write", "focused.notify"]
 DEFAULT_SCOPES_PG = ["pg.access"]  # Default for Priority Guardian suite
+DEFAULT_SCOPES_MINDSORT = ["clarity.write"]  # Default for MindSort AI
 
 
 @router.post("/oauth/focused/register")
 @router.post("/oauth/pg/register")
+@router.post("/oauth/mindsort/register")
 async def register_endpoint(
     request: Request,
     register_request: RegisterRequest,
@@ -123,6 +128,8 @@ async def register_endpoint(
     route_path = request.url.path
     if route_path == "/oauth/focused/register":
         default_scopes = DEFAULT_SCOPES_FOCUSED
+    elif route_path == "/oauth/mindsort/register":
+        default_scopes = DEFAULT_SCOPES_MINDSORT
     else:
         # /oauth/pg/register: PG suite defaults (ChatGPT doesn't send scope param)
         default_scopes = DEFAULT_SCOPES_PG

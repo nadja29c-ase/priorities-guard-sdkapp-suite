@@ -36,6 +36,7 @@ from backend.core.oauth_provider.jwks import router as jwks_router
 from backend.core.oauth_provider.register_client import router as register_router
 from backend.core.oauth_provider.token_endpoint import router as token_router
 from backend.core.oauth_provider.revoke import router as revoke_router
+from backend.core.oauth_provider.mindsort_discovery import router as mindsort_discovery_router
 
 router = APIRouter(tags=["oauth-provider"])
 
@@ -47,3 +48,6 @@ router.include_router(jwks_router)
 router.include_router(register_router)
 router.include_router(token_router)
 router.include_router(revoke_router)
+
+# MindSort AI app-specific discovery (mounted with prefix)
+router.include_router(mindsort_discovery_router, prefix="/oauth/mindsort")
