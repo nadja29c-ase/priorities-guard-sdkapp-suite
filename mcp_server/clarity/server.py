@@ -193,7 +193,7 @@ class HeadMcpMiddleware:
 # Create FastMCP instance
 # stateless_http=True: Each request is self-contained, authenticated via JWT.
 # This avoids session ID issues on deploy (server restart clears in-memory sessions).
-mcp = FastMCP("clarity-mcp", streamable_http_path="/mcp", stateless_http=True)
+mcp = FastMCP("mindsort-mcp", streamable_http_path="/mcp", stateless_http=True)
 
 
 # ============================================================================
@@ -317,7 +317,7 @@ async def wellknown_oauth_protected_resource(_request):
 
 async def _cleanup_on_shutdown():
     """Clean up HTTP clients on shutdown."""
-    logger.info("clarity.server.shutdown")
+    logger.info("mindsort.server.shutdown")
     await cleanup_jwks_cache()
     await cleanup_http_client()
 
@@ -392,7 +392,7 @@ def create_app():
     # Health endpoints (for monitoring and reviewer reachability checks)
     async def health_root(_request):
         """Root health check - returns JSON for monitoring/reviewers."""
-        return JSONResponse({"status": "ok", "service": "clarity-mcp"})
+        return JSONResponse({"status": "ok", "service": "mindsort-mcp"})
 
     async def health_check(_request):
         """Simple health check endpoint."""
@@ -412,7 +412,7 @@ def create_app():
 
     content_type_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app)
     head_mcp_app = HeadMcpMiddleware(content_type_app, allowed_origins=allowed_origins)
-    return RequestLoggingMiddleware(head_mcp_app, service_name="clarity-mcp")
+    return RequestLoggingMiddleware(head_mcp_app, service_name="mindsort-mcp")
 
 
 # ASGI entrypoint
@@ -423,13 +423,13 @@ if __name__ == "__main__":
     port = int(os.getenv("PORT", "8002"))
 
     logger.info(
-        "clarity.server.starting",
+        "mindsort.server.starting",
         host="127.0.0.1",
         port=port,
     )
 
     print("=" * 50)
-    print("CLARITY MCP SERVER - V5 (Widget Integration)")
+    print("MINDSORT AI MCP SERVER")
     print(f"Starting on http://127.0.0.1:{port}")
     print(f"MCP endpoint: http://127.0.0.1:{port}/mcp")
     print("=" * 50)

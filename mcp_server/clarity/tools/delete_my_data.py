@@ -1,7 +1,7 @@
 """
 Delete My Data Tool.
 
-Permanently deletes the user's saved Clarity board (GDPR compliance).
+Permanently deletes the user's saved MindSort AI board (GDPR compliance).
 Self-registers at import time.
 
 OpenAI Requirement (Compliance Master C38):
@@ -25,7 +25,7 @@ logger = structlog.get_logger(__name__)
 NAME = "delete_my_data"
 
 DESCRIPTION = """
-Permanently deletes the user's saved Clarity board. This cannot be undone.
+Permanently deletes the user's saved MindSort AI board. This cannot be undone.
 Use when user explicitly requests to delete their data.
 Requires user_confirmed_deletion=true to execute.
 """
@@ -56,7 +56,7 @@ async def handle(
     arguments: dict,
 ) -> mcp_types.CallToolResult:
     """
-    Delete user's saved Clarity board.
+    Delete user's saved MindSort AI board.
 
     Args:
         user_id: Authenticated user ID from JWT
@@ -109,14 +109,14 @@ async def handle(
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text="SUCCESS: Your Clarity board has been permanently deleted."
+                text="SUCCESS: Your MindSort AI board has been permanently deleted."
             )],
             structuredContent={
                 "status": "deleted",
                 "success": True,
-                "message": "SUCCESS: Your Clarity board has been permanently deleted.",
+                "message": "SUCCESS: Your MindSort AI board has been permanently deleted.",
                 "deleted": result.get("deleted"),
-                "assistant_guidance": "DELETION SUCCESSFUL. The user's saved Clarity board has been permanently deleted. Tell them: 'Your board has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes Clarity data — for full account deletion, they should contact clarity@priority-guard.com.",
+                "assistant_guidance": "DELETION SUCCESSFUL. The user's saved MindSort AI board has been permanently deleted. Tell them: 'Your board has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes MindSort AI data — for full account deletion, they should contact mindsort@priority-guard.com.",
             },
             _meta={
                 "openai/toolInvocation/invoking": "Deleting your saved board...",
@@ -126,19 +126,19 @@ async def handle(
 
     elif status == "no_data":
         # Treat as success - user either had no data, or LLM called twice after deletion
-        # Either way, user's Clarity data is now clear
+        # Either way, user's MindSort AI data is now clear
         logger.info("delete_my_data.no_data",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text="Your Clarity data has been deleted."
+                text="Your MindSort AI data has been deleted."
             )],
             structuredContent={
                 "status": "deleted",
                 "success": True,
-                "message": "Your Clarity data has been deleted.",
-                "assistant_guidance": "DELETION COMPLETE. The user's Clarity data is now clear. Tell them: 'Your Clarity data has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes Clarity data — for full account deletion, they should contact clarity@priority-guard.com.",
+                "message": "Your MindSort AI data has been deleted.",
+                "assistant_guidance": "DELETION COMPLETE. The user's MindSort AI data is now clear. Tell them: 'Your MindSort AI data has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes MindSort AI data — for full account deletion, they should contact mindsort@priority-guard.com.",
             },
             _meta={
                 "openai/toolInvocation/invoking": "Deleting your saved board...",

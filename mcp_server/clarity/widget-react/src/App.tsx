@@ -7,7 +7,7 @@ import { Button } from '@openai/apps-sdk-ui/components/Button'
 import { Check } from '@openai/apps-sdk-ui/components/Icon'
 
 // Widget state persisted across re-renders via OpenAI SDK
-interface ClarityWidgetState {
+interface MindSortWidgetState {
   scrollY: number
 }
 
@@ -36,7 +36,7 @@ function App() {
 
   // Restore scroll position from widgetState on mount
   useEffect(() => {
-    const savedState = window.openai?.widgetState as ClarityWidgetState | undefined
+    const savedState = window.openai?.widgetState as MindSortWidgetState | undefined
     if (savedState?.scrollY) {
       // Defer to ensure DOM is ready
       requestAnimationFrame(() => {
@@ -56,7 +56,7 @@ function App() {
 
     if (error) {
       setLoadError(error)
-      console.error('Clarity widget load error:', error)
+      console.error('MindSort AI widget load error:', error)
     } else {
       setLoadError(null)
     }
@@ -103,7 +103,7 @@ function App() {
       timeoutId = setTimeout(() => {
         window.openai?.setWidgetState?.({
           scrollY: window.scrollY
-        } satisfies ClarityWidgetState)
+        } satisfies MindSortWidgetState)
       }, 150)
     }
 
@@ -162,7 +162,7 @@ function App() {
   return (
     <main
       role="main"
-      aria-label="Clarity Board"
+      aria-label="MindSort AI Board"
       className="bg-surface-secondary rounded-2xl px-8 py-6 -m-4"
     >
       <Header />

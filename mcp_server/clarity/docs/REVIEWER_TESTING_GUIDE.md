@@ -1,8 +1,8 @@
-# Clarity — Reviewer Testing Guide
+# MindSort AI — Reviewer Testing Guide
 
 ## Installation
 
-1. Add Clarity app from directory
+1. Add MindSort AI app from directory
 2. No separate login required. Reviewer installs the app and can use tools immediately.
 
 ## Test Flow
@@ -39,7 +39,7 @@ Type in chat:
 
 ### 6. Delete Data
 Type in chat:
-> "Delete all my Clarity data"
+> "Delete all my MindSort AI data"
 
 Then confirm when prompted.
 

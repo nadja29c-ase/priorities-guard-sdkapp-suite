@@ -61,8 +61,8 @@ async def list_resources() -> List[mcp_types.Resource]:
     """List available resources (widgets) for discovery."""
     return [
         mcp_types.Resource(
-            name="clarity_clusters_widget",
-            title="Clarity Clusters Widget",
+            name="mindsort_clusters_widget",
+            title="MindSort AI Clusters Widget",
             uri=WIDGET_URI,
             description="Widget for rendering clustered thoughts",
             mimeType="text/html;profile=mcp-app",
@@ -84,8 +84,8 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
     """List resource templates (widget templates) for discovery."""
     return [
         mcp_types.ResourceTemplate(
-            name="Clarity Clusters Widget",
-            title="Clarity Clusters Widget",
+            name="MindSort AI Clusters Widget",
+            title="MindSort AI Clusters Widget",
             uriTemplate=WIDGET_URI,
             description="Widget for rendering clustered thoughts",
             mimeType="text/html;profile=mcp-app",
@@ -159,6 +159,6 @@ def embedded_widget_resource() -> mcp_types.EmbeddedResource:
             uri=WIDGET_URI,
             mimeType="text/html;profile=mcp-app",
             text=WIDGET_HTML,
-            title="Clarity Clusters Widget",
+            title="MindSort AI Clusters Widget",
         ),
     )

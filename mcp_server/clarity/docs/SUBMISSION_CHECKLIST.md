@@ -1,4 +1,4 @@
-# Clarity — OpenAI SDK App Submission Checklist
+# MindSort AI — OpenAI SDK App Submission Checklist
 
 ## Pre-Submission Verification
 
@@ -19,7 +19,7 @@
 
 ## Store Listing Metadata
 
-- [X] App name: Clarity
+- [X] App name: MindSort AI
 - [X] Description: Clear and accurate
-- [X] Support email: clarity@priority-guard.com
+- [X] Support email: mindsort@priority-guard.com
 - [X] Privacy policy URL: https://www.priority-guard.com/privacy
