@@ -84,6 +84,17 @@ AFTER TOOL RETURNS: Follow assistant_guidance in structuredContent.
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        "user_priorities_verbatim": {
+            "type": "string",
+            "description": (
+                "Copy-paste the user's exact words explicitly naming their priorities. "
+                "Must be non-empty. "
+                "Examples: 'my P1 is the client project', 'I want to focus on health first, work second'. "
+                "Do NOT call this tool until the user has explicitly stated which clusters or items "
+                "are their priorities. Never infer priorities from context or conversation history."
+            ),
+            "minLength": 1,
+        },
         "clusters": {
             "type": "array",
             "description": "The current board clusters to prioritize. IMPORTANT: Include existing 'priority' fields from previous tool output to preserve them.",
@@ -173,7 +184,7 @@ INPUT_SCHEMA = {
             "maxItems": 3
         }
     },
-    "required": ["clusters", "priorities"],
+    "required": ["user_priorities_verbatim", "clusters", "priorities"],
     "additionalProperties": False,
 }
 
@@ -343,6 +354,38 @@ def _validate_priorities(
 
 
 # ============================================================================
+# Provenance Guidance
+# ============================================================================
+
+GUIDANCE_EMPTY_PRIORITIES_VERBATIM = (
+    "user_priorities_verbatim is empty. Do not call this tool until the user has explicitly "
+    "named their priorities. "
+    "Ask: 'Which of these feels most important to focus on right now? Name your P1, "
+    "and optionally a P2 and P3.' "
+    "Store their exact answer in user_priorities_verbatim."
+)
+
+
+def _build_provenance_error(error_code: str, instruction: str) -> mcp_types.CallToolResult:
+    """Build a structured error response for provenance validation failure."""
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(
+            type="text",
+            text=f"Provenance validation failed: {error_code}"
+        )],
+        structuredContent={
+            "success": False,
+            "error": error_code,
+            "assistant_guidance": {
+                "action": "ASK_CLARIFYING",
+                "instruction": instruction,
+            },
+        },
+        isError=True,
+    )
+
+
+# ============================================================================
 # Tool Handler
 # ============================================================================
 
@@ -366,6 +409,19 @@ async def handle(
     logger.debug("prioritize_clusters.handle.start",
                 user_id=user_id,
                 correlation_id=correlation_id)
+
+    # ============================================================
+    # PROVENANCE CHECK (behavioral gate)
+    # ============================================================
+    user_priorities_verbatim = arguments.get("user_priorities_verbatim", "")
+    if not user_priorities_verbatim or not user_priorities_verbatim.strip():
+        logger.info("prioritize_clusters.provenance_failed",
+                    user_id=user_id,
+                    field="user_priorities_verbatim")
+        return _build_provenance_error(
+            "empty_priorities_verbatim",
+            GUIDANCE_EMPTY_PRIORITIES_VERBATIM,
+        )
 
     # Validate request structure
     try:

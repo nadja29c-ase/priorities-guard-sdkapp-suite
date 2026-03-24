@@ -37,12 +37,27 @@ THIS IS THE FASTEST WAY TO HELP USER ACHIEVE CLARITY AND FOCUS!
 WHEN NOT TO CALL:
 - when user wants to sort through emotional and personal dilemmas, or relationship problems.
 
+CALL PRECONDITION: user_thoughts_exhausted_verbatim must be non-empty.
+Do NOT call this tool until the user has explicitly confirmed they have no more thoughts to add.
+Never infer this from silence, a pause, or the number of items provided.
+
 AFTER TOOL RETURNS: ALWAYS follow the ASSISTANT_GUIDANCE in structuredContent for what to say.
 """
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        "user_thoughts_exhausted_verbatim": {
+            "type": "string",
+            "description": (
+                "Copy-paste the user's exact words confirming they are done adding thoughts. "
+                "Must be non-empty. "
+                "Examples: 'that's it', 'I think that's everything', 'done', 'nothing else comes to mind'. "
+                "Do NOT set thoughts_exhausted=true and call this tool until the user has explicitly "
+                "signaled they are done. Never infer completion from silence or item count."
+            ),
+            "minLength": 1,
+        },
         "thoughts_exhausted": {
             "type": "boolean",
             "description": "Default false. Set true only when user has no more thought items."
@@ -108,7 +123,7 @@ INPUT_SCHEMA = {
             }
         }
     },
-    "required": ["clusters"],  # thoughts_exhausted defaults to false if missing
+    "required": ["user_thoughts_exhausted_verbatim", "clusters"],
     "additionalProperties": False,
 }
 
@@ -183,6 +198,37 @@ class ClusterRequest(BaseModel):
 
 
 # ============================================================================
+# Provenance Guidance
+# ============================================================================
+
+GUIDANCE_EMPTY_THOUGHTS_EXHAUSTED_VERBATIM = (
+    "user_thoughts_exhausted_verbatim is empty. Do not call this tool until the user has "
+    "explicitly confirmed they are done adding thoughts. "
+    "Ask: 'Is there anything else on your mind, or shall we organize what you have so far?' "
+    "Store their exact answer in user_thoughts_exhausted_verbatim."
+)
+
+
+def _build_provenance_error(error_code: str, instruction: str) -> mcp_types.CallToolResult:
+    """Build a structured error response for provenance validation failure."""
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(
+            type="text",
+            text=f"Provenance validation failed: {error_code}"
+        )],
+        structuredContent={
+            "success": False,
+            "error": error_code,
+            "assistant_guidance": {
+                "action": "ASK_CLARIFYING",
+                "instruction": instruction,
+            },
+        },
+        isError=True,
+    )
+
+
+# ============================================================================
 # Tool Handler
 # ============================================================================
 
@@ -207,6 +253,19 @@ async def handle(
                 user_id=user_id,
                 correlation_id=correlation_id,
                 argument_keys=list(arguments.keys()))
+
+    # ============================================================
+    # PROVENANCE CHECK (behavioral gate)
+    # ============================================================
+    user_thoughts_exhausted_verbatim = arguments.get("user_thoughts_exhausted_verbatim", "")
+    if not user_thoughts_exhausted_verbatim or not user_thoughts_exhausted_verbatim.strip():
+        logger.info("organize_thoughts.provenance_failed",
+                    user_id=user_id,
+                    field="user_thoughts_exhausted_verbatim")
+        return _build_provenance_error(
+            "empty_thoughts_exhausted_verbatim",
+            GUIDANCE_EMPTY_THOUGHTS_EXHAUSTED_VERBATIM,
+        )
 
     validated_request = None
 
