@@ -38,7 +38,8 @@ INPUT_SCHEMA = {
             "description": "Set to true ONLY when the user has explicitly confirmed they want to delete their data. Call this tool exactly ONCE after user gives consent.",
         }
     },
-    "required": ["user_confirmed_deletion"]
+    "required": ["user_confirmed_deletion"],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["clarity.write"]

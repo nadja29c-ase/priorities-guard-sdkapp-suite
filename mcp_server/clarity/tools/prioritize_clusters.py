@@ -94,14 +94,15 @@ INPUT_SCHEMA = {
                     "priority": {
                         "type": ["object", "null"],
                         "description": "Existing priority on this cluster (pass through from previous output to preserve)",
-                        "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
+                        "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
+                        "additionalProperties": False,
                     },
                     "thought_items": {
                         "type": "array",
                         "items": {
                             "oneOf": [
                                 {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
                             ]
                         }
                     },
@@ -114,24 +115,27 @@ INPUT_SCHEMA = {
                                 "priority": {
                                     "type": ["object", "null"],
                                     "description": "Existing priority on this subcluster (pass through from previous output to preserve)",
-                                    "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
+                                    "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
+                                    "additionalProperties": False,
                                 },
                                 "thought_items": {
                                     "type": "array",
                                     "items": {
                                         "oneOf": [
                                             {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
                                         ]
                                     }
                                 },
                                 "tags": {"type": "array", "items": {"type": "string"}}
-                            }
+                            },
+                            "additionalProperties": False,
                         }
                     },
                     "tags": {"type": "array", "items": {"type": "string"}}
                 },
-                "required": ["cluster_name"]
+                "required": ["cluster_name"],
+                "additionalProperties": False,
             }
         },
         "priorities": {
@@ -163,12 +167,14 @@ INPUT_SCHEMA = {
                         "description": "Optional reason for prioritization"
                     }
                 },
-                "required": ["rank"]
+                "required": ["rank"],
+                "additionalProperties": False,
             },
             "maxItems": 3
         }
     },
-    "required": ["clusters", "priorities"]
+    "required": ["clusters", "priorities"],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["clarity.write"]

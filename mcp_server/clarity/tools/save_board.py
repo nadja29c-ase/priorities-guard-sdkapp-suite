@@ -89,9 +89,11 @@ INPUT_SCHEMA = {
                                             "properties": {
                                                 "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
                                                 "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                                            }
+                                            },
+                                            "additionalProperties": False,
                                         }
-                                    }
+                                    },
+                                    "additionalProperties": False,
                                 }
                             ]
                         },
@@ -120,9 +122,11 @@ INPUT_SCHEMA = {
                                                         "properties": {
                                                             "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
                                                             "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                                                        }
+                                                        },
+                                                        "additionalProperties": False,
                                                     }
-                                                }
+                                                },
+                                                "additionalProperties": False,
                                             }
                                         ]
                                     }
@@ -137,10 +141,12 @@ INPUT_SCHEMA = {
                                     "properties": {
                                         "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
                                         "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                                    }
+                                    },
+                                    "additionalProperties": False,
                                 }
                             },
-                            "required": ["subcluster_name", "thought_items"]
+                            "required": ["subcluster_name", "thought_items"],
+                            "additionalProperties": False,
                         }
                     },
                     "tags": {
@@ -154,14 +160,17 @@ INPUT_SCHEMA = {
                         "properties": {
                             "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
                             "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                        }
+                        },
+                        "additionalProperties": False,
                     }
                 },
-                "required": ["cluster_name"]
+                "required": ["cluster_name"],
+                "additionalProperties": False,
             }
         }
     },
-    "required": ["clusters"]
+    "required": ["clusters"],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["clarity.write"]

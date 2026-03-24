@@ -119,14 +119,15 @@ INPUT_SCHEMA = {
                     "priority": {
                         "type": ["object", "null"],
                         "description": "Existing priority (MUST pass through from previous output)",
-                        "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
+                        "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
+                        "additionalProperties": False,
                     },
                     "thought_items": {
                         "type": "array",
                         "items": {
                             "oneOf": [
                                 {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
                             ]
                         }
                     },
@@ -139,24 +140,27 @@ INPUT_SCHEMA = {
                                 "priority": {
                                     "type": ["object", "null"],
                                     "description": "Existing priority (MUST pass through from previous output)",
-                                    "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}
+                                    "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
+                                    "additionalProperties": False,
                                 },
                                 "thought_items": {
                                     "type": "array",
                                     "items": {
                                         "oneOf": [
                                             {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object"}}}
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
                                         ]
                                     }
                                 },
                                 "tags": {"type": "array", "items": {"type": "string"}}
-                            }
+                            },
+                            "additionalProperties": False,
                         }
                     },
                     "tags": {"type": "array", "items": {"type": "string"}}
                 },
-                "required": ["cluster_name"]
+                "required": ["cluster_name"],
+                "additionalProperties": False,
             }
         },
         "operation": {
@@ -213,11 +217,13 @@ INPUT_SCHEMA = {
                     "text": {"type": "string"},
                     "tag": {"type": "string", "enum": sorted(ALLOWED_TAGS)}
                 },
-                "required": ["operation"]
+                "required": ["operation"],
+                "additionalProperties": False,
             }
         }
     },
-    "required": ["board"]
+    "required": ["board"],
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["clarity.write"]

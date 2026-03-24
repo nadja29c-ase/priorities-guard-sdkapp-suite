@@ -88,7 +88,8 @@ INPUT_SCHEMA = {
                                     "description": "Optional. Only tag when user intent is clear and dominant."
                                 }
                             },
-                            "required": ["subcluster_name", "thought_items"]
+                            "required": ["subcluster_name", "thought_items"],
+                            "additionalProperties": False,
                         }
                     },
                     "tags": {
@@ -102,11 +103,13 @@ INPUT_SCHEMA = {
                         "description": "Optional. Only tag when user intent is clear and dominant."
                     }
                 },
-                "required": ["cluster_name"]
+                "required": ["cluster_name"],
+                "additionalProperties": False,
             }
         }
     },
-    "required": ["clusters"]  # thoughts_exhausted defaults to false if missing
+    "required": ["clusters"],  # thoughts_exhausted defaults to false if missing
+    "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["clarity.write"]

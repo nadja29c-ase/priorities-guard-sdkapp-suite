@@ -10,11 +10,15 @@ IMPORTANT:
     in the load_saved_board tool, not here.
 
 TIMEOUT GUARANTEE:
-    All HTTP calls use get_http_client() which has a 10-second timeout.
-    See http_client.py for the guarantee. This prevents hanging on network issues.
+    All HTTP calls are wrapped with asyncio.wait_for(timeout=TIMEOUT_S).
+    TIMEOUT_S=8.0 leaves margin within the ~10s MCP execution window.
 """
 
+import asyncio
+
 import structlog
+
+TIMEOUT_S = 8.0
 
 from .http_client import get_http_client
 from .config import BACKEND_URL, INTERNAL_API_SECRET
@@ -68,10 +72,13 @@ async def persist_cluster(
             payload["content_hash"] = content_hash
 
         client = get_http_client()
-        response = await client.post(
-            f"{BACKEND_URL}/api/clarity/clusters",
-            headers=headers,
-            json=payload,
+        response = await asyncio.wait_for(
+            client.post(
+                f"{BACKEND_URL}/api/clarity/clusters",
+                headers=headers,
+                json=payload,
+            ),
+            timeout=TIMEOUT_S,
         )
 
         if response.status_code == 201:
@@ -142,9 +149,12 @@ async def get_cluster(user_id: str, correlation_id: str | None = None) -> dict |
             headers["X-Correlation-ID"] = correlation_id
 
         client = get_http_client()
-        response = await client.get(
-            f"{BACKEND_URL}/api/clarity/clusters",
-            headers=headers,
+        response = await asyncio.wait_for(
+            client.get(
+                f"{BACKEND_URL}/api/clarity/clusters",
+                headers=headers,
+            ),
+            timeout=TIMEOUT_S,
         )
 
         if response.status_code == 200:
@@ -221,13 +231,16 @@ async def delete_cluster(user_id: str, correlation_id: str | None = None) -> dic
 
         client = get_http_client()
         # Use request() instead of delete() because httpx delete() doesn't support json param
-        response = await client.request(
-            "DELETE",
-            f"{BACKEND_URL}/api/clarity/data",
-            headers=headers,
-            # Defense in depth: MCP tool validates confirm=True before calling,
-            # backend also validates. Double-validation is intentional.
-            json={"confirm": True},
+        response = await asyncio.wait_for(
+            client.request(
+                "DELETE",
+                f"{BACKEND_URL}/api/clarity/data",
+                headers=headers,
+                # Defense in depth: MCP tool validates confirm=True before calling,
+                # backend also validates. Double-validation is intentional.
+                json={"confirm": True},
+            ),
+            timeout=TIMEOUT_S,
         )
 
         if response.status_code == 200:
