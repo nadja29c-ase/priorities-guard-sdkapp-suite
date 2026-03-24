@@ -23,7 +23,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('Clarity widget error:', error, errorInfo.componentStack)
+    console.error('MindSort AI widget error:', error, errorInfo.componentStack)
   }
 
   render(): ReactNode {
@@ -44,7 +44,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 // Safe root element lookup with fallback
 const rootElement = document.getElementById('root')
 if (!rootElement) {
-  console.error('Clarity widget: #root element not found in DOM')
+  console.error('MindSort AI widget: #root element not found in DOM')
 } else {
   createRoot(rootElement).render(
     <ErrorBoundary>
