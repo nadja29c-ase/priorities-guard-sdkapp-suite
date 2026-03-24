@@ -23,6 +23,9 @@ async def openid_configuration():
         "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
         "registration_endpoint": f"{OAUTH_ISSUER_URL}/register",
         "scopes_supported": SCOPES_SUPPORTED,
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "token_endpoint_auth_methods_supported": ["none"],
         "code_challenge_methods_supported": ["S256"],
     }
 
@@ -36,6 +39,9 @@ async def oauth_authorization_server():
         "jwks_uri": f"{OAUTH_ISSUER_URL}/jwks",
         "registration_endpoint": f"{OAUTH_ISSUER_URL}/register",
         "scopes_supported": SCOPES_SUPPORTED,
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "token_endpoint_auth_methods_supported": ["none"],
         "code_challenge_methods_supported": ["S256"],
     }
 
@@ -43,7 +49,7 @@ async def oauth_authorization_server():
 async def oauth_protected_resource():
     """OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
     return {
-        "resource": MCP_SERVER_URL,
+        "resource": f"{MCP_SERVER_URL}/mcp",
         "authorization_servers": [OAUTH_ISSUER_URL],
         "scopes_supported": SCOPES_SUPPORTED,
     }
