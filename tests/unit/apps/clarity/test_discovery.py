@@ -14,12 +14,12 @@ class TestClarityDiscovery:
     async def test_openid_configuration_required_fields(self):
         """openid_configuration should return all required OAuth fields."""
         from mcp_server.clarity.discovery import openid_configuration
-        from mcp_server.clarity.config import OAUTH_ISSUER_URL, SCOPES_SUPPORTED
+        from mcp_server.clarity.config import CLARITY_ISSUER, OAUTH_ISSUER_URL, SCOPES_SUPPORTED
 
         result = await openid_configuration()
 
-        # Core fields
-        assert result["issuer"] == OAUTH_ISSUER_URL
+        # Core fields - issuer must be domain-only
+        assert result["issuer"] == CLARITY_ISSUER
         assert result["authorization_endpoint"] == f"{OAUTH_ISSUER_URL}/authorize"
         assert result["token_endpoint"] == f"{OAUTH_ISSUER_URL}/token"
         assert result["jwks_uri"] == f"{OAUTH_ISSUER_URL}/jwks"
@@ -36,12 +36,12 @@ class TestClarityDiscovery:
     async def test_oauth_authorization_server_required_fields(self):
         """oauth_authorization_server should return all required OAuth fields."""
         from mcp_server.clarity.discovery import oauth_authorization_server
-        from mcp_server.clarity.config import OAUTH_ISSUER_URL, SCOPES_SUPPORTED
+        from mcp_server.clarity.config import CLARITY_ISSUER, OAUTH_ISSUER_URL, SCOPES_SUPPORTED
 
         result = await oauth_authorization_server()
 
-        # Core fields
-        assert result["issuer"] == OAUTH_ISSUER_URL
+        # Core fields - issuer must be domain-only
+        assert result["issuer"] == CLARITY_ISSUER
         assert result["authorization_endpoint"] == f"{OAUTH_ISSUER_URL}/authorize"
         assert result["token_endpoint"] == f"{OAUTH_ISSUER_URL}/token"
         assert result["jwks_uri"] == f"{OAUTH_ISSUER_URL}/jwks"
