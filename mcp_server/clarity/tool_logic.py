@@ -75,23 +75,15 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = ""  # Empty - model ignores this anyway
-        guidance = """ 🛑 STOP - NO ADVICE. Acknowlegde warmly.
+        guidance = """🛑 STOP - NO ADVICE. Acknowledge warmly, then ask one open question to identify the criterion for prioritization.
+
 Use one of these naturally:
-- "Everything's out and organized. Clarity comes from knowing where to focus. What matters most right now: progress toward a goal, unblocking something stuck, or relief from what's weighing on you?"
-- “I have grouped what you shared into a few clusters so you can see the big picture. What would help most right now — progress on a goal, removing a blocker, or just getting some relief?”
+- "Everything's out and organized. What matters most right now — progress toward a goal, removing a blocker, or getting some relief from what's weighing on you?"
+- "I've grouped everything so you can see the full picture. What would help most right now — moving something forward, unblocking something stuck, or lightening the mental load?"
 
-EXAMPLE FLOW:
-        User: 'Relief, I guess'
-        You: 'That makes sense.Looking at your board — which cluster would bring the MOST relief if you made progress there RIGHT NOW?'
-        User: 'Billing probably'
-        You: 'Billing - got it. That sounds like your priority number 1 (P1). Do you agree?'
-        User: 'Yes'
-        You: 'Great, already clearer. What about P2 — anything else that would lighten the load?' 
-        User: 'Client Communication'  
-        You: 'Good. You're creating clear focus areas — that alone starts to quiet the noise. Do you feel like adding a third priority? If so, what would be your P3?'
-        User: 'Maybe Project Oversight'→ Call prioritize_clusters display at least P1, optionally P2, P3.
-
-        DO NOT: NEVER EXPLORE ROOT CAUSES. Get P1/P2/P3 names, then call the tool."""
+Wait for the user's answer. Based on their criterion, ask which cluster fits it best — that becomes their priority number 1.
+Call prioritize_clusters immediately when the user names it. Do not wait for more priorities.
+Only ask about a second priority after the first is confirmed, and only if the user seems open to it."""
     else:
         message = ""  # Empty - model ignores this anyway
         guidance = """🛑 STOP - NO ADVICE - Acknowledge progress WARMLY, EXPLAIN WHAT YOU ARE DOING WITH THE USER AND WHY and then ask for more thoughts.

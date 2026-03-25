@@ -60,23 +60,24 @@ ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it 
 
 NAME = "prioritize_clusters"
 
-DESCRIPTION = """ WHEN TO CALL:
-- After user exhausted ALL thoughts AND ALL thoughts have been organized into a board
-- After USER explicitly names which clusters/subclusters/items are their priorities (e.g. "My P1 is X, P2 is Y")
-- When the user sayd "I have too much to do and I am still overwhelmed" or "I still don't know what to do next"
-The Tool marks up to 3 priorities (P1/P2/P3) on the board. This helps the user focus on what really matters most and reduce overwhelm.
+DESCRIPTION = """WHEN TO CALL:
+- As soon as the user names ANY single priority — call immediately, do not wait for more.
+- When user says "I still don't know what to do next" or "I'm still overwhelmed" after board is created.
+- When user wants to change or clear priorities.
 
-CRITICAL: - NEVER EXPLORE ROOT CAUSES OF USER'S EMOTIONAL DISTRESS: ACKNOWLEDGE IT AND KEEP THE CONVERSATION FUTURE-ORIENTED AND FOCUSED ON IDENTIFIYING PRIORITIES.
-- NEVER when you INFER or GUESS PRIORITIES; NOR PROVIDE ANY ADVICE on prioritization.
+Call iteratively: once when user names their first priority, again only if user volunteers a second, again only if user volunteers a third. Maximum 3. Never push the user to name more than they offer.
 
-TARGETING (choose the right method):
-1. For CLUSTERS or SUBCLUSTERS → use "name":
-   { name: "Work Projects", rank: "P1" }
-   { name: "Urgent Tasks", rank: "P2" }
+The tool marks priorities on the board to help the user focus.
 
-2. For individual THOUGHT ITEMS (the bullet points inside clusters) → use "item_index" + "parent_name":
-   { item_index: 0, parent_name: "Work Projects", rank: "P3" }
-   (item_index is 0-based position in the parent's thought_items array)
+CRITICAL:
+- NEVER infer or guess priorities. NEVER advise on what to prioritize.
+- NEVER push the user toward naming P2 or P3. One priority is complete.
+- NEVER use "P1", "P2", "P3" in conversation — say "priority number 1", "priority number 2", "priority number 3".
+- NEVER explore root causes of emotional distress. Acknowledge and stay future-oriented.
+
+TARGETING:
+1. Clusters/subclusters → use "name": { name: "Work Projects", rank: "P1" }
+2. Individual thought items → use "item_index" + "parent_name": { item_index: 0, parent_name: "Work Projects", rank: "P1" }
 
 AFTER TOOL RETURNS: Follow assistant_guidance in structuredContent.
 """
@@ -358,11 +359,9 @@ def _validate_priorities(
 # ============================================================================
 
 GUIDANCE_EMPTY_PRIORITIES_VERBATIM = (
-    "user_priorities_verbatim is empty. Do not call this tool until the user has explicitly "
-    "named their priorities. "
-    "Ask: 'Which of these feels most important to focus on right now? Name your P1, "
-    "and optionally a P2 and P3.' "
-    "Store their exact answer in user_priorities_verbatim."
+    "user_priorities_verbatim is empty. Do not call this tool yet. "
+    "Ask the user which cluster or area feels most important right now. "
+    "One priority is enough — only continue if the user volunteers more."
 )
 
 
@@ -526,24 +525,22 @@ Examples:
 NOT allowed: "Why do you feel overwhelmed?" or "What's causing this stress?" Stay forward-focused."""
 
     elif priority_count == 1:
-        guidance = """P1 is set. Continue naturally, but stay FUTURE-ORIENTED.
+        guidance = """Priority number 1 is set. Acknowledge warmly, then ask if one focus is enough or if they want to add a second.
 
-Guide toward: "Is there a P2, or is one focus enough?"
+Example: "Got it — that's your priority number 1. Does that feel like enough focus for now, or is there a second priority you'd want to add?"
 
-Allowed: Warmth, acknowledgment, brief reflection on their choice.
-NOT allowed: Exploring WHY they're overwhelmed, root causes, emotional processing.
-
-Keep momentum toward completing priorities or confirming they're done."""
+If user says one is enough: close warmly, suggest saving the board.
+If user names another: call prioritize_clusters again with P1 + P2.
+Do NOT push. Let the user decide."""
 
     elif priority_count == 2:
-        guidance = """P1 and P2 are set. Continue naturally, stay FUTURE-ORIENTED.
+        guidance = """Priority number 2 is set. Acknowledge warmly, then ask if two is enough or if they want a third.
 
-Guide toward: "Is there a P3, or does this feel complete?"
+Example: "Two clear focus areas — that's already much clearer. Do you want to add one more priority, or does this feel complete?"
 
-Allowed: Acknowledge progress, be encouraging.
-NOT allowed: Diving into root causes, exploring feelings about the priorities.
-
-Keep momentum toward P3 or confirmation they're done."""
+If user says two is enough: close warmly, suggest saving the board.
+If user names another: call prioritize_clusters again with P1 + P2 + P3.
+Do NOT push. Let the user decide."""
 
     else:  # 3
         guidance = """All priorities set. Acknowledge warmly, then let user lead.
