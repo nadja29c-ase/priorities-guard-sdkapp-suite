@@ -46,6 +46,14 @@ class CreateClusterRequest(BaseModel):
         if not isinstance(clusters, list):
             raise ValueError("cluster_data['clusters'] must be a list")
 
+        # Payload size guard: prevent abuse from oversized requests
+        MAX_CLUSTERS = 10
+        if len(clusters) > MAX_CLUSTERS:
+            raise ValueError(
+                f"cluster_data['clusters'] exceeds maximum allowed clusters ({MAX_CLUSTERS}). "
+                f"Got {len(clusters)}."
+            )
+
         # NOTE: Empty clusters list IS allowed.
         # Valid use case: user starts brain dump but hasn't clustered yet.
         # MCP tool handles empty state appropriately.
