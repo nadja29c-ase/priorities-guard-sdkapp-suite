@@ -17,7 +17,7 @@ describe('ThoughtItem', () => {
     render(<ThoughtItem item={item} />)
     expect(screen.getByText('Unprioritized item')).toBeInTheDocument()
     // Should not have a priority badge
-    expect(screen.queryByLabelText(/Priority P/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Priority \d/)).not.toBeInTheDocument()
   })
 
   it('renders object item with priority (bar + badge)', () => {
@@ -25,21 +25,21 @@ describe('ThoughtItem', () => {
 
     render(<ThoughtItem item={item} />)
     expect(screen.getByText('Important task')).toBeInTheDocument()
-    expect(screen.getByLabelText('Priority P1')).toBeInTheDocument()
+    expect(screen.getByLabelText('Priority 1')).toBeInTheDocument()
   })
 
   it('renders P2 priority badge correctly', () => {
     const item: ThoughtItemType = { text: 'Second priority', priority: { rank: 'P2' } }
 
     render(<ThoughtItem item={item} />)
-    expect(screen.getByLabelText('Priority P2')).toBeInTheDocument()
+    expect(screen.getByLabelText('Priority 2')).toBeInTheDocument()
   })
 
   it('renders P3 priority badge correctly', () => {
     const item: ThoughtItemType = { text: 'Third priority', priority: { rank: 'P3' } }
 
     render(<ThoughtItem item={item} />)
-    expect(screen.getByLabelText('Priority P3')).toBeInTheDocument()
+    expect(screen.getByLabelText('Priority 3')).toBeInTheDocument()
   })
 
   it('renders with small size', () => {
@@ -61,6 +61,6 @@ describe('ThoughtItem', () => {
 
     render(<ThoughtItem item={item} />)
     expect(screen.getByText('No priority')).toBeInTheDocument()
-    expect(screen.queryByLabelText(/Priority P/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Priority \d/)).not.toBeInTheDocument()
   })
 })

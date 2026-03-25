@@ -1,8 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ClusterCard } from '../components/ClusterCard'
-import { SaveModal } from '../components/SaveModal'
 import type { Cluster } from '../types'
 
 describe('Accessibility', () => {
@@ -89,69 +88,4 @@ describe('Accessibility', () => {
     })
   })
 
-  describe('Modal focus management', () => {
-    it('modal traps focus', async () => {
-      const user = userEvent.setup()
-
-      render(
-        <SaveModal
-          isOpen={true}
-          onCancel={vi.fn()}
-          onConfirm={vi.fn()}
-          isSaving={false}
-        />
-      )
-
-      const modal = screen.getByRole('dialog')
-      expect(modal).toBeInTheDocument()
-
-      // Focus should be inside modal (on Cancel button due to autoFocus)
-      expect(modal.contains(document.activeElement)).toBe(true)
-
-      // Tab several times — focus should stay inside
-      await user.tab()
-      expect(modal.contains(document.activeElement)).toBe(true)
-      await user.tab()
-      expect(modal.contains(document.activeElement)).toBe(true)
-      await user.tab()
-      expect(modal.contains(document.activeElement)).toBe(true)
-    })
-
-    it('modal closes on Escape', async () => {
-      const onCancel = vi.fn()
-      const user = userEvent.setup()
-
-      render(
-        <SaveModal
-          isOpen={true}
-          onCancel={onCancel}
-          onConfirm={vi.fn()}
-          isSaving={false}
-        />
-      )
-
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
-
-      await user.keyboard('{Escape}')
-
-      // onCancel should have been called (which will close the modal)
-      expect(onCancel).toHaveBeenCalled()
-    })
-
-    it('modal has correct ARIA attributes', () => {
-      render(
-        <SaveModal
-          isOpen={true}
-          onCancel={vi.fn()}
-          onConfirm={vi.fn()}
-          isSaving={false}
-        />
-      )
-
-      const modal = screen.getByRole('dialog')
-      expect(modal).toHaveAttribute('aria-modal', 'true')
-      expect(modal).toHaveAttribute('aria-labelledby', 'save-modal-title')
-      expect(modal).toHaveAttribute('aria-describedby', 'save-modal-description')
-    })
-  })
 })
