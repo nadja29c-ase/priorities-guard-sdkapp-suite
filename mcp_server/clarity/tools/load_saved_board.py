@@ -143,7 +143,6 @@ Ask if they'd like to start a new Clarity Board. Something warm like: "Ready for
             "clusters": [],
             "has_history": True,
             "is_empty_snapshot": True,
-            "last_updated": cluster_data.get("created_at"),
             "assistant_guidance": guidance,
         }
         logger.info("load_saved_board.empty_snapshot", user_id=user_id)
@@ -158,7 +157,6 @@ Ask how you can help: "Now that you see your board, how would you like me to ass
             "clusters": clusters,
             "has_history": True,
             "is_empty_snapshot": False,
-            "last_updated": cluster_data.get("created_at"),
             "assistant_guidance": guidance,
         }
         logger.info("load_saved_board.retrieved", user_id=user_id, cluster_count=cluster_count)

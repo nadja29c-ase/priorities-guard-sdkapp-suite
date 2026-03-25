@@ -88,7 +88,6 @@ async def handle(
         - clusters: List of cluster objects (empty if none)
         - has_history: Whether any prior snapshot exists
         - is_empty_snapshot: True if snapshot exists but has no clusters
-        - last_updated: ISO timestamp of last update (if has_history=true)
     """
     logger.debug("read_saved_board.handle.start",
                 user_id=user_id,
@@ -154,7 +153,6 @@ async def handle(
                 "clusters": [],
                 "has_history": True,
                 "is_empty_snapshot": True,
-                "last_updated": cluster_data.get("created_at"),
                 "assistant_guidance": "Board was cleared previously. Tell the user briefly, then proceed with their request (e.g., 'Your board is empty — let me help you organize...').",
             },
             _meta={
@@ -180,7 +178,6 @@ async def handle(
             "cluster_names": cluster_names,
             "has_history": True,
             "is_empty_snapshot": False,
-            "last_updated": cluster_data.get("created_at"),
             "assistant_guidance": f"""IMPORTANT: Acknowledge the board briefly BEFORE making changes. This gives the user feedback that you understood.
 
 Examples:
