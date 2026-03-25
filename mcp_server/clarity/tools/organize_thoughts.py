@@ -33,6 +33,7 @@ DESCRIPTION = """YOUR ROLE: EMPATHIC FACILITATOR. You support the user's THINKIN
 
 ALWAYS use this tool when:
 - User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity" or similar.
+- User has different tasks, ideas, thoughts that compete for attention and needs to identify priorities.
 - When user wants to merge, combine and recluster thoughts.
 
 WHEN NOT TO CALL:
@@ -83,7 +84,8 @@ INPUT_SCHEMA = {
                     "thought_items": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Direct thought items (use for flat clusters without subclusters)"
+                        "minItems": 2,
+                        "description": "Direct thought items. Minimum 2 — a single item is not a cluster. If only 1 item exists, merge it into another cluster."
                     },
                     "subclusters": {
                         "type": "array",
@@ -98,7 +100,8 @@ INPUT_SCHEMA = {
                                 "thought_items": {
                                     "type": "array",
                                     "items": {"type": "string"},
-                                    "description": "Thought items in this subcluster"
+                                    "minItems": 2,
+                                    "description": "Thought items in this subcluster. Minimum 2 — a single item is not a cluster."
                                 },
                                 "tags": {
                                     "type": "array",
@@ -153,10 +156,10 @@ class SubclusterInput(BaseModel):
     @model_validator(mode="after")
     def validate_subcluster(self) -> "SubclusterInput":
         """Validate subcluster has items and valid tags."""
-        if len(self.thought_items) == 0:
+        if len(self.thought_items) < 2:
             raise ValueError(
-                f"Subcluster '{self.subcluster_name}' has no thought_items. "
-                "Subclusters must contain at least one thought item."
+                f"Subcluster '{self.subcluster_name}' has only {len(self.thought_items)} item. "
+                "Minimum 2 required — merge into another cluster."
             )
         if len(self.tags) > 3:
             raise ValueError(
@@ -186,6 +189,11 @@ class ClusterInput(BaseModel):
         if not has_items and not has_subclusters:
             raise ValueError(
                 f"Cluster '{self.cluster_name}' is empty. Must have thought_items or subclusters."
+            )
+        if has_items and len(self.thought_items) < 2:
+            raise ValueError(
+                f"Cluster '{self.cluster_name}' has only {len(self.thought_items)} item. "
+                "Minimum 2 required — merge into another cluster."
             )
         if len(self.tags) > 3:
             raise ValueError(
