@@ -81,7 +81,7 @@ Say EXACTLY this — do not rephrase, do not add bullet points, do not change th
 "Everything's grouped so you can see the full picture. To find your priority number 1, I want to understand what kind of progress would help most right now. **What matters most right now — progress toward a goal, removing a blocker, or getting some relief?**"
 
 Wait for the user's answer. Store it in user_prioritization_criterion_verbatim.
-Then ask which specific cluster, subcluster, or item on the board fits that criterion best — be precise, not just the cluster name. That becomes priority number 1.
+Then ask which cluster, subcluster, or specific item on the board fits that criterion best. A cluster name is fine as a starting point — but if the user names a cluster, ask if there is a more specific subcluster or item within it that is the real focus, or if the whole cluster is what they mean. What the user confirms becomes priority number 1.
 Call prioritize_clusters immediately when the user names it."""
     else:
         message = ""  # Empty - model ignores this anyway
