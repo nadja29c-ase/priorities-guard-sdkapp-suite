@@ -5,7 +5,9 @@ Tools self-register at import time using register_tool().
 """
 
 from dataclasses import dataclass
-from typing import Callable, Awaitable, Any
+from typing import Callable, Awaitable
+
+from mcp import types as mcp_types
 
 
 @dataclass
@@ -33,7 +35,7 @@ class ToolDefinition:
     input_schema: dict
     required_scopes: list[str]
     widget_uri: str | None  # None if tool doesn't produce widget
-    handle: Callable[[str, str, dict], Awaitable[Any]]  # (user_id, correlation_id, arguments)
+    handle: Callable[[str, str, dict], Awaitable[mcp_types.CallToolResult]]  # (user_id, correlation_id, arguments)
     widget_accessible: bool = False  # If True, adds openai/widgetAccessible to _meta
     # Tool annotations (compliance hints for OpenAI)
     read_only_hint: bool = True  # Default: read-only (no side effects)

@@ -98,7 +98,7 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
     # ============================================================
     # DISPATCH TO TOOL HANDLER (with timing)
     # ============================================================
-    logger.debug("tool.dispatch.executing",
+    logger.info("tool.dispatch.executing",
                 tool_name=name,
                 user_id=user_id,
                 correlation_id=correlation_id)
@@ -119,6 +119,21 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
             isError=True,
         )
     tool_ms = (time.perf_counter() - start_tool) * 1000
+
+    # Runtime type guard: ensure handler returned CallToolResult
+    if not isinstance(result, mcp_types.CallToolResult):
+        logger.error("tool.dispatch.invalid_return_type",
+                    tool_name=name,
+                    user_id=user_id,
+                    correlation_id=correlation_id,
+                    actual_type=type(result).__name__)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Internal error: tool returned invalid response type."
+            )],
+            isError=True,
+        )
 
     # ============================================================
     # LOG TIMING BREAKDOWN
