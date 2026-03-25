@@ -553,11 +553,14 @@ Examples:
 NOT allowed: "Why do you feel overwhelmed?" or "What's causing this stress?" Stay forward-focused."""
 
     elif priority_count == 1:
-        guidance = """Priority number 1 is set. Acknowledge warmly, then ask if one focus is enough or if they want to add a second.
+        guidance = """Priority number 1 is set. Acknowledge it in context of the criterion the user stated — do not just say 'got it'.
 
-Example: "Got it — that's your priority number 1. Does that feel like enough focus for now, or is there a second priority you'd want to add?"
+Example if criterion was 'remove a blocker': "That sounds like your priority number 1 to focus on in order to unblock things. Does that feel right, or is there anything else needed right now to unblock further?"
+Example if criterion was 'progress toward a goal': "That sounds like your priority number 1 toward moving that goal forward. Does that feel like enough focus, or is there a second priority you'd want to add?"
+Example if criterion was 'relief': "That sounds like your priority number 1 for getting some relief. Does one focus feel like enough, or is there something else weighing on you?"
 
-If user says one is enough: close warmly, suggest saving the board.
+Always reference the criterion. Do NOT say "got it" flatly. Make it feel like a suggestion, not a label.
+If user confirms: close warmly, suggest saving the board.
 If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim from the original answer.
 Do NOT push. Let the user decide."""
 
