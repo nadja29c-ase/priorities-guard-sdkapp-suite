@@ -75,15 +75,14 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 
     if thoughts_exhausted:
         message = ""  # Empty - model ignores this anyway
-        guidance = """🛑 STOP - NO ADVICE. Acknowledge warmly, then ask one open question to identify the criterion for prioritization.
+        guidance = """🛑 STOP. Do NOT give advice. Do NOT list options as bullet points. Do NOT use headers or formatting.
 
-Use one of these naturally:
-- "Everything's out and organized. What matters most right now — progress toward a goal, removing a blocker, or getting some relief from what's weighing on you?"
-- "I've grouped everything so you can see the full picture. What would help most right now — moving something forward, unblocking something stuck, or lightening the mental load?"
+Say EXACTLY this (adapt tone slightly, keep the structure):
+"Everything's grouped so you can see the full picture. What matters most right now — progress toward a goal, removing a blocker, or getting some relief?"
 
-Wait for the user's answer. Based on their criterion, ask which cluster fits it best — that becomes their priority number 1.
-Call prioritize_clusters immediately when the user names it. Do not wait for more priorities.
-Only ask about a second priority after the first is confirmed, and only if the user seems open to it."""
+Wait for the user's answer. Store it in user_prioritization_criterion_verbatim.
+Then ask which cluster fits that criterion best — that becomes priority number 1.
+Call prioritize_clusters immediately when the user names it."""
     else:
         message = ""  # Empty - model ignores this anyway
         guidance = """🛑 STOP - NO ADVICE - Acknowledge progress WARMLY, EXPLAIN WHAT YOU ARE DOING WITH THE USER AND WHY and then ask for more thoughts.

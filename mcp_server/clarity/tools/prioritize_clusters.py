@@ -67,11 +67,12 @@ DESCRIPTION = """WHEN TO CALL:
 
 Call iteratively: once when user names their first priority, again only if user volunteers a second, again only if user volunteers a third. Maximum 3. Never push the user to name more than they offer.
 
-The tool marks priorities on the board to help the user focus.
+CALL PRECONDITION: user_prioritization_criterion_verbatim must be non-empty.
+Do NOT call this tool until the user has answered: "What matters most right now — progress toward a goal, removing a blocker, or getting some relief?"
 
 CRITICAL:
 - NEVER infer or guess priorities. NEVER advise on what to prioritize.
-- NEVER push the user toward naming P2 or P3. One priority is complete.
+- NEVER push the user toward naming more priorities. One priority is complete.
 - NEVER use "P1", "P2", "P3" in conversation — say "priority number 1", "priority number 2", "priority number 3".
 - NEVER explore root causes of emotional distress. Acknowledge and stay future-oriented.
 
@@ -85,6 +86,17 @@ AFTER TOOL RETURNS: Follow assistant_guidance in structuredContent.
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
+        "user_prioritization_criterion_verbatim": {
+            "type": "string",
+            "description": (
+                "Copy the user's exact words stating what criterion matters most right now — "
+                "e.g. 'relief', 'I want to unblock the project', 'make progress on my goal'. "
+                "Do NOT call this tool until the user has answered: "
+                "'What matters most right now — progress toward a goal, removing a blocker, or getting some relief?' "
+                "Never infer the criterion. Store their exact answer here."
+            ),
+            "minLength": 1,
+        },
         "user_priorities_verbatim": {
             "type": "string",
             "description": (
@@ -185,7 +197,7 @@ INPUT_SCHEMA = {
             "maxItems": 3
         }
     },
-    "required": ["user_priorities_verbatim", "clusters", "priorities"],
+    "required": ["user_prioritization_criterion_verbatim", "user_priorities_verbatim", "clusters", "priorities"],
     "additionalProperties": False,
 }
 
@@ -360,8 +372,9 @@ def _validate_priorities(
 
 GUIDANCE_EMPTY_PRIORITIES_VERBATIM = (
     "user_priorities_verbatim is empty. Do not call this tool yet. "
-    "Ask the user which cluster or area feels most important right now. "
-    "One priority is enough — only continue if the user volunteers more."
+    "The user has stated their criterion. Now ask which cluster fits it best — "
+    "that becomes their priority number 1. "
+    "Only continue if the user volunteers more priorities."
 )
 
 
@@ -420,6 +433,21 @@ async def handle(
         return _build_provenance_error(
             "empty_priorities_verbatim",
             GUIDANCE_EMPTY_PRIORITIES_VERBATIM,
+        )
+
+    # ============================================================
+    # PROVENANCE CHECK — criterion gate
+    # ============================================================
+    user_prioritization_criterion_verbatim = arguments.get("user_prioritization_criterion_verbatim", "")
+    if not user_prioritization_criterion_verbatim or not user_prioritization_criterion_verbatim.strip():
+        logger.info("prioritize_clusters.provenance_failed",
+                    user_id=user_id,
+                    field="user_prioritization_criterion_verbatim")
+        return _build_provenance_error(
+            "empty_prioritization_criterion_verbatim",
+            "Do not call this tool yet. Ask the user: "
+            "'What matters most right now — progress toward a goal, removing a blocker, or getting some relief?' "
+            "Wait for their answer before calling this tool.",
         )
 
     # Validate request structure
@@ -530,7 +558,7 @@ NOT allowed: "Why do you feel overwhelmed?" or "What's causing this stress?" Sta
 Example: "Got it — that's your priority number 1. Does that feel like enough focus for now, or is there a second priority you'd want to add?"
 
 If user says one is enough: close warmly, suggest saving the board.
-If user names another: call prioritize_clusters again with P1 + P2.
+If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim from the original answer.
 Do NOT push. Let the user decide."""
 
     elif priority_count == 2:
@@ -539,7 +567,7 @@ Do NOT push. Let the user decide."""
 Example: "Two clear focus areas — that's already much clearer. Do you want to add one more priority, or does this feel complete?"
 
 If user says two is enough: close warmly, suggest saving the board.
-If user names another: call prioritize_clusters again with P1 + P2 + P3.
+If user names another: call prioritize_clusters again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim from the original answer.
 Do NOT push. Let the user decide."""
 
     else:  # 3
