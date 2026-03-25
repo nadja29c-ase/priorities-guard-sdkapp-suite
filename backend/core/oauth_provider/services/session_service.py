@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 # Session configuration
 SESSION_TOKEN_BYTES = 32  # 32 bytes = 64 hex characters
-SESSION_LIFETIME_DAYS = 730  # 2 years
+SESSION_LIFETIME_DAYS = 30  # 30 days — reduced from 2 years to limit shared-device leakage window
 
 
 def _generate_session_token() -> str:
