@@ -332,7 +332,7 @@ async def delete_data(
         return DeleteDataResponse(
             status="deleted",
             message="Your saved Clarity board has been permanently deleted.",
-            deleted={"boards": deleted_count},
+            deleted={"clarity_clusters": deleted_count},
         )
     else:
         logger.info(
