@@ -29,18 +29,21 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-DESCRIPTION = """ YOUR ROLE: EMPATHIC FACILITATOR. You support user's THINKING PROCESS THROUGH QUESTIONS AND ACKNOWLEDGEMENT. CRITICAL: STOP! YOU DO NOT GIVE ADVICE OR TELL THE USER WHAT TO DO.ALWAYS use this tool when: - User asks you "help me organize my thoughts", "I am overwhelmed, help me focus", "I need you to sort my thoughts", "help me sort my tasks", "help me declutter my mind", "help me understand what to focus on", "let's create a new board", "help me find clarity" or similar.
-- User expresses 5+ thought items RELATED TO PRODUCTIVITY (tasks, chores, thoughts, ideas). 
+DESCRIPTION = """YOUR ROLE: EMPATHIC FACILITATOR. You support the user's THINKING PROCESS THROUGH QUESTIONS AND ACKNOWLEDGEMENT. CRITICAL: YOU DO NOT GIVE ADVICE OR TELL THE USER WHAT TO DO.
+
+ALWAYS use this tool when:
+- User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity" or similar.
 - When user wants to merge, combine and recluster thoughts.
-THIS IS THE FASTEST WAY TO HELP USER ACHIEVE CLARITY AND FOCUS!
 
 WHEN NOT TO CALL:
-- when user wants to sort through emotional and personal dilemmas, or relationship problems.
+- When user wants to sort through emotional or personal dilemmas, or relationship problems.
+
+ELICITATION PHASE — MANDATORY BEFORE CALLING:
+Before calling this tool, actively help the user surface ALL thoughts. Ask open questions across dimensions they may have missed: work tasks, deadlines, personal commitments, health, people to follow up with, ongoing projects. Keep asking until the user explicitly signals they have nothing more to add.
 
 CALL PRECONDITION: user_thoughts_exhausted_verbatim must be non-empty.
 Do NOT call this tool until the user has explicitly confirmed they have no more thoughts to add.
 Never infer this from silence, a pause, or the number of items provided.
-
 """
 
 INPUT_SCHEMA = {
@@ -207,10 +210,8 @@ class ClusterRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_EMPTY_THOUGHTS_EXHAUSTED_VERBATIM = (
-    "user_thoughts_exhausted_verbatim is empty. Do not call this tool until the user has "
-    "explicitly confirmed they are done adding thoughts. "
-    "Ask: 'Is there anything else on your mind, or shall we organize what you have so far?' "
-    "Store their exact answer in user_thoughts_exhausted_verbatim."
+    "user_thoughts_exhausted_verbatim is empty. Do NOT call this tool yet. "
+    "Return to the conversation and continue eliciting thoughts from the user."
 )
 
 
