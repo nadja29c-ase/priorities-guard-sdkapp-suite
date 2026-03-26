@@ -61,7 +61,7 @@ ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it 
 
 NAME = "prioritize_clusters"
 
-DESCRIPTION = """Requires a board to exist in DB (created via organize_thoughts or loaded via load_saved_board).
+DESCRIPTION = """Requires a board to exist in DB. Use organize_thoughts to create one. load_saved_board only displays the board — it does not create DB state.
 The board is fetched automatically — do NOT pass clusters. Only pass priorities and provenance fields.
 
 WHEN TO CALL:
@@ -338,7 +338,7 @@ async def handle(
     Args:
         user_id: Authenticated user ID from JWT
         correlation_id: Request correlation ID for tracing
-        arguments: { clusters: [...], priorities: [...] }
+        arguments: { priorities: [...], user_prioritization_criterion_verbatim: "...", user_priorities_verbatim: "..." }
 
     Returns:
         CallToolResult with prioritized board and widget metadata
