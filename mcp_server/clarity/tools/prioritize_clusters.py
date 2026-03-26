@@ -119,18 +119,13 @@ INPUT_SCHEMA = {
                 "properties": {
                     "cluster_name": {"type": "string"},
                     "sum_thought_items": {"type": "integer"},
-                    "priority": {
-                        "type": ["object", "null"],
-                        "description": "Existing priority on this cluster (pass through from previous output to preserve)",
-                        "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
-                        "additionalProperties": False,
-                    },
+                    "priority": {"type": ["object", "null"]},
                     "thought_items": {
                         "type": "array",
                         "items": {
                             "oneOf": [
                                 {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"], "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}, "additionalProperties": False}}, "additionalProperties": False}
+                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"]}}, "additionalProperties": False}
                             ]
                         }
                     },
@@ -141,18 +136,13 @@ INPUT_SCHEMA = {
                             "properties": {
                                 "subcluster_name": {"type": "string"},
                                 "sum_thought_items": {"type": "integer"},
-                                "priority": {
-                                    "type": ["object", "null"],
-                                    "description": "Existing priority on this subcluster (pass through from previous output to preserve)",
-                                    "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
-                                    "additionalProperties": False,
-                                },
+                                "priority": {"type": ["object", "null"]},
                                 "thought_items": {
                                     "type": "array",
                                     "items": {
                                         "oneOf": [
                                             {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"], "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}, "additionalProperties": False}}, "additionalProperties": False}
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"]}}, "additionalProperties": False}
                                         ]
                                     }
                                 },

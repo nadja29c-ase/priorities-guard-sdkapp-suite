@@ -109,14 +109,7 @@ INPUT_SCHEMA = {
                                                 "type": "object",
                                                 "properties": {
                                                     "text": {"type": "string"},
-                                                    "priority": {
-                                                        "type": ["object", "null"],
-                                                        "properties": {
-                                                            "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
-                                                            "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                                                        },
-                                                        "additionalProperties": False,
-                                                    }
+                                                    "priority": {"type": ["object", "null"]}
                                                 },
                                                 "additionalProperties": False,
                                             }
