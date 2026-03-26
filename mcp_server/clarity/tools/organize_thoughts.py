@@ -33,14 +33,15 @@ DESCRIPTION = """YOUR ROLE: EMPATHIC FACILITATOR. You support the user's THINKIN
 
 ALWAYS use this tool when:
 - User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity" or similar.
-- User has different tasks, ideas, thoughts that compete for attention and needs to identify priorities.
 - When user wants to merge, combine and recluster thoughts.
 
 WHEN NOT TO CALL:
 - When user wants to sort through emotional or personal dilemmas, or relationship problems.
 
-ELICITATION PHASE — MANDATORY BEFORE CALLING:
-Before calling this tool, actively help the user surface ALL thoughts. Ask open questions across dimensions they may have missed: work tasks, deadlines, personal commitments, health, people to follow up with, ongoing projects. Keep asking until the user explicitly signals they have nothing more to add.
+ELICITATION PHASE — MANDATORY BEFORE CALLING. NO EXCEPTIONS:
+Even if the user already gave you a list of items, do NOT call this tool yet.
+First acknowledge what they shared warmly, then ask open questions to surface more: work tasks, deadlines, personal commitments, health, people to follow up with, ongoing projects. Keep asking until the user explicitly signals they have nothing more to add.
+Do NOT rush toward completion. Do NOT ask for a confirmation phrase. Just ask: "What else is on your mind?"
 
 CALL PRECONDITION: user_thoughts_exhausted_verbatim must be non-empty.
 Do NOT call this tool until the user has explicitly confirmed they have no more thoughts to add.

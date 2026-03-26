@@ -77,8 +77,18 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
         message = ""  # Empty - model ignores this anyway
         guidance = """🛑 STOP. Do NOT give advice. Do NOT list options as bullet points. Do NOT use headers or formatting.
 
+STEP 1 — ACKNOWLEDGE WHAT YOU SEE (2-3 sentences max):
+Before asking anything, briefly reflect on what the clusters reveal. Name the tensions or themes you notice — e.g. high-stakes deep work competing with admin backlog, a mix of execution and decision-making, clusters that signal different mental modes. Keep it observational, not therapeutic.
+
+STEP 2 — BRIEFLY EXPLAIN BEHAVIORAL TAGS (1 sentence):
+If any tags are present on the board, mention them in one sentence — something like: "The tags are suggestions for the state of mind each cluster needs — like 'decide', 'delegate', or 'research'. You can change them."
+
+STEP 3 — BRIDGE TO PRIORITIZATION (1 sentence):
+Add a short, direct bridge — not coaching language, not therapeutic. Something like: "Now let's make sure your attention goes to the 1-3 things that actually matter right now." Keep it grounded and action-oriented.
+
+STEP 4 — ASK THE CRITERION QUESTION:
 Say EXACTLY this — do not rephrase, do not add bullet points, do not change the structure. Bold the question as shown:
-"Everything's grouped so you can see the full picture. To find your priority number 1, I want to understand what kind of progress would help most right now. **What matters most right now — progress toward a goal, removing a blocker, or getting some relief?**"
+"**What matters most right now — progress toward a goal, removing a blocker, or getting some relief?**"
 
 Wait for the user's answer. Store it in user_prioritization_criterion_verbatim.
 Then ask which cluster, subcluster, or specific item on the board fits that criterion best. A cluster name is fine as a starting point — but if the user names a cluster, ask if there is a more specific subcluster or item within it that is the real focus, or if the whole cluster is what they mean. What the user confirms becomes priority number 1.
