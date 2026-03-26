@@ -118,6 +118,7 @@ INPUT_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "cluster_name": {"type": "string"},
+                    "sum_thought_items": {"type": "integer"},
                     "priority": {
                         "type": ["object", "null"],
                         "description": "Existing priority on this cluster (pass through from previous output to preserve)",
@@ -139,6 +140,7 @@ INPUT_SCHEMA = {
                             "type": "object",
                             "properties": {
                                 "subcluster_name": {"type": "string"},
+                                "sum_thought_items": {"type": "integer"},
                                 "priority": {
                                     "type": ["object", "null"],
                                     "description": "Existing priority on this subcluster (pass through from previous output to preserve)",

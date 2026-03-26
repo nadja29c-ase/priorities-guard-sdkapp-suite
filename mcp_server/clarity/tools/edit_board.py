@@ -88,7 +88,7 @@ WHEN TO CALL:
 - User says "add X to Y" (use add_thought_item)
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
-- User says "make X my P2" or "change P1 to Y" (use set_priority)
+- User says "make X my P2" or "change P1 to Y" (use set_priority) — only P1, P2, P3 exist. If 3 priorities are already set and user wants a new one, tell them before calling: they must replace an existing priority, not add a fourth.
 - User says "rename X to Y" (use rename_cluster/rename_subcluster)
 - User says "delete X" or "remove X" (use delete_cluster/delete_subcluster/delete_thought_item)
 - User says "clear my priorities" (use clear_all_priorities)
@@ -116,6 +116,7 @@ INPUT_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "cluster_name": {"type": "string"},
+                    "sum_thought_items": {"type": "integer"},
                     "priority": {
                         "type": ["object", "null"],
                         "description": "Existing priority (MUST pass through from previous output)",
@@ -127,7 +128,7 @@ INPUT_SCHEMA = {
                         "items": {
                             "oneOf": [
                                 {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
+                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"], "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}, "additionalProperties": False}}, "additionalProperties": False}
                             ]
                         }
                     },
@@ -137,6 +138,7 @@ INPUT_SCHEMA = {
                             "type": "object",
                             "properties": {
                                 "subcluster_name": {"type": "string"},
+                                "sum_thought_items": {"type": "integer"},
                                 "priority": {
                                     "type": ["object", "null"],
                                     "description": "Existing priority (MUST pass through from previous output)",
@@ -148,7 +150,7 @@ INPUT_SCHEMA = {
                                     "items": {
                                         "oneOf": [
                                             {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"], "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}, "additionalProperties": False}}, "additionalProperties": False}
                                         ]
                                     }
                                 },
