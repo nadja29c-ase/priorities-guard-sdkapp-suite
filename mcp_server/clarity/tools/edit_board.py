@@ -88,7 +88,7 @@ WHEN TO CALL:
 - User says "add X to Y" (use add_thought_item)
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
-- User says "make X my P2" or "change P1 to Y" (use set_priority) — only P1, P2, P3 exist. If 3 priorities are already set and user wants a new one, tell them before calling: they must replace an existing priority, not add a fourth.
+- User says "make X my P2" or "change P1 to Y" (use set_priority) — maximum 3 priorities at once (P1, P2, P3). The limit exists because focus only works when attention is bounded — more than 3 priorities means no real priority. If 3 are already set and user wants a new one, tell them before calling: they need to decide what to replace, not just add another.
 - User says "rename X to Y" (use rename_cluster/rename_subcluster)
 - User says "delete X" or "remove X" (use delete_cluster/delete_subcluster/delete_thought_item)
 - User says "clear my priorities" (use clear_all_priorities)
