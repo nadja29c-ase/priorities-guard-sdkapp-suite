@@ -129,7 +129,7 @@ INPUT_SCHEMA = {
                         "items": {
                             "oneOf": [
                                 {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
+                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"], "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}, "additionalProperties": False}}, "additionalProperties": False}
                             ]
                         }
                     },
@@ -150,7 +150,7 @@ INPUT_SCHEMA = {
                                     "items": {
                                         "oneOf": [
                                             {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": "object", "additionalProperties": False}}, "additionalProperties": False}
+                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"], "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}}, "additionalProperties": False}}, "additionalProperties": False}
                                         ]
                                     }
                                 },
