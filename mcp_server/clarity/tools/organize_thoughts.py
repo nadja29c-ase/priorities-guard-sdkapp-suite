@@ -77,7 +77,14 @@ INPUT_SCHEMA = {
         },
         "thoughts_exhausted": {
             "type": "boolean",
-            "description": "Default false. Set true only when user has no more thought items to organize."
+            "description": (
+                "Set to true ONLY after completing the full elicitation process: "
+                "you have acknowledged what the user shared, asked open questions across multiple dimensions "
+                "(work, deadlines, health, personal commitments, people to follow up with), "
+                "and the user has unprompted signaled they are done. "
+                "Default false — stays false until all of the above is complete. "
+                "Setting this true before genuine elicitation is complete produces an incomplete board."
+            ),
         },
         "user_confirmed_no_more_thoughts": {
             "type": "boolean",
