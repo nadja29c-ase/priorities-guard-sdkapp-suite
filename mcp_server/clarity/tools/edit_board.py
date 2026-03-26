@@ -54,7 +54,7 @@ VALID_OPERATIONS = {
 # Error Messages
 # ============================================================================
 
-ERROR_NO_BOARD = "No board provided. Pass the current board to edit."
+ERROR_NO_BOARD = "No board found. Create one with organize_thoughts first."
 ERROR_INVALID_OPERATION = "Invalid operation. Supported: set_priority, clear_priority, rename_cluster, rename_subcluster, delete_cluster, delete_subcluster, delete_thought_item, clear_all_priorities, add_thought_item, add_tag, remove_tag"
 ERROR_MISSING_TARGET = "Target not specified. Provide target_name or item_index + parent_name."
 ERROR_CLUSTER_NOT_FOUND = "Cluster '{name}' not found."
@@ -83,7 +83,7 @@ ERROR_EMPTY_BATCH = "Batch operations list cannot be empty."
 NAME = "edit_board"
 
 DESCRIPTION = """
-Requires a board to exist in DB (created via organize_thoughts or loaded via load_saved_board).
+Requires a board to exist in DB. Use organize_thoughts to create one. load_saved_board only displays the board — it does not create DB state.
 The board is fetched automatically — do NOT pass a board field. Only pass operation(s) and targeting fields.
 
 PURPOSE: Edit an existing board — add items, manage tags, reassign priorities, rename clusters, or delete items.
@@ -791,7 +791,7 @@ async def handle(
             "delete_subcluster": f"Deleted subcluster '{request.target_name}'.",
             "delete_thought_item": "Deleted thought item.",
             "clear_all_priorities": "All priorities cleared.",
-            "add_thought_item": f"Added '{request.text}' to '{request.parent_name}'.",
+            "add_thought_item": f"Added '{request.text}' to '{request.parent_name or request.target_name}'.",
             "add_tag": f"Added tag '{request.tag}' to '{request.target_name}'.",
             "remove_tag": f"Removed tag '{request.tag}' from '{request.target_name}'.",
         }
