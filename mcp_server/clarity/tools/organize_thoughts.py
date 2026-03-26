@@ -44,10 +44,12 @@ WHEN TO CALL THIS TOOL:
 - User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity" or similar.
 - When a lot of unstructured thoughts, ideas, tasks are present and user needs help finding themes, priorities, or next steps.
 - When user wants to merge, combine and recluster thoughts/ boards.
-CALL PRECONDITION:
-- thoughts_exhausted must be true AND user_thoughts_exhausted_verbatim must contain the user's exact words confirming they are done adding thoughts.
-Valid signals: "that's it", "nothing else", "done", "I think that's everything".
-- Keep asking "What else is on your mind?" across all dimensions until the user unprompted signals done.
+CALL PRECONDITION: ALL three must be true before calling:
+- thoughts_exhausted = true
+- user_confirmed_no_more_thoughts = true
+- user_thoughts_exhausted_verbatim contains the user's exact words
+Valid user signals: "that's it", "nothing else", "done", "I think that's everything".
+NEVER set these to true by asking "are you done?" — only from unprompted user signals.
 
 WHEN NOT TO CALL:
 - When user wants to sort through emotional or personal dilemmas, or relationship problems.
@@ -71,6 +73,16 @@ INPUT_SCHEMA = {
         "thoughts_exhausted": {
             "type": "boolean",
             "description": "Default false. Set true only when user has no more thought items to organize."
+        },
+        "user_confirmed_no_more_thoughts": {
+            "type": "boolean",
+            "description": (
+                "Set to true ONLY after the user has unprompted signaled they are done adding thoughts. "
+                "Valid signals: 'that's it', 'nothing else', 'done', 'I think that's everything'. "
+                "NEVER set to true if you asked 'are you done?' — that is a leading question. "
+                "NEVER infer from silence or item count. "
+                "Must be true before calling this tool."
+            ),
         },
         "clusters": {
             "type": "array",
@@ -141,7 +153,7 @@ INPUT_SCHEMA = {
             }
         }
     },
-    "required": ["user_thoughts_exhausted_verbatim", "clusters"],
+    "required": ["user_thoughts_exhausted_verbatim", "user_confirmed_no_more_thoughts", "thoughts_exhausted", "clusters"],
     "additionalProperties": False,
 }
 
@@ -225,8 +237,9 @@ class ClusterRequest(BaseModel):
 # ============================================================================
 
 GUIDANCE_EMPTY_THOUGHTS_EXHAUSTED_VERBATIM = (
-    "user_thoughts_exhausted_verbatim is empty. Do NOT call this tool yet. "
-    "Return to the conversation and continue eliciting thoughts from the user."
+    "MINDSORT MODE STILL BINDING. "
+    "user_thoughts_exhausted_verbatim is empty. Do not call this tool yet. "
+    "Ask: 'What else is on your mind?' Then stop and wait."
 )
 
 
@@ -286,6 +299,18 @@ async def handle(
         return _build_provenance_error(
             "empty_thoughts_exhausted_verbatim",
             GUIDANCE_EMPTY_THOUGHTS_EXHAUSTED_VERBATIM,
+        )
+
+    user_confirmed = arguments.get("user_confirmed_no_more_thoughts", False)
+    if not user_confirmed:
+        logger.info("organize_thoughts.provenance_failed",
+                    user_id=user_id,
+                    field="user_confirmed_no_more_thoughts")
+        return _build_provenance_error(
+            "thoughts_not_confirmed",
+            "MINDSORT MODE STILL BINDING. "
+            "user_confirmed_no_more_thoughts is false. Do not call this tool yet. "
+            "Ask: 'What else is on your mind?' Then stop and wait.",
         )
 
     validated_request = None
