@@ -457,7 +457,7 @@ async def handle(
         await persist_cluster(
             user_id=user_id,
             cluster_data=clusters_for_storage,
-            thoughts_exhausted=False,
+            thoughts_exhausted=validated_request.thoughts_exhausted,
             correctly_clustered=None,
             correlation_id=correlation_id,
             content_hash=content_hash,
@@ -495,7 +495,7 @@ async def handle(
     meta = {
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Organizing your thoughts into clusters...",
-        "openai/toolInvocation/invoked": "Here's your Clarity board.",
+        "openai/toolInvocation/invoked": "Here's your board.",
         "openai/widgetAccessible": True,
         "openai/resultCanProduceWidget": True,
     }
