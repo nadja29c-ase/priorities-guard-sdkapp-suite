@@ -152,7 +152,12 @@ Ask if they'd like to start a new Clarity Board. Something warm like: "Ready for
         message = f"Found {cluster_count} cluster{'s' if cluster_count != 1 else ''} from your previous session."
         guidance = """Board loaded with existing clusters.
 
-Ask how you can help: "Now that you see your board, how would you like me to assist you?" Let them lead — they might want to add, edit, prioritize, or just reflect."""
+Read the user's intent from what they said BEFORE calling this tool:
+- If they asked to FOCUS, PRIORITIZE, or said they're OVERWHELMED/STRESSED → skip any further elicitation. Ask directly: "What matters most right now — progress toward a goal, removing a blocker, or getting some relief?" Then call prioritize_clusters as soon as they answer.
+- If they asked to ADD items → proceed with adding via organize_thoughts or edit_board.
+- If they just asked to SEE the board → ask "How can I help?" and let them lead.
+
+Do NOT call organize_thoughts if the board already exists and the user just wants to focus or prioritize."""
         structured = {
             "clusters": clusters,
             "has_history": True,
