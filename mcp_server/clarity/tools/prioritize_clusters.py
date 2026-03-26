@@ -558,25 +558,33 @@ Examples:
 NOT allowed: "Why do you feel overwhelmed?" or "What's causing this stress?" Stay forward-focused."""
 
     elif priority_count == 1:
-        guidance = """Priority number 1 is set. Acknowledge it in context of the criterion the user stated — do not just say 'got it'.
+        guidance = """Priority number 1 is set. Acknowledge it in context of the criterion the user stated.
 
-Example if criterion was 'remove a blocker': "That sounds like your priority number 1 to focus on in order to unblock things. Does that feel right, or is there anything else needed right now to unblock further?"
-Example if criterion was 'progress toward a goal': "That sounds like your priority number 1 toward moving that goal forward. Does that feel like enough focus, or is there a second priority you'd want to add?"
-Example if criterion was 'relief': "That sounds like your priority number 1 for getting some relief. Does one focus feel like enough, or is there something else weighing on you?"
+Then present the trade-off explicitly — do not just ask if they want to add more:
+- Adding a second priority splits attention and reduces the quality of focus on priority number 1
+- Staying with one priority means deeper, higher-quality execution toward the criterion they named
 
-Always reference the criterion. Do NOT say "got it" flatly. Make it feel like a suggestion, not a label.
-If user confirms: close warmly, suggest saving the board.
-If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim from the original answer.
-Do NOT push. Let the user decide."""
+Frame this against their actual criterion. Examples:
+- If criterion was 'progress toward a goal': "That's your priority number 1 toward [goal]. One focused priority usually moves a goal faster than two split ones. Does full attention on this feel right, or is there something else that also directly serves [goal]?"
+- If criterion was 'remove a blocker': "That's your priority number 1 to unblock things. Staying focused here gives it the best chance of actually clearing. Is this the only blocker, or is there a second one that would still leave you stuck if you cleared this?"
+- If criterion was 'relief': "That's your priority number 1 for peace of mind. One clear focus often brings more relief than two. Does this feel like enough, or is there something else weighing on you equally?"
+
+Always name the criterion and the trade-off. Make it a conscious choice, not a default yes/no.
+If user says one is enough: close warmly, suggest saving the board.
+If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim unchanged."""
 
     elif priority_count == 2:
-        guidance = """Priority number 2 is set. Acknowledge warmly, then ask if two is enough or if they want a third.
+        guidance = """Two priorities set. Acknowledge, then present the same trade-off for a third — frame it against the criterion.
 
-Example: "Two clear focus areas — that's already much clearer. Do you want to add one more priority, or does this feel complete?"
+Adding a third priority further divides attention. The question is whether a third is necessary to serve the criterion, or whether two focused priorities already cover it.
 
+Example if criterion was 'progress toward a goal': "Two clear focus areas toward [goal]. A third would split your attention further — is there something that would directly block [goal] if left out, or do these two cover it?"
+Example if criterion was 'relief': "Two priorities — that already takes a lot off the mental pile. Is there a third that's still weighing on you, or does this feel like enough to breathe?"
+Example if criterion was 'remove a blocker': "Two focus areas to unblock. Would a third still leave you stuck, or are these two enough to clear the path?"
+
+Always name the criterion. Make adding a third a conscious trade-off, not a default.
 If user says two is enough: close warmly, suggest saving the board.
-If user names another: call prioritize_clusters again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim from the original answer.
-Do NOT push. Let the user decide."""
+If user names another: call prioritize_clusters again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim unchanged."""
 
     else:  # 3
         guidance = """All priorities set. Acknowledge warmly, then let user lead.
