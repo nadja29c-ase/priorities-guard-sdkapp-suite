@@ -16,8 +16,8 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Ref to avoid re-running effect on clusters change
-  const isInitializedRef = useRef(false)
+  // Track last processed toolOutput to detect updates
+  const lastToolOutputRef = useRef<unknown>(null)
 
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
@@ -39,10 +39,12 @@ function App() {
 
   // Load clusters from window.openai.toolOutput
   const loadClusters = useCallback(() => {
-    if (isInitializedRef.current) return
-
     const t = window.openai?.toolOutput
     if (!t) return  // No data yet, wait for event
+
+    // Skip if toolOutput hasn't changed since last render
+    if (t === lastToolOutputRef.current) return
+    lastToolOutputRef.current = t
 
     const { clusters: data, error } = getToolOutput()
 
@@ -55,7 +57,6 @@ function App() {
 
     setClusters(data)
     setIsInitialized(true)
-    isInitializedRef.current = true
 
     // Notify host of new content height
     notifyHeight()
