@@ -83,14 +83,7 @@ INPUT_SCHEMA = {
                                     "type": "object",
                                     "properties": {
                                         "text": {"type": "string"},
-                                        "priority": {
-                                            "type": ["object", "null"],
-                                            "properties": {
-                                                "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
-                                                "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                                            },
-                                            "additionalProperties": False,
-                                        }
+                                        "priority": {"type": ["object", "null"]}
                                     },
                                     "additionalProperties": False,
                                 }
@@ -134,18 +127,10 @@ INPUT_SCHEMA = {
                                     "type": "array",
                                     "items": {"type": "string"}
                                 },
-                                "priority": {
-                                    "type": ["object", "null"],
-                                    "description": "Priority assignment on this subcluster",
-                                    "properties": {
-                                        "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
-                                        "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                                    },
-                                    "additionalProperties": False,
-                                }
+                                "priority": {"type": ["object", "null"]}
                             },
                             "required": ["subcluster_name", "thought_items"],
-                            "additionalProperties": False,
+                            "additionalProperties": True,
                         }
                     },
                     "tags": {
@@ -153,18 +138,10 @@ INPUT_SCHEMA = {
                         "items": {"type": "string"},
                         "description": "Optional behavioral tags"
                     },
-                    "priority": {
-                        "type": ["object", "null"],
-                        "description": "Priority assignment on this cluster",
-                        "properties": {
-                            "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
-                            "reason": {"type": "string", "enum": ["blocker", "goal-aligned"]}
-                        },
-                        "additionalProperties": False,
-                    }
+                    "priority": {"type": ["object", "null"]}
                 },
                 "required": ["cluster_name"],
-                "additionalProperties": False,
+                "additionalProperties": True,
             }
         }
     },

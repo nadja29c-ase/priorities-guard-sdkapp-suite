@@ -158,13 +158,13 @@ INPUT_SCHEMA = {
                                 },
                                 "tags": {"type": "array", "items": {"type": "string"}}
                             },
-                            "additionalProperties": False,
+                            "additionalProperties": True,
                         }
                     },
                     "tags": {"type": "array", "items": {"type": "string"}}
                 },
                 "required": ["cluster_name"],
-                "additionalProperties": False,
+                "additionalProperties": True,
             }
         },
         "priorities": {

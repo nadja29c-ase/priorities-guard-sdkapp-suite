@@ -117,12 +117,7 @@ INPUT_SCHEMA = {
                 "properties": {
                     "cluster_name": {"type": "string"},
                     "sum_thought_items": {"type": "integer"},
-                    "priority": {
-                        "type": ["object", "null"],
-                        "description": "Existing priority (MUST pass through from previous output)",
-                        "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
-                        "additionalProperties": False,
-                    },
+                    "priority": {"type": ["object", "null"]},
                     "thought_items": {
                         "type": "array",
                         "items": {
@@ -139,12 +134,7 @@ INPUT_SCHEMA = {
                             "properties": {
                                 "subcluster_name": {"type": "string"},
                                 "sum_thought_items": {"type": "integer"},
-                                "priority": {
-                                    "type": ["object", "null"],
-                                    "description": "Existing priority (MUST pass through from previous output)",
-                                    "properties": {"rank": {"type": "string"}, "reason": {"type": "string"}},
-                                    "additionalProperties": False,
-                                },
+                                "priority": {"type": ["object", "null"]},
                                 "thought_items": {
                                     "type": "array",
                                     "items": {
@@ -156,13 +146,13 @@ INPUT_SCHEMA = {
                                 },
                                 "tags": {"type": "array", "items": {"type": "string"}}
                             },
-                            "additionalProperties": False,
+                            "additionalProperties": True,
                         }
                     },
                     "tags": {"type": "array", "items": {"type": "string"}}
                 },
                 "required": ["cluster_name"],
-                "additionalProperties": False,
+                "additionalProperties": True,
             }
         },
         "operation": {
@@ -569,8 +559,11 @@ def _op_clear_all_priorities(clusters: List[dict]) -> tuple:
 
 
 def _op_add_thought_item(clusters: List[dict], parent_name: Optional[str],
-                         text: Optional[str]) -> tuple:
+                         text: Optional[str], target_name: Optional[str] = None) -> tuple:
     """Add a thought item to a container."""
+    # Fallback: LLM sometimes passes target_name instead of parent_name for add_thought_item
+    if not parent_name and target_name:
+        parent_name = target_name
     if not parent_name:
         return None, ERROR_PARENT_NOT_FOUND.format(parent="(empty)")
     if not text:
@@ -666,7 +659,7 @@ def _dispatch_operation(clusters: List[dict], op: SingleOperation) -> tuple:
     elif op.operation == "clear_priority":
         return _op_clear_priority(clusters, op.target_name, op.parent_name, op.item_index)
     elif op.operation == "add_thought_item":
-        return _op_add_thought_item(clusters, op.parent_name, op.text)
+        return _op_add_thought_item(clusters, op.parent_name, op.text, op.target_name)
     elif op.operation == "add_tag":
         return _op_add_tag(clusters, op.target_name, op.tag)
     elif op.operation == "remove_tag":
