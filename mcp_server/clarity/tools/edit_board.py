@@ -101,7 +101,7 @@ You MUST pass the EXACT board JSON from the previous tool output.
 - Do NOT reconstruct the board from memory
 - Do NOT summarize or simplify the structure
 
-DOES NOT AUTO-SAVE: Changes are applied to working board only. User must call save_board to persist.
+DOES NOT AUTO-SAVE: Changes are applied to working board only. Tell user to click the Save button on the widget to persist — do NOT call save_board yourself.
 
 AFTER TOOL RETURNS: Confirm the change was made. If user wants to save, remind them to ask.
 """

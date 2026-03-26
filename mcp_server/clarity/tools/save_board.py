@@ -52,14 +52,13 @@ DESCRIPTION = """
 Save the current Clarity board to the database.
 
 WHEN TO CALL:
-- ONLY WHEN User EXPLICITELY ASKS TO SAVE their board f.e. "Save my board"
-- Or User clicked Widget Save button
+- ONLY when user clicks the Save button in the widget (widget-initiated call)
 
 WHEN NOT TO CALL:
-- NEVER call this tool automatically when you are ASSUMING user implied "save" f.e. user asks "Add to my saved board" -> read saved board via read_saved_board THEN add the requested edit by merging it with saved board and calling organize_board to create a new updated version of the saved board.
+- NEVER call this tool yourself based on user text like "save my board"
+- When user asks to save: tell them to use the Save button on the board widget instead
 
-Returns saved=true for widget to show temporary "Saved" confirmation (3 seconds).
-Does NOT render a new widget. Widget shows transient feedback only.
+The widget Save button handles saving directly. Do not replicate this from the conversation.
 """
 
 INPUT_SCHEMA = {
