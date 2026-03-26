@@ -8,6 +8,9 @@ Used by:
 
 from typing import List, Optional, Union
 import copy
+import hashlib
+import json
+import unicodedata
 
 from pydantic import BaseModel, field_validator
 
@@ -252,3 +255,69 @@ def apply_priorities(clusters: List[dict], priorities: List[PriorityInput]) -> L
             subcluster["thought_items"] = new_sub_items
 
     return result
+
+
+# ============================================================================
+# Content Hash
+# ============================================================================
+
+
+def compute_content_hash(clusters: List[dict]) -> str:
+    """
+    Compute SHA256 hash of board content for saved state detection.
+
+    CANONICAL HASH SPECIFICATION (must match widget exactly):
+    - Explicit key order (NOT alphabetical): cluster_name, subclusters, tags, thought_items
+    - NFC Unicode normalization
+    - Clusters sorted alphabetically by cluster_name
+    - Subclusters sorted alphabetically by subcluster_name
+    - thought_items and tags sorted lexicographically
+    - No whitespace in JSON
+
+    Args:
+        clusters: List of cluster dictionaries
+
+    Returns:
+        SHA256 hex digest (64 characters)
+    """
+    def normalize_string(s: str) -> str:
+        """NFC normalize and trim whitespace."""
+        return unicodedata.normalize("NFC", s.strip())
+
+    def normalize_thought_item(item: Union[str, dict]) -> str:
+        """Extract text from thought item (handles both string and object format)."""
+        if isinstance(item, dict):
+            return normalize_string(item.get("text", ""))
+        return normalize_string(item)
+
+    def normalize_subcluster(s: dict) -> dict:
+        """Normalize subcluster with explicit key order."""
+        # Key order: subcluster_name, tags, thought_items
+        return {
+            "subcluster_name": normalize_string(s.get("subcluster_name", "")),
+            "tags": sorted([normalize_string(t) for t in s.get("tags", [])]),
+            "thought_items": sorted([normalize_thought_item(i) for i in s.get("thought_items", [])]),
+        }
+
+    def normalize_cluster(c: dict) -> dict:
+        """Normalize cluster with explicit key order."""
+        # Key order: cluster_name, subclusters, tags, thought_items
+        return {
+            "cluster_name": normalize_string(c.get("cluster_name", "")),
+            "subclusters": sorted(
+                [normalize_subcluster(s) for s in c.get("subclusters", [])],
+                key=lambda x: x["subcluster_name"]
+            ),
+            "tags": sorted([normalize_string(t) for t in c.get("tags", [])]),
+            "thought_items": sorted([normalize_thought_item(i) for i in c.get("thought_items", [])]),
+        }
+
+    # Sort clusters by cluster_name, normalize all content
+    normalized = sorted(
+        [normalize_cluster(c) for c in clusters],
+        key=lambda x: x["cluster_name"]
+    )
+
+    # NO sort_keys=True - key order is determined by dict construction above
+    canonical = json.dumps({"clusters": normalized}, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

@@ -4,8 +4,8 @@ Organize Thoughts Tool.
 Organizes user's thoughts, ideas, tasks into visual clusters for cognitive ease.
 Self-registers at import time.
 
-NOTE: As of Increment 12, this tool is PURE (no DB persistence).
-      Use save_board to explicitly save the board.
+NOTE: As of Increment 15, this tool auto-persists to DB after successful clustering (DB-only model).
+      Overwrites any existing saved board. No undo. Persist failure is fatal.
 """
 
 import re
@@ -18,8 +18,9 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .base import ToolDefinition
 from . import register_tool
-from .board_utils import ALLOWED_TAGS
+from .board_utils import ALLOWED_TAGS, compute_content_hash
 from ..tool_logic import organize_thoughts as format_clusters  # Renamed from cluster_raw_thoughts
+from ..persistence import persist_cluster
 from ..handlers.resources import WIDGET_URI
 from ..mcp_auth import build_invalid_params_error
 
@@ -448,7 +449,44 @@ async def handle(
     result = format_clusters(clusters, thoughts_exhausted=validated_request.thoughts_exhausted)
 
     # ============================================================
-    # BUILD RESPONSE (no persistence - Increment 12 explicit save model)
+    # AUTO-PERSIST TO DB — runs only after clustering succeeds (fatal on failure)
+    # ============================================================
+    try:
+        clusters_for_storage = {"clusters": clusters}
+        content_hash = compute_content_hash(clusters)
+        await persist_cluster(
+            user_id=user_id,
+            cluster_data=clusters_for_storage,
+            thoughts_exhausted=False,
+            correctly_clustered=None,
+            correlation_id=correlation_id,
+            content_hash=content_hash,
+        )
+        logger.info("organize_thoughts.auto_persisted", user_id=user_id)
+    except Exception as e:
+        logger.error("organize_thoughts.persist_failed", user_id=user_id, error=str(e))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Your board could not be saved."
+            )],
+            structuredContent={
+                "success": False,
+                "error": "persist_failed",
+                "assistant_guidance": {
+                    "action": "RETRY",
+                    "instruction": (
+                        "Board clustering succeeded but could not be saved to the database. "
+                        "Tell the user their board was not saved and ask them to try again. "
+                        "Do NOT imply the board was updated."
+                    ),
+                },
+            },
+            isError=True,
+        )
+
+    # ============================================================
+    # BUILD RESPONSE
     # ============================================================
     logger.info("organize_thoughts.complete",
                 cluster_count=len(result["structuredContent"]["clusters"]),
@@ -486,7 +524,7 @@ register_tool(ToolDefinition(
     widget_uri=WIDGET_URI,
     handle=handle,
     # OpenAI compliance annotations
-    read_only_hint=True,  # Transforms input into clusters, no DB write
-    destructive_hint=False,  # N/A when read_only=True
+    read_only_hint=False,  # Auto-persists to DB
+    destructive_hint=True,  # Overwrites saved board state in DB
     open_world_hint=False,  # Only affects internal backend
 ))

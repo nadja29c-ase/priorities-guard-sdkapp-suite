@@ -15,11 +15,10 @@ Role boundaries:
 - Tool: Receives final decisions, updates widget (execution only)
 """
 
-from typing import List, Optional, Union
+from typing import List, Optional
 
 import structlog
 from mcp import types as mcp_types
-from pydantic import BaseModel, Field, ValidationError
 
 from .base import ToolDefinition
 from . import register_tool
@@ -29,7 +28,9 @@ from .board_utils import (
     MAX_PRIORITIES,
     PriorityInput,
     apply_priorities as _apply_priorities,
+    compute_content_hash,
 )
+from ..persistence import get_cluster, persist_cluster
 
 logger = structlog.get_logger(__name__)
 
@@ -60,7 +61,10 @@ ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it 
 
 NAME = "prioritize_clusters"
 
-DESCRIPTION = """WHEN TO CALL:
+DESCRIPTION = """Requires a board to exist in DB (created via organize_thoughts or loaded via load_saved_board).
+The board is fetched automatically — do NOT pass clusters. Only pass priorities and provenance fields.
+
+WHEN TO CALL:
 - As soon as the user names ANY single priority — call immediately, do not wait for more.
 - When user wants to change or clear priorities.
 
@@ -111,52 +115,6 @@ INPUT_SCHEMA = {
             ),
             "minLength": 1,
         },
-        "clusters": {
-            "type": "array",
-            "description": "The current board clusters to prioritize. IMPORTANT: Include existing 'priority' fields from previous tool output to preserve them.",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "cluster_name": {"type": "string"},
-                    "sum_thought_items": {"type": "integer"},
-                    "priority": {"type": ["object", "null"]},
-                    "thought_items": {
-                        "type": "array",
-                        "items": {
-                            "oneOf": [
-                                {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"]}}, "additionalProperties": False}
-                            ]
-                        }
-                    },
-                    "subclusters": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "subcluster_name": {"type": "string"},
-                                "sum_thought_items": {"type": "integer"},
-                                "priority": {"type": ["object", "null"]},
-                                "thought_items": {
-                                    "type": "array",
-                                    "items": {
-                                        "oneOf": [
-                                            {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"]}}, "additionalProperties": False}
-                                        ]
-                                    }
-                                },
-                                "tags": {"type": "array", "items": {"type": "string"}}
-                            },
-                            "additionalProperties": True,
-                        }
-                    },
-                    "tags": {"type": "array", "items": {"type": "string"}}
-                },
-                "required": ["cluster_name"],
-                "additionalProperties": True,
-            }
-        },
         "priorities": {
             "type": "array",
             "description": "Priority assignments (max 3). Use name for clusters/subclusters, or item_index + parent_name for thought items.",
@@ -192,39 +150,11 @@ INPUT_SCHEMA = {
             "maxItems": 3
         }
     },
-    "required": ["user_prioritization_criterion_verbatim", "user_priorities_verbatim", "clusters", "priorities"],
+    "required": ["user_prioritization_criterion_verbatim", "user_priorities_verbatim", "priorities"],
     "additionalProperties": False,
 }
 
 REQUIRED_SCOPES = ["clarity.write"]
-
-# ============================================================================
-# Pydantic Models (PriorityInput imported from board_utils)
-# ============================================================================
-
-
-class SubclusterInput(BaseModel):
-    """Subcluster structure."""
-    subcluster_name: str
-    thought_items: List[Union[str, dict]] = Field(default_factory=list)  # string or {text, priority?}
-    tags: List[str] = Field(default_factory=list)
-    priority: Optional[dict] = None  # Will be added by tool
-
-
-class ClusterInput(BaseModel):
-    """Cluster structure."""
-    cluster_name: str
-    thought_items: List[Union[str, dict]] = Field(default_factory=list)  # string or {text, priority?}
-    subclusters: List[SubclusterInput] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
-    priority: Optional[dict] = None  # Will be added by tool
-
-
-class PrioritizeClustersRequest(BaseModel):
-    """Request structure."""
-    clusters: List[ClusterInput]
-    priorities: List[PriorityInput] = Field(default_factory=list)
-
 
 # ============================================================================
 # Helper Functions
@@ -445,56 +375,49 @@ async def handle(
             "Wait for their answer before calling this tool.",
         )
 
-    # Validate request structure
+    # ============================================================
+    # FETCH BOARD FROM DB
+    # ============================================================
+    cluster_record = await get_cluster(user_id=user_id, correlation_id=correlation_id)
+    if not cluster_record:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text=ERROR_NO_BOARD)],
+            isError=True,
+        )
+
+    inner_data = cluster_record.get("cluster_data") or {}
+    clusters_data = inner_data.get("clusters") or []
+
+    if not clusters_data:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text=ERROR_NO_BOARD)],
+            isError=True,
+        )
+
+    # Parse priorities from arguments
+    raw_priorities = arguments.get("priorities", [])
+    if not isinstance(raw_priorities, list):
+        raw_priorities = []
+
     try:
-        request = PrioritizeClustersRequest.model_validate(arguments)
-    except ValidationError as e:
-        logger.warning("prioritize_clusters.validation_failed",
-                      user_id=user_id,
-                      error=str(e.errors()))
+        priorities = [PriorityInput.model_validate(p) for p in raw_priorities]
+    except Exception as e:
+        logger.warning("prioritize_clusters.priority_parse_failed",
+                      user_id=user_id, error=str(e))
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text="Invalid input format. Please provide clusters and priorities."
+                text="Invalid priority format. Please specify rank and target name."
             )],
             isError=True,
         )
-
-    # Check for empty board
-    if not request.clusters:
-        logger.info("prioritize_clusters.no_board", user_id=user_id)
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text=ERROR_NO_BOARD
-            )],
-            isError=True,
-        )
-
-    # Check for empty clusters (LLM passed only cluster names, not full board)
-    total_items = sum(
-        len(c.thought_items) + sum(len(sc.thought_items) for sc in c.subclusters)
-        for c in request.clusters
-    )
-    if total_items == 0:
-        logger.info("prioritize_clusters.empty_clusters", user_id=user_id)
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Clusters have no thought items. Pass the complete clusters from organize_thoughts output."
-            )],
-            isError=True,
-        )
-
-    # Convert to dicts for processing
-    clusters_data = [c.model_dump() for c in request.clusters]
 
     # Find all valid names
     cluster_names, subcluster_names, subcluster_to_parent = _find_all_names(clusters_data)
 
     # Validate priorities
     error = _validate_priorities(
-        request.priorities,
+        priorities,
         clusters_data,
         cluster_names,
         subcluster_names,
@@ -513,17 +436,54 @@ async def handle(
         )
 
     # Apply priorities to clusters
-    prioritized_clusters = _apply_priorities(clusters_data, request.priorities)
+    prioritized_clusters = _apply_priorities(clusters_data, priorities)
+
+    # ============================================================
+    # AUTO-PERSIST UPDATED BOARD TO DB (fatal on failure)
+    # ============================================================
+    try:
+        storage_data = {"clusters": prioritized_clusters}
+        content_hash = compute_content_hash(prioritized_clusters)
+        await persist_cluster(
+            user_id=user_id,
+            cluster_data=storage_data,
+            thoughts_exhausted=False,
+            correctly_clustered=None,
+            correlation_id=correlation_id,
+            content_hash=content_hash,
+        )
+        logger.info("prioritize_clusters.auto_persisted", user_id=user_id)
+    except Exception as e:
+        logger.error("prioritize_clusters.persist_failed", user_id=user_id, error=str(e))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Your priorities could not be saved."
+            )],
+            structuredContent={
+                "success": False,
+                "error": "persist_failed",
+                "assistant_guidance": {
+                    "action": "RETRY",
+                    "instruction": (
+                        "Priority assignment succeeded but could not be saved to the database. "
+                        "Tell the user their priorities were not saved and ask them to try again. "
+                        "Do NOT imply the board was updated."
+                    ),
+                },
+            },
+            isError=True,
+        )
 
     # Enrich with sum_thought_items for widget
     enriched_clusters = enrich_clusters(prioritized_clusters)
 
     # Build response
-    priority_count = len(request.priorities)
+    priority_count = len(priorities)
     if priority_count == 0:
         message = "Priorities cleared from board."
     else:
-        ranks = [p.rank for p in request.priorities]
+        ranks = [p.rank for p in priorities]
         message = f"Applied {priority_count} priorit{'y' if priority_count == 1 else 'ies'} ({', '.join(sorted(ranks))}) to board."
 
     logger.info("prioritize_clusters.success",
@@ -560,7 +520,7 @@ Frame this against their actual criterion. Examples:
 - If criterion was 'relief': "That's your priority number 1 for peace of mind. One clear focus often brings more relief than two. Does this feel like enough, or is there something else weighing on you equally?"
 
 Always name the criterion and the trade-off. Make it a conscious choice, not a default yes/no.
-If user says one is enough: close warmly, suggest saving the board.
+If user says one is enough: close warmly. Your board has been updated.
 If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim unchanged."""
 
     elif priority_count == 2:
@@ -573,13 +533,13 @@ Example if criterion was 'relief': "Two priorities — that already takes a lot 
 Example if criterion was 'remove a blocker': "Two focus areas to unblock. Would a third still leave you stuck, or are these two enough to clear the path?"
 
 Always name the criterion. Make adding a third a conscious trade-off, not a default.
-If user says two is enough: close warmly, suggest saving the board.
+If user says two is enough: close warmly. Your board has been updated.
 If user names another: call prioritize_clusters again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim unchanged."""
 
     else:  # 3
         guidance = """All priorities set. Acknowledge warmly, then let user lead.
 
-Example: "You've got your focus areas. Board's ready to save when you are."
+Example: "You've got your focus areas. Your board has been updated."
 
 Now follow user's lead — they may want to discuss next steps, or they may be done."""
 
@@ -608,7 +568,7 @@ register_tool(ToolDefinition(
     widget_uri=WIDGET_URI,
     handle=handle,
     # OpenAI compliance annotations
-    read_only_hint=True,  # Transforms input with priority assignments, no DB write
-    destructive_hint=False,  # N/A when read_only=True
+    read_only_hint=False,  # Auto-persists to DB
+    destructive_hint=True,  # Overwrites saved board state in DB
     open_world_hint=False,  # Only affects internal backend
 ))

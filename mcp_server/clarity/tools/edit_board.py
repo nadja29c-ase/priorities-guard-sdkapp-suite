@@ -7,12 +7,12 @@ Handles priorities, renames, and deletes.
 Self-registers at import time.
 """
 
-from typing import List, Optional, Union
+from typing import List, Optional
 import copy
 
 import structlog
 from mcp import types as mcp_types
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 
 from .base import ToolDefinition
 from . import register_tool
@@ -26,7 +26,9 @@ from .board_utils import (
     PriorityInput,
     apply_priorities,
     clear_all_priorities,
+    compute_content_hash,
 )
+from ..persistence import get_cluster, persist_cluster
 
 logger = structlog.get_logger(__name__)
 
@@ -81,6 +83,9 @@ ERROR_EMPTY_BATCH = "Batch operations list cannot be empty."
 NAME = "edit_board"
 
 DESCRIPTION = """
+Requires a board to exist in DB (created via organize_thoughts or loaded via load_saved_board).
+The board is fetched automatically — do NOT pass a board field. Only pass operation(s) and targeting fields.
+
 PURPOSE: Edit an existing board — add items, manage tags, reassign priorities, rename clusters, or delete items.
 Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
 
@@ -95,66 +100,12 @@ WHEN TO CALL:
 - User requests multiple changes at once (use operations array)
   Example: "Rename X to Y and make it P1" → batch with rename_cluster + set_priority
 
-CRITICAL INPUT REQUIREMENT:
-You MUST pass the EXACT board JSON from the previous tool output.
-- Copy the complete clusters array including ALL priority fields
-- Do NOT reconstruct the board from memory
-- Do NOT summarize or simplify the structure
-
-DOES NOT AUTO-SAVE: Changes are applied to working board only. Tell user to click the Save button on the widget to persist — do NOT call save_board yourself.
-
-AFTER TOOL RETURNS: Confirm the change was made. If user wants to save, remind them to ask.
+AFTER TOOL RETURNS: Confirm the change was made. Your board has been updated.
 """
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "board": {
-            "type": "array",
-            "description": "CRITICAL: Pass the EXACT clusters JSON from the previous tool output. Do NOT reconstruct from memory.",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "cluster_name": {"type": "string"},
-                    "sum_thought_items": {"type": "integer"},
-                    "priority": {"type": ["object", "null"]},
-                    "thought_items": {
-                        "type": "array",
-                        "items": {
-                            "oneOf": [
-                                {"type": "string"},
-                                {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"]}}, "additionalProperties": False}
-                            ]
-                        }
-                    },
-                    "subclusters": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "subcluster_name": {"type": "string"},
-                                "sum_thought_items": {"type": "integer"},
-                                "priority": {"type": ["object", "null"]},
-                                "thought_items": {
-                                    "type": "array",
-                                    "items": {
-                                        "oneOf": [
-                                            {"type": "string"},
-                                            {"type": "object", "properties": {"text": {"type": "string"}, "priority": {"type": ["object", "null"]}}, "additionalProperties": False}
-                                        ]
-                                    }
-                                },
-                                "tags": {"type": "array", "items": {"type": "string"}}
-                            },
-                            "additionalProperties": True,
-                        }
-                    },
-                    "tags": {"type": "array", "items": {"type": "string"}}
-                },
-                "required": ["cluster_name"],
-                "additionalProperties": True,
-            }
-        },
         "operation": {
             "type": "string",
             "enum": ["set_priority", "clear_priority", "rename_cluster", "rename_subcluster", "delete_cluster", "delete_subcluster", "delete_thought_item", "clear_all_priorities", "add_thought_item", "add_tag", "remove_tag"],
@@ -214,7 +165,7 @@ INPUT_SCHEMA = {
             }
         }
     },
-    "required": ["board"],
+    "required": [],
     "additionalProperties": False,
 }
 
@@ -223,23 +174,6 @@ REQUIRED_SCOPES = ["clarity.write"]
 # ============================================================================
 # Pydantic Models
 # ============================================================================
-
-
-class SubclusterInput(BaseModel):
-    """Subcluster structure."""
-    subcluster_name: str
-    thought_items: List[Union[str, dict]] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
-    priority: Optional[dict] = None
-
-
-class ClusterInput(BaseModel):
-    """Cluster structure."""
-    cluster_name: str
-    thought_items: List[Union[str, dict]] = Field(default_factory=list)
-    subclusters: List[SubclusterInput] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
-    priority: Optional[dict] = None
 
 
 class SingleOperation(BaseModel):
@@ -265,8 +199,7 @@ class SingleOperation(BaseModel):
 
 
 class EditBoardRequest(BaseModel):
-    """Request structure — single or batch mode."""
-    board: List[ClusterInput]
+    """Request structure — single or batch mode (board fetched from DB)."""
     # Single mode
     operation: Optional[str] = None
     target_name: Optional[str] = None
@@ -696,8 +629,8 @@ async def handle(
     Args:
         user_id: Authenticated user ID from JWT
         correlation_id: Request correlation ID for tracing
-        arguments: { board: [...], operation: "..." } for single mode
-                   { board: [...], operations: [...] } for batch mode
+        arguments: { operation: "..." } for single mode
+                   { operations: [...] } for batch mode
 
     Returns:
         CallToolResult with edited board and widget metadata
@@ -716,13 +649,25 @@ async def handle(
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
-                text="Invalid input format. Please provide board and operation."
+                text="Invalid input format. Please provide operation."
             )],
             isError=True,
         )
 
-    # Check board is provided
-    if not request.board:
+    # ============================================================
+    # FETCH BOARD FROM DB
+    # ============================================================
+    cluster_record = await get_cluster(user_id=user_id, correlation_id=correlation_id)
+    if not cluster_record:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(type="text", text=ERROR_NO_BOARD)],
+            isError=True,
+        )
+
+    inner_data = cluster_record.get("cluster_data") or {}
+    clusters_data = inner_data.get("clusters") or []
+
+    if not clusters_data:
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(type="text", text=ERROR_NO_BOARD)],
             isError=True,
@@ -773,7 +718,6 @@ async def handle(
             )
 
     # Execute in order — fail fast
-    clusters_data = [c.model_dump() for c in request.board]
     completed = []
 
     for i, op in enumerate(ops):
@@ -794,6 +738,43 @@ async def handle(
             )
         clusters_data = result
         completed.append(op.operation)
+
+    # ============================================================
+    # AUTO-PERSIST UPDATED BOARD TO DB (fatal on failure)
+    # ============================================================
+    try:
+        storage_data = {"clusters": clusters_data}
+        content_hash = compute_content_hash(clusters_data)
+        await persist_cluster(
+            user_id=user_id,
+            cluster_data=storage_data,
+            thoughts_exhausted=False,
+            correctly_clustered=None,
+            correlation_id=correlation_id,
+            content_hash=content_hash,
+        )
+        logger.info("edit_board.auto_persisted", user_id=user_id)
+    except Exception as e:
+        logger.error("edit_board.persist_failed", user_id=user_id, error=str(e))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Your edits could not be saved."
+            )],
+            structuredContent={
+                "success": False,
+                "error": "persist_failed",
+                "assistant_guidance": {
+                    "action": "RETRY",
+                    "instruction": (
+                        "Edit operations succeeded but could not be saved to the database. "
+                        "Tell the user their edits were not saved and ask them to try again. "
+                        "Do NOT imply the board was updated."
+                    ),
+                },
+            },
+            isError=True,
+        )
 
     # Enrich for widget display
     enriched = enrich_clusters(clusters_data)
@@ -857,7 +838,7 @@ register_tool(ToolDefinition(
     widget_uri=WIDGET_URI,
     handle=handle,
     # OpenAI compliance annotations
-    read_only_hint=True,  # Transforms board data, no DB write until save_board
-    destructive_hint=False,  # N/A when read_only=True
+    read_only_hint=False,  # Auto-persists to DB
+    destructive_hint=True,  # Overwrites saved board state in DB
     open_world_hint=False,  # Only affects internal backend
 ))

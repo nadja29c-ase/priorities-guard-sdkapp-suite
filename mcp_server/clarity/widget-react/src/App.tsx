@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Cluster } from './types'
-import { extractStructuredContent, getToolOutput, sortClustersByPriority } from './utils'
+import { getToolOutput, sortClustersByPriority } from './utils'
 import { Header } from './components/Header'
 import { ClusterCard } from './components/ClusterCard'
-import { Button } from '@openai/apps-sdk-ui/components/Button'
-import { Check } from '@openai/apps-sdk-ui/components/Icon'
 
 // Widget state persisted across re-renders via OpenAI SDK
 interface MindSortWidgetState {
@@ -16,16 +14,10 @@ function App() {
 
   const [clusters, setClusters] = useState<Cluster[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [showSaved, setShowSaved] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   // Ref to avoid re-running effect on clusters change
   const isInitializedRef = useRef(false)
-
-  // Ref for Save button focus management
-  const saveButtonRef = useRef<HTMLButtonElement>(null)
 
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
@@ -61,7 +53,6 @@ function App() {
       setLoadError(null)
     }
 
-    setShowSaved(false)  // Reset stale indicator on new data load
     setClusters(data)
     setIsInitialized(true)
     isInitializedRef.current = true
@@ -89,7 +80,7 @@ function App() {
     if (isInitialized) {
       notifyHeight()
     }
-  }, [saveError, loadError, isInitialized, notifyHeight])
+  }, [loadError, isInitialized, notifyHeight])
 
   // Persist scroll position to widgetState
   useEffect(() => {
@@ -113,39 +104,6 @@ function App() {
       window.removeEventListener('scroll', handleScroll)
     }
   }, [isInitialized])
-
-  // Handle save
-  const handleSave = async () => {
-    if (isSaving || clusters.length === 0) return
-
-    setIsSaving(true)
-    setSaveError(null)
-
-    try {
-      if (window.openai?.callTool) {
-        const result = await window.openai.callTool<{ saved?: boolean }>('save_board', {
-          clusters: clusters,
-        })
-
-        // Check if save was successful
-        const content = extractStructuredContent<{ saved?: boolean }>(result)
-        if (content?.saved === true) {
-          setShowSaved(true)
-          // Clear after 3 seconds
-          setTimeout(() => setShowSaved(false), 3000)
-        }
-      } else {
-        console.warn('window.openai.callTool not available')
-      }
-    } catch (err) {
-      console.error('Save failed:', err)
-      setSaveError('Save failed. Please try again.')
-    } finally {
-      setIsSaving(false)
-      // Restore focus to Save button after async save completes
-      setTimeout(() => saveButtonRef.current?.focus(), 0)
-    }
-  }
 
   // Sort clusters by priority for display
   const sortedClusters = sortClustersByPriority(clusters)
@@ -173,12 +131,6 @@ function App() {
         </div>
       )}
 
-      {saveError && (
-        <div className="mb-4 p-3 text-sm text-danger bg-surface rounded-lg border border-danger-outline" role="alert">
-          {saveError}
-        </div>
-      )}
-
       {sortedClusters.length > 0 ? (
         <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
           {sortedClusters.map((cluster) => (
@@ -190,32 +142,6 @@ function App() {
           No saved board yet. Start one by sharing what's on your mind in the chat.
         </div>
       )}
-
-      {/* Sticky Save button - always visible at bottom */}
-      <div className="sticky bottom-0 pt-4 pb-2 bg-surface-secondary">
-        <div className="flex justify-start items-center">
-          {showSaved && (
-            <span
-              className="flex items-center gap-1 text-xs text-success font-medium mr-3"
-              aria-live="polite"
-            >
-              <Check className="w-3.5 h-3.5" aria-hidden="true" />
-              Saved
-            </span>
-          )}
-          <Button
-            ref={saveButtonRef}
-            color="primary"
-            variant="solid"
-            onClick={handleSave}
-            disabled={clusters.length === 0 || isSaving}
-            aria-label={clusters.length === 0 ? "Save board (no items to save)" : "Save board"}
-          >
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
-        </div>
-        <p className="text-xs text-secondary mt-1 text-left">Only 1 board can be saved</p>
-      </div>
     </main>
   )
 }

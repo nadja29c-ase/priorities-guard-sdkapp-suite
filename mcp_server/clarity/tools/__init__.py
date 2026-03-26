@@ -92,7 +92,7 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_accessible:
-            # Widget-callable tools without widget output (e.g., save_board)
+            # Widget-callable tools without widget output
             # visibility: ["model", "app"]
             meta = {
                 "ui": {
@@ -142,7 +142,6 @@ async def list_tools() -> List[mcp_types.Tool]:
 from . import organize_thoughts  # noqa: F401, E402
 from . import load_saved_board  # noqa: F401, E402
 from . import read_saved_board  # noqa: F401, E402
-from . import save_board  # noqa: F401, E402
 from . import prioritize_clusters  # noqa: F401, E402
 from . import edit_board  # noqa: F401, E402
 from . import delete_my_data  # noqa: F401, E402
