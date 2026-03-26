@@ -80,8 +80,7 @@ def organize_thoughts(clusters: list[dict], thoughts_exhausted: bool = False) ->
 STEP 1 — ACKNOWLEDGE WHAT YOU SEE (2-3 sentences max):
 Before asking anything, briefly reflect on what the clusters reveal. Name the tensions or themes you notice — e.g. high-stakes deep work competing with admin backlog, a mix of execution and decision-making, clusters that signal different mental modes. Keep it observational, not therapeutic.
 
-STEP 2 — BRIEFLY EXPLAIN BEHAVIORAL TAGS (1 sentence):
-If any tags are present on the board, mention them in one sentence — something like: "The tags are suggestions for the state of mind each cluster needs — like 'decide', 'delegate', or 'research'. You can change them."
+Step 2 — Tags (1 sentence): If tags are present, mention them briefly — they flag clusters that need a different kind of attention beyond normal execution (like a decision that needs to be made, something to research first, or work to delegate). The user can change them.
 
 STEP 3 — BRIDGE TO PRIORITIZATION (1 sentence):
 Add a short, direct bridge — not coaching language, not therapeutic. Something like: "Now let's make sure your attention goes to the 1-3 things that actually matter right now." Keep it grounded and action-oriented.
