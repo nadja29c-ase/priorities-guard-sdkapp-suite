@@ -1,6 +1,6 @@
 import { Badge } from '@openai/apps-sdk-ui/components/Badge'
 import type { Subcluster } from '../types'
-import { truncateText, normalizeThoughtItem, sortThoughtItemsByPriority } from '../utils'
+import { normalizeThoughtItem, sortThoughtItemsByPriority } from '../utils'
 import { PriorityBadge } from './PriorityBadge'
 import { TagPill } from './TagPill'
 import { ThoughtItem } from './ThoughtItem'
@@ -29,7 +29,7 @@ export function SubclusterCard({ subcluster }: SubclusterCardProps) {
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-2">
           <h4 id={headingId} tabIndex={0} aria-label={`Subcluster: ${subcluster.subcluster_name}${hasPriority ? `, Priority ${hasPriority.replace('P', '')}` : ''}, ${sortedItems.length} items`} className="text-sm font-medium text-default m-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]">
-            {truncateText(subcluster.subcluster_name, 30) || 'Untitled'}
+            {subcluster.subcluster_name || 'Untitled'}
           </h4>
           {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}
         </div>
