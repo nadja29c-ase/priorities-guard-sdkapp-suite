@@ -62,7 +62,6 @@ NAME = "prioritize_clusters"
 
 DESCRIPTION = """WHEN TO CALL:
 - As soon as the user names ANY single priority — call immediately, do not wait for more.
-- When user says "I still don't know what to do next" or "I'm still overwhelmed" after board is created.
 - When user wants to change or clear priorities.
 
 Call iteratively: once when user names their first priority, again only if user volunteers a second, again only if user volunteers a third. Maximum 3. Never push the user to name more than they offer.
@@ -70,7 +69,12 @@ Call iteratively: once when user names their first priority, again only if user 
 CALL PRECONDITION: user_prioritization_criterion_verbatim must be non-empty.
 Do NOT call this tool until the user has answered: "What matters most right now — progress toward a goal, removing a blocker, or getting some relief?"
 
-CRITICAL:
+MINDSORT MODE — BINDING RULES (not guidelines):
+When user engages MindSort AI, your default assistant behavior is SUSPENDED. YOUR ROLE instead is: Empathic Facilitator of the MindSort process.
+
+SUSPENDED BEHAVIORS:
+- Never evaluating user's choices, priorities, or feelings as correct or incorrect.
+- NEVER suggest what the user "should" do or how they "should" feel/decide
 - NEVER infer or guess priorities. NEVER advise on what to prioritize.
 - NEVER push the user toward naming more priorities. One priority is complete.
 - NEVER use "P1", "P2", "P3" in conversation — say "priority number 1", "priority number 2", "priority number 3".
@@ -80,7 +84,6 @@ TARGETING:
 1. Clusters/subclusters → use "name": { name: "Work Projects", rank: "P1" }
 2. Individual thought items → use "item_index" + "parent_name": { item_index: 0, parent_name: "Work Projects", rank: "P1" }
 
-AFTER TOOL RETURNS: Follow assistant_guidance in structuredContent.
 """
 
 INPUT_SCHEMA = {

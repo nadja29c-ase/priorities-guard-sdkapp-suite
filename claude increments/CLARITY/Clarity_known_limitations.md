@@ -1,4 +1,4 @@
-# Clarity — Known Limitations
+# Clarity — Known Limitations - MIGHT BE OUTDATED!
 
 Technical documentation of known limitations, their root causes, and potential future solutions.
 
