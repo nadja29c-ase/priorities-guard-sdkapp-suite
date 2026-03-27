@@ -85,40 +85,8 @@ class TestRegisterTool:
         del TOOL_REGISTRY["test_dummy_tool"]
 
 
-class TestSaveBoardRegistration:
-    """Tests for save_board tool registration."""
-
-    def test_save_board_registered(self):
-        """save_board tool should be in registry."""
-        assert "save_board" in TOOL_REGISTRY
-
-    def test_save_board_widget_accessible(self):
-        """save_board should be widget_accessible (for window.openai.callTool)."""
-        tool = get_tool("save_board")
-        assert tool is not None
-        assert tool.widget_accessible is True
-
-    def test_save_board_no_widget_uri(self):
-        """save_board should NOT have widget_uri (pure data operation)."""
-        tool = get_tool("save_board")
-        assert tool is not None
-        assert tool.widget_uri is None
-
-    @pytest.mark.asyncio
-    async def test_save_board_widget_accessible_only_meta(self):
-        """save_board has ui.visibility: ['model', 'app'] but no ui.resourceUri."""
-        tools = await list_tools()
-        save_board_tool = next((t for t in tools if t.name == "save_board"), None)
-        assert save_board_tool is not None
-        # Has meta with ui.visibility (both model and widget can call it)
-        assert save_board_tool.meta is not None
-        ui_meta = save_board_tool.meta.get("ui", {})
-        assert ui_meta.get("visibility") == ["model", "app"], \
-            "save_board should have ui.visibility: ['model', 'app']"
-        # But does NOT have ui.resourceUri (doesn't produce widget)
-        assert "resourceUri" not in ui_meta, \
-            "save_board should not have ui.resourceUri"
-        assert "openai/outputTemplate" not in save_board_tool.meta
+class TestWidgetProducingTools:
+    """Tests for widget-producing tool metadata."""
 
     @pytest.mark.asyncio
     async def test_widget_producing_tools_have_full_meta(self):

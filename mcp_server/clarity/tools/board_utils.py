@@ -2,7 +2,7 @@
 Board Utilities - Shared logic for priority operations.
 
 Used by:
-- prioritize_clusters: bulk priority assignment
+- start_prioritization_flow: bulk priority assignment
 - edit_board: single priority mutations
 """
 

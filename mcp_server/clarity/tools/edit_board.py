@@ -95,7 +95,7 @@ WHEN TO CALL:
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
 - User wants to REASSIGN OR SWAP an existing priority that is already set on the board (use set_priority). Example: "change my P2 to something else", "move P1 to the other cluster".
-NEVER use set_priority if you are currently in a prioritization conversation — meaning the user just answered the criterion question or is still naming their priorities for the first time. In that case, always use prioritize_clusters, even if the user's wording sounds like a direct board edit (e.g. "p2: Follow up on payments"). The prioritization conversation takes precedence over any general board-edit rule.
+NEVER use set_priority if you are currently in a prioritization conversation — meaning the user just answered the criterion question or is still naming their priorities for the first time. In that case, always use start_prioritization_flow, even if the user's wording sounds like a direct board edit (e.g. "p2: Follow up on payments"). The prioritization conversation takes precedence over any general board-edit rule.
 - User says "rename X to Y" (use rename_cluster/rename_subcluster)
 - User says "delete X" or "remove X" (use delete_cluster/delete_subcluster/delete_thought_item)
 - User says "clear my priorities" (use clear_all_priorities)

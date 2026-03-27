@@ -153,7 +153,7 @@ Ask if they'd like to start a new Clarity Board. Something warm like: "Ready for
         guidance = """Board loaded with existing clusters.
 
 Read the user's intent from what they said BEFORE calling this tool:
-- If they asked to FOCUS, PRIORITIZE, or said they're OVERWHELMED/STRESSED → skip any further elicitation. Ask directly: "What matters most right now — progress toward a goal, removing a blocker, or getting some relief?" Then call prioritize_clusters as soon as they answer.
+- If they asked to FOCUS, PRIORITIZE, or said they're OVERWHELMED/STRESSED → skip any further elicitation. Ask directly: "What matters most right now — progress toward a goal, removing a blocker, or getting some relief?" Then call start_prioritization_flow as soon as they answer.
 - If they asked to ADD items → proceed with adding via organize_thoughts or edit_board.
 - If they just asked to SEE the board → ask "How can I help?" and let them lead.
 

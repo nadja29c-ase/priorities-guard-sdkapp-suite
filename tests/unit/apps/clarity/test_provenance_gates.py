@@ -1,9 +1,11 @@
 """
 Unit tests for Clarity verbatim provenance gates.
 
-Tests the behavioral gates on organize_thoughts and prioritize_clusters
+Tests the behavioral gates on organize_thoughts and start_prioritization_flow
 that require explicit user confirmation before tool execution.
 """
+
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from mcp import types as mcp_types
@@ -84,20 +86,20 @@ class TestOrganizeThoughtsProvenanceGate:
             assert result.structuredContent.get("error") != "empty_thoughts_exhausted_verbatim"
 
 
-class TestPrioritizeClustersProvenanceGate:
-    """Tests for prioritize_clusters user_priorities_verbatim gate."""
+class TestStartPrioritizationFlowProvenanceGate:
+    """Tests for start_prioritization_flow user_priorities_verbatim gate."""
 
     @pytest.mark.asyncio
     async def test_empty_string_returns_provenance_error(self):
         """Empty user_priorities_verbatim returns provenance error."""
-        from mcp_server.clarity.tools.prioritize_clusters import handle
+        from mcp_server.clarity.tools.start_prioritization_flow import handle
 
         result = await handle(
             user_id="test",
             correlation_id="test",
             arguments={
+                "user_prioritization_criterion_verbatim": "relief",
                 "user_priorities_verbatim": "",
-                "clusters": [{"cluster_name": "Test", "thought_items": ["item1"]}],
                 "priorities": [{"name": "Test", "rank": "P1"}],
             },
         )
@@ -110,13 +112,13 @@ class TestPrioritizeClustersProvenanceGate:
     @pytest.mark.asyncio
     async def test_missing_field_returns_provenance_error(self):
         """Missing user_priorities_verbatim returns provenance error."""
-        from mcp_server.clarity.tools.prioritize_clusters import handle
+        from mcp_server.clarity.tools.start_prioritization_flow import handle
 
         result = await handle(
             user_id="test",
             correlation_id="test",
             arguments={
-                "clusters": [{"cluster_name": "Test", "thought_items": ["item1"]}],
+                "user_prioritization_criterion_verbatim": "relief",
                 "priorities": [{"name": "Test", "rank": "P1"}],
             },
         )
@@ -128,14 +130,14 @@ class TestPrioritizeClustersProvenanceGate:
     @pytest.mark.asyncio
     async def test_whitespace_only_returns_provenance_error(self):
         """Whitespace-only user_priorities_verbatim returns provenance error."""
-        from mcp_server.clarity.tools.prioritize_clusters import handle
+        from mcp_server.clarity.tools.start_prioritization_flow import handle
 
         result = await handle(
             user_id="test",
             correlation_id="test",
             arguments={
+                "user_prioritization_criterion_verbatim": "relief",
                 "user_priorities_verbatim": "   ",
-                "clusters": [{"cluster_name": "Test", "thought_items": ["item1"]}],
                 "priorities": [{"name": "Test", "rank": "P1"}],
             },
         )
@@ -146,18 +148,26 @@ class TestPrioritizeClustersProvenanceGate:
     @pytest.mark.asyncio
     async def test_non_empty_verbatim_proceeds_past_gate(self):
         """Non-empty user_priorities_verbatim proceeds past provenance gate."""
-        from mcp_server.clarity.tools.prioritize_clusters import handle
+        from mcp_server.clarity.tools.start_prioritization_flow import handle
 
-        result = await handle(
-            user_id="test",
-            correlation_id="test",
-            arguments={
-                "user_priorities_verbatim": "my P1 is the work cluster",
-                "clusters": [{"cluster_name": "Test", "thought_items": ["item1"]}],
-                "priorities": [{"name": "Test", "rank": "P1"}],
-            },
-        )
+        with patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster", new_callable=AsyncMock) as mock_get, \
+             patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster", new_callable=AsyncMock):
+            mock_get.return_value = {
+                "cluster_data": {
+                    "clusters": [{"cluster_name": "Test", "thought_items": ["item1"], "subclusters": []}]
+                }
+            }
 
-        # Should NOT return provenance error - may return success or validation error
-        if result.structuredContent:
-            assert result.structuredContent.get("error") != "empty_priorities_verbatim"
+            result = await handle(
+                user_id="test",
+                correlation_id="test",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "my P1 is the work cluster",
+                    "priorities": [{"name": "Test", "rank": "P1"}],
+                },
+            )
+
+            # Should NOT return provenance error - may return success or validation error
+            if result.structuredContent:
+                assert result.structuredContent.get("error") != "empty_priorities_verbatim"

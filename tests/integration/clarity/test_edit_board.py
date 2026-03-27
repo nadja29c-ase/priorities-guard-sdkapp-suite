@@ -7,9 +7,11 @@ Tests:
 3. edit_loaded_board — load_saved_board → edit_board → priorities preserved
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from mcp_server.clarity.tools.edit_board import handle as edit_handle
-from mcp_server.clarity.tools.prioritize_clusters import handle as prioritize_handle
+from mcp_server.clarity.tools.start_prioritization_flow import handle as prioritize_handle
 
 
 # ============================================================================
@@ -194,9 +196,9 @@ class TestEditBoardIntegration:
         assert home["priority"]["rank"] == "P2"
 
     @pytest.mark.asyncio
-    async def test_edit_after_prioritize_clusters(self):
+    async def test_edit_after_start_prioritization_flow(self):
         """
-        prioritize_clusters → edit_board → priorities accumulate correctly.
+        start_prioritization_flow → edit_board → priorities accumulate correctly.
         """
         # Start with a basic board
         board = [
@@ -205,20 +207,25 @@ class TestEditBoardIntegration:
             make_cluster("Health", items=["exercise"]),
         ]
 
-        # Use prioritize_clusters to set P1 and P2
-        result1 = await prioritize_handle(
-            user_id="test-user",
-            correlation_id="test-corr",
-            arguments={
-                "clusters": board,
-                "priorities": [
-                    {"name": "Work", "rank": "P1"},
-                    {"name": "Home", "rank": "P2"},
-                ],
-            },
-        )
-        assert result1.isError is None or result1.isError is False
-        board_after_prioritize = result1.structuredContent["clusters"]
+        # Use start_prioritization_flow to set P1 and P2
+        with patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster", new_callable=AsyncMock) as mock_get, \
+             patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster", new_callable=AsyncMock):
+            mock_get.return_value = {"cluster_data": {"clusters": board}}
+
+            result1 = await prioritize_handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Work P1, Home P2",
+                    "priorities": [
+                        {"name": "Work", "rank": "P1"},
+                        {"name": "Home", "rank": "P2"},
+                    ],
+                },
+            )
+            assert result1.isError is None or result1.isError is False
+            board_after_prioritize = result1.structuredContent["clusters"]
 
         # Use edit_board to add P3
         result2 = await edit_handle(

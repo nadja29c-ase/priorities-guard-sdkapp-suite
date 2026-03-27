@@ -1,5 +1,5 @@
 """
-Prioritize Clusters Tool.
+Start Prioritization Flow Tool.
 
 Single authority for ALL priority mutations across the board.
 Handles clusters, subclusters, AND thought item priorities.
@@ -59,7 +59,7 @@ ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it 
 # Tool Metadata
 # ============================================================================
 
-NAME = "prioritize_clusters"
+NAME = "start_prioritization_flow"
 
 DESCRIPTION = """Requires a board to exist in DB. Use organize_thoughts to create one. load_saved_board only displays the board — it does not create DB state.
 The board is fetched automatically — do NOT pass clusters. Only pass priorities and provenance fields.
@@ -343,7 +343,7 @@ async def handle(
     Returns:
         CallToolResult with prioritized board and widget metadata
     """
-    logger.debug("prioritize_clusters.handle.start",
+    logger.debug("start_prioritization_flow.handle.start",
                 user_id=user_id,
                 correlation_id=correlation_id)
 
@@ -352,7 +352,7 @@ async def handle(
     # ============================================================
     user_priorities_verbatim = arguments.get("user_priorities_verbatim", "")
     if not user_priorities_verbatim or not user_priorities_verbatim.strip():
-        logger.info("prioritize_clusters.provenance_failed",
+        logger.info("start_prioritization_flow.provenance_failed",
                     user_id=user_id,
                     field="user_priorities_verbatim")
         return _build_provenance_error(
@@ -365,7 +365,7 @@ async def handle(
     # ============================================================
     user_prioritization_criterion_verbatim = arguments.get("user_prioritization_criterion_verbatim", "")
     if not user_prioritization_criterion_verbatim or not user_prioritization_criterion_verbatim.strip():
-        logger.info("prioritize_clusters.provenance_failed",
+        logger.info("start_prioritization_flow.provenance_failed",
                     user_id=user_id,
                     field="user_prioritization_criterion_verbatim")
         return _build_provenance_error(
@@ -402,7 +402,7 @@ async def handle(
     try:
         priorities = [PriorityInput.model_validate(p) for p in raw_priorities]
     except Exception as e:
-        logger.warning("prioritize_clusters.priority_parse_failed",
+        logger.warning("start_prioritization_flow.priority_parse_failed",
                       user_id=user_id, error=str(e))
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
@@ -424,7 +424,7 @@ async def handle(
         subcluster_to_parent
     )
     if error:
-        logger.info("prioritize_clusters.validation_error",
+        logger.info("start_prioritization_flow.validation_error",
                    user_id=user_id,
                    error=error)
         return mcp_types.CallToolResult(
@@ -452,9 +452,9 @@ async def handle(
             correlation_id=correlation_id,
             content_hash=content_hash,
         )
-        logger.info("prioritize_clusters.auto_persisted", user_id=user_id)
+        logger.info("start_prioritization_flow.auto_persisted", user_id=user_id)
     except Exception as e:
-        logger.error("prioritize_clusters.persist_failed", user_id=user_id, error=str(e))
+        logger.error("start_prioritization_flow.persist_failed", user_id=user_id, error=str(e))
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
@@ -486,7 +486,7 @@ async def handle(
         ranks = [p.rank for p in priorities]
         message = f"Applied {priority_count} priorit{'y' if priority_count == 1 else 'ies'} ({', '.join(sorted(ranks))}) to board."
 
-    logger.info("prioritize_clusters.success",
+    logger.info("start_prioritization_flow.success",
                user_id=user_id,
                priority_count=priority_count)
 
@@ -521,7 +521,7 @@ Frame this against their actual criterion. Examples:
 
 Always name the criterion and the trade-off. Make it a conscious choice, not a default yes/no.
 If user says one is enough: close warmly. Your board has been updated.
-If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim unchanged.
+If user names another: call start_prioritization_flow again with P1 + P2. Pass user_prioritization_criterion_verbatim unchanged.
 TARGETING REMINDER: If the user names a thought item (not a cluster), use item_index + parent_name, NOT name.
 Example: { "item_index": 0, "parent_name": "Admin and delivery upkeep", "rank": "P2" }
 Never target a thought item by its text as a cluster name — it will fail."""
@@ -537,7 +537,7 @@ Example if criterion was 'remove a blocker': "Two focus areas to unblock. Would 
 
 Always name the criterion. Make adding a third a conscious trade-off, not a default.
 If user says two is enough: close warmly. Your board has been updated.
-If user names another: call prioritize_clusters again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim unchanged.
+If user names another: call start_prioritization_flow again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim unchanged.
 TARGETING REMINDER: If the user names a thought item (not a cluster), use item_index + parent_name, NOT name.
 Example: { "item_index": 0, "parent_name": "Admin and delivery upkeep", "rank": "P3" }
 Never target a thought item by its text as a cluster name — it will fail."""

@@ -91,7 +91,7 @@ Say EXACTLY this — do not rephrase, do not add bullet points, do not change th
 
 Wait for the user's answer. Store it in user_prioritization_criterion_verbatim.
 Then ask which cluster, subcluster, or specific item on the board fits that criterion best. A cluster name is fine as a starting point — but if the user names a cluster, ask if there is a more specific subcluster or item within it that is the real focus, or if the whole cluster is what they mean. What the user confirms becomes priority number 1.
-Call prioritize_clusters immediately when the user names it."""
+Call start_prioritization_flow immediately when the user names it."""
     else:
         message = ""  # Empty - model ignores this anyway
         guidance = """🛑 STOP - NO ADVICE - Acknowledge progress WARMLY, EXPLAIN WHAT YOU ARE DOING WITH THE USER AND WHY and then ask for more thoughts.
