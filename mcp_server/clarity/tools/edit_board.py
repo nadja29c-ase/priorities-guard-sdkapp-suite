@@ -815,7 +815,11 @@ async def handle(
     }
 
     # Guidance for all operations
-    guidance = "Confirm the edit briefly, then continue with whatever you were doing with the user."
+    guidance = (
+        f"Say one short sentence acknowledging what you found and what changed — "
+        f"example: 'Found your board with {len(clusters_data)} clusters. Done, [edit description].' "
+        "Then confirm the edit briefly and continue with whatever you were doing with the user."
+    )
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(type="text", text=message)],
