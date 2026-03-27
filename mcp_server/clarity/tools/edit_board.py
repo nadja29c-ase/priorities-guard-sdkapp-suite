@@ -94,8 +94,8 @@ WHEN TO CALL:
 - User says "add X to Y" (use add_thought_item)
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
-- User says "change P1 to Y" or "swap my P2" AFTER priorities are already set (use set_priority to reassign an existing priority slot) — maximum 3 priorities at once (P1, P2, P3). The limit exists because focus only works when attention is bounded — more than 3 priorities means no real priority. If 3 are already set and user wants a new one, tell them before calling: they need to decide what to replace, not just add another.
-DO NOT use set_priority here when the user is naming a NEW priority for the first time. For initial priority assignment always use prioritize_clusters — it enforces the criterion question and the conscious trade-off conversation.
+- User wants to REASSIGN OR SWAP an existing priority that is already set on the board (use set_priority). Example: "change my P2 to something else", "move P1 to the other cluster".
+NEVER use set_priority if you are currently in a prioritization conversation — meaning the user just answered the criterion question or is still naming their priorities for the first time. In that case, always use prioritize_clusters, even if the user's wording sounds like a direct board edit (e.g. "p2: Follow up on payments"). The prioritization conversation takes precedence over any general board-edit rule.
 - User says "rename X to Y" (use rename_cluster/rename_subcluster)
 - User says "delete X" or "remove X" (use delete_cluster/delete_subcluster/delete_thought_item)
 - User says "clear my priorities" (use clear_all_priorities)
