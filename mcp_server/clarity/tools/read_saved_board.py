@@ -184,7 +184,9 @@ Examples:
 - "Found your board — {cluster_count} clusters. Making the change now..."
 - "Got your board with {', '.join(cluster_names[:3])}{'...' if len(cluster_names) > 3 else ''}. Let me [action]..."
 
-Keep it to ONE short sentence, then proceed with the user's request.""",
+Keep it to ONE short sentence, then proceed with the user's request.
+
+IF MERGING NEW THOUGHTS AND RECLUSTERING: After reclustering, the board will have no priorities — this is correct and expected. Tell the user their board has been reorganized and they can set priorities again when ready.""",
         },
         _meta={
             "saved_board_hash": saved_board_hash,
