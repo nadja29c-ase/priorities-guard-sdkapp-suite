@@ -143,6 +143,9 @@ function App() {
           No saved board yet. Start one by sharing what's on your mind in the chat.
         </div>
       )}
+
+      {/* Auto-save indicator */}
+      <p className="text-xs text-secondary mt-3 text-left">Changes are saved automatically</p>
     </main>
   )
 }
