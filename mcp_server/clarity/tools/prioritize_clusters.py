@@ -521,7 +521,10 @@ Frame this against their actual criterion. Examples:
 
 Always name the criterion and the trade-off. Make it a conscious choice, not a default yes/no.
 If user says one is enough: close warmly. Your board has been updated.
-If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim unchanged."""
+If user names another: call prioritize_clusters again with P1 + P2. Pass user_prioritization_criterion_verbatim unchanged.
+TARGETING REMINDER: If the user names a thought item (not a cluster), use item_index + parent_name, NOT name.
+Example: { "item_index": 0, "parent_name": "Admin and delivery upkeep", "rank": "P2" }
+Never target a thought item by its text as a cluster name — it will fail."""
 
     elif priority_count == 2:
         guidance = """Two priorities set. Acknowledge, then present the same trade-off for a third — frame it against the criterion.
@@ -534,7 +537,10 @@ Example if criterion was 'remove a blocker': "Two focus areas to unblock. Would 
 
 Always name the criterion. Make adding a third a conscious trade-off, not a default.
 If user says two is enough: close warmly. Your board has been updated.
-If user names another: call prioritize_clusters again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim unchanged."""
+If user names another: call prioritize_clusters again with P1 + P2 + P3. Pass user_prioritization_criterion_verbatim unchanged.
+TARGETING REMINDER: If the user names a thought item (not a cluster), use item_index + parent_name, NOT name.
+Example: { "item_index": 0, "parent_name": "Admin and delivery upkeep", "rank": "P3" }
+Never target a thought item by its text as a cluster name — it will fail."""
 
     else:  # 3
         guidance = """All priorities set. Acknowledge warmly, then let user lead.
