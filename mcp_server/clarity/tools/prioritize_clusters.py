@@ -569,6 +569,6 @@ register_tool(ToolDefinition(
     handle=handle,
     # OpenAI compliance annotations
     read_only_hint=False,  # Auto-persists to DB
-    destructive_hint=True,  # Overwrites saved board state in DB
+    destructive_hint=False,  # Priorities are reversible — can be changed or cleared at any time
     open_world_hint=False,  # Only affects internal backend
 ))
