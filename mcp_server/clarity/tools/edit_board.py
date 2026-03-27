@@ -86,7 +86,8 @@ DESCRIPTION = """
 Requires a board to exist in DB. Use organize_thoughts to create one. load_saved_board only displays the board — it does not create DB state.
 The board is fetched automatically — do NOT pass a board field. Only pass operation(s) and targeting fields.
 
-PURPOSE: Edit an existing board — add items, manage tags, reassign priorities, rename clusters, or delete items.
+PURPOSE: Targeted, surgical edits to an existing board — one item at a time. Use for specific changes: add one item, rename one cluster, delete one item, set a priority.
+Do NOT use this when the user wants to add many new thoughts or recluster the board. For that, use read_saved_board → merge thoughts → organize_thoughts.
 Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
 
 WHEN TO CALL:
