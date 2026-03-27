@@ -326,6 +326,37 @@ async def handle(
             "Ask: 'What else is on your mind?' Then stop and wait.",
         )
 
+    # ============================================================
+    # CLUSTER COUNT CHECK (before full validation)
+    # ============================================================
+    raw_clusters = arguments.get("clusters", [])
+    if isinstance(raw_clusters, list) and len(raw_clusters) > 10:
+        logger.info("organize_thoughts.too_many_clusters",
+                    user_id=user_id, count=len(raw_clusters))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=f"Too many clusters: {len(raw_clusters)}. Maximum is 10."
+            )],
+            structuredContent={
+                "success": False,
+                "error": "too_many_clusters",
+                "assistant_guidance": {
+                    "action": "CONSOLIDATE",
+                    "instruction": (
+                        f"You created {len(raw_clusters)} top-level clusters. Maximum is 10. "
+                        "More than 10 clusters defeats the purpose — the board stops being a big-picture view "
+                        "and becomes another overwhelming list. "
+                        "Consolidate by merging clusters that share a theme. "
+                        "Move detail into subclusters. "
+                        "Tell the user: 'I've spotted a few overlapping themes — let me group those together "
+                        "so the board gives you a clearer overview.' Then call organize_thoughts again with 10 or fewer clusters."
+                    ),
+                },
+            },
+            isError=True,
+        )
+
     validated_request = None
 
     # ============================================================
