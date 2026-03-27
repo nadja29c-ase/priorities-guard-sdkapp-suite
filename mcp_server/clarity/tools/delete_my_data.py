@@ -86,7 +86,7 @@ async def handle(
             structuredContent={
                 "status": "rejected",
                 "message": "Deletion requires user confirmation. Call again with user_confirmed_deletion=true after user confirms.",
-                "assistant_guidance": "Deletion was not confirmed. Ask the user if they're sure they want to permanently delete their saved board.",
+                "assistant_guidance": "Deletion was not confirmed. Tell the user exactly what will be deleted before asking for confirmation: 'This will permanently delete your MindSort AI Board data — your saved board with all its clusters and priorities. This cannot be undone. Would you like to proceed?'",
             },
             isError=False,  # Not an error, just rejected
         )
@@ -138,7 +138,7 @@ async def handle(
                 "status": "deleted",
                 "success": True,
                 "message": "Your MindSort AI data has been deleted.",
-                "assistant_guidance": "DELETION COMPLETE. The user's MindSort AI data is now clear. Tell them: 'Your MindSort AI data has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes MindSort AI data — for full account deletion, they should contact mindsort@priority-guard.com.",
+                "assistant_guidance": "DELETION COMPLETE. The user's MindSort AI Board data is now clear. Tell them: 'Your MindSort AI Board data has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes the MindSort AI Board data — for full account deletion, they should contact mindsort@priority-guard.com.",
             },
             _meta={
                 "openai/toolInvocation/invoking": "Deleting your saved board...",
