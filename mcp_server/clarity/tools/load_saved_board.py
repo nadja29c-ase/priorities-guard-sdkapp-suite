@@ -162,6 +162,7 @@ Do NOT call organize_thoughts if the board already exists and the user just want
             "clusters": clusters,
             "has_history": True,
             "is_empty_snapshot": False,
+            "collapsed_by_default": True,
             "assistant_guidance": guidance,
         }
         logger.info("load_saved_board.retrieved", user_id=user_id, cluster_count=cluster_count)
