@@ -78,6 +78,7 @@ async def handle(
                 correlation_id=correlation_id)
 
     # Fetch with exception handling - never crash on backend failures
+    persistence_error = False
     try:
         cluster_data = await get_cluster(
             user_id=user_id,
@@ -88,6 +89,28 @@ async def handle(
                       user_id=user_id,
                       error=str(e))
         cluster_data = None
+        persistence_error = True
+
+    if persistence_error:
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Unable to load your saved board right now. Please try again in a moment."
+            )],
+            structuredContent={
+                "clusters": [],
+                "has_history": None,
+                "is_empty_snapshot": False,
+                "assistant_guidance": "Backend error — could not load the board. Tell the user: 'I wasn't able to load your board right now — please try again in a moment.' Do NOT tell them they have no board.",
+            },
+            _meta={
+                "openai/outputTemplate": WIDGET_URI,
+                "openai/toolInvocation/invoking": "Loading your saved board...",
+                "openai/toolInvocation/invoked": "Unable to load board.",
+                "openai/widgetAccessible": True,
+                "openai/resultCanProduceWidget": True,
+            },
+        )
 
     # Extract clusters with defensive defaults
     # Defense in depth: check dict type in case persistence layer returns unexpected type
@@ -101,16 +124,14 @@ async def handle(
 
     # Determine state and build response
     cluster_count = len(clusters)
-    saved_board_hash = cluster_data.get("content_hash") if has_snapshot else None
 
-    # Widget metadata - hash in _meta so LLM cannot see it
+    # Widget metadata
     meta = {
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Loading your saved board...",
         "openai/toolInvocation/invoked": "Here's your saved Clarity board.",
         "openai/widgetAccessible": True,
         "openai/resultCanProduceWidget": True,
-        "saved_board_hash": saved_board_hash,  # Widget can read, LLM cannot
     }
 
     # DEBUG: Log actual values being returned

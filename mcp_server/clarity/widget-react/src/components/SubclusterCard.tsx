@@ -9,9 +9,10 @@ import { ThoughtItem } from './ThoughtItem'
 interface SubclusterCardProps {
   subcluster: Subcluster
   defaultCollapsed?: boolean
+  onToggle?: () => void
 }
 
-export function SubclusterCard({ subcluster, defaultCollapsed }: SubclusterCardProps) {
+export function SubclusterCard({ subcluster, defaultCollapsed, onToggle }: SubclusterCardProps) {
   const headingId = `subcluster-heading-${subcluster.subcluster_name.replace(/\s+/g, '-')}`
   const contentId = `${headingId}-content`
 
@@ -64,7 +65,10 @@ export function SubclusterCard({ subcluster, defaultCollapsed }: SubclusterCardP
 
         return defaultCollapsed ? (
           <button
-            onClick={() => setIsExpanded(e => !e)}
+            onClick={() => {
+              setIsExpanded(e => !e)
+              onToggle?.()
+            }}
             className="flex items-center justify-between gap-2 mb-2 w-full text-left bg-transparent border-none p-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
             aria-expanded={isExpanded}
             aria-controls={contentId}

@@ -10,9 +10,10 @@ import { SubclusterCard } from './SubclusterCard'
 interface ClusterCardProps {
   cluster: Cluster
   defaultCollapsed?: boolean
+  onToggle?: () => void
 }
 
-export function ClusterCard({ cluster, defaultCollapsed }: ClusterCardProps) {
+export function ClusterCard({ cluster, defaultCollapsed, onToggle }: ClusterCardProps) {
   const headingId = `cluster-heading-${cluster.cluster_name.replace(/\s+/g, '-')}`
   const contentId = `${headingId}-content`
 
@@ -75,7 +76,10 @@ export function ClusterCard({ cluster, defaultCollapsed }: ClusterCardProps) {
 
         return defaultCollapsed ? (
           <button
-            onClick={() => setIsExpanded(e => !e)}
+            onClick={() => {
+              setIsExpanded(e => !e)
+              onToggle?.()
+            }}
             className="flex items-center justify-between gap-2 mb-3 w-full text-left bg-transparent border-none p-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
             aria-expanded={isExpanded}
             aria-controls={contentId}
@@ -119,6 +123,7 @@ export function ClusterCard({ cluster, defaultCollapsed }: ClusterCardProps) {
                 key={sub.subcluster_name}
                 subcluster={sub}
                 defaultCollapsed={!isExpanded ? true : defaultCollapsed}
+                onToggle={onToggle}
               />
             ))}
           </div>

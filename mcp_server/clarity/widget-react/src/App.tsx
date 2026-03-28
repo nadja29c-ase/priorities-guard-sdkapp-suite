@@ -19,11 +19,6 @@ function App() {
   // Track last processed toolOutput to detect updates
   const lastToolOutputRef = useRef<unknown>(null)
 
-  // Mobile detection (same pattern as PG widget)
-  const isMobile =
-    (window.openai as any)?.userAgent?.device?.type === 'mobile' ||
-    /iPhone|iPad|iPod|Android/.test(navigator?.userAgent || '')
-
   const [defaultCollapsed, setDefaultCollapsed] = useState(false)
 
   // Notify host of height changes (for iOS scroll fix)
@@ -33,16 +28,16 @@ function App() {
     })
   }, [])
 
-  // Restore scroll position from widgetState on mount
+  // Restore scroll position from widgetState after initialization
   useEffect(() => {
+    if (!isInitialized) return
     const savedState = window.openai?.widgetState as MindSortWidgetState | undefined
     if (savedState?.scrollY) {
-      // Defer to ensure DOM is ready
       requestAnimationFrame(() => {
         window.scrollTo(0, savedState.scrollY)
       })
     }
-  }, []) // Run once on mount
+  }, [isInitialized])
 
   // Load clusters from window.openai.toolOutput
   const loadClusters = useCallback(() => {
@@ -66,6 +61,9 @@ function App() {
 
     // Derive collapsed_by_default from toolOutput structuredContent
     const sc = (t as any)?.result?.structuredContent ?? (t as any)?.structuredContent ?? t
+    const isMobile =
+      (window.openai as any)?.userAgent?.device?.type === 'mobile' ||
+      /iPhone|iPad|iPod|Android/.test(navigator?.userAgent || '')
     const collapsedByDefault = isMobile && sc?.collapsed_by_default === true
     setDefaultCollapsed(collapsedByDefault)
 
@@ -148,7 +146,12 @@ function App() {
       {sortedClusters.length > 0 ? (
         <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
           {sortedClusters.map((cluster) => (
-            <ClusterCard key={cluster.cluster_name} cluster={cluster} defaultCollapsed={defaultCollapsed} />
+            <ClusterCard
+              key={cluster.cluster_name}
+              cluster={cluster}
+              defaultCollapsed={defaultCollapsed}
+              onToggle={notifyHeight}
+            />
           ))}
         </div>
       ) : (
