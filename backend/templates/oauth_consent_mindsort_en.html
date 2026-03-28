@@ -14,7 +14,7 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f1f5f9;
+            background-color: #000000;
             color: #1d1d1f;
             line-height: 1.6;
             min-height: 100vh;
@@ -46,7 +46,7 @@
 
         .app-logo {
             width: 64px;
-            height: 52px;
+            height: 64px;
             margin-bottom: 8px;
         }
 
@@ -117,6 +117,24 @@
         .privacy-notice a:hover,
         .privacy-notice a:focus {
             text-decoration: underline;
+        }
+
+        .website-link {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .website-link a {
+            color: #1d1d1f;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .website-link a:hover,
+        .website-link a:focus {
+            text-decoration: underline;
+            color: #1d1d1f;
         }
 
         .button-group {
@@ -207,32 +225,38 @@
 <body>
     <main class="container" role="main">
         <header class="header" aria-labelledby="app-title">
-            <svg class="app-logo" width="64" height="52" viewBox="0 0 64 52" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                <path d="M16 38 A20 20 0 1 1 48 38" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round"/>
-                <circle cx="32" cy="28" r="11" fill="#94a3b8"/>
-                <rect x="27" y="40" width="10" height="9" rx="3" fill="#94a3b8"/>
-            </svg>
+            <img class="app-logo" src="/static/logo-mindsort-64.svg" alt="MindSort AI logo" width="64" height="64">
             <h1 id="app-title" class="app-name">{{ client_name }}</h1>
         </header>
 
         <p class="purpose-sentence">
-            This app helps you sort your thoughts into clusters so you can find focus when you feel overwhelmed.
+            When too many things compete for your attention, MindSort AI turns scattered thoughts into a clear, visual board — so you can cut through the noise and find your focus.
         </p>
 
         <section class="permissions-section" aria-labelledby="permissions-title">
-            <h2 id="permissions-title" class="section-title">Permission Required</h2>
+            <h2 id="permissions-title" class="section-title">Allow MindSort AI to:</h2>
             <ul class="permission-list" role="list">
-                {% for scope in scopes %}
-                <li class="permission-item" aria-label="{{ scope_descriptions.get(scope, scope) }}">
-                    <div class="permission-description">{{ scope_descriptions.get(scope, scope) }}</div>
+                <li class="permission-item">
+                    <div class="permission-description">Store and update your thoughts, tasks, ideas clusters on our servers so your board is saved between sessions</div>
                 </li>
-                {% endfor %}
+                <li class="permission-item">
+                    <div class="permission-description">Retrieve your latest board when you return</div>
+                </li>
+                <li class="permission-item">
+                    <div class="permission-description">Delete your stored data when you choose to start fresh</div>
+                </li>
             </ul>
         </section>
 
         <div class="privacy-notice" role="complementary">
             By authorizing this application, you agree to our
-            <a href="https://www.priority-guard.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+            <a href="https://www.fulfilling-productivity.com/pg-privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+            and
+            <a href="https://www.fulfilling-productivity.com/pg-terms-of-service" target="_blank" rel="noopener noreferrer">Terms of Service</a>.
+        </div>
+
+        <div class="website-link">
+            <a href="https://www.fulfilling-productivity.com/mindsort" target="_blank" rel="noopener noreferrer">Visit the Website ↗</a>
         </div>
 
         <form method="POST" action="/oauth/mindsort/consent" aria-label="Authorization form" id="consent-form">
