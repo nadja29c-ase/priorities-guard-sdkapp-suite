@@ -14,7 +14,8 @@ interface ClusterCardProps {
 }
 
 export function ClusterCard({ cluster, defaultCollapsed, onToggle }: ClusterCardProps) {
-  const headingId = `cluster-heading-${cluster.cluster_name.replace(/\s+/g, '-')}`
+  const idRef = useRef(`cluster-${Math.random().toString(36).slice(2)}`)
+  const headingId = idRef.current
   const contentId = `${headingId}-content`
 
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed)

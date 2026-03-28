@@ -13,7 +13,8 @@ interface SubclusterCardProps {
 }
 
 export function SubclusterCard({ subcluster, defaultCollapsed, onToggle }: SubclusterCardProps) {
-  const headingId = `subcluster-heading-${subcluster.subcluster_name.replace(/\s+/g, '-')}`
+  const idRef = useRef(`subcluster-${Math.random().toString(36).slice(2)}`)
+  const headingId = idRef.current
   const contentId = `${headingId}-content`
 
   const [isExpanded, setIsExpanded] = useState(!defaultCollapsed)
