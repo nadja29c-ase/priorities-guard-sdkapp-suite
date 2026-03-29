@@ -18,6 +18,7 @@ function App() {
 
   // Track last processed toolOutput to detect updates
   const lastToolOutputRef = useRef<unknown>(null)
+  const isInitializedRef = useRef(false)
 
   const [defaultCollapsed, setDefaultCollapsed] = useState(false)
 
@@ -71,10 +72,28 @@ function App() {
     setDefaultCollapsed(collapsedByDefault)
 
     setIsInitialized(true)
+    isInitializedRef.current = true
 
     // Notify host of new content height
     notifyHeight()
   }, [notifyHeight])
+
+  // Re-evaluate isMobile and defaultCollapsed on set_globals
+  // even when toolOutput hasn't changed (userAgent may now be available)
+  const syncCollapsedState = useCallback(() => {
+    if (!isInitializedRef.current) return
+    const t = window.openai?.toolOutput
+    if (!t) return
+    const isMobile =
+      (window.openai as any)?.userAgent?.device?.type === 'mobile' ||
+      /iPhone|iPad|iPod|Android/.test(navigator?.userAgent || '')
+    const collapsedByDefault = isMobile && (
+      (t as any)?.result?.structuredContent?.collapsed_by_default === true ||
+      (t as any)?.structuredContent?.collapsed_by_default === true ||
+      (t as any)?.collapsed_by_default === true
+    )
+    setDefaultCollapsed(collapsedByDefault)
+  }, [])
 
   // Initial load and listen for openai:set_globals
   useEffect(() => {
@@ -82,13 +101,14 @@ function App() {
 
     const handleSetGlobals = () => {
       loadClusters()
+      syncCollapsedState()
     }
 
     window.addEventListener('openai:set_globals', handleSetGlobals, { passive: true })
     return () => {
       window.removeEventListener('openai:set_globals', handleSetGlobals)
     }
-  }, [loadClusters])
+  }, [loadClusters, syncCollapsedState])
 
   // Notify host when error state changes (affects widget height)
   useEffect(() => {
