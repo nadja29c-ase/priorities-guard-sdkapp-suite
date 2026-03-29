@@ -347,7 +347,9 @@ def create_app():
     if IS_DEV:
         # Add localhost origins for MCP Inspector during development
         allowed_origins.extend([
-            "http://localhost:5173",   # MCP Inspector default
+            "http://localhost:6274",   # MCP Inspector
+            "http://127.0.0.1:6274",
+            "http://localhost:5173",   # Vite dev server
             "http://127.0.0.1:5173",
             "http://localhost:3000",   # Common dev port
             "http://127.0.0.1:3000",
