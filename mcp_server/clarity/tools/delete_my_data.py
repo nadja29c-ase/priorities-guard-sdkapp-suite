@@ -86,7 +86,7 @@ async def handle(
             structuredContent={
                 "status": "rejected",
                 "message": "Deletion requires user confirmation. Call again with user_confirmed_deletion=true after user confirms.",
-                "assistant_guidance": "Deletion was not confirmed. Tell the user exactly what will be deleted before asking for confirmation: 'This will permanently delete your MindSort AI Board data — your saved board with all its clusters and priorities. This cannot be undone. Would you like to proceed?'",
+                "assistant_guidance": "Deletion was not confirmed. Tell the user exactly what will be deleted before asking for confirmation: 'This will permanently delete your MindSort AI Board data — your saved board with all its clusters, thought items, tags, and priorities. This cannot be undone. Would you like to proceed?'",
             },
             isError=False,  # Not an error, just rejected
         )

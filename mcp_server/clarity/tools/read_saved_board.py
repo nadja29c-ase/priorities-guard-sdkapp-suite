@@ -25,7 +25,7 @@ logger = structlog.get_logger(__name__)
 NAME = "read_saved_board"
 
 DESCRIPTION = """
-Read user's saved Clarity board data from database.
+Read user's saved MindSort AI board data from database.
 
 WHEN TO CALL:
 - ONCE AT THE BEGINNING OF EACH NEW CONVERSATION WITH THE USER involving Clarity and SAVED BOARD

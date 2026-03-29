@@ -244,6 +244,40 @@ Each request is now self-contained, authenticated via JWT. No session state requ
 
 ---
 
+## 6. B2-7: HTTP-Layer 401 + WWW-Authenticate Missing on /mcp (Post-Launch Hardening)
+
+### Problem
+
+The OpenAI Apps SDK authentication spec (B2-7) requires the MCP server to respond with an HTTP 401 and `WWW-Authenticate` header when token verification fails on the `/mcp` endpoint. Currently, auth failures on `/mcp` return errors via the JSON-RPC body with `_meta["mcp/www_authenticate"]` (B2-10) — but no HTTP-layer 401 is set.
+
+### Current State
+
+| Endpoint | HTTP 401 + WWW-Authenticate | Notes |
+|---|---|---|
+| `/oauth/*` | ✅ Present | `oauth_exception_handler` in `backend/main.py` |
+| `/mcp` (tool calls) | ❌ Missing | JSON-RPC body error only |
+| `/mcp` (tool responses) | ✅ `_meta["mcp/www_authenticate"]` | B2-10 — triggers ChatGPT OAuth UI |
+
+### Why Not a Submission Blocker
+
+ChatGPT's OAuth UI trigger relies on `_meta["mcp/www_authenticate"]` (B2-10), which is fully implemented. The HTTP-layer 401 on `/mcp` is a fallback discovery mechanism — ChatGPT uses the `/.well-known/oauth-protected-resource` endpoint for discovery (also fully implemented), so the auth flow works end-to-end without the HTTP header. Reviewers test functional behavior (does OAuth trigger, does auth complete, does the tool work) — not HTTP header presence on `/mcp`. Apps pass review without this.
+
+### Why It's Still a Real Gap
+
+- The spec uses "must" language
+- Other OAuth clients (non-ChatGPT) may depend on the HTTP-layer 401
+- Full spec compliance requires it
+
+### Planned Fix
+
+Add `WWWAuthenticateMiddleware` to both `mcp_server/clarity/server.py` and `mcp_server/priority_guardian/server.py`. The middleware buffers the `/mcp` POST response, detects `isError: true` + `mcp/www_authenticate` in the JSON body, and rewrites the HTTP status to 401 with the `WWW-Authenticate` header. Briefing exists — deferred to post-launch.
+
+### Applies To
+
+Both MindSort AI (`mcp_server/clarity/server.py`) and Priority Guardian (`mcp_server/priority_guardian/server.py`) — identical gap in both.
+
+---
+
 ## Summary
 
 | Limitation | Severity | User Impact | Fix Available |
@@ -253,7 +287,8 @@ Each request is now self-contained, authenticated via JWT. No session state requ
 | Schema errors | Low | Handled | ✅ Repair logic |
 | Two-tool chaining | Medium | Extra prompt needed | ✅ Better descriptions |
 | Stale session ID | N/A | N/A | ✅ Fixed |
+| B2-7 HTTP 401 on /mcp | Low | None in practice | Deferred post-launch |
 
 ---
 
-*Last updated: December 16, 2025*
+*Last updated: March 2026*

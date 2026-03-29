@@ -50,7 +50,7 @@ curl https://<SUBMISSION_URL>/.well-known/oauth-protected-resource
 # PG MCP — should return {"status": "ok", ...}
 curl https://pg.priority-guard.com/
 
-# Clarity MCP — should return {"status": "ok", ...}
+# MindSort AI MCP — should return {"status": "ok", ...}
 curl https://priorities-guard-clarity-mcp.onrender.com/
 ```
 
@@ -177,31 +177,67 @@ curl -I https://<MCP_SERVER>/mcp
 
 ## Latency Testing
 
-**Run against production Render services, not localhost. Use `python ops/pg_latency_check.py`.**
+**Tool calls must complete within 8 seconds (ChatGPT server-side timeout).**
 
-Tool calls must complete within 8 seconds (TIMEOUT_S in mcp_auth.py).
-
-- [X] Each tool responds under 8s on first call (cold start)
-- [X] Each tool responds under 3s on subsequent calls (warm)
-- [X] Timeout error message is user-friendly, not stack trace
-- [X] No tools hang indefinitely under normal conditions
+### Priority Guardian
 
 ```bash
-# Measure tool latency (requires valid JWT)
-time curl -X POST https://<MCP_SERVER>/mcp \
-  -H "Authorization: Bearer <TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"method": "tools/call", "params": {"name": "<TOOL_NAME>", "arguments": {}}}'
+python ops/pg_latency_check.py
+```
 
-# Check multiple tools in sequence
-for tool in get_today get_week get_patterns; do
+Tests infrastructure endpoints only (no auth required). For authenticated tool call latency, use MCP Inspector connected to production with a valid JWT.
+
+### MindSort AI
+
+```bash
+# Infrastructure only (no auth required):
+python ops/mindsort_latency_check.py
+
+# Full test including authenticated tool calls:
+MINDSORT_JWT=<your_token> python ops/mindsort_latency_check.py
+```
+
+The MindSort script tests both infrastructure and authenticated `load_saved_board` / `read_saved_board` calls. Write tools (`organize_thoughts`, `edit_board`, `start_prioritization_flow`, `delete_my_data`) are excluded from automated tests to avoid mutating the reviewer test account — test those manually in ChatGPT.
+
+### Thresholds
+
+| Latency | Infrastructure | Tool calls |
+|---|---|---|
+| Good | < 300ms | < 2000ms |
+| Acceptable | 300–500ms | 2000–4000ms |
+| Sluggish | 500–1000ms | 4000–8000ms |
+| **TIMEOUT RISK** | > 1000ms | **> 8000ms — will fail in ChatGPT** |
+
+### Checklist
+
+- [ ] Each tool responds under 8s on first call (cold start)
+- [ ] Each tool responds under 3s on subsequent calls (warm)
+- [ ] Timeout error message is user-friendly, not stack trace
+- [ ] No tools hang indefinitely under normal conditions
+
+### Manual tool call timing (MindSort AI)
+
+```bash
+# Requires valid JWT from MCP Inspector or review account
+TOKEN=<your_token>
+MCP=https://priorities-guard-clarity-mcp.onrender.com
+
+for tool in load_saved_board read_saved_board; do
   echo "Testing $tool..."
-  time curl -s -X POST https://<MCP_SERVER>/mcp \
-    -H "Authorization: Bearer <TOKEN>" \
+  time curl -s -X POST $MCP/mcp \
+    -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"method\": \"tools/call\", \"params\": {\"name\": \"$tool\", \"arguments\": {}}}" > /dev/null
+    -H "Accept: application/json, text/event-stream" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$tool\",\"arguments\":{}}}" > /dev/null
 done
 ```
+
+### Common causes of timeout failures
+
+- Render service on Free tier — spins down after 15 min inactivity → **upgrade to Hobby**
+- Backend cold start behind the MCP server → check backend is also Hobby tier
+- DB connection pool exhausted → check Render logs for connection errors
+- JWKS fetch timeout on first request → JWKS cache not yet populated (warms on second call)
 
 ## Error Handling Audit
 
