@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Cluster } from './types'
-import { getToolOutput, sortClustersByPriority } from './utils'
+import { getToolOutput, sortClustersByPriority, extractStructuredContent } from './utils'
 import { Header } from './components/Header'
 import { ClusterCard } from './components/ClusterCard'
 
@@ -60,7 +60,7 @@ function App() {
     setClusters(data)
 
     // Derive collapsed_by_default from toolOutput structuredContent
-    const sc = (t as any)?.result?.structuredContent ?? (t as any)?.structuredContent ?? t
+    const sc = extractStructuredContent<{ collapsed_by_default?: boolean }>(t)
     const isMobile =
       (window.openai as any)?.userAgent?.device?.type === 'mobile' ||
       /iPhone|iPad|iPod|Android/.test(navigator?.userAgent || '')
