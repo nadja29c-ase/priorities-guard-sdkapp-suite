@@ -37,7 +37,7 @@ WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)
 WIDGET_FALLBACK_HTML = """<!DOCTYPE html>
 <html><head><title>Clarity Widget</title></head>
 <body style="font-family: system-ui; padding: 20px; text-align: center;">
-<p style="color: #dc2626;">Widget failed to load. Please try again later.</p>
+<p style="color: var(--color-danger);">Widget failed to load. Please try again later.</p>
 </body></html>"""
 
 def _load_widget_html() -> str:
