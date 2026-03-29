@@ -10,10 +10,11 @@ import { SubclusterCard } from './SubclusterCard'
 interface ClusterCardProps {
   cluster: Cluster
   defaultCollapsed?: boolean
+  isCollapsible?: boolean
   onToggle?: () => void
 }
 
-export function ClusterCard({ cluster, defaultCollapsed, onToggle }: ClusterCardProps) {
+export function ClusterCard({ cluster, defaultCollapsed, isCollapsible, onToggle }: ClusterCardProps) {
   const idRef = useRef(`cluster-${Math.random().toString(36).slice(2)}`)
   const headingId = idRef.current
   const contentId = `${headingId}-content`
@@ -68,14 +69,14 @@ export function ClusterCard({ cluster, defaultCollapsed, onToggle }: ClusterCard
                 </Badge>
                 <span className="sr-only">{cluster.sum_thought_items} items</span>
               </span>
-              {defaultCollapsed && (
+              {isCollapsible && (
                 <span className="text-xs text-secondary ml-1" aria-hidden="true">{isExpanded ? '▲' : '▼'}</span>
               )}
             </div>
           </>
         )
 
-        return defaultCollapsed ? (
+        return isCollapsible ? (
           <button
             onClick={() => {
               setIsExpanded(e => !e)
@@ -124,6 +125,7 @@ export function ClusterCard({ cluster, defaultCollapsed, onToggle }: ClusterCard
                 key={sub.subcluster_name}
                 subcluster={sub}
                 defaultCollapsed={!isExpanded ? true : defaultCollapsed}
+                isCollapsible={isCollapsible}
                 onToggle={onToggle}
               />
             ))}

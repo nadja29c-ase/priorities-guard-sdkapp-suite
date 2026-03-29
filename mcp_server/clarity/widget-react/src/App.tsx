@@ -21,6 +21,7 @@ function App() {
   const isInitializedRef = useRef(false)
 
   const [defaultCollapsed, setDefaultCollapsed] = useState(false)
+  const [isCollapsible, setIsCollapsible] = useState(false)
 
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
@@ -71,6 +72,11 @@ function App() {
     )
     setDefaultCollapsed(collapsedByDefault)
 
+    // Set isCollapsible once on first load — mobile capability flag, never changes
+    if (!isInitializedRef.current) {
+      setIsCollapsible(isMobile)
+    }
+
     setIsInitialized(true)
     isInitializedRef.current = true
 
@@ -87,6 +93,8 @@ function App() {
     const isMobile =
       (window.openai as any)?.userAgent?.device?.type === 'mobile' ||
       /iPhone|iPad|iPod|Android/.test(navigator?.userAgent || '')
+    // Set isCollapsible once — it never resets
+    setIsCollapsible(prev => prev || isMobile)
     const collapsedByDefault = isMobile && (
       (t as any)?.result?.structuredContent?.collapsed_by_default === true ||
       (t as any)?.structuredContent?.collapsed_by_default === true ||
@@ -173,6 +181,7 @@ function App() {
               key={cluster.cluster_name}
               cluster={cluster}
               defaultCollapsed={defaultCollapsed}
+              isCollapsible={isCollapsible}
               onToggle={notifyHeight}
             />
           ))}
