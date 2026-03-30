@@ -77,21 +77,15 @@ async def handle(
                 user_id=user_id,
                 correlation_id=correlation_id)
 
-    # Fetch with exception handling - never crash on backend failures
-    persistence_error = False
-    try:
-        cluster_data = await get_cluster(
-            user_id=user_id,
-            correlation_id=correlation_id,
-        )
-    except Exception as e:
-        logger.warning("load_saved_board.persistence_error",
-                      user_id=user_id,
-                      error=str(e))
-        cluster_data = None
-        persistence_error = True
+    # Fetch cluster data from persistence layer
+    cluster_data = await get_cluster(
+        user_id=user_id,
+        correlation_id=correlation_id,
+    )
 
-    if persistence_error:
+    # Check for error sentinel from persistence layer
+    if isinstance(cluster_data, dict) and cluster_data.get("status") == "error":
+        logger.warning("load_saved_board.persistence_error", user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",

@@ -93,17 +93,27 @@ async def handle(
                 user_id=user_id,
                 correlation_id=correlation_id)
 
-    # Fetch with exception handling - never crash on backend failures
-    try:
-        cluster_data = await get_cluster(
-            user_id=user_id,
-            correlation_id=correlation_id,
+    # Fetch cluster data from persistence layer
+    cluster_data = await get_cluster(
+        user_id=user_id,
+        correlation_id=correlation_id,
+    )
+
+    # Check for error sentinel from persistence layer
+    if isinstance(cluster_data, dict) and cluster_data.get("status") == "error":
+        logger.warning("read_saved_board.persistence_error", user_id=user_id)
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text="Unable to read your saved board right now. Please try again in a moment."
+            )],
+            structuredContent={
+                "clusters": [],
+                "has_history": None,
+                "is_empty_snapshot": False,
+                "assistant_guidance": "Backend error — could not read the board. Tell the user: 'I wasn't able to read your board right now — please try again in a moment.' Do NOT tell them they have no board.",
+            },
         )
-    except Exception as e:
-        logger.warning("read_saved_board.persistence_error",
-                      user_id=user_id,
-                      error=str(e))
-        cluster_data = None
 
     # Extract clusters with defensive defaults
     # Defense in depth: check dict type in case persistence layer returns unexpected type

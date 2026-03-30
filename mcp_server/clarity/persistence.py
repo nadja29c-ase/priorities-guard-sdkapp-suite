@@ -131,11 +131,13 @@ async def get_cluster(user_id: str, correlation_id: str | None = None) -> dict |
         correlation_id: Optional correlation ID for distributed tracing
 
     Returns:
-        Full response dict on success (cluster_id, cluster_data, thoughts_exhausted,
-        correctly_clustered, created_at), None if no snapshot exists or on error.
+        - Full response dict on success (cluster_id, cluster_data, thoughts_exhausted,
+          correctly_clustered, created_at)
+        - None if no snapshot exists (404)
+        - {"status": "error"} sentinel on backend errors (5xx, timeout, exception)
 
     Note:
-        Failure is logged but doesn't raise - caller handles None gracefully.
+        Failure is logged but doesn't raise - caller checks for error sentinel.
     """
     # Bind correlation_id to logger for consistent tracing
     log = logger.bind(correlation_id=correlation_id) if correlation_id else logger
@@ -164,7 +166,7 @@ async def get_cluster(user_id: str, correlation_id: str | None = None) -> dict |
                 log.warning("clarity.retrieve.contract_violation",
                            user_id=user_id,
                            error="Backend returned list, expected dict")
-                return None
+                return {"status": "error"}
             log.info("clarity.retrieve.success",
                     cluster_id=data.get("cluster_id"),
                     user_id=user_id)
@@ -189,13 +191,13 @@ async def get_cluster(user_id: str, correlation_id: str | None = None) -> dict |
                        status=response.status_code,
                        user_id=user_id,
                        response=response.text[:200])
-        return None
+        return {"status": "error"}
 
     except Exception as e:
         log.warning("clarity.retrieve.error",
                    error=str(e),
                    user_id=user_id)
-        return None
+        return {"status": "error"}
 
 
 async def delete_cluster(user_id: str, correlation_id: str | None = None) -> dict:
