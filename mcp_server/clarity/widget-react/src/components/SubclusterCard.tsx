@@ -45,13 +45,13 @@ export function SubclusterCard({ subcluster, defaultCollapsed, isCollapsible, on
       {(() => {
         const headerContent = (
           <>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <h4 id={headingId} className="text-sm font-medium text-default m-0">
                 {subcluster.subcluster_name || 'Untitled'}
               </h4>
               {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <span role="text" aria-label={`${subcluster.sum_thought_items || rawItems.length} items in this subcluster`}>
                 <Badge color="secondary" variant="outline" size="sm" aria-hidden="true">
                   {subcluster.sum_thought_items || rawItems.length}
