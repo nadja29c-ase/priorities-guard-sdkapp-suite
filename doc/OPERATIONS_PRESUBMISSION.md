@@ -11,6 +11,7 @@ Run through this checklist before submitting any SDK app to the OpenAI store.
 - [ ] All `required=True` config values have env vars set (will fail-fast at startup if missing)
 - [ ] `INTERNAL_API_SECRET` set and matching between backend and MCP server(s)
 - [ ] `CORS_ALLOWED_ORIGINS` explicitly set (required in production)
+- [ ] **`CORS_ALLOWED_ORIGINS` contains NO localhost entries** — remove any `http://localhost:*` values added during testing. Production value must be exactly: `https://web-sandbox.oaiusercontent.com,https://chatgpt.com,https://chat.openai.com`
 - [ ] **Upgrade Render from Free to Hobby tier** — free tier spins down after inactivity, causing cold starts that can exceed OpenAI's timeout on first tool call
 
 ## Domain / ui.domain Verification
@@ -247,60 +248,104 @@ Errors must be well-handled with clear messaging or fallback behavior across all
 
 ### MCP Server Layer
 
-- [X] All tool handlers use `_call_with_timeout` wrapper (already implemented)
-- [X] Timeout errors return clear message ("Request timed out, please try again")
+- [X] Timeout protection on all backend HTTP calls (see per-app pattern below)
+- [X] Timeout errors return clear user-facing message, not stack trace
 - [X] Backend unreachable returns graceful error, not stack trace
 - [X] Invalid/expired token returns `invalid_token` OAuth error (not 500)
+- [X] Unknown tool returns `isError=True` with clear message
+- [X] Bare `Exception` in dispatcher caught — returns generic user-friendly message
 
 ### Backend Layer
 
-- [X] Global exception handler catches unhandled errors (main.py `global_exception_handler`)
-- [X] Database errors logged but not exposed to user (no SQL in response)
-- [X] External API failures (Google, etc.) return user-friendly message
+- [X] Global exception handler catches unhandled errors (`main.py` `global_exception_handler`)
+- [X] Database errors logged but not exposed to user (no SQL in response — logs `error_type` only)
+- [X] External API failures (Google, etc.) return user-friendly message — **N/A for MindSort AI** (no external API calls at backend layer)
 - [X] OAuth errors follow RFC 6749 format (`error`, `error_description`)
 
 ### Widget Layer
 
-- [X] React Error Boundary wraps main component tree (main.tsx lines 15-42, wraps App)
-- [X] `loadError` state displays alert on failures (App.tsx line 22, rendered at 535-538)
-- [X] All CRUD handlers check `isError` and missing data (already implemented)
-- [X] Empty states have clear messaging (EmptyState component)
+- [X] React `ErrorBoundary` wraps `<App />` — catches render crashes, shows fallback UI
+- [X] `loadError` state rendered as `role="alert"` div on tool output errors
+- [X] Loading state before initialization — no blank state
+- [X] Empty state when no clusters — clear message, not blank
+- [X] Widget fallback HTML uses `var(--color-danger)` — shown if widget file fails to load
 
 ### Quick verification
 
+#### Priority Guardian
 ```bash
-# Verify MCP tools use timeout wrapper
+# Verify PG tools use _call_with_timeout wrapper
 grep -rn "_call_with_timeout" mcp_server/priority_guardian/tools/ | wc -l
-# Expected: 15+ files
-
-# Check for bare except clauses (anti-pattern)
-grep -rn "except:" --include="*.py" mcp_server/ backend/ | grep -v test
+# Expected: 15+ matches
 
 # Verify widget has Error Boundary
 grep -rn "class ErrorBoundary" mcp_server/priority_guardian/widget-react/src/main.tsx
+# Expected: 1 match
+```
+
+#### MindSort AI
+```bash
+# MindSort AI uses asyncio.wait_for directly in persistence layer (not _call_with_timeout)
+grep -rn "asyncio.wait_for" mcp_server/clarity/persistence.py
+# Expected: 3 matches (persist_cluster, get_cluster, delete_cluster)
+
+# Verify widget has Error Boundary
+grep -rn "class ErrorBoundary" mcp_server/clarity/widget-react/src/main.tsx
+# Expected: 1 match
+
+# Verify fallback HTML uses CSS variable, not hardcoded hex
+grep "WIDGET_FALLBACK_HTML" mcp_server/clarity/handlers/resources.py -A3
+# Expected: var(--color-danger), not #dc2626
+```
+
+#### Both apps
+```bash
+# Check for bare except clauses (anti-pattern)
+grep -rn "except:" --include="*.py" mcp_server/ backend/ | grep -v test
+# Expected: 0 matches (all exceptions should be typed)
 ```
 
 ### Manual verification
 
-1. Disconnect network, trigger tool call → verify graceful error
-2. Use expired token → verify `invalid_token` response
-3. Trigger backend 500 → verify no stack trace in response
+**Only one manual test is realistically executable and worth doing:**
+
+Use an expired or tampered JWT → call any tool via MCP Inspector → verify:
+- Response contains `isError: true`
+- Content text says "Authentication required. Please connect your account."
+- `_meta["mcp/www_authenticate"]` is present in the response
+
+This is the auth failure path reviewers will actually trigger. Everything else (backend 500, network disconnect) is either covered by the static code audit above or not meaningfully testable against a live production service.
+
+---
 
 ## Data Minimization
 
-- [X] OAuth scopes are minimal (read-only where possible, no unnecessary permissions)
-- [X] Only essential user data is stored in database
-- [X] Logs do not contain PII (user IDs truncated, no tokens/secrets)
-- [X] Session tokens hashed before storage
-- [X] No unnecessary data retained after user disconnects
+> **Audit note (March 2026):** Items below reflect accurate status per codebase audit. Some items differ between apps — see per-app notes. None of the gaps below are OpenAI submission blockers; they are GDPR/best-practice items.
 
-## Submission Artifacts
+### Priority Guardian
 
-- [X] ANNOTATION_JUSTIFICATIONS.md created (one entry per tool annotation)
-- [ ] Screenshots: inline card + fullscreen, light mode + dark mode
-- [X] Support email configured in store listing
-- [X] Privacy policy URL accessible and accurate
-- [X] App name and description finalized
+- [X] OAuth scopes are minimal — `calendar.events.readonly` + `calendar.settings.readonly` only
+- [X] Only essential user data is stored — priorities, deliverables, goals, weekly snapshots
+- [X] Tokens/secrets scrubbed from logs (`logging.py` `scrub_sensitive_data` processor)
+- [~] User IDs logged as full UUIDs (pseudonymous, not truncated — standard practice, acceptable)
+- [X] Session tokens hashed before storage (`session_service.py`, `token_service.py`)
+- [X] Board data deleted on `delete_my_data`; inactive accounts hard-deleted after 6 months (`retention_cleanup.py`)
+
+### MindSort AI
+
+- [ ] OAuth scopes minimal — **gap:** `clarity.write` is used for all operations including read-only (`load_saved_board`, `read_saved_board`). No `clarity.read` scope exists. Single-scope design is a deliberate simplification but does not satisfy "read-only where possible." Post-launch improvement: add `clarity.read` scope for read-only tools.
+- [~] Only essential user data stored — data model is lean (single snapshot per user, deprecated fields not persisted). However `cluster_data` stores full freeform thought content which may include sensitive personal information. Shared auth layer adds consent/audit/session records. Acceptable but not unconditionally clean.
+- [X] Tokens/secrets scrubbed from logs (`logging.py` `scrub_sensitive_data` processor) ✅
+- [~] User IDs logged as full UUIDs throughout (`clusters_router.py`, `token_service.py`, `mcp_auth.py`). Pseudonymous identifiers — standard practice, not truncated. Checklist wording "truncated" was inaccurate.
+- [X] Session tokens hashed before storage — refresh tokens encrypted + hashed (`token_service.py`); access token JTI only stored, not plaintext
+- [~] Data retained after OAuth revocation by design (`revoke.py` explicitly does not delete board data or browser sessions — preserves cross-app identity). Board data deleted via `delete_my_data` tool or 6-month inactive account cleanup (`retention_cleanup.py`). Intentional design decision; disclose retention period in privacy policy.
+
+### Both apps
+
+- [X] No API keys, credentials, or secrets in logs
+- [X] Audit logs hard-deleted after 90 days (`retention_cleanup.py` `cleanup_expired_audit_logs`)
+- [X] No unnecessary data retained — inactive accounts deleted after 6 months with cascade
+
 
 ## Post-Deploy Smoke Test
 

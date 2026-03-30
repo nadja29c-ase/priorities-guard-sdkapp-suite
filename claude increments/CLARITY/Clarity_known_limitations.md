@@ -244,37 +244,45 @@ Each request is now self-contained, authenticated via JWT. No session state requ
 
 ---
 
-## 6. B2-7: HTTP-Layer 401 + WWW-Authenticate Missing on /mcp (Post-Launch Hardening)
+## 6. Post-Launch Hardening: Transport-Layer OAuth Gaps (Deferred)
 
-### Problem
+Two related transport-layer gaps that do not affect ChatGPT in production but leave the implementation technically incomplete. To be fixed together in a single post-launch increment.
 
-The OpenAI Apps SDK authentication spec (B2-7) requires the MCP server to respond with an HTTP 401 and `WWW-Authenticate` header when token verification fails on the `/mcp` endpoint. Currently, auth failures on `/mcp` return errors via the JSON-RPC body with `_meta["mcp/www_authenticate"]` (B2-10) — but no HTTP-layer 401 is set.
+### Gap A: HTTP-Layer 401 + WWW-Authenticate Missing on /mcp (B2-7)
 
-### Current State
+The OpenAI Apps SDK spec (B2-7) requires the MCP server to return HTTP 401 with a `WWW-Authenticate` header when token verification fails on `/mcp`. Currently auth failures return errors via the JSON-RPC body with `_meta["mcp/www_authenticate"]` (B2-10) — no HTTP-layer 401 is set.
 
-| Endpoint | HTTP 401 + WWW-Authenticate | Notes |
-|---|---|---|
-| `/oauth/*` | ✅ Present | `oauth_exception_handler` in `backend/main.py` |
-| `/mcp` (tool calls) | ❌ Missing | JSON-RPC body error only |
-| `/mcp` (tool responses) | ✅ `_meta["mcp/www_authenticate"]` | B2-10 — triggers ChatGPT OAuth UI |
+**Why not a submission blocker:** ChatGPT's OAuth UI trigger relies on `_meta["mcp/www_authenticate"]` (B2-10), which is implemented. Discovery works via `/.well-known/oauth-protected-resource`. Auth flow works end-to-end.
 
-### Why Not a Submission Blocker
+**Why still a real gap:** Spec uses "must" language. Non-ChatGPT OAuth clients may depend on HTTP-layer 401.
 
-ChatGPT's OAuth UI trigger relies on `_meta["mcp/www_authenticate"]` (B2-10), which is fully implemented. The HTTP-layer 401 on `/mcp` is a fallback discovery mechanism — ChatGPT uses the `/.well-known/oauth-protected-resource` endpoint for discovery (also fully implemented), so the auth flow works end-to-end without the HTTP header. Reviewers test functional behavior (does OAuth trigger, does auth complete, does the tool work) — not HTTP header presence on `/mcp`. Apps pass review without this.
+**Planned fix:** Add `WWWAuthenticateMiddleware` to both MCP servers. Buffers `/mcp` POST response, detects `isError: true` + `mcp/www_authenticate` in JSON body, rewrites HTTP status to 401 with `WWW-Authenticate` header.
 
-### Why It's Still a Real Gap
+### Gap B: CORS Missing on `/.well-known/*` Discovery Endpoints
 
-- The spec uses "must" language
-- Other OAuth clients (non-ChatGPT) may depend on the HTTP-layer 401
-- Full spec compliance requires it
+`CORSMiddleware` is added to `fastmcp_app` but does NOT propagate to the mounted `discovery_app` sub-app — this is a known Starlette behaviour. As a result, `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`, and `/.well-known/openid-configuration` return no CORS headers on preflight requests.
 
-### Planned Fix
+**Why not a submission blocker:** ChatGPT makes server-side requests — no CORS enforcement. Discovery endpoints work correctly for ChatGPT. PG shipped to production with the same gap.
 
-Add `WWWAuthenticateMiddleware` to both `mcp_server/clarity/server.py` and `mcp_server/priority_guardian/server.py`. The middleware buffers the `/mcp` POST response, detects `isError: true` + `mcp/www_authenticate` in the JSON body, and rewrites the HTTP status to 401 with the `WWW-Authenticate` header. Briefing exists — deferred to post-launch.
+**Why still a real gap:** Any browser-based OAuth client (MCP Inspector, future tooling, OpenAI tooling changes) will fail to discover OAuth metadata. Discovery endpoints are architecturally broken for browser contexts.
+
+**Confirmed symptom:** MCP Inspector OAuth flow fails with "Failed to discover OAuth metadata" — root cause is this CORS gap, not routing or DNS.
+
+**Planned fix:** Add `CORSMiddleware` with `allow_origins=["*"]` directly to `discovery_app` in both `mcp_server/clarity/server.py` and `mcp_server/priority_guardian/server.py`. Discovery docs are public by spec (RFC 8414, RFC 9728) — `*` is correct and intentional.
+
+```python
+discovery_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "HEAD", "OPTIONS"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
+```
 
 ### Applies To
 
-Both MindSort AI (`mcp_server/clarity/server.py`) and Priority Guardian (`mcp_server/priority_guardian/server.py`) — identical gap in both.
+Both MindSort AI and Priority Guardian — identical gaps in both servers.
 
 ---
 
@@ -288,6 +296,7 @@ Both MindSort AI (`mcp_server/clarity/server.py`) and Priority Guardian (`mcp_se
 | Two-tool chaining | Medium | Extra prompt needed | ✅ Better descriptions |
 | Stale session ID | N/A | N/A | ✅ Fixed |
 | B2-7 HTTP 401 on /mcp | Low | None in practice | Deferred post-launch |
+| CORS on discovery endpoints | Low | None in practice (ChatGPT) | Deferred post-launch |
 
 ---
 
