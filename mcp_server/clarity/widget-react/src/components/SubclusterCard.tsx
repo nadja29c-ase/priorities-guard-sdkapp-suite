@@ -45,8 +45,8 @@ export function SubclusterCard({ subcluster, defaultCollapsed, isCollapsible, on
       {(() => {
         const headerContent = (
           <>
-            <div className="flex items-center gap-2 min-w-0">
-              <h4 id={headingId} className="text-sm font-medium text-default m-0">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h4 id={headingId} className="text-sm font-medium text-default m-0 break-words min-w-0">
                 {subcluster.subcluster_name || 'Untitled'}
               </h4>
               {hasPriority && <PriorityBadge rank={hasPriority} size="sm" />}

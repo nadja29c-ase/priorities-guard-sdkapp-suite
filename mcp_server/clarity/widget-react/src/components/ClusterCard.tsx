@@ -56,8 +56,8 @@ export function ClusterCard({ cluster, defaultCollapsed, isCollapsible, onToggle
       {(() => {
         const headerContent = (
           <>
-            <div className="flex items-center gap-2 min-w-0">
-              <h3 id={headingId} aria-label={`Cluster: ${cluster.cluster_name}`} className="text-sm font-semibold text-default m-0">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h3 id={headingId} aria-label={`Cluster: ${cluster.cluster_name}`} className="text-sm font-semibold text-default m-0 break-words min-w-0">
                 {cluster.cluster_name || 'Untitled cluster'}
               </h3>
               {hasPriority && <PriorityBadge rank={hasPriority} />}

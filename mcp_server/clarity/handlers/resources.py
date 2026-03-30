@@ -28,7 +28,7 @@ def _extract_origin(url: str) -> str:
 
 
 # Widget configuration
-WIDGET_VERSION = "1.1.3"
+WIDGET_VERSION = "1.1.4"
 WIDGET_URI = f"ui://widget/clarity-clusters.html?v={WIDGET_VERSION}"
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/clarity-clusters.html")
 WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)
