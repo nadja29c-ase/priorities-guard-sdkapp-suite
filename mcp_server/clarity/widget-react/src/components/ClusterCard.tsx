@@ -82,7 +82,7 @@ export function ClusterCard({ cluster, defaultCollapsed, isCollapsible, onToggle
               setIsExpanded(e => !e)
               onToggle?.()
             }}
-            className="flex items-center justify-between gap-2 mb-3 w-full text-left bg-transparent border-none p-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+            className="flex items-start justify-between gap-2 mb-3 w-full text-left bg-transparent border-none p-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} cluster: ${cluster.cluster_name}`}
             aria-expanded={isExpanded}
             aria-controls={contentId}
@@ -90,7 +90,7 @@ export function ClusterCard({ cluster, defaultCollapsed, isCollapsible, onToggle
             {headerContent}
           </button>
         ) : (
-          <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-start justify-between gap-2 mb-3">
             {headerContent}
           </div>
         )
