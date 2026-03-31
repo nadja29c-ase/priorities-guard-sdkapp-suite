@@ -41,7 +41,8 @@ DO NOT CALL:
 FLOW:
 1. Call read_saved_board -> receive clusters (no UI)
 2. LLM merges new thoughts into returned clusters (no DB writes)
-3. Call organize_thoughts with merged set -> widget renders
+3. Call organize_thoughts (NOT any other tool) with the full merged cluster set -> widget renders
+   CRITICAL: There is no "recluster" or "merge" tool. organize_thoughts IS the reclustering tool.
 
 EMPTY STATE RESPONSE:
 When no saved board exists:
