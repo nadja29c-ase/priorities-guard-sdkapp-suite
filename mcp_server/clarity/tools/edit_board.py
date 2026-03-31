@@ -86,12 +86,14 @@ DESCRIPTION = """
 Requires a board to exist in DB. Use organize_thoughts to create one. load_saved_board only displays the board — it does not create DB state.
 The board is fetched automatically — do NOT pass a board field. Only pass operation(s) and targeting fields.
 
-PURPOSE: Targeted, surgical edits to an existing board — one item at a time. Use for specific changes: add one item, rename one cluster, delete one item, set a priority.
+PURPOSE: Targeted, surgical edits to an existing board — one item at a time. Use for specific changes: add one item, rename one cluster, delete one item, set a priority. This is also the correct tool when the user provides a list of specific items to add to an existing cluster — do not use read_saved_board → organize_thoughts for this case.
 Do NOT use this when the user wants to add many new thoughts or recluster the board. For that, use read_saved_board → merge thoughts → organize_thoughts.
 Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
 
 WHEN TO CALL:
 - User says "add X to Y" (use add_thought_item)
+- User says "add these items to my board" or "add these items to [cluster]" with a specific list → use add_thought_item in batch mode via operations array
+- Use this for any targeted edits, even when multiple specific edits are requested at once
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
 - User wants to REASSIGN OR SWAP an existing priority that is already set on the board (use set_priority). Example: "change my P2 to something else", "move P1 to the other cluster".

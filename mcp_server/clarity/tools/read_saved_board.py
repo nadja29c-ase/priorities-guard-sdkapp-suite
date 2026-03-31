@@ -37,12 +37,18 @@ WHEN TO CALL:
 DO NOT CALL:
 - When user wants to VIEW/SHOW their board (use load_saved_board instead)
 - You already called it earlier in THIS conversation AND NO NEW conversation started
+- When user wants to make targeted edits (add a few specific items, rename, delete, tag). Use edit_board for that.
 
-FLOW:
+FLOW — choose based on what the user needs:
+
+IF USER WANTS TO MERGE MANY NEW THOUGHTS AND RECLUSTER THE BOARD:
 1. Call read_saved_board -> receive clusters (no UI)
 2. LLM merges new thoughts into returned clusters (no DB writes)
-3. Call organize_thoughts (NOT any other tool) with the full merged cluster set -> widget renders
-   CRITICAL: There is no "recluster" or "merge" tool. organize_thoughts IS the reclustering tool.
+3. Call organize_thoughts with the full merged cluster set -> widget renders
+CRITICAL: There is no separate "recluster" or "merge" tool. organize_thoughts has preconditions (thoughts_exhausted, user_confirmed_no_more_thoughts) and is the ONLY tool for reclustering. Do not invent or call any other tool name for this step.
+
+IF USER WANTS TO MAKE TARGETED CHANGES TO AN EXISTING BOARD:
+Do NOT call read_saved_board. Use edit_board instead — for adding specific items, renaming, deleting, tagging, or changing priorities. edit_board fetches the board automatically.
 
 EMPTY STATE RESPONSE:
 When no saved board exists:
