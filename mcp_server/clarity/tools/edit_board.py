@@ -143,7 +143,7 @@ INPUT_SCHEMA = {
         },
         "tag": {
             "type": "string",
-            "description": "For add_tag/remove_tag operations. Use only these values: align, automate, decide, delegate, learn, research, test. Invalid values will be rejected."
+            "description": "For add_tag/remove_tag operations. Valid values: align, automate, decide, delegate, learn, research, test. Invalid values will be rejected with a clear error message."
         },
         "operations": {
             "type": "array",
@@ -161,7 +161,7 @@ INPUT_SCHEMA = {
                     "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
                     "new_name": {"type": "string"},
                     "text": {"type": "string"},
-                    "tag": {"type": "string", "description": "Valid values: align, automate, decide, delegate, learn, research, test"}
+                    "tag": {"type": "string", "description": "For add_tag/remove_tag. Valid values: align, automate, decide, delegate, learn, research, test."}
                 },
                 "required": ["operation"],
                 "additionalProperties": False,

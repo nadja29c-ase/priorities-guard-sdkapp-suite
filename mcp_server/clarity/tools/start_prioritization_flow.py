@@ -35,12 +35,6 @@ from ..persistence import get_cluster, persist_cluster
 logger = structlog.get_logger(__name__)
 
 # ============================================================================
-# Constants (local - not shared)
-# ============================================================================
-
-VALID_REASONS = {"blocker", "goal-aligned", None}
-
-# ============================================================================
 # Error Messages
 # ============================================================================
 
@@ -141,11 +135,11 @@ INPUT_SCHEMA = {
                     },
                     "reason": {
                         "type": "string",
-                        "enum": ["blocker", "goal-aligned"],
-                        "description": "Optional reason for prioritization"
+                        "minLength": 1,
+                        "description": "Required. The user's criterion for this priority. Use 'blocker' when the user's criterion is removing something blocking progress, 'goal-aligned' when it is progress toward a specific goal, 'relief' when it is reducing mental load or stress."
                     }
                 },
-                "required": ["rank"],
+                "required": ["rank", "reason"],
                 "additionalProperties": False,
             },
             "maxItems": 3

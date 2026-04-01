@@ -139,7 +139,7 @@ INPUT_SCHEMA = {
                                     "type": "array",
                                     "items": {
                                         "type": "string",
-                                        "description": "decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others. Use only these values: align, automate, decide, delegate, learn, research, test. Invalid values will be silently ignored."
+                                        "description": "Use only these values: align, automate, decide, delegate, learn, research, test. decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others. Invalid values are silently ignored."
                                     },
                                     "maxItems": 3,
                                     "description": "Optional. Only tag when user intent is clear and dominant."
@@ -153,7 +153,7 @@ INPUT_SCHEMA = {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "description": "decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others. Use only these values: align, automate, decide, delegate, learn, research, test. Invalid values will be silently ignored."
+                            "description": "Use only these values: align, automate, decide, delegate, learn, research, test. decide=choices needing resolution, research=unknowns to investigate, test=assumptions to validate, delegate=work for others, automate=repetitive work, learn=skill gaps, align=needs discussion with others. Invalid values are silently ignored."
                         },
                         "maxItems": 3,
                         "description": "Optional. Only tag when user intent is clear and dominant."
