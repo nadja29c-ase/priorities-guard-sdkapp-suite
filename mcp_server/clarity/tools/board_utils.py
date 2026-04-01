@@ -53,7 +53,7 @@ class PriorityInput(BaseModel):
     item_index: Optional[int] = None  # For thought item targeting
     parent_name: Optional[str] = None  # Required when targeting thought item
     rank: str
-    reason: str
+    reason: Optional[str] = None
 
     @field_validator("rank")
     @classmethod
@@ -64,10 +64,10 @@ class PriorityInput(BaseModel):
 
     @field_validator("reason")
     @classmethod
-    def validate_reason(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("reason must be non-empty.")
-        return v.strip()
+    def validate_reason(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not v.strip():
+            raise ValueError("reason must be non-empty when provided.")
+        return v.strip() if v else None
 
     @field_validator("item_index", mode="before")
     @classmethod
