@@ -25,30 +25,20 @@ logger = structlog.get_logger(__name__)
 NAME = "read_saved_board"
 
 DESCRIPTION = """
-Read user's saved MindSort AI board data from database.
+Read user's saved MindSort AI board data from database if you cant reliably recall it from memory. This is needed only for you when you perform complex edit board operations and want to ensure 100% accuracy.
 
 WHEN TO CALL:
-- ONCE AT THE BEGINNING OF EACH NEW CONVERSATION WITH THE USER involving Clarity and SAVED BOARD
-- User wants to ADD/MODIFY their SAVED board at the beginning 
-- User asks to MERGE new thought items with their prior SAVED BOARD from previous conversations
+- User wants to ADD/MODIFY their SAVED board f.e. with new thought items, new cluster names, or by merging new thoughts into existing clusters.
 - Example: "Add X to my board" -> call read_saved_board -> merge -> call organize_thoughts
 - You CAN NOT reliably recall what the saved board contained
 
+NOTE: There is no separate "recluster" or "merge" tool. organize_thoughts has preconditions (thoughts_exhausted, user_confirmed_no_more_thoughts) and is the ONLY tool for reclustering. 
+
 DO NOT CALL:
 - When user wants to VIEW/SHOW their board (use load_saved_board instead)
-- You already called it earlier in THIS conversation AND NO NEW conversation started
 - When user wants to make targeted edits (add a few specific items, rename, delete, tag). Use edit_board for that.
+- When you can 100& reliably recall the board contents from memory. If you have high confidence in your recall, use that to make edits instead of calling this tool. This allows you to merge new thoughts with existing clusters without losing any existing content that you remember.
 
-FLOW — choose based on what the user needs:
-
-IF USER WANTS TO MERGE MANY NEW THOUGHTS AND RECLUSTER THE BOARD:
-1. Call read_saved_board -> receive clusters (no UI)
-2. LLM merges new thoughts into returned clusters (no DB writes)
-3. Call organize_thoughts with the full merged cluster set -> widget renders
-CRITICAL: There is no separate "recluster" or "merge" tool. organize_thoughts has preconditions (thoughts_exhausted, user_confirmed_no_more_thoughts) and is the ONLY tool for reclustering. Do not invent or call any other tool name for this step.
-
-IF USER WANTS TO MAKE TARGETED CHANGES TO AN EXISTING BOARD:
-Do NOT call read_saved_board. Use edit_board instead — for adding specific items, renaming, deleting, tagging, or changing priorities. edit_board fetches the board automatically.
 
 EMPTY STATE RESPONSE:
 When no saved board exists:

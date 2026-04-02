@@ -83,9 +83,6 @@ ERROR_EMPTY_BATCH = "Batch operations list cannot be empty."
 NAME = "edit_board"
 
 DESCRIPTION = """
-Requires a board to exist in DB. Use organize_thoughts to create one. load_saved_board only displays the board — it does not create DB state.
-The board is fetched automatically — do NOT pass a board field. Only pass operation(s) and targeting fields.
-
 PURPOSE: Targeted, surgical edits to an existing board — one item at a time. Use for specific changes: add one item, rename one cluster, delete one item, set a priority. This is also the correct tool when the user provides a list of specific items to add to an existing cluster — do not use read_saved_board → organize_thoughts for this case.
 Do NOT use this when the user wants to add many new thoughts or recluster the board. For that, use read_saved_board → merge thoughts → organize_thoughts.
 Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
@@ -103,6 +100,9 @@ NEVER use set_priority if you are currently in a prioritization conversation —
 - User says "clear my priorities" (use clear_all_priorities)
 - User requests multiple changes at once (use operations array)
   Example: "Rename X to Y and make it P1" → batch with rename_cluster + set_priority
+
+Requires a saved board. Use organize_thoughts to create one if none saved. 
+The board is fetched automatically — do NOT pass a board field. Only pass operation(s) and targeting fields.
 
 AFTER TOOL RETURNS: Confirm the change was made. Your board has been updated.
 """
