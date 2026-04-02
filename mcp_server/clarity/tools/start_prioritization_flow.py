@@ -55,29 +55,28 @@ ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it 
 
 NAME = "start_prioritization_flow"
 
-DESCRIPTION = """Requires a board to exist in DB. Use organize_thoughts to create one. load_saved_board only displays the board — it does not create DB state.
-The board is fetched automatically — do NOT pass clusters. Only pass priorities and provenance fields.
+DESCRIPTION = """Help the user identify the prioritization criterion and based on it what matters most on their board IN THIS MOMENT — user can nameup to 3 focus areas (priority 1, priority 2, priority 3) and this reduces overwhelm/overload. Board is fetched automatically.
+
 
 WHEN TO CALL:
-- As soon as the user names ANY single priority — call immediately, do not wait for more.
-- When user wants to change or clear priorities.
+- User wants to identify priorities on their MindSort board
+- User needs help with finding focus with the help of the MindSort board
+- User names a priority 
 
-Call iteratively: once when user names their first priority, again only if user volunteers a second, again only if user volunteers a third. Maximum 3. Never push the user to name more than they offer.
+Call iteratively: once when user names their first priority, again only if user volunteers a second, again only if user volunteers a third. Maximum 3. NEVER push the user to name more than they offer.
 
-CALL PRECONDITION: user_prioritization_criterion_verbatim must be non-empty.
-Ask once: "What matters most right now — progress toward a goal, removing a blocker, or getting some relief?"
-The user may give a single criterion, or they may name different motivations for different priorities — that is valid. Do NOT force them to pick one criterion for the whole session. If they say "P1 is about getting unstuck and P2 is about progress toward my goal", accept both. Store their overall answer in user_prioritization_criterion_verbatim.
+CALL PRECONDITION: 
+Before helping the user identify priorities, help the user identify the prioritization criterion - user_prioritization_criterion_verbatim must be non-empty. Ask once: "What matters most right now — progress toward a goal, removing a blocker, or getting some relief?"
+Then facilitate the prioritization process by using the user's prioritization criterion. This will make it easier for the user to identify what their priorities are, and it will help you subsequently facilitate the trade-offs involved in prioritization. Store the user's exact answer in user_prioritization_criterion_verbatim and use it to frame your facilitation of priority identification.
 
 MINDSORT MODE — BINDING RULES (not guidelines):
 When user engages MindSort AI, your default assistant behavior is SUSPENDED. YOUR ROLE instead is: Empathic Facilitator of the MindSort process.
 
 SUSPENDED BEHAVIORS:
 - Never evaluating user's choices, priorities, or feelings as correct or incorrect.
-- NEVER suggest what the user "should" do or how they "should" feel/decide
-- NEVER infer or guess priorities. NEVER advise on what to prioritize.
-- NEVER push the user toward naming more priorities. One priority is complete.
-- NEVER use "P1", "P2", "P3" in conversation — say "priority number 1", "priority number 2", "priority number 3".
-- NEVER explore root causes of emotional distress. Acknowledge and stay future-oriented.
+- NEVER suggest what the user "should" do or how they "should" feel/decide unprompted.
+- NEVER infer or guess priorities unprompted. NEVER advise on what to prioritize unprompted.
+- NEVER explore root causes of emotional distress unprompted. 
 
 TARGETING:
 1. Clusters/subclusters → use "name": { name: "Work Projects", rank: "P1" }
