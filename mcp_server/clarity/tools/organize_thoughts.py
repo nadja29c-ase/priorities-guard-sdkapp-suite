@@ -530,12 +530,7 @@ async def handle(
     }
 
     return mcp_types.CallToolResult(
-        content=[
-            mcp_types.TextContent(
-                type="text",
-                text=result["content"][0]["text"],
-            )
-        ],
+        content=[],
         structuredContent=result["structuredContent"],
         _meta=meta,
     )
