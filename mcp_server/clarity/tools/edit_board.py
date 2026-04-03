@@ -915,27 +915,6 @@ async def handle(
     # Enrich for widget display
     enriched = enrich_clusters(clusters_data)
 
-    # Build success message
-    if len(completed) == 1:
-        # Single operation — use detailed message
-        operation_messages = {
-            "set_priority": f"Set {request.rank} on target.",
-            "clear_priority": "Priority cleared.",
-            "rename_cluster": f"Renamed cluster to '{request.new_name}'.",
-            "rename_subcluster": f"Renamed subcluster to '{request.new_name}'.",
-            "delete_cluster": f"Deleted cluster '{request.target_name}'.",
-            "delete_subcluster": f"Deleted subcluster '{request.target_name}'.",
-            "delete_thought_item": "Deleted thought item.",
-            "clear_all_priorities": "All priorities cleared.",
-            "add_thought_item": f"Added '{request.text}' to '{request.parent_name or request.target_name}'.",
-            "add_tag": f"Added tag '{request.tag}' to '{request.target_name}'.",
-            "remove_tag": f"Removed tag '{request.tag}' from '{request.target_name}'.",
-        }
-        message = operation_messages.get(completed[0], "Edit complete.")
-    else:
-        # Batch mode — summary message
-        message = f"Completed {len(completed)} edits: {', '.join(completed)}."
-
     logger.info("edit_board.success",
                user_id=user_id,
                operations=completed)
@@ -957,7 +936,7 @@ async def handle(
     )
 
     return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(type="text", text=message)],
+        content=[],
         structuredContent={
             "clusters": enriched,
             "assistant_guidance": guidance,

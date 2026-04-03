@@ -127,10 +127,7 @@ async def handle(
         logger.info("read_saved_board.no_snapshot",
                    user_id=user_id)
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="No saved board found. Starting fresh."
-            )],
+            content=[],
             structuredContent={
                 "clusters": [],
                 "has_history": False,
@@ -152,10 +149,7 @@ async def handle(
         logger.info("read_saved_board.empty_snapshot",
                    user_id=user_id)
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Found previous session, but clusters were cleared."
-            )],
+            content=[],
             structuredContent={
                 "clusters": [],
                 "has_history": True,
@@ -176,10 +170,7 @@ async def handle(
     cluster_names = [c.get("cluster_name", "") for c in clusters if c.get("cluster_name")]
 
     return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(
-            type="text",
-            text=f"Read {cluster_count} cluster{'s' if cluster_count != 1 else ''} from saved board."
-        )],
+        content=[],
         structuredContent={
             "clusters": clusters,
             "cluster_names": cluster_names,

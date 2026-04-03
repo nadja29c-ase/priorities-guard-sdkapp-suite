@@ -136,7 +136,6 @@ async def handle(
     # Compute guidance based on state
     if not has_snapshot:
         # No snapshot exists at all - truly starting fresh
-        message = "No previous brain dump found. Starting fresh."
         guidance = """No saved board found — this is a fresh start.
 
 Ask if they'd like to create a new Clarity Board. Something warm like: "Ready for your brain dump session when you are!" Keep it light and inviting."""
@@ -150,7 +149,6 @@ Ask if they'd like to create a new Clarity Board. Something warm like: "Ready fo
 
     elif cluster_count == 0:
         # Snapshot exists but is empty (user cleared their clusters)
-        message = "Found your previous session, but clusters were cleared."
         guidance = """Previous session found but it's empty — they cleared it before.
 
 Ask if they'd like to start a new Clarity Board. Something warm like: "Ready for your brain dump session when you are!" Keep it light and inviting."""
@@ -164,7 +162,6 @@ Ask if they'd like to start a new Clarity Board. Something warm like: "Ready for
 
     else:
         # Snapshot exists with clusters
-        message = f"Found {cluster_count} cluster{'s' if cluster_count != 1 else ''} from your previous session."
         guidance = """Board loaded with existing clusters.
 
 Read the user's intent from what they said BEFORE calling this tool:
@@ -183,10 +180,7 @@ Do NOT call organize_thoughts if the board already exists and the user just want
         logger.info("load_saved_board.retrieved", user_id=user_id, cluster_count=cluster_count)
 
     return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(
-            type="text",
-            text=message
-        )],
+        content=[],
         structuredContent=structured,
         _meta=meta,
     )

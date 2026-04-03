@@ -106,7 +106,7 @@ Use one of these naturally:
 NO advice. NO task lists. Just acknowledge + ask."""
 
     return {
-        "content": [{"type": "text", "text": message}],
+        "content": [],
         "structuredContent": {
             "clusters": enriched,
             "thoughts_exhausted": thoughts_exhausted,

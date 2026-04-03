@@ -451,3 +451,52 @@ Not done yet — introduced as a post-submission cleanup task to avoid pre-submi
 ### Production Bug Reference
 
 Increment 47 (March 2026): Widget URI bumped to v7 in `resources.py` and `add_priority.py` but not in the remaining 7 mutation tools (`update_priority`, `delete_priority`, `add_deliverable`, `update_deliverable`, `delete_deliverable`, `add_goal`, `update_goal`, `delete_goal`). Caught during review before deploy. Root cause: briefing specified "update `add_priority.py`" without accounting for the full set of mutation tools. Fix: all 7 remaining files updated manually before Render deploy.
+
+---
+
+## Tool Response Architecture — `content` vs `assistant_guidance`
+
+### The Rule
+
+Every tool response uses one of two patterns. Never both simultaneously.
+
+**Option A — Tool speaks (no `assistant_guidance`):**
+```python
+content=[mcp_types.TextContent(type="text", text="Board updated.")]
+structuredContent={"clusters": enriched}  # no assistant_guidance key
+```
+Use when the tool response is deterministic, non-conversational, and requires no LLM narration.
+
+**Option B — Model speaks (recommended for conversational flows):**
+```python
+content=[]
+structuredContent={
+    "clusters": enriched,
+    "assistant_guidance": "Confirm the change briefly..."
+}
+```
+Use when `assistant_guidance` in `structuredContent` drives the user-facing response.
+
+### Why
+
+Per the OpenAI Apps SDK reference: both `content` and `structuredContent` appear in the conversation transcript and are surfaced to the model. When `assistant_guidance` instructs the LLM to confirm the same action already described in `content`, the user sees a duplicate message — once from the tool transcript entry, once from the LLM following `assistant_guidance`.
+
+`content=[]` (empty array) is the canonical form for "no content" per the MCP spec — `content` is typed as `Content[]`, so the empty array is cleaner than a TextContent block with empty string.
+
+### Rule
+
+**If `assistant_guidance` exists in `structuredContent` → `content` must be `[]`.**
+
+### Exceptions
+
+`content` may remain non-empty only when:
+- The response is an error (`isError=True`) — error text must surface regardless of `structuredContent` processing
+- No `assistant_guidance` is present and the tool is the sole author of the visible response
+
+### Enforcement
+
+Every tool response that contains `assistant_guidance` in `structuredContent` must have `content=[]`. This applies to all SDK apps in the suite.
+
+### Production Bug Reference
+
+MindSort AI (March 2026): All non-error tool responses returned both a confirmation string in `content` AND `assistant_guidance` in `structuredContent` instructing the LLM to confirm the same action. Users saw each response twice. Fix: `content=[]` on all success paths across all six tools. Error paths preserved.

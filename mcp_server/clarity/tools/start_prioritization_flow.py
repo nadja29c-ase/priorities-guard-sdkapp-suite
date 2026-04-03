@@ -544,10 +544,7 @@ Example: "You've got your focus areas. Your board has been updated."
 Now follow user's lead — they may want to discuss next steps, or they may be done."""
 
     return mcp_types.CallToolResult(
-        content=[mcp_types.TextContent(
-            type="text",
-            text=message
-        )],
+        content=[],
         structuredContent={
             "clusters": enriched_clusters,
             "assistant_guidance": guidance,

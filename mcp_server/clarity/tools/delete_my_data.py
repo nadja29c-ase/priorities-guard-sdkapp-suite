@@ -26,19 +26,14 @@ NAME = "delete_my_data"
 
 DESCRIPTION = """
 Permanently deletes the user's saved MindSort AI board. This cannot be undone.
-Use when user explicitly requests to delete their data.
-Requires user_confirmed_deletion=true to execute.
+
+BEFORE CALLING: Confirm with the user what will be deleted — their saved board with all clusters, thought items, tags, and priorities. Only call after they confirm.
 """
 
 INPUT_SCHEMA = {
     "type": "object",
-    "properties": {
-        "user_confirmed_deletion": {
-            "type": "boolean",
-            "description": "Set to true ONLY when the user has explicitly confirmed they want to delete their data. Call this tool exactly ONCE after user gives consent.",
-        }
-    },
-    "required": ["user_confirmed_deletion"],
+    "properties": {},
+    "required": [],
     "additionalProperties": False,
 }
 
@@ -71,27 +66,6 @@ async def handle(
                 correlation_id=correlation_id)
 
     # ============================================================
-    # CONFIRMATION CHECK (defense against model regressions)
-    # ============================================================
-    user_confirmed = arguments.get("user_confirmed_deletion", False)
-
-    if not user_confirmed:
-        logger.info("delete_my_data.rejected.no_confirm",
-                   user_id=user_id)
-        return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Deletion requires user confirmation. Call again with user_confirmed_deletion=true after user confirms."
-            )],
-            structuredContent={
-                "status": "rejected",
-                "message": "Deletion requires user confirmation. Call again with user_confirmed_deletion=true after user confirms.",
-                "assistant_guidance": "Deletion was not confirmed. Tell the user exactly what will be deleted before asking for confirmation: 'This will permanently delete your MindSort AI Board data — your saved board with all its clusters, thought items, tags, and priorities. This cannot be undone. Would you like to proceed?'",
-            },
-            isError=False,  # Not an error, just rejected
-        )
-
-    # ============================================================
     # CALL BACKEND TO DELETE
     # ============================================================
     result = await delete_cluster(user_id=user_id, correlation_id=correlation_id)
@@ -107,14 +81,10 @@ async def handle(
                    user_id=user_id,
                    deleted=result.get("deleted"))
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="SUCCESS: Your MindSort AI board has been permanently deleted."
-            )],
+            content=[],
             structuredContent={
                 "status": "deleted",
                 "success": True,
-                "message": "SUCCESS: Your MindSort AI board has been permanently deleted.",
                 "deleted": result.get("deleted"),
                 "assistant_guidance": "DELETION SUCCESSFUL. The user's saved MindSort AI board has been permanently deleted. Tell them: 'Your board has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes MindSort AI data — for full account deletion, they should contact mindsort@priority-guard.com.",
             },
@@ -130,14 +100,10 @@ async def handle(
         logger.info("delete_my_data.no_data",
                    user_id=user_id)
         return mcp_types.CallToolResult(
-            content=[mcp_types.TextContent(
-                type="text",
-                text="Your MindSort AI data has been deleted."
-            )],
+            content=[],
             structuredContent={
                 "status": "deleted",
                 "success": True,
-                "message": "Your MindSort AI data has been deleted.",
                 "assistant_guidance": "DELETION COMPLETE. The user's MindSort AI Board data is now clear. Tell them: 'Your MindSort AI Board data has been deleted.' Do NOT call delete_my_data again. If they ask about deleting their entire account, let them know this tool only deletes the MindSort AI Board data — for full account deletion, they should contact mindsort@priority-guard.com.",
             },
             _meta={
