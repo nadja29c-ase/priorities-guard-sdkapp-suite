@@ -91,7 +91,7 @@ NAME = "edit_board"
 DESCRIPTION = """
 CRITICAL PRECONDITION: Only call this tool if a board has been confirmed to exist in the current conversation — via a prior successful call to load_saved_board, read_saved_board, or organize_thoughts in THIS session. Do not assume a board exists based on user intent or context. If no board is confirmed, do not call edit_board.
 
-PURPOSE: Targeted, surgical edits to an existing board — one item at a time. Use for specific changes: add one item, rename one cluster, delete one item, set a priority.
+PURPOSE: Targeted, surgical edits to an existing board. Use for specific changes: add items, rename clusters, delete items, set priorities. Supports single operations and batches of multiple operations in one call.
 Do NOT use this when the user wants to add many new thoughts or recluster the board. For that, use read_saved_board → merge thoughts → organize_thoughts.
 Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
 
