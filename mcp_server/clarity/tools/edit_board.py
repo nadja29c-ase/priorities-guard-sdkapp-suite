@@ -95,9 +95,11 @@ WHEN TO CALL:
 - Use this for any targeted edits, even when multiple specific edits are requested at once
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
-- To target a specific thought item by text (set/clear priority, delete):
-  pass text="exact item text". No need for item_index.
-  Add parent_name if the same text might appear in multiple clusters.
+- To target a specific thought item (set/clear priority, delete):
+  Use text="exact item text" (case-insensitive, whitespace-tolerant).
+  Prefer text over item_index — you usually do not know item_index.
+  If item_index is also provided, item_index takes precedence.
+  If the same text appears in multiple clusters, add parent_name to disambiguate.
 - User wants to REASSIGN OR SWAP an existing priority that is already set on the board (use set_priority). Example: "change my P2 to something else", "move P1 to the other cluster".
 NEVER use set_priority if you are currently in a prioritization conversation — meaning the user just answered the criterion question or is still naming their priorities for the first time. In that case, always use start_prioritization_flow, even if the user's wording sounds like a direct board edit (e.g. "p2: Follow up on payments"). The prioritization conversation takes precedence over any general board-edit rule.
 - User says "rename X to Y" (use rename_cluster/rename_subcluster)
@@ -179,7 +181,8 @@ INPUT_SCHEMA = {
                             "For set_priority, clear_priority, delete_thought_item: "
                             "exact text of the thought item to target. Case-insensitive. "
                             "item_index takes precedence if both provided."
-                        )
+                        ),
+                        "maxLength": MAX_ITEM_LENGTH
                     },
                     "tag": {"type": "string", "description": "For add_tag/remove_tag. Valid values: align, automate, decide, delegate, learn, research, test."}
                 },
@@ -370,11 +373,20 @@ def _find_thought_item_by_text(
 
     if not matches:
         return None, None, ERROR_ITEM_TEXT_NOT_FOUND.format(text=text)
-    if len(matches) == 1:
-        return matches[0][0], matches[0][1], None
 
-    parents = ", ".join(f"'{m[1]}'" for m in matches)
-    return None, None, ERROR_ITEM_TEXT_AMBIGUOUS.format(text=text, parents=parents)
+    # Group matches by parent container
+    parents_map: dict = {}
+    for idx, parent in matches:
+        parents_map.setdefault(parent, []).append(idx)
+
+    # Same container (possibly duplicates) → pick first occurrence
+    if len(parents_map) == 1:
+        parent_name_resolved = next(iter(parents_map))
+        return parents_map[parent_name_resolved][0], parent_name_resolved, None
+
+    # Multiple containers → real ambiguity, require parent_name
+    parent_list = ", ".join(f"'{p}'" for p in parents_map.keys())
+    return None, None, ERROR_ITEM_TEXT_AMBIGUOUS.format(text=text, parents=parent_list)
 
 
 # ============================================================================

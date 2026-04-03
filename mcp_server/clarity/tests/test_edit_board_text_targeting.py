@@ -170,6 +170,18 @@ def test_find_item_parent_not_found_falls_through(sample_clusters):
     assert parent == "Work Projects"
 
 
+def test_find_item_duplicate_text_same_container(sample_clusters):
+    """Two items with same text in same container — picks first occurrence, not an error."""
+    sample_clusters[0]["thought_items"].append("Review Q3 report")
+
+    index, parent, error = _find_thought_item_by_text(
+        sample_clusters, "Review Q3 report"
+    )
+    assert error is None
+    assert parent == "Work Projects"
+    assert index == 1  # first occurrence
+
+
 # ============================================================================
 # _op_set_priority with text targeting tests
 # ============================================================================
