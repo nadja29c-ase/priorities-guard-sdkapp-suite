@@ -75,6 +75,8 @@ ERROR_TEXT_TOO_LONG = f"Text exceeds maximum length of {MAX_ITEM_LENGTH} charact
 ERROR_MIXED_MODE = "Use 'operation' (single) OR 'operations' (batch), not both."
 ERROR_NO_OPERATION = "Provide 'operation' (single) or 'operations' (batch)."
 ERROR_EMPTY_BATCH = "Batch operations list cannot be empty."
+ERROR_ITEM_TEXT_NOT_FOUND = "Thought item '{text}' not found on board."
+ERROR_ITEM_TEXT_AMBIGUOUS = "'{text}' found in multiple containers ({parents}). Provide parent_name to disambiguate."
 
 # ============================================================================
 # Tool Metadata
@@ -93,6 +95,9 @@ WHEN TO CALL:
 - Use this for any targeted edits, even when multiple specific edits are requested at once
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
+- To target a specific thought item by text (set/clear priority, delete):
+  pass text="exact item text". No need for item_index.
+  Add parent_name if the same text might appear in multiple clusters.
 - User wants to REASSIGN OR SWAP an existing priority that is already set on the board (use set_priority). Example: "change my P2 to something else", "move P1 to the other cluster".
 NEVER use set_priority if you are currently in a prioritization conversation — meaning the user just answered the criterion question or is still naming their priorities for the first time. In that case, always use start_prioritization_flow, even if the user's wording sounds like a direct board edit (e.g. "p2: Follow up on payments"). The prioritization conversation takes precedence over any general board-edit rule.
 - User says "rename X to Y" (use rename_cluster/rename_subcluster)
@@ -138,7 +143,14 @@ INPUT_SCHEMA = {
         },
         "text": {
             "type": "string",
-            "description": "For add_thought_item: the thought item text to add",
+            "description": (
+                "For add_thought_item: the text to add. "
+                "For set_priority, clear_priority, delete_thought_item: "
+                "the exact text of the thought item to target — use this instead of item_index. "
+                "Matching is case-insensitive and whitespace-tolerant. "
+                "If item_index is also provided, item_index takes precedence. "
+                "Add parent_name if the same text might appear in multiple clusters."
+            ),
             "maxLength": MAX_ITEM_LENGTH
         },
         "tag": {
@@ -160,7 +172,15 @@ INPUT_SCHEMA = {
                     "item_index": {"type": "integer"},
                     "rank": {"type": "string", "enum": ["P1", "P2", "P3"]},
                     "new_name": {"type": "string"},
-                    "text": {"type": "string"},
+                    "text": {
+                        "type": "string",
+                        "description": (
+                            "For add_thought_item: text to add. "
+                            "For set_priority, clear_priority, delete_thought_item: "
+                            "exact text of the thought item to target. Case-insensitive. "
+                            "item_index takes precedence if both provided."
+                        )
+                    },
                     "tag": {"type": "string", "description": "For add_tag/remove_tag. Valid values: align, automate, decide, delegate, learn, research, test."}
                 },
                 "required": ["operation"],
@@ -291,6 +311,72 @@ def _check_ambiguous_name(clusters: List[dict], name: str) -> Optional[str]:
     return None
 
 
+def _find_thought_item_by_text(
+    clusters: List[dict],
+    text: str,
+    parent_name: Optional[str] = None,
+) -> tuple:
+    """
+    Find a thought item by text (normalized: stripped, lowercased).
+
+    Precedence:
+    - If parent_name provided: search that container first.
+      If found there, return immediately.
+      If not found there, fall through to board-wide search.
+    - Board-wide search: collect all matches.
+      Single match → return it.
+      Multiple matches → return disambiguation error.
+
+    Returns: (item_index, resolved_parent_name, error_message)
+      On success: (int, str, None)
+      On failure: (None, None, str)
+    """
+    def normalize(s: str) -> str:
+        return s.strip().lower()
+
+    normalized_text = normalize(text)
+
+    def search_container(container: dict, container_name: str) -> Optional[tuple]:
+        for i, item in enumerate(container.get("thought_items", [])):
+            item_text = item if isinstance(item, str) else item.get("text", "")
+            if normalize(item_text) == normalized_text:
+                return (i, container_name)
+        return None
+
+    # If parent_name provided — search that container first
+    if parent_name:
+        for cluster in clusters:
+            if cluster.get("cluster_name") == parent_name:
+                match = search_container(cluster, parent_name)
+                if match:
+                    return match[0], match[1], None
+            for sub in cluster.get("subclusters", []):
+                if sub.get("subcluster_name") == parent_name:
+                    match = search_container(sub, parent_name)
+                    if match:
+                        return match[0], match[1], None
+        # parent_name provided but item not found in it — fall through to board-wide
+
+    # Board-wide search
+    matches = []
+    for cluster in clusters:
+        match = search_container(cluster, cluster.get("cluster_name", ""))
+        if match:
+            matches.append(match)
+        for sub in cluster.get("subclusters", []):
+            match = search_container(sub, sub.get("subcluster_name", ""))
+            if match:
+                matches.append(match)
+
+    if not matches:
+        return None, None, ERROR_ITEM_TEXT_NOT_FOUND.format(text=text)
+    if len(matches) == 1:
+        return matches[0][0], matches[0][1], None
+
+    parents = ", ".join(f"'{m[1]}'" for m in matches)
+    return None, None, ERROR_ITEM_TEXT_AMBIGUOUS.format(text=text, parents=parents)
+
+
 # ============================================================================
 # Operation Handlers
 # ============================================================================
@@ -298,7 +384,7 @@ def _check_ambiguous_name(clusters: List[dict], name: str) -> Optional[str]:
 
 def _op_set_priority(clusters: List[dict], target_name: Optional[str],
                      parent_name: Optional[str], item_index: Optional[int],
-                     rank: Optional[str]) -> tuple:
+                     rank: Optional[str], text: Optional[str] = None) -> tuple:
     """
     Set priority on target. Returns (updated_clusters, error_message).
     Error is None on success.
@@ -307,6 +393,18 @@ def _op_set_priority(clusters: List[dict], target_name: Optional[str],
         return None, ERROR_MISSING_RANK
     if rank not in VALID_RANKS:
         return None, f"Invalid rank: {rank}. Must be P1, P2, or P3."
+
+    # Text-based thought item targeting (fallback when item_index not known).
+    # item_index takes precedence if both provided.
+    # target_name means cluster/subcluster targeting, so skip text resolution.
+    if item_index is None and text and not target_name:
+        resolved_index, resolved_parent, error = _find_thought_item_by_text(
+            clusters, text, parent_name
+        )
+        if error:
+            return None, error
+        item_index = resolved_index
+        parent_name = resolved_parent
 
     # Build a PriorityInput for the target
     if item_index is not None:
@@ -341,11 +439,23 @@ def _op_set_priority(clusters: List[dict], target_name: Optional[str],
 
 
 def _op_clear_priority(clusters: List[dict], target_name: Optional[str],
-                       parent_name: Optional[str], item_index: Optional[int]) -> tuple:
+                       parent_name: Optional[str], item_index: Optional[int],
+                       text: Optional[str] = None) -> tuple:
     """
     Clear priority from target. Returns (updated_clusters, error_message).
     """
     result = copy.deepcopy(clusters)
+
+    # Text-based thought item targeting. item_index takes precedence if both provided.
+    # target_name means cluster/subcluster targeting, so skip text resolution.
+    if item_index is None and text and not target_name:
+        resolved_index, resolved_parent, error = _find_thought_item_by_text(
+            clusters, text, parent_name
+        )
+        if error:
+            return None, error
+        item_index = resolved_index
+        parent_name = resolved_parent
 
     if item_index is not None:
         # Targeting a thought item
@@ -467,8 +577,19 @@ def _op_delete_subcluster(clusters: List[dict], target_name: Optional[str],
 
 
 def _op_delete_thought_item(clusters: List[dict], parent_name: Optional[str],
-                            item_index: Optional[int]) -> tuple:
+                            item_index: Optional[int],
+                            text: Optional[str] = None) -> tuple:
     """Delete a single thought item."""
+    # Text-based thought item targeting. item_index takes precedence if both provided.
+    if item_index is None and text:
+        resolved_index, resolved_parent, error = _find_thought_item_by_text(
+            clusters, text, parent_name
+        )
+        if error:
+            return None, error
+        item_index = resolved_index
+        parent_name = resolved_parent
+
     if item_index is None:
         return None, ERROR_MISSING_TARGET
     if not parent_name:
@@ -591,9 +712,9 @@ def _op_remove_tag(clusters: List[dict], target_name: Optional[str],
 def _dispatch_operation(clusters: List[dict], op: SingleOperation) -> tuple:
     """Route operation to handler. Returns (updated_clusters, error)."""
     if op.operation == "set_priority":
-        return _op_set_priority(clusters, op.target_name, op.parent_name, op.item_index, op.rank)
+        return _op_set_priority(clusters, op.target_name, op.parent_name, op.item_index, op.rank, op.text)
     elif op.operation == "clear_priority":
-        return _op_clear_priority(clusters, op.target_name, op.parent_name, op.item_index)
+        return _op_clear_priority(clusters, op.target_name, op.parent_name, op.item_index, op.text)
     elif op.operation == "add_thought_item":
         return _op_add_thought_item(clusters, op.parent_name, op.text, op.target_name)
     elif op.operation == "add_tag":
@@ -609,7 +730,7 @@ def _dispatch_operation(clusters: List[dict], op: SingleOperation) -> tuple:
     elif op.operation == "delete_subcluster":
         return _op_delete_subcluster(clusters, op.target_name, op.parent_name)
     elif op.operation == "delete_thought_item":
-        return _op_delete_thought_item(clusters, op.parent_name, op.item_index)
+        return _op_delete_thought_item(clusters, op.parent_name, op.item_index, op.text)
     elif op.operation == "clear_all_priorities":
         return _op_clear_all_priorities(clusters)
     else:
