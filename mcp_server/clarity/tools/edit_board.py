@@ -77,6 +77,10 @@ ERROR_NO_OPERATION = "Provide 'operation' (single) or 'operations' (batch)."
 ERROR_EMPTY_BATCH = "Batch operations list cannot be empty."
 ERROR_ITEM_TEXT_NOT_FOUND = "Thought item '{text}' not found on board."
 ERROR_ITEM_TEXT_AMBIGUOUS = "'{text}' found in multiple containers ({parents}). Provide parent_name to disambiguate."
+ERROR_TOO_MANY_ADDITIONS = (
+    "Too many items to add at once. edit_board is for 1–3 targeted additions. "
+    "For 4 or more new thoughts, use read_saved_board → merge → organize_thoughts."
+)
 
 # ============================================================================
 # Tool Metadata
@@ -85,14 +89,17 @@ ERROR_ITEM_TEXT_AMBIGUOUS = "'{text}' found in multiple containers ({parents}). 
 NAME = "edit_board"
 
 DESCRIPTION = """
+CRITICAL PRECONDITION: Only call this tool if a board has been confirmed to exist in the current conversation — via a prior successful call to load_saved_board, read_saved_board, or organize_thoughts in THIS session. Do not assume a board exists based on user intent or context. If no board is confirmed, do not call edit_board.
+
 PURPOSE: Targeted, surgical edits to an existing board — one item at a time. Use for specific changes: add one item, rename one cluster, delete one item, set a priority. This is also the correct tool when the user provides a list of specific items to add to an existing cluster — do not use read_saved_board → organize_thoughts for this case.
 Do NOT use this when the user wants to add many new thoughts or recluster the board. For that, use read_saved_board → merge thoughts → organize_thoughts.
 Use this when user wants to MODIFY their current board, NOT CREATE A NEW ONE.
 
 WHEN TO CALL:
-- User says "add X to Y" (use add_thought_item)
-- User says "add these items to my board" or "add these items to [cluster]" with a specific list → use add_thought_item in batch mode via operations array
-- Use this for any targeted edits, even when multiple specific edits are requested at once
+- User says "add X to Y" (use add_thought_item) — for 1–3 targeted additions where you know exactly which cluster each item belongs to.
+- User says "add these items to my board" with a short specific list of 1–3 items → use add_thought_item in batch mode via operations array.
+- If the user wants to add 4 or more new thoughts, or the items don't clearly map to existing clusters, do NOT use edit_board. Use read_saved_board → merge → organize_thoughts instead. Adding many new thoughts is a reclustering operation, not a surgical edit.
+- Use this for any targeted edits, even when multiple specific edits are requested at once.
 - User says "tag X as research" (use add_tag)
 - User says "remove the research tag from X" (use remove_tag)
 - To target a specific thought item (set/clear priority, delete):
@@ -844,6 +851,37 @@ async def handle(
             text=request.text,
             tag=request.tag,
         )]
+
+    # ============================================================
+    # TOO-MANY-ADDITIONS GUARD
+    # If more than 3 add_thought_item operations are requested,
+    # redirect to organize_thoughts via instructive error.
+    # This is a reclustering operation, not a surgical edit.
+    # ============================================================
+    add_item_ops = [op for op in ops if op.operation == "add_thought_item"]
+    if len(add_item_ops) > 3:
+        logger.info("edit_board.too_many_additions",
+                    user_id=user_id,
+                    count=len(add_item_ops))
+        return mcp_types.CallToolResult(
+            content=[mcp_types.TextContent(
+                type="text",
+                text=ERROR_TOO_MANY_ADDITIONS,
+            )],
+            structuredContent={
+                "success": False,
+                "error": "too_many_additions",
+                "assistant_guidance": (
+                    f"The user wants to add {len(add_item_ops)} new thought items. "
+                    "edit_board is for 1–3 targeted additions only. "
+                    "This is a reclustering operation. "
+                    "Call read_saved_board to load the existing board, "
+                    "merge the new items into the existing clusters in-model, "
+                    "then call organize_thoughts with the full merged cluster set."
+                ),
+            },
+            isError=True,
+        )
 
     # Validate all operations
     for op in ops:
