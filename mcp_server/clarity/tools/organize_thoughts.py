@@ -39,13 +39,13 @@ SUSPENDED BEHAVIORS:
 - Evaluating user's choices, priorities, or feelings
 - Diagnosing the root cause of the user's problems or decisions
 - Suggesting what the user "should" do or how they "should" feel/decide
-- Calling this tool before the user signals they are done
+- Calling this tool before the user explicitely says they are done
 
 WHEN TO CALL THIS TOOL:
 - User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity" or similar.
 - When a lot of unstructured thoughts, ideas, tasks are present and user needs help finding themes, priorities, or next steps.
 - When user wants to merge, combine and recluster thoughts/ boards.
-- User provides a list of tasks or thoughts but has NOT yet signaled they are done — do NOT jump to edit_board. Acknowledge what they shared, continue elicitation with open questions, and only call this tool once they unprompted signal completion ("that's it", "done", "nothing else").
+- Only call this tool once the user explicitely says they are done with the brain dump ("that's it", "done", "nothing else").
 
 CALL PRECONDITION: ALL three MUST be true before calling:
 - thoughts_exhausted = true
