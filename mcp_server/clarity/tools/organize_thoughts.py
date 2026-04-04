@@ -118,7 +118,7 @@ INPUT_SCHEMA = {
                         "type": "array",
                         "items": {"type": "string"},
                         "minItems": 2,
-                        "description": "Direct thought items. Minimum 2 — a single item is not a cluster. If only 1 item exists, merge it into another cluster."
+                        "description": "Direct thought items. Minimum 2 — a single item is not a cluster. If only 1 item exists, merge it into another cluster or let the server handle it by placing it in Unclustered."
                     },
                     "subclusters": {
                         "type": "array",
@@ -355,6 +355,51 @@ async def handle(
             },
             isError=True,
         )
+
+    # ============================================================
+    # SINGLE-ITEM CLUSTER REPAIR — runs before Pydantic validation
+    # If any cluster has exactly 1 thought_item and no subclusters,
+    # collect the orphaned items and add them to an "Unclustered" cluster.
+    # This avoids a validation error and retry loop.
+    # ============================================================
+    raw_clusters = arguments.get("clusters", [])
+    if isinstance(raw_clusters, list):
+        orphaned_items = []
+        surviving_clusters = []
+        for cluster in raw_clusters:
+            if not isinstance(cluster, dict):
+                surviving_clusters.append(cluster)
+                continue
+            thought_items = cluster.get("thought_items", [])
+            subclusters = cluster.get("subclusters", [])
+            if len(thought_items) == 1 and not subclusters:
+                orphaned_items.append(thought_items[0])
+                logger.info(
+                    "organize_thoughts.repair_single_item_cluster",
+                    cluster_name=cluster.get("cluster_name", "unknown"),
+                    item=thought_items[0],
+                    user_id=user_id,
+                )
+            else:
+                surviving_clusters.append(cluster)
+        if orphaned_items:
+            # Find existing "Unclustered" cluster or create one
+            unclustered = next(
+                (c for c in surviving_clusters if isinstance(c, dict) and c.get("cluster_name") == "Unclustered"),
+                None,
+            )
+            if unclustered:
+                unclustered["thought_items"] = unclustered.get("thought_items", []) + orphaned_items
+            else:
+                surviving_clusters.append({
+                    "cluster_name": "Unclustered",
+                    "thought_items": orphaned_items,
+                    "subclusters": [],
+                    "tags": [],
+                })
+            # Mutate arguments so the rest of the handler sees the repaired clusters
+            arguments = {**arguments, "clusters": surviving_clusters}
+            raw_clusters = surviving_clusters
 
     validated_request = None
 
