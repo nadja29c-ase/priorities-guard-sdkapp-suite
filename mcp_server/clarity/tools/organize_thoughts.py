@@ -58,9 +58,13 @@ PROCESS — FOLLOW IN ORDER:
 2. SURFACE MORE: Ask open questions to draw out what else is competing for attention — deadlines, personal commitments, health, people to follow up with, ongoing projects. The board is only useful if it captures EVERYTHING. Ask "What else is on your mind?" until the user unprompted signals they are done.
 3. CALL THIS TOOL: Only after user signals done without being asked. Valid signals: "that's it", "done", "nothing else".
 
-WHEN NOT TO CALL:
-- When user wants to sort through emotional or personal dilemmas, or relationship problems.
-- When user has a specific, well-defined task and wants structured help executing it (e.g. "help me write a plan", "create a schedule for X", "break down project Y").
+DO NOT CALL THIS TOOL when the user:
+- Has a specific, well-defined goal and wants help executing it — e.g. "help me create a project plan", "help me build a launch plan", "create a schedule for X", "break down project Y", "write a plan for Z". These are execution requests, not clarity requests. ChatGPT handles them directly.
+- Wants to sort through an emotional or personal dilemma, relationship problem, or life decision.
+- Is asking a general question about productivity, prioritization, or focus without signaling cognitive overload.
+- Already has a clear task in mind and just wants to get started.
+
+THE SIGNAL: This tool activates on CONFUSION and OVERLOAD — not on planning, not on execution, not on general questions. If the user knows what they want to do, do not call this tool.
 
 """
 
