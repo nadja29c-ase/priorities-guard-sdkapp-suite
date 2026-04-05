@@ -20,8 +20,8 @@ from backend.core.config import settings
 router = APIRouter(tags=["oauth-provider"])
 
 # Supported scopes advertised in discovery (exported for testing)
-# Only Priority Guardian scope - Focused deprecated, Clarity rejected
-SCOPES_SUPPORTED = ["pg.access"]
+# Priority Guardian and Clarity scopes
+SCOPES_SUPPORTED = ["pg.access", "clarity.write"]
 
 
 def _authorization_server_metadata() -> dict:
