@@ -28,6 +28,7 @@ DESCRIPTION = """
 Read user's saved MindSort AI board data from database if you cant reliably recall it from memory. This is needed only for you when you perform complex edit board operations and want to ensure 100% accuracy.
 
 WHEN TO CALL:
+- When the user intent is explicitly about editing their existing saved board, and you are not confident in your recall of the existing board contents. 
 - User wants to ADD/MODIFY their SAVED board f.e. with new thought items, new cluster names, or by merging new thoughts into existing clusters.
 - Example: "Add X to my board" -> call read_saved_board -> merge -> call organize_thoughts
 - You CAN NOT reliably recall what the saved board contained
