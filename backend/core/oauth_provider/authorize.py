@@ -523,7 +523,7 @@ async def authorize_endpoint(
     # VALIDATE STATE LENGTH (Increment 20 - security hardening)
     # Prevents Redis/redirect URL abuse from megabyte-long state values
     # =========================================================================
-    if state and len(state) > 512:
+    if state and len(state) > 5000:
         request_logger.warning(
             "oauth.authorize.error",
             error="invalid_request",
