@@ -35,6 +35,7 @@ WHEN TO CALL:
 NOTE: There is no separate "recluster" or "merge" tool. organize_thoughts has preconditions (thoughts_exhausted, user_confirmed_no_more_thoughts) and is the ONLY tool for reclustering. 
 
 DO NOT CALL:
+- When user has a specific, well-defined task and wants structured help executing it (e.g. "help me create a project plan", "write a schedule for X", "help me with Y"). ChatGPT handles these directly without needing the board as context.
 - When user wants to VIEW/SHOW their board (use load_saved_board instead)
 - When user wants to make targeted edits (add a few specific items, rename, delete, tag). Use edit_board for that.
 - When you can 100& reliably recall the board contents from memory. If you have high confidence in your recall, use that to make edits instead of calling this tool. This allows you to merge new thoughts with existing clusters without losing any existing content that you remember.
