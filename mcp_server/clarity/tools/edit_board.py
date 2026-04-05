@@ -959,6 +959,7 @@ async def handle(
 
     # Widget metadata
     meta = {
+        "ui": {"resourceUri": WIDGET_URI},
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Editing board...",
         "openai/toolInvocation/invoked": "Board updated.",

@@ -98,6 +98,7 @@ async def handle(
                 "assistant_guidance": "Backend error — could not load the board. Tell the user: 'I wasn't able to load your board right now — please try again in a moment.' Do NOT tell them they have no board.",
             },
             _meta={
+                "ui": {"resourceUri": WIDGET_URI},
                 "openai/outputTemplate": WIDGET_URI,
                 "openai/toolInvocation/invoking": "Loading your saved board...",
                 "openai/toolInvocation/invoked": "Unable to load board.",
@@ -121,6 +122,7 @@ async def handle(
 
     # Widget metadata
     meta = {
+        "ui": {"resourceUri": WIDGET_URI},
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Loading your saved board...",
         "openai/toolInvocation/invoked": "Here's your saved Clarity board.",

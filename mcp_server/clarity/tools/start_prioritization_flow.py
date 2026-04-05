@@ -485,6 +485,7 @@ async def handle(
                priority_count=priority_count)
 
     meta = {
+        "ui": {"resourceUri": WIDGET_URI},
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Applying priorities...",
         "openai/toolInvocation/invoked": message,

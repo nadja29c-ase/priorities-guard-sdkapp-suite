@@ -566,6 +566,7 @@ async def handle(
                 user_id=user_id)
 
     meta = {
+        "ui": {"resourceUri": WIDGET_URI},
         "openai/outputTemplate": WIDGET_URI,
         "openai/toolInvocation/invoking": "Organizing your thoughts into clusters...",
         "openai/toolInvocation/invoked": "Here's your board.",
