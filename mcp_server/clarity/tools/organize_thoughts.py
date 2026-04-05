@@ -60,6 +60,7 @@ PROCESS — FOLLOW IN ORDER:
 
 WHEN NOT TO CALL:
 - When user wants to sort through emotional or personal dilemmas, or relationship problems.
+- When user has a specific, well-defined task and wants structured help executing it (e.g. "help me write a plan", "create a schedule for X", "break down project Y").
 
 """
 
