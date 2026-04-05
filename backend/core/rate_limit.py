@@ -128,7 +128,7 @@ async def rate_limit_authorize(request: Request) -> None:
     """
     ip = get_client_ip(request)
     key = f"ratelimit:oauth:authorize:{ip}"
-    await check_rate_limit(key, limit=100, window=60, request=request)
+    await check_rate_limit(key, limit=500, window=60, request=request)
 
 
 async def rate_limit_token(request: Request, client_id: str) -> None:
