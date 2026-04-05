@@ -25,14 +25,18 @@ logger = structlog.get_logger(__name__)
 NAME = "load_saved_board"
 
 DESCRIPTION = """
-Load and DISPLAY user's saved Clarity board with widget.
+ONLY call this tool when the user explicitly asks to SEE, SHOW, VIEW, or DISPLAY their MindSort board. Do NOT call for planning, context, or any other purpose.
 
 WHEN TO CALL:
-- User asks to SEE/SHOW/VIEW/DISPLAY their saved board
-- Example: "Show my board", "What's on my board?"
+- User explicitly asks to see their board: "Show my board", "What's on my board?", "Load my board", "Display my board"
 
 DO NOT CALL:
+- When user has a specific task and wants help executing it — e.g. "help me create a project plan", "help me with X", "build Y", "write Z". Handle these directly without touching the board.
 - When user wants to ADD items (use read_board_before_editing instead)
+- To use as context or background information for any request
+- When the user has not explicitly asked to see their board
+
+THE SIGNAL: This tool activates ONLY on explicit board-display requests. If the user did not ask to see their board, do not call this tool.
 
 EMPTY STATE RESPONSE:
 When no saved board exists, widget shows empty state message.
