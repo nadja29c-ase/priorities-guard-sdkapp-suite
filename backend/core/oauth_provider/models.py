@@ -108,7 +108,7 @@ class OAuthAuthorizationCode(Base):
     )
 
     state: Mapped[str | None] = mapped_column(
-        String(512),
+        String(5000),
         nullable=True,
         comment="CSRF protection state (optional)"
     )
