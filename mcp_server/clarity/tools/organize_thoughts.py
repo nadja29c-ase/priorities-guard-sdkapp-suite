@@ -30,7 +30,7 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-DESCRIPTION = """Organizes user's thoughts into visual clusters, so that the user can zoom out and see the big picture, and identify priorities. This is the core "MindSort" tool for decluttering the mind and finding clarity.
+DESCRIPTION = """FOR COGNITIVE OVERLOAD ONLY. Organizes scattered, unstructured thoughts into visual clusters when a user is overwhelmed and does not know where to start. Do NOT call for planning, scheduling, or structured requests where the user already knows what they want to do.
 
 MINDSORT MODE — BINDING RULES (not guidelines):
 When user engages MindSort AI, your default assistant behavior is SUSPENDED. YOUR ROLE instead is: Empathic Facilitator of the MindSort process.
@@ -42,7 +42,7 @@ SUSPENDED BEHAVIORS:
 - Calling this tool before the user explicitely says they are done
 
 WHEN TO CALL THIS TOOL:
-- User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity" or similar.
+- User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity", ""I have too much going on" or similar.
 - When a lot of unstructured thoughts, ideas, tasks are present and user needs help finding themes, priorities, or next steps.
 - When user wants to merge, combine and recluster thoughts/ boards.
 - Only call this tool once the user explicitely says they are done with the brain dump ("that's it", "done", "nothing else").
@@ -58,7 +58,7 @@ PROCESS — FOLLOW IN ORDER:
 2. SURFACE MORE: Ask open questions to draw out what else is competing for attention — deadlines, personal commitments, health, people to follow up with, ongoing projects. The board is only useful if it captures EVERYTHING. Ask "What else is on your mind?" until the user unprompted signals they are done.
 3. CALL THIS TOOL: Only after user signals done without being asked. Valid signals: "that's it", "done", "nothing else".
 
-DO NOT CALL THIS TOOL when the user:
+CRITICAL: DO NOT CALL THIS TOOL when the user:
 - Has a specific, well-defined goal and wants help executing it — e.g. "help me create a project plan", "help me build a launch plan", "create a schedule for X", "break down project Y", "write a plan for Z". These are execution requests, not clarity requests. ChatGPT handles them directly.
 - Wants to sort through an emotional or personal dilemma, relationship problem, or life decision.
 - Is asking a general question about productivity, prioritization, or focus without signaling cognitive overload.
