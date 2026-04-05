@@ -22,15 +22,15 @@ logger = structlog.get_logger(__name__)
 # Tool Metadata
 # ============================================================================
 
-NAME = "read_saved_board"
+NAME = "read_board_before_editing"
 
 DESCRIPTION = """
-Read user's saved MindSort AI board data from database if you cant reliably recall it from memory. This is needed only for you when you perform complex edit board operations and want to ensure 100% accuracy.
+Reads the user's saved MindSort AI board data ONLY when the user explicitly wants to ADD, MERGE, or MODIFY their existing board content. Do NOT call for any other purpose — not for planning, not for context, not for general questions.
 
 WHEN TO CALL:
 - When the user intent is explicitly about editing their existing saved board, and you are not confident in your recall of the existing board contents. 
 - User wants to ADD/MODIFY their SAVED board f.e. with new thought items, new cluster names, or by merging new thoughts into existing clusters.
-- Example: "Add X to my board" -> call read_saved_board -> merge -> call organize_thoughts
+- Example: "Add X to my board" -> call read_board_before_editing -> merge -> call organize_thoughts
 - You CAN NOT reliably recall what the saved board contained
 
 NOTE: There is no separate "recluster" or "merge" tool. organize_thoughts has preconditions (thoughts_exhausted, user_confirmed_no_more_thoughts) and is the ONLY tool for reclustering. 
@@ -88,7 +88,7 @@ async def handle(
         - has_history: Whether any prior snapshot exists
         - is_empty_snapshot: True if snapshot exists but has no clusters
     """
-    logger.debug("read_saved_board.handle.start",
+    logger.debug("read_board_before_editing.handle.start",
                 user_id=user_id,
                 correlation_id=correlation_id)
 
@@ -100,7 +100,7 @@ async def handle(
 
     # Check for error sentinel from persistence layer
     if isinstance(cluster_data, dict) and cluster_data.get("status") == "error":
-        logger.warning("read_saved_board.persistence_error", user_id=user_id)
+        logger.warning("read_board_before_editing.persistence_error", user_id=user_id)
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
@@ -126,7 +126,7 @@ async def handle(
 
     # No snapshot exists at all - truly starting fresh
     if not has_snapshot:
-        logger.info("read_saved_board.no_snapshot",
+        logger.info("read_board_before_editing.no_snapshot",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[],
@@ -148,7 +148,7 @@ async def handle(
 
     # Snapshot exists but is empty (user cleared their clusters)
     if cluster_count == 0:
-        logger.info("read_saved_board.empty_snapshot",
+        logger.info("read_board_before_editing.empty_snapshot",
                    user_id=user_id)
         return mcp_types.CallToolResult(
             content=[],
@@ -164,7 +164,7 @@ async def handle(
         )
 
     # Snapshot exists with clusters
-    logger.info("read_saved_board.retrieved",
+    logger.info("read_board_before_editing.retrieved",
                user_id=user_id,
                cluster_count=cluster_count)
 

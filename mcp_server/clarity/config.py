@@ -162,7 +162,7 @@ SCOPES_SUPPORTED = ["clarity.write"]
 TOOL_SCOPES = {
     "organize_thoughts": ["clarity.write"],
     "load_saved_board": ["clarity.write"],
-    "read_saved_board": ["clarity.write"],
+    "read_board_before_editing": ["clarity.write"],
     "save_board": ["clarity.write"],
     "start_prioritization_flow": ["clarity.write"],
     "edit_board": ["clarity.write"],

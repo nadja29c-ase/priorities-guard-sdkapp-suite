@@ -309,7 +309,7 @@ def main():
         # Test those manually in ChatGPT with the reviewer account.
         read_tools = [
             ("load_saved_board", {}, "load_saved_board (DB read + widget)"),
-            ("read_saved_board", {}, "read_saved_board (DB read, no widget)"),
+            ("read_board_before_editing", {}, "read_board_before_editing (DB read, no widget)"),
         ]
 
         with httpx.Client(timeout=TOOL_TIMEOUT_S) as client:

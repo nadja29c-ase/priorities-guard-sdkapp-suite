@@ -1,5 +1,5 @@
 """
-Unit tests for read_saved_board tool.
+Unit tests for read_board_before_editing tool.
 
 This tool returns data only - NO widget metadata.
 Critical difference from load_saved_board: result.meta must always be None.
@@ -8,11 +8,11 @@ Critical difference from load_saved_board: result.meta must always be None.
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from mcp_server.clarity.tools.read_saved_board import handle
+from mcp_server.clarity.tools.read_board_before_editing import handle
 
 
 class TestReadSavedBoardNoWidget:
-    """CRITICAL: read_saved_board must NEVER include widget metadata."""
+    """CRITICAL: read_board_before_editing must NEVER include widget metadata."""
 
     @pytest.mark.asyncio
     async def test_no_meta_when_clusters_found(self):
@@ -26,7 +26,7 @@ class TestReadSavedBoardNoWidget:
             "content_hash": "abc123",
         }
 
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -35,12 +35,12 @@ class TestReadSavedBoardNoWidget:
                 arguments={},
             )
 
-        assert result.meta is None, "read_saved_board must NEVER return widget metadata"
+        assert result.meta is None, "read_board_before_editing must NEVER return widget metadata"
 
     @pytest.mark.asyncio
     async def test_no_meta_when_no_history(self):
         """result.meta must be None when no saved board exists."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(
@@ -49,7 +49,7 @@ class TestReadSavedBoardNoWidget:
                 arguments={},
             )
 
-        assert result.meta is None, "read_saved_board must NEVER return widget metadata"
+        assert result.meta is None, "read_board_before_editing must NEVER return widget metadata"
 
     @pytest.mark.asyncio
     async def test_no_meta_when_empty_snapshot(self):
@@ -61,7 +61,7 @@ class TestReadSavedBoardNoWidget:
             "content_hash": "empty123",
         }
 
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -70,12 +70,12 @@ class TestReadSavedBoardNoWidget:
                 arguments={},
             )
 
-        assert result.meta is None, "read_saved_board must NEVER return widget metadata"
+        assert result.meta is None, "read_board_before_editing must NEVER return widget metadata"
 
     @pytest.mark.asyncio
     async def test_no_meta_on_persistence_error(self):
         """result.meta must be None even when persistence fails."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Network error")
 
             result = await handle(
@@ -84,11 +84,11 @@ class TestReadSavedBoardNoWidget:
                 arguments={},
             )
 
-        assert result.meta is None, "read_saved_board must NEVER return widget metadata"
+        assert result.meta is None, "read_board_before_editing must NEVER return widget metadata"
 
 
 class TestReadSavedBoardReturnsData:
-    """read_saved_board must return clusters and saved_board_hash."""
+    """read_board_before_editing must return clusters and saved_board_hash."""
 
     @pytest.mark.asyncio
     async def test_returns_clusters_when_found(self):
@@ -105,7 +105,7 @@ class TestReadSavedBoardReturnsData:
             "content_hash": "hash123",
         }
 
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -128,7 +128,7 @@ class TestReadSavedBoardReturnsData:
             "content_hash": "expected_hash_value",
         }
 
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -142,7 +142,7 @@ class TestReadSavedBoardReturnsData:
     @pytest.mark.asyncio
     async def test_returns_null_hash_when_no_history(self):
         """Should return null saved_board_hash when no saved board."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(
@@ -155,12 +155,12 @@ class TestReadSavedBoardReturnsData:
 
 
 class TestReadSavedBoardEmptyState:
-    """read_saved_board empty state handling."""
+    """read_board_before_editing empty state handling."""
 
     @pytest.mark.asyncio
     async def test_empty_clusters_when_no_history(self):
         """Should return empty clusters list when no saved board."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(
@@ -182,7 +182,7 @@ class TestReadSavedBoardEmptyState:
             "created_at": "2025-01-15T10:00:00Z",
         }
 
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -197,12 +197,12 @@ class TestReadSavedBoardEmptyState:
 
 
 class TestReadSavedBoardPersistenceError:
-    """read_saved_board persistence error handling."""
+    """read_board_before_editing persistence error handling."""
 
     @pytest.mark.asyncio
     async def test_exception_returns_safe_empty(self):
         """Persistence exceptions should return safe empty structure."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Database connection failed")
 
             result = await handle(
@@ -218,7 +218,7 @@ class TestReadSavedBoardPersistenceError:
     @pytest.mark.asyncio
     async def test_no_retry_on_error(self):
         """Should not retry on persistence error."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.side_effect = Exception("Timeout")
 
             await handle(
@@ -231,12 +231,12 @@ class TestReadSavedBoardPersistenceError:
 
 
 class TestReadSavedBoardSchemaStability:
-    """read_saved_board schema stability tests."""
+    """read_board_before_editing schema stability tests."""
 
     @pytest.mark.asyncio
     async def test_schema_when_no_history(self):
         """Schema must be stable when has_history=False."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(
@@ -262,7 +262,7 @@ class TestReadSavedBoardSchemaStability:
             "content_hash": "hash123",
         }
 
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = mock_cluster_data
 
             result = await handle(
@@ -278,7 +278,7 @@ class TestReadSavedBoardSchemaStability:
     @pytest.mark.asyncio
     async def test_no_arguments_required(self):
         """Tool should work with empty arguments."""
-        with patch("mcp_server.clarity.tools.read_saved_board.get_cluster", new_callable=AsyncMock) as mock_get:
+        with patch("mcp_server.clarity.tools.read_board_before_editing.get_cluster", new_callable=AsyncMock) as mock_get:
             mock_get.return_value = None
 
             result = await handle(

@@ -13,7 +13,7 @@ def enrich_clusters(clusters: list[dict]) -> list[dict]:
     Used by:
     - organize_thoughts: enrich before returning to widget
     - load_saved_board: enrich persisted data before display
-    - read_saved_board: enrich persisted data before returning
+    - read_board_before_editing: enrich persisted data before returning
 
     Args:
         clusters: List of cluster dicts from ChatGPT or persistence

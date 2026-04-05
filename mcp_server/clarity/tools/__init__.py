@@ -141,7 +141,7 @@ async def list_tools() -> List[mcp_types.Tool]:
 
 from . import organize_thoughts  # noqa: F401, E402
 from . import load_saved_board  # noqa: F401, E402
-from . import read_saved_board  # noqa: F401, E402
+from . import read_board_before_editing  # noqa: F401, E402
 from . import start_prioritization_flow  # noqa: F401, E402
 from . import edit_board  # noqa: F401, E402
 from . import delete_my_data  # noqa: F401, E402

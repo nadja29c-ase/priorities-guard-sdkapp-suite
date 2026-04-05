@@ -4,7 +4,7 @@ Load Saved Board Tool.
 Retrieves and DISPLAYS user's saved board with widget rendering.
 Self-registers at import time.
 
-For data-only access (no widget), use read_saved_board instead.
+For data-only access (no widget), use read_board_before_editing instead.
 """
 
 import structlog
@@ -32,7 +32,7 @@ WHEN TO CALL:
 - Example: "Show my board", "What's on my board?"
 
 DO NOT CALL:
-- When user wants to ADD items (use read_saved_board instead)
+- When user wants to ADD items (use read_board_before_editing instead)
 
 EMPTY STATE RESPONSE:
 When no saved board exists, widget shows empty state message.

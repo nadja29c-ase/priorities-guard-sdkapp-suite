@@ -198,7 +198,7 @@ python ops/mindsort_latency_check.py
 MINDSORT_JWT=<your_token> python ops/mindsort_latency_check.py
 ```
 
-The MindSort script tests both infrastructure and authenticated `load_saved_board` / `read_saved_board` calls. Write tools (`organize_thoughts`, `edit_board`, `start_prioritization_flow`, `delete_my_data`) are excluded from automated tests to avoid mutating the reviewer test account — test those manually in ChatGPT.
+The MindSort script tests both infrastructure and authenticated `load_saved_board` / `read_board_before_editing` calls. Write tools (`organize_thoughts`, `edit_board`, `start_prioritization_flow`, `delete_my_data`) are excluded from automated tests to avoid mutating the reviewer test account — test those manually in ChatGPT.
 
 ### Thresholds
 
@@ -223,7 +223,7 @@ The MindSort script tests both infrastructure and authenticated `load_saved_boar
 TOKEN=<your_token>
 MCP=https://priorities-guard-clarity-mcp.onrender.com
 
-for tool in load_saved_board read_saved_board; do
+for tool in load_saved_board read_board_before_editing; do
   echo "Testing $tool..."
   time curl -s -X POST $MCP/mcp \
     -H "Authorization: Bearer $TOKEN" \
@@ -333,7 +333,7 @@ This is the auth failure path reviewers will actually trigger. Everything else (
 
 ### MindSort AI
 
-- [ ] OAuth scopes minimal — **gap:** `clarity.write` is used for all operations including read-only (`load_saved_board`, `read_saved_board`). No `clarity.read` scope exists. Single-scope design is a deliberate simplification but does not satisfy "read-only where possible." Post-launch improvement: add `clarity.read` scope for read-only tools.
+- [ ] OAuth scopes minimal — **gap:** `clarity.write` is used for all operations including read-only (`load_saved_board`, `read_board_before_editing`). No `clarity.read` scope exists. Single-scope design is a deliberate simplification but does not satisfy "read-only where possible." Post-launch improvement: add `clarity.read` scope for read-only tools.
 - [~] Only essential user data stored — data model is lean (single snapshot per user, deprecated fields not persisted). However `cluster_data` stores full freeform thought content which may include sensitive personal information. Shared auth layer adds consent/audit/session records. Acceptable but not unconditionally clean.
 - [X] Tokens/secrets scrubbed from logs (`logging.py` `scrub_sensitive_data` processor) ✅
 - [~] User IDs logged as full UUIDs throughout (`clusters_router.py`, `token_service.py`, `mcp_auth.py`). Pseudonymous identifiers — standard practice, not truncated. Checklist wording "truncated" was inaccurate.
