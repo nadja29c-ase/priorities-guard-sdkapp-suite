@@ -117,8 +117,7 @@ INPUT_SCHEMA = {
                     "thought_items": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "minItems": 2,
-                        "description": "Direct thought items. Minimum 2 — a single item is not a cluster. If only 1 item exists, merge it into another cluster or let the server handle it by placing it in Unclustered."
+                        "description": "Direct thought items. Aim for at least 2 per cluster. If only 1 item exists, the server will place it in Unclustered automatically."
                     },
                     "subclusters": {
                         "type": "array",
@@ -133,8 +132,7 @@ INPUT_SCHEMA = {
                                 "thought_items": {
                                     "type": "array",
                                     "items": {"type": "string"},
-                                    "minItems": 2,
-                                    "description": "Thought items in this subcluster. Minimum 2 — a single item is not a cluster."
+                                    "description": "Thought items in this subcluster. Aim for at least 2 per subcluster."
                                 },
                                 "tags": {
                                     "type": "array",
