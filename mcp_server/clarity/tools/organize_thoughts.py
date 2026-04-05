@@ -43,7 +43,7 @@ SUSPENDED BEHAVIORS:
 
 WHEN TO CALL THIS TOOL:
 - User asks to "help me organize my thoughts", "I am overwhelmed", "help me focus", "sort my tasks", "declutter my mind", "help me find clarity", ""I have too much going on" or similar.
-- When a lot of unstructured thoughts, ideas, tasks are present and user needs help finding themes, priorities, or next steps.
+- When a lot of unstructured thoughts, ideas, tasks are present and user needs help finding themes, priorities, or next steps IN THE MOMENT. THIS IS NOT A PLANNING TOOL.
 - When user wants to merge, combine and recluster thoughts/ boards.
 - Only call this tool once the user explicitely says they are done with the brain dump ("that's it", "done", "nothing else").
 

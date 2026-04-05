@@ -40,7 +40,8 @@ DO NOT CALL:
 - When user wants to VIEW/SHOW their board (use load_saved_board instead)
 - When user wants to make targeted edits (add a few specific items, rename, delete, tag). Use edit_board for that.
 - When you can 100% reliably recall the board contents from memory. If you have high confidence in your recall, use that to make edits instead of calling this tool. This allows you to merge new thoughts with existing clusters without losing any existing content that you remember.
-
+- Wants to sort through an emotional or personal dilemma, relationship problem, or life decision.
+- Is asking a general question about productivity, prioritization, or focus without signaling cognitive overload.
 
 EMPTY STATE RESPONSE:
 When no saved board exists:
