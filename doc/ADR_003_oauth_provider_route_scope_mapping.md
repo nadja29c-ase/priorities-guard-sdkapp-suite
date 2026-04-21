@@ -1,26 +1,31 @@
 # ADR 003 — OAuth Provider: Route-to-Scope Mapping Strategy
 
-**Date:** March 2026  
-**Status:** Accepted  
+**Date:** March 2026 (Amended: April 21, 2026)
+**Status:** Accepted — migrated to registry April 21, 2026
 **Context:** `backend/core/oauth_provider/register_client.py`
 
 ---
 
 ## Decision
 
-Default OAuth scopes for dynamic client registration are **hardcoded per route** in `register_client.py`:
+Default OAuth scopes for dynamic client registration are derived from a **registry dict** in `register_client.py`:
 
 ```python
-DEFAULT_SCOPES_FOCUSED = ["focused.read", "focused.write", "focused.notify"]
-DEFAULT_SCOPES_PG = ["pg.access"]
+ROUTE_SCOPE_REGISTRY: dict[str, list[str]] = {
+    "focused":  ["focused.read", "focused.write", "focused.notify"],
+    "pg":       ["pg.access"],
+    "mindsort": ["clarity.write"],
+}
 
-if route_path == "/oauth/focused/register":
-    default_scopes = DEFAULT_SCOPES_FOCUSED
-else:
-    default_scopes = DEFAULT_SCOPES_PG
+# Derive app name from route: "/oauth/<app>/register" -> "<app>"
+route_parts = request.url.path.split("/")
+app_name = route_parts[2] if len(route_parts) >= 3 else None
+default_scopes = ROUTE_SCOPE_REGISTRY.get(app_name)
+if default_scopes is None:
+    raise HTTPException(status_code=404, detail="Unknown OAuth registration route")
 ```
 
-Each SDK app gets its own registration route (`/oauth/<app>/register`) with its own hardcoded default scope list.
+Each SDK app gets its own registration route (`/oauth/<app>/register`) with its own entry in the registry. Route decorators remain explicit — the registry is only for scope lookup, not route generation.
 
 ---
 
@@ -32,41 +37,21 @@ Each SDK app gets its own registration route (`/oauth/<app>/register`) with its 
 
 ---
 
-## Known Technical Debt
+## Implementation
 
-This pattern **does not scale** cleanly beyond 3–4 apps. Each new SDK app requires:
+To add a new authenticated SDK app:
 
-1. A new `DEFAULT_SCOPES_<APP>` constant
-2. A new `elif route_path == "/oauth/<app>/register":` branch
-3. A new route decorator on `register_endpoint`
-4. Manual verification that the new scope is in `SCOPES_SUPPORTED` (discovery)
+1. Add the scope to `SCOPES_SUPPORTED` in `discovery.py` (or keep the union pattern used by `SUPPORTED_SCOPES` for app-specific scopes).
+2. Add one entry to `ROUTE_SCOPE_REGISTRY` in `register_client.py`.
+3. Add one `@router.post("/oauth/<app>/register")` decorator on `register_endpoint`.
 
-If this is missed, the app either gets wrong scopes silently (too broad) or fails at runtime (scope not in discovery).
-
-**The correct long-term fix** is to derive default scopes from the route namespace automatically:
-
-```python
-# Example: derive app name from route, look up scopes from a registry
-ROUTE_SCOPE_REGISTRY = {
-    "focused": ["focused.read", "focused.write", "focused.notify"],
-    "pg":      ["pg.access"],
-    "clarity": ["clarity.write"],
-    # Add new apps here — single source of truth
-}
-
-app_name = request.url.path.split("/")[2]  # e.g. "pg" from "/oauth/pg/register"
-default_scopes = ROUTE_SCOPE_REGISTRY.get(app_name)
-if default_scopes is None:
-    raise HTTPException(status_code=404, detail="Unknown OAuth route")
-```
-
-This moves the mapping to a **single dict** — one line per new app, no branching logic, fail-fast on unknown routes.
+That's it — one dict entry, one route decorator. No branching logic, fail-fast on unknown routes.
 
 ---
 
 ## Trigger for Revisiting
 
-Revisit this ADR when adding a **third authenticated SDK app** to the suite. At that point the if/elif chain becomes a maintenance liability and the registry pattern above should replace it.
+Revisit if route structure fundamentally changes (e.g., dynamic route registration, multi-tenant scope derivation, or scopes no longer deducible from URL path).
 
 ---
 

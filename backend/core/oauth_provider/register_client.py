@@ -40,13 +40,18 @@ class RegisterRequest(BaseModel):
 # (safe: shared discovery.py SCOPES_SUPPORTED untouched, per-app discovery separated)
 SUPPORTED_SCOPES = set(SCOPES_SUPPORTED) | {"clarity.write"}
 
-# Route-specific defaults (least privilege principle)
-# - /oauth/focused/register: Focused app scopes only (backward compatibility)
-# - /oauth/pg/register: PG suite scopes (each MCP server advertises only its own scopes)
-# - /oauth/mindsort/register: MindSort AI scopes
-DEFAULT_SCOPES_FOCUSED = ["focused.read", "focused.write", "focused.notify"]
-DEFAULT_SCOPES_PG = ["pg.access"]  # Default for Priority Guardian suite
-DEFAULT_SCOPES_MINDSORT = ["clarity.write"]  # Default for MindSort AI
+# Route-to-scope registry (single source of truth per ADR 003).
+# Key: app segment in /oauth/<app>/register. Value: default scopes for that app.
+# To add a new authenticated SDK app:
+#   1. Add the scope to SCOPES_SUPPORTED in discovery.py (or keep the union pattern
+#      used by SUPPORTED_SCOPES above for app-specific scopes not in discovery).
+#   2. Add one entry here.
+#   3. Add the route decorator on register_endpoint below.
+ROUTE_SCOPE_REGISTRY: dict[str, list[str]] = {
+    "focused":  ["focused.read", "focused.write", "focused.notify"],
+    "pg":       ["pg.access"],
+    "mindsort": ["clarity.write"],
+}
 
 
 @router.post("/oauth/focused/register")
@@ -65,6 +70,7 @@ async def register_endpoint(
     Routes:
         /oauth/focused/register: Focused app clients (defaults to focused.* scopes)
         /oauth/pg/register: Priority Guardian clients (defaults to pg.access)
+        /oauth/mindsort/register: MindSort AI clients (defaults to clarity.write)
 
     Request Body:
         client_name: Human-readable client name
@@ -124,15 +130,13 @@ async def register_endpoint(
     # Set default grant types
     grant_types = register_request.grant_types or ["authorization_code", "refresh_token"]
 
-    # Determine route-specific default scopes (least privilege)
-    route_path = request.url.path
-    if route_path == "/oauth/focused/register":
-        default_scopes = DEFAULT_SCOPES_FOCUSED
-    elif route_path == "/oauth/mindsort/register":
-        default_scopes = DEFAULT_SCOPES_MINDSORT
-    else:
-        # /oauth/pg/register: PG suite defaults (ChatGPT doesn't send scope param)
-        default_scopes = DEFAULT_SCOPES_PG
+    # Derive app name from route: "/oauth/<app>/register" -> "<app>"
+    route_parts = request.url.path.split("/")
+    app_name = route_parts[2] if len(route_parts) >= 3 else None
+    default_scopes = ROUTE_SCOPE_REGISTRY.get(app_name)
+    if default_scopes is None:
+        # Fail closed on unknown route — should be unreachable due to route decorators
+        raise HTTPException(status_code=404, detail="Unknown OAuth registration route")
 
     # Parse and validate requested scopes
     # Normalize: treat whitespace-only as "no scope provided"
@@ -156,7 +160,7 @@ async def register_endpoint(
         scopes = default_scopes.copy()
         request_logger.info(
             "oauth.register.scopes_default",
-            route=route_path,
+            app=app_name,
             default_scopes=scopes
         )
 
