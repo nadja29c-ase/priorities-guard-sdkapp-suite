@@ -27,9 +27,9 @@ VALID_TEST_TOKEN = "a" * 64
 class TestSessionConstants:
     """Tests for session configuration constants (Increment 19 spec compliance)."""
 
-    def test_session_lifetime_days_is_two_years(self):
-        """SESSION_LIFETIME_DAYS must be 730 (2 years) per Increment 19."""
-        assert SESSION_LIFETIME_DAYS == 365 * 2
+    def test_session_lifetime_days_is_30(self):
+        """SESSION_LIFETIME_DAYS must be 30 days (rolling window)."""
+        assert SESSION_LIFETIME_DAYS == 30
 
     def test_session_token_bytes_is_32(self):
         """SESSION_TOKEN_BYTES must be 32 (64 hex chars) for cryptographic security."""
