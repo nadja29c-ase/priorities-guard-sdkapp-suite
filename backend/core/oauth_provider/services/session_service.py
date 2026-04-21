@@ -106,7 +106,7 @@ async def get_session_user(
     Look up user by session token and extend session expiry.
 
     Implements sliding window expiration: each successful lookup
-    extends the session by SESSION_LIFETIME_DAYS (2 years).
+    extends the session by SESSION_LIFETIME_DAYS (30 days).
 
     Security:
     - Looks up by session_token_hash (indexed) instead of plaintext
