@@ -97,6 +97,12 @@ The `_reconcile_user_by_subject` function in `backend/apps/priority_guardian/rou
 
 When adding a new table that represents meaningful user state (e.g., `pg_settings`, `pg_templates`), add an existence check for that table to the fresh-shell guard. Missing a table here silently widens the remap blast radius and risks cross-user data exposure.
 
+### Adding a New Personal-Data Column or Table?
+
+**Update the Data Retention Strategy detailed table in the same commit.**
+
+The ROPA Data Categories block references the Data Retention Strategy table and does not need separate updates. Keeping retention rules in one place (the detailed table) prevents drift between two lists.
+
 ---
 
 ## Deploy Reminder
