@@ -32,8 +32,8 @@ Each SDK app gets its own registration route (`/oauth/<app>/register`) with its 
 ## Rationale
 
 - **Least privilege**: Each route grants only the scopes its app needs. ChatGPT does not send a `scope` parameter during DCR — defaults determine what the client receives.
-- **Simplicity at current scale**: Two apps. Explicit is better than automatic when the mapping is trivial.
-- **Backward compatibility**: `focused.*` scopes predate the PG suite structure. Hardcoding preserves exact behavior without risk of regression.
+- **Single source of truth**: One registry dict replaces per-app branching. Adding a new app is a one-line change.
+- **Explicit routing preserved**: Route decorators remain the source of reachable paths; the registry is only default-scope lookup. This separation prevents accidental auto-registration of routes from dict entries.
 
 ---
 
@@ -59,7 +59,7 @@ Revisit if route structure fundamentally changes (e.g., dynamic route registrati
 
 When adding a new SDK app that requires authentication:
 
-1. **Do not add another `elif` branch** to `register_endpoint`. Migrate to the registry pattern first.
+1. **Add new apps to `ROUTE_SCOPE_REGISTRY`** — one dict entry plus one route decorator. No branching logic needed.
 2. **New scopes must be added to `SCOPES_SUPPORTED` in `discovery.py`** before adding them here — discovery is the single source of truth. Adding a scope to the route mapping without adding it to discovery will cause DCR clients to receive scopes that are not advertised, which breaks OpenAI's OAuth flow.
 3. **The `SUPPORTED_SCOPES` set in `register_client.py`** is derived from `discovery.SCOPES_SUPPORTED` — do not define scopes in two places.
 4. **Resource allowlist (`OAUTH_ALLOWED_RESOURCES`)**: The OAuth provider currently accepts arbitrary `resource` parameter values and will mint JWTs with `aud = <whatever resource was passed>`. This is RFC-compliant but should be locked to known MCP server URLs when a third app is added. Add validation in `token_service.py` before the RFC 9728 resolution rules:
