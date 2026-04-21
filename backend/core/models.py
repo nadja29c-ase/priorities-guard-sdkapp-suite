@@ -40,9 +40,24 @@ class CoreUser(Base):
     Maps external ChatGPT user IDs (from login_hint) to internal UUIDs.
     The chatgpt_user_id is a pseudonymous identifier used for OAuth flows.
     When login_hint is not provided, chatgpt_user_id will be NULL (anonymous user).
+
+    Inc 78: openai_subject provides cross-device identity continuity. When a user
+    makes a tool call, the MCP server extracts _meta['openai/subject'] and reconciles
+    it against the JWT-issued user_id. This allows the same ChatGPT user to be
+    recognized across different devices even when login_hint differs.
     """
 
     __tablename__ = "core_users"
+    __table_args__ = (
+        # Partial unique index: enforce uniqueness on openai_subject only when NOT NULL.
+        # Multiple NULL values are allowed (users who haven't made a tool call yet).
+        Index(
+            "ix_core_users_openai_subject_unique",
+            "openai_subject",
+            unique=True,
+            postgresql_where=text("openai_subject IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True),
@@ -57,6 +72,16 @@ class CoreUser(Base):
         unique=True,
         index=True,
         comment="ChatGPT user ID from login_hint parameter (NULL for anonymous users)"
+    )
+
+    openai_subject: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        comment="Anonymized ChatGPT user id from _meta['openai/subject']. "
+                "Used as cross-device identity anchor. NULL for users who have "
+                "not yet made a tool call post-Inc 78 deploy, or for CoreUsers "
+                "superseded by reconciliation. Uniqueness enforced by partial "
+                "index (see migration). Suite-wide field — not PG-specific."
     )
 
     created_at: Mapped[datetime] = mapped_column(

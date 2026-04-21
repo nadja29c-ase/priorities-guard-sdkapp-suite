@@ -546,6 +546,65 @@ def build_forbidden_meta() -> Dict[str, Any]:
 
 
 # ============================================================================
+# Cross-Device Identity Reconciliation (Increment 78)
+# ============================================================================
+
+async def reconcile_user_via_backend(
+    jwt_user_id: str,
+    meta: Optional[Dict[str, Any]],
+    correlation_id: str,
+) -> str:
+    """
+    Reconcile JWT-resolved user_id against openai/subject by calling the backend.
+
+    MCP server does not access the DB. All reconciliation state lives in the backend.
+
+    Returns the canonical user_id. Falls back to jwt_user_id if:
+    - subject is absent or empty
+    - backend call fails (degrade gracefully — do not block the tool call)
+
+    Does NOT raise on backend failure — logs at WARNING and returns jwt_user_id
+    unchanged. Reconciliation failure must not break tool execution.
+    """
+    # Late import to avoid circular imports
+    from mcp_server.priority_guardian.http_client import reconcile_user
+
+    subject = (meta or {}).get("openai/subject")
+
+    if not subject:
+        logger.debug(
+            "auth.reconcile.subject_absent",
+            correlation_id=correlation_id,
+        )
+        return jwt_user_id
+
+    try:
+        response = await reconcile_user(jwt_user_id, subject, correlation_id)
+
+        canonical_user_id = response["user_id"]
+        case = response["case"]
+
+        logger.info(
+            "auth.reconcile.result",
+            correlation_id=correlation_id,
+            case=case,
+            jwt_user_id=jwt_user_id,
+            canonical_user_id=canonical_user_id,
+        )
+
+        return canonical_user_id
+
+    except Exception as e:
+        logger.warning(
+            "auth.reconcile.backend_failed",
+            correlation_id=correlation_id,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        return jwt_user_id
+
+
+# ============================================================================
 # Main Authentication Function
 # ============================================================================
 
@@ -606,6 +665,10 @@ async def authenticate_request(
         scopes = validated["scopes"]
         jti = validated["jti"]
         azp = validated["azp"]
+
+        # Inc 78: Reconcile JWT user_id against openai/subject for cross-device continuity.
+        # MCP server stays stateless — reconciliation happens in the backend.
+        user_id = await reconcile_user_via_backend(user_id, meta, correlation_id)
 
         # Step 5: Enforce tool-specific scopes
         enforce_tool_scope(tool_name, scopes, correlation_id)

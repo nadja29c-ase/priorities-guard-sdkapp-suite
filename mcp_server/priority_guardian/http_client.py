@@ -188,6 +188,51 @@ async def backend_put(
     return resp.json()
 
 
+async def reconcile_user(
+    jwt_user_id: str,
+    openai_subject: str,
+    correlation_id: str,
+) -> dict:
+    """
+    Call the backend reconciliation endpoint to resolve the canonical user_id
+    for a given (jwt_user_id, openai_subject) pair.
+
+    Called BEFORE tool dispatch. Unlike backend_get/backend_post, this endpoint
+    does not accept X-User-ID because its purpose is to produce one.
+
+    Returns dict with 'user_id' (str) and 'case' (str).
+    Raises httpx.HTTPStatusError on backend error.
+    """
+    global http_client
+    if http_client is None:
+        http_client = httpx.AsyncClient(timeout=30.0)
+
+    url = f"{BACKEND_URL}/api/priority-guardian/reconcile-user"
+
+    # No X-User-ID header — this endpoint produces the canonical user_id
+    headers = {
+        "X-Correlation-ID": correlation_id,
+    }
+    if INTERNAL_API_SECRET:
+        headers["X-Internal-Secret"] = INTERNAL_API_SECRET
+
+    logger.info(
+        "backend.api.reconcile_user",
+        correlation_id=correlation_id,
+        jwt_user_id=jwt_user_id,
+    )
+
+    resp = await http_client.post(
+        url,
+        json={"jwt_user_id": jwt_user_id, "openai_subject": openai_subject},
+        headers=headers,
+        timeout=4.0,  # Short timeout — reconciliation is on the critical path
+    )
+
+    resp.raise_for_status()
+    return resp.json()
+
+
 async def backend_delete(
     path: str,
     user_id: str,

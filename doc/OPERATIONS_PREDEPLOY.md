@@ -85,6 +85,20 @@ Before OpenAI submission, verify Render env vars match exactly:
 
 With Increment 52 deployed, wrong values cause startup failure rather than silent misbehavior.
 
+## Schema Change Checklist
+
+### Adding a New PG-Owned Table?
+
+**Extend the fresh-shell check in `reconcile_router.py`.**
+
+The `_reconcile_user_by_subject` function in `backend/apps/priority_guardian/routers/reconcile_router.py` determines whether a CoreUser is a "fresh shell" (safe to remap to a different user). Currently it checks:
+- No active (non-revoked) Google connection
+- No PgPriority rows (of any status)
+
+When adding a new table that represents meaningful user state (e.g., `pg_settings`, `pg_templates`), add an existence check for that table to the fresh-shell guard. Missing a table here silently widens the remap blast radius and risks cross-user data exposure.
+
+---
+
 ## Deploy Reminder
 
 **After pushing changes to the shared backend**, manually redeploy the service on Render.

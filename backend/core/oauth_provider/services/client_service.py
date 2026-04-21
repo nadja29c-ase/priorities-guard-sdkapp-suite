@@ -38,7 +38,10 @@ async def create_oauth_client(
         client_name: Human-readable client name
         redirect_uris: List of allowed redirect URIs
         grant_types: Optional list of grant types (default: authorization_code, refresh_token)
-        scopes: Optional list of scopes (caller should provide explicit scopes)
+        scopes: List of scopes. Required in practice — passing None raises ValueError.
+                Typing stays Optional to preserve the signature; callers must always
+                provide explicit scopes (per-route defaults are computed in
+                register_client.py).
         correlation_id: Optional correlation ID for logging
 
     Returns:
@@ -65,9 +68,15 @@ async def create_oauth_client(
     if grant_types is None:
         grant_types = ["authorization_code", "refresh_token"]
 
-    # Set default scopes (must include all supported scopes)
+    # Scopes must be explicitly provided by the caller.
+    # Previously this block fell back to a union of scopes across ALL SDK apps,
+    # which is a cross-app privilege escalation landmine. Per-route defaults are
+    # computed in register_client.py — no global default is correct here.
     if scopes is None:
-        scopes = ["focused.read", "focused.write", "focused.notify", "clarity.write"]
+        raise ValueError(
+            "scopes must be explicitly provided — no global defaults allowed. "
+            "Callers should resolve per-route defaults before calling create_oauth_client."
+        )
 
     # Generate client credentials
     # Prefix: pg = Priority Guardian (neutral, works for all apps)

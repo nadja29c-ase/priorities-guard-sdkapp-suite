@@ -260,6 +260,7 @@ class TestRouterLevelProtection:
             ("GET", "/api/priority-guardian/patterns"),
             ("POST", "/api/priority-guardian/disconnect"),
             ("GET", "/api/priority-guardian/google/connection-status"),
+            ("POST", "/api/priority-guardian/reconcile-user"),  # Inc 78: cross-device reconciliation
         ]
 
         with patch("backend.core.config.settings.INTERNAL_API_SECRET", "production-secret"):

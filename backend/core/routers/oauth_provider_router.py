@@ -14,14 +14,15 @@ Architecture (Post Phase 1 Refactoring):
 - Shared exceptions in backend/core/oauth_provider/exceptions.py
 - Zero inline logic in this orchestrator
 
-Included Endpoints:
+Included Endpoints (served for three SDK app route families: focused, pg, mindsort):
 - Discovery: /.well-known/openid-configuration, oauth-protected-resource
-- JWKS: /oauth/focused/jwks
-- Authorization: /oauth/focused/authorize (OAuth 2.1 + PKCE)
-- Consent UI: /oauth/focused/consent
-- Token: /oauth/focused/token (authorization_code, refresh_token grants)
-- Registration: /oauth/focused/register (RFC 7591 dynamic client registration)
-- Revocation: /oauth/focused/revoke (RFC 7009 token revocation)
+- JWKS: /oauth/{focused,pg,mindsort}/jwks
+- Authorization: /oauth/{focused,pg,mindsort}/authorize (OAuth 2.1 + PKCE)
+- Consent UI: /oauth/{focused,pg,mindsort}/consent
+- Token: /oauth/{focused,pg,mindsort}/token (authorization_code, refresh_token grants)
+- Registration: /oauth/{focused,pg,mindsort}/register (RFC 7591 dynamic client registration)
+- Revocation: /oauth/{focused,pg,mindsort}/revoke (RFC 7009 token revocation)
+- MindSort-specific discovery: /oauth/mindsort/.well-known/oauth-authorization-server
 
 Status: Consolidated OAuth 2.1 provider for all SDK apps
 """
