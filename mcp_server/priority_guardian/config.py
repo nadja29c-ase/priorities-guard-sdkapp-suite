@@ -224,6 +224,18 @@ IS_DEV = ENV == "dev"
 
 
 # ============================================================================
+# Request Size Limits
+# ============================================================================
+
+# Maximum request body size for MCP endpoints (bytes)
+# Prevents DoS via oversized payloads. Default 1 MB is generous for JSON-RPC.
+MAX_MCP_BODY_SIZE_BYTES = int(get_env(
+    "MAX_MCP_BODY_SIZE_BYTES",
+    default=str(1024 * 1024)  # 1 MB
+))
+
+
+# ============================================================================
 # Logging Configuration
 # ============================================================================
 

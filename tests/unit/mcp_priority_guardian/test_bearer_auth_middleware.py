@@ -177,6 +177,7 @@ class MockInnerApp:
         self.called = False
         self.scope = None
         self.received_body = None
+        self.received_more_body = None  # Track more_body flag
 
     async def __call__(self, scope, receive, send):
         self.called = True
@@ -185,6 +186,7 @@ class MockInnerApp:
         msg = await receive()
         if msg["type"] == "http.request":
             self.received_body = msg.get("body", b"")
+            self.received_more_body = msg.get("more_body", True)  # Default True if missing
         # Send a minimal response
         await send({
             "type": "http.response.start",
@@ -205,7 +207,7 @@ class TestBearerAuthMiddleware401:
     """Tests for HTTP 401 responses (missing, malformed, or invalid JWTs)."""
 
     @pytest.mark.asyncio
-    async def test_no_authorization_header_returns_401(self, mock_jwks_cache):
+    async def test_no_authorization_header_returns_401(self, mock_jwks_cache, capsys):
         """Case 1: No Authorization header → 401, reason=missing_header."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
 
@@ -220,6 +222,11 @@ class TestBearerAuthMiddleware401:
         assert 'error="invalid_token"' in send.headers["www-authenticate"]
         assert send.body_json["error"] == "unauthorized"
         assert send.body_json["error_description"] == "Authentication required"
+
+        # Verify structured log event was emitted (structlog writes to stdout)
+        captured = capsys.readouterr()
+        assert "auth.middleware.rejected" in captured.out
+        assert "missing_header" in captured.out
 
     @pytest.mark.asyncio
     async def test_header_not_bearer_returns_401(self, mock_jwks_cache):
@@ -255,7 +262,7 @@ class TestBearerAuthMiddleware401:
         assert 'error="invalid_token"' in send.headers["www-authenticate"]
 
     @pytest.mark.asyncio
-    async def test_expired_token_returns_401(self, mock_jwks_cache):
+    async def test_expired_token_returns_401(self, mock_jwks_cache, capsys):
         """Case 4: Bearer <valid-but-expired> → 401, reason=token_expired."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
 
@@ -270,6 +277,11 @@ class TestBearerAuthMiddleware401:
 
         assert send.status == 401
         assert "Token expired" in send.body_json["error_description"]
+
+        # Verify structured log event was emitted (structlog writes to stdout)
+        captured = capsys.readouterr()
+        assert "auth.middleware.rejected" in captured.out
+        assert "token_expired" in captured.out
 
     @pytest.mark.asyncio
     async def test_wrong_issuer_returns_401(self, mock_jwks_cache):
@@ -381,10 +393,11 @@ class TestBearerAuthMiddleware403:
             await middleware(scope, _make_receive(body), send)
 
         assert inner_app.called
-        assert send.status == 200
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
     @pytest.mark.asyncio
-    async def test_valid_token_missing_required_scope_returns_403(self, mock_jwks_cache):
+    async def test_valid_token_missing_required_scope_returns_403(self, mock_jwks_cache, capsys):
         """Case 10: Valid token missing required scope → 403, reason=insufficient_scope."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
 
@@ -418,6 +431,12 @@ class TestBearerAuthMiddleware403:
         assert "create_priority" in send.body_json["error_description"]
         assert send.body_json["required_scopes"] == ["pg.access"]
 
+        # Verify structured log event with tool_name and scopes (structlog writes to stdout)
+        captured = capsys.readouterr()
+        assert "auth.middleware.rejected" in captured.out
+        assert "insufficient_scope" in captured.out
+        assert "create_priority" in captured.out
+
     @pytest.mark.asyncio
     async def test_unknown_tool_passes_through(self, mock_jwks_cache):
         """Case 11: Unknown tool → inner app called (FastMCP handles it)."""
@@ -444,7 +463,8 @@ class TestBearerAuthMiddleware403:
             await middleware(scope, _make_receive(body), send)
 
         assert inner_app.called
-        assert send.status == 200
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
     @pytest.mark.asyncio
     async def test_initialize_method_passes_through(self, mock_jwks_cache):
@@ -465,7 +485,8 @@ class TestBearerAuthMiddleware403:
         await middleware(scope, _make_receive(body), send)
 
         assert inner_app.called
-        assert send.status == 200
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
     @pytest.mark.asyncio
     async def test_tools_list_method_passes_through(self, mock_jwks_cache):
@@ -486,7 +507,8 @@ class TestBearerAuthMiddleware403:
         await middleware(scope, _make_receive(body), send)
 
         assert inner_app.called
-        assert send.status == 200
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
     @pytest.mark.asyncio
     async def test_malformed_json_passes_through(self, mock_jwks_cache):
@@ -507,7 +529,8 @@ class TestBearerAuthMiddleware403:
         await middleware(scope, _make_receive(body), send)
 
         assert inner_app.called
-        assert send.status == 200
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
 
 # =============================================================================
@@ -518,7 +541,7 @@ class TestBearerAuthMiddlewareBodyHandling:
     """Tests for body size limits and replay."""
 
     @pytest.mark.asyncio
-    async def test_body_exceeds_size_limit_returns_413(self, mock_jwks_cache):
+    async def test_body_exceeds_size_limit_returns_413(self, mock_jwks_cache, capsys):
         """Case 15: Body > 1 MB → HTTP 413, inner app not called."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
 
@@ -539,6 +562,12 @@ class TestBearerAuthMiddlewareBodyHandling:
         assert not inner_app.called
         assert send.status == 413
         assert send.body_json["error"] == "payload_too_large"
+
+        # Verify structured log event with size_bytes (structlog writes to stdout)
+        captured = capsys.readouterr()
+        assert "auth.middleware.rejected" in captured.out
+        assert "body_too_large" in captured.out
+        assert "size_bytes" in captured.out
 
     @pytest.mark.asyncio
     async def test_content_length_header_exceeds_limit_returns_413(self, mock_jwks_cache):
@@ -586,7 +615,7 @@ class TestBearerAuthMiddlewareBodyHandling:
 
     @pytest.mark.asyncio
     async def test_valid_body_replayed_correctly(self, mock_jwks_cache):
-        """Case 16: Valid body → body correctly replayed to inner app."""
+        """Case 16: Valid body → body correctly replayed to inner app with more_body=False."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
 
         token = _create_test_jwt(scopes="pg.access")
@@ -604,10 +633,14 @@ class TestBearerAuthMiddlewareBodyHandling:
 
         assert inner_app.called
         assert inner_app.received_body == body
+        # Verify more_body: False on replayed chunk (briefing acceptance criterion)
+        assert inner_app.received_more_body is False
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
     @pytest.mark.asyncio
     async def test_empty_body_replayed_correctly(self, mock_jwks_cache):
-        """Case 17: Empty body → inner app called, replayed body is empty."""
+        """Case 17: Empty body → inner app called, replayed body is empty with more_body=False."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
 
         token = _create_test_jwt(scopes="pg.access")
@@ -623,6 +656,10 @@ class TestBearerAuthMiddlewareBodyHandling:
 
         assert inner_app.called
         assert inner_app.received_body == b""
+        # Verify more_body: False on replayed chunk
+        assert inner_app.received_more_body is False
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
     @pytest.mark.asyncio
     async def test_get_request_no_body_parsing(self, mock_jwks_cache):
@@ -742,3 +779,114 @@ class TestBearerAuthMiddlewareEdgeCases:
         await middleware(scope, _make_receive(), send)
 
         assert send.status == 401
+
+    @pytest.mark.asyncio
+    async def test_multi_scope_403_formats_correctly(self, mock_jwks_cache):
+        """Tool requiring multiple scopes → 403 with space-separated scope list."""
+        from mcp_server.priority_guardian.server import BearerAuthMiddleware
+
+        token = _create_test_jwt(scopes="single.scope")  # Only one scope
+        inner_app = MockInnerApp()
+        middleware = BearerAuthMiddleware(inner_app, "https://pg.test.com")
+
+        body = json.dumps({
+            "method": "tools/call",
+            "params": {"name": "multi_scope_tool", "arguments": {}},
+        }).encode()
+
+        scope = _make_scope(headers=[
+            (b"authorization", f"Bearer {token}".encode()),
+        ])
+        send = MockSend()
+
+        # Mock get_tool to return a tool that requires multiple scopes
+        with patch("mcp_server.priority_guardian.tools.get_tool") as mock_get_tool:
+            mock_tool = MagicMock()
+            mock_tool.required_scopes = ["pg.access", "pg.admin"]  # Two scopes
+            mock_get_tool.return_value = mock_tool
+
+            await middleware(scope, _make_receive(body), send)
+
+        assert not inner_app.called
+        assert send.status == 403
+        # Verify multi-scope formatting: scope="pg.access pg.admin"
+        www_auth = send.headers["www-authenticate"]
+        assert 'scope="pg.access pg.admin"' in www_auth
+        assert send.body_json["required_scopes"] == ["pg.access", "pg.admin"]
+
+    @pytest.mark.asyncio
+    async def test_replay_receive_forwards_to_original_after_body(self, mock_jwks_cache):
+        """After body is consumed, replay_receive forwards to original receive (Bug 2 regression guard)."""
+        from mcp_server.priority_guardian.server import BearerAuthMiddleware
+
+        token = _create_test_jwt(scopes="pg.access")
+        middleware = BearerAuthMiddleware(MockInnerApp(), "https://pg.test.com")
+
+        body = b'{"method": "initialize"}'
+
+        # Track receive calls
+        receive_calls = []
+        original_receive = _make_receive(body)
+
+        async def tracking_receive():
+            result = await original_receive()
+            receive_calls.append(result)
+            return result
+
+        # Create an inner app that calls receive() twice
+        class DoubleReceiveApp:
+            def __init__(self):
+                self.called = False
+                self.first_msg = None
+                self.second_msg = None
+
+            async def __call__(self, scope, receive, send):
+                self.called = True
+                self.first_msg = await receive()
+                self.second_msg = await receive()
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": b"ok",
+                })
+
+        inner_app = DoubleReceiveApp()
+        middleware = BearerAuthMiddleware(inner_app, "https://pg.test.com")
+
+        scope = _make_scope(headers=[
+            (b"authorization", f"Bearer {token}".encode()),
+        ])
+        send = MockSend()
+
+        await middleware(scope, tracking_receive, send)
+
+        assert inner_app.called
+        # First receive() should return the replayed body
+        assert inner_app.first_msg["type"] == "http.request"
+        assert inner_app.first_msg["body"] == body
+        # Second receive() should forward to original (returns http.disconnect)
+        assert inner_app.second_msg["type"] == "http.disconnect"
+
+    @pytest.mark.asyncio
+    async def test_auth_header_var_untouched_on_rejection(self, mock_jwks_cache):
+        """Verify auth_header_var is NOT set by BearerAuthMiddleware on rejection (Hygiene 7)."""
+        from mcp_server.priority_guardian.server import BearerAuthMiddleware
+        from mcp_server.priority_guardian.request_context import auth_header_var
+
+        middleware = BearerAuthMiddleware(MockInnerApp(), "https://pg.test.com")
+        scope = _make_scope(headers=[])  # No auth header → 401
+        send = MockSend()
+
+        # Verify auth_header_var is at default before call
+        assert auth_header_var.get() is None
+
+        await middleware(scope, _make_receive(), send)
+
+        assert send.status == 401
+        # Verify auth_header_var is still at default after rejection
+        # (BearerAuthMiddleware does NOT set it - that's MCPContentTypeAndAcceptFixMiddleware's job)
+        assert auth_header_var.get() is None

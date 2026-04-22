@@ -189,6 +189,23 @@ class HeadMcpMiddleware:
         await self.app(scope, receive, send)
 
 
+def _escape_error_description(description: str) -> str:
+    """
+    Escape a description string for use in WWW-Authenticate header.
+
+    Per RFC 6749, error_description values in headers must be safe quoted-strings.
+    This prevents header injection if description ever includes user-controlled text.
+    Removes characters that could break the quoted-string format.
+    """
+    # Remove characters that could break quoted-string: " and \
+    # Also remove control characters (0x00-0x1F, 0x7F)
+    safe_chars = []
+    for c in description:
+        if c not in '"\\' and (0x20 <= ord(c) < 0x7F):
+            safe_chars.append(c)
+    return "".join(safe_chars)
+
+
 class BearerAuthMiddleware:
     """
     ASGI middleware for full HTTP-layer MCP auth compliance (401 + 403).
@@ -197,7 +214,7 @@ class BearerAuthMiddleware:
     - HTTP 401 + WWW-Authenticate for missing, malformed, or invalid JWTs
     - HTTP 403 + WWW-Authenticate (error="insufficient_scope") for valid JWTs
       that lack required scopes for the requested tool
-    - HTTP 413 for request bodies exceeding 1 MB
+    - HTTP 413 for request bodies exceeding MAX_MCP_BODY_SIZE_BYTES
 
     FastMCP streamable HTTP uses:
     - GET /mcp for SSE stream initiation
@@ -205,7 +222,7 @@ class BearerAuthMiddleware:
     - DELETE /mcp for session close
 
     Decision sequence for POST /mcp:
-    1. Body size guard: reject > 1 MB with 413
+    1. Body size guard: reject > limit with 413
     2. Check Authorization header presence → 401 if missing
     3. Extract Bearer token → 401 if invalid format
     4. Validate JWT (signature, iss, aud, exp) → 401 if invalid
@@ -216,9 +233,6 @@ class BearerAuthMiddleware:
     Positioning: between HeadMcpMiddleware and MCPContentTypeAndAcceptFixMiddleware.
     Does NOT set auth_header_var — that remains MCPContentTypeAndAcceptFixMiddleware's job.
     """
-
-    # Maximum request body size (1 MB)
-    MAX_BODY_SIZE = 1024 * 1024
 
     def __init__(self, app, mcp_origin: str):
         self.app = app
@@ -245,6 +259,7 @@ class BearerAuthMiddleware:
             check_scopes,
             extract_or_generate_correlation_id,
         )
+        from mcp_server.priority_guardian.config import MAX_MCP_BODY_SIZE_BYTES
 
         correlation_id = extract_or_generate_correlation_id(None)
 
@@ -295,7 +310,7 @@ class BearerAuthMiddleware:
 
         # For POST: Pre-flight Content-Length check (after auth, before buffering)
         # Avoids reading any body bytes for honest oversized requests
-        if content_length is not None and content_length > self.MAX_BODY_SIZE:
+        if content_length is not None and content_length > MAX_MCP_BODY_SIZE_BYTES:
             await self._send_413(send, content_length, correlation_id)
             return
 
@@ -310,7 +325,7 @@ class BearerAuthMiddleware:
             if message["type"] == "http.request":
                 chunk = message.get("body", b"")
                 total_size += len(chunk)
-                if total_size > self.MAX_BODY_SIZE:
+                if total_size > MAX_MCP_BODY_SIZE_BYTES:
                     # Will be caught below
                     raise _BodyTooLargeError(total_size)
                 body_chunks.append(chunk)
@@ -408,13 +423,15 @@ class BearerAuthMiddleware:
             correlation_id=correlation_id,
         )
 
+        # Escape description for safe use in WWW-Authenticate header (prevents injection)
+        safe_description = _escape_error_description(description)
         www_auth = (
             f'Bearer resource_metadata="{self.mcp_origin}/.well-known/oauth-protected-resource", '
-            f'error="invalid_token", error_description="{description}"'
+            f'error="invalid_token", error_description="{safe_description}"'
         )
         body = json.dumps({
             "error": "unauthorized",
-            "error_description": description,
+            "error_description": description,  # Body is JSON-encoded, safe as-is
         }).encode("utf-8")
 
         await send({
