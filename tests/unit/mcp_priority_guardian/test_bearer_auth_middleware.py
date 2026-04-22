@@ -322,7 +322,8 @@ class TestBearerAuthMiddleware401:
         await middleware(scope, _make_receive(), send)
 
         assert inner_app.called
-        assert send.status == 200
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
     @pytest.mark.asyncio
     async def test_health_endpoint_passes_through(self, mock_jwks_cache):
@@ -341,7 +342,8 @@ class TestBearerAuthMiddleware401:
         await middleware(scope, _make_receive(), send)
 
         assert inner_app.called
-        assert send.status == 200
+        # Verify scope was passed through unchanged
+        assert inner_app.scope is scope
 
 
 # =============================================================================
@@ -540,7 +542,7 @@ class TestBearerAuthMiddlewareBodyHandling:
 
     @pytest.mark.asyncio
     async def test_content_length_header_exceeds_limit_returns_413(self, mock_jwks_cache):
-        """Pre-flight check: Content-Length > 1 MB → 413 without reading body."""
+        """Pre-flight check: Content-Length > 1 MB with valid JWT → 413 without reading body."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
 
         token = _create_test_jwt(scopes="pg.access")
@@ -560,6 +562,27 @@ class TestBearerAuthMiddlewareBodyHandling:
         assert not inner_app.called
         assert send.status == 413
         assert send.body_json["error"] == "payload_too_large"
+
+    @pytest.mark.asyncio
+    async def test_content_length_exceeds_limit_without_auth_returns_401(self, mock_jwks_cache):
+        """Content-Length > 1 MB but no auth → 401 (auth check before size check)."""
+        from mcp_server.priority_guardian.server import BearerAuthMiddleware
+
+        inner_app = MockInnerApp()
+        middleware = BearerAuthMiddleware(inner_app, "https://pg.test.com")
+
+        # Large Content-Length but no auth header
+        scope = _make_scope(headers=[
+            (b"content-length", b"2000000"),  # 2 MB declared, no auth
+        ])
+        send = MockSend()
+
+        await middleware(scope, _make_receive(b"small body"), send)
+
+        assert not inner_app.called
+        # Auth check comes first: should be 401, not 413
+        assert send.status == 401
+        assert send.body_json["error"] == "unauthorized"
 
     @pytest.mark.asyncio
     async def test_valid_body_replayed_correctly(self, mock_jwks_cache):

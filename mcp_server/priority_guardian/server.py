@@ -12,6 +12,7 @@ Or (direct mode - for local development):
     python -m mcp_server.priority_guardian.server
 """
 
+import json
 import os
 import time
 
@@ -259,13 +260,8 @@ class BearerAuthMiddleware:
                 except (ValueError, UnicodeDecodeError):
                     pass
 
-        # Pre-flight check: reject immediately if Content-Length exceeds limit
-        # (avoids reading any body bytes for honest oversized requests)
-        if method == "POST" and content_length is not None and content_length > self.MAX_BODY_SIZE:
-            await self._send_413(send, content_length, correlation_id)
-            return
-
-        # Step 2: Check for Authorization header
+        # Step 2: Check for Authorization header (before Content-Length check
+        # to avoid leaking body size limits to unauthenticated clients)
         if not auth_header:
             await self._send_401(send, "missing_header", "Authentication required", correlation_id, method)
             return
@@ -297,8 +293,14 @@ class BearerAuthMiddleware:
             await self.app(scope, receive, send)
             return
 
+        # For POST: Pre-flight Content-Length check (after auth, before buffering)
+        # Avoids reading any body bytes for honest oversized requests
+        if content_length is not None and content_length > self.MAX_BODY_SIZE:
+            await self._send_413(send, content_length, correlation_id)
+            return
+
         # For POST: need to buffer body for scope enforcement and replay
-        # Step 0: Body size guard during buffering
+        # Step 0: Body size guard during streaming (for chunked/missing Content-Length)
         body_chunks = []
         total_size = 0
 
@@ -322,6 +324,12 @@ class BearerAuthMiddleware:
                     if not msg.get("more_body", False):
                         break
                 elif msg["type"] == "http.disconnect":
+                    # Client disconnected mid-body; log and return cleanly
+                    logger.info(
+                        "auth.middleware.client_disconnected",
+                        correlation_id=correlation_id,
+                        bytes_received=total_size,
+                    )
                     return
         except _BodyTooLargeError as e:
             await self._send_413(send, e.size, correlation_id)
@@ -360,14 +368,19 @@ class BearerAuthMiddleware:
                         )
                         return
 
-        # Create replay receive callable
-        replay_receive = self._create_replay_receive(full_body)
+        # Create replay receive callable (pass original receive for post-body disconnect)
+        replay_receive = self._create_replay_receive(full_body, receive)
 
         # Pass through to inner app with replayed body
         await self.app(scope, replay_receive, send)
 
-    def _create_replay_receive(self, body: bytes):
-        """Create a receive callable that replays the buffered body."""
+    def _create_replay_receive(self, body: bytes, original_receive):
+        """Create a receive callable that replays the buffered body.
+
+        After the buffered body is consumed once, subsequent calls forward
+        to the original receive to wait for real disconnect events (not
+        synthesize fake ones that could prematurely tear down FastMCP streams).
+        """
         sent = False
 
         async def replay_receive():
@@ -379,8 +392,8 @@ class BearerAuthMiddleware:
                     "body": body,
                     "more_body": False,
                 }
-            # After body sent, return disconnect on subsequent calls
-            return {"type": "http.disconnect"}
+            # After body consumed, forward to original receive for real disconnect
+            return await original_receive()
 
         return replay_receive
 
@@ -497,10 +510,6 @@ class _BodyTooLargeError(Exception):
         self.size = size
 
 
-# Import json at module level for _send_* methods
-import json
-
-
 class MCPContentTypeAndAcceptFixMiddleware:
     """
     Fix ChatGPT -> FastMCP header mismatch and capture Authorization header.
@@ -580,18 +589,10 @@ def create_app():
         OAUTH_ISSUER_URL,
         BACKEND_URL,
         CORS_ALLOWED_ORIGINS,
-        SCOPES_SUPPORTED,
         IS_DEV,
     )
     from urllib.parse import urlparse as _urlparse
     _mcp_origin = f"{_urlparse(MCP_SERVER_URL).scheme}://{_urlparse(MCP_SERVER_URL).netloc}"
-    # Per OpenAI docs: include scope in WWW-Authenticate to help ChatGPT
-    # understand required permissions during the discovery path
-    _scopes = " ".join(SCOPES_SUPPORTED)
-    WWW_AUTHENTICATE_VALUE = (
-        f'Bearer resource_metadata="{_mcp_origin}/.well-known/oauth-protected-resource/mcp", '
-        f'scope="{_scopes}"'
-    )
     from mcp_server.priority_guardian.discovery import (
         openid_configuration,
         oauth_authorization_server,
