@@ -35,24 +35,23 @@ class Base(DeclarativeBase):
 
 class CoreUser(Base):
     """
-    Minimal user table for storing user references.
+    User table storing references to external ChatGPT identities.
 
-    Maps external ChatGPT user IDs (from login_hint) to internal UUIDs.
-    The chatgpt_user_id is a pseudonymous identifier used for OAuth flows.
-    When login_hint is not provided, chatgpt_user_id will be NULL (anonymous user).
+    Two pseudonymous identifiers link ChatGPT users to internal UUIDs:
+    - chatgpt_user_id: from OAuth login_hint (NULL for anonymous users)
+    - openai_subject: from MCP tool call _meta['openai/subject'], provides
+      cross-device continuity (Inc 78)
 
-    Inc 78: openai_subject provides cross-device identity continuity. When a user
-    makes a tool call, the MCP server extracts _meta['openai/subject'] and reconciles
-    it against the JWT-issued user_id. This allows the same ChatGPT user to be
-    recognized across different devices even when login_hint differs.
+    The internal UUID `id` is the canonical reference used by all FKs.
     """
 
     __tablename__ = "core_users"
     __table_args__ = (
         # Partial unique index: enforce uniqueness on openai_subject only when NOT NULL.
         # Multiple NULL values are allowed (users who haven't made a tool call yet).
+        # Name must match migration b8c9d0e1f2g3 to avoid alembic autogenerate drift.
         Index(
-            "ix_core_users_openai_subject_unique",
+            "ix_core_users_openai_subject",
             "openai_subject",
             unique=True,
             postgresql_where=text("openai_subject IS NOT NULL"),

@@ -199,6 +199,14 @@ async def test_case_a_race_lost_no_winner_anomaly(async_session, user_b_fresh):
     # 1. First SELECT returns None (no owner)
     # 2. UPDATE returns rowcount=0 (race lost)
     # 3. Second SELECT returns None (anomaly: no winner found)
+    #
+    # TODO: This test is brittle because it relies on isinstance(stmt, Update)
+    # working correctly when the session is patched. MagicMock doesn't satisfy
+    # isinstance(mock, Update), so SELECT statements fall through to the else branch.
+    # If SQLAlchemy or MagicMock behavior changes (e.g., adding __class__ forwarding),
+    # this test could break silently. A more robust approach would use a custom
+    # mock session class that explicitly tracks call order and returns typed results.
+    # Acceptable for now since the test exercises the right branch and passes.
 
     async def mock_execute(stmt):
         # Check if this is an UPDATE statement

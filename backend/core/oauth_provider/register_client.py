@@ -131,6 +131,11 @@ async def register_endpoint(
     grant_types = register_request.grant_types or ["authorization_code", "refresh_token"]
 
     # Derive app name from route: "/oauth/<app>/register" -> "<app>"
+    # COUPLING: assumes exact path shape "/oauth/<app>/register". If routes are ever
+    # mounted under a prefix or restructured, both ROUTE_SCOPE_REGISTRY keys AND this
+    # parser must change together. Integration tests in
+    # tests/integration/oauth_provider/test_register_client_registry.py exercise all
+    # three routes end-to-end and will fail if this invariant breaks.
     route_parts = request.url.path.split("/")
     app_name = route_parts[2] if len(route_parts) >= 3 else None
     default_scopes = ROUTE_SCOPE_REGISTRY.get(app_name)

@@ -111,6 +111,8 @@ async def _reconcile_user_by_subject(
         # - jwt_user_id was deleted between JWT issuance and this call
         # - Genuine concurrent race (extremely unlikely with guarded UPDATE)
         # Log error for alerting and return jwt_user_id with case "X" (anomaly).
+        # MONITORING: Better Stack alert should fire on "reconcile.race_lost_no_winner"
+        # to page ops when reconciliation invariants are violated.
         if subject_user_id is None:
             log.error(
                 "reconcile.race_lost_no_winner",
