@@ -237,7 +237,6 @@ class BearerAuthMiddleware:
             return
 
         # Late imports to avoid circular dependencies
-        import json
         import jwt
         from mcp_server.priority_guardian.mcp_auth import (
             extract_bearer_token,
@@ -248,12 +247,23 @@ class BearerAuthMiddleware:
 
         correlation_id = extract_or_generate_correlation_id(None)
 
-        # Extract Authorization header
+        # Extract Authorization header and Content-Length from headers
         auth_header = None
+        content_length = None
         for name, value in scope.get("headers", []):
             if name == b"authorization":
                 auth_header = value.decode("utf-8")
-                break
+            elif name == b"content-length":
+                try:
+                    content_length = int(value.decode())
+                except (ValueError, UnicodeDecodeError):
+                    pass
+
+        # Pre-flight check: reject immediately if Content-Length exceeds limit
+        # (avoids reading any body bytes for honest oversized requests)
+        if method == "POST" and content_length is not None and content_length > self.MAX_BODY_SIZE:
+            await self._send_413(send, content_length, correlation_id)
+            return
 
         # Step 2: Check for Authorization header
         if not auth_header:

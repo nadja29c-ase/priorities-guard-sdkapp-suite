@@ -539,6 +539,29 @@ class TestBearerAuthMiddlewareBodyHandling:
         assert send.body_json["error"] == "payload_too_large"
 
     @pytest.mark.asyncio
+    async def test_content_length_header_exceeds_limit_returns_413(self, mock_jwks_cache):
+        """Pre-flight check: Content-Length > 1 MB → 413 without reading body."""
+        from mcp_server.priority_guardian.server import BearerAuthMiddleware
+
+        token = _create_test_jwt(scopes="pg.access")
+        inner_app = MockInnerApp()
+        middleware = BearerAuthMiddleware(inner_app, "https://pg.test.com")
+
+        # Set Content-Length header to exceed limit (body itself is small)
+        scope = _make_scope(headers=[
+            (b"authorization", f"Bearer {token}".encode()),
+            (b"content-length", b"2000000"),  # 2 MB declared
+        ])
+        send = MockSend()
+
+        # Body is small - but Content-Length says it's big
+        await middleware(scope, _make_receive(b"small body"), send)
+
+        assert not inner_app.called
+        assert send.status == 413
+        assert send.body_json["error"] == "payload_too_large"
+
+    @pytest.mark.asyncio
     async def test_valid_body_replayed_correctly(self, mock_jwks_cache):
         """Case 16: Valid body → body correctly replayed to inner app."""
         from mcp_server.priority_guardian.server import BearerAuthMiddleware
