@@ -163,25 +163,85 @@ async def test_case_a_first_bind_new_subject(async_session, user_b_fresh):
 
 
 @pytest.mark.asyncio
-async def test_case_a_race_lost_winner_found(async_session, user_a, user_b_fresh):
+async def test_case_a_race_lost_winner_found():
     """
-    Simulate: user_b_fresh tries to bind subject that user_a already owns.
-    Initial SELECT returns None (simulating race window), UPDATE returns 0,
-    re-SELECT finds user_a. Returns (user_a.id, "C1") since fresh shell remaps.
+    Exercises the real race-lost-winner-found code path:
+      1. Initial SELECT by subject -> None (race window: subject not yet bound)
+      2. Guarded UPDATE -> rowcount == 0 (another request won the race)
+      3. Re-SELECT by subject -> winner_id (the concurrent writer's user_id)
+      4. Function falls through to Case C logic with subject_user_id set
+      5. jwt_user_id is a fresh shell (fake DB returns no Google/priorities) -> C1
+
+    Uses a deterministic fake session that routes statements by class and tracks
+    call order so the first SELECT returns None while the second returns the
+    winner. Does not rely on MagicMock's accidental isinstance behavior.
+
+    NOTE: This is the test the previous version was named for but did not
+    actually exercise. The real-DB C1 path is covered by
+    test_case_c1_fresh_shell_returns_canonical; this test fills in the
+    race-lost-winner-found gap.
     """
-    # user_a has the subject, user_b_fresh is trying to claim it
-    # This tests the path where initial SELECT misses but re-SELECT after
-    # race-lost finds the winner.
+    jwt_user_id = uuid4()
+    winner_id = uuid4()
+    subject = "v1/race-subject"
+
+    # Track how many SELECT-by-subject calls have happened so the first
+    # returns None and the second returns winner_id. Other SELECTs (Google
+    # connection exists(), priorities exists()) also return None/False.
+    select_subject_call_count = 0
+
+    class FakeSubjectSelectResult:
+        def __init__(self, value):
+            self._value = value
+
+        def scalar_one_or_none(self):
+            return self._value
+
+    class FakeExistsResult:
+        def scalar(self):
+            return False  # No Google connection, no priorities -> fresh shell
+
+    class FakeUpdateResult:
+        rowcount = 0  # Race lost: UPDATE matched zero rows
+
+    fake_session = AsyncMock()
+
+    async def fake_execute(stmt):
+        nonlocal select_subject_call_count
+        if isinstance(stmt, Update):
+            return FakeUpdateResult()
+        if isinstance(stmt, Select):
+            # Distinguish subject-lookup SELECTs from exists() SELECTs by
+            # checking the compiled SQL. The subject SELECT is the only one
+            # that references CoreUser.openai_subject.
+            compiled = str(stmt.compile())
+            if "openai_subject" in compiled:
+                select_subject_call_count += 1
+                if select_subject_call_count == 1:
+                    return FakeSubjectSelectResult(None)  # Race window
+                else:
+                    return FakeSubjectSelectResult(winner_id)  # Re-lookup finds winner
+            else:
+                # exists() checks for Google connection / priorities
+                return FakeExistsResult()
+        raise AssertionError(
+            f"Unexpected statement type in test: {type(stmt).__name__}"
+        )
+
+    fake_session.execute = fake_execute
+    fake_session.commit = AsyncMock()
+
     user_id, case = await _reconcile_user_by_subject(
-        db=async_session,
-        jwt_user_id=user_b_fresh.id,
-        openai_subject=user_a.openai_subject,
+        db=fake_session,
+        jwt_user_id=jwt_user_id,
+        openai_subject=subject,
         correlation_id="test-corr-id",
     )
 
-    # user_b_fresh is a fresh shell, so it remaps to user_a (C1)
-    assert user_id == user_a.id
+    assert user_id == winner_id
     assert case == "C1"
+    # Confirm the race path was actually exercised: first SELECT None, re-SELECT winner
+    assert select_subject_call_count == 2
 
 
 @pytest.mark.asyncio
@@ -360,6 +420,81 @@ async def test_db_error_propagates(async_session):
                 openai_subject="v1/test",
                 correlation_id="test-corr-id",
             )
+
+
+# =============================================================================
+# Observability Contract Tests
+# =============================================================================
+# These tests pin the ERROR-level structured logs that Better Stack alerting
+# depends on. A refactor that renames or removes these log events would silently
+# break ops alerting; these tests fail loudly if that happens.
+
+@pytest.mark.asyncio
+async def test_anomaly_x_logs_race_lost_no_winner_error(user_b_fresh, capsys):
+    """
+    Case X (race lost + no winner on re-SELECT) must emit ERROR-level
+    'reconcile.race_lost_no_winner' — Better Stack alert key.
+    """
+    subject = "v1/anomaly-subject-logtest"
+
+    class FakeSelectResult:
+        def scalar_one_or_none(self):
+            return None
+
+    class FakeUpdateResult:
+        rowcount = 0
+
+    fake_session = AsyncMock()
+
+    async def fake_execute(stmt):
+        if isinstance(stmt, Update):
+            return FakeUpdateResult()
+        elif isinstance(stmt, Select):
+            return FakeSelectResult()
+        raise AssertionError(f"Unexpected statement type: {type(stmt).__name__}")
+
+    fake_session.execute = fake_execute
+    fake_session.commit = AsyncMock()
+
+    await _reconcile_user_by_subject(
+        db=fake_session,
+        jwt_user_id=user_b_fresh.id,
+        openai_subject=subject,
+        correlation_id="test-corr-id",
+    )
+
+    # structlog writes to stdout; capture and verify the event key + level
+    captured = capsys.readouterr()
+    assert "reconcile.race_lost_no_winner" in captured.out, (
+        f"Expected 'reconcile.race_lost_no_winner' in log output, got: {captured.out[:500]}"
+    )
+    assert "[error" in captured.out.lower(), (
+        f"Expected [error] level marker in log output, got: {captured.out[:500]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_case_c2_logs_ambiguous_collision_error(async_session, user_a, user_with_priority, capsys):
+    """
+    Case C2 (hydrated user refusing swap) must emit ERROR-level
+    'reconcile.ambiguous_collision' — Better Stack alert key for identity
+    collisions that need human review.
+    """
+    await _reconcile_user_by_subject(
+        db=async_session,
+        jwt_user_id=user_with_priority.id,
+        openai_subject=user_a.openai_subject,
+        correlation_id="test-corr-id",
+    )
+
+    # structlog writes to stdout; capture and verify the event key + level
+    captured = capsys.readouterr()
+    assert "reconcile.ambiguous_collision" in captured.out, (
+        f"Expected 'reconcile.ambiguous_collision' in log output, got: {captured.out[:500]}"
+    )
+    assert "[error" in captured.out.lower(), (
+        f"Expected [error] level marker in log output, got: {captured.out[:500]}"
+    )
 
 
 # =============================================================================

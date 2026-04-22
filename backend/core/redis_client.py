@@ -53,7 +53,14 @@ class RedisClient:
         return f"{self._env_prefix}{key}"
 
     async def connect(self):
-        """Initialize Redis connection pool."""
+        """Initialize Redis connection pool.
+
+        Raises RuntimeError on failure. Redis is load-bearing for OAuth security
+        (rate limiting, authorization context, token replay prevention) — the app
+        MUST NOT serve requests without it. Runtime callers that observe temporary
+        Redis unavailability (via is_connected()) still degrade gracefully; this
+        change only affects the startup path.
+        """
         try:
             self._client = redis.from_url(
                 settings.REDIS_URL,
@@ -62,14 +69,16 @@ class RedisClient:
                 socket_connect_timeout=5,
                 socket_timeout=5,
             )
-            # Test connection
             await self._client.ping()
             logger.info("Redis connection established")
         except Exception as e:
-            logger.error(f"Redis connection failed: {e}")
-            # Don't raise - allow app to start without Redis
-            # Webhook handlers will gracefully degrade
             self._client = None
+            logger.error(f"Redis connection failed at startup: {e}")
+            raise RuntimeError(
+                "Redis connection failed at startup. Redis is required for OAuth "
+                "rate limiting, authorization context storage, and token replay "
+                "prevention. Refusing to serve requests without it."
+            ) from e
 
     async def close(self):
         """Close Redis connections."""
@@ -114,7 +123,7 @@ class RedisClient:
         value: Any,
         ex: Optional[int] = None,
         nx: bool = False
-    ) -> bool:
+    ) -> Optional[bool]:
         """
         Set key-value pair with optional expiry.
 
@@ -125,9 +134,12 @@ class RedisClient:
             nx: Only set if key does not exist (for idempotency)
 
         Returns:
-            True if successful (or if key already exists when nx=True)
-            False if nx=True and key already exists
-            None if Redis error
+            True: Key was set successfully.
+            None: Key was NOT set. Two causes:
+                  (a) nx=True and key already exists (idempotency block), or
+                  (b) Redis error (connection lost, timeout, etc.).
+                  Callers must treat None as "operation failed" regardless of cause.
+            False: Reserved for future redis-py compatibility; not currently returned.
         """
         if not self.is_connected():
             logger.warning("Redis not connected, set() returning None")

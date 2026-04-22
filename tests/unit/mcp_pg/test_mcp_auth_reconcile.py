@@ -183,20 +183,37 @@ async def test_authenticate_request_calls_reconcile_when_subject_present():
     ):
         mock_auth_header_var.get.return_value = "Bearer test-token"
 
+        meta_passed = {"openai/subject": subject}
         result = await authenticate_request(
             tool_name="get_priorities",
-            meta={"openai/subject": subject},
+            meta=meta_passed,
         )
 
         assert result["user_id"] == canonical_user_id
+
+        # Assert exact call args, not just call count, so a refactor that passes
+        # wrong args (e.g., subject directly instead of meta dict) fails loudly.
         mock_reconcile.assert_called_once()
+        call_args = mock_reconcile.call_args
+        # authenticate_request signature: reconcile_user_via_backend(jwt_user_id, meta, correlation_id)
+        assert call_args.args[0] == jwt_user_id, f"Expected jwt_user_id as first arg, got {call_args.args[0]}"
+        assert call_args.args[1] == meta_passed, f"Expected meta dict as second arg, got {call_args.args[1]}"
+        # correlation_id is generated inside authenticate_request; just verify it's a non-empty string
+        assert isinstance(call_args.args[2], str) and call_args.args[2], (
+            f"Expected non-empty correlation_id string as third arg, got {call_args.args[2]!r}"
+        )
 
 
 @pytest.mark.asyncio
-async def test_authenticate_request_skips_reconcile_when_subject_absent():
+async def test_authenticate_request_falls_back_to_jwt_user_id_when_subject_absent():
     """
-    meta has no openai/subject.
-    Verify reconcile_user not called. auth_context["user_id"] is the JWT sub.
+    When meta has no openai/subject, authenticate_request still invokes
+    reconcile_user_via_backend — the skip happens INSIDE that helper, which
+    short-circuits and returns jwt_user_id without making a backend call.
+
+    This test pins the outer behavior: auth_context["user_id"] == jwt_user_id.
+    The inner skip (http_client.reconcile_user not called) is pinned separately
+    in test_reconcile_user_via_backend_skips_when_subject_absent.
     """
     jwt_user_id = str(uuid4())
 
@@ -227,7 +244,7 @@ async def test_authenticate_request_skips_reconcile_when_subject_absent():
         )
 
         assert result["user_id"] == jwt_user_id
-        # reconcile_user_via_backend is still called, but it skips internally
+        # reconcile_user_via_backend is still called; the skip happens inside it
         mock_reconcile.assert_called_once()
 
 

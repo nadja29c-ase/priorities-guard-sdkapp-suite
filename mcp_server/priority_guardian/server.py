@@ -847,17 +847,33 @@ def create_app():
         forward_headers["accept-encoding"] = "identity"
         body = await request.body()
         resp = await client.post(backend_url, headers=forward_headers, content=body)
+        # SECURITY: Do NOT log body contents (even as hex). The backend's DCR
+        # response contains a freshly-minted client_secret as a top-level JSON
+        # field. Hex encoding is not obfuscation. We log structural metadata
+        # only — status, content-type, encoding — sufficient for diagnosing
+        # the content-type/compression issues this log was originally added for.
         logger.info(
             "oauth.proxy.register_debug",
             status_code=resp.status_code,
             content_type=resp.headers.get("content-type", "MISSING"),
             content_encoding=resp.headers.get("content-encoding", "NONE"),
-            body_hex=resp.content[:60].hex(),
+            content_length=len(resp.content),
         )
         try:
             return JSONResponse(content=resp.json(), status_code=resp.status_code)
         except Exception as e:
-            logger.error("oauth.proxy.register_parse_failed", error=str(e), body_hex=resp.content[:120].hex())
+            # SECURITY: Do NOT log body contents. On JSON parse failure, response
+            # likely contains an error message rather than a valid secret payload,
+            # but we cannot guarantee this without parsing — and parsing is what
+            # failed. Log structural metadata only.
+            logger.error(
+                "oauth.proxy.register_parse_failed",
+                error=str(e),
+                status_code=resp.status_code,
+                content_type=resp.headers.get("content-type", "MISSING"),
+                content_encoding=resp.headers.get("content-encoding", "NONE"),
+                content_length=len(resp.content),
+            )
             # Return raw content with explicit JSON content-type as last resort
             return Response(content=resp.content, status_code=resp.status_code, headers={"content-type": "application/json; charset=utf-8"})
 

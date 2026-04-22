@@ -68,8 +68,17 @@ PG_ISSUER = get_env(
     default="https://www.priority-guard.com"
 )
 
-# Expected JWT audience (aud claim)
-# Must match backend's settings.OAUTH_ISSUER (provider uses aud=iss)
+# Expected JWT audience (aud claim) — legacy fallback form.
+#
+# The PG MCP server's validate_jwt accepts THREE audience forms (see mcp_auth.py):
+#   1. MCP_RESOURCE_URL  — e.g., https://pg.priority-guard.com/mcp (primary)
+#   2. MCP_SERVER_URL    — e.g., https://pg.priority-guard.com (origin-only)
+#   3. PG_AUDIENCE       — e.g., https://www.priority-guard.com (legacy: matches
+#                          backend's OAUTH_ISSUER from pre-RFC-9728 behavior)
+#
+# Tokens minted today use form 1 or 2 depending on the `resource` parameter
+# ChatGPT sends during authorize. Form 3 is kept for tokens issued before the
+# RFC 9728 migration. Do not remove without verifying no active tokens use it.
 PG_AUDIENCE = get_env(
     "PG_AUDIENCE",
     default="https://www.priority-guard.com"
@@ -193,6 +202,32 @@ if ENV in ("production", "prod", "staging") and "localhost" in OAUTH_ISSUER_BASE
         "PG_OAUTH_ISSUER_BASE contains 'localhost' in production. "
         "Set to production URL (e.g., https://www.priority-guard.com)."
     )
+
+# Fail-fast: all URL env vars must be real production URLs in prod/staging.
+# Default values in this module are localhost-based for dev convenience, but
+# silently accepting them in production causes subtle failures (JWKS unreachable,
+# discovery publishes wrong URL, reconcile calls hit localhost). Fail loudly at
+# startup instead of serving a broken stack.
+if ENV in ("production", "prod", "staging"):
+    _prod_url_invariants = {
+        "PG_JWKS_URL": PG_JWKS_URL,
+        "PG_MCP_SERVER_URL (MCP_SERVER_URL)": MCP_SERVER_URL,
+        "PG_MCP_RESOURCE_URL (MCP_RESOURCE_URL)": MCP_RESOURCE_URL,
+        "PG_OAUTH_ISSUER_URL (OAUTH_ISSUER_URL)": OAUTH_ISSUER_URL,
+        "PG_BACKEND_URL (BACKEND_URL)": BACKEND_URL,
+        "PG_ISSUER": PG_ISSUER,
+        "PG_AUDIENCE": PG_AUDIENCE,
+    }
+    _invalid_urls = {
+        name: value
+        for name, value in _prod_url_invariants.items()
+        if "localhost" in value or value.startswith("http://")
+    }
+    if _invalid_urls:
+        raise RuntimeError(
+            f"Production URL validation failed. These env vars must be set to "
+            f"HTTPS production URLs (not localhost, not http://): {_invalid_urls}"
+        )
 
 # Supported OAuth scopes for discovery endpoint
 SCOPES_SUPPORTED = ["pg.access"]

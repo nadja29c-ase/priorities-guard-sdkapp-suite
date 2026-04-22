@@ -565,6 +565,13 @@ async def reconcile_user_via_backend(
 
     Does NOT raise on backend failure — logs at WARNING and returns jwt_user_id
     unchanged. Reconciliation failure must not break tool execution.
+
+    Reconciliation case contract (Inc 78):
+    - A / B / C1 / C2 — normal outcomes, logged at INFO (auth.reconcile.result).
+    - X — backend-side anomaly (race lost, no winner found). Logged at WARNING here
+          (auth.reconcile.anomaly); backend already logs ERROR on its side.
+    - Anything else — contract drift. Logged at ERROR (auth.reconcile.unknown_case)
+          to surface silent backend regressions.
     """
     # Late import to avoid circular imports
     from mcp_server.priority_guardian.http_client import reconcile_user
@@ -584,13 +591,39 @@ async def reconcile_user_via_backend(
         canonical_user_id = response["user_id"]
         case = response["case"]
 
-        logger.info(
-            "auth.reconcile.result",
-            correlation_id=correlation_id,
-            case=case,
-            jwt_user_id=jwt_user_id,
-            canonical_user_id=canonical_user_id,
-        )
+        # Validate case against known reconciliation contract (Inc 78).
+        # Backend contract: A | B | C1 | C2 | X. Anything else is a silent regression.
+        # X is a backend-side anomaly (race lost, no winner) that the backend already
+        # logs at ERROR; we escalate it from INFO to WARNING on the MCP side so the
+        # ERROR→WARNING chain surfaces in both services' alerting.
+        KNOWN_CASES = {"A", "B", "C1", "C2", "X"}
+
+        if case not in KNOWN_CASES:
+            logger.error(
+                "auth.reconcile.unknown_case",
+                correlation_id=correlation_id,
+                case=case,
+                jwt_user_id=jwt_user_id,
+                canonical_user_id=canonical_user_id,
+                msg="Backend returned unknown reconciliation case. Contract drift or regression.",
+            )
+        elif case == "X":
+            logger.warning(
+                "auth.reconcile.anomaly",
+                correlation_id=correlation_id,
+                case=case,
+                jwt_user_id=jwt_user_id,
+                canonical_user_id=canonical_user_id,
+                msg="Backend reported anomaly case (race lost, no owner). Check backend ERROR logs.",
+            )
+        else:
+            logger.info(
+                "auth.reconcile.result",
+                correlation_id=correlation_id,
+                case=case,
+                jwt_user_id=jwt_user_id,
+                canonical_user_id=canonical_user_id,
+            )
 
         return canonical_user_id
 
