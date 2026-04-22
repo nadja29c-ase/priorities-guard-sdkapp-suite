@@ -62,20 +62,24 @@ When adding a new SDK app that requires authentication:
 1. **Add new apps to `ROUTE_SCOPE_REGISTRY`** — one dict entry plus one route decorator. No branching logic needed.
 2. **New scopes must be added to `SCOPES_SUPPORTED` in `discovery.py`** before adding them here — discovery is the single source of truth. Adding a scope to the route mapping without adding it to discovery will cause DCR clients to receive scopes that are not advertised, which breaks OpenAI's OAuth flow.
 3. **The `SUPPORTED_SCOPES` set in `register_client.py`** is derived from `discovery.SCOPES_SUPPORTED` — do not define scopes in two places.
-4. **Resource allowlist (`OAUTH_ALLOWED_RESOURCES`)**
+4. **Resource allowlist — not implemented, decision 2026-04-22:**
 
-   **Status (2026-04-22):** Not implemented.
+   The OAuth provider accepts arbitrary `resource` parameter values and mints JWTs with `aud = <resource>`. This is RFC-compliant. An earlier version of this ADR flagged this as work to be done "when a third app is added" (MindSort AI, added April 2026).
 
-   **Risk assessment:** No active attack surface.
-   - Redirect URI allowlist constrains DCR clients
-   - MCP servers enforce strict audience (`aud`) validation
-   - No external MCP server trusts this issuer
+   **Risk reassessment (April 22, 2026):** No live attack surface exists.
+   - DCR redirect URI allowlist (`OAUTH_ALLOWED_REDIRECT_URIS`) constrains which clients can even register
+   - Every MCP server in the suite enforces its own `aud` allowlist during JWT validation — a forged `aud` cannot be consumed by any MCP server in this architecture
+   - No external MCP server federates with `iss = https://www.priority-guard.com`
+   - The theoretical threat (attacker-chosen `aud` usable against a future trusting MCP server) requires architectural changes that are not on the roadmap
 
-   The current behavior is RFC-compliant and not exploitable in the current architecture.
+   **Decision:** Do not implement. The over-permissive `resource` behavior is accepted as RFC-compliant with no exploitation path in the current architecture.
 
    **Revisit only if:**
-   - OAuth provider is opened to third-party clients beyond ChatGPT/Claude, or
-   - External MCP server federation with this issuer is introduced
+   - OAuth provider is opened to third-party clients beyond ChatGPT/Claude/MCP Inspector
+   - An external MCP server begins federating with this issuer
+   - A security audit specifically flags it
+
+   No backlog ticket. This item is closed unless one of the above triggers fires.
 
 ---
 
