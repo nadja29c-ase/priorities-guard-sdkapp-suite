@@ -62,12 +62,20 @@ When adding a new SDK app that requires authentication:
 1. **Add new apps to `ROUTE_SCOPE_REGISTRY`** — one dict entry plus one route decorator. No branching logic needed.
 2. **New scopes must be added to `SCOPES_SUPPORTED` in `discovery.py`** before adding them here — discovery is the single source of truth. Adding a scope to the route mapping without adding it to discovery will cause DCR clients to receive scopes that are not advertised, which breaks OpenAI's OAuth flow.
 3. **The `SUPPORTED_SCOPES` set in `register_client.py`** is derived from `discovery.SCOPES_SUPPORTED` — do not define scopes in two places.
-4. **Resource allowlist (`OAUTH_ALLOWED_RESOURCES`)**: The OAuth provider currently accepts arbitrary `resource` parameter values and will mint JWTs with `aud = <whatever resource was passed>`. This is RFC-compliant but should be locked to known MCP server URLs when a third app is added. Add validation in `token_service.py` before the RFC 9728 resolution rules:
-   ```python
-   ALLOWED_RESOURCES = {settings.PG_MCP_SERVER_URL, ...}
-   if resource and resource not in ALLOWED_RESOURCES:
-       return ("invalid_target", "Invalid resource parameter")
-   ```
+4. **Resource allowlist (`OAUTH_ALLOWED_RESOURCES`)**
+
+   **Status (2026-04-22):** Not implemented.
+
+   **Risk assessment:** No active attack surface.
+   - Redirect URI allowlist constrains DCR clients
+   - MCP servers enforce strict audience (`aud`) validation
+   - No external MCP server trusts this issuer
+
+   The current behavior is RFC-compliant and not exploitable in the current architecture.
+
+   **Revisit only if:**
+   - OAuth provider is opened to third-party clients beyond ChatGPT/Claude, or
+   - External MCP server federation with this issuer is introduced
 
 ---
 
