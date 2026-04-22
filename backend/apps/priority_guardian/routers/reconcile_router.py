@@ -61,6 +61,16 @@ async def _reconcile_user_by_subject(
     Reconcile JWT-stamped user_id to the canonical CoreUser that owns the given
     openai/subject. See Inc 78 briefing for the algorithm spec.
 
+    Returns (user_id, case):
+    - "A"  — First-time bind: subject was unbound, now stamped onto jwt_user_id.
+    - "B"  — Match, same user (steady state).
+    - "C1" — Cross-device: jwt_user_id is a fresh shell; return canonical owner.
+    - "C2" — Ambiguous collision: jwt_user_id has hydrated state; refuse swap.
+    - "X"  — Anomaly: UPDATE lost the race AND re-SELECT found no owner.
+             Indicates a deeper invariant violation (e.g., user deleted mid-flow,
+             schema drift). Returns jwt_user_id as degraded-C2 behavior; logs at
+             ERROR level for ops alerting.
+
     Fresh-shell invariant (see Inc 78 briefing, Case C anomaly guard):
     A CoreUser is a fresh shell ONLY when BOTH are true:
       - no active (non-revoked) CoreConnection with connection_type='google'

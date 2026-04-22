@@ -10,8 +10,9 @@ Tests the reconciliation algorithm cases:
 
 import pytest
 from uuid import uuid4
+from unittest.mock import AsyncMock
 
-from sqlalchemy import select
+from sqlalchemy import select, Select, Update
 
 from backend.apps.priority_guardian.routers.reconcile_router import _reconcile_user_by_subject
 from backend.apps.priority_guardian.db_models import PgPriority
@@ -184,53 +185,46 @@ async def test_case_a_race_lost_winner_found(async_session, user_a, user_b_fresh
 
 
 @pytest.mark.asyncio
-async def test_case_a_race_lost_no_winner_anomaly(async_session, user_b_fresh):
+async def test_case_a_race_lost_no_winner_anomaly(user_b_fresh):
     """
     Simulate: UPDATE returns 0 rows AND re-SELECT returns None.
-    This is an anomaly - race was lost but no one owns the subject.
+    This is an anomaly — race was lost but no one owns the subject.
     Returns (jwt_user_id, "X") with error log.
-    """
-    from unittest.mock import AsyncMock, patch, MagicMock
-    from sqlalchemy import Update
 
+    Uses a deterministic fake session that differentiates SELECT from UPDATE
+    by statement class. Does not rely on MagicMock's accidental isinstance
+    behavior.
+    """
     subject = "v1/anomaly-subject"
 
-    # Mock the session to simulate:
-    # 1. First SELECT returns None (no owner)
-    # 2. UPDATE returns rowcount=0 (race lost)
-    # 3. Second SELECT returns None (anomaly: no winner found)
-    #
-    # TODO: This test is brittle because it relies on isinstance(stmt, Update)
-    # working correctly when the session is patched. MagicMock doesn't satisfy
-    # isinstance(mock, Update), so SELECT statements fall through to the else branch.
-    # If SQLAlchemy or MagicMock behavior changes (e.g., adding __class__ forwarding),
-    # this test could break silently. A more robust approach would use a custom
-    # mock session class that explicitly tracks call order and returns typed results.
-    # Acceptable for now since the test exercises the right branch and passes.
+    class FakeSelectResult:
+        def scalar_one_or_none(self):
+            return None  # No owner found on initial lookup and re-lookup
 
-    async def mock_execute(stmt):
-        # Check if this is an UPDATE statement
+    class FakeUpdateResult:
+        rowcount = 0  # Race lost: UPDATE matched zero rows
+
+    fake_session = AsyncMock()
+
+    async def fake_execute(stmt):
         if isinstance(stmt, Update):
-            # Return mock with rowcount=0
-            mock_result = MagicMock()
-            mock_result.rowcount = 0
-            return mock_result
+            return FakeUpdateResult()
+        elif isinstance(stmt, Select):
+            return FakeSelectResult()
+        raise AssertionError(
+            f"Unexpected statement type in test: {type(stmt).__name__}"
+        )
 
-        # For SELECT statements, always return None
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        return mock_result
+    fake_session.execute = fake_execute
+    fake_session.commit = AsyncMock()
 
-    with patch.object(async_session, "execute", side_effect=mock_execute):
-        with patch.object(async_session, "commit", new_callable=AsyncMock):
-            user_id, case = await _reconcile_user_by_subject(
-                db=async_session,
-                jwt_user_id=user_b_fresh.id,
-                openai_subject=subject,
-                correlation_id="test-corr-id",
-            )
+    user_id, case = await _reconcile_user_by_subject(
+        db=fake_session,
+        jwt_user_id=user_b_fresh.id,
+        openai_subject=subject,
+        correlation_id="test-corr-id",
+    )
 
-    # Anomaly case: return jwt_user_id with "X" (anomaly, ERROR logged)
     assert user_id == user_b_fresh.id
     assert case == "X"
 
