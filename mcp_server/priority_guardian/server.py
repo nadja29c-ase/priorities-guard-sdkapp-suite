@@ -190,69 +190,305 @@ class HeadMcpMiddleware:
 
 class BearerAuthMiddleware:
     """
-    ASGI middleware to enforce Bearer token presence on /mcp requests.
+    ASGI middleware for full HTTP-layer MCP auth compliance (401 + 403).
 
-    When ChatGPT initiates connector creation, it probes /mcp without a token.
-    FastMCP cannot handle unauthenticated MCP protocol requests gracefully —
-    it closes the internal memory stream, producing a ClosedResourceError
-    instead of a clean HTTP 401. ChatGPT interprets the broken connection
-    as a DCR failure.
+    Implements MCP spec 2025-06-18 §2 and OpenAI Apps SDK auth requirements:
+    - HTTP 401 + WWW-Authenticate for missing, malformed, or invalid JWTs
+    - HTTP 403 + WWW-Authenticate (error="insufficient_scope") for valid JWTs
+      that lack required scopes for the requested tool
+    - HTTP 413 for request bodies exceeding 1 MB
 
     FastMCP streamable HTTP uses:
     - GET /mcp for SSE stream initiation
-    - POST /mcp for messages
+    - POST /mcp for messages (JSON-RPC, including tools/call)
     - DELETE /mcp for session close
 
-    This middleware intercepts GET/POST/DELETE /mcp requests with no
-    Authorization header and returns a standards-compliant HTTP 401 with
-    WWW-Authenticate challenge BEFORE FastMCP sees the request. ChatGPT
-    reads the WWW-Authenticate header, follows the resource_metadata pointer
-    to /.well-known/oauth-protected-resource, discovers the AS, and initiates DCR.
+    Decision sequence for POST /mcp:
+    1. Body size guard: reject > 1 MB with 413
+    2. Check Authorization header presence → 401 if missing
+    3. Extract Bearer token → 401 if invalid format
+    4. Validate JWT (signature, iss, aud, exp) → 401 if invalid
+    5. For tools/call: enforce scope requirements → 403 if insufficient
+
+    GET/DELETE /mcp: steps 2-4 only (no body parsing).
 
     Positioning: between HeadMcpMiddleware and MCPContentTypeAndAcceptFixMiddleware.
-    Requests with a valid Authorization header pass through unchanged.
+    Does NOT set auth_header_var — that remains MCPContentTypeAndAcceptFixMiddleware's job.
     """
 
-    def __init__(self, app, www_authenticate_value: str):
+    # Maximum request body size (1 MB)
+    MAX_BODY_SIZE = 1024 * 1024
+
+    def __init__(self, app, mcp_origin: str):
         self.app = app
-        self.www_authenticate_value = www_authenticate_value
+        self.mcp_origin = mcp_origin
 
     async def __call__(self, scope, receive, send):
-        if (
-            scope["type"] == "http"
-            and scope.get("method") in ("GET", "POST", "DELETE")
-            and scope.get("path") == "/mcp"
-        ):
-            # Check for Authorization header
-            has_auth = any(
-                name == b"authorization"
-                for name, _ in scope.get("headers", [])
-            )
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-            if not has_auth:
-                # Return 401 with WWW-Authenticate challenge
-                # ChatGPT reads this and initiates OAuth discovery + DCR
-                # Must intercept GET/POST/DELETE - FastMCP streamable HTTP uses:
-                # - GET for SSE stream initiation
-                # - POST for messages
-                # - DELETE for session close
-                body = b'{"error": "unauthorized", "error_description": "Bearer token required"}'
-                await send({
-                    "type": "http.response.start",
-                    "status": 401,
-                    "headers": [
-                        (b"content-type", b"application/json"),
-                        (b"www-authenticate", self.www_authenticate_value.encode()),
-                        (b"cache-control", b"no-store"),
-                    ],
-                })
-                await send({
-                    "type": "http.response.body",
+        method = scope.get("method")
+        path = scope.get("path")
+
+        # Only process /mcp requests
+        if path != "/mcp" or method not in ("GET", "POST", "DELETE"):
+            await self.app(scope, receive, send)
+            return
+
+        # Late imports to avoid circular dependencies
+        import json
+        import jwt
+        from mcp_server.priority_guardian.mcp_auth import (
+            extract_bearer_token,
+            validate_jwt,
+            check_scopes,
+            extract_or_generate_correlation_id,
+        )
+
+        correlation_id = extract_or_generate_correlation_id(None)
+
+        # Extract Authorization header
+        auth_header = None
+        for name, value in scope.get("headers", []):
+            if name == b"authorization":
+                auth_header = value.decode("utf-8")
+                break
+
+        # Step 2: Check for Authorization header
+        if not auth_header:
+            await self._send_401(send, "missing_header", "Authentication required", correlation_id, method)
+            return
+
+        # Step 3: Extract Bearer token
+        token = extract_bearer_token(auth_header)
+        if not token:
+            await self._send_401(send, "invalid_format", "Invalid Authorization header format", correlation_id, method)
+            return
+
+        # Step 4: Validate JWT
+        try:
+            validated = await validate_jwt(token, correlation_id)
+        except jwt.ExpiredSignatureError:
+            await self._send_401(send, "token_expired", "Token expired", correlation_id, method)
+            return
+        except jwt.InvalidTokenError:
+            await self._send_401(send, "invalid_token", "Token validation failed", correlation_id, method)
+            return
+        except Exception as e:
+            logger.error("auth.middleware.validation_error", correlation_id=correlation_id, error=str(e))
+            await self._send_401(send, "validation_error", "Token validation failed", correlation_id, method)
+            return
+
+        token_scopes = validated["scopes"]
+
+        # For GET/DELETE: JWT validated, pass through
+        if method in ("GET", "DELETE"):
+            await self.app(scope, receive, send)
+            return
+
+        # For POST: need to buffer body for scope enforcement and replay
+        # Step 0: Body size guard during buffering
+        body_chunks = []
+        total_size = 0
+
+        async def buffering_receive():
+            nonlocal total_size
+            message = await receive()
+            if message["type"] == "http.request":
+                chunk = message.get("body", b"")
+                total_size += len(chunk)
+                if total_size > self.MAX_BODY_SIZE:
+                    # Will be caught below
+                    raise _BodyTooLargeError(total_size)
+                body_chunks.append(chunk)
+            return message
+
+        # Buffer the entire body
+        try:
+            while True:
+                msg = await buffering_receive()
+                if msg["type"] == "http.request":
+                    if not msg.get("more_body", False):
+                        break
+                elif msg["type"] == "http.disconnect":
+                    return
+        except _BodyTooLargeError as e:
+            await self._send_413(send, e.size, correlation_id)
+            return
+
+        full_body = b"".join(body_chunks)
+
+        # Step 5: Parse JSON-RPC body for scope enforcement
+        try:
+            body_json = json.loads(full_body) if full_body else {}
+        except json.JSONDecodeError:
+            # Malformed JSON: let FastMCP handle the protocol error
+            body_json = {}
+
+        jsonrpc_method = body_json.get("method")
+
+        # Only enforce scopes for tools/call
+        if jsonrpc_method == "tools/call":
+            params = body_json.get("params", {})
+            tool_name = params.get("name")
+
+            if tool_name:
+                # Late import to avoid circular imports
+                from mcp_server.priority_guardian.tools import get_tool
+
+                tool_def = get_tool(tool_name)
+
+                # Unknown tool: let FastMCP handle it (not a 403 concern)
+                if tool_def is not None:
+                    required_scopes = tool_def.required_scopes
+
+                    # Only enforce if tool has required scopes
+                    if required_scopes and not check_scopes(token_scopes, required_scopes):
+                        await self._send_403(
+                            send, tool_name, required_scopes, list(token_scopes), correlation_id
+                        )
+                        return
+
+        # Create replay receive callable
+        replay_receive = self._create_replay_receive(full_body)
+
+        # Pass through to inner app with replayed body
+        await self.app(scope, replay_receive, send)
+
+    def _create_replay_receive(self, body: bytes):
+        """Create a receive callable that replays the buffered body."""
+        sent = False
+
+        async def replay_receive():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {
+                    "type": "http.request",
                     "body": body,
-                })
-                return
+                    "more_body": False,
+                }
+            # After body sent, return disconnect on subsequent calls
+            return {"type": "http.disconnect"}
 
-        await self.app(scope, receive, send)
+        return replay_receive
+
+    async def _send_401(self, send, reason: str, description: str, correlation_id: str, method: str = "POST"):
+        """Send HTTP 401 Unauthorized response."""
+        logger.warning(
+            "auth.middleware.rejected",
+            method=method,
+            path="/mcp",
+            status=401,
+            reason=reason,
+            correlation_id=correlation_id,
+        )
+
+        www_auth = (
+            f'Bearer resource_metadata="{self.mcp_origin}/.well-known/oauth-protected-resource", '
+            f'error="invalid_token", error_description="{description}"'
+        )
+        body = json.dumps({
+            "error": "unauthorized",
+            "error_description": description,
+        }).encode("utf-8")
+
+        await send({
+            "type": "http.response.start",
+            "status": 401,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"www-authenticate", www_auth.encode("utf-8")),
+                (b"cache-control", b"no-store"),
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": body,
+        })
+
+    async def _send_403(
+        self, send, tool_name: str, required_scopes: list, actual_scopes: list, correlation_id: str
+    ):
+        """Send HTTP 403 Forbidden response."""
+        logger.warning(
+            "auth.middleware.rejected",
+            method="POST",
+            path="/mcp",
+            status=403,
+            reason="insufficient_scope",
+            correlation_id=correlation_id,
+            tool_name=tool_name,
+            required_scopes=required_scopes,
+            actual_scopes=actual_scopes,
+        )
+
+        scope_str = " ".join(required_scopes)
+        www_auth = (
+            f'Bearer resource_metadata="{self.mcp_origin}/.well-known/oauth-protected-resource", '
+            f'error="insufficient_scope", error_description="Insufficient permissions", '
+            f'scope="{scope_str}"'
+        )
+        body = json.dumps({
+            "error": "insufficient_scope",
+            "error_description": f"Insufficient permissions for tool '{tool_name}'",
+            "required_scopes": required_scopes,
+        }).encode("utf-8")
+
+        await send({
+            "type": "http.response.start",
+            "status": 403,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"www-authenticate", www_auth.encode("utf-8")),
+                (b"cache-control", b"no-store"),
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": body,
+        })
+
+    async def _send_413(self, send, size_bytes: int, correlation_id: str):
+        """Send HTTP 413 Payload Too Large response."""
+        logger.warning(
+            "auth.middleware.rejected",
+            method="POST",
+            path="/mcp",
+            status=413,
+            reason="body_too_large",
+            correlation_id=correlation_id,
+            size_bytes=size_bytes,
+        )
+
+        body = json.dumps({
+            "error": "payload_too_large",
+            "error_description": "Request body exceeds maximum size",
+        }).encode("utf-8")
+
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"cache-control", b"no-store"),
+            ],
+        })
+        await send({
+            "type": "http.response.body",
+            "body": body,
+        })
+
+
+class _BodyTooLargeError(Exception):
+    """Internal exception for body size limit exceeded."""
+    def __init__(self, size: int):
+        self.size = size
+
+
+# Import json at module level for _send_* methods
+import json
 
 
 class MCPContentTypeAndAcceptFixMiddleware:
@@ -652,7 +888,7 @@ def create_app():
         ])
 
     content_type_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app, auth_header_var)
-    bearer_auth_app = BearerAuthMiddleware(content_type_app, WWW_AUTHENTICATE_VALUE)
+    bearer_auth_app = BearerAuthMiddleware(content_type_app, _mcp_origin)
     lifespan_app = LifespanMiddleware(bearer_auth_app, _cleanup_on_shutdown)
     head_mcp_app = HeadMcpMiddleware(lifespan_app, allowed_origins=allowed_origins)
     return RequestLoggingMiddleware(head_mcp_app, service_name="priority-guardian-mcp")
