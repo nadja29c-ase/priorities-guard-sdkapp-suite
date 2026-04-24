@@ -13,7 +13,6 @@ from backend.core.config import settings
 from backend.core.database import get_db
 from backend.core.logging import get_logger
 from backend.core.rate_limit import rate_limit_register
-from backend.core.oauth_provider.discovery import SCOPES_SUPPORTED
 from backend.core.oauth_provider.services.client_service import create_oauth_client
 from backend.core.oauth_provider.validators.client_metadata import (
     validate_client_name,
@@ -34,23 +33,30 @@ class RegisterRequest(BaseModel):
     scope: str | None = None  # Space-separated list of requested scopes
 
 
-# Supported scopes derived from discovery (single source of truth)
-# Prevents drift between what's advertised and what's accepted
-# Union with clarity.write for MindSort AI route validation
-# (safe: shared discovery.py SCOPES_SUPPORTED untouched, per-app discovery separated)
-SUPPORTED_SCOPES = set(SCOPES_SUPPORTED) | {"clarity.write"}
-
 # Route-to-scope registry (single source of truth per ADR 003).
 # Key: app segment in /oauth/<app>/register. Value: default scopes for that app.
 # To add a new authenticated SDK app:
-#   1. Add the scope to SCOPES_SUPPORTED in discovery.py (or keep the union pattern
-#      used by SUPPORTED_SCOPES above for app-specific scopes not in discovery).
+#   1. Add the scope(s) to the new app's entry below.
 #   2. Add one entry here.
 #   3. Add the route decorator on register_endpoint below.
 ROUTE_SCOPE_REGISTRY: dict[str, list[str]] = {
     "focused":  ["focused.read", "focused.write", "focused.notify"],
     "pg":       ["pg.access"],
     "mindsort": ["clarity.write"],
+}
+
+# Supported scopes for client registration validation — derived from the registry
+# so every scope used by any app is accepted. ROUTE_SCOPE_REGISTRY is the single
+# source of truth for valid-per-app scopes; SUPPORTED_SCOPES is the union across
+# all apps used only for validating explicit `scope` params in DCR requests.
+#
+# Note: discovery.py::SCOPES_SUPPORTED advertises only a subset (pg.access,
+# clarity.write) because Focused predates suite-wide discovery and is frozen.
+# Discovery and registry intentionally diverge — this is not drift.
+SUPPORTED_SCOPES: set[str] = {
+    scope
+    for scopes in ROUTE_SCOPE_REGISTRY.values()
+    for scope in scopes
 }
 
 

@@ -54,6 +54,31 @@ configure_logging()
 
 logger = get_logger(__name__)
 
+
+def _assert_no_duplicate_routes(app: FastAPI) -> None:
+    """Fail-fast at startup if any (method, path) pair is registered more than once.
+
+    FastAPI silently overrides duplicate routes ("last one wins"), which can cause
+    hard-to-diagnose production failures when two routers under the same prefix
+    accidentally register identical sub-paths. This check converts silent shadow
+    into a loud startup error.
+    """
+    from collections import Counter
+    from fastapi.routing import APIRoute
+
+    seen: Counter = Counter()
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            for method in route.methods:
+                seen[(method, route.path)] += 1
+
+    duplicates = {k: v for k, v in seen.items() if v > 1}
+    if duplicates:
+        raise RuntimeError(
+            f"Duplicate routes detected (FastAPI silently overrides them): {duplicates}"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events."""
@@ -79,14 +104,10 @@ async def lifespan(app: FastAPI):
     logger.info("HTTP client initialized")
 
     # Initialize Redis connection
+    # Redis is load-bearing for OAuth security (rate limiting, authorization
+    # context, token replay). connect() raises on failure.
     await redis_client.connect()
-
-    # Verify Redis connection health
-    if redis_client.is_connected():
-        logger.info("Redis connection healthy")
-    else:
-        logger.warning("Redis connection failed - webhook idempotency/throttling will be degraded")
-        # Don't raise - app continues with degraded functionality
+    logger.info("Redis connection healthy")
 
     # Test database connection
     try:
@@ -244,11 +265,7 @@ async def oauth_exception_handler(request: Request, exc: OAuthError):
 
     # Build headers dict - add WWW-Authenticate for 401 on OAuth endpoints (B2-7)
     headers = {}
-    if (
-        exc.status_code == 401
-        and request.url.path.startswith("/oauth/")
-        and "WWW-Authenticate" not in headers
-    ):
+    if exc.status_code == 401 and request.url.path.startswith("/oauth/"):
         headers["WWW-Authenticate"] = WWW_AUTHENTICATE_VALUE
 
     return JSONResponse(
@@ -382,3 +399,7 @@ app.include_router(pg_snapshot_router, prefix="/api/priority-guardian")
 app.include_router(pg_pattern_router, prefix="/api/priority-guardian")
 # Priority Guardian SDK app routers (Increment 78)
 app.include_router(pg_reconcile_router, prefix="/api/priority-guardian")
+
+# Validate no duplicate routes across all registered routers.
+# Runs at module import time, before uvicorn starts accepting requests.
+_assert_no_duplicate_routes(app)

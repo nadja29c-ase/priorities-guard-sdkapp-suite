@@ -1,24 +1,11 @@
-
-
-
-
-
-
-
-
-
-
-
-
 Privacy Policy
 Priority Guard App Suite
 
-Effective Date: March 3, 2026 | Version: 3.0 | Last Updated: March 27, 2026
+Effective Date: March 3, 2026 | Version: 3.1 | Last Updated: April 21, 2026
 
 
 
-
-In short: We do not request or require direct identifiers such as your name or email address. We identify you by a pseudonymous identifier provided by ChatGPT and an internal user ID derived from it. Priority Guardian reads your Google Calendar (read-only) to compute time spent on priorities — we never store your events. MindSort AI stores only the board content you create — clusters, thought items, and priorities. Your stored application data is hosted on EU servers. Some data is transferred to the US when processed by OpenAI during app usage.
+In short: We do not request or require direct identifiers such as your name or email address. We identify you by pseudonymous identifiers provided by ChatGPT (including a cross-device identity anchor) and an internal user ID derived from them. Priority Guardian reads your Google Calendar (read-only) to compute time spent on priorities — we never store your events. MindSort AI stores only the board content you create — clusters, thought items, and priorities. Your stored application data is hosted on EU servers. Some data is transferred to the US when processed by OpenAI during app usage.
 
 
 
@@ -54,9 +41,11 @@ Shared Infrastructure
 
 User Identifier:
 
-Pseudonymous identifier provided by ChatGPT, plus an internal user ID derived from it (UUID)
+Two pseudonymous identifiers provided by ChatGPT (one from the OAuth flow, one for cross-device continuity) plus an internal user ID (UUID) derived from them.
 
-Purpose: Identify your account across sessions. We do not receive your real name or email address from ChatGPT.
+Purpose: Identify your account across sessions and across devic
+
+es. The cross-device identifier allows the same ChatGPT account to be recognized when you switch between devices (e.g., phone to desktop) so your data remains accessible. We do not receive your real name or email address from ChatGPT.
 
 
 
@@ -345,9 +334,9 @@ Below is the complete list of data we store for Priority Guardian. If it is not 
 
 User Identifier
 
-What we store: Pseudonymous identifier provided by ChatGPT, plus an internal user ID derived from it (UUID)
+What we store: Two pseudonymous identifiers provided by ChatGPT (one from the OAuth flow, one for cross-device continuity) plus an internal user ID (UUID) derived from them.
 
-Purpose: Identify your account across sessions. We do not receive your real name or email address from ChatGPT.
+Purpose: Identify your account across sessions and across devices. We do not receive your real name or email address from ChatGPT.
 
 
 Priority Configuration
@@ -407,11 +396,9 @@ Purpose: Cross-app authentication. No plaintext tokens stored. Also part of shar
 
 
 
-
 A.2 What Priority Guardian Reads from Your Calendar (But Does NOT Store)
 
 Priority Guardian reads your Google Calendar events to compute how many hours you spent on each priority during a given week. Here is exactly what is read, why, and what happens to it:
-
 
 Data read via calendar.events.readonly:
 
@@ -437,7 +424,6 @@ Timezone — We read your Google Calendar timezone setting to determine the boun
 
 After processing, all calendar event data is discarded. The only thing that persists is aggregated hours per priority per week.
 
-
 For the current week, event titles, descriptions, and times may be included in app requests and responses exchanged with the ChatGPT runtime in two scenarios: (1) to propose semantic groupings of your non-priority time, and (2) when you request a breakdown of time within a specific priority (P1, P2, or P3), that priority's event titles and descriptions are sent to generate subcategory groupings. For past weeks, no event-level data is transferred — only stored aggregates are used.
 
 
@@ -452,7 +438,6 @@ When we request your calendar events from Google, we explicitly tell Google to s
 A.4 What is Stored vs. Computed
 
 Stored: Priority names, types, keywords, deadlines, targets, checkpoint dates, goals, deliverables, weekly aggregated hours, streak counts, and running averages. All user-authored text. Google OAuth tokens (AES-256 encrypted).
-
 
 Computed and discarded: Event titles and descriptions are processed in real-time to compute hours and semantic groupings, then discarded. Only the aggregated numbers persist. For the current week's report, event titles and descriptions are included in app requests and responses exchanged with the ChatGPT runtime so it can propose categories — this data is not stored by our backend.
 
@@ -572,9 +557,9 @@ Below is the complete list of data we store for MindSort AI. If it is not listed
 
 User Identifier
 
-What we store: Pseudonymous identifier provided by ChatGPT, plus an internal user ID derived from it (UUID)
+What we store: Two pseudonymous identifiers provided by ChatGPT (one from the OAuth flow, one for cross-device continuity) plus an internal user ID (UUID) derived from them.
 
-Purpose: Identify your board across sessions. We do not receive your real name or email address from ChatGPT.
+Purpose: Identify your board across sessions and across devices. We do not receive your real name or email address from ChatGPT.
 
 
 Board Content
@@ -599,12 +584,10 @@ Purpose: Record when the board was last saved. Operational metadata only — not
 
 
 
-
 B.2 What Gets Sent to OpenAI
 
 
 During app usage, the following board data is included in requests and responses exchanged with the ChatGPT runtime:
-
 
 Your full board content (cluster names, subcluster names, thought items, tags, and priority assignments including rank and reason) is included in app requests and responses so the language model can display, organize, and update your board conversationally.
 
@@ -707,8 +690,6 @@ Addendum C: Future Apps
 
 When new apps are added to the Priority Guard suite, a corresponding addendum will be appended to this Privacy Policy. Until a specific addendum is published for a new app, Part I (General) of this policy applies in full. We will update the version number and effective date of this document when new addenda are added.
 
-
 Priority Guard  ·  support@priority-guard.com  ·  https://www.fulfilling-productivity.com/priority-guard
 
 © 2026 Nadja Carabulea. All rights reserved.
-

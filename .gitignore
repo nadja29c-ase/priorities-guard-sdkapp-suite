@@ -27,6 +27,9 @@ ENV/
 env/
 .venv
 
+# Node
+node_modules/
+
 # Poetry
 
 # Environment Variables
