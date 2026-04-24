@@ -15,7 +15,7 @@ Architecture (Post Phase 1 Refactoring):
 - Zero inline logic in this orchestrator
 
 Included Endpoints (served for three SDK app route families: focused, pg, mindsort):
-- Discovery: /.well-known/openid-configuration, oauth-protected-resource
+- Discovery: /.well-known/openid-configuration, /.well-known/oauth-authorization-server
 - JWKS: /oauth/{focused,pg,mindsort}/jwks
 - Authorization: /oauth/{focused,pg,mindsort}/authorize (OAuth 2.1 + PKCE)
 - Consent UI: /oauth/{focused,pg,mindsort}/consent
