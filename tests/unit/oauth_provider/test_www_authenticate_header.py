@@ -1,23 +1,30 @@
 """
-B2-7 WWW-Authenticate Header Tests (Increment 40).
+WWW-Authenticate Header Tests for Token Endpoint.
 
-Tests that OAuth 401 responses include the correct WWW-Authenticate header
-per OpenAI Apps SDK authentication spec.
+Tests that OAuth 401 responses from the token endpoint include the correct
+WWW-Authenticate header per RFC 6750.
 
-Header format: Bearer resource_metadata="<PG_MCP_SERVER_URL>/.well-known/oauth-protected-resource"
+Header format: Bearer realm="oauth"
+
+Note: The global oauth_exception_handler in main.py does NOT emit
+WWW-Authenticate headers. Only the token endpoint does. This is intentional:
+the AS does not know which RS the client is targeting, so it cannot emit
+resource_metadata headers. The token endpoint uses 'Bearer realm="oauth"'
+as a valid AS-level challenge.
 """
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch, AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from backend.core.config import WWW_AUTHENTICATE_VALUE, RESOURCE_METADATA_URL
+
+# Expected header value for 401 responses from token endpoint
+EXPECTED_WWW_AUTHENTICATE = 'Bearer realm="oauth"'
 
 
 class TestWWWAuthenticateHeader:
-    """Test WWW-Authenticate header on OAuth 401 responses."""
+    """Test WWW-Authenticate header on OAuth 401 responses from token endpoint."""
 
     @pytest.mark.asyncio
     async def test_invalid_client_error_code_includes_header(
@@ -69,14 +76,9 @@ class TestWWWAuthenticateHeader:
         # Should be 401 for invalid_client
         assert response.status_code == 401
 
-        # Should have WWW-Authenticate header
+        # Should have WWW-Authenticate header with AS-level challenge
         assert "WWW-Authenticate" in response.headers
-
-        # Should have correct format
-        www_auth = response.headers["WWW-Authenticate"]
-        assert www_auth == WWW_AUTHENTICATE_VALUE
-        assert "Bearer resource_metadata=" in www_auth
-        assert "/.well-known/oauth-protected-resource" in www_auth
+        assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
 
     @pytest.mark.asyncio
     async def test_invalid_client_refresh_token_includes_header(
@@ -128,15 +130,17 @@ class TestWWWAuthenticateHeader:
 
         # Should have WWW-Authenticate header
         assert "WWW-Authenticate" in response.headers
-        assert response.headers["WWW-Authenticate"] == WWW_AUTHENTICATE_VALUE
+        assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
 
     @pytest.mark.asyncio
-    async def test_oauth_exception_handler_includes_header(self, async_engine, fake_redis_client):
+    async def test_oauth_exception_handler_no_header(self, async_engine, fake_redis_client):
         """
-        OAuthError with 401 status on /oauth/* path should include WWW-Authenticate header.
+        OAuthError with 401 status on /oauth/* path should NOT include WWW-Authenticate header.
 
-        This tests the oauth_exception_handler path in main.py using the real app.
-        We add a test-only route that raises InvalidClientError to trigger the exception handler.
+        The global oauth_exception_handler in main.py does not emit WWW-Authenticate
+        headers. Only the token endpoint does. This is the AS/RS separation:
+        the AS cannot emit resource_metadata headers because it doesn't know
+        which RS the client is targeting.
         """
         from backend.main import app
         from backend.core.oauth_provider.exceptions import InvalidClientError
@@ -158,9 +162,8 @@ class TestWWWAuthenticateHeader:
             # Should be 401
             assert response.status_code == 401
 
-            # Should have WWW-Authenticate header (from real exception handler)
-            assert "WWW-Authenticate" in response.headers
-            assert response.headers["WWW-Authenticate"] == WWW_AUTHENTICATE_VALUE
+            # Should NOT have WWW-Authenticate header (exception handler doesn't emit it)
+            assert "WWW-Authenticate" not in response.headers
         finally:
             # Clean up: remove test route
             app.router.routes = [r for r in app.router.routes if getattr(r, 'path', '') != test_path]
@@ -170,8 +173,7 @@ class TestWWWAuthenticateHeader:
         """
         401 from non-OAuth path should NOT include WWW-Authenticate header.
 
-        The header is only for /oauth/* paths. Tests the real exception handler in main.py.
-        We add a test-only route outside /oauth/* that raises InvalidClientError.
+        Tests the real exception handler in main.py.
         """
         from backend.main import app
         from backend.core.oauth_provider.exceptions import InvalidClientError
@@ -340,82 +342,4 @@ class TestWWWAuthenticateHeader:
 
         # Header should also be present
         assert "WWW-Authenticate" in response.headers
-
-
-    @pytest.mark.asyncio
-    async def test_existing_www_authenticate_not_overwritten(self, async_engine, fake_redis_client):
-        """
-        Verify the defensive guard: if WWW-Authenticate is already in headers, don't overwrite.
-
-        This tests the real exception handler in main.py. The guard check
-        `"WWW-Authenticate" not in headers` prevents double-setting.
-
-        We add a test-only route and patch JSONResponse to capture headers,
-        verifying the header is set exactly once via the guard.
-        """
-        from backend.main import app
-        from backend.core.oauth_provider.exceptions import InvalidClientError
-        from fastapi.responses import JSONResponse as OriginalJSONResponse
-
-        captured_headers = {}
-
-        # Patch JSONResponse to capture headers and verify guard behavior
-        class CapturingJSONResponse(OriginalJSONResponse):
-            def __init__(self, *args, headers=None, **kwargs):
-                captured_headers.update(headers or {})
-                super().__init__(*args, headers=headers, **kwargs)
-
-        # Add test-only route that raises InvalidClientError
-        async def raise_invalid_client_for_guard_test():
-            raise InvalidClientError("Test error")
-
-        test_path = "/oauth/test/raise-401-guard-test"
-        app.router.add_api_route(test_path, raise_invalid_client_for_guard_test, methods=["GET"])
-
-        try:
-            with patch("backend.main.JSONResponse", CapturingJSONResponse):
-                async with AsyncClient(
-                    transport=ASGITransport(app=app),
-                    base_url="http://test"
-                ) as client:
-                    response = await client.get(test_path)
-
-            # Verify the response has WWW-Authenticate header
-            assert response.status_code == 401
-            assert "WWW-Authenticate" in response.headers
-
-            # The captured headers should contain WWW-Authenticate (set once, not overwritten)
-            assert "WWW-Authenticate" in captured_headers
-            assert captured_headers["WWW-Authenticate"] == WWW_AUTHENTICATE_VALUE
-        finally:
-            # Clean up: remove test route
-            app.router.routes = [r for r in app.router.routes if getattr(r, 'path', '') != test_path]
-
-
-class TestWWWAuthenticateHeaderFormat:
-    """Test the WWW-Authenticate header value format."""
-
-    def test_header_value_format(self):
-        """WWW-Authenticate value should have correct Bearer resource_metadata format."""
-        # Should start with "Bearer resource_metadata="
-        assert WWW_AUTHENTICATE_VALUE.startswith('Bearer resource_metadata="')
-
-        # Should end with closing quote
-        assert WWW_AUTHENTICATE_VALUE.endswith('"')
-
-        # Should contain the well-known path
-        assert "/.well-known/oauth-protected-resource" in WWW_AUTHENTICATE_VALUE
-
-    def test_resource_metadata_url_format(self):
-        """RESOURCE_METADATA_URL should point to oauth-protected-resource."""
-        assert RESOURCE_METADATA_URL.endswith("/.well-known/oauth-protected-resource")
-
-    def test_header_value_uses_config(self):
-        """WWW-Authenticate header value should be derived from config."""
-        from backend.core.config import settings
-
-        expected_url = f"{settings.PG_MCP_SERVER_URL}/.well-known/oauth-protected-resource"
-        assert RESOURCE_METADATA_URL == expected_url
-
-        expected_header = f'Bearer resource_metadata="{expected_url}"'
-        assert WWW_AUTHENTICATE_VALUE == expected_header
+        assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE

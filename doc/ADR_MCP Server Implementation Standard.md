@@ -351,6 +351,40 @@ All three functions in `discovery.py` follow a single rule:
 
 ---
 
+### Backend Config Boundary — AS Must Not Know RS URLs
+
+**The backend AS (`www.priority-guard.com`) must never reference any MCP server (RS) URL in its configuration.**
+
+This is a core architectural boundary. The AS issues tokens; MCP servers validate them. The AS knows:
+- `OAUTH_ISSUER` — its own identity
+- `BACKEND_PUBLIC_URL` — where users reach OAuth consent screens
+- RSA keys for signing JWTs
+
+The AS does **not** know:
+- `PG_MCP_SERVER_URL` or any `*_MCP_SERVER_URL`
+- Which RS a client will eventually present the token to
+- RS-specific `resource_metadata` URLs
+
+#### Why This Matters
+
+1. **Celery doesn't need RS URLs.** Celery imports `backend.core.config`. If config contains `PG_MCP_SERVER_URL`, Celery fails at startup unless that env var is set — even though Celery never uses it.
+
+2. **WWW-Authenticate headers.** RFC 6750 allows `WWW-Authenticate: Bearer resource_metadata="..."` on 401 responses. But the AS cannot emit this header correctly — it would point to one RS's metadata regardless of which app the client is accessing. The token endpoint now emits `Bearer realm="oauth"` instead, a valid AS-level challenge.
+
+3. **Multi-app scaling.** Adding MindSort means adding `MINDSORT_MCP_SERVER_URL`. Adding a fourth app means a fourth URL. Config pollution breaks the pattern. Each RS knows its own URL; the AS never needs to.
+
+#### Enforcement
+
+`backend/core/config.py` must never contain:
+- `PG_MCP_SERVER_URL`
+- `MINDSORT_MCP_SERVER_URL`
+- Any `*_MCP_SERVER_URL` field
+- Any derived constants like `RESOURCE_METADATA_URL` or `WWW_AUTHENTICATE_VALUE` that depend on RS URLs
+
+If you see these in a PR, reject. The AS/RS boundary is non-negotiable.
+
+---
+
 ### Multi-App OAuth: One Shared AS, Multiple MCP Servers
 
 The shared backend AS on `www.priority-guard.com` is designed to serve multiple SDK apps simultaneously. Each app gets its own route prefix on the backend and its own MCP server domain. The AS itself is untouched when adding a new app.

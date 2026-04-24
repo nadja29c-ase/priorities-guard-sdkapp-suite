@@ -90,4 +90,4 @@ When adding a new SDK app that requires authentication:
 | `backend/core/oauth_provider/register_client.py` | Route-to-scope mapping (current implementation) |
 | `backend/core/oauth_provider/discovery.py` | `SCOPES_SUPPORTED` — single source of truth for valid scopes |
 | `backend/core/oauth_provider/services/token_service.py` | Resource parameter handling (RFC 9728 B2-5) |
-| `backend/core/config.py` | `OAUTH_ALLOWED_REDIRECT_URIS`, `PG_MCP_SERVER_URL` env vars |
+| `backend/core/config.py` | `OAUTH_ALLOWED_REDIRECT_URIS` env var |

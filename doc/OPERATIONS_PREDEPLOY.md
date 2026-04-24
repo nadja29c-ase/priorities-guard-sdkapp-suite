@@ -81,7 +81,6 @@ Before OpenAI submission, verify Render env vars match exactly:
 |----------|----------------|
 | `OAUTH_ISSUER` | `https://www.priority-guard.com` |
 | `BACKEND_PUBLIC_URL` | `https://www.priority-guard.com` |
-| `PG_MCP_SERVER_URL` | `https://pg.priority-guard.com` |
 
 With Increment 52 deployed, wrong values cause startup failure rather than silent misbehavior.
 

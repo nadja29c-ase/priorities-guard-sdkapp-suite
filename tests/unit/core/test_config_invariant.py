@@ -4,7 +4,6 @@ Unit tests for backend config production URL invariants (Increment 52).
 Tests the startup validators:
 - OAUTH_ISSUER must use HTTPS and have no path in production
 - BACKEND_PUBLIC_URL must use HTTPS in production
-- PG_MCP_SERVER_URL must use HTTPS in production
 """
 
 import os
@@ -70,7 +69,6 @@ class TestProductionUrlValidation:
                 "ENV": "production",
                 "OAUTH_ISSUER": "https://www.priority-guard.com/oauth/pg",
                 "BACKEND_PUBLIC_URL": "https://www.priority-guard.com",
-                "PG_MCP_SERVER_URL": "https://pg.priority-guard.com",
             })
 
         error_msg = str(exc_info.value)
@@ -87,7 +85,6 @@ class TestProductionUrlValidation:
                 "ENV": "production",
                 "OAUTH_ISSUER": "http://www.priority-guard.com",
                 "BACKEND_PUBLIC_URL": "https://www.priority-guard.com",
-                "PG_MCP_SERVER_URL": "https://pg.priority-guard.com",
             })
 
         error_msg = str(exc_info.value)
@@ -103,7 +100,6 @@ class TestProductionUrlValidation:
             "ENV": "production",
             "OAUTH_ISSUER": "https://www.priority-guard.com",
             "BACKEND_PUBLIC_URL": "https://www.priority-guard.com",
-            "PG_MCP_SERVER_URL": "https://pg.priority-guard.com",
         })
 
         assert settings.OAUTH_ISSUER == "https://www.priority-guard.com"
@@ -117,7 +113,6 @@ class TestProductionUrlValidation:
             "ENV": "production",
             "OAUTH_ISSUER": "https://www.priority-guard.com/",
             "BACKEND_PUBLIC_URL": "https://www.priority-guard.com",
-            "PG_MCP_SERVER_URL": "https://pg.priority-guard.com",
         })
 
         assert settings.OAUTH_ISSUER == "https://www.priority-guard.com/"
@@ -131,27 +126,10 @@ class TestProductionUrlValidation:
                 "ENV": "production",
                 "OAUTH_ISSUER": "https://www.priority-guard.com",
                 "BACKEND_PUBLIC_URL": "http://www.priority-guard.com",
-                "PG_MCP_SERVER_URL": "https://pg.priority-guard.com",
             })
 
         error_msg = str(exc_info.value)
         assert "BACKEND_PUBLIC_URL" in error_msg
-        assert "HTTPS" in error_msg
-
-    def test_pg_mcp_server_url_with_http_raises_in_production(self):
-        """
-        PG_MCP_SERVER_URL with HTTP raises ValueError in production.
-        """
-        with pytest.raises(ValueError) as exc_info:
-            create_settings_with_env({
-                "ENV": "production",
-                "OAUTH_ISSUER": "https://www.priority-guard.com",
-                "BACKEND_PUBLIC_URL": "https://www.priority-guard.com",
-                "PG_MCP_SERVER_URL": "http://pg.priority-guard.com",
-            })
-
-        error_msg = str(exc_info.value)
-        assert "PG_MCP_SERVER_URL" in error_msg
         assert "HTTPS" in error_msg
 
     def test_all_checks_skipped_in_dev(self):
@@ -164,10 +142,8 @@ class TestProductionUrlValidation:
             "ENV": "dev",
             "OAUTH_ISSUER": "http://localhost:8000",
             "BACKEND_PUBLIC_URL": "http://localhost:8000",
-            "PG_MCP_SERVER_URL": "http://localhost:8003",
             "INTERNAL_API_SECRET": "",  # Also allowed empty in dev
         })
 
         assert settings.OAUTH_ISSUER == "http://localhost:8000"
         assert settings.BACKEND_PUBLIC_URL == "http://localhost:8000"
-        assert settings.PG_MCP_SERVER_URL == "http://localhost:8003"
