@@ -8,6 +8,7 @@ This is the core business logic for the time tracking pipeline.
 import re
 import structlog
 from datetime import datetime, timedelta, date, timezone
+from fractions import Fraction
 from zoneinfo import ZoneInfo
 from typing import Any
 from uuid import UUID
@@ -192,12 +193,22 @@ def compute_allocation_from_events(events: list[dict]) -> dict[str, Any]:
     """
     Compute time allocation from a list of Google Calendar events.
 
-    Implements all time computation rules from the spec:
-    - Filter out all-day, declined, cancelled, zero-duration events
-    - Match P1/P2/P3 keywords with word-boundary regex
-    - Multi-match events counted for EACH keyword (overlapping)
-    - bar_segments assigns multi-match to highest priority (P1 > P2 > P3)
-    - totalTrackedHours is deduplicated by event ID
+    Uses interval sweep + distinct bucket attribution to correctly handle
+    overlapping events. Every wall-clock second covered by at least one
+    filtered-in event contributes to total_tracked_hours exactly once;
+    that time is divided evenly across the distinct claimant buckets.
+
+    Bucket model:
+    - Four buckets: P1, P2, P3, other
+    - Event title matches one keyword → claims that priority bucket
+    - Event title matches multiple keywords → claims each matched bucket
+    - Event title matches no keyword → claims "other"
+
+    Filtering rules:
+    - Exclude all-day events
+    - Exclude declined events
+    - Exclude cancelled events
+    - Exclude zero-duration events
 
     Args:
         events: List of Google Calendar event dicts
@@ -208,20 +219,17 @@ def compute_allocation_from_events(events: list[dict]) -> dict[str, Any]:
         - other_hours: float
         - total_tracked_hours: float
         - total_events_scanned: int
-        - bar_segments: {P1, P2, P3, other} summing to total_tracked_hours
+        - bar_segments: {P1, P2, P3, other} mirrors keyword_hours + other_hours
+        - overlap_segment_count: int (segments where >1 bucket shared time; ops telemetry)
     """
-    # Initialize keyword buckets
-    keyword_hours: dict[str, float] = {"P1": 0.0, "P2": 0.0, "P3": 0.0}
+    total_events_scanned = len(events)
+
+    # Track event counts per keyword (independent of hour attribution)
     keyword_event_counts: dict[str, int] = {"P1": 0, "P2": 0, "P3": 0}
 
-    # Bar segments (exclusive allocation for stacked bar)
-    bar_segments: dict[str, float] = {"P1": 0.0, "P2": 0.0, "P3": 0.0, "other": 0.0}
-
-    # Track unique events for totalTrackedHours (deduplicated)
-    seen_event_ids: set[str] = set()
-    total_tracked_hours = 0.0
-    other_hours = 0.0
-    total_events_scanned = len(events)
+    # Build list of (start_epoch, end_epoch, claims) for filtered events
+    # claims is a frozenset of bucket names
+    intervals: list[tuple[int, int, frozenset[str]]] = []
 
     for event in events:
         # Skip all-day events
@@ -236,70 +244,133 @@ def compute_allocation_from_events(events: list[dict]) -> dict[str, Any]:
         if is_cancelled_event(event):
             continue
 
-        # Compute duration
-        duration = compute_event_duration_hours(event)
-        if duration <= 0:
+        # Get start/end datetimes
+        start_str = event.get("start", {}).get("dateTime")
+        end_str = event.get("end", {}).get("dateTime")
+        if not start_str or not end_str:
             continue
 
-        # Get event ID for deduplication
-        event_id = event.get("id")
-        if not event_id:
-            logger.warning("Event missing ID, skipping from total")
+        try:
+            start_dt = datetime.fromisoformat(start_str)
+            end_dt = datetime.fromisoformat(end_str)
+        except (ValueError, TypeError):
             continue
 
-        # Match keywords
+        # Skip zero or negative duration
+        if start_dt >= end_dt:
+            continue
+
+        # Convert to UTC epoch seconds (integer)
+        start_epoch = int(start_dt.timestamp())
+        end_epoch = int(end_dt.timestamp())
+
+        # Match keywords to determine claims
         title = event.get("summary", "")
         matched_keywords = match_keywords(title)
 
-        # Add to totalTrackedHours (deduplicated)
-        if event_id not in seen_event_ids:
-            seen_event_ids.add(event_id)
-            total_tracked_hours += duration
+        # Update event counts (per matched keyword)
+        for kw in matched_keywords:
+            if kw in keyword_event_counts:
+                keyword_event_counts[kw] += 1
 
+        # Warn if event has no ID (defensive: malformed API response signal)
+        if not event.get("id"):
+            logger.warning("Event missing ID, including via interval union")
+
+        # Determine bucket claims for this event
         if matched_keywords:
-            # Add duration to EACH matched keyword bucket (overlapping)
-            for kw in matched_keywords:
-                if kw in keyword_hours:
-                    keyword_hours[kw] += duration
-                    keyword_event_counts[kw] += 1
-
-            # Bar segment: assign to FIRST matched keyword (highest priority)
-            # Keywords come out in order found, but we need priority order
-            # P1 > P2 > P3
-            for priority_kw in PG_KEYWORDS:  # ["P1", "P2", "P3"]
-                if priority_kw in matched_keywords:
-                    bar_segments[priority_kw] += duration
-                    break
+            claims = frozenset(kw for kw in matched_keywords if kw in ("P1", "P2", "P3"))
         else:
-            # No keyword match → "other" hours
-            other_hours += duration
-            bar_segments["other"] += duration
+            claims = frozenset(["other"])
 
-    # Round all values to 2 decimal places
+        intervals.append((start_epoch, end_epoch, claims))
+
+    # Handle empty case
+    if not intervals:
+        return {
+            "keywords": {
+                "P1": {"hours": 0.0, "event_count": 0},
+                "P2": {"hours": 0.0, "event_count": 0},
+                "P3": {"hours": 0.0, "event_count": 0},
+            },
+            "other_hours": 0.0,
+            "total_tracked_hours": 0.0,
+            "total_events_scanned": total_events_scanned,
+            "bar_segments": {"P1": 0.0, "P2": 0.0, "P3": 0.0, "other": 0.0},
+            "overlap_segment_count": 0,
+        }
+
+    # Build sorted list of boundary points
+    boundaries: set[int] = set()
+    for start_epoch, end_epoch, _ in intervals:
+        boundaries.add(start_epoch)
+        boundaries.add(end_epoch)
+    sorted_boundaries = sorted(boundaries)
+
+    # Accumulate seconds per bucket using Fraction for exact arithmetic
+    bucket_seconds: dict[str, Fraction] = {
+        "P1": Fraction(0),
+        "P2": Fraction(0),
+        "P3": Fraction(0),
+        "other": Fraction(0),
+    }
+    total_seconds = Fraction(0)
+    overlap_segment_count = 0  # Count segments with >1 distinct bucket claim
+
+    # Sweep through adjacent boundary pairs
+    for i in range(len(sorted_boundaries) - 1):
+        seg_start = sorted_boundaries[i]
+        seg_end = sorted_boundaries[i + 1]
+        seg_length = seg_end - seg_start
+
+        if seg_length <= 0:
+            continue
+
+        # Find all distinct bucket claims covering this segment
+        distinct_claims: set[str] = set()
+        for start_epoch, end_epoch, claims in intervals:
+            if start_epoch <= seg_start and end_epoch >= seg_end:
+                distinct_claims.update(claims)
+
+        if not distinct_claims:
+            continue
+
+        # Track segments where multiple buckets share time (overlap indicator)
+        if len(distinct_claims) > 1:
+            overlap_segment_count += 1
+
+        # Split segment equally across distinct claimant buckets
+        num_claimants = len(distinct_claims)
+        share = Fraction(seg_length, num_claimants)
+
+        for bucket in distinct_claims:
+            bucket_seconds[bucket] += share
+
+        total_seconds += seg_length
+
+    # Convert to hours (divide by 3600) and round to 2 decimals
+    p1_hours = round(float(bucket_seconds["P1"]) / 3600, 2)
+    p2_hours = round(float(bucket_seconds["P2"]) / 3600, 2)
+    p3_hours = round(float(bucket_seconds["P3"]) / 3600, 2)
+    other_hours = round(float(bucket_seconds["other"]) / 3600, 2)
+    total_tracked_hours = round(float(total_seconds) / 3600, 2)
+
     return {
         "keywords": {
-            "P1": {
-                "hours": round(keyword_hours["P1"], 2),
-                "event_count": keyword_event_counts["P1"],
-            },
-            "P2": {
-                "hours": round(keyword_hours["P2"], 2),
-                "event_count": keyword_event_counts["P2"],
-            },
-            "P3": {
-                "hours": round(keyword_hours["P3"], 2),
-                "event_count": keyword_event_counts["P3"],
-            },
+            "P1": {"hours": p1_hours, "event_count": keyword_event_counts["P1"]},
+            "P2": {"hours": p2_hours, "event_count": keyword_event_counts["P2"]},
+            "P3": {"hours": p3_hours, "event_count": keyword_event_counts["P3"]},
         },
-        "other_hours": round(other_hours, 2),
-        "total_tracked_hours": round(total_tracked_hours, 2),
+        "other_hours": other_hours,
+        "total_tracked_hours": total_tracked_hours,
         "total_events_scanned": total_events_scanned,
         "bar_segments": {
-            "P1": round(bar_segments["P1"], 2),
-            "P2": round(bar_segments["P2"], 2),
-            "P3": round(bar_segments["P3"], 2),
-            "other": round(bar_segments["other"], 2),
+            "P1": p1_hours,
+            "P2": p2_hours,
+            "P3": p3_hours,
+            "other": other_hours,
         },
+        "overlap_segment_count": overlap_segment_count,
     }
 
 
@@ -448,6 +519,7 @@ async def compute_time_allocation(
         p2_hours=allocation["keywords"]["P2"]["hours"],
         p3_hours=allocation["keywords"]["P3"]["hours"],
         other_hours=allocation["other_hours"],
+        overlap_segment_count=allocation.get("overlap_segment_count", 0),
         **log_context
     )
 
@@ -474,4 +546,5 @@ def _empty_allocation() -> dict[str, Any]:
             "P3": 0.0,
             "other": 0.0,
         },
+        "overlap_segment_count": 0,
     }

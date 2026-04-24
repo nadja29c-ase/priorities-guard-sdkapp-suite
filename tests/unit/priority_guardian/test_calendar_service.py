@@ -2,7 +2,7 @@
 Unit tests for calendar_service module.
 
 Tests keyword matching, duration computation, event filtering,
-bar_segments allocation, and week boundary computation.
+interval sweep allocation (overlap fix), and week boundary computation.
 """
 
 import pytest
@@ -379,7 +379,9 @@ class TestAllocationComputation:
         assert result["total_tracked_hours"] == 1.0
 
     def test_multi_keyword_event_counts_for_each(self):
-        """Event 'P1 P2 sync' counts for BOTH keywords."""
+        # Updated for interval sweep + distinct bucket attribution (overlap fix).
+        # Pre-fix expected values: P1=2.0, P2=2.0 (double-counting).
+        """Event 'P1 P2 sync' splits hours evenly between matched keywords."""
         events = [
             {
                 "id": "event-1",
@@ -391,18 +393,23 @@ class TestAllocationComputation:
 
         result = compute_allocation_from_events(events)
 
-        # Duration counted for EACH keyword
-        assert result["keywords"]["P1"]["hours"] == 2.0
-        assert result["keywords"]["P2"]["hours"] == 2.0
-        # But totalTrackedHours is deduplicated
+        # Hours split evenly between matched keywords
+        assert result["keywords"]["P1"]["hours"] == 1.0
+        assert result["keywords"]["P2"]["hours"] == 1.0
+        # Event counts still incremented for each matched keyword
+        assert result["keywords"]["P1"]["event_count"] == 1
+        assert result["keywords"]["P2"]["event_count"] == 1
+        # Total tracked hours unchanged
         assert result["total_tracked_hours"] == 2.0
 
     def test_bar_segments_exclusive_allocation(self):
-        """bar_segments assigns multi-match to highest priority (P1 > P2 > P3)."""
+        # Updated for interval sweep + distinct bucket attribution (overlap fix).
+        # Pre-fix expected values: P1=2.0, P2=0.0 (first-keyword-wins).
+        """bar_segments now mirrors keyword_hours (honest split)."""
         events = [
             {
                 "id": "event-1",
-                "summary": "P1 P2 sync",  # Multi-match: P1 wins
+                "summary": "P1 P2 sync",  # Multi-match: split evenly
                 "start": {"dateTime": "2026-02-11T10:00:00+01:00"},
                 "end": {"dateTime": "2026-02-11T12:00:00+01:00"},
             }
@@ -410,15 +417,20 @@ class TestAllocationComputation:
 
         result = compute_allocation_from_events(events)
 
-        # P1 gets the bar segment (highest priority)
-        assert result["bar_segments"]["P1"] == 2.0
-        assert result["bar_segments"]["P2"] == 0.0
+        # Both keywords get equal share of bar segment
+        assert result["bar_segments"]["P1"] == 1.0
+        assert result["bar_segments"]["P2"] == 1.0
+        # bar_segments mirrors keyword_hours
+        assert result["bar_segments"]["P1"] == result["keywords"]["P1"]["hours"]
+        assert result["bar_segments"]["P2"] == result["keywords"]["P2"]["hours"]
         # bar_segments sum equals total_tracked_hours
         total_segments = sum(result["bar_segments"].values())
         assert total_segments == result["total_tracked_hours"]
 
     def test_complex_multi_match_scenario(self):
-        """Complex scenario: P1-only, P1+P2, P2-only, other events."""
+        # Updated for interval sweep + distinct bucket attribution (overlap fix).
+        # Pre-fix expected: P1=5.0, P2=3.0, bar_segments P1=5.0, P2=1.0 (double-counting + first-wins).
+        """Complex scenario: P1-only, P1+P2, P2-only, other events (no temporal overlap)."""
         events = [
             {
                 "id": "event-1",
@@ -431,7 +443,7 @@ class TestAllocationComputation:
                 "summary": "P1 P2 sync",
                 "start": {"dateTime": "2026-02-11T13:00:00+01:00"},
                 "end": {"dateTime": "2026-02-11T15:00:00+01:00"},
-            },  # 2h P1+P2
+            },  # 2h P1+P2 → splits to 1h each
             {
                 "id": "event-3",
                 "summary": "P2 review",
@@ -448,18 +460,18 @@ class TestAllocationComputation:
 
         result = compute_allocation_from_events(events)
 
-        # Keywords (overlapping)
-        assert result["keywords"]["P1"]["hours"] == 5.0  # 3 + 2
-        assert result["keywords"]["P2"]["hours"] == 3.0  # 2 + 1
+        # Keywords (honest split)
+        assert result["keywords"]["P1"]["hours"] == 4.0  # 3h + 1h (split from P1+P2)
+        assert result["keywords"]["P2"]["hours"] == 2.0  # 1h (split from P1+P2) + 1h
         assert result["keywords"]["P3"]["hours"] == 0.0
         assert result["other_hours"] == 1.0
 
-        # Total (deduplicated)
+        # Total unchanged (no temporal overlap)
         assert result["total_tracked_hours"] == 7.0  # 3 + 2 + 1 + 1
 
-        # bar_segments (exclusive)
-        assert result["bar_segments"]["P1"] == 5.0  # 3h + 2h (P1+P2 goes to P1)
-        assert result["bar_segments"]["P2"] == 1.0  # Only P2-exclusive
+        # bar_segments mirrors keyword_hours
+        assert result["bar_segments"]["P1"] == 4.0
+        assert result["bar_segments"]["P2"] == 2.0
         assert result["bar_segments"]["other"] == 1.0
         assert sum(result["bar_segments"].values()) == 7.0
 
@@ -564,3 +576,412 @@ class TestEmptyAllocation:
         assert result["bar_segments"]["P2"] == 0.0
         assert result["bar_segments"]["P3"] == 0.0
         assert result["bar_segments"]["other"] == 0.0
+
+
+# =============================================================================
+# Sweep Line Allocation Tests (Overlap Fix)
+# =============================================================================
+
+
+class TestSweepLineAllocation:
+    """Tests for interval sweep + distinct bucket attribution in compute_allocation_from_events."""
+
+    def test_no_overlap_baseline_matches_naive_sum(self):
+        """Three non-overlapping events should produce naive sum behavior."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 work",
+                "start": {"dateTime": "2026-02-11T09:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T10:00:00+01:00"},
+            },  # 1h P1
+            {
+                "id": "event-2",
+                "summary": "P2 work",
+                "start": {"dateTime": "2026-02-11T10:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T11:00:00+01:00"},
+            },  # 1h P2
+            {
+                "id": "event-3",
+                "summary": "Untagged meeting",
+                "start": {"dateTime": "2026-02-11T11:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T12:00:00+01:00"},
+            },  # 1h other
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 1.0
+        assert result["keywords"]["P2"]["hours"] == 1.0
+        assert result["keywords"]["P3"]["hours"] == 0.0
+        assert result["other_hours"] == 1.0
+        assert result["total_tracked_hours"] == 3.0
+
+    def test_case_a_cross_priority_partial_overlap(self):
+        """P1 15-17 + P2 16-16:30 → P1=1.75, P2=0.25, total=2.0."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 deep work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "P2 sync",
+                "start": {"dateTime": "2026-02-11T16:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:30:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 1.75
+        assert result["keywords"]["P2"]["hours"] == 0.25
+        assert result["other_hours"] == 0.0
+        assert result["total_tracked_hours"] == 2.0
+        assert result["keywords"]["P1"]["event_count"] == 1
+        assert result["keywords"]["P2"]["event_count"] == 1
+
+    def test_case_b_same_priority_partial_overlap(self):
+        """P1 15-17 + P1 16-16:30 → P1=2.0, total=2.0."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 deep work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "P1 quick sync",
+                "start": {"dateTime": "2026-02-11T16:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:30:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 2.0
+        assert result["total_tracked_hours"] == 2.0
+        assert result["keywords"]["P1"]["event_count"] == 2
+
+    def test_case_c_priority_plus_untagged_overlap(self):
+        """P1 15-17 + untagged 16-16:30 → P1=1.75, other=0.25, total=2.0."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 deep work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "Quick chat",
+                "start": {"dateTime": "2026-02-11T16:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:30:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 1.75
+        assert result["other_hours"] == 0.25
+        assert result["total_tracked_hours"] == 2.0
+
+    def test_case_d_two_untagged_overlap(self):
+        """Two untagged events 15-17 + 16-16:30 → other=2.0, total=2.0."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "Meeting A",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "Meeting B",
+                "start": {"dateTime": "2026-02-11T16:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:30:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["other_hours"] == 2.0
+        assert result["total_tracked_hours"] == 2.0
+
+    def test_case_e_multi_keyword_single_event(self):
+        """Single event 'P1 P2 sync' 15-17 → P1=1.0, P2=1.0, total=2.0."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 P2 sync",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            }
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 1.0
+        assert result["keywords"]["P2"]["hours"] == 1.0
+        assert result["total_tracked_hours"] == 2.0
+        assert result["keywords"]["P1"]["event_count"] == 1
+        assert result["keywords"]["P2"]["event_count"] == 1
+
+    def test_three_way_overlap_equal_split(self):
+        """P1, P2, P3 events all spanning 15-16 → each gets ~0.33h."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "P2 work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:00:00+01:00"},
+            },
+            {
+                "id": "event-3",
+                "summary": "P3 work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:00:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == pytest.approx(0.33, abs=0.01)
+        assert result["keywords"]["P2"]["hours"] == pytest.approx(0.33, abs=0.01)
+        assert result["keywords"]["P3"]["hours"] == pytest.approx(0.33, abs=0.01)
+        assert result["total_tracked_hours"] == 1.0
+
+    def test_full_containment(self):
+        """P1 15-17, P2 15:30-16:00 (fully inside P1) → P1=1.75, P2=0.25."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 deep work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "P2 quick sync",
+                "start": {"dateTime": "2026-02-11T15:30:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:00:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 1.75
+        assert result["keywords"]["P2"]["hours"] == 0.25
+        assert result["total_tracked_hours"] == 2.0
+
+    def test_back_to_back_no_overlap(self):
+        """P1 15-16, P2 16-17 (touching but not overlapping) → P1=1.0, P2=1.0."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "P2 work",
+                "start": {"dateTime": "2026-02-11T16:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 1.0
+        assert result["keywords"]["P2"]["hours"] == 1.0
+        assert result["total_tracked_hours"] == 2.0
+
+    def test_zero_length_event_excluded(self):
+        """Zero-duration event is filtered out; P1 15-17 alone → P1=2.0."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 deep work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "P2 marker",
+                "start": {"dateTime": "2026-02-11T16:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:00:00+01:00"},  # Zero duration
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        assert result["keywords"]["P1"]["hours"] == 2.0
+        assert result["keywords"]["P2"]["hours"] == 0.0
+        assert result["total_tracked_hours"] == 2.0
+
+    @pytest.mark.parametrize("case_name,events,expected_buckets,expected_total", [
+        # Case (a): P1 15-17 + P2 16-16:30
+        ("case_a", [
+            {"id": "1", "summary": "P1 deep work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "P2 sync", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ], {"P1": 1.75, "P2": 0.25, "P3": 0.0, "other": 0.0}, 2.0),
+        # Case (b): P1 15-17 + P1 16-16:30
+        ("case_b", [
+            {"id": "1", "summary": "P1 deep work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "P1 quick sync", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ], {"P1": 2.0, "P2": 0.0, "P3": 0.0, "other": 0.0}, 2.0),
+        # Case (c): P1 15-17 + untagged 16-16:30
+        ("case_c", [
+            {"id": "1", "summary": "P1 deep work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "Quick chat", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ], {"P1": 1.75, "P2": 0.0, "P3": 0.0, "other": 0.25}, 2.0),
+        # Case (d): Two untagged overlap
+        ("case_d", [
+            {"id": "1", "summary": "Meeting A", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "Meeting B", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ], {"P1": 0.0, "P2": 0.0, "P3": 0.0, "other": 2.0}, 2.0),
+        # Case (e): Multi-keyword single event
+        ("case_e", [
+            {"id": "1", "summary": "P1 P2 sync", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+        ], {"P1": 1.0, "P2": 1.0, "P3": 0.0, "other": 0.0}, 2.0),
+        # Case (f): 3-way overlap P1+P2+P3 — the rounding edge case the 0.02 tolerance exists for
+        # 1h split 3 ways → 0.33+0.33+0.33 = 0.99 vs total 1.0
+        ("case_f_3way", [
+            {"id": "1", "summary": "P1 work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:00:00+01:00"}},
+            {"id": "2", "summary": "P2 work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:00:00+01:00"}},
+            {"id": "3", "summary": "P3 work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:00:00+01:00"}},
+        ], {"P1": 0.33, "P2": 0.33, "P3": 0.33, "other": 0.0}, 1.0),
+    ])
+    def test_invariant_total_equals_bucket_sum(self, case_name, events, expected_buckets, expected_total):
+        """Sum of bucket hours equals total_tracked_hours within 0.02h tolerance, and values match expected."""
+        result = compute_allocation_from_events(events)
+
+        # Verify actual bucket values match expected
+        assert result["keywords"]["P1"]["hours"] == pytest.approx(expected_buckets["P1"], abs=0.02)
+        assert result["keywords"]["P2"]["hours"] == pytest.approx(expected_buckets["P2"], abs=0.02)
+        assert result["keywords"]["P3"]["hours"] == pytest.approx(expected_buckets["P3"], abs=0.02)
+        assert result["other_hours"] == pytest.approx(expected_buckets["other"], abs=0.02)
+        assert result["total_tracked_hours"] == pytest.approx(expected_total, abs=0.02)
+
+        # Verify invariant: bucket sum equals total
+        bucket_sum = (
+            result["keywords"]["P1"]["hours"]
+            + result["keywords"]["P2"]["hours"]
+            + result["keywords"]["P3"]["hours"]
+            + result["other_hours"]
+        )
+        assert bucket_sum == pytest.approx(result["total_tracked_hours"], abs=0.02)
+
+    @pytest.mark.parametrize("case_name,events", [
+        # Case (a): P1 15-17 + P2 16-16:30 → union = 2.0h
+        ("case_a", [
+            {"id": "1", "summary": "P1 deep work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "P2 sync", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ]),
+        # Case (b): P1 15-17 + P1 16-16:30 → union = 2.0h
+        ("case_b", [
+            {"id": "1", "summary": "P1 deep work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "P1 quick sync", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ]),
+        # Case (c): P1 15-17 + untagged 16-16:30 → union = 2.0h
+        ("case_c", [
+            {"id": "1", "summary": "P1 deep work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "Quick chat", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ]),
+        # Case (d): Two untagged overlap → union = 2.0h
+        ("case_d", [
+            {"id": "1", "summary": "Meeting A", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+            {"id": "2", "summary": "Meeting B", "start": {"dateTime": "2026-02-11T16:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:30:00+01:00"}},
+        ]),
+        # Case (e): Multi-keyword single event → union = 2.0h
+        ("case_e", [
+            {"id": "1", "summary": "P1 P2 sync", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T17:00:00+01:00"}},
+        ]),
+        # Case (f): 3-way overlap P1+P2+P3 → union = 1.0h
+        ("case_f_3way", [
+            {"id": "1", "summary": "P1 work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:00:00+01:00"}},
+            {"id": "2", "summary": "P2 work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:00:00+01:00"}},
+            {"id": "3", "summary": "P3 work", "start": {"dateTime": "2026-02-11T15:00:00+01:00"}, "end": {"dateTime": "2026-02-11T16:00:00+01:00"}},
+        ]),
+    ])
+    def test_invariant_total_equals_event_union(self, case_name, events):
+        """total_tracked_hours equals the union of all event intervals."""
+        result = compute_allocation_from_events(events)
+
+        # Compute interval union independently using naive merge
+        intervals = []
+        for event in events:
+            start_str = event.get("start", {}).get("dateTime")
+            end_str = event.get("end", {}).get("dateTime")
+            if start_str and end_str:
+                start_dt = datetime.fromisoformat(start_str)
+                end_dt = datetime.fromisoformat(end_str)
+                if start_dt < end_dt:
+                    intervals.append((int(start_dt.timestamp()), int(end_dt.timestamp())))
+
+        # Sort by start, merge overlapping
+        intervals.sort()
+        merged = []
+        for start, end in intervals:
+            if merged and start <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+            else:
+                merged.append((start, end))
+
+        # Compute union hours
+        union_seconds = sum(end - start for start, end in merged)
+        union_hours = round(union_seconds / 3600, 2)
+
+        assert result["total_tracked_hours"] == pytest.approx(union_hours, abs=0.01)
+
+    def test_bar_segments_mirrors_keywords_and_other(self):
+        """bar_segments mirrors keyword_hours plus other_hours exactly."""
+        events = [
+            {
+                "id": "event-1",
+                "summary": "P1 deep work",
+                "start": {"dateTime": "2026-02-11T15:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T17:00:00+01:00"},
+            },
+            {
+                "id": "event-2",
+                "summary": "P2 sync",
+                "start": {"dateTime": "2026-02-11T16:00:00+01:00"},
+                "end": {"dateTime": "2026-02-11T16:30:00+01:00"},
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        expected_bar_segments = {
+            "P1": result["keywords"]["P1"]["hours"],
+            "P2": result["keywords"]["P2"]["hours"],
+            "P3": result["keywords"]["P3"]["hours"],
+            "other": result["other_hours"],
+        }
+        assert result["bar_segments"] == expected_bar_segments
+
+    def test_empty_event_list(self):
+        """Empty event list returns all zeros."""
+        result = compute_allocation_from_events([])
+
+        assert result["keywords"]["P1"]["hours"] == 0.0
+        assert result["keywords"]["P1"]["event_count"] == 0
+        assert result["keywords"]["P2"]["hours"] == 0.0
+        assert result["keywords"]["P2"]["event_count"] == 0
+        assert result["keywords"]["P3"]["hours"] == 0.0
+        assert result["keywords"]["P3"]["event_count"] == 0
+        assert result["other_hours"] == 0.0
+        assert result["total_tracked_hours"] == 0.0
+        assert result["total_events_scanned"] == 0
+        assert result["bar_segments"] == {"P1": 0.0, "P2": 0.0, "P3": 0.0, "other": 0.0}
