@@ -103,6 +103,22 @@ When adding a new table that represents meaningful user state (e.g., `pg_setting
 
 The ROPA Data Categories block references the Data Retention Strategy table and does not need separate updates. Keeping retention rules in one place (the detailed table) prevents drift between two lists.
 
+### Poetry Lock File Consistency
+
+After any change to `pyproject.toml`, regenerate `poetry.lock` and commit both files together:
+
+```bash
+poetry lock
+git add pyproject.toml poetry.lock
+git commit -m "deps: <what changed>"
+```
+
+**Suite-wide impact:** All Render services deployed from this repo (backend, PG OpenAI MCP, PG Claude MCP, MindSort MCP, and any other MCP services) share this `pyproject.toml` + `poetry.lock`. A dependency change affects every service.
+
+Render installs production dependencies via `poetry install --no-root --only main` (set as Build Command on every service). If `poetry.lock` is out of sync with `pyproject.toml`, Render builds will fail with a lock-file-stale error. This is intentional — it prevents silent dependency drift between local and production.
+
+`requirements_fullbackend.txt` was retained temporarily during the Poetry migration as a rollback fallback. It will be removed once Poetry-based deploys have proven stable.
+
 ---
 
 ## Deploy Reminder
