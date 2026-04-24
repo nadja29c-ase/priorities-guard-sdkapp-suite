@@ -117,7 +117,7 @@ git commit -m "deps: <what changed>"
 
 Render installs production dependencies via `poetry install --no-root --only main` (set as Build Command on every service). If `poetry.lock` is out of sync with `pyproject.toml`, Render builds will fail with a lock-file-stale error. This is intentional — it prevents silent dependency drift between local and production.
 
-`requirements_fullbackend.txt` was retained temporarily during the Poetry migration as a rollback fallback. It will be removed once Poetry-based deploys have proven stable.
+`requirements_fullbackend.txt` was removed in Increment 81 Commit 2. Do not reintroduce it — `pyproject.toml` + `poetry.lock` are the single source of truth for every service deployed from this repo.
 
 ---
 

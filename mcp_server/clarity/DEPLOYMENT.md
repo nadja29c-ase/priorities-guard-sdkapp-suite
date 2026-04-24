@@ -14,7 +14,7 @@ The Clarity MCP server is deployed on Render as a web service.
 
 - **Name:** `priorities-guard-clarity-mcp`
 - **Region:** Frankfurt (or closest to your users)
-- **Build Command:** `pip install -r requirements.txt`
+- **Build Command:** `poetry install --no-root --only main` (env var `POETRY_VERSION=2.2.0` required)
 - **Start Command:** `uvicorn mcp_server.clarity.server:app --host 0.0.0.0 --port $PORT`
 - **Plan:** Starter or higher
 
