@@ -5,8 +5,6 @@ The backend AS must never reference MCP server (RS) URLs. This file
 guards against reintroduction of PG_MCP_SERVER_URL or similar fields.
 """
 
-import pytest
-
 
 class TestASRSBoundary:
     """Tests that backend config enforces AS/RS separation."""
@@ -22,8 +20,13 @@ class TestASRSBoundary:
 
         field_names = set(Settings.model_fields.keys())
 
-        # These should never exist in backend config
-        forbidden_patterns = ["MCP_SERVER_URL", "mcp_server_url"]
+        # These substrings should never appear in any backend Settings field name.
+        # Why each one is forbidden:
+        # - MCP_SERVER_URL    — RS server URL (PG_MCP_SERVER_URL pattern)
+        # - MCP_RESOURCE_URL  — RS resource URL per RFC 9728
+        # - RESOURCE_METADATA — derived constant pointing to RS metadata
+        # All belong in the MCP server's own config, never in the AS.
+        forbidden_patterns = ["MCP_SERVER_URL", "MCP_RESOURCE_URL", "RESOURCE_METADATA"]
 
         violations = [
             name for name in field_names
@@ -55,5 +58,13 @@ class TestASRSBoundary:
         assert not hasattr(config, "RESOURCE_METADATA_URL"), (
             "config.RESOURCE_METADATA_URL should not exist. "
             "RS metadata URLs belong in MCP server config, not backend. "
+            "See ADR_MCP Server Implementation Standard.md → Backend Config Boundary."
+        )
+
+        assert not hasattr(config, "_MCP_ORIGIN"), (
+            "config._MCP_ORIGIN should not exist. "
+            "MCP origin derivation belongs in MCP server config, not backend. "
+            "Underscore prefix doesn't exempt it from the AS/RS boundary — "
+            "this constant was the building block for resource_metadata URLs. "
             "See ADR_MCP Server Implementation Standard.md → Backend Config Boundary."
         )

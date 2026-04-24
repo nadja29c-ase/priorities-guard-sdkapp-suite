@@ -2,7 +2,12 @@
 WWW-Authenticate Header Tests for Token Endpoint.
 
 Tests that OAuth 401 responses from the token endpoint include the correct
-WWW-Authenticate header per RFC 6750.
+WWW-Authenticate header. Two RFCs apply:
+
+- RFC 6749 §5.2: invalid_client errors MUST return HTTP 401 with a
+  WWW-Authenticate challenge identifying the AS.
+- RFC 6750 §3: defines the Bearer challenge syntax used in the header
+  value (Bearer realm="...").
 
 Header format: Bearer realm="oauth"
 
@@ -50,35 +55,36 @@ class TestWWWAuthenticateHeader:
 
         app.dependency_overrides[get_db] = override_get_db
 
-        # Mock the token service to return invalid_client error
-        with patch(
-            "backend.core.oauth_provider.token_endpoint.exchange_authorization_code",
-            new_callable=AsyncMock,
-            return_value=("invalid_client", "Client not found")
-        ):
-            async with AsyncClient(
-                transport=ASGITransport(app=app),
-                base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    "/oauth/pg/token",
-                    data={
-                        "grant_type": "authorization_code",
-                        "code": "any-code",
-                        "code_verifier": "a" * 43,
-                        "client_id": "any-client-id",
-                        "redirect_uri": "http://localhost:3000/callback"
-                    }
-                )
+        try:
+            # Mock the token service to return invalid_client error
+            with patch(
+                "backend.core.oauth_provider.token_endpoint.exchange_authorization_code",
+                new_callable=AsyncMock,
+                return_value=("invalid_client", "Client not found")
+            ):
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        "/oauth/pg/token",
+                        data={
+                            "grant_type": "authorization_code",
+                            "code": "any-code",
+                            "code_verifier": "a" * 43,
+                            "client_id": "any-client-id",
+                            "redirect_uri": "http://localhost:3000/callback"
+                        }
+                    )
 
-        app.dependency_overrides.clear()
+            # Should be 401 for invalid_client
+            assert response.status_code == 401
 
-        # Should be 401 for invalid_client
-        assert response.status_code == 401
-
-        # Should have WWW-Authenticate header with AS-level challenge
-        assert "WWW-Authenticate" in response.headers
-        assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
+            # Should have WWW-Authenticate header with AS-level challenge
+            assert "WWW-Authenticate" in response.headers
+            assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
     async def test_invalid_client_refresh_token_includes_header(
@@ -104,33 +110,34 @@ class TestWWWAuthenticateHeader:
 
         app.dependency_overrides[get_db] = override_get_db
 
-        # Mock the token service to return invalid_client error
-        with patch(
-            "backend.core.oauth_provider.token_endpoint.exchange_refresh_token",
-            new_callable=AsyncMock,
-            return_value=("invalid_client", "Client not found")
-        ):
-            async with AsyncClient(
-                transport=ASGITransport(app=app),
-                base_url="http://test"
-            ) as client:
-                response = await client.post(
-                    "/oauth/focused/token",
-                    data={
-                        "grant_type": "refresh_token",
-                        "refresh_token": "any-refresh-token",
-                        "client_id": "any-client-id"
-                    }
-                )
+        try:
+            # Mock the token service to return invalid_client error
+            with patch(
+                "backend.core.oauth_provider.token_endpoint.exchange_refresh_token",
+                new_callable=AsyncMock,
+                return_value=("invalid_client", "Client not found")
+            ):
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        "/oauth/focused/token",
+                        data={
+                            "grant_type": "refresh_token",
+                            "refresh_token": "any-refresh-token",
+                            "client_id": "any-client-id"
+                        }
+                    )
 
-        app.dependency_overrides.clear()
+            # Should be 401 for invalid_client
+            assert response.status_code == 401
 
-        # Should be 401 for invalid_client
-        assert response.status_code == 401
-
-        # Should have WWW-Authenticate header
-        assert "WWW-Authenticate" in response.headers
-        assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
+            # Should have WWW-Authenticate header
+            assert "WWW-Authenticate" in response.headers
+            assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
     async def test_oauth_exception_handler_no_header(self, async_engine, fake_redis_client):
@@ -223,29 +230,30 @@ class TestWWWAuthenticateHeader:
 
         app.dependency_overrides[get_db] = override_get_db
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test"
-        ) as client:
-            # Invalid code returns invalid_grant (400)
-            response = await client.post(
-                "/oauth/pg/token",
-                data={
-                    "grant_type": "authorization_code",
-                    "code": "nonexistent-code",
-                    "code_verifier": "a" * 43,
-                    "client_id": "some-client",
-                    "redirect_uri": "http://localhost:3000/callback"
-                }
-            )
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test"
+            ) as client:
+                # Invalid code returns invalid_grant (400)
+                response = await client.post(
+                    "/oauth/pg/token",
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": "nonexistent-code",
+                        "code_verifier": "a" * 43,
+                        "client_id": "some-client",
+                        "redirect_uri": "http://localhost:3000/callback"
+                    }
+                )
 
-        app.dependency_overrides.clear()
+            # Should be 400 for invalid_grant
+            assert response.status_code == 400
 
-        # Should be 400 for invalid_grant
-        assert response.status_code == 400
-
-        # Should NOT have WWW-Authenticate header (only for 401)
-        assert "WWW-Authenticate" not in response.headers
+            # Should NOT have WWW-Authenticate header (only for 401)
+            assert "WWW-Authenticate" not in response.headers
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
     async def test_unsupported_grant_type_no_header(self, async_engine, fake_redis_client):
@@ -267,26 +275,27 @@ class TestWWWAuthenticateHeader:
 
         app.dependency_overrides[get_db] = override_get_db
 
-        async with AsyncClient(
-            transport=ASGITransport(app=app),
-            base_url="http://test"
-        ) as client:
-            # Unsupported grant type returns 400
-            response = await client.post(
-                "/oauth/pg/token",
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": "some-client"
-                }
-            )
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test"
+            ) as client:
+                # Unsupported grant type returns 400
+                response = await client.post(
+                    "/oauth/pg/token",
+                    data={
+                        "grant_type": "client_credentials",
+                        "client_id": "some-client"
+                    }
+                )
 
-        app.dependency_overrides.clear()
+            # Should be 400 for unsupported grant type
+            assert response.status_code == 400
 
-        # Should be 400 for unsupported grant type
-        assert response.status_code == 400
-
-        # Should NOT have WWW-Authenticate header
-        assert "WWW-Authenticate" not in response.headers
+            # Should NOT have WWW-Authenticate header
+            assert "WWW-Authenticate" not in response.headers
+        finally:
+            app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
     async def test_response_body_unchanged(self, async_engine, fake_redis_client):
@@ -310,12 +319,68 @@ class TestWWWAuthenticateHeader:
 
         app.dependency_overrides[get_db] = override_get_db
 
-        # Mock to return invalid_client to trigger 401 path
-        with patch(
-            "backend.core.oauth_provider.token_endpoint.exchange_authorization_code",
-            new_callable=AsyncMock,
-            return_value=("invalid_client", "Client authentication failed")
-        ):
+        try:
+            # Mock to return invalid_client to trigger 401 path
+            with patch(
+                "backend.core.oauth_provider.token_endpoint.exchange_authorization_code",
+                new_callable=AsyncMock,
+                return_value=("invalid_client", "Client authentication failed")
+            ):
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test"
+                ) as client:
+                    response = await client.post(
+                        "/oauth/pg/token",
+                        data={
+                            "grant_type": "authorization_code",
+                            "code": "any-code",
+                            "code_verifier": "a" * 43,
+                            "client_id": "any-client-id",
+                            "redirect_uri": "http://localhost:3000/callback"
+                        }
+                    )
+
+            # Verify JSON structure is intact
+            body = response.json()
+            assert "error" in body
+            assert body["error"] == "invalid_client"
+            assert "error_description" in body
+            assert body["error_description"] == "Client authentication failed"
+
+            # Header should also be present
+            assert "WWW-Authenticate" in response.headers
+            assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_missing_client_id_returns_401_with_header(
+        self, async_engine, fake_redis_client
+    ):
+        """
+        Token endpoint must return 401 with WWW-Authenticate when client_id is missing.
+
+        Per RFC 6749 §5.2, invalid_client responses are 401, not 400. This applies
+        to both authentication failures (bad client_id) and missing client_id (the
+        early-rejection branch).
+        """
+        from backend.main import app
+        from backend.core.database import get_db
+
+        endpoint_session_maker = async_sessionmaker(
+            async_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
+        async def override_get_db():
+            async with endpoint_session_maker() as session:
+                yield session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        try:
             async with AsyncClient(
                 transport=ASGITransport(app=app),
                 base_url="http://test"
@@ -326,20 +391,16 @@ class TestWWWAuthenticateHeader:
                         "grant_type": "authorization_code",
                         "code": "any-code",
                         "code_verifier": "a" * 43,
-                        "client_id": "any-client-id",
+                        # Intentionally omit client_id
                         "redirect_uri": "http://localhost:3000/callback"
                     }
                 )
 
-        app.dependency_overrides.clear()
-
-        # Verify JSON structure is intact
-        body = response.json()
-        assert "error" in body
-        assert body["error"] == "invalid_client"
-        assert "error_description" in body
-        assert body["error_description"] == "Client authentication failed"
-
-        # Header should also be present
-        assert "WWW-Authenticate" in response.headers
-        assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
+            assert response.status_code == 401
+            assert "WWW-Authenticate" in response.headers
+            assert response.headers["WWW-Authenticate"] == EXPECTED_WWW_AUTHENTICATE
+            body = response.json()
+            assert body["error"] == "invalid_client"
+            assert "client_id" in body["error_description"]
+        finally:
+            app.dependency_overrides.clear()

@@ -139,14 +139,24 @@ async def token_endpoint(
         client_id="[from_header]" if client_from_header else mask_client_id(client_id)
     )
 
-    # Require client_id (from form body or Basic Auth)
+    # Require client_id (from form body or Basic Auth).
+    # RFC 6749 §5.2: invalid_client → 401 with WWW-Authenticate challenge.
+    # Use 'Bearer realm="oauth"' — AS-level challenge, no RS-specific metadata
+    # (per ADR MCP Server Implementation Standard → Backend Config Boundary).
     if client_id is None:
+        request_logger.warning(
+            "oauth.token.error",
+            error="invalid_client",
+            error_description="client_id is required",
+            grant_type=grant_type,
+        )
         return JSONResponse(
-            status_code=400,
+            status_code=401,
             content={
                 "error": "invalid_client",
                 "error_description": "client_id is required"
-            }
+            },
+            headers={"WWW-Authenticate": 'Bearer realm="oauth"'}
         )
 
     # Rate limit check
