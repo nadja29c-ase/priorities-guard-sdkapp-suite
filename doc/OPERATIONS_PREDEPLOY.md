@@ -119,6 +119,8 @@ Render installs production dependencies via `poetry install --no-root --only mai
 
 `requirements_fullbackend.txt` was removed in Increment 81 Commit 2. Do not reintroduce it — `pyproject.toml` + `poetry.lock` are the single source of truth for every service deployed from this repo.
 
+**Resuming a suspended Render service:** If you resume a service that was suspended during/before the Poetry migration (PG Claude MCP, Focused, Sharpen), update its Build Command to `poetry install --no-root --only main` and set env var `POETRY_VERSION=2.2.0` BEFORE triggering its first deploy. Otherwise the build will fail — the old `pip install -r requirements_fullbackend.txt` references a file that no longer exists in the repo.
+
 ---
 
 ## Deploy Reminder

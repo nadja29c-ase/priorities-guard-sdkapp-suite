@@ -96,7 +96,7 @@ After deployment, verify:
 
 1. **ImportError on startup**
    - Check all Python files are committed and pushed
-   - Verify requirements.txt includes all dependencies
+   - Verify the dependency is declared in `pyproject.toml` and `poetry.lock` is current (run `poetry lock` locally if in doubt)
 
 2. **OAuth validation fails**
    - Verify `CLARITY_ISSUER` matches token's `iss` claim

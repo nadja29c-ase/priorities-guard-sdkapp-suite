@@ -93,4 +93,3 @@ celerybeat.pid
 
 # FastAPI/Uvicorn
 *.pid
-.sonar/
