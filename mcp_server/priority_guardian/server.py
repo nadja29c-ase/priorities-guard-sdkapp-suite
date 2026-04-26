@@ -593,6 +593,11 @@ def create_app():
     uvicorn can bind to the port quickly before loading dependencies.
     This is critical for Render's free tier port scan timeout.
     """
+    # Configure structured logging first (before any other imports that might log)
+    # Import inside create_app() to preserve fast-startup contract
+    from shared.logging import configure_logging
+    configure_logging()
+
     # Import heavy dependencies here, not at module level
     from mcp.server.fastmcp import FastMCP
     from mcp import types as mcp_types

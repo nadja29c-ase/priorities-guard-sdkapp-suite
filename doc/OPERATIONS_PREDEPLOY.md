@@ -122,6 +122,51 @@ Render installs production dependencies via `poetry install --no-root --only mai
 
 ---
 
+## Better Stack Log Shipping
+
+### Overview
+
+The backend and MCP servers ship structured JSON logs to Better Stack via `logtail-python`. The shared logging module (`shared/logging.py`) handles configuration for both services.
+
+### Environment Variables
+
+| Variable | Required On | Value |
+|----------|-------------|-------|
+| `BETTER_STACK_SOURCE_TOKEN` | Backend, PG OpenAI MCP | Token from Better Stack source settings |
+| `SERVICE_NAME` | Backend, PG OpenAI MCP | `priority-guardian-backend` (backend) / `priority-guardian-mcp` (MCP) |
+
+**Each service needs these env vars set independently.** Render does not propagate env vars across services.
+
+**Why SERVICE_NAME matters:** All suite logs flow into a single Better Stack source. The `service` field (injected automatically by `shared/logging.py`) is how you filter backend vs MCP logs in saved views. If `SERVICE_NAME` is unset on a service, its logs are tagged `priority-guard-suite` and become indistinguishable from other services — degrading the value of saved views and alerts.
+
+If the env var is unset or empty, the service runs normally but logs only to stdout — fine for local dev, not desired in production.
+
+### Post-Deploy Verification
+
+After setting the env var on a Render service:
+
+1. Restart the service (or trigger a deploy)
+2. Open Better Stack → Live Tail
+3. Verify the `logging.betterstack.enabled` startup event appears within ~30 seconds
+4. The `service` field should identify the service (`priority-guardian-backend`, `priority-guardian-mcp`)
+
+### Deferred Services
+
+The **PG Claude MCP server** (`mcp_server/priority_guardian_claude/`) is currently deprecated. When PG is submitted to the Claude MCP Directory and this service is reactivated:
+
+1. Add `BETTER_STACK_SOURCE_TOKEN` to its Render env vars
+2. Add `SERVICE_NAME=priority-guardian-claude-mcp` to its Render env vars
+3. Add `configure_logging()` call inside `server_dupl.py`'s `create_app()` (same pattern as PG OpenAI MCP's `server.py`)
+4. Follow the "Resuming a suspended Render service" checklist in the Poetry Lock section
+
+Same applies to any future MCP service in the suite (Focused, Sharpen, MindSort, etc.).
+
+### Graceful Degradation
+
+If Better Stack is unreachable or the token is invalid at startup, the service continues normally with stdout-only logging. The `logging.betterstack.init_failed` warning will appear in stdout. This is intentional — Better Stack is a best-effort transport, not a startup dependency.
+
+---
+
 ## Deploy Reminder
 
 **After pushing changes to the shared backend**, manually redeploy the service on Render.
