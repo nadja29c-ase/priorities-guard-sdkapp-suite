@@ -2,6 +2,7 @@ import './main.css'
 import { createRoot } from 'react-dom/client'
 import { Component, type ReactNode, type ErrorInfo } from 'react'
 import App from './App'
+import { reportWidgetError } from './widgetErrorReporter'
 
 // Set document language BEFORE React renders (for VoiceOver)
 // Must run synchronously before createRoot to ensure correct voice from start
@@ -31,6 +32,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('PG widget error:', error, errorInfo.componentStack)
+    reportWidgetError({
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack ?? undefined,
+    })
   }
 
   render(): ReactNode {
@@ -54,6 +61,39 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
   }
 }
 
+// Global error handlers — catch errors outside React's tree
+window.addEventListener('error', (event: ErrorEvent) => {
+  const error = event.error
+  if (error instanceof Error) {
+    reportWidgetError({
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    })
+  } else {
+    reportWidgetError({
+      message: event.message || 'Unknown window error',
+      stack: null,
+    })
+  }
+})
+
+window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+  const reason = event.reason
+  if (reason instanceof Error) {
+    reportWidgetError({
+      name: reason.name,
+      message: reason.message,
+      stack: reason.stack,
+    })
+  } else {
+    reportWidgetError({
+      message: String(reason),
+      stack: null,
+    })
+  }
+})
+
 // Safe root element lookup with fallback
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -65,3 +105,6 @@ if (!rootElement) {
     </ErrorBoundary>
   )
 }
+
+// Test-only export
+export { ErrorBoundary as __ErrorBoundaryForTesting }
