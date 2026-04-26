@@ -1571,3 +1571,186 @@ class TestRetiredPriorityAggregateFreeze:
 
         assert row[0] == 3, "streak_count should be updated"
         assert row[1] == Decimal("8.0"), "total_hours_invested should be updated"
+
+
+# =============================================================================
+# Section 7: Snapshot Row Invariants (Overlap Fix)
+# =============================================================================
+
+
+class TestSnapshotRowInvariants:
+    """
+    Verify snapshot row invariants hold after overlap fix.
+
+    Critical context: pg_weekly_snapshots stores `other_hours` and `total_tracked_hours`
+    as **denormalized week-level values** — every snapshot row for a given user+week
+    carries identical copies of these two values. This means a naive SUM(other_hours)
+    across rows would multiply-count. These tests account for this.
+    """
+
+    @pytest.mark.asyncio
+    async def test_snapshot_row_invariant_total_equals_components(
+        self, async_session: AsyncSession
+    ):
+        """
+        Verify snapshot invariant: sum(actual_hours) + other_hours == total_tracked_hours.
+
+        Setup: P1 and P2 priorities with overlapping events {P1 15-17, P2 16-16:30}.
+        Triggers snapshot creation and verifies:
+        1. All rows agree on other_hours and total_tracked_hours (consistency)
+        2. For each row, actual_hours <= total_tracked_hours (per-priority bound)
+        3. sum(actual_hours) + other_hours == total_tracked_hours (component sum)
+        """
+        from backend.apps.priority_guardian.services.snapshot_service import (
+            _create_snapshots_for_week,
+        )
+        from unittest.mock import AsyncMock, patch
+
+        # Create user
+        user = CoreUser(id=uuid4())
+        async_session.add(user)
+        await async_session.flush()
+
+        # Create P1 priority (created well before test week)
+        priority_p1 = PgPriority(
+            user_id=user.id,
+            name="P1 Priority",
+            type="flexible",
+            calendar_keyword="P1",
+            status="active",
+            weekly_hour_target=Decimal("10.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2025, 12, 1),
+        )
+        async_session.add(priority_p1)
+
+        # Create P2 priority
+        priority_p2 = PgPriority(
+            user_id=user.id,
+            name="P2 Priority",
+            type="flexible",
+            calendar_keyword="P2",
+            status="active",
+            weekly_hour_target=Decimal("5.0"),
+            checkpoint_date=date(2026, 3, 15),
+            created_at=datetime(2025, 12, 1),
+        )
+        async_session.add(priority_p2)
+        await async_session.commit()
+
+        # Test week: Jan 5, 2026 (Monday)
+        test_week_start = date(2026, 1, 5)
+        test_tuesday = "2026-01-06"
+
+        # Overlapping events: P1 15-17, P2 16-16:30
+        # Expected allocation:
+        #   P1: 1.5h (15:00-16:00) + 0.25h (half of 16:00-16:30 overlap) = 1.75h
+        #   P2: 0.25h (half of 16:00-16:30 overlap)
+        #   P1 remaining: 0.5h (16:30-17:00) — wait, let me recalculate:
+        #   Actually the sweep line logic:
+        #     15:00-16:00: P1 only → 1h to P1
+        #     16:00-16:30: P1+P2 overlap → 0.25h each
+        #     16:30-17:00: P1 only → 0.5h to P1
+        #   So P1 = 1 + 0.25 + 0.5 = 1.75h, P2 = 0.25h
+        mock_events = [
+            {
+                "id": "event-p1",
+                "summary": "[P1] Deep work",
+                "start": {"dateTime": f"{test_tuesday}T15:00:00Z"},
+                "end": {"dateTime": f"{test_tuesday}T17:00:00Z"},
+                "status": "confirmed",
+            },
+            {
+                "id": "event-p2",
+                "summary": "[P2] Quick call",
+                "start": {"dateTime": f"{test_tuesday}T16:00:00Z"},
+                "end": {"dateTime": f"{test_tuesday}T16:30:00Z"},
+                "status": "confirmed",
+            },
+        ]
+
+        mock_http_client = AsyncMock()
+        log = {"user_id": str(user.id), "correlation_id": "test"}
+
+        with patch(
+            "backend.apps.priority_guardian.services.snapshot_service.list_events"
+        ) as mock_list_events, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.compute_week_boundaries"
+        ) as mock_boundaries, patch(
+            "backend.apps.priority_guardian.services.snapshot_service.to_rfc3339"
+        ) as mock_rfc:
+            mock_list_events.return_value = (mock_events, 0)
+            mock_boundaries.return_value = (
+                datetime(2026, 1, 5, 0, 0),
+                datetime(2026, 1, 12, 0, 0),
+            )
+            mock_rfc.side_effect = lambda dt: dt.isoformat() + "Z"
+
+            result = await _create_snapshots_for_week(
+                user_id=user.id,
+                week_start=test_week_start,
+                timezone_str="UTC",
+                priorities=[priority_p1, priority_p2],
+                access_token="test_token",
+                session=async_session,
+                http_client=mock_http_client,
+                log=log,
+            )
+
+        assert result is True
+
+        # -------------------------------------------------------------------------
+        # Consistency assertion: all rows agree on other_hours and total_tracked_hours
+        # -------------------------------------------------------------------------
+        distinct_result = await async_session.execute(
+            text("""
+                SELECT DISTINCT other_hours, total_tracked_hours
+                FROM pg_weekly_snapshots
+                WHERE user_id = :uid AND week_start = :ws
+            """),
+            {"uid": user.id, "ws": test_week_start},
+        )
+        distinct_rows = distinct_result.fetchall()
+
+        assert len(distinct_rows) == 1, (
+            f"Expected exactly 1 distinct (other_hours, total_tracked_hours) pair, "
+            f"got {len(distinct_rows)}: {distinct_rows}"
+        )
+
+        representative_other_hours = distinct_rows[0][0]
+        representative_total_tracked = distinct_rows[0][1]
+
+        # -------------------------------------------------------------------------
+        # Per-priority bound: actual_hours <= total_tracked_hours for each row
+        # -------------------------------------------------------------------------
+        all_snapshots_result = await async_session.execute(
+            text("""
+                SELECT priority_id, actual_hours, other_hours, total_tracked_hours
+                FROM pg_weekly_snapshots
+                WHERE user_id = :uid AND week_start = :ws
+            """),
+            {"uid": user.id, "ws": test_week_start},
+        )
+        all_rows = all_snapshots_result.fetchall()
+
+        assert len(all_rows) == 2, f"Expected 2 snapshot rows, got {len(all_rows)}"
+
+        for row in all_rows:
+            priority_id, actual_hours, other_hours, total_tracked = row
+            assert actual_hours <= total_tracked, (
+                f"Per-priority bound violated: actual_hours ({actual_hours}) > "
+                f"total_tracked_hours ({total_tracked}) for priority {priority_id}"
+            )
+
+        # -------------------------------------------------------------------------
+        # Component sum: sum(actual_hours) + other_hours == total_tracked_hours
+        # -------------------------------------------------------------------------
+        total_actual_hours = sum(row[1] for row in all_rows)  # actual_hours from all rows
+        computed_total = total_actual_hours + representative_other_hours
+
+        # 0.02 tolerance matches the rounding tolerance in part 1 invariant 1
+        assert abs(float(computed_total) - float(representative_total_tracked)) <= 0.02, (
+            f"Component sum invariant violated: "
+            f"sum(actual_hours)={total_actual_hours} + other_hours={representative_other_hours} "
+            f"= {computed_total} != total_tracked_hours={representative_total_tracked}"
+        )

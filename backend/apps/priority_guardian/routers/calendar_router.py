@@ -86,6 +86,10 @@ async def get_time_allocation(
             total_hours=allocation.get("total_tracked_hours", 0),
         )
 
+        # Strip internal telemetry field before returning to client
+        # (overlap_segment_count is logged for ops but not part of the response contract)
+        allocation.pop("overlap_segment_count", None)
+
         return {
             "success": True,
             "data": allocation,

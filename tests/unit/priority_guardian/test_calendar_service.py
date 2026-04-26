@@ -730,6 +730,38 @@ class TestSweepLineAllocation:
         assert result["keywords"]["P1"]["event_count"] == 1
         assert result["keywords"]["P2"]["event_count"] == 1
 
+    def test_duplicate_keyword_in_single_title_counts_one_event(self):
+        """
+        Regression: an event title containing the same keyword multiple times
+        (e.g. "P1 P1 planning") must count as ONE P1 event, not two.
+
+        The match_keywords function uses re.findall and returns all occurrences,
+        so without deduplication via set(), a duplicated keyword inflates
+        keyword_event_counts. The fix uses set(matched_keywords) for counting.
+
+        Hours math is unaffected (frozenset already deduplicates claims), but
+        event_count is user-visible and must remain "events matching this keyword",
+        not "keyword occurrences across event titles".
+        """
+        events = [
+            {
+                "id": "event-dup",
+                "summary": "P1 P1 planning",
+                "start": {"dateTime": "2026-04-13T15:00:00Z"},
+                "end": {"dateTime": "2026-04-13T17:00:00Z"},
+                "status": "confirmed",
+            },
+        ]
+
+        result = compute_allocation_from_events(events)
+
+        # Event count for P1 must be 1, not 2 (one event, not two keyword matches)
+        assert result["keywords"]["P1"]["event_count"] == 1
+        # Hours math: single event, single bucket → all 2h goes to P1
+        assert result["keywords"]["P1"]["hours"] == pytest.approx(2.0, abs=0.01)
+        assert result["other_hours"] == 0.0
+        assert result["total_tracked_hours"] == pytest.approx(2.0, abs=0.01)
+
     def test_three_way_overlap_equal_split(self):
         """P1, P2, P3 events all spanning 15-16 → each gets ~0.33h."""
         events = [

@@ -268,14 +268,15 @@ def compute_allocation_from_events(events: list[dict]) -> dict[str, Any]:
         title = event.get("summary", "")
         matched_keywords = match_keywords(title)
 
-        # Update event counts (per matched keyword)
-        for kw in matched_keywords:
+        # Update event counts (per matched keyword, dedupe to avoid double-counting
+        # titles like "P1 P1 planning" as two P1 events)
+        for kw in set(matched_keywords):
             if kw in keyword_event_counts:
                 keyword_event_counts[kw] += 1
 
         # Warn if event has no ID (defensive: malformed API response signal)
         if not event.get("id"):
-            logger.warning("Event missing ID, including via interval union")
+            logger.warning("calendar.event_missing_id")
 
         # Determine bucket claims for this event
         if matched_keywords:
