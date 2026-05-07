@@ -181,7 +181,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Guard: reject call for past weeks (event data only available for current week)
     if not data.get("is_current_week"):
-        logger.info(
+        logger.warning(
             "tool.get_priority_events.breakdown_unavailable",
             correlation_id=correlation_id,
             user_id=user_id,
@@ -210,7 +210,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Guard: no priorities at all
     if not priorities:
-        logger.info(
+        logger.warning(
             "tool.get_priority_events.no_priorities",
             correlation_id=correlation_id,
             user_id=user_id,

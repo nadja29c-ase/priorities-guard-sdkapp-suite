@@ -208,7 +208,7 @@ async def handle(
 
     # Check reflection_items present and non-empty
     if not reflection_items_raw or len(reflection_items_raw) == 0:
-        logger.info(
+        logger.warning(
             "tool.inspect_adapt.provenance_failed",
             correlation_id=correlation_id,
             field="reflection_items",
@@ -236,7 +236,7 @@ async def handle(
         # Check user_reflection_verbatim
         verbatim = item.get("user_reflection_verbatim", "")
         if not verbatim or not verbatim.strip():
-            logger.info(
+            logger.warning(
                 "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="user_reflection_verbatim",
@@ -246,7 +246,7 @@ async def handle(
 
     # Check action_steps present and non-empty
     if not action_steps_raw or len(action_steps_raw) == 0:
-        logger.info(
+        logger.warning(
             "tool.inspect_adapt.provenance_failed",
             correlation_id=correlation_id,
             field="action_steps",
@@ -263,7 +263,7 @@ async def handle(
         # Check user_action_verbatim
         verbatim = step.get("user_action_verbatim", "")
         if not verbatim or not verbatim.strip():
-            logger.info(
+            logger.warning(
                 "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="user_action_verbatim",
@@ -274,7 +274,7 @@ async def handle(
         # Check derived_from_id references a valid reflection item
         derived_from_id = step.get("derived_from_id", "")
         if derived_from_id not in reflection_ids:
-            logger.info(
+            logger.warning(
                 "tool.inspect_adapt.provenance_failed",
                 correlation_id=correlation_id,
                 field="derived_from_id",

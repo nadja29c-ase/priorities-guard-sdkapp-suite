@@ -141,10 +141,10 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         tool_ms = (time.perf_counter() - start_tool) * 1000
         total_ms = (time.perf_counter() - start_total) * 1000
 
-        logger.info("tool.dispatch.rejected",
-                   tool_name=name,
-                   correlation_id=correlation_id,
-                   reason=str(e))
+        logger.warning("tool.dispatch.rejected",
+                       tool_name=name,
+                       correlation_id=correlation_id,
+                       reason=str(e))
 
         logger.info("tool.timing",
                    tool_name=name,
@@ -152,7 +152,8 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
                    auth_ms=round(auth_ms, 1),
                    tool_ms=round(tool_ms, 1),
                    total_ms=round(total_ms, 1),
-                   user_id=user_id)
+                   user_id=user_id,
+                   success=False)
 
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
@@ -178,7 +179,8 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
                    auth_ms=round(auth_ms, 1),
                    tool_ms=round(tool_ms, 1),
                    total_ms=round(total_ms, 1),
-                   user_id=user_id)
+                   user_id=user_id,
+                   success=False)
 
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
@@ -193,13 +195,21 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
     # Step 9: Log timing
     total_ms = (time.perf_counter() - start_total) * 1000
 
+    # success reflects the actual result.isError, not just "no exception was raised"
+    # — handlers may return CallToolResult(isError=True) directly without raising
+    # (e.g., _build_provenance_error in create_priority.py and inspect_adapt.py,
+    # or direct CallToolResult(isError=True) returns in render_weekly_report.py,
+    # get_priority_events.py, onboarding_calendar_setup.py)
+    success = not getattr(result, "isError", False)
+
     logger.info("tool.timing",
                 tool_name=name,
                 correlation_id=correlation_id,
                 auth_ms=round(auth_ms, 1),
                 tool_ms=round(tool_ms, 1),
                 total_ms=round(total_ms, 1),
-                user_id=user_id)
+                user_id=user_id,
+                success=success)
 
     # Step 10: Return result
     return result

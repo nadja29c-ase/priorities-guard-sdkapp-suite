@@ -164,7 +164,7 @@ async def _handle_keyword_education(
 
     # Guard: no calendar connection
     if not google_connection.get("connected"):
-        logger.info(
+        logger.warning(
             "onboarding.no_connection",
             user_id=user_id,
             correlation_id=correlation_id,
@@ -180,7 +180,7 @@ async def _handle_keyword_education(
     # Guard: no active priorities
     active_priorities = [p for p in priorities if p.get("status") == "active"]
     if not active_priorities:
-        logger.info(
+        logger.warning(
             "onboarding.no_priorities",
             user_id=user_id,
             correlation_id=correlation_id,
@@ -313,7 +313,7 @@ async def _handle_first_weekly_report(
 
         # Handle specific error codes
         if error_code == "GOOGLE_NOT_CONNECTED":
-            logger.info(
+            logger.warning(
                 "onboarding.no_connection",
                 user_id=user_id,
                 correlation_id=correlation_id,
@@ -335,7 +335,7 @@ async def _handle_first_weekly_report(
 
     # Guard: no active priorities
     if not priorities:
-        logger.info(
+        logger.warning(
             "onboarding.no_priorities",
             user_id=user_id,
             correlation_id=correlation_id,
@@ -359,7 +359,7 @@ async def _handle_first_weekly_report(
 
     if total_hours == 0:
         # Empty week — no events at all
-        logger.info(
+        logger.warning(
             "onboarding.zero_keyword_hours",
             user_id=user_id,
             correlation_id=correlation_id,
@@ -379,7 +379,7 @@ async def _handle_first_weekly_report(
 
     if priority_hours == 0 and other_hours > 0:
         # Events exist but no keywords in titles
-        logger.info(
+        logger.warning(
             "onboarding.zero_keyword_hours",
             user_id=user_id,
             correlation_id=correlation_id,

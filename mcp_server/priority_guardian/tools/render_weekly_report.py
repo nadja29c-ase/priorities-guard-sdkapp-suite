@@ -478,7 +478,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Guard: reject semantic_groupings for past weeks (no event data available)
     if has_semantic_groupings and not data.get("is_current_week"):
-        logger.info(
+        logger.warning(
             "tool.render_weekly_report.semantic_breakdown_unavailable",
             correlation_id=correlation_id,
             user_id=user_id,
@@ -511,7 +511,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             else f"Week of {data.get('week_start')}"
         )
 
-        logger.info(
+        logger.warning(
             "tool.render_weekly_report.no_priorities",
             correlation_id=correlation_id,
             user_id=user_id,

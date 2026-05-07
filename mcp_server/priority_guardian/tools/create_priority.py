@@ -404,7 +404,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Check user_priority_name_verbatim non-empty
     if not user_priority_name_verbatim or not user_priority_name_verbatim.strip():
-        logger.info(
+        logger.warning(
             "tool.create_priority.provenance_failed",
             correlation_id=correlation_id,
             field="user_priority_name_verbatim",
@@ -413,7 +413,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Check name non-empty
     if not name or not name.strip():
-        logger.info(
+        logger.warning(
             "tool.create_priority.provenance_failed",
             correlation_id=correlation_id,
             field="name",
@@ -422,7 +422,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Check user_priority_type_verbatim non-empty
     if not user_priority_type_verbatim or not user_priority_type_verbatim.strip():
-        logger.info(
+        logger.warning(
             "tool.create_priority.provenance_failed",
             correlation_id=correlation_id,
             field="user_priority_type_verbatim",
@@ -431,7 +431,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
     # Defensive guard: type must be valid (schema should prevent, but costs one line)
     if priority_type not in ("deadline", "flexible"):
-        logger.info(
+        logger.warning(
             "tool.create_priority.provenance_failed",
             correlation_id=correlation_id,
             field="type",
@@ -442,7 +442,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     # For deadline type: check deadline field is present
     if priority_type == "deadline":
         if not deadline or not deadline.strip():
-            logger.info(
+            logger.warning(
                 "tool.create_priority.provenance_failed",
                 correlation_id=correlation_id,
                 field="deadline",
@@ -452,7 +452,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     # For flexible type: check structural and goal fields
     if priority_type == "flexible":
         if weekly_hour_target is None or weekly_hour_target <= 0:
-            logger.info(
+            logger.warning(
                 "tool.create_priority.provenance_failed",
                 correlation_id=correlation_id,
                 field="weekly_hour_target",
@@ -460,7 +460,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             return _build_provenance_error("missing_weekly_hours", GUIDANCE_MISSING_WEEKLY_HOURS)
 
         if not checkpoint_date or not checkpoint_date.strip():
-            logger.info(
+            logger.warning(
                 "tool.create_priority.provenance_failed",
                 correlation_id=correlation_id,
                 field="checkpoint_date",
@@ -468,7 +468,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             return _build_provenance_error("missing_checkpoint", GUIDANCE_MISSING_CHECKPOINT)
 
         if not user_goal_verbatim or not user_goal_verbatim.strip():
-            logger.info(
+            logger.warning(
                 "tool.create_priority.provenance_failed",
                 correlation_id=correlation_id,
                 field="user_goal_verbatim",
@@ -476,7 +476,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             return _build_provenance_error("empty_goal_verbatim", GUIDANCE_EMPTY_GOAL_VERBATIM)
 
         if not initial_goal_text or not initial_goal_text.strip():
-            logger.info(
+            logger.warning(
                 "tool.create_priority.provenance_failed",
                 correlation_id=correlation_id,
                 field="initial_goal_text",
