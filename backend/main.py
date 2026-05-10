@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
@@ -327,34 +327,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 # CorrelationIDMiddleware must be outermost so correlation_id is available to all inner middleware
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CorrelationIDMiddleware)
-
-
-@app.get("/")
-async def root():
-    """Serve the landing page."""
-    file_path = Path(__file__).parent / "static" / "index.html"
-    return FileResponse(file_path)
-
-
-@app.get("/privacy")
-async def privacy_policy():
-    """Serve the Privacy Policy HTML page."""
-    file_path = Path(__file__).parent / "static" / "PrivacyPolicy_PGS.html"
-    return FileResponse(file_path)
-
-
-@app.get("/terms")
-async def terms_of_service():
-    """Serve the Terms of Service HTML page."""
-    file_path = Path(__file__).parent / "static" / "terms.html"
-    return FileResponse(file_path)
-
-
-@app.get("/clarity")
-async def clarity_landing():
-    """Serve the Clarity landing page."""
-    file_path = Path(__file__).parent / "static" / "clarity.html"
-    return FileResponse(file_path)
 
 
 # Mount static files directory
