@@ -61,6 +61,9 @@ class Settings(BaseSettings):
         # Claude
         "https://claude.ai/api/mcp/auth_callback",
         "https://claude.com/api/mcp/auth_callback",
+        # Claude Code + MCP Inspector (local development and Anthropic review testing)
+        "http://localhost:6274/oauth/callback",
+        "http://localhost:6274/oauth/callback/debug",
     ]
 
     # Populated by build_allowed_redirect_uris validator at startup

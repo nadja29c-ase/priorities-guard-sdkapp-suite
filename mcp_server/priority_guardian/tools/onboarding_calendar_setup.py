@@ -621,6 +621,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
 ONBOARDING_CALENDAR_SETUP = ToolDefinition(
     name=NAME,
+    title="Onboarding Calendar Setup",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,

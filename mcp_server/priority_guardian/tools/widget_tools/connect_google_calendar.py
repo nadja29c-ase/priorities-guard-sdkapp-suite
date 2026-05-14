@@ -159,13 +159,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
 CONNECT_GOOGLE_CALENDAR = ToolDefinition(
     name=NAME,
+    title="Connect Google Calendar",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,
     handle=handle,
     read_only_hint=False,   # Initiates OAuth flow, modifies connection state
-    destructive_hint=False,
+    destructive_hint=True,  # Modifies connection state, initiates OAuth flow
     open_world_hint=True,   # Initiates external Google OAuth flow
     widget_accessible=True, # Widget can call this tool
     visibility="private",   # Widget-only, LLM cannot see or call

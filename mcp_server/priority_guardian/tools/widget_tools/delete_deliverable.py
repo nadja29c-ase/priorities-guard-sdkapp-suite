@@ -157,6 +157,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
 DELETE_DELIVERABLE = ToolDefinition(
     name=NAME,
+    title="Delete Deliverable",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,

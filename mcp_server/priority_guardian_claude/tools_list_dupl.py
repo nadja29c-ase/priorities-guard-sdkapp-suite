@@ -8,11 +8,6 @@ from mcp import types as mcp_types
 from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 
 
-def _derive_title(tool_name: str) -> str:
-    """Derive human-readable title from snake_case tool name."""
-    return " ".join(word.capitalize() for word in tool_name.split("_"))
-
-
 async def list_tools_for_claude() -> list[mcp_types.Tool]:
     """
     Build MCP Tool list for Claude.
@@ -38,7 +33,7 @@ async def list_tools_for_claude() -> list[mcp_types.Tool]:
 
         # Set annotations with hints from ToolDefinition
         tool.annotations = mcp_types.ToolAnnotations(
-            title=_derive_title(tool_def.name),
+            title=tool_def.title,
             readOnlyHint=tool_def.read_only_hint,
             destructiveHint=tool_def.destructive_hint,
             openWorldHint=tool_def.open_world_hint,

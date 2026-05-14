@@ -1,8 +1,11 @@
 # Structural Guideline: Priority Guardian for Claude vs. ChatGPT
 
-**Created:** March 2026  
-**Status:** Decided — not yet implemented  
+**Created:** March 2026
+**Updated:** May 2026
+**Status:** Implemented — Increments Claude-01 through Claude-06 complete
 **Context:** Priority Guardian v1.0 is accepted into the OpenAI GPT store. This document captures the architecture decisions for extending PG to the Anthropic MCP Directory as a second distribution channel.
+
+**Current State:** Claude MCP server deployed, OAuth callbacks configured, response adapter built, widget implemented. Widget rendering blocked by platform-side issue (anthropics/claude-ai-mcp #61). Pending: `title` annotation missing on ChatGPT server, `destructive_hint=False` incorrect on write tools.
 
 ---
 
@@ -260,78 +263,61 @@ Mitigation: keep tool handlers clean of ChatGPT-specific assumptions. If branchi
 
 ## Compliance Blockers Before Submission to Anthropic MCP Directory
 
-The following are confirmed or likely blockers specific to the Claude submission. All items already satisfied for OpenAI are not re-listed here — see `compliance_master_1.3.26.md`.
+The following tracks Claude-specific blockers. See `claude_connectors_compliance_master.md` for comprehensive requirements.
 
-### 0. `title` Annotation Missing — Code Change Required
+### ✅ Resolved — OAuth Callback URLs (Increment Claude-03)
 
-Anthropica's policy item 17 explicitly requires `title` as a named annotation: *"MCP servers must provide all applicable annotations for their tools, in particular `readOnlyHint`, `destructiveHint`, and `title`"*.
+Claude callback URLs added to `backend/core/config.py` allowlist:
+- `https://claude.ai/api/mcp/auth_callback`
+- `https://claude.com/api/mcp/auth_callback`
+- `http://localhost:6274/oauth/callback`
+- `http://localhost:6274/oauth/callback/debug`
 
-PG's `ToolDefinition` dataclass has no `title` field. `list_tools()` constructs `mcp_types.ToolAnnotations` with only `readOnlyHint`, `destructiveHint`, `openWorldHint` — `title` is absent from all 17 tools.
+PKCE S256 already implemented. No further code change needed.
 
-This is a small fix: add `title` to `ToolDefinition`, pass it to `ToolAnnotations` in `list_tools()`. But it affects all tools and requires a redeploy.
+### ✅ Resolved — Widget Bridge Refactor (Increment Claude-06)
 
-Note: this was not caught in the OpenAI compliance assessment because the OpenAI submission guide does not require `title` as a named field. It appears only in the Anthropic directory policy.
+Full widget rewrite completed using `@modelcontextprotocol/ext-apps` SDK. Implemented:
+- `ui/notifications/tool-result` for data delivery
+- `tools/call` via MCP Apps bridge for CRUD operations
+- `ui/setState` / `ui/getState` for state persistence
+- MCP Apps context for locale/theme/displayMode
 
-### 1. OAuth Callback URLs — Code Change Required
+Widget implementation is correct per spec. Currently blocked by platform-side issue — claude.ai does not call `resources/read` for third-party custom connectors (anthropics/claude-ai-mcp #61, open since February 2026).
 
-Claude's required callbacks are absent from the production allowlist in `backend/core/config.py`:
+### ✅ Resolved — Response Adapter (Increment Claude-04)
 
-```python
-# Currently present (ChatGPT only):
-_CHATGPT_REDIRECT_URIS: ClassVar[list[str]] = [
-    "https://chatgpt.com/connector/oauth/",
-    "https://chatgpt.com/connector_platform_oauth_redirect",
-    "https://platform.openai.com/apps-manage/oauth",
-]
+Adapter layer in `priority_guardian_claude/` correctly:
+- Moves `assistant_guidance` from `structuredContent` to `content`
+- Strips ChatGPT-specific `_meta` from `structuredContent`
+- Places `ui.resourceUri` at top-level `_meta`
+- Applies `MAX_LIST_ITEMS = 10` threshold for token efficiency
 
-# Missing — must be added:
-"https://claude.ai/api/mcp/auth_callback"
-"https://claude.com/api/mcp/auth_callback"
-"http://localhost:6274/oauth/callback"
-"http://localhost:6274/oauth/callback/debug"
-```
+Gap: `_meta.ui.domain` not set. Should be added when widget rendering resolves.
 
-Severity: likely blocker. Not confirmed — depends on whether Claude proxies OAuth or hits the provider directly.
+### 🟡 Pending — `title` Annotation on ChatGPT Server
 
-### 2. Widget Bridge Refactor — Significant Work
+Claude server compensates via `tools_list_dupl.py` which derives `title` from tool name using `_derive_title()`. ChatGPT server in `priority_guardian/` lacks `title` — needs fix in shared `ToolDefinition` dataclass.
 
-The entire `widget-react/src/` must be rewritten to use the MCP Apps `ui/*` postMessage bridge. This is not a patch — it is a new widget implementation.
+### 🔴 Blocker — `destructive_hint` Incorrect on Write Tools
 
-Scope of change:
-- Initial data load: `window.openai.toolOutput` → `ui/notifications/tool-result`
-- All CRUD tool calls: `window.openai.callTool()` → standard `tools/call` via MCP Apps bridge (17 call sites in `App.tsx`)
-- State persistence: `window.openai.setWidgetState()` → `ui/setState`
-- Host communication: `notifyIntrinsicHeight`, `requestDisplayMode` → MCP Apps equivalents or dropped
-- Event subscription: `openai:set_globals` → MCP Apps notification pattern
-- Locale / theme / displayMode reads: `window.openai.locale`, `.displayMode`, `.safeArea` → MCP Apps context
+`create_priority`, `add_priority`, `update_priority` have `destructive_hint=False` when they should be `True`. Affects both platforms. Fix in `priority_guardian/tools/` (shared).
 
-Start from `@modelcontextprotocol/ext-apps` SDK, not from the existing ChatGPT widget source.
+### 🟡 Pending — Documentation Page
 
-### 3. Documentation Page — Must Be Created
+No Claude-specific documentation page exists. Must be published at a stable HTTPS URL before submission with all required sections including minimum 3 usage examples.
 
-Anthropic MCP Directory requires a publicly accessible documentation page with all of:
-- Description
-- Features
-- Setup instructions
-- Authentication section
-- Minimum 3 working usage examples (user prompt + what happens + expected output)
-- Privacy policy link
-- Support contact
+### 🟡 Pending — MCP App Screenshots
 
-No Claude-specific page exists. Must be published at a stable HTTPS URL (e.g. `priority-guard.com/docs/mcp-claude`) before submission.
+Screenshots of widget rendering in Claude.ai mandatory for directory listing. Blocked until platform widget rendering issue resolves.
 
-### 4. CORS Origins — Verify Before Submission
+### 🟡 Item — CORS Origins (Operational Verify)
 
-Confirm whether Claude's browser client hits the MCP server directly. If yes, add `https://claude.ai` and `https://claude.com` to `CORS_ALLOWED_ORIGINS` on the Claude Render service. If Claude proxies through Anthropic's backend, no change needed.
+Confirm whether Claude's browser client hits the MCP server directly. If yes, `https://claude.ai` must be in `CORS_ALLOWED_ORIGINS`.
 
-ChatGPT proxies all widget calls (no browser CORS needed). Claude's architecture may differ.
+### 🟡 Item — `/.well-known/oauth-protected-resource` URL Match (Operational Verify)
 
-### 5. `/.well-known/oauth-protected-resource` — No Code Change, Operational Verify
-
-The `resource` field must exactly match the URL Claude uses to connect. This is handled automatically by having a separate Render service with its own `PG_MCP_SERVER_URL` env var — the existing `_extract_origin(MCP_SERVER_URL)` pattern in `discovery.py` is correct.
-
-Before submitting, run the three-way URL match verification per `OPERATIONS_PRESUBMISSION.md`:
-
+Before submitting, verify:
 ```bash
 curl https://<CLAUDE_SUBMISSION_URL>/.well-known/oauth-protected-resource
 # → "resource" must equal <CLAUDE_SUBMISSION_URL>
@@ -345,14 +331,17 @@ curl https://<CLAUDE_SUBMISSION_URL>/.well-known/oauth-protected-resource
 - Google OAuth integration — unchanged
 - Inbound OAuth provider (DCR, PKCE, JWT issuance, JWKS) — unchanged
 - Token verification logic (`mcp_auth.py`) — unchanged
-- All tool handlers and `ToolDefinition` annotations — unchanged
-- `_meta.ui.resourceUri` — already set as standard key (alongside ChatGPT compat alias)
+- All tool handlers — unchanged (shared via import)
+- `_meta.ui.resourceUri` — Claude adapter sets at top-level correctly
 - MIME type `text/html;profile=mcp-app` — already correct in `handlers/resources.py`
-- Safety annotations (`readOnlyHint`, `destructiveHint`, `openWorldHint`) — 100% coverage confirmed across all 17 tools
 - Privacy policy — already discloses Google Calendar data handling per Google and GDPR requirements
 - Test account — `review@priority-guard.com` with seed data already exists
 - Transport — FastMCP Streamable HTTP is what Anthropic requires; SSE deprecated path not used
 - Production readiness — error handling, timeouts, Render Hobby tier all already in place
+
+**Items that DO need changes (cross-platform):**
+- `title` annotation — missing on all tools in shared `ToolDefinition`; Claude server compensates via `_derive_title()`, ChatGPT server does not
+- `destructive_hint` — incorrectly `False` on `create_priority`, `add_priority`, `update_priority`; should be `True`
 
 ---
 

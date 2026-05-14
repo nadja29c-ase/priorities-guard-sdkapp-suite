@@ -396,6 +396,7 @@ async def handle(
 
 GET_PATTERNS = ToolDefinition(
     name=NAME,
+    title="Get Patterns",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,

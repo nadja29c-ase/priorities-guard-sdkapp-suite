@@ -96,7 +96,23 @@ See MCP Protocol - Tool Annotations for complete schema and implementation detai
 
  
 
-Not optional. This is a hard requirement derived from the MCP Directory Policy.
+Not optional. This is a hard requirement derived from the Anthropic Software Directory Policy.
+
+
+
+Tool Design — Read/Write Split Required
+
+A single tool that accepts both safe HTTP methods (GET, HEAD, OPTIONS) and unsafe methods (POST, PUT, PATCH, DELETE) will be rejected. Catch-all `api_request` tools with a method parameter fail review.
+
+Requirements:
+
+Split read-only tools and write tools into separate tools
+
+Ideally split write operations further by action type (create, update, delete)
+
+Documenting safe vs. unsafe operations within one tool's description does NOT satisfy this — they must be separate tools
+
+Custom query tools: If a tool accepts freeform endpoint paths, query strings, or request bodies, its description must include a link to or explicit name of the target API.
 
  
 
@@ -138,10 +154,10 @@ readOnlyHint: true
 
 Internal optimization OK
 
- 
-Additional recommended annotation:
 
-title - Human-readable tool name for UI display (improves user experience)
+Required on every tool:
+
+title - Human-readable tool name for UI display (mandatory per policy §5E)
 
 Do I need to provide test accounts?
 YES - If your server requires authentication.
@@ -185,9 +201,11 @@ YES - If your server requires authentication.
 
 OAuth implementation requirements:
 
-Must use OAuth 2.0 authorization code flow
+Must use OAuth 2.0 authorization code flow with PKCE S256 support
 
 Certificates from recognized authorities
+
+Authorization server must advertise `"code_challenge_methods_supported": ["S256"]` in metadata (Claude will refuse to proceed if absent)
 
 Allowlist local MCP client (e.g. Claude Code, MCP Inspector) callback URLs:
 
@@ -216,7 +234,7 @@ Implementation guidance: See OAuth 2.0 Authorization Framework for complete OAut
 Are there firewall requirements?
 YES - Must allowlist Claude's IP addresses for claude.ai compatibility
 
-For servers behind firewalls, allowlist IP addresses from https://docs.claude.com/en/api/ip-addresses.
+For servers behind firewalls, allowlist Anthropic's outbound IP range: **160.79.104.0/21**
 
  
 
@@ -362,7 +380,23 @@ Proper error handling and graceful failures
 Complete documentation and support channels
 
 Cannot be included: Beta versions, development servers, or limited-access services.
-​
+
+
+
+Are screenshots required for MCP Apps?
+YES - If submitting an MCP App (server that surfaces interactive UI elements).
+
+Screenshots are mandatory for MCP App directory listing:
+
+3–5 PNG screenshots required
+
+At least 1000px wide
+
+Cropped to the app response area only (not full browser window)
+
+Each screenshot paired with the prompt text that produced it
+
+
 
 What technical requirements must be met?
 Must meet the core technical compliance standards.
@@ -377,7 +411,9 @@ Fast response times with high availability
 
 Graceful error handling with helpful messages
 
-Token-efficient responses (max 25,000 tokens per tool result)
+Token-efficient responses:
+  - Claude.ai / Desktop: ~150,000 characters max per tool result
+  - Claude Code: 25,000 tokens max (configurable via MAX_MCP_OUTPUT_TOKENS)
 
 Security and Data:
 
@@ -574,7 +610,7 @@ Success rate: Servers following this prevention guide have significantly fewer r
 
 5. Directory Policy
 What policies must I comply with?
-All servers must comply with the Anthropic MCP Directory Policy.
+All servers must comply with the Anthropic Software Directory Policy.
 
  
 
@@ -619,7 +655,7 @@ Quick Reference
 Key Resources
 Submission Form: MCP Directory Server Review Form
 
-Directory Policy: MCP Directory Policy
+Directory Policy: Anthropic Software Directory Policy
 
 Directory Terms: MCP Directory Terms and Conditions
 

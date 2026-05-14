@@ -193,6 +193,7 @@ async def list_tools() -> List[mcp_types.Tool]:
 
         # Set annotations at Tool level (proper ToolAnnotations object, not dict)
         tool.annotations = mcp_types.ToolAnnotations(
+            title=tool_def.title,
             readOnlyHint=tool_def.read_only_hint,
             destructiveHint=tool_def.destructive_hint,
             openWorldHint=tool_def.open_world_hint,

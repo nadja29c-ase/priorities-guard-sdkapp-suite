@@ -23,6 +23,7 @@ class ToolDefinition:
 
     Args:
         name: Tool name (e.g., "create_priority")
+        title: Human-readable tool name for UI display (required by Anthropic §5E)
         description: Tool description shown to ChatGPT
         input_schema: JSON Schema for ChatGPT/MCP discovery
         required_scopes: OAuth scopes required to call this tool (e.g., ["pg.access"])
@@ -35,6 +36,7 @@ class ToolDefinition:
         visibility: Tool visibility - "public" (LLM can see/call), "private" (widget-only)
     """
     name: str
+    title: str  # Human-readable tool name for UI display (required by Anthropic §5E)
     description: str
     input_schema: dict
     required_scopes: list[str]

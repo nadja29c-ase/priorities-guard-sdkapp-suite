@@ -162,13 +162,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
 ADD_GOAL = ToolDefinition(
     name=NAME,
+    title="Add Goal",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
     widget_uri=None,
     handle=handle,
     read_only_hint=False,
-    destructive_hint=False,
+    destructive_hint=True,  # Creates DB record
     open_world_hint=False,
     widget_accessible=True,
     visibility="private",

@@ -5,6 +5,8 @@
 import json
 from mcp import types as mcp_types
 
+from mcp_server.priority_guardian_claude.handlers.resources_dupl import WIDGET_APP_DOMAIN
+
 # Widget resource URI (matches resources_dupl.py)
 WIDGET_URI = "ui://pg-claude/dashboard-v1.html"
 
@@ -119,12 +121,13 @@ def adapt_get_priorities_meta(result: mcp_types.CallToolResult) -> mcp_types.Cal
     if result.isError:
         return result
 
-    # Build new _meta with ui.resourceUri nested structure
+    # Build new _meta with ui.resourceUri and ui.domain nested structure
     existing_meta = result.meta or {}
     new_meta = {
         **existing_meta,
         "ui": {
             "resourceUri": WIDGET_URI,
+            "domain": WIDGET_APP_DOMAIN,
         },
     }
 

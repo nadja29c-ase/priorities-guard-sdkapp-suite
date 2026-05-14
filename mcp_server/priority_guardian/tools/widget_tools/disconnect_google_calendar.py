@@ -174,13 +174,14 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
 DISCONNECT_GOOGLE_CALENDAR = ToolDefinition(
     name=NAME,
+    title="Disconnect Google Calendar",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,
     handle=handle,
     read_only_hint=False,    # Revokes tokens, modifies state
-    destructive_hint=False,  # No data deleted, user can reconnect
+    destructive_hint=True,   # Revokes OAuth tokens, modifies connection state
     open_world_hint=True,    # Revokes external Google OAuth tokens
     widget_accessible=True,  # Widget can call this tool
     visibility="private",    # Widget-only, LLM cannot see or call

@@ -683,13 +683,14 @@ def _build_backend_error_response(error_code: str, error_message: str) -> mcp_ty
 
 CREATE_PRIORITY = ToolDefinition(
     name=NAME,
+    title="Create Priority",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,
     handle=handle,
     read_only_hint=False,   # Creates data in database
-    destructive_hint=False,
+    destructive_hint=True,  # Creates DB record
     open_world_hint=False,  # No external system interaction
     # widget_accessible intentionally NOT set (defaults False):
     # This tool requires verbatim provenance fields that widgets cannot provide.

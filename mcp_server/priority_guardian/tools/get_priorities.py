@@ -318,6 +318,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
 GET_PRIORITIES = ToolDefinition(
     name=NAME,
+    title="Get Priorities",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,

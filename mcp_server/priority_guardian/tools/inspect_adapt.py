@@ -319,6 +319,7 @@ async def handle(
 
 INSPECT_ADAPT = ToolDefinition(
     name=NAME,
+    title="Inspect Adapt",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,

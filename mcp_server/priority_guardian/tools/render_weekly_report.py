@@ -659,6 +659,7 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
 
 RENDER_WEEKLY_REPORT = ToolDefinition(
     name=NAME,
+    title="Render Weekly Report",
     description=DESCRIPTION,
     input_schema=INPUT_SCHEMA,
     required_scopes=REQUIRED_SCOPES,
