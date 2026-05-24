@@ -79,8 +79,10 @@ async def list_resources() -> List[mcp_types.Resource]:
                         "resourceDomains": [],  # Self-contained HTML, no external assets
                     },
                 },
-                # Legacy ChatGPT extension — keep for openExternal support
+                # Legacy ChatGPT extension — published apps need snake_case form
                 "openai/widgetCSP": {
+                    "connect_domains": [BACKEND_DOMAIN],
+                    "resource_domains": [],
                     "redirect_domains": [BACKEND_DOMAIN],
                 },
                 "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
@@ -107,6 +109,8 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                     },
                 },
                 "openai/widgetCSP": {
+                    "connect_domains": [BACKEND_DOMAIN],
+                    "resource_domains": [],
                     "redirect_domains": [BACKEND_DOMAIN],
                 },
                 "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
@@ -146,6 +150,8 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 },
             },
             "openai/widgetCSP": {
+                "connect_domains": [BACKEND_DOMAIN],
+                "resource_domains": [],
                 "redirect_domains": [BACKEND_DOMAIN],
             },
             "openai/widgetDescription": "Shows user's priorities and Google Calendar connection status.",
