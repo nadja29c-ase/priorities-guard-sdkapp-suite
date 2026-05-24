@@ -29,6 +29,8 @@ def _extract_origin(url: str) -> str:
 
 
 # Widget configuration
+# WIDGET_URI is imported from tools.widget_tools.constants — single source of truth.
+# Do NOT redefine it here. If you need a different value, change constants.py.
 WIDGET_VERSION = ""
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/pg-dashboard.html")
 WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)

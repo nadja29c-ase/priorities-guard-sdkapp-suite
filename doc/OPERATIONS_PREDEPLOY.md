@@ -122,6 +122,76 @@ Render installs production dependencies via `poetry install --no-root --only mai
 
 ---
 
+## Widget Bundle Changes
+
+The PG widget bundle is built by Vite (`mcp_server/priority_guardian/widget-react/`) and committed as a single inlined HTML file at `mcp_server/priority_guardian/widgets/pg-dashboard.html`. The PG MCP server loads this file ONCE at module import (`handlers/resources.py` → `_load_widget_html()`) — meaning every Render deploy restarts the server and reloads the file fresh, but the file must be correct on disk before commit.
+
+### Pre-commit checks (any change to `widget-react/src/` or a `WIDGET_URI` bump)
+
+```bash
+cd mcp_server/priority_guardian/widget-react && npm run build
+cd -
+
+# Verify the bundle is correctly inlined — NOT split into /assets/
+grep -c '<script[^>]*src="' mcp_server/priority_guardian/widgets/pg-dashboard.html
+# Must return 0. Non-zero means viteSingleFile broke; widget will load externally
+# and ChatGPT will serve a stale cache from oaiusercontent.com instead.
+
+# Verify Vite-injected constants were replaced (when applicable)
+grep -c "__WIDGET_BUILD_TIME__" mcp_server/priority_guardian/widgets/pg-dashboard.html
+# Must return 0 if the constant is being used. Non-zero means Vite's `define`
+# block didn't fire — the diagnostic code in the bundle will run with an
+# undefined constant and either fail silently or report wrong build times.
+
+# Verify file size is reasonable (~350KB+ for current bundle)
+ls -la mcp_server/priority_guardian/widgets/pg-dashboard.html
+```
+
+### Pre-commit checks (any `WIDGET_URI` bump)
+
+`WIDGET_URI` is the single source of truth in `tools/widget_tools/constants.py`. The resource handler imports it from there. If you see a hardcoded `WIDGET_URI = "..."` anywhere else in the PG codebase, that is a bug — fix it to import from `tools.widget_tools.constants` instead. Two copies will drift and the resource handler will return empty for the advertised URI, causing ChatGPT to fall back to its CDN cache (which can be weeks old).
+
+To verify there is only one source of truth:
+
+```bash
+grep -rn "WIDGET_URI = " mcp_server/priority_guardian/ --include="*.py" | grep -v __pycache__
+# Should return exactly ONE match — the assignment in tools/widget_tools/constants.py.
+# All other files must IMPORT it, not redefine it.
+```
+
+### Post-deploy verification (production iframe console)
+
+After deploying a widget bundle change AND completing the cache-bust dance (restart MCP server on Render, click Refresh in ChatGPT → Settings → Apps → Priority Guardian, start a NEW conversation), open DevTools, switch context to the widget iframe (the `pg-priority-guard-com.web-sandbox.oaiusercontent.com` frame), and run:
+
+```javascript
+// Must return 1
+document.querySelectorAll('script').length
+
+// Must return ~340000+ — the inlined bundle.
+// If 0, ChatGPT is serving a cached widget from oaiusercontent.com,
+// not your MCP server. The deploy did NOT take effect.
+document.querySelector('script').textContent.length
+
+// If the bundle uses __WIDGET_BUILD_TIME__ (or any similar Vite-injected
+// constant), the timestamp string should be present in the bundle text:
+document.documentElement.innerHTML.includes('2026-')  // adjust year
+```
+
+If the bundle is loaded externally (`textContent.length: 0` AND the script tag has a `src=https://.../assets/main-*.js` attribute), the deploy did not take effect. Check Render PG MCP logs for `resource.read.requested` events at the deploy time:
+
+```
+{"event": "resource.read.requested", "uri": "ui://widget/pg-dashboard-vN.html", ...}
+{"event": "resource.read.serving_widget", "uri": "ui://widget/pg-dashboard-vN.html", ...}
+```
+
+If `resource.read.requested` appears with a URI that the handler doesn't recognize, you'll see NO matching `serving_widget` event — that's the failure mode. Bump `WIDGET_URI` in `constants.py` to a clearly new value (v14 → v15) and redeploy.
+
+### Why this matters
+
+The PG MCP resource handler responds to `ui://widget/pg-dashboard-vN.html` requests. If ChatGPT requests a URI the handler doesn't recognize (because `WIDGET_URI` is hardcoded somewhere out-of-sync), the handler returns an empty result and ChatGPT silently falls back to whatever it has cached at the `oaiusercontent.com` CDN — which can be weeks old. No error appears in logs. The widget appears to render but is running stale code. This failure mode hides production bugs from your diagnostic work and made Increment 89's diagnostic instrumentation invisible for hours.
+
+---
+
 ## Better Stack Log Shipping
 
 ### Overview
