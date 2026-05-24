@@ -64,7 +64,7 @@ async def widget_diagnostic_report(request: Request, body: WidgetDiagnosticRepor
 
     correlation_id = getattr(request.state, "correlation_id", "widget")
 
-    # Hash client IP for privacy (same pattern as Inc 83)
+    # Hash client IP for privacy (useful for grouping events from same client)
     client_ip = request.client.host if request.client else "unknown"
     ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:12]
 
