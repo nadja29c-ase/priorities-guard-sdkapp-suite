@@ -17,6 +17,7 @@ from .update_goal import UPDATE_GOAL
 from .delete_goal import DELETE_GOAL
 from .connect_google_calendar import CONNECT_GOOGLE_CALENDAR
 from .disconnect_google_calendar import DISCONNECT_GOOGLE_CALENDAR
+from .record_widget_diagnostic import RECORD_WIDGET_DIAGNOSTIC
 
 __all__ = [
     "ADD_PRIORITY",
@@ -30,4 +31,5 @@ __all__ = [
     "DELETE_GOAL",
     "CONNECT_GOOGLE_CALENDAR",
     "DISCONNECT_GOOGLE_CALENDAR",
+    "RECORD_WIDGET_DIAGNOSTIC",
 ]

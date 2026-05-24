@@ -77,11 +77,13 @@ export async function reportWidgetError(payload: WidgetErrorPayload): Promise<vo
   }
 }
 
-// ============ Diagnostic Reporter (Inc 89) ============
+// ============ Diagnostic Reporter (Inc 89 / 89.8) ============
 // Temporary — remove after fullscreen flash-revert bug is diagnosed.
-
-const WIDGET_DIAGNOSTIC_ENDPOINT =
-  'https://priorities-guard-sdkapp-suite.onrender.com/api/priority-guardian/widget-diagnostic'
+//
+// Inc 89.8: routes through window.openai.callTool() instead of fetch().
+// Browser CSP blocks direct widget->backend HTTP calls (Issue #85), so we
+// invoke a private MCP tool which the host runs server-side, bypassing
+// iframe CSP entirely.
 
 const MAX_DIAGNOSTIC_EVENTS_PER_SESSION = 20
 let diagnosticCount = 0
@@ -91,26 +93,29 @@ export interface WidgetDiagnosticPayload {
   data?: Record<string, unknown>
 }
 
+interface OpenAIHostWithCallTool {
+  callTool?: (name: string, args: Record<string, unknown>) => Promise<unknown>
+}
+
 export async function reportWidgetDiagnostic(payload: WidgetDiagnosticPayload): Promise<void> {
   try {
     if (diagnosticCount >= MAX_DIAGNOSTIC_EVENTS_PER_SESSION) return
     diagnosticCount++
 
-    const body = {
+    const host = (typeof window !== 'undefined'
+      ? (window.openai as OpenAIHostWithCallTool | undefined)
+      : undefined)
+
+    if (!host?.callTool) return  // No host bridge available — silent skip
+
+    await host.callTool('record_widget_diagnostic', {
       event: payload.event,
       data: payload.data ?? {},
       ts: Date.now(),
       ua: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-    }
-
-    await fetch(WIDGET_DIAGNOSTIC_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      keepalive: true,
     })
   } catch {
-    // Silent failure
+    // Silent failure — diagnostic must never break the widget
   }
 }
 

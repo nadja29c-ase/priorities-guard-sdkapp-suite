@@ -175,25 +175,27 @@ describe('widgetErrorReporter', () => {
   })
 })
 
-// ============ reportWidgetDiagnostic tests (Inc 89) ============
+// ============ reportWidgetDiagnostic tests (Inc 89 / 89.8) ============
+// Inc 89.8: Routes through window.openai.callTool() instead of fetch()
 
-const EXPECTED_DIAGNOSTIC_URL =
-  'https://priorities-guard-sdkapp-suite.onrender.com/api/priority-guardian/widget-diagnostic'
+// We need to declare the openai property once as configurable at module level,
+// then we can reassign it in tests.
+const windowWithOpenai = window as Window & { openai?: unknown }
 
-describe('reportWidgetDiagnostic (Inc 89)', () => {
-  let mockFetch: Mock
+describe('reportWidgetDiagnostic (Inc 89.8 - callTool)', () => {
+  let mockCallTool: Mock
 
   beforeEach(() => {
     __resetReporterStateForTesting()
-    mockFetch = vi.fn().mockResolvedValue({ ok: true })
-    vi.stubGlobal('fetch', mockFetch)
+    mockCallTool = vi.fn().mockResolvedValue({ success: true })
+    windowWithOpenai.openai = { callTool: mockCallTool }
   })
 
-  it('sends POST to diagnostic URL', async () => {
+  it('calls window.openai.callTool with correct tool name', async () => {
     await reportWidgetDiagnostic({ event: 'mount' })
 
-    expect(mockFetch).toHaveBeenCalledTimes(1)
-    expect(mockFetch.mock.calls[0][0]).toBe(EXPECTED_DIAGNOSTIC_URL)
+    expect(mockCallTool).toHaveBeenCalledTimes(1)
+    expect(mockCallTool.mock.calls[0][0]).toBe('record_widget_diagnostic')
   })
 
   it('sends correct payload shape with data', async () => {
@@ -202,20 +204,12 @@ describe('reportWidgetDiagnostic (Inc 89)', () => {
       data: { caller: 'test', next: 'fullscreen' },
     })
 
-    const [, options] = mockFetch.mock.calls[0]
-    const body = JSON.parse(options.body)
+    const args = mockCallTool.mock.calls[0][1]
 
-    expect(body.event).toBe('displayMode.change')
-    expect(body.data).toEqual({ caller: 'test', next: 'fullscreen' })
-    expect(body.ts).toBeTypeOf('number')
-    expect(body.ua).toBe(navigator.userAgent)
-  })
-
-  it('uses keepalive: true', async () => {
-    await reportWidgetDiagnostic({ event: 'test' })
-
-    const [, options] = mockFetch.mock.calls[0]
-    expect(options.keepalive).toBe(true)
+    expect(args.event).toBe('displayMode.change')
+    expect(args.data).toEqual({ caller: 'test', next: 'fullscreen' })
+    expect(args.ts).toBeTypeOf('number')
+    expect(args.ua).toBe(navigator.userAgent)
   })
 
   it('enforces per-session cap of 20 diagnostics', async () => {
@@ -225,7 +219,7 @@ describe('reportWidgetDiagnostic (Inc 89)', () => {
     }
 
     // Only first 20 should have been sent
-    expect(mockFetch).toHaveBeenCalledTimes(20)
+    expect(mockCallTool).toHaveBeenCalledTimes(20)
   })
 
   it('does NOT dedup same events (unlike error reporter)', async () => {
@@ -235,11 +229,29 @@ describe('reportWidgetDiagnostic (Inc 89)', () => {
     }
 
     // Should send all 5 (no dedup)
-    expect(mockFetch).toHaveBeenCalledTimes(5)
+    expect(mockCallTool).toHaveBeenCalledTimes(5)
   })
 
-  it('swallows fetch rejection without throwing', async () => {
-    mockFetch.mockRejectedValue(new Error('network error'))
+  it('swallows callTool rejection without throwing', async () => {
+    mockCallTool.mockRejectedValue(new Error('host error'))
+
+    // Should not throw
+    await expect(
+      reportWidgetDiagnostic({ event: 'test' })
+    ).resolves.toBeUndefined()
+  })
+
+  it('skips silently when window.openai is undefined', async () => {
+    windowWithOpenai.openai = undefined
+
+    // Should not throw, should not call anything
+    await expect(
+      reportWidgetDiagnostic({ event: 'test' })
+    ).resolves.toBeUndefined()
+  })
+
+  it('skips silently when window.openai exists but callTool is undefined', async () => {
+    windowWithOpenai.openai = {}
 
     // Should not throw
     await expect(
@@ -252,25 +264,24 @@ describe('reportWidgetDiagnostic (Inc 89)', () => {
     for (let i = 0; i < 15; i++) {
       await reportWidgetDiagnostic({ event: `event-${i}` })
     }
-    expect(mockFetch).toHaveBeenCalledTimes(15)
+    expect(mockCallTool).toHaveBeenCalledTimes(15)
 
     // Reset state
     __resetReporterStateForTesting()
-    mockFetch.mockClear()
+    mockCallTool.mockClear()
 
     // Should be able to send 20 more
     for (let i = 0; i < 20; i++) {
       await reportWidgetDiagnostic({ event: `event-${i}` })
     }
-    expect(mockFetch).toHaveBeenCalledTimes(20)
+    expect(mockCallTool).toHaveBeenCalledTimes(20)
   })
 
   it('defaults data to empty object when not provided', async () => {
     await reportWidgetDiagnostic({ event: 'mount' })
 
-    const [, options] = mockFetch.mock.calls[0]
-    const body = JSON.parse(options.body)
+    const args = mockCallTool.mock.calls[0][1]
 
-    expect(body.data).toEqual({})
+    expect(args.data).toEqual({})
   })
 })

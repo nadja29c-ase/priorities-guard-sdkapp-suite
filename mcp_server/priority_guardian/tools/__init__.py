@@ -33,6 +33,7 @@ from .widget_tools import (
     DELETE_GOAL,
     CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR,
+    RECORD_WIDGET_DIAGNOSTIC,
 )
 
 logger = structlog.get_logger(__name__)
@@ -92,6 +93,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     ADD_GOAL.name: ADD_GOAL,
     UPDATE_GOAL.name: UPDATE_GOAL,
     DELETE_GOAL.name: DELETE_GOAL,
+    RECORD_WIDGET_DIAGNOSTIC.name: RECORD_WIDGET_DIAGNOSTIC,
 }
 
 
