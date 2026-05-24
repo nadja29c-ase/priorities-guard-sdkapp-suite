@@ -13,4 +13,4 @@
 #
 # To update widget content: change the HTML bundle, keep URI unchanged.
 # ChatGPT fetches fresh content on each ReadResourceRequest regardless of URI.
-WIDGET_URI = "ui://widget/pg-dashboard-v12.html"
+WIDGET_URI = "ui://widget/pg-dashboard-v8.html"
