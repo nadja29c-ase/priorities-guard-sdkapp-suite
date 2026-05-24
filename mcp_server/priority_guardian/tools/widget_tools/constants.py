@@ -6,9 +6,11 @@
 #   - mcp_server/priority_guardian/tools/create_priority.py
 #   - mcp_server/priority_guardian/tools/render_weekly_report.py
 #
-# When bumping the version: change ONLY this constant.
-# Do not redefine WIDGET_URI in any other file. Two copies will drift.
+# IMPORTANT: Do NOT bump the version for approved apps!
+# OpenAI freezes the tool schema at approval time. ChatGPT will always request
+# the URI from the frozen schema (v12). Bumping to v13/v14 breaks the handler
+# (returns empty response, ChatGPT falls back to stale CDN cache).
 #
-# Bump version (v12 → v13 → v14 ...) whenever the widget bundle content changes,
-# to force ChatGPT to invalidate its widget cache and fetch the new bundle.
-WIDGET_URI = "ui://widget/pg-dashboard-v14.html"
+# To update widget content: change the HTML bundle, keep URI unchanged.
+# ChatGPT fetches fresh content on each ReadResourceRequest regardless of URI.
+WIDGET_URI = "ui://widget/pg-dashboard-v12.html"
