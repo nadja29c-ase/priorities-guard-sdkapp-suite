@@ -75,7 +75,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                 "ui": {
                     "domain": WIDGET_DOMAIN,
                     "csp": {
-                        "connectDomains": [],  # Widget uses callTool/postMessage, not HTTP
+                        "connectDomains": [BACKEND_DOMAIN],  # widget-error (Inc 83) + widget-diagnostic (Inc 89) endpoints
                         "resourceDomains": [],  # Self-contained HTML, no external assets
                     },
                 },
@@ -102,7 +102,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                 "ui": {
                     "domain": WIDGET_DOMAIN,
                     "csp": {
-                        "connectDomains": [],
+                        "connectDomains": [BACKEND_DOMAIN],  # widget-error + widget-diagnostic endpoints
                         "resourceDomains": [],
                     },
                 },
@@ -141,7 +141,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
             "ui": {
                 "domain": WIDGET_DOMAIN,
                 "csp": {
-                    "connectDomains": [],
+                    "connectDomains": [BACKEND_DOMAIN],  # widget-error + widget-diagnostic endpoints
                     "resourceDomains": [],
                 },
             },
