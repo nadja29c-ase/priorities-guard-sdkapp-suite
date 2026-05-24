@@ -690,7 +690,7 @@ CREATE_PRIORITY = ToolDefinition(
     widget_uri=WIDGET_URI,
     handle=handle,
     read_only_hint=False,   # Creates data in database
-    destructive_hint=True,  # Creates DB record
+    destructive_hint=False,  # Reverted: ChatGPT acts on destructiveHint for public tools — keep False for published app. Claude override handled in tools_list_dupl.py.
     open_world_hint=False,  # No external system interaction
     # widget_accessible intentionally NOT set (defaults False):
     # This tool requires verbatim provenance fields that widgets cannot provide.
