@@ -13,6 +13,10 @@ import { PieChart } from './components/PieChart'
 import { FullscreenHeader } from './components/FullscreenHeader'
 import { ExpandButton } from './components/ExpandButton'
 import { CalendarConnectionMinimal } from './components/CalendarConnectionMinimal'
+import { reportWidgetDiagnostic } from './widgetErrorReporter'
+
+// Inc 89: temporary diagnostic flag. Set to false before next non-diagnostic deploy.
+const PG_DIAG_FULLSCREEN = true
 
 type DisplayMode = 'inline' | 'fullscreen'
 
@@ -89,6 +93,27 @@ function App() {
 
   // Guard against double backfillTimeAllocation calls (race between mount and set_globals)
   const backfillCalledRef = useRef(false)
+
+  // Inc 89: session-scoped diagnostic id
+  const diagSessionIdRef = useRef<string>(
+    `pg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  )
+
+  // Inc 89: helper to log every displayMode change with caller marker
+  const logDisplayModeChange = (next: DisplayMode | 'sync', caller: string, extra?: Record<string, unknown>) => {
+    if (!PG_DIAG_FULLSCREEN) return
+    reportWidgetDiagnostic({
+      event: 'displayMode.change',
+      data: {
+        sid: diagSessionIdRef.current,
+        next,
+        caller,
+        hostMode: (window.openai as { displayMode?: string } | undefined)?.displayMode,
+        ts: performance.now(),
+        ...extra,
+      },
+    })
+  }
 
   // Notify host of height changes (for iOS scroll fix)
   const notifyHeight = useCallback(() => {
@@ -601,6 +626,7 @@ function App() {
         }
       } catch { /* noop */ }
     }
+    logDisplayModeChange('fullscreen', 'handleExpandToFullscreen', { isMobile })
     setDisplayMode('fullscreen')
     notifyHeight()
   }, [isMobile, notifyHeight])
@@ -616,6 +642,7 @@ function App() {
         }
       } catch { /* noop */ }
     }
+    logDisplayModeChange('inline', 'handleMinimizeToInline', { isMobile })
     setDisplayMode('inline')
     notifyHeight()
   }, [isMobile, notifyHeight])
@@ -641,6 +668,23 @@ function App() {
     document.documentElement.lang = rawLocale
   }, [])
 
+  // Inc 89: log initial displayMode at mount
+  useEffect(() => {
+    if (!PG_DIAG_FULLSCREEN) return
+    reportWidgetDiagnostic({
+      event: 'mount',
+      data: {
+        sid: diagSessionIdRef.current,
+        initialDisplayMode: displayMode,
+        hostMode: (window.openai as { displayMode?: string } | undefined)?.displayMode,
+        availableDisplayModes: (window.openai as { availableDisplayModes?: unknown } | undefined)?.availableDisplayModes,
+        hasRequestDisplayMode: typeof (window.openai as { requestDisplayMode?: unknown } | undefined)?.requestDisplayMode === 'function',
+        widgetBuildTime: __WIDGET_BUILD_TIME__,  // injected by Vite — actual build moment
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Initial load and listen for openai:set_globals
   useEffect(() => {
     loadData()
@@ -653,7 +697,20 @@ function App() {
       // Sync displayMode from host (only after init to avoid layout flicker)
       if (isInitializedRef.current) {
         const hostMode = (window.openai as OpenAIHost | undefined)?.displayMode
+        // Inc 89: log every set_globals event with host displayMode, regardless of whether we sync
+        if (PG_DIAG_FULLSCREEN) {
+          reportWidgetDiagnostic({
+            event: 'set_globals',
+            data: {
+              sid: diagSessionIdRef.current,
+              hostMode,
+              ts: performance.now(),
+            },
+          })
+        }
         if (hostMode === 'fullscreen' || hostMode === 'inline') {
+          // Inc 89: log the sync intent before it fires
+          logDisplayModeChange('sync', 'handleSetGlobals.hostSync', { hostMode })
           setDisplayMode(prev => prev !== hostMode ? hostMode : prev)
         }
       }

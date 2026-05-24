@@ -48,6 +48,8 @@ from backend.apps.priority_guardian.routers.snapshot_router import router as pg_
 from backend.apps.priority_guardian.routers.pattern_router import router as pg_pattern_router
 # Priority Guardian app routers (Increment 78)
 from backend.apps.priority_guardian.routers.reconcile_router import router as pg_reconcile_router
+# Priority Guardian app routers (Increment 89)
+from backend.apps.priority_guardian.routers.widget_diagnostic import router as pg_widget_diagnostic_router
 
 # Initialize logging first
 configure_logging()
@@ -379,6 +381,8 @@ app.include_router(pg_snapshot_router, prefix="/api/priority-guardian")
 app.include_router(pg_pattern_router, prefix="/api/priority-guardian")
 # Priority Guardian SDK app routers (Increment 78)
 app.include_router(pg_reconcile_router, prefix="/api/priority-guardian")
+# Priority Guardian SDK app routers (Increment 89)
+app.include_router(pg_widget_diagnostic_router, prefix="/api/priority-guardian")
 
 # Validate no duplicate routes across all registered routers.
 # Runs at module import time, before uvicorn starts accepting requests.

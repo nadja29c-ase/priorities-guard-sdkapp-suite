@@ -12,6 +12,9 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile()],
+  define: {
+    __WIDGET_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   build: {
     target: 'esnext',
     outDir: '../widgets',

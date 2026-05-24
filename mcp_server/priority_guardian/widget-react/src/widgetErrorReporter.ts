@@ -77,10 +77,48 @@ export async function reportWidgetError(payload: WidgetErrorPayload): Promise<vo
   }
 }
 
+// ============ Diagnostic Reporter (Inc 89) ============
+// Temporary — remove after fullscreen flash-revert bug is diagnosed.
+
+const WIDGET_DIAGNOSTIC_ENDPOINT =
+  'https://priorities-guard-sdkapp-suite.onrender.com/api/priority-guardian/widget-diagnostic'
+
+const MAX_DIAGNOSTIC_EVENTS_PER_SESSION = 20
+let diagnosticCount = 0
+
+export interface WidgetDiagnosticPayload {
+  event: string
+  data?: Record<string, unknown>
+}
+
+export async function reportWidgetDiagnostic(payload: WidgetDiagnosticPayload): Promise<void> {
+  try {
+    if (diagnosticCount >= MAX_DIAGNOSTIC_EVENTS_PER_SESSION) return
+    diagnosticCount++
+
+    const body = {
+      event: payload.event,
+      data: payload.data ?? {},
+      ts: Date.now(),
+      ua: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    }
+
+    await fetch(WIDGET_DIAGNOSTIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      keepalive: true,
+    })
+  } catch {
+    // Silent failure
+  }
+}
+
 /**
  * Reset reporter state for testing. Internal use only.
  */
 export function __resetReporterStateForTesting(): void {
   errorCount = 0
   seenErrors.clear()
+  diagnosticCount = 0  // Inc 89
 }
