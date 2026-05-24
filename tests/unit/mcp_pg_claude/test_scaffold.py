@@ -166,7 +166,7 @@ async def test_list_tools_returns_public_tools_only(set_dev_env):
 
 @pytest.mark.asyncio
 async def test_list_tools_annotations_match_registry(set_dev_env):
-    """Tool annotations match ToolDefinition fields, _meta is None."""
+    """Tool annotations match ToolDefinition fields."""
     from mcp_server.priority_guardian.tools import TOOL_REGISTRY
     from mcp_server.priority_guardian_claude.tools_list_dupl import list_tools_for_claude
 
@@ -178,7 +178,11 @@ async def test_list_tools_annotations_match_registry(set_dev_env):
         assert tool.annotations.readOnlyHint == TOOL_REGISTRY[tool.name].read_only_hint
         assert tool.annotations.destructiveHint == TOOL_REGISTRY[tool.name].destructive_hint
         assert tool.annotations.openWorldHint == TOOL_REGISTRY[tool.name].open_world_hint
-        assert tool.meta is None
+        # get_priorities has _meta for widget prefetch; others have None
+        if tool.name == "get_priorities":
+            assert tool.meta is not None
+        else:
+            assert tool.meta is None
 
 
 @pytest.mark.asyncio
@@ -581,5 +585,53 @@ async def test_adapt_get_priorities_meta_skips_error_results(set_dev_env):
         isError=True,
     )
     adapted = adapt_get_priorities_meta(result)
-    # Error result returned unchanged
-    assert adapted is result
+    # Error result returns new object with same values (no widget link added)
+    assert adapted is not result
+    assert adapted.content[0].text == "Error occurred"
+    assert adapted.isError is True
+    assert adapted.meta is None
+
+
+# =============================================================================
+# Widget Discovery Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_priorities_has_widget_meta(set_dev_env):
+    """get_priorities tool has _meta.ui.resourceUri for host-side prefetch."""
+    from mcp_server.priority_guardian_claude.tools_list_dupl import list_tools_for_claude
+
+    tools = await list_tools_for_claude()
+    tool = next(t for t in tools if t.name == "get_priorities")
+    assert tool.meta is not None
+    assert tool.meta.get("ui", {}).get("resourceUri") == "ui://pg-claude/dashboard-v1.html"
+
+
+@pytest.mark.asyncio
+async def test_non_widget_tools_have_no_meta(set_dev_env):
+    """Non-widget tools have _meta=None."""
+    from mcp_server.priority_guardian_claude.tools_list_dupl import list_tools_for_claude
+
+    tools = await list_tools_for_claude()
+    for tool in tools:
+        if tool.name != "get_priorities":
+            assert tool.meta is None, f"{tool.name} should have _meta=None"
+
+
+def test_widget_uri_consistency(set_dev_env):
+    """WIDGET_URI constants match between response_adapter and resources."""
+    from mcp_server.priority_guardian_claude.response_adapter_dupl import WIDGET_URI
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import WIDGET_URI as RESOURCE_URI
+    assert WIDGET_URI == RESOURCE_URI
+
+
+@pytest.mark.asyncio
+async def test_list_resources_returns_widget(set_dev_env):
+    """list_resources returns the widget resource."""
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import list_resources
+
+    resources = await list_resources()
+    assert len(resources) == 1
+    assert str(resources[0].uri) == "ui://pg-claude/dashboard-v1.html"
+    assert resources[0].mimeType == "text/html+mcp"

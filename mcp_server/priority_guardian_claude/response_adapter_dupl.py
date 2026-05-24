@@ -117,19 +117,20 @@ def adapt_get_priorities_meta(result: mcp_types.CallToolResult) -> mcp_types.Cal
     Returns:
         New CallToolResult with _meta.ui.resourceUri added
     """
-    # Don't add widget link to error results
+    # Don't add widget link to error results — return new object for consistency
     if result.isError:
-        return result
+        return mcp_types.CallToolResult(
+            content=result.content,
+            structuredContent=result.structuredContent,
+            isError=result.isError,
+            _meta=result.meta,
+        )
 
-    # Build new _meta with ui.resourceUri and ui.domain nested structure
-    existing_meta = result.meta or {}
-    new_meta = {
-        **existing_meta,
-        "ui": {
-            "resourceUri": WIDGET_URI,
-            "domain": WIDGET_APP_DOMAIN,
-        },
-    }
+    # Build new _meta with ui.resourceUri and ui.domain — defensive merge preserves existing ui keys
+    existing_meta = dict(result.meta) if result.meta else {}
+    existing_ui = dict(existing_meta.get("ui", {}))
+    existing_ui.update({"resourceUri": WIDGET_URI, "domain": WIDGET_APP_DOMAIN})
+    new_meta = {**existing_meta, "ui": existing_ui}
 
     return mcp_types.CallToolResult(
         content=result.content,

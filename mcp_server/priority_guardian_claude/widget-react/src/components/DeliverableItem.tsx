@@ -1,19 +1,266 @@
+import { useState, useRef, useEffect } from 'react'
 import type { Deliverable } from '../types'
+import { t } from '../i18n'
 
 interface DeliverableItemProps {
   deliverable: Deliverable
+  isInline?: boolean  // When true, display-only (no CRUD actions)
+  onToggle?: (deliverableId: string, done: boolean) => Promise<void>
+  onRename?: (deliverableId: string, name: string) => Promise<void>
+  onDelete?: (deliverableId: string) => Promise<void>
+  disabled?: boolean
 }
 
-/**
- * DeliverableItem - Display only version for Claude widget.
- * All edit/delete handlers removed.
- */
-export function DeliverableItem({ deliverable }: DeliverableItemProps) {
+export function DeliverableItem({
+  deliverable,
+  isInline = false,
+  onToggle,
+  onRename,
+  onDelete,
+  disabled = false,
+}: DeliverableItemProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState(deliverable.name)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isHoveredEdit, setIsHoveredEdit] = useState(false)
+  const [isHoveredDelete, setIsHoveredDelete] = useState(false)
+  const [isHoveredNo, setIsHoveredNo] = useState(false)
+  const [isGroupHovered, setIsGroupHovered] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Optimistic toggle state
+  const [optimisticDone, setOptimisticDone] = useState<boolean | null>(null)
+  const isPendingRef = useRef(false)
+
+  // Displayed value: optimistic when set, otherwise prop
+  const displayedDone = optimisticDone !== null ? optimisticDone : deliverable.done
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus()
+      inputRef.current.select()
+    }
+  }, [isEditing])
+
+  // Clear error timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  // Reset optimistic state when server prop changes
+  useEffect(() => {
+    setOptimisticDone(null)
+  }, [deliverable.done])
+
+  const showError = (message: string) => {
+    if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current)
+    setError(message)
+    errorTimeoutRef.current = setTimeout(() => setError(null), 3000)
+  }
+
+  const handleToggle = async () => {
+    if (isPendingRef.current || disabled || isInline || !onToggle) return
+
+    // Capture current displayed value and flip optimistically
+    const currentValue = displayedDone
+    const newValue = !currentValue
+    setOptimisticDone(newValue)
+    setError(null)
+
+    isPendingRef.current = true
+    try {
+      await onToggle(deliverable.id, newValue)
+      // Success: clear optimistic state (prop-sync useEffect is safety net)
+      setOptimisticDone(null)
+    } catch (e) {
+      // Revert optimistic state to original value
+      setOptimisticDone(currentValue)
+      showError(e instanceof Error ? e.message : t('couldntSave'))
+    } finally {
+      isPendingRef.current = false
+    }
+  }
+
+  const handleSaveEdit = async () => {
+    if (isLoading || !onRename) return
+    const trimmedName = editName.trim()
+
+    // Empty text - revert to original
+    if (!trimmedName) {
+      setEditName(deliverable.name)
+      setIsEditing(false)
+      return
+    }
+
+    // No change - just close
+    if (trimmedName === deliverable.name) {
+      setIsEditing(false)
+      return
+    }
+    setIsLoading(true)
+    setError(null)
+    try {
+      await onRename(deliverable.id, trimmedName)
+      setIsEditing(false)
+    } catch (e) {
+      showError(e instanceof Error ? e.message : t('couldntSave'))
+      setEditName(deliverable.name) // Revert
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditName(deliverable.name)
+    setIsEditing(false)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveEdit()
+    } else if (e.key === 'Escape') {
+      handleCancelEdit()
+    }
+  }
+
+  const handleDelete = async () => {
+    if (isLoading || !onDelete) return
+    setIsLoading(true)
+    setError(null)
+    try {
+      await onDelete(deliverable.id)
+    } catch (e) {
+      showError(e instanceof Error ? e.message : t('couldntSave'))
+      setShowDeleteConfirm(false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Inline mode - display only (using inline styles for Claude widget)
+  if (isInline) {
+    return (
+      <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Checkbox (display only) */}
+          <div
+            style={{
+              width: '16px',
+              height: '16px',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              background: deliverable.done ? 'var(--color-text-tertiary, #8c8c8c)' : 'transparent',
+              border: deliverable.done ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
+            }}
+            aria-hidden="true"
+          >
+            {deliverable.done && (
+              <svg style={{ width: '10px', height: '10px', color: '#fff' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+
+          {/* Name */}
+          <span
+            style={{
+              flex: 1,
+              fontSize: '14px',
+              overflowWrap: 'break-word',
+              color: deliverable.done ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-primary, #0d0d0d)',
+              textDecoration: deliverable.done ? 'line-through' : 'none',
+            }}
+          >
+            {deliverable.name}
+          </span>
+        </div>
+      </li>
+    )
+  }
+
+  // Fullscreen mode - show delete confirmation
+  if (showDeleteConfirm) {
+    return (
+      <li
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '8px',
+          background: 'var(--color-background-secondary, #f9f9f9)',
+          borderRadius: '6px',
+        }}
+      >
+        <span style={{ fontSize: '12px', color: 'var(--color-text-primary, #0d0d0d)', flex: 1 }}>
+          {t('removeItem', { name: deliverable.name })}
+        </span>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={isLoading}
+          style={{
+            fontSize: '12px',
+            color: 'var(--color-text-danger, #dc2626)',
+            fontWeight: 500,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+          aria-label={t('confirmRemove')}
+        >
+          {isLoading ? '...' : t('yes')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowDeleteConfirm(false)}
+          onMouseEnter={() => setIsHoveredNo(true)}
+          onMouseLeave={() => setIsHoveredNo(false)}
+          disabled={isLoading}
+          style={{
+            fontSize: '12px',
+            color: isHoveredNo ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+          }}
+          aria-label={t('cancelRemove')}
+        >
+          {t('no')}
+        </button>
+      </li>
+    )
+  }
+
+  // Fullscreen mode - interactive with CRUD
   return (
     <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        {/* Checkbox (display only) */}
-        <div
+      {error && (
+        <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '4px' }} role="alert">
+          {error}
+        </p>
+      )}
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        onMouseEnter={() => setIsGroupHovered(true)}
+        onMouseLeave={() => setIsGroupHovered(false)}
+      >
+        {/* Checkbox */}
+        <button
+          type="button"
+          onClick={handleToggle}
+          disabled={disabled || !onToggle}
           style={{
             width: '16px',
             height: '16px',
@@ -22,31 +269,117 @@ export function DeliverableItem({ deliverable }: DeliverableItemProps) {
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            background: deliverable.done ? 'var(--color-text-tertiary, #8c8c8c)' : 'transparent',
-            border: deliverable.done ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
+            background: displayedDone ? 'var(--color-text-tertiary, #8c8c8c)' : 'transparent',
+            border: displayedDone ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            padding: 0,
           }}
           role="checkbox"
-          aria-checked={deliverable.done}
+          aria-checked={displayedDone}
+          aria-disabled={disabled}
+          aria-label={t(displayedDone ? 'markAsNotDone' : 'markAsDone', { name: deliverable.name })}
         >
-          {deliverable.done && (
-            <svg style={{ width: '10px', height: '10px', color: '#fff' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          {displayedDone && (
+            <svg style={{ width: '10px', height: '10px', color: 'var(--color-background-primary, #fff)' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
               <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           )}
-        </div>
+        </button>
 
-        {/* Name */}
-        <span
-          style={{
-            flex: 1,
-            fontSize: '14px',
-            overflowWrap: 'break-word',
-            color: deliverable.done ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-primary, #0d0d0d)',
-            textDecoration: deliverable.done ? 'line-through' : 'none',
-          }}
-        >
-          {deliverable.name}
-        </span>
+        {/* Name (editable) */}
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={handleSaveEdit}
+            onKeyDown={handleKeyDown}
+            disabled={isLoading}
+            style={{
+              flex: 1,
+              fontSize: '14px',
+              color: 'var(--color-text-primary, #0d0d0d)',
+              background: 'var(--color-background-primary, #fff)',
+              border: '1px solid var(--color-border, #e5e5e5)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              outline: 'none',
+            }}
+            aria-label="Edit deliverable name"
+          />
+        ) : (
+          <span
+            style={{
+              flex: 1,
+              fontSize: '14px',
+              cursor: 'pointer',
+              overflowWrap: 'break-word',
+              color: displayedDone ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-primary, #0d0d0d)',
+              textDecoration: displayedDone ? 'line-through' : 'none',
+            }}
+            onDoubleClick={() => !disabled && onRename && setIsEditing(true)}
+            title={onRename ? t('doubleClickToEdit') : undefined}
+          >
+            {deliverable.name}
+          </span>
+        )}
+
+        {/* Actions (visible on hover) */}
+        {!isEditing && !disabled && (onRename || onDelete) && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              opacity: isGroupHovered ? 1 : 0,
+              transition: 'opacity 0.15s',
+            }}
+          >
+            {onRename && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                onMouseEnter={() => setIsHoveredEdit(true)}
+                onMouseLeave={() => setIsHoveredEdit(false)}
+                style={{
+                  padding: '4px',
+                  color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #8c8c8c)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+                aria-label={t('editItem', { name: deliverable.name })}
+              >
+                <svg style={{ width: '14px', height: '14px' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
+                </svg>
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                onMouseEnter={() => setIsHoveredDelete(true)}
+                onMouseLeave={() => setIsHoveredDelete(false)}
+                style={{
+                  padding: '4px',
+                  color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #8c8c8c)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+                aria-label={t('deleteItemAction', { name: deliverable.name })}
+              >
+                <svg style={{ width: '14px', height: '14px' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                  <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
+                  <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
+                  <path d="M6.5 7v5M8 7v5M9.5 7v5"/>
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </li>
   )

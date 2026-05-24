@@ -152,8 +152,8 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         if name == "get_priorities":
             result = adapt_get_priorities_meta(result)
             logger.debug(
-                "tool.get_priorities.wire_payload",
-                payload=result.model_dump(by_alias=True, mode="json", exclude_none=True),
+                "tool.get_priorities.widget_attached",
+                has_structured=result.structuredContent is not None,
             )
 
     except ToolUsageError as e:

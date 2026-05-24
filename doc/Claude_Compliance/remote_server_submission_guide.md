@@ -398,6 +398,35 @@ Each screenshot paired with the prompt text that produced it
 
 
 
+MCP Apps Design Guidelines (Interactive Connectors)
+If submitting an interactive connector (MCP App), your widget UI must comply with Anthropic's published design guidelines at: claude.com/docs/connectors/building/mcp-apps/design-guidelines
+
+These are Anthropic-authored constraints for the Claude host. They are not part of the MCP ext-apps spec (which is silent on layout) and are not enumerated as gating rejection criteria in the review checklist — but reviewers test widgets and violations will be flagged.
+
+Inline card constraints:
+- Max height: 500px (auto-fit content height, no nested scrolling)
+- Max actions: 2, placed at the bottom of the card
+- No menus or popovers — use visible controls instead
+- No nested scrolling
+- Keep content concise — inline cards are not full UIs
+
+Fullscreen constraints:
+- Full interaction allowed — create, edit, delete, complex forms
+- No floating panels — use collapsible sections, tabs, or pagination instead
+- A close button must appear in the native header
+- The host composer stays visible at the bottom
+
+Mobile constraints:
+- Fullscreen mode not yet available on mobile
+- Widgets render in WKWebView (iOS) / Android WebView rather than a sandboxed iframe on mobile
+
+Architecture implication for CRUD widgets:
+All write operations (create, edit, delete) and complex interactions (dropdowns, multi-step forms, confirmation dialogs) must be surfaced in fullscreen mode only. The inline card should show read-only summary data plus an expand button. This is consistent with how all current directory-listed interactive connectors (Asana, monday.com, Canva, Figma, Slack) are designed — none expose delete affordances in the inline card.
+
+Updated: May 2026 — Source: Anthropic design guidelines page (verified from live docs)
+
+
+
 What technical requirements must be met?
 Must meet the core technical compliance standards.
 

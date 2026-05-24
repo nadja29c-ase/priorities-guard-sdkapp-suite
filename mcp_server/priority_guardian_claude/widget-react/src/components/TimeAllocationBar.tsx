@@ -216,7 +216,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
                 width: '6px',
                 height: '6px',
                 borderRadius: '50%',
-                background: item.isOther ? BAR_COLORS.other : BAR_COLORS[item.key],
+                background: item.isOther ? BAR_COLORS.other : (BAR_COLORS[item.key] ?? BAR_COLORS.other),
               }}
               aria-hidden="true"
             />

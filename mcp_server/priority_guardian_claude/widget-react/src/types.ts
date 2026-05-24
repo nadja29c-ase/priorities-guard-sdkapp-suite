@@ -73,7 +73,45 @@ export interface DashboardData {
   locale?: string  // User locale for i18n (e.g., 'en-US', 'de-DE')
 }
 
+// Pie chart slice (from get_weekly_report)
+export interface PieSlice {
+  label: string
+  hours: number
+  type: 'priority' | 'semantic'
+  keyword?: CalendarKeyword  // For priority slices
+  eventCount?: number        // For semantic slices
+}
+
+// Pie chart view data (from get_weekly_report)
+export interface PieChartData {
+  weekStart: string
+  weekEnd: string
+  slices: PieSlice[]
+  totalHours: number
+  semanticTarget?: 'P1' | 'P2' | 'P3' | 'other' | null
+  semanticTargetLabel?: string | null
+  priorities?: unknown[]
+  allEvents?: unknown[]
+  isCurrentWeek?: boolean
+  timeAllocation?: unknown
+  [key: string]: unknown
+}
+
+// Union type for all tool output data
+export type ToolOutputData = DashboardData | PieChartData
+
+// Widget state (React state only — no persistence in sandboxed iframe)
+export interface WidgetState {
+  editingPriorityId?: string | null
+  addFormOpen?: boolean
+  awaitingOAuth?: boolean
+}
+
 // Type guards
-export function isDashboardData(data: unknown): data is DashboardData {
-  return data !== null && data !== undefined && typeof data === 'object' && 'priorities' in data
+export function isPieChartData(data: ToolOutputData | null | undefined): data is PieChartData {
+  return data !== null && data !== undefined && 'slices' in data
+}
+
+export function isDashboardData(data: ToolOutputData | null | undefined): data is DashboardData {
+  return data !== null && data !== undefined && !isPieChartData(data) && Array.isArray((data as DashboardData).priorities)
 }

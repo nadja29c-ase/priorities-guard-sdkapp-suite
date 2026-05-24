@@ -66,3 +66,24 @@ export function formatHoursA11y(hours: number): string {
   const formatted = rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)
   return `${formatted} ${t('hoursUnit')}`
 }
+
+/**
+ * Detect mobile device from userAgent string.
+ * Claude's hostContext.userAgent is a plain string, not an object.
+ */
+export function isMobileDevice(userAgent: string | undefined): boolean {
+  return /iPhone|iPad|iPod|Android/i.test(userAgent ?? '')
+}
+
+/**
+ * Extract structuredContent from Claude callServerTool result.
+ * Returns typed data or undefined if extraction fails.
+ */
+export function extractClaudeStructuredContent<T>(result: unknown): T | undefined {
+  if (!result || typeof result !== 'object') return undefined
+  const r = result as Record<string, unknown>
+  if (r.structuredContent !== undefined) {
+    return r.structuredContent as T
+  }
+  return undefined
+}

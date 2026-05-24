@@ -39,14 +39,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
           <p style={{ fontSize: '14px', color: 'var(--color-text-danger, #dc2626)', fontWeight: 600, marginBottom: '8px' }}>
             Dashboard unavailable
           </p>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #5c5c5c)', marginBottom: '8px' }}>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
             Please refresh to try again.
-          </p>
-          <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary, #8c8c8c)', wordBreak: 'break-all', marginBottom: '4px' }}>
-            {this.state.error?.name || 'UnknownError'}: {this.state.error?.message || '(no message)'}
-          </p>
-          <p style={{ fontSize: '10px', color: 'var(--color-text-tertiary, #8c8c8c)', wordBreak: 'break-all' }}>
-            {this.state.error?.stack?.split('\n').slice(0, 4).join(' | ')}
           </p>
         </div>
       )

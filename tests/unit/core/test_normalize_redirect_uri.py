@@ -99,6 +99,12 @@ class TestRedirectUriAllowlist:
         )
         assert valid is True, f"Claude URI should be accepted: {error}"
 
+    def test_claude_com_uri_accepted(self):
+        """Claude.com callback URI is in the production allowlist."""
+        from backend.core.config import Settings
+
+        assert "https://claude.com/api/mcp/auth_callback" in Settings._CHATGPT_REDIRECT_URIS
+
     def test_chatgpt_uris_still_accepted(self):
         """All existing ChatGPT URIs still pass (regression guard)."""
         from backend.core.oauth_provider.validators.client_metadata import validate_redirect_uris

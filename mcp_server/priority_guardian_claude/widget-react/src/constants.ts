@@ -5,7 +5,9 @@
  * useHostStyles(app) injects host CSS variables but token names may differ.
  */
 
-// Badge colors - inline styles with fallbacks (no Tailwind in Claude widget)
+// Priority identity colors — semantic product colors, not host theme tokens.
+// These represent P1/P2/P3 identity across all surfaces and are intentionally
+// fixed, not inherited from host CSS variables.
 export const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   P1: { bg: 'rgba(2, 133, 255, 0.12)', text: '#0285ff' },
   P2: { bg: 'rgba(146, 79, 247, 0.12)', text: '#924ff7' },

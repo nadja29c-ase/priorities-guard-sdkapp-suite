@@ -5,7 +5,7 @@
 **Status:** Implemented — Increments Claude-01 through Claude-06 complete
 **Context:** Priority Guardian v1.0 is accepted into the OpenAI GPT store. This document captures the architecture decisions for extending PG to the Anthropic MCP Directory as a second distribution channel.
 
-**Current State:** Claude MCP server deployed, OAuth callbacks configured, response adapter built, widget implemented. Widget rendering blocked by platform-side issue (anthropics/claude-ai-mcp #61). Pending: `title` annotation missing on ChatGPT server, `destructive_hint=False` incorrect on write tools.
+**Current State:** Claude MCP server deployed, OAuth callbacks configured, response adapter built, display-only widget implemented (Claude-06). Full CRUD widget targeting Increment Claude-08. Widget rendering blocked by platform-side issue (anthropics/claude-ai-mcp #61). All tool annotations fixed (Shared-Annotations-01): `title` present on all 17 tools, `destructive_hint=True` on all 9 write tools.
 
 ---
 
@@ -191,9 +191,48 @@ All tool *logic* remains shared. The adapter only touches response serialisation
 
 ---
 
+## Anthropic Widget Design Constraints (Claude-Specific)
+
+**Source:** `claude.com/docs/connectors/building/mcp-apps/design-guidelines` (verified May 2026)
+
+These constraints are authored by Anthropic and apply to the Claude host. The MCP `ext-apps` spec (SEP-1865) is **silent on all of these** — they are Claude host policies, not spec requirements. They are not enumerated as gating rejection criteria in Anthropic's review checklist, but reviewers test widgets and violations will be flagged.
+
+### Inline card
+| Constraint | Rule |
+|---|---|
+| Max height | 500px — auto-fit content height, no nested scrolling |
+| Max actions | 2, placed at bottom of card |
+| Menus/popovers | Not allowed — use visible controls only |
+| Nested scrolling | Not allowed |
+| Content | Concise — inline cards are not full UIs |
+
+### Fullscreen
+| Constraint | Rule |
+|---|---|
+| Interactions | Full CRUD allowed — create, edit, delete, complex forms |
+| Floating panels | Not allowed — use collapsible sections, tabs, or pagination |
+| Close button | Must appear in native header |
+| Composer | Host composer stays visible at bottom |
+
+### Mobile
+- Fullscreen mode not yet available on mobile
+- Widgets render in WKWebView (iOS) / Android WebView, not sandboxed iframe
+
+### Architecture implication for PG Claude widget
+
+The PG ChatGPT widget's inline card has CRUD buttons, a `KeywordPicker` dropdown, and collapsible sections that would violate Claude's inline constraints.
+
+**Correct approach for the Claude widget:**
+- **Inline card:** Read-only summary — priorities with hours/deadlines, TimeAllocationBar, + one expand button. Max 2 actions (e.g. "Open dashboard" + optional one quick action). No dropdowns. Auto-fit height.
+- **Fullscreen:** Full ChatGPT-equivalent CRUD — edit name, deadline, goals, deliverables, keyword reassignment via `KeywordPicker`, delete confirmation, add priority form. All write operations live here.
+
+This is consistent with how all currently listed interactive directory connectors work: none expose delete affordances in the inline card.
+
+---
+
 ## Token Size Risk Assessment — Pre-Decision Analysis
 
-**This must be evaluated before committing to the Claude build.** Anthropic's directory policy item 15 requires tool responses to be "roughly commensurate with the complexity or impact of the task." PG has one tool that warrants scrutiny: `get_weekly_report`.
+**This must be evaluated before committing to the Claude build.**
 
 ### The `structuredContent` / `_meta` separation is critical
 
@@ -278,10 +317,15 @@ PKCE S256 already implemented. No further code change needed.
 ### ✅ Resolved — Widget Bridge Refactor (Increment Claude-06)
 
 Full widget rewrite completed using `@modelcontextprotocol/ext-apps` SDK. Implemented:
-- `ui/notifications/tool-result` for data delivery
-- `tools/call` via MCP Apps bridge for CRUD operations
-- `ui/setState` / `ui/getState` for state persistence
-- MCP Apps context for locale/theme/displayMode
+- `app.ontoolresult` callback for data delivery (SDK method name; spec notation: `ui/notifications/tool-result`)
+- `app.callServerTool({ name, arguments })` for CRUD operations from the widget
+- `app.setState()` / `app.getState()` for state persistence across remounts
+- `app.getHostContext()` for locale/theme/displayMode/safeArea
+- `app.onhostcontextchanged` callback for host context updates
+- `app.requestDisplayMode({ mode })` for inline/fullscreen transitions
+- `app.notifyIntrinsicHeight()` for layout height signalling
+
+Widget currently display-only (Increment Claude-06 scope). Full CRUD targeting Increment Claude-08 — technically unblocked as of May 2026 (`app.callServerTool` confirmed working in ext-apps v1.7.1).
 
 Widget implementation is correct per spec. Currently blocked by platform-side issue — claude.ai does not call `resources/read` for third-party custom connectors (anthropics/claude-ai-mcp #61, open since February 2026).
 
@@ -295,13 +339,13 @@ Adapter layer in `priority_guardian_claude/` correctly:
 
 Gap: `_meta.ui.domain` not set. Should be added when widget rendering resolves.
 
-### 🟡 Pending — `title` Annotation on ChatGPT Server
+### ✅ Resolved — `title` Annotation on All Tools (Increment Shared-Annotations-01)
 
-Claude server compensates via `tools_list_dupl.py` which derives `title` from tool name using `_derive_title()`. ChatGPT server in `priority_guardian/` lacks `title` — needs fix in shared `ToolDefinition` dataclass.
+`title` field added to `ToolDefinition` in `base.py` and passed to `ToolAnnotations` in shared `list_tools()`. All 17 tool files have `title` set. Both ChatGPT and Claude servers now expose `title` correctly. Claude server `tools_list_dupl.py` `_derive_title()` workaround removed.
 
-### 🔴 Blocker — `destructive_hint` Incorrect on Write Tools
+### ✅ Resolved — `destructive_hint` Corrected on Write Tools (Increment Shared-Annotations-01)
 
-`create_priority`, `add_priority`, `update_priority` have `destructive_hint=False` when they should be `True`. Affects both platforms. Fix in `priority_guardian/tools/` (shared).
+`destructive_hint=True` set on all 9 write tools: `create_priority`, `add_priority`, `update_priority`, `add_deliverable`, `update_deliverable`, `add_goal`, `update_goal`, `connect_google_calendar`, `disconnect_google_calendar`. Both platforms now have correct annotations.
 
 ### 🟡 Pending — Documentation Page
 
