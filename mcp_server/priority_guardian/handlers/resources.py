@@ -12,6 +12,7 @@ import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.config import BACKEND_URL, MCP_SERVER_URL
+from mcp_server.priority_guardian.tools.widget_tools.constants import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
@@ -29,7 +30,6 @@ def _extract_origin(url: str) -> str:
 
 # Widget configuration
 WIDGET_VERSION = ""
-WIDGET_URI = "ui://widget/pg-dashboard-v12.html"
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/pg-dashboard.html")
 WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)
 BACKEND_DOMAIN = _extract_origin(BACKEND_URL)
