@@ -149,6 +149,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# -------------------------------------------------------------
+# Root Health Check (for Render deploy health checks)
+# -------------------------------------------------------------
+# Fast, no auth, no DB - just confirms the app is running.
+# Set Render Health Check Path to "/health" in dashboard.
+
+@app.get("/health")
+async def health_check():
+    """Lightweight health check for deploy verification."""
+    return {"status": "ok"}
+
 # Add custom exception handler for validation errors
 # -------------------------------------------------------------
 # Friendly validation error messages
