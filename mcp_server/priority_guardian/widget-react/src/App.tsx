@@ -91,6 +91,13 @@ function App() {
   const enteredFullscreenForEditRef = useRef(false)
   const wasEditingRef = useRef<string | null>(null)
 
+  // Inc 89.10: desktop-local fullscreen intent guard.
+  // Desktop fullscreen is owned by the widget (no requestDisplayMode call).
+  // Host displayMode stays 'inline' during desktop local-fullscreen sessions.
+  // When true, ignore host set_globals(hostMode: 'inline') syncs that would revert
+  // local fullscreen. Cleared by handleMinimizeToInline. Mobile is unaffected.
+  const desktopLocalFullscreenIntentRef = useRef(false)
+
   // Guard against double backfillTimeAllocation calls (race between mount and set_globals)
   const backfillCalledRef = useRef(false)
 
@@ -100,7 +107,7 @@ function App() {
   )
 
   // Inc 89: helper to log every displayMode change with caller marker
-  const logDisplayModeChange = (next: DisplayMode | 'sync', caller: string, extra?: Record<string, unknown>) => {
+  const logDisplayModeChange = (next: DisplayMode | 'sync' | 'sync-ignored', caller: string, extra?: Record<string, unknown>) => {
     if (!PG_DIAG_FULLSCREEN) return
     reportWidgetDiagnostic({
       event: 'displayMode.change',
@@ -625,6 +632,10 @@ function App() {
           window.openai.requestDisplayMode({ mode: 'fullscreen' })
         }
       } catch { /* noop */ }
+    } else {
+      // Inc 89.10: desktop fullscreen is local-only; mark intent so handleSetGlobals
+      // ignores stale host inline syncs until the user explicitly minimizes.
+      desktopLocalFullscreenIntentRef.current = true
     }
     logDisplayModeChange('fullscreen', 'handleExpandToFullscreen', { isMobile })
     setDisplayMode('fullscreen')
@@ -641,6 +652,10 @@ function App() {
           window.openai.requestDisplayMode({ mode: 'inline' })
         }
       } catch { /* noop */ }
+    } else {
+      // Inc 89.10: user explicitly closing local fullscreen — release the guard
+      // so subsequent host inline syncs work normally.
+      desktopLocalFullscreenIntentRef.current = false
     }
     logDisplayModeChange('inline', 'handleMinimizeToInline', { isMobile })
     setDisplayMode('inline')
@@ -709,9 +724,25 @@ function App() {
           })
         }
         if (hostMode === 'fullscreen' || hostMode === 'inline') {
-          // Inc 89: log the sync intent before it fires
-          logDisplayModeChange('sync', 'handleSetGlobals.hostSync', { hostMode })
-          setDisplayMode(prev => prev !== hostMode ? hostMode : prev)
+          // Inc 89.10: desktop-local fullscreen intent guard.
+          // On desktop, when the user has opened local fullscreen, host displayMode
+          // stays 'inline' (because we never called requestDisplayMode). Any host
+          // set_globals(inline) during this period is stale and would revert the
+          // user's intended fullscreen. Mobile and host 'fullscreen' syncs are
+          // never blocked.
+          const isStaleDesktopInlineSync =
+            hostMode === 'inline' &&
+            !isMobile &&
+            desktopLocalFullscreenIntentRef.current
+
+          if (isStaleDesktopInlineSync) {
+            // Log the ignored sync for dev-mode and v15 production verification.
+            logDisplayModeChange('sync-ignored', 'handleSetGlobals.intentGuard', { hostMode })
+          } else {
+            // Inc 89: log the sync intent before it fires
+            logDisplayModeChange('sync', 'handleSetGlobals.hostSync', { hostMode })
+            setDisplayMode(prev => prev !== hostMode ? hostMode : prev)
+          }
         }
       }
 
