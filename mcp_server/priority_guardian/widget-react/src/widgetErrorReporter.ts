@@ -85,7 +85,7 @@ export async function reportWidgetError(payload: WidgetErrorPayload): Promise<vo
 // invoke a private MCP tool which the host runs server-side, bypassing
 // iframe CSP entirely.
 
-const MAX_DIAGNOSTIC_EVENTS_PER_SESSION = 20
+const MAX_DIAGNOSTIC_EVENTS_PER_SESSION = 200
 let diagnosticCount = 0
 
 export interface WidgetDiagnosticPayload {

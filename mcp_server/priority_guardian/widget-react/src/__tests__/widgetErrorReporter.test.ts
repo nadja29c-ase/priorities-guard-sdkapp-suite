@@ -212,14 +212,14 @@ describe('reportWidgetDiagnostic (Inc 89.8 - callTool)', () => {
     expect(args.ua).toBe(navigator.userAgent)
   })
 
-  it('enforces per-session cap of 20 diagnostics', async () => {
-    // Send 21 diagnostic events
-    for (let i = 1; i <= 21; i++) {
+  it('enforces per-session cap of 200 diagnostics', async () => {
+    // Send 201 diagnostic events
+    for (let i = 1; i <= 201; i++) {
       await reportWidgetDiagnostic({ event: `event-${i}` })
     }
 
-    // Only first 20 should have been sent
-    expect(mockCallTool).toHaveBeenCalledTimes(20)
+    // Only first 200 should have been sent
+    expect(mockCallTool).toHaveBeenCalledTimes(200)
   })
 
   it('does NOT dedup same events (unlike error reporter)', async () => {
