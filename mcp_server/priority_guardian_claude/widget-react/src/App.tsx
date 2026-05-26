@@ -605,6 +605,20 @@ function App() {
           <EmptyState />
         )}
 
+        {/* Hint: CRUD requires full dashboard */}
+        {sortedPriorities.length > 0 && (
+          <p style={{
+            fontSize: '11px',
+            color: 'var(--color-text-tertiary, #8c8c8c)',
+            textAlign: 'center',
+            marginTop: '12px',
+            marginBottom: '4px',
+            fontStyle: 'italic',
+          }}>
+            {t('openDashboardToEdit')}
+          </p>
+        )}
+
         {/* Calendar connection status (inline, no actions) */}
         <CalendarConnectionMinimal connected={dashboardData?.google_connected ?? false} />
 

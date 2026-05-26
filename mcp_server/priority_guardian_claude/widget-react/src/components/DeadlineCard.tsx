@@ -297,13 +297,14 @@ export function DeadlineCard({
                 border: 'none',
                 padding: 0,
                 cursor: 'pointer',
+                color: 'var(--color-text-tertiary, #8c8c8c)',
               }}
               aria-expanded={deliverablesExpanded}
             >
-              <span style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+              <span style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t('e2eDeliverables')}
               </span>
-              <span style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+              <span style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
                 ({doneCount}/{totalCount})
               </span>
               <span style={{ marginLeft: 'auto' }}>

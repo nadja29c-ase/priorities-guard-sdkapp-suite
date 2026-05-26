@@ -113,6 +113,7 @@ export function GoalSection({
             border: 'none',
             padding: 0,
             cursor: isCollapsible ? 'pointer' : 'default',
+            color: 'var(--color-text-tertiary, #8c8c8c)',
           }}
           onClick={() => isCollapsible && setExpanded(!expanded)}
           aria-expanded={expanded}
@@ -127,13 +128,12 @@ export function GoalSection({
               fontWeight: 500,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              color: 'var(--color-text-tertiary, #8c8c8c)',
             }}
           >
             {goals.length === 1 ? t('oneMonthGoal') : t('oneMonthGoals')}
           </span>
           {checkpointDate && (
-            <span style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+            <span style={{ fontSize: '12px' }}>
               {t('by')} {formatDate(checkpointDate)}
             </span>
           )}

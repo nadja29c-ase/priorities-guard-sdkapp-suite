@@ -108,6 +108,7 @@ const messages = {
     refreshCalendar: 'Refresh calendar data',
 
     // Navigation
+    openDashboardToEdit: 'Open full dashboard to edit',
     openFullDashboard: 'Open full dashboard',
     expandDashboard: 'Expand dashboard',
     fullscreenUnavailable: 'Fullscreen mode is unavailable',
@@ -286,6 +287,7 @@ const messages = {
     refreshCalendar: 'Kalenderdaten neu laden',
 
     // Navigation
+    openDashboardToEdit: 'Vollständiges Dashboard öffnen zum Bearbeiten',
     openFullDashboard: 'Dashboard öffnen',
     expandDashboard: 'Dashboard erweitern',
     fullscreenUnavailable: 'Vollbildmodus nicht verfügbar',
