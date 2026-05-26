@@ -15,8 +15,8 @@ from .constants import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
 
-# Timeout for backend calls (seconds) — must be under ChatGPT's ~10s window
-TIMEOUT_S = 8.0
+# Timeout for backend calls (seconds) — 15s survives cold starts, safe for both ChatGPT (~30s) and Claude
+TIMEOUT_S = 15.0
 
 
 async def _call_with_timeout(coro, op_name: str, correlation_id: str):
