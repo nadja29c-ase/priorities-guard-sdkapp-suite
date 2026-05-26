@@ -63,22 +63,10 @@ def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolRes
             existing_text = first.text
 
     # Serialize data for Claude's model channel.
-    # Strip list fields exceeding MAX_LIST_ITEMS — these are widget-only event arrays
-    # that Claude does not need for narration. Size threshold is generic: no field
-    # name coupling, no tool-specific logic. Small lists (e.g. priorityEvents with
-    # 4-8 items from get_priority_events) pass through so the breakdown flow works.
-    MAX_LIST_ITEMS = 10
+    # Data is already correctly scoped by tool handlers — only fields Claude needs
+    # are in the response. Pass through without filtering.
     data = result.structuredContent.get("data")
-
-    if isinstance(data, dict):
-        data_for_claude = {
-            k: v for k, v in data.items()
-            if not (isinstance(v, list) and len(v) > MAX_LIST_ITEMS)
-        }
-        data_str = json.dumps(data_for_claude, ensure_ascii=False, indent=2) if data_for_claude else ""
-    else:
-        # data is non-dict (list, primitive, etc) — serialize as-is, no filtering possible
-        data_str = json.dumps(data, ensure_ascii=False, indent=2) if data else ""
+    data_str = json.dumps(data, ensure_ascii=False, indent=2) if data else ""
 
     # Compose content: guidance first (behavior), then summary (natural language), then data (raw facts)
     # This order produces better narration — Claude reads guidance before encountering JSON
