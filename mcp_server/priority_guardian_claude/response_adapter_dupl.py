@@ -101,18 +101,20 @@ def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolRes
     )
 
 
-def adapt_get_priorities_meta(result: mcp_types.CallToolResult) -> mcp_types.CallToolResult:
+def adapt_widget_tool_meta(result: mcp_types.CallToolResult) -> mcp_types.CallToolResult:
     """
-    Add _meta.ui.resourceUri to get_priorities result for widget display.
+    Add _meta.ui.resourceUri to widget tool results for display.
 
     MCP Apps standard: tool results with _meta.ui.resourceUri trigger
     the host to fetch and display the corresponding widget resource.
     Claude uses this pattern to show interactive UI after tool calls.
 
+    Applies to: get_priorities, render_weekly_report
+
     Only adds metadata if the result is not an error.
 
     Args:
-        result: The CallToolResult from get_priorities (already adapted)
+        result: The CallToolResult from a widget tool (already adapted)
 
     Returns:
         New CallToolResult with _meta.ui.resourceUri added

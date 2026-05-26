@@ -26,8 +26,11 @@ from mcp_server.priority_guardian_claude.mcp_auth_dupl import (
 )
 from mcp_server.priority_guardian_claude.response_adapter_dupl import (
     adapt_tool_result,
-    adapt_get_priorities_meta,
+    adapt_widget_tool_meta,
 )
+
+# Tools that render the widget (need _meta.ui in tool result)
+_WIDGET_TOOL_NAMES = {"get_priorities", "render_weekly_report"}
 
 logger = structlog.get_logger(__name__)
 
@@ -148,11 +151,12 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         # Adapt result for Claude (move assistant_guidance to content)
         result = adapt_tool_result(result)
 
-        # Add widget link for get_priorities (triggers Claude to display dashboard widget)
-        if name == "get_priorities":
-            result = adapt_get_priorities_meta(result)
+        # Add widget link for widget tools (triggers Claude to display dashboard widget)
+        if name in _WIDGET_TOOL_NAMES:
+            result = adapt_widget_tool_meta(result)
             logger.debug(
-                "tool.get_priorities.widget_attached",
+                "tool.widget_attached",
+                tool_name=name,
                 has_structured=result.structuredContent is not None,
             )
 

@@ -8,6 +8,9 @@ from mcp import types as mcp_types
 from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 from mcp_server.priority_guardian_claude.response_adapter_dupl import WIDGET_URI, WIDGET_APP_DOMAIN
 
+# Tools that render the widget (need _meta.ui.resourceUri in tool definition)
+_WIDGET_TOOL_NAMES = {"get_priorities", "render_weekly_report"}
+
 # Claude-specific destructiveHint overrides.
 # create_priority has destructive_hint=False in shared ToolDefinition to preserve
 # ChatGPT UX — ChatGPT shows confirmation UI for destructiveHint=True on public tools.
@@ -34,8 +37,8 @@ async def list_tools_for_claude() -> list[mcp_types.Tool]:
         if tool_def.visibility != "public":
             continue
 
-        # get_priorities has widget _meta for host-side prefetch (MCP Apps spec)
-        if tool_def.name == "get_priorities":
+        # Widget tools have _meta for host-side prefetch (MCP Apps spec)
+        if tool_def.name in _WIDGET_TOOL_NAMES:
             tool_meta = {"ui": {"resourceUri": WIDGET_URI, "domain": WIDGET_APP_DOMAIN}}
         else:
             tool_meta = None
