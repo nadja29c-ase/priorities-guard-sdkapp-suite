@@ -452,15 +452,26 @@ function App() {
   // ============ Display Mode Handlers ============
 
   const handleExpandToFullscreen = useCallback(async () => {
-    if (appRef.current?.requestDisplayMode) {
+    const ua = appRef.current?.getHostContext()?.userAgent ?? ''
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua)
+
+    if (isMobile && appRef.current?.requestDisplayMode) {
+      // On mobile: request actual fullscreen from host
       try {
-        const result = await appRef.current.requestDisplayMode({ mode: 'fullscreen' })
-        setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
+        const ctx = appRef.current.getHostContext()
+        if (ctx?.availableDisplayModes?.includes('fullscreen')) {
+          const result = await appRef.current.requestDisplayMode({ mode: 'fullscreen' })
+          setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
+        } else {
+          // Fullscreen not available on this mobile host — expand locally
+          setDisplayMode('fullscreen')
+        }
       } catch {
-        setLoadError(t('fullscreenUnavailable'))
-        // Keep current displayMode — don't lie about state
+        // Fallback to local expand
+        setDisplayMode('fullscreen')
       }
     } else {
+      // On desktop: expand locally without requesting fullscreen from host
       setDisplayMode('fullscreen')
     }
   }, [])
