@@ -41,10 +41,6 @@ WIDGET_URI = "ui://pg-claude/dashboard-v1.html"
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/pg-dashboard-claude.html")
 WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)
 
-# Claude app domain for CSP (SHA-256 of MCP server URL, first 32 hex chars)
-_hash = hashlib.sha256(MCP_SERVER_URL.encode()).hexdigest()[:32]
-WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com"
-
 # Fallback HTML if widget file cannot be loaded
 WIDGET_FALLBACK_HTML = """<!DOCTYPE html>
 <html><head><title>Priority Guardian</title></head>
@@ -70,6 +66,12 @@ def _load_widget_html() -> str:
 
 # Load widget HTML at module import time
 WIDGET_HTML = _load_widget_html()
+
+# Claude app domain — SHA-256 of widget HTML content (first 32 hex chars)
+# Must match the domain claude.ai computes from the served HTML.
+# Recomputed on every server startup to track widget changes across deploys.
+_hash = hashlib.sha256(WIDGET_HTML.encode()).hexdigest()[:32]
+WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com"
 
 
 async def list_resources() -> List[mcp_types.Resource]:
