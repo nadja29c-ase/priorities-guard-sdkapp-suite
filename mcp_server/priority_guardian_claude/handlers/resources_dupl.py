@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 import structlog
 from mcp import types as mcp_types
 
-from mcp_server.priority_guardian_claude.config import MCP_SERVER_URL
+from mcp_server.priority_guardian_claude.config import MCP_RESOURCE_URL, MCP_SERVER_URL
 
 logger = structlog.get_logger(__name__)
 
@@ -67,10 +67,11 @@ def _load_widget_html() -> str:
 # Load widget HTML at module import time
 WIDGET_HTML = _load_widget_html()
 
-# Claude app domain — SHA-256 of widget HTML content (first 32 hex chars)
-# Must match the domain claude.ai computes from the served HTML.
-# Recomputed on every server startup to track widget changes across deploys.
-_hash = hashlib.sha256(WIDGET_HTML.encode()).hexdigest()[:32]
+# Claude app domain — SHA-256 of MCP resource URL (full /mcp endpoint, first 32 hex chars)
+# Per Anthropic docs: hash the full server URL including /mcp path.
+# Formula: sha256(MCP_RESOURCE_URL)[:32].claudemcpcontent.com
+# Reference: https://docs.anthropic.com/en/docs/claude-ai-connectors/building/mcp-apps/cross-compatibility
+_hash = hashlib.sha256(MCP_RESOURCE_URL.encode()).hexdigest()[:32]
 WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com"
 
 

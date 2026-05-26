@@ -337,7 +337,31 @@ Adapter layer in `priority_guardian_claude/` correctly:
 - Places `ui.resourceUri` at top-level `_meta`
 - Applies `MAX_LIST_ITEMS = 10` threshold for token efficiency
 
-Gap: `_meta.ui.domain` not set. Should be added when widget rendering resolves.
+### ✅ Resolved — `_meta.ui.domain` Widget App Domain (Increment Claude-07)
+
+Claude requires `_meta.ui.domain` as a cryptographic binding between the widget and the MCP server.
+
+**Formula (per Anthropic docs):**
+```
+sha256(MCP_RESOURCE_URL)[:32].claudemcpcontent.com
+```
+
+Where `MCP_RESOURCE_URL` is the **full MCP endpoint URL including `/mcp` path** (e.g. `https://priority-guardian-claude-mcp.onrender.com/mcp`).
+
+**Common mistake:** Hashing the origin only (without `/mcp` path) produces a different hash and causes widget rendering to fail with "ui.domain mismatch".
+
+**Verification:**
+```bash
+node -e 'console.log(require("crypto").createHash("sha256").update("https://priority-guardian-claude-mcp.onrender.com/mcp").digest("hex").slice(0,32) + ".claudemcpcontent.com")'
+# → e524d9efa639471cac7431657ac08f2c.claudemcpcontent.com
+```
+
+Implementation in `resources_dupl.py`:
+```python
+from mcp_server.priority_guardian_claude.config import MCP_RESOURCE_URL
+_hash = hashlib.sha256(MCP_RESOURCE_URL.encode()).hexdigest()[:32]
+WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com"
+```
 
 ### ✅ Resolved — `title` Annotation on All Tools (Increment Shared-Annotations-01)
 

@@ -426,6 +426,37 @@ All write operations (create, edit, delete) and complex interactions (dropdowns,
 Updated: May 2026 — Source: Anthropic design guidelines page (verified from live docs)
 
 
+Widget App Domain (`_meta.ui.domain`)
+
+MCP Apps require `_meta.ui.domain` for cryptographic binding between the widget and server. This value must be computed from your MCP server URL.
+
+**Formula (per Anthropic docs):**
+```
+sha256(YOUR_MCP_SERVER_URL)[:32].claudemcpcontent.com
+```
+
+**Compute it with Node.js:**
+```bash
+node -e 'const yourServerUrl = "https://example.com/mcp"; console.log(require("crypto").createHash("sha256").update(yourServerUrl).digest("hex").slice(0,32) + ".claudemcpcontent.com")'
+```
+
+**Critical:** The URL must be the **full MCP endpoint URL including the `/mcp` path**, not just the origin. Hashing only the origin (e.g. `https://example.com` instead of `https://example.com/mcp`) produces a different hash and causes widget rendering to fail with "ui.domain mismatch".
+
+**Example:**
+- Server URL: `https://priority-guardian-claude-mcp.onrender.com/mcp`
+- Computed domain: `e524d9efa639471cac7431657ac08f2c.claudemcpcontent.com`
+
+**Python implementation:**
+```python
+import hashlib
+MCP_RESOURCE_URL = "https://your-server.com/mcp"
+_hash = hashlib.sha256(MCP_RESOURCE_URL.encode()).hexdigest()[:32]
+WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com"
+```
+
+Reference: [Claude MCP Apps Cross-Compatibility Guide](https://docs.anthropic.com/en/docs/claude-ai-connectors/building/mcp-apps/cross-compatibility)
+
+
 
 What technical requirements must be met?
 Must meet the core technical compliance standards.
