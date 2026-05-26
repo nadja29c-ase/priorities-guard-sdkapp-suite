@@ -30,7 +30,7 @@ from mcp_server.priority_guardian_claude.response_adapter_dupl import (
 )
 
 # Tools that render the widget (need _meta.ui in tool result)
-_WIDGET_TOOL_NAMES = {"get_priorities", "render_weekly_report"}
+_WIDGET_TOOL_NAMES = {"get_priorities", "render_weekly_report", "create_priority"}
 
 logger = structlog.get_logger(__name__)
 

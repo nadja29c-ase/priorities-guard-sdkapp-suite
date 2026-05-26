@@ -9,7 +9,7 @@ from mcp_server.priority_guardian.tools import TOOL_REGISTRY
 from mcp_server.priority_guardian_claude.response_adapter_dupl import WIDGET_URI, WIDGET_APP_DOMAIN
 
 # Tools that render the widget (need _meta.ui.resourceUri in tool definition)
-_WIDGET_TOOL_NAMES = {"get_priorities", "render_weekly_report"}
+_WIDGET_TOOL_NAMES = {"get_priorities", "render_weekly_report", "create_priority"}
 
 # Claude-specific destructiveHint overrides.
 # create_priority has destructive_hint=False in shared ToolDefinition to preserve
