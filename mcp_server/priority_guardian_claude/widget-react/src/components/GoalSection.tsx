@@ -38,8 +38,8 @@ export function GoalSection({
   const inputRef = useRef<HTMLInputElement>(null)
   const errorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Collapsible if multiple goals OR currently collapsed (allows re-expand)
-  const isCollapsible = goals.length > 1 || !expanded
+  // Collapsible if there are any goals
+  const isCollapsible = goals.length > 0
 
   // Sync expanded state when display mode changes
   useEffect(() => {
