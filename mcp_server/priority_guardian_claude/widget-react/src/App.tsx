@@ -605,25 +605,25 @@ function App() {
           <EmptyState />
         )}
 
+        {/* Calendar connection status (inline, no actions) */}
+        <CalendarConnectionMinimal connected={dashboardData?.google_connected ?? false} />
+
+        {/* Expand to fullscreen button */}
+        <ExpandButton onClick={handleExpandToFullscreen} />
+
         {/* Hint: CRUD requires full dashboard */}
         {sortedPriorities.length > 0 && (
           <p style={{
             fontSize: '11px',
             color: 'var(--color-text-tertiary, #8c8c8c)',
             textAlign: 'center',
-            marginTop: '12px',
-            marginBottom: '4px',
+            marginTop: '8px',
+            marginBottom: '0',
             fontStyle: 'italic',
           }}>
             {t('openDashboardToEdit')}
           </p>
         )}
-
-        {/* Calendar connection status (inline, no actions) */}
-        <CalendarConnectionMinimal connected={dashboardData?.google_connected ?? false} />
-
-        {/* Expand to fullscreen button */}
-        <ExpandButton onClick={handleExpandToFullscreen} />
       </main>
     )
   }
