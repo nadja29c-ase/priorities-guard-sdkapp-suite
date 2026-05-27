@@ -42,6 +42,11 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
   tomorrow.setDate(tomorrow.getDate() + 1)
   const minDate = tomorrow.toISOString().split('T')[0]
 
+  // iOS detection — use text input instead of date to avoid native picker overflow
+  const isIOS = typeof window !== 'undefined' && /iPhone|iPad/i.test(navigator.userAgent)
+  const dateInputType = isIOS ? 'text' : 'date'
+  const datePlaceholder = isIOS ? 'YYYY-MM-DD' : undefined
+
   const handleNameNext = () => {
     if (name.trim()) {
       setError(null) // Clear stale error from previous steps
@@ -73,6 +78,11 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
       setError(t('deadlineRequired'))
       return false
     }
+    // On iOS with text input, validate date format
+    if (priorityType === 'deadline' && isIOS && deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+      setError('Please use YYYY-MM-DD format')
+      return false
+    }
     if (priorityType === 'flexible') {
       if (!weeklyHourTarget) {
         setError(t('weeklyHoursRequired'))
@@ -84,6 +94,11 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
       }
       if (!checkpointDate) {
         setError(t('checkpointRequired'))
+        return false
+      }
+      // On iOS with text input, validate date format
+      if (isIOS && checkpointDate && !/^\d{4}-\d{2}-\d{2}$/.test(checkpointDate)) {
+        setError('Please use YYYY-MM-DD format')
         return false
       }
       if (!initialGoalText.trim()) {
@@ -364,7 +379,8 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                 </label>
                 <input
                   id="priority-deadline"
-                  type="date"
+                  type={dateInputType}
+                  placeholder={datePlaceholder}
                   value={deadline}
                   onChange={(e) => {
                     setDeadline(e.target.value)
@@ -377,7 +393,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                     }
                   }}
                   disabled={isSubmitting}
-                  min={minDate}
+                  min={isIOS ? undefined : minDate}
                   style={inputStyle}
                 />
               </div>
@@ -418,14 +434,15 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                   </label>
                   <input
                     id="priority-checkpoint"
-                    type="date"
+                    type={dateInputType}
+                    placeholder={datePlaceholder}
                     value={checkpointDate}
                     onChange={(e) => {
                       setCheckpointDate(e.target.value)
                       if (error) setError(null)
                     }}
                     disabled={isSubmitting}
-                    min={minDate}
+                    min={isIOS ? undefined : minDate}
                     style={inputStyle}
                   />
                 </div>
