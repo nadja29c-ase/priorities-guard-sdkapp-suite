@@ -279,6 +279,8 @@ export function GoalItem({
             border: 'none',
             padding: 0,
             cursor: disabled ? 'not-allowed' : 'pointer',
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent',
           }}
           role="checkbox"
           aria-checked={displayedAchieved}
@@ -371,6 +373,8 @@ export function GoalItem({
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
                 aria-label={t('editItem', { name: goal.text })}
               >
@@ -391,6 +395,8 @@ export function GoalItem({
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
                 aria-label={t('deleteItemAction', { name: goal.text })}
               >

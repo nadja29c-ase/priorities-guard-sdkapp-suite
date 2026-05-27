@@ -276,6 +276,8 @@ export function DeliverableItem({
             border: displayedDone ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
             cursor: disabled ? 'not-allowed' : 'pointer',
             padding: 0,
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent',
           }}
           role="checkbox"
           aria-checked={displayedDone}
@@ -351,6 +353,8 @@ export function DeliverableItem({
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
                 aria-label={t('editItem', { name: deliverable.name })}
               >
@@ -371,6 +375,8 @@ export function DeliverableItem({
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
                 }}
                 aria-label={t('deleteItemAction', { name: deliverable.name })}
               >

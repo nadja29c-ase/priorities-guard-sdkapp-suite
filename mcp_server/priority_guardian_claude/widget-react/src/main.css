@@ -5,10 +5,18 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   width: 100%;
   margin: 0;
   padding: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+body,
+#root,
+main {
+  touch-action: pan-y;
 }
 
 body {
