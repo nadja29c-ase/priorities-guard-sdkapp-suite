@@ -103,8 +103,9 @@ function App() {
       }
 
       // Listen for display mode changes from host via context changes
+      // ctx is a partial update — only changed fields are present
       appInstance.onhostcontextchanged = (ctx) => {
-        if (ctx.displayMode) {
+        if (ctx.displayMode !== undefined) {
           setDisplayMode(ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline')
         }
       }
