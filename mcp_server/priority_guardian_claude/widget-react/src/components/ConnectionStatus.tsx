@@ -3,6 +3,18 @@ import type { App as McpApp } from '@modelcontextprotocol/ext-apps'
 import { extractClaudeStructuredContent } from '../utils'
 import { t } from '../i18n'
 
+// Timeout wrapper for callServerTool — detects stale sessions
+const TOOL_TIMEOUT_MS = 9000
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), ms)
+    ),
+  ])
+}
+
 interface ConnectionStatusProps {
   app: McpApp
   connected: boolean
@@ -35,10 +47,13 @@ export function ConnectionStatus({
     setError(null)
 
     try {
-      const result = await app.callServerTool({
-        name: 'connect_google_calendar',
-        arguments: {},
-      })
+      const result = await withTimeout(
+        app.callServerTool({
+          name: 'connect_google_calendar',
+          arguments: {},
+        }),
+        TOOL_TIMEOUT_MS
+      )
 
       const content = extractClaudeStructuredContent<{ data?: { connect_url?: string } }>(result)
       const connectUrl = content?.data?.connect_url
@@ -57,7 +72,11 @@ export function ConnectionStatus({
       }
     } catch (err) {
       console.error('Failed to initiate connection:', err)
-      setError(t('failedToConnect'))
+      if (err instanceof Error && err.message === 'timeout') {
+        setError(t('sessionExpiredRetry'))
+      } else {
+        setError(t('failedToConnect'))
+      }
     } finally {
       setIsConnecting(false)
     }
@@ -78,16 +97,23 @@ export function ConnectionStatus({
     setError(null)
 
     try {
-      await app.callServerTool({
-        name: 'disconnect_google_calendar',
-        arguments: { confirm: true },
-      })
+      await withTimeout(
+        app.callServerTool({
+          name: 'disconnect_google_calendar',
+          arguments: { confirm: true },
+        }),
+        TOOL_TIMEOUT_MS
+      )
       setShowDisconnectConfirm(false)
       onAwaitingOAuthChange(false)
       onRefresh()
     } catch (err) {
       console.error('Failed to disconnect:', err)
-      setError(t('failedToDisconnect'))
+      if (err instanceof Error && err.message === 'timeout') {
+        setError(t('sessionExpiredRetry'))
+      } else {
+        setError(t('failedToDisconnect'))
+      }
     } finally {
       setIsDisconnecting(false)
     }

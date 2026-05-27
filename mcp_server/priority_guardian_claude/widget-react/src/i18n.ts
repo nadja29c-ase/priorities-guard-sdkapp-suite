@@ -66,6 +66,9 @@ const messages = {
     failedToConnect: 'Failed to start connection. Please try again.',
     failedToDisconnect: 'Failed to disconnect. Please try again.',
     connectionNotAvailable: 'Connection not available',
+    sessionExpiredRetry: 'Session expired. Open a fresh Priority Guardian conversation to reconnect.',
+    widgetSessionExpired: 'This dashboard is from a previous session.',
+    widgetSessionExpiredHint: 'Start a new conversation with Priority Guardian to interact with your dashboard.',
 
     // Validation errors
     nameRequired: 'Name is required',
@@ -245,6 +248,9 @@ const messages = {
     failedToConnect: 'Verbindung konnte nicht hergestellt werden',
     failedToDisconnect: 'Verbindung konnte nicht getrennt werden',
     connectionNotAvailable: 'Verbindung nicht verfügbar',
+    sessionExpiredRetry: 'Sitzung abgelaufen. Starte ein neues Priority Guardian Gespräch, um dich erneut zu verbinden.',
+    widgetSessionExpired: 'Dieses Dashboard stammt aus einer früheren Sitzung.',
+    widgetSessionExpiredHint: 'Starte ein neues Gespräch mit Priority Guardian, um mit deinem Dashboard zu interagieren.',
 
     // Validation errors
     nameRequired: 'Name ist erforderlich',

@@ -44,6 +44,9 @@ function App() {
   // Display mode state
   const [displayMode, setDisplayMode] = useState<DisplayMode>('inline')
 
+  // Stale bridge detection — if onAppCreated never fires, widget is from old session
+  const [isBridgeStale, setIsBridgeStale] = useState(false)
+
   // App reference for CRUD operations
   const appRef = useRef<McpApp | null>(null)
 
@@ -117,6 +120,16 @@ function App() {
       appRef.current = app
     }
   }, [app])
+
+  // Stale bridge detection — if onAppCreated hasn't fired within 3s, session is stale
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!appRef.current) {
+        setIsBridgeStale(true)
+      }
+    }, 3000)
+    return () => clearTimeout(timeout)
+  }, [])
 
   // Sync locale on data changes
   useEffect(() => {
@@ -199,7 +212,7 @@ function App() {
     checkpoint_date?: string
     initial_goal_text?: string
   }) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({ name: 'add_priority', arguments: priorityData })
     const content = extractClaudeStructuredContent<{ data?: DashboardData }>(result)
@@ -212,7 +225,7 @@ function App() {
     updateDataFromResponse(content)
     backfillTimeAllocation()
     setIsAddingPriority(false)
-  }, [updateDataFromResponse, backfillTimeAllocation])
+  }, [isBridgeStale, updateDataFromResponse, backfillTimeAllocation])
 
   const handleUpdatePriority = useCallback(async (priorityId: string, updates: {
     name?: string
@@ -220,7 +233,7 @@ function App() {
     weekly_hour_target?: number
     checkpoint_date?: string
   }) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'update_priority',
@@ -239,10 +252,10 @@ function App() {
     updateDataFromResponse(content)
     backfillTimeAllocation()
     setEditingPriorityId(null)
-  }, [updateDataFromResponse, backfillTimeAllocation])
+  }, [isBridgeStale, updateDataFromResponse, backfillTimeAllocation])
 
   const handleDeletePriority = useCallback(async (priorityId: string) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'delete_priority',
@@ -261,12 +274,12 @@ function App() {
     updateDataFromResponse(content)
     backfillTimeAllocation()
     setEditingPriorityId((current) => current === priorityId ? null : current)
-  }, [updateDataFromResponse, backfillTimeAllocation])
+  }, [isBridgeStale, updateDataFromResponse, backfillTimeAllocation])
 
   // ============ Deliverable CRUD Operations ============
 
   const handleAddDeliverable = useCallback(async (priorityId: string, name: string) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'add_deliverable',
@@ -283,10 +296,10 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   const handleToggleDeliverable = useCallback(async (deliverableId: string, done: boolean) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'update_deliverable',
@@ -303,10 +316,10 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   const handleRenameDeliverable = useCallback(async (deliverableId: string, name: string) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'update_deliverable',
@@ -323,10 +336,10 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   const handleDeleteDeliverable = useCallback(async (deliverableId: string) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'delete_deliverable',
@@ -343,12 +356,12 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   // ============ Goal CRUD Operations ============
 
   const handleAddGoal = useCallback(async (priorityId: string, text: string) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'add_goal',
@@ -365,10 +378,10 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   const handleToggleGoal = useCallback(async (goalId: string, achieved: boolean) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'update_goal',
@@ -385,10 +398,10 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   const handleRenameGoal = useCallback(async (goalId: string, text: string) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'update_goal',
@@ -405,10 +418,10 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   const handleDeleteGoal = useCallback(async (goalId: string) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'delete_goal',
@@ -425,12 +438,12 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   // ============ Keyword Reassignment ============
 
   const handleKeywordChange = useCallback(async (priorityId: string, keyword: CalendarKeyword) => {
-    if (!appRef.current?.callServerTool) throw new Error('Tool calls not available')
+    if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
 
     const result = await appRef.current.callServerTool({
       name: 'update_priority',
@@ -447,11 +460,13 @@ function App() {
 
     lastCrudAtRef.current = Date.now()
     updateDataFromResponse(content)
-  }, [updateDataFromResponse])
+  }, [isBridgeStale, updateDataFromResponse])
 
   // ============ Display Mode Handlers ============
 
   const handleExpandToFullscreen = useCallback(async () => {
+    if (isBridgeStale) return
+
     const ua = appRef.current?.getHostContext()?.userAgent ?? ''
     const isMobile = /iPhone|iPad|iPod|Android/i.test(ua)
 
@@ -474,7 +489,7 @@ function App() {
       // On desktop: expand locally without requesting fullscreen from host
       setDisplayMode('fullscreen')
     }
-  }, [])
+  }, [isBridgeStale])
 
   const handleMinimizeToInline = useCallback(async () => {
     if (appRef.current?.requestDisplayMode) {
@@ -501,6 +516,26 @@ function App() {
         borderRadius: '12px',
       }}>
         {t('loading')}
+      </div>
+    )
+  }
+
+  // Stale session overlay — bridge never connected, widget is from previous session
+  if (isBridgeStale) {
+    return (
+      <div style={{
+        padding: '24px',
+        textAlign: 'center',
+        color: 'var(--color-text-secondary, #5c5c5c)',
+        fontSize: '13px',
+        lineHeight: '1.5',
+        background: 'var(--color-background-secondary, #f9f9f9)',
+        borderRadius: '12px',
+      }}>
+        <p style={{ marginBottom: '8px', fontWeight: 600 }}>
+          {t('widgetSessionExpired')}
+        </p>
+        <p style={{ margin: 0 }}>{t('widgetSessionExpiredHint')}</p>
       </div>
     )
   }
