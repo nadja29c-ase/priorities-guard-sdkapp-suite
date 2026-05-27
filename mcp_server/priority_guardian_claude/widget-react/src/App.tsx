@@ -530,6 +530,8 @@ function App() {
           borderRadius: '16px',
           padding: '16px',
           background: 'var(--color-background-secondary, #f9f9f9)',
+          touchAction: 'pan-y',
+          overscrollBehavior: 'contain',
           ...(isInline ? {} : { maxWidth: '672px', marginLeft: 'auto', marginRight: 'auto' }),
         }}
       >
@@ -571,6 +573,8 @@ function App() {
           background: 'var(--color-background-secondary, #f9f9f9)',
           borderRadius: '16px',
           padding: '16px',
+          touchAction: 'pan-y',
+          overscrollBehavior: 'contain',
         }}
       >
         {loadError && (
@@ -657,6 +661,8 @@ function App() {
         marginLeft: 'auto',
         marginRight: 'auto',
         background: 'var(--color-background-secondary, #f9f9f9)',
+        touchAction: 'pan-y',
+        overscrollBehavior: 'contain',
       }}
     >
       {/* Fullscreen header with minimize button */}
