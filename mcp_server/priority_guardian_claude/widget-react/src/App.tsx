@@ -466,9 +466,23 @@ function App() {
 
   const handleExpandToFullscreen = useCallback(async () => {
     if (isBridgeStale) return
-    // On both desktop and mobile: expand locally without requesting fullscreen from host.
-    // Fullscreen host mode is not needed — the full dashboard renders inline.
+    // Always expand locally first for immediate UI response
     setDisplayMode('fullscreen')
+    // On mobile only: also request host fullscreen if available.
+    // On desktop: local expand is sufficient and preferred (avoids unnecessary host fullscreen).
+    // This specifically targets iOS scroll trapping — host fullscreen gives the widget
+    // its own scroll context separate from the chat page.
+    if (appRef.current?.requestDisplayMode) {
+      const ctx = appRef.current.getHostContext()
+      const isMobile = ctx?.platform === 'mobile'
+      if (isMobile && ctx?.availableDisplayModes?.includes('fullscreen')) {
+        try {
+          await appRef.current.requestDisplayMode({ mode: 'fullscreen' })
+        } catch {
+          // Silent — local fullscreen already set above
+        }
+      }
+    }
   }, [isBridgeStale])
 
   const handleMinimizeToInline = useCallback(async () => {
