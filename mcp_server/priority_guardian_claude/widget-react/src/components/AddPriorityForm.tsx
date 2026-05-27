@@ -42,10 +42,14 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
   tomorrow.setDate(tomorrow.getDate() + 1)
   const minDate = tomorrow.toISOString().split('T')[0]
 
-  // iOS detection — use text input instead of date to avoid native picker overflow
-  const isIOS = typeof window !== 'undefined' && /iPhone|iPad/i.test(navigator.userAgent)
-  const dateInputType = isIOS ? 'text' : 'date'
-  const datePlaceholder = isIOS ? 'YYYY-MM-DD' : undefined
+  // Detect touch-only device (covers iOS and Android)
+  // navigator.userAgent is unreliable in sandboxed iframes — use touch detection instead
+  const isTouchDevice = typeof window !== 'undefined' &&
+    window.matchMedia('(hover: none) and (pointer: coarse)').matches
+
+  // Use text input on touch devices to avoid native date picker overflow
+  const dateInputType = isTouchDevice ? 'text' : 'date'
+  const datePlaceholder = isTouchDevice ? 'YYYY-MM-DD' : undefined
 
   const handleNameNext = () => {
     if (name.trim()) {
@@ -79,7 +83,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
       return false
     }
     // On iOS with text input, validate date format
-    if (priorityType === 'deadline' && isIOS && deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+    if (priorityType === 'deadline' && isTouchDevice && deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
       setError('Please use YYYY-MM-DD format')
       return false
     }
@@ -97,7 +101,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
         return false
       }
       // On iOS with text input, validate date format
-      if (isIOS && checkpointDate && !/^\d{4}-\d{2}-\d{2}$/.test(checkpointDate)) {
+      if (isTouchDevice && checkpointDate && !/^\d{4}-\d{2}-\d{2}$/.test(checkpointDate)) {
         setError('Please use YYYY-MM-DD format')
         return false
       }
@@ -393,7 +397,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                     }
                   }}
                   disabled={isSubmitting}
-                  min={isIOS ? undefined : minDate}
+                  min={isTouchDevice ? undefined : minDate}
                   style={inputStyle}
                 />
               </div>
@@ -442,7 +446,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
                       if (error) setError(null)
                     }}
                     disabled={isSubmitting}
-                    min={isIOS ? undefined : minDate}
+                    min={isTouchDevice ? undefined : minDate}
                     style={inputStyle}
                   />
                 </div>
