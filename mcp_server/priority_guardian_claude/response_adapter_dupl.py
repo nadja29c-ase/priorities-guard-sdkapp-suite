@@ -8,7 +8,7 @@ from mcp import types as mcp_types
 from mcp_server.priority_guardian_claude.handlers.resources_dupl import WIDGET_APP_DOMAIN
 
 # Widget resource URI (matches resources_dupl.py)
-WIDGET_URI = "ui://pg-claude/dashboard-v1.html"
+WIDGET_URI = "ui://pg-claude/dashboard-v2.html"
 
 
 def adapt_tool_result(result: mcp_types.CallToolResult) -> mcp_types.CallToolResult:
