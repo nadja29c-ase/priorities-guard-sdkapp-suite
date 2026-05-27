@@ -466,29 +466,9 @@ function App() {
 
   const handleExpandToFullscreen = useCallback(async () => {
     if (isBridgeStale) return
-
-    const ua = appRef.current?.getHostContext()?.userAgent ?? ''
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua)
-
-    if (isMobile && appRef.current?.requestDisplayMode) {
-      // On mobile: request actual fullscreen from host
-      try {
-        const ctx = appRef.current.getHostContext()
-        if (ctx?.availableDisplayModes?.includes('fullscreen')) {
-          const result = await appRef.current.requestDisplayMode({ mode: 'fullscreen' })
-          setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
-        } else {
-          // Fullscreen not available on this mobile host — expand locally
-          setDisplayMode('fullscreen')
-        }
-      } catch {
-        // Fallback to local expand
-        setDisplayMode('fullscreen')
-      }
-    } else {
-      // On desktop: expand locally without requesting fullscreen from host
-      setDisplayMode('fullscreen')
-    }
+    // On both desktop and mobile: expand locally without requesting fullscreen from host.
+    // Fullscreen host mode is not needed — the full dashboard renders inline.
+    setDisplayMode('fullscreen')
   }, [isBridgeStale])
 
   const handleMinimizeToInline = useCallback(async () => {
