@@ -132,6 +132,8 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
   // Common input style
   const inputStyle: React.CSSProperties = {
     width: '100%',
+    boxSizing: 'border-box',          // Prevents iOS/Android width overflow
+    WebkitAppearance: 'none',         // Prevents native date picker chrome
     fontSize: '14px',
     color: 'var(--color-text-primary, #0d0d0d)',
     background: 'var(--color-background-primary, #fff)',
