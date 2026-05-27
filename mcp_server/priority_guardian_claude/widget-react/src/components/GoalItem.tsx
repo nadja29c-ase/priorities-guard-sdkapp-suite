@@ -11,6 +11,9 @@ interface GoalItemProps {
   disabled?: boolean
 }
 
+// Touch device detection — icons always visible on mobile (no hover)
+const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
+
 /**
  * GoalItem - V7 style with edit/delete parity to DeliverableItem
  * - 18px circular checkbox (green bg-success-solid when achieved)
@@ -352,7 +355,7 @@ export function GoalItem({
               alignItems: 'center',
               gap: '4px',
               marginTop: '2px',
-              opacity: isGroupHovered ? 1 : 0,
+              opacity: isGroupHovered ? 1 : (isTouchDevice ? 0.4 : 0),
               transition: 'opacity 0.15s',
             }}
           >

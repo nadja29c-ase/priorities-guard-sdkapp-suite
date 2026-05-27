@@ -11,6 +11,9 @@ interface DeliverableItemProps {
   disabled?: boolean
 }
 
+// Touch device detection — icons always visible on mobile (no hover)
+const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches
+
 export function DeliverableItem({
   deliverable,
   isInline = false,
@@ -332,7 +335,7 @@ export function DeliverableItem({
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              opacity: isGroupHovered ? 1 : 0,
+              opacity: isGroupHovered ? 1 : (isTouchDevice ? 0.4 : 0),
               transition: 'opacity 0.15s',
             }}
           >
