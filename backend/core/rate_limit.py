@@ -165,7 +165,10 @@ async def rate_limit_revoke(request: Request, client_id: str) -> None:
 
 async def rate_limit_register(request: Request) -> None:
     """
-    Rate limit /register endpoint: 10 requests per minute per IP.
+    Rate limit /register endpoint: 30 requests per minute per IP.
+
+    Claude.ai fires multiple parallel PKCE flows on reconnect (known platform
+    behavior). 10/min is insufficient — raised to 30/min.
 
     Args:
         request: FastAPI request object
@@ -175,4 +178,4 @@ async def rate_limit_register(request: Request) -> None:
     """
     ip = get_client_ip(request)
     key = f"ratelimit:oauth:register:{ip}"
-    await check_rate_limit(key, limit=10, window=60, request=request)
+    await check_rate_limit(key, limit=30, window=60, request=request)
