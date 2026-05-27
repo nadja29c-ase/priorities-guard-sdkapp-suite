@@ -6,7 +6,8 @@ import { t, getRawLocale } from '../i18n'
 interface TimeAllocationBarProps {
   timeAllocation: TimeAllocation | undefined
   activeKeywords: CalendarKeyword[]  // Keywords that have active priorities
-  // onRefresh and isRefreshing removed for display-only mode
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }
 
 /**
@@ -84,7 +85,7 @@ function buildAriaLabel(
   return t('timeAllocationPrefix') + parts.join(', ')
 }
 
-export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAllocationBarProps) {
+export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, isRefreshing }: TimeAllocationBarProps) {
   // Don't render if timeAllocation is absent
   if (!timeAllocation) {
     return null
@@ -167,9 +168,48 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords }: TimeAlloca
         >
           {t('timeAllocationHeading')}
         </span>
-        <span style={{ fontSize: '14px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-primary, #0d0d0d)' }}>
-          {formatHours(totalTrackedHours)}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '14px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-primary, #0d0d0d)' }}>
+            {formatHours(totalTrackedHours)}
+          </span>
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              style={{
+                padding: '4px',
+                borderRadius: '9999px',
+                background: 'none',
+                border: 'none',
+                cursor: isRefreshing ? 'not-allowed' : 'pointer',
+                opacity: isRefreshing ? 0.4 : 1,
+                color: 'var(--color-text-tertiary, #8c8c8c)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title={t('refreshCalendar')}
+              aria-label={t('refreshCalendar')}
+            >
+              <svg
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                }}
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <path d="M2.5 8a5.5 5.5 0 019.3-3.9M13.5 8a5.5 5.5 0 01-9.3 3.9" />
+                <path d="M12 1v3.5h-3.5M4 15v-3.5h3.5" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Date range */}

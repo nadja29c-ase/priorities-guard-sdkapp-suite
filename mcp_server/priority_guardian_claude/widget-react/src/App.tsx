@@ -592,6 +592,8 @@ function App() {
           <TimeAllocationBar
             timeAllocation={timeAllocation}
             activeKeywords={activeKeywords}
+            onRefresh={refreshData}
+            isRefreshing={isRefreshing}
           />
         )}
 
@@ -682,6 +684,8 @@ function App() {
         <TimeAllocationBar
           timeAllocation={timeAllocation}
           activeKeywords={activeKeywords}
+          onRefresh={refreshData}
+          isRefreshing={isRefreshing}
         />
       )}
 
