@@ -137,6 +137,55 @@ class RequestLoggingMiddleware:
                 logger.info("http.request", **log_data)
 
 
+class OriginValidationMiddleware:
+    """
+    ASGI middleware to validate Origin header on /mcp requests.
+    Anthropic submission requirement per review-criteria checklist.
+    Only applied to /mcp path — discovery and OAuth proxy routes unaffected.
+    No Origin header = allowed (server-to-server, Claude's MCP client uses python-httpx which doesn't send Origin).
+    Unknown Origin = 403.
+    """
+
+    def __init__(self, app, allowed_origins: list[str]):
+        self.app = app
+        self._allowed_origins = set(allowed_origins)
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope["type"] == "http"
+            and scope.get("method") in ("GET", "POST", "DELETE")
+            and scope.get("path") == "/mcp"
+        ):
+            origin = None
+            for name, value in scope.get("headers", []):
+                if name == b"origin":
+                    origin = value.decode("utf-8", errors="replace")
+                    break
+
+            if origin is not None and origin not in self._allowed_origins:
+                logger.warning(
+                    "origin.validation.rejected",
+                    origin=origin,
+                    path=scope.get("path"),
+                )
+                body = b'{"error": "forbidden", "error_description": "Origin not allowed"}'
+                await send({
+                    "type": "http.response.start",
+                    "status": 403,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"cache-control", b"no-store"),
+                    ],
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": body,
+                })
+                return
+
+        await self.app(scope, receive, send)
+
+
 class HeadMcpMiddleware:
     """
     ASGI middleware to handle HEAD /mcp requests.
@@ -634,9 +683,11 @@ def create_app():
     # Order matters: outermost runs first at request time
     # 1. RequestLoggingMiddleware (outermost) - logs all requests
     # 2. HeadMcpMiddleware - intercepts HEAD /mcp for reachability probes
-    # 3. LifespanMiddleware - handles shutdown cleanup
-    # 4. MCPContentTypeAndAcceptFixMiddleware - fixes headers, captures auth
-    # 5. fastmcp_app (innermost) - handles MCP protocol
+    # 3. OriginValidationMiddleware - validates Origin header on /mcp (Anthropic requirement)
+    # 4. LifespanMiddleware - handles shutdown cleanup
+    # 5. BearerAuthMiddleware - enforces Bearer token on /mcp
+    # 6. MCPContentTypeAndAcceptFixMiddleware - fixes headers, captures auth
+    # 7. fastmcp_app (innermost) - handles MCP protocol
 
     # NOTE: Unlike Clarity, PG does not use Starlette's CORSMiddleware.
     # PG MCP server is not accessed directly by browsers - Claude proxies
@@ -655,7 +706,8 @@ def create_app():
     content_type_app = MCPContentTypeAndAcceptFixMiddleware(fastmcp_app, auth_header_var)
     bearer_auth_app = BearerAuthMiddleware(content_type_app, WWW_AUTHENTICATE_VALUE)
     lifespan_app = LifespanMiddleware(bearer_auth_app, _cleanup_on_shutdown)
-    head_mcp_app = HeadMcpMiddleware(lifespan_app, allowed_origins=allowed_origins)
+    origin_validation_app = OriginValidationMiddleware(lifespan_app, allowed_origins=allowed_origins)
+    head_mcp_app = HeadMcpMiddleware(origin_validation_app, allowed_origins=allowed_origins)
     return RequestLoggingMiddleware(head_mcp_app, service_name="priority-guardian-claude-mcp")
 
 
