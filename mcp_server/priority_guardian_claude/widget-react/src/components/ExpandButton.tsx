@@ -17,7 +17,7 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
       style={{
         width: '100%',
         marginTop: '16px',
-        padding: '10px 0',
+        padding: '16px 0',
         borderRadius: '12px',
         fontSize: '12px',
         fontWeight: 500,

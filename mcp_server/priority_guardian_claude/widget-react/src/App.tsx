@@ -47,6 +47,9 @@ function App() {
   // Stale bridge detection — if onAppCreated never fires, widget is from old session
   const [isBridgeStale, setIsBridgeStale] = useState(false)
 
+  // Safe area insets for mobile fullscreen (notch/home indicator)
+  const [safeAreaBottom, setSafeAreaBottom] = useState(0)
+
   // App reference for CRUD operations
   const appRef = useRef<McpApp | null>(null)
 
@@ -66,6 +69,12 @@ function App() {
       const hostContext = appInstance.getHostContext()
       if (hostContext?.displayMode === 'fullscreen') {
         setDisplayMode('fullscreen')
+      }
+
+      // Read initial safe area insets for mobile fullscreen
+      const safeInsets = hostContext?.safeAreaInsets
+      if (safeInsets?.bottom) {
+        setSafeAreaBottom(safeInsets.bottom)
       }
 
       // Register handler for incoming tool results
@@ -107,6 +116,9 @@ function App() {
       appInstance.onhostcontextchanged = (ctx) => {
         if (ctx.displayMode !== undefined) {
           setDisplayMode(ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline')
+        }
+        if (ctx.safeAreaInsets?.bottom !== undefined) {
+          setSafeAreaBottom(ctx.safeAreaInsets.bottom)
         }
       }
     }, []),
@@ -672,6 +684,7 @@ function App() {
       style={{
         borderRadius: '16px',
         padding: '16px',
+        paddingBottom: safeAreaBottom > 0 ? `${16 + safeAreaBottom}px` : '16px',
         maxWidth: '672px',
         marginLeft: 'auto',
         marginRight: 'auto',

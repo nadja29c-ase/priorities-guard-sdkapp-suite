@@ -252,6 +252,139 @@ Actionable error messages — validate inputs and return actionable messages, no
 Scalable infrastructure and monitoring
 4I. First-Party API Requirement
 Your MCP server must call your own first-party APIs or APIs you legitimately proxy. The MCP server domain should match your service. Reviewers verify this during the functional review. This applies to all tools — a server that wraps arbitrary third-party APIs without owning or proxying them will fail review.
+4K. MCP Apps Design Guidelines (Interactive Connectors)
+Source: https://claude.com/docs/connectors/building/mcp-apps/design-guidelines
+Required per policy §3H: developers must follow design guidelines Anthropic publishes.
+
+Inline card constraints (mandatory):
+- Max height: 500px — auto-fit content height, no nested scrolling
+- Max actions: 2, placed at the bottom of the card
+- Max data points: 4–5
+- No drill-ins, breadcrumbs, or multiple views
+- No menus or popovers — use visible controls (segmented buttons, toggles, inline options)
+- Touch targets minimum 44×44pt on mobile
+- WCAG AA accessibility required: maintain high contrast (AA minimum), support keyboard navigation, provide text alternatives for visual content, test with assistive technologies — "Your app must be usable by everyone" (Anthropic design guidelines)
+
+Fullscreen constraints (mandatory):
+- No floating panels — use collapsible sidebars, tabs, or pagination
+- App provides its own fullscreen button; close button appears in native header
+- Composer always visible — design UX to work with it
+
+Mobile constraints:
+- Fullscreen not yet available on mobile — inline only (coming soon)
+- Renders in WKWebView (iOS) / WebView (Android), not sandboxed iframe
+- Connectors must be added via web or desktop before appearing on mobile
+- Honor safeAreaInsets for notches and home indicator
+
+Styling requirements (mandatory):
+- Use host CSS variable tokens for ALL structural elements: backgrounds, text, borders, icons
+- NEVER hardcode colors for structural UI — use var(--color-*) tokens
+- Brand accent colors are permitted for identity, but core UI must use host palette
+- All views must support both light and dark themes — tokens adapt automatically
+- Test both light and dark mode before submitting
+
+CSP declaration (mandatory for MCP Apps):
+Declare external origins per ui:// resource via _meta.ui.csp:
+{
+  "_meta": {
+    "ui": {
+      "csp": {
+        "connectDomains": ["https://api.example.com"],
+        "resourceDomains": ["https://cdn.example.com"]
+      }
+    }
+  }
+}
+By default, all external origins are blocked. connectDomains = API endpoints the widget calls. resourceDomains = CDN/asset origins. frameDomains (third-party iframes) is currently restricted pending security review.
+
+Display modes:
+Declare supported modes via appCapabilities.availableDisplayModes in ui/initialize. Modes: inline, fullscreen, pip. Host responds with supported modes. Request a switch with ui/request-display-mode.
+
+Key host CSS tokens (full table at design guidelines URL above):
+Backgrounds: --color-background-primary, --color-background-secondary, --color-background-tertiary
+Text: --color-text-primary, --color-text-secondary, --color-text-tertiary
+Borders: --color-border-primary, --color-border-secondary, --color-border-tertiary
+Status: --color-background-info/danger/success/warning, --color-text-info/danger/success/warning
+Typography: --font-sans, --font-text-sm-size (14px), --font-text-md-size (16px)
+Radius: --border-radius-sm (6px), --border-radius-md (8px), --border-radius-xl (12px)
+
+PG widget pre-submission checklist (MCP Apps specific):
+[ ] All structural colors use var(--color-*) tokens with hex fallbacks
+[ ] Widget tested in both light and dark mode
+[ ] _meta.ui.csp declared on ui:// resource (connectDomains, resourceDomains)
+[ ] Inline card ≤500px, ≤2 actions, no popovers, no nested scroll
+[ ] All touch targets ≥44×44pt
+[ ] safeAreaInsets honored for mobile layout
+[ ] html, body { background: transparent; margin: 0; } — no opaque body background
+[ ] <meta name="color-scheme" content="light dark" /> in document head
+[ ] prefersBorder: false set in _meta.ui (removes host card border)
+[ ] openLink() only called from user gesture handlers (not programmatically)
+[ ] Allowed link URIs declared in submission form for all openLink() destinations
+[ ] Widget handles multiple instances gracefully (BroadcastChannel supersession if stateful dashboard)
+
+4L. External Links Behavior (MCP Apps)
+Source: https://claude.com/docs/connectors/building/mcp-apps/external-links
+
+Default behavior: ui/open-link always shows a confirmation modal before navigating. Directory connectors can allowlist destinations to skip the modal.
+
+Allowlisting (declare in submission form Allowed link URIs field):
+- HTTPS origin format: https://example.com (exact hostname match, no subdomains implied)
+- Custom URI scheme format: example-app or example-app:
+- Entries must be URLs/schemes your organization owns
+- Generic schemes (http, file, mailto, javascript, etc.) are rejected
+
+User-activation requirement (hard requirement):
+ui/open-link MUST be triggered by a real user gesture (button click). Programmatic calls or timer-triggered calls always show the confirmation modal regardless of allowlist. Design your app so openLink is always in an event handler.
+
+Reserved/rejected URI schemes (full list from official docs):
+http, https, file, data, javascript, blob, mailto, tel, sms, intent, android-app, browser-extension schemes, Windows shell schemes (search-ms, shell). Any entry matching these is rejected during review.
+
+PG status: compliant — ConnectionStatus.tsx triggers openLink only on button click user gesture.
+
+4M. Widget Instance Supersession (MCP Apps)
+Source: https://claude.com/docs/connectors/building/mcp-apps/instance-supersession
+
+Each time Claude calls a tool that renders an MCP App, a new iframe is mounted. There is no host API to unmount earlier instances. If the tool is called multiple times in a conversation, multiple live widget copies exist simultaneously, each independently able to push model-context updates and messages.
+
+For stateful single-instance widgets (dashboards, carts): implement BroadcastChannel-based supersession — older instances detect a newer sibling and disable themselves (grey out UI, disable buttons, stop sending model-context updates).
+
+Pattern: server stamps each tool result with an election key (createdAt + seq) in structuredContent. Widget reads key via toolresult event, broadcasts on BroadcastChannel. Older instances compare keys and mark themselves superseded.
+
+PG status: get_priorities, render_weekly_report, create_priority can all be called multiple times. PG does not currently implement instance supersession. Multiple live dashboard instances will coexist. This is not a submission blocker but is a known UX degradation. Track as post-submission improvement.
+
+Implementation details (from official docs):
+- Election key MUST use server wall-clock time (createdAt) — NOT client-side Date.now(). Client mount time does not reflect tool-call order; stored conversations remount widgets as they scroll into view.
+- seq should be monotonic counter or derived from durable state (database row ID, version number)
+- Channel scope: without fixed ui.domain, BroadcastChannel is scoped per-conversation automatically. With fixed ui.domain, scope widens — include a server-minted conversation scope key to prevent cross-conversation interference.
+- localStorage caching: usable for remount optimization on web; iOS WKWebView returns undefined for localStorage — do not depend on it.
+
+4N. Transparency and Theming (MCP Apps)
+Source: https://claude.com/docs/connectors/building/mcp-apps/transparent-theming
+
+For widgets to blend with Claude's conversation UI (strongly recommended for directory apps):
+
+Required CSS:
+  html, body { margin: 0; background: transparent; }
+  (any opaque background hides the chat surface)
+
+Required HTML head tag:
+  <meta name="color-scheme" content="light dark" />
+  (without this, browser adds opaque canvas backdrop in dark mode; light-dark() CSS values won't resolve)
+
+Recommended resource meta:
+  _meta.ui.prefersBorder: false — removes host card border; Claude web defaults to borderless but other hosts differ; explicit keeps app portable
+
+Host font loading (optional but expected):
+  Add https://assets.claude.ai to CSP resourceDomains to enable Anthropic Sans loading via applyHostFonts()
+  _meta.ui.csp: { resourceDomains: ["https://assets.claude.ai"] }
+
+SDK helpers (apply in onhostcontextchanged and on connect):
+  applyDocumentTheme(theme) — sets <html data-theme> and root color-scheme
+  applyHostStyleVariables(variables) — writes all style tokens onto :root as CSS custom properties
+  applyHostFonts(fontCss) — injects @font-face rules once
+
+PG status: uses useHostStyles(app) hook which calls applyHostStyleVariables. color-scheme meta tag status: verify in built HTML. prefersBorder: false — not currently set in resources_dupl.py. Background transparency: verify html/body CSS in main.css.
+
 4J. Token Efficiency Response size should be reasonable for the task (~150k character ceiling is a hard limit, but reviewers will reject responses far below this if they're unnecessarily verbose)
 Claude Code: Max 25,000 tokens per tool result (configurable)
 Do not return full database dumps when summaries were requested

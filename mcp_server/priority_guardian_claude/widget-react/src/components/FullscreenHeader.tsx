@@ -37,7 +37,7 @@ export function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
         onMouseLeave={() => setIsHovered(false)}
         style={{
           fontSize: '12px',
-          padding: '4px 10px',
+          padding: '16px 10px',
           borderRadius: '8px',
           transition: 'background 0.15s',
           background: isHovered ? 'var(--color-background-secondary, rgba(0,0,0,0.05))' : 'transparent',

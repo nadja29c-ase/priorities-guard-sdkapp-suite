@@ -259,7 +259,7 @@ export function DeliverableItem({
         onMouseEnter={() => setIsGroupHovered(true)}
         onMouseLeave={() => setIsGroupHovered(false)}
       >
-        {/* Checkbox */}
+        {/* Checkbox — 44pt tap target with negative margin to prevent layout shift */}
         <button
           type="button"
           onClick={handleToggle}
@@ -275,7 +275,9 @@ export function DeliverableItem({
             background: displayedDone ? 'var(--color-text-tertiary, #8c8c8c)' : 'transparent',
             border: displayedDone ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            padding: 0,
+            padding: '14px',
+            margin: '-14px',
+            boxSizing: 'content-box',
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent',
           }}
@@ -349,6 +351,11 @@ export function DeliverableItem({
                 onMouseLeave={() => setIsHoveredEdit(false)}
                 style={{
                   padding: '4px',
+                  minWidth: '44px',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #8c8c8c)',
                   background: 'none',
                   border: 'none',
@@ -371,6 +378,11 @@ export function DeliverableItem({
                 onMouseLeave={() => setIsHoveredDelete(false)}
                 style={{
                   padding: '4px',
+                  minWidth: '44px',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #8c8c8c)',
                   background: 'none',
                   border: 'none',

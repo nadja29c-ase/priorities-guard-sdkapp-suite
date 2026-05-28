@@ -179,6 +179,8 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
               disabled={isRefreshing}
               style={{
                 padding: '4px',
+                minWidth: '44px',
+                minHeight: '44px',
                 borderRadius: '9999px',
                 background: 'none',
                 border: 'none',

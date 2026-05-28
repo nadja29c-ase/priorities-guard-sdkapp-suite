@@ -267,7 +267,7 @@ export function GoalItem({
         onMouseEnter={() => setIsGroupHovered(true)}
         onMouseLeave={() => setIsGroupHovered(false)}
       >
-        {/* Circular checkbox - 18px diameter, green when achieved */}
+        {/* Circular checkbox - 18px diameter, green when achieved — 44pt tap target with negative margin */}
         <button
           type="button"
           onClick={handleToggle}
@@ -277,7 +277,9 @@ export function GoalItem({
             flexShrink: 0,
             background: 'none',
             border: 'none',
-            padding: 0,
+            padding: '13px',
+            margin: '-13px',
+            boxSizing: 'content-box',
             cursor: disabled ? 'not-allowed' : 'pointer',
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent',
@@ -369,6 +371,11 @@ export function GoalItem({
                 onMouseLeave={() => setIsHoveredEdit(false)}
                 style={{
                   padding: '4px',
+                  minWidth: '44px',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #8c8c8c)',
                   background: 'none',
                   border: 'none',
@@ -391,6 +398,11 @@ export function GoalItem({
                 onMouseLeave={() => setIsHoveredDelete(false)}
                 style={{
                   padding: '4px',
+                  minWidth: '44px',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #8c8c8c)',
                   background: 'none',
                   border: 'none',

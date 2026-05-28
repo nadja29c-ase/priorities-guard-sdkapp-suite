@@ -20,8 +20,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const [isFocused, setIsFocused] = useState(false)
 
     const sizeStyles: Record<ButtonSize, CSSProperties> = {
-      sm: { padding: '6px 12px', fontSize: '12px' },
-      md: { padding: '8px 16px', fontSize: '14px' },
+      sm: { padding: '16px 12px', fontSize: '12px' },
+      md: { padding: '15px 16px', fontSize: '14px' },
     }
 
     const colorStyles: Record<ButtonColor, Record<ButtonVariant, { base: CSSProperties; hover: CSSProperties }>> = {
