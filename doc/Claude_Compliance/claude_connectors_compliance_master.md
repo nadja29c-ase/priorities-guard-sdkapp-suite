@@ -1,7 +1,6 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: May 2026 Sources verified against:
-
-Anthropic Software Directory Policy: https://support.claude.com/en/articles/13145358-anthropic-software-directory-policy (updated yesterday)
+Last updated: May 2026 — Sources verified against live Anthropic documentation
+Anthropic Software Directory Policy last updated: April 15, 2026
 Submission guide: https://claude.com/docs/connectors/building/submission
 Pre-submission checklist: https://claude.com/docs/connectors/building/review-criteria
 Authentication reference: https://claude.com/docs/connectors/building/authentication
@@ -33,7 +32,7 @@ Submission forms:
 Remote MCPs (including MCP Apps): http://clau.de/mcp-directory-submission
 Desktop extensions (MCPB): http://clau.de/desktop-extention-submission
 
-Review times vary. Anthropic reviews submissions manually and cannot promise to accept or respond to every submission individually. Do not assume a fixed timeline.
+Review times vary with queue volume. Anthropic reviews submissions manually and cannot promise to accept or respond to every submission individually. Do not assume a fixed timeline. A self-serve status dashboard is rolling out in Claude.ai — until then you may not receive proactive notification on every status change. Email mcp-review@anthropic.com for escalations.
 
 
 3. Technical Limits
@@ -213,6 +212,8 @@ For servers behind firewalls, allowlist Anthropic's outbound IP range: 160.79.10
 Required for: Claude.ai and Claude Desktop
 Not required for: Claude Code (connects directly from user's machine)
 IP allowlisting alone is not recommended as a security measure — use OAuth 2.1
+
+> ⚠️ NEW — Origin-header validation: Your MCP server must also validate the `Origin` header on incoming requests. This is listed as a technical requirement in the submission form policy checklist alongside OAuth, HTTPS, and annotations. Servers that accept requests without validating the `Origin` header fail the security review.
 4F. Documentation
 Comprehensive documentation required — published at a stable HTTPS URL before your publish date (a blog post or help-center article is sufficient; can share privately with Anthropic during review).
 
@@ -249,8 +250,9 @@ All features fully implemented and tested
 Proper error handling — every tool must return a successful response with valid parameters; generic errors ("Internal Server Error" with no detail) fail review
 Actionable error messages — validate inputs and return actionable messages, not silent failures
 Scalable infrastructure and monitoring
-4H. Token Efficiency
-Claude.ai/Desktop: Response size should be reasonable for the task (~150k character ceiling is a hard limit, but reviewers will reject responses far below this if they're unnecessarily verbose)
+4I. First-Party API Requirement
+Your MCP server must call your own first-party APIs or APIs you legitimately proxy. The MCP server domain should match your service. Reviewers verify this during the functional review. This applies to all tools — a server that wraps arbitrary third-party APIs without owning or proxying them will fail review.
+4J. Token Efficiency Response size should be reasonable for the task (~150k character ceiling is a hard limit, but reviewers will reject responses far below this if they're unnecessarily verbose)
 Claude Code: Max 25,000 tokens per tool result (configurable)
 Do not return full database dumps when summaries were requested
 When possible, give users options to exclude unnecessary text
@@ -267,9 +269,9 @@ Documentation & support — links to docs, privacy policy, support channel
 Test account — credentials with step-by-step setup instructions (fully populated, no MFA required)
 Launch readiness — GA date, confirmation of which surfaces tested (Claude.ai, Desktop, etc.)
 Branding — server logo (URL or SVG upload), favicon verification
-For MCP Apps — screenshots mandatory for directory listing. Requirements: 3–5 PNG screenshots, at least 1000px wide, cropped to the app response area only (not full browser), each paired with the prompt text that produced it
+For MCP Apps — screenshots mandatory for directory listing. Requirements: 3–5 PNG screenshots, at least 1000px wide, cropped to the app response area only — do NOT include the prompt in the image. Provide the prompt text separately for each screenshot.
 Allowed link URIs — if connector uses ui/open-link, declare allowed HTTPS origins and custom URI schemes (declared destinations open without confirmation prompt; anything else still prompts user)
-Policy & requirements checklists — confirming compliance with directory policy, technical requirements, documentation, and testing standards
+Policy & requirements checklists — confirming compliance with directory policy, technical requirements (OAuth, HTTPS, Origin-header validation, annotations), documentation, and testing standards
 Optional: Skills & Plugins — if submitting a related Agent Skill alongside the server
 
 
@@ -380,7 +382,7 @@ Claude Code loopback URIs registered (port-agnostic matching for localhost and 1
 Server returns 401 with WWW-Authenticate header for unauthenticated requests
 Server returns invalid_grant (not custom codes) when refresh token is invalid
 HTTPS/TLS with valid certificates
-CORS configured for Claude client origins
+Origin header validation — server validates Origin header on all incoming requests
 Anthropic IP range 160.79.104.0/21 allowlisted (if behind firewall)
 Token-efficient responses — no verbose dumps; users given options to exclude unnecessary text
 Error handling — actionable messages, not generic errors

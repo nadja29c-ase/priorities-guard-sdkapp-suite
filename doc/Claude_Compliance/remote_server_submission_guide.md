@@ -392,9 +392,9 @@ Screenshots are mandatory for MCP App directory listing:
 
 At least 1000px wide
 
-Cropped to the app response area only (not full browser window)
+Cropped to the app response area only (do NOT include the prompt in the image)
 
-Each screenshot paired with the prompt text that produced it
+Prompt text provided separately for each screenshot
 
 
 
@@ -726,7 +726,7 @@ MCP Protocol: Model Context Protocol Documentation
 Getting Started Guide: Custom Connectors Using Remote MCP
 
 Pre-Submission Checklist
-[ ] All tools have safety annotations (readOnlyHint OR destructiveHint)
+[ ] All tools have `title` AND safety annotations (`readOnlyHint` OR `destructiveHint`)
 
 [ ] OAuth 2.0 implemented correctly (if authentication required)
 
