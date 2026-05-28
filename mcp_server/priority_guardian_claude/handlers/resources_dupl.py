@@ -88,9 +88,10 @@ async def list_resources() -> List[mcp_types.Resource]:
             _meta={
                 "ui": {
                     "domain": WIDGET_APP_DOMAIN,
+                    "prefersBorder": False,
                     "csp": {
                         "connectDomains": [],  # Widget uses postMessage, not HTTP
-                        "resourceDomains": [],  # Self-contained HTML, no external assets
+                        "resourceDomains": ["https://assets.claude.ai"],  # Host font loading
                     },
                 },
             },
@@ -111,9 +112,10 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
             _meta={
                 "ui": {
                     "domain": WIDGET_APP_DOMAIN,
+                    "prefersBorder": False,
                     "csp": {
                         "connectDomains": [],
-                        "resourceDomains": [],
+                        "resourceDomains": ["https://assets.claude.ai"],
                     },
                 },
             },
@@ -144,9 +146,10 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
         resource_meta = {
             "ui": {
                 "domain": WIDGET_APP_DOMAIN,
+                "prefersBorder": False,
                 "csp": {
                     "connectDomains": [],
-                    "resourceDomains": [],
+                    "resourceDomains": ["https://assets.claude.ai"],
                 },
             },
         }
