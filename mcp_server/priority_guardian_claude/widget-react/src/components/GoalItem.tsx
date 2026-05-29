@@ -226,7 +226,14 @@ export function GoalItem({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: 0,
+            padding: '0 8px',
+            minHeight: '44px',
+            minWidth: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent',
           }}
           aria-label={t('confirmRemove')}
         >
@@ -244,7 +251,14 @@ export function GoalItem({
             background: 'none',
             border: 'none',
             cursor: 'pointer',
-            padding: 0,
+            padding: '0 8px',
+            minHeight: '44px',
+            minWidth: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            touchAction: 'manipulation',
+            WebkitTapHighlightColor: 'transparent',
           }}
           aria-label={t('cancelRemove')}
         >
