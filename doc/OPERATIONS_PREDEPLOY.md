@@ -246,3 +246,10 @@ Render does not auto-deploy on push — you must trigger it manually:
 2. Click "Manual Deploy" → "Deploy latest commit"
 
 Changes to `backend/` are not live until the service is redeployed.
+
+---
+
+## Backend Domain Notes
+
+- **Apex redirect:** `priority-guard.com` 301-redirects to `www.priority-guard.com` (configured in Render).
+- **robots.txt:** The backend serves `GET /robots.txt` returning `User-agent: *\nDisallow: /\n`. This is intentional — the backend is OAuth/API only, not a public content surface. The marketing site is `fulfilling-productivity.com`.
