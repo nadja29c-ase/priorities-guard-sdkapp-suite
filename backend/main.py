@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
@@ -162,6 +162,19 @@ app = FastAPI(
 async def health_check():
     """Lightweight health check for deploy verification."""
     return {"status": "ok"}
+
+
+# -------------------------------------------------------------
+# robots.txt — Tell crawlers to stay out of the backend domain.
+# This is the OAuth/API backend (priority-guard.com). The public
+# marketing surface is fulfilling-productivity.com.
+# -------------------------------------------------------------
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    """Serve robots.txt to block all crawlers from the backend domain."""
+    return PlainTextResponse("User-agent: *\nDisallow: /\n")
+
 
 # Add custom exception handler for validation errors
 # -------------------------------------------------------------
