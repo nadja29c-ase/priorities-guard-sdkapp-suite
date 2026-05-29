@@ -188,6 +188,7 @@ const messages = {
     keywordChangeHowTo: 'Tag calendar events with {keyword} to track time toward this priority.',
     keywordChangeConfirm: 'Change',
     keywordChangeCancel: 'Cancel',
+    keywordChangeInline: 'Change from {oldKeyword} to {newKeyword}?',
   },
   de: {
     // Loading states
@@ -370,6 +371,7 @@ const messages = {
     keywordChangeHowTo: 'Füge {keyword} in deine Kalendertitel ein, um Zeit für diese Priorität zu tracken.',
     keywordChangeConfirm: 'Ändern',
     keywordChangeCancel: 'Abbrechen',
+    keywordChangeInline: 'Von {oldKeyword} zu {newKeyword} wechseln?',
   },
 } as const
 

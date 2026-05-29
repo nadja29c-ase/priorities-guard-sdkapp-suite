@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { Button } from './Button'
 import type { Priority, CalendarKeyword } from '../types'
 import { BADGE_COLORS } from '../constants'
 import { t } from '../i18n'
@@ -17,6 +16,8 @@ const ALL_KEYWORDS: CalendarKeyword[] = ['P1', 'P2', 'P3']
  * Inline keyword picker for edit mode.
  * Shows all 3 keywords, current is selected, others are tappable.
  * If another priority holds a keyword, shows "Will swap with [name]" hint.
+ *
+ * Confirmation is inline (no modal/popover) per MCP Apps guidelines.
  */
 export function KeywordPicker({
   currentKeyword,
@@ -26,13 +27,15 @@ export function KeywordPicker({
 }: KeywordPickerProps) {
   // Prevent concurrent swaps from rapid taps
   const [loadingKeyword, setLoadingKeyword] = useState<CalendarKeyword | null>(null)
-  // Pending keyword for confirmation dialog
+  // Pending keyword for inline confirmation
   const [pendingKeyword, setPendingKeyword] = useState<CalendarKeyword | null>(null)
   // Tooltip hover states
   const [hoveredKeyword, setHoveredKeyword] = useState<CalendarKeyword | null>(null)
+  // Hover states for inline confirmation buttons
+  const [isHoveredConfirm, setIsHoveredConfirm] = useState(false)
+  const [isHoveredCancel, setIsHoveredCancel] = useState(false)
 
-  const modalRef = useRef<HTMLDivElement>(null)
-  const cancelButtonRef = useRef<HTMLDivElement>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
 
   // Build map of keyword -> priority name (only active priorities)
   const keywordHolders = new Map<string, string>()
@@ -46,14 +49,14 @@ export function KeywordPicker({
     // Guard: if same as current, do nothing
     if (kw === currentKeyword) return
     if (disabled || loadingKeyword !== null) return
-    // Set pending keyword and show dialog
+    // Set pending keyword and show inline confirmation
     setPendingKeyword(kw)
   }
 
   const handleConfirm = async () => {
     if (!pendingKeyword) return
     const kwToChange = pendingKeyword
-    // Dismiss dialog immediately
+    // Dismiss confirmation immediately
     setPendingKeyword(null)
     // Then trigger the change
     setLoadingKeyword(kwToChange)
@@ -68,13 +71,14 @@ export function KeywordPicker({
     setPendingKeyword(null)
   }
 
-  // Auto-focus cancel button on open (safe default)
+  // Auto-focus cancel button when confirmation appears (safe default)
   useEffect(() => {
-    if (pendingKeyword === null) return
-    cancelButtonRef.current?.querySelector('button')?.focus()
+    if (pendingKeyword !== null) {
+      cancelButtonRef.current?.focus()
+    }
   }, [pendingKeyword])
 
-  // ESC key closes modal
+  // ESC key dismisses inline confirmation
   useEffect(() => {
     if (pendingKeyword === null) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -86,61 +90,23 @@ export function KeywordPicker({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [pendingKeyword, loadingKeyword])
 
-  // Focus trap — Tab/Shift+Tab stay within modal
-  useEffect(() => {
-    if (pendingKeyword === null) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return
-      if (!modalRef.current) return
-      if (!modalRef.current.contains(document.activeElement)) return
-
-      // Query all focusable elements
-      const focusableSelector = 'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      const allFocusable = modalRef.current.querySelectorAll<HTMLElement>(focusableSelector)
-
-      // Filter to visible elements only
-      const focusable = Array.from(allFocusable).filter(el => el.offsetParent !== null)
-      if (focusable.length === 0) return
-
-      const first = focusable[0]
-      const last = focusable[focusable.length - 1]
-
-      if (e.shiftKey && document.activeElement === first) {
-        // Shift+Tab on first → wrap to last
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        // Tab on last → wrap to first
-        e.preventDefault()
-        first.focus()
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [pendingKeyword])
-
-  // Handle backdrop click
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && loadingKeyword === null) {
-      handleCancel()
-    }
-  }
-
   const isLoading = loadingKeyword !== null
+  const pendingBadgeColor = pendingKeyword ? (BADGE_COLORS[pendingKeyword] ?? BADGE_COLORS.P1) : null
 
   return (
-    <>
+    <div>
+      {/* Keyword badges row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)' }}>{t('badgeLabel')}</span>
         <div style={{ display: 'flex', gap: '6px' }}>
           {ALL_KEYWORDS.map((kw) => {
             const isSelected = kw === currentKeyword
+            const isPending = kw === pendingKeyword
             const holderName = keywordHolders.get(kw)
             const isHeldByOther = holderName && !isSelected
             const badgeColor = BADGE_COLORS[kw] ?? BADGE_COLORS.P1
 
-            const isDisabled = disabled || isLoading
+            const isDisabled = disabled || isLoading || pendingKeyword !== null
 
             return (
               <div
@@ -158,27 +124,43 @@ export function KeywordPicker({
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    flexShrink: 0,
-                    background: badgeColor.bg,
-                    color: badgeColor.text,
-                    transition: 'all 0.15s',
-                    cursor: isDisabled ? 'not-allowed' : 'pointer',
-                    opacity: isSelected ? 1 : 0.6,
-                    outline: isSelected ? '2px solid currentColor' : 'none',
-                    outlineOffset: '2px',
+                    minWidth: '44px',
+                    minHeight: '44px',
+                    padding: '10px',
+                    margin: '-10px',
+                    boxSizing: 'content-box',
+                    background: 'none',
                     border: 'none',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                    touchAction: 'manipulation',
+                    WebkitTapHighlightColor: 'transparent',
                   }}
                   aria-label={`${isSelected ? t('currentKeyword') : t('switchTo')} ${kw}${isHeldByOther ? ` (${t('willSwapWith', { name: holderName! })})` : ''}`}
                 >
-                  {kw}
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      background: badgeColor.bg,
+                      color: badgeColor.text,
+                      transition: 'all 0.15s',
+                      opacity: isSelected || isPending ? 1 : 0.6,
+                      outline: isSelected ? '2px solid currentColor' : isPending ? '2px dashed currentColor' : 'none',
+                      outlineOffset: '2px',
+                    }}
+                  >
+                    {kw}
+                  </span>
                 </button>
                 {/* Tooltip on hover for swap hint */}
-                {isHeldByOther && hoveredKeyword === kw && (
+                {isHeldByOther && hoveredKeyword === kw && !pendingKeyword && (
                   <div
                     style={{
                       position: 'absolute',
@@ -205,87 +187,86 @@ export function KeywordPicker({
         </div>
       </div>
 
-      {/* Keyword Change Confirmation Dialog */}
+      {/* Inline confirmation row (no modal/popover) */}
       {pendingKeyword !== null && (
         <div
           style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 50,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(0, 0, 0, 0.5)',
+            marginTop: '12px',
+            padding: '12px',
+            background: 'var(--color-background-secondary, #f9f9f9)',
+            borderRadius: '8px',
           }}
-          onClick={handleBackdropClick}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="keyword-change-dialog-title"
+          role="region"
+          aria-live="polite"
+          aria-label={t('keywordChangeTitle')}
         >
-          <div
-            ref={modalRef}
-            style={{
-              background: 'var(--color-background-primary, #fff)',
-              borderRadius: '16px',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              padding: '24px',
-              maxWidth: '384px',
-              width: '100%',
-              margin: '0 16px',
-            }}
-          >
-            <h2
-              id="keyword-change-dialog-title"
+          {/* Confirmation message */}
+          <p style={{ fontSize: '13px', color: 'var(--color-text-primary, #0d0d0d)', marginBottom: '8px' }}>
+            {t('keywordChangeInline', { oldKeyword: currentKeyword, newKeyword: pendingKeyword })}
+          </p>
+
+          {/* Swap hint if applicable */}
+          {keywordHolders.get(pendingKeyword) && (
+            <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)', marginBottom: '8px' }}>
+              {t('willSwapWith', { name: keywordHolders.get(pendingKeyword)! })}
+            </p>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={isLoading}
+              onMouseEnter={() => setIsHoveredConfirm(true)}
+              onMouseLeave={() => setIsHoveredConfirm(false)}
               style={{
-                fontSize: '18px',
-                fontWeight: 600,
-                color: 'var(--color-text-primary, #0d0d0d)',
-                marginBottom: '12px',
+                padding: '8px 16px',
+                minHeight: '44px',
+                fontSize: '13px',
+                fontWeight: 500,
+                borderRadius: '8px',
+                background: pendingBadgeColor?.bg ?? 'var(--color-background-info-solid, #0285ff)',
+                color: pendingBadgeColor?.text ?? '#fff',
+                border: 'none',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.5 : isHoveredConfirm ? 0.9 : 1,
+                transition: 'opacity 0.15s',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
               }}
+              aria-label={t('keywordChangeConfirm')}
             >
-              {t('keywordChangeTitle')}
-            </h2>
-
-            {/* Body paragraph */}
-            <p style={{ fontSize: '14px', color: 'var(--color-text-secondary, #737373)', marginBottom: '12px' }}>
-              {t('keywordChangeBody', { oldKeyword: currentKeyword })}
-            </p>
-
-            {/* Best time line */}
-            <p style={{ fontSize: '14px', color: 'var(--color-text-secondary, #737373)', marginBottom: '12px' }}>
-              {t('keywordChangeBestTime')}
-            </p>
-
-            {/* How-to line (actionable, slightly more prominent) */}
-            <p style={{ fontSize: '14px', color: 'var(--color-text-primary, #0d0d0d)', marginBottom: '24px' }}>
-              {t('keywordChangeHowTo', { keyword: pendingKeyword })}
-            </p>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <div ref={cancelButtonRef}>
-                <Button
-                  color="secondary"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancel}
-                  disabled={isLoading}
-                >
-                  {t('keywordChangeCancel')}
-                </Button>
-              </div>
-              <Button
-                color="primary"
-                variant="solid"
-                size="sm"
-                onClick={handleConfirm}
-                disabled={isLoading}
-              >
-                {t('keywordChangeConfirm')}
-              </Button>
-            </div>
+              {t('keywordChangeConfirm')}
+            </button>
+            <button
+              ref={cancelButtonRef}
+              type="button"
+              onClick={handleCancel}
+              disabled={isLoading}
+              onMouseEnter={() => setIsHoveredCancel(true)}
+              onMouseLeave={() => setIsHoveredCancel(false)}
+              style={{
+                padding: '8px 16px',
+                minHeight: '44px',
+                fontSize: '13px',
+                fontWeight: 500,
+                borderRadius: '8px',
+                background: 'transparent',
+                color: isHoveredCancel ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+                border: 'none',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'color 0.15s',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              aria-label={t('keywordChangeCancel')}
+            >
+              {t('keywordChangeCancel')}
+            </button>
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }
