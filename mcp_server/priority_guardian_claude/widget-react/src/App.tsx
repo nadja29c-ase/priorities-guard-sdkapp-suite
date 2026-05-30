@@ -124,8 +124,8 @@ function App() {
     }, []),
   })
 
-  // Inject host theme CSS variables
-  useHostStyles(app)
+  // Inject host theme CSS variables (must pass hostContext for dark mode)
+  useHostStyles(app, app?.getHostContext())
 
   // Store app reference
   useEffect(() => {
