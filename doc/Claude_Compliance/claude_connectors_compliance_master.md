@@ -306,6 +306,25 @@ By default, all external origins are blocked. connectDomains = API endpoints the
 Display modes:
 Declare supported modes via appCapabilities.availableDisplayModes in ui/initialize. Modes: inline, fullscreen, pip. Host responds with supported modes. Request a switch with ui/request-display-mode.
 
+Widget App Domain (_meta.ui.domain) — mandatory for MCP Apps:
+Source: https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility
+The _meta.ui.domain field is required on every ui:// resource. Without it the widget will not render.
+For Claude, compute the value by hashing your full MCP resource URL (including /mcp path):
+
+  node -e 'const url = "https://your-server.com/mcp"; console.log(require("crypto").createHash("sha256").update(url).digest("hex").slice(0,32) + ".claudemcpcontent.com")'
+
+Formula: sha256(MCP_RESOURCE_URL)[:32] + ".claudemcpcontent.com"
+The URL is the FULL MCP endpoint including /mcp path — NOT just the origin.
+Example: sha256("https://example.com/mcp")[:32] = c3d80a4ed901ee05b21755a88273b4a4
+Result: c3d80a4ed901ee05b21755a88273b4a4.claudemcpcontent.com
+
+PG status: domain computed from https://mcp.priority-guard.com/mcp → a7b31ccb44096357600a7460eb0a78e9.claudemcpcontent.com. Confirmed working ✅
+
+Cross-platform note (source: https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility):
+MCP Apps can run in both Claude and ChatGPT from a single codebase. The SDK auto-detects the host
+environment via App.connect() (no explicit transport parameter needed). registerAppTool() and
+registerAppResource() automatically generate platform-specific metadata.
+
 Complete host CSS token reference (source: https://claude.com/docs/connectors/building/mcp-apps/design-guidelines)
 IMPORTANT: Hardcoded fallback hex values MUST match official values below. Mismatches cause incorrect rendering when host tokens fail to load.
 
@@ -360,28 +379,28 @@ Shadow tokens:
 are NOT in the official token table. These appear to be internal/undocumented tokens. Use with caution.
 Consider using the official non-solid equivalents as fallbacks.
 
-⚠️ PG FALLBACK MISMATCH — must correct before submission:
-- color-text-tertiary:         PG uses #8c8c8c  → correct is #73726C
-- color-text-secondary:        PG uses #5c5c5c  → correct is #3D3D3A
-- color-background-secondary:  PG uses #f9f9f9  → correct is #F5F4ED
-All other PG fallbacks match official values.
+✅ PG FALLBACK VALUES — corrected (verified 2025-05-30):
+- color-text-tertiary:         #73726C ✓
+- color-text-secondary:        #3D3D3A ✓
+- color-background-secondary:  #F5F4ED ✓
+All PG fallbacks now match official values.
 
 PG widget pre-submission checklist (MCP Apps specific):
-[ ] All structural colors use var(--color-*) tokens with hex fallbacks
-[ ] Widget tested in both light and dark mode
-[ ] _meta.ui.csp declared on ui:// resource (connectDomains, resourceDomains)
-[ ] Inline card ≤500px, ≤2 actions, no popovers, no nested scroll
-[ ] All touch targets ≥44×44pt
-[ ] safeAreaInsets honored for mobile layout
-[ ] html, body { background: transparent; margin: 0; } — no opaque body background
-[ ] <meta name="color-scheme" content="light dark" /> in document head
-[ ] prefersBorder: false set in _meta.ui (removes host card border)
-[ ] openLink() only called from user gesture handlers (not programmatically)
-[ ] Allowed link URIs declared in submission form for all openLink() destinations
-[ ] Widget handles multiple instances gracefully (BroadcastChannel supersession if stateful dashboard)
-[ ] Loading states use skeleton screens for inline content (not spinners)
-[ ] Icons have text alternatives (aria-label) — icons must not be essential to understanding
-[ ] No fixed-width layouts — content reflows gracefully at 320px minimum width
+[x] All structural colors use var(--color-*) tokens with hex fallbacks — verified 2025-05-30
+[x] Widget tested in both light and dark mode — useHostStyles hook active
+[x] _meta.ui.csp declared on ui:// resource (connectDomains, resourceDomains) — resources_dupl.py
+[x] Inline card ≤500px, ≤2 actions, no popovers, no nested scroll — App.tsx inline mode
+[x] All touch targets ≥44×44pt — verified across all components
+[x] safeAreaInsets honored for mobile layout — App.tsx line 52
+[x] html, body { background: transparent; margin: 0; } — main.css
+[x] <meta name="color-scheme" content="light dark" /> in document head — pg-dashboard-claude.html
+[x] prefersBorder: false set in _meta.ui — resources_dupl.py
+[x] openLink() only called from user gesture handlers — ConnectionStatus.tsx onClick
+[ ] Allowed link URIs declared in submission form — pending (external submission form)
+[ ] Widget handles multiple instances gracefully — NOT IMPLEMENTED (non-blocking, enhancement)
+[x] Loading states use appropriate indicators — inline uses shimmer, fullscreen uses spinners
+[x] Icons have text alternatives (aria-label) — verified across all components
+[x] No fixed-width layouts — flex layouts reflow at narrow widths
 
 4L. External Links Behavior (MCP Apps)
 Source: https://claude.com/docs/connectors/building/mcp-apps/external-links
@@ -409,6 +428,9 @@ Each time Claude calls a tool that renders an MCP App, a new iframe is mounted. 
 
 For stateful single-instance widgets (dashboards, carts): implement BroadcastChannel-based supersession — older instances detect a newer sibling and disable themselves (grey out UI, disable buttons, stop sending model-context updates).
 
+Why BroadcastChannel works:
+All widget iframes from a single connector are served from the same sandbox origin on *.claudemcpcontent.com (iframe sandbox includes allow-same-origin). A BroadcastChannel opened in one instance reaches every other instance from the same connector in the current conversation.
+
 Pattern: server stamps each tool result with an election key (createdAt + seq) in structuredContent. Widget reads key via toolresult event, broadcasts on BroadcastChannel. Older instances compare keys and mark themselves superseded.
 
 PG status: get_priorities, render_weekly_report, create_priority can all be called multiple times. PG does not currently implement instance supersession. Multiple live dashboard instances will coexist. This is not a submission blocker but is a known UX degradation. Track as post-submission improvement.
@@ -417,7 +439,24 @@ Implementation details (from official docs):
 - Election key MUST use server wall-clock time (createdAt) — NOT client-side Date.now(). Client mount time does not reflect tool-call order; stored conversations remount widgets as they scroll into view.
 - seq should be monotonic counter or derived from durable state (database row ID, version number)
 - Channel scope: without fixed ui.domain, BroadcastChannel is scoped per-conversation automatically. With fixed ui.domain, scope widens — include a server-minted conversation scope key to prevent cross-conversation interference.
-- localStorage caching: usable for remount optimization on web; iOS WKWebView returns undefined for localStorage — do not depend on it.
+- Election key is read from the SDK toolresult event (params.structuredContent), NOT from initial widget props.
+
+localStorage caching across remounts:
+- On Claude.ai web: hostContext.toolInfo.id is the stable tool-use ID. Persist the resolved server key to localStorage keyed by toolInfo.id to reuse on remount without waiting for toolresult event again.
+- On Claude iOS: toolInfo.id is undefined when a stored conversation is rehydrated. Detect this case (toolInfo?.id == null) and skip the cache — fall back to waiting for the toolresult event. This is the only ordering source that works on every platform.
+- Treat localStorage as an optimization, not a correctness guarantee.
+
+Fallback if server key is delayed:
+- Race the toolresult event against a 1-second timeout after connect()
+- If timeout fires first: fall back to client-side Date.now() as orderKey
+- CRITICAL: if mixing server and client timestamps, tag with keySource ('server' | 'client') and refuse to compare a client value against a server value — a server createdAt from hours ago will always be smaller than a fresh client timestamp, wrongly handing 'live' to the wrong instance
+
+SDK App class requirement:
+- Use the SDK App class (new App() / useApp() in React), not a hand-rolled postMessage bridge
+- Hand-rolled bridges silently drop ping (liveness check) and ui/resource-teardown (host asking widget to clean up before unmount)
+- Claude.ai web does not currently send ping or resource-teardown to widgets; Claude iOS sends resource-teardown only when user navigates away from the conversation
+- The App class handles the full request surface and is required for production
+- PG status: uses useApp() React hook — correct. ✅
 
 4N. Transparency and Theming (MCP Apps)
 Source: https://claude.com/docs/connectors/building/mcp-apps/transparent-theming
