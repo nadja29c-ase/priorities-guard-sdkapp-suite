@@ -426,30 +426,89 @@ For widgets to blend with Claude's conversation UI (strongly recommended for dir
 
 Required CSS:
   html, body { margin: 0; background: transparent; }
-  (any opaque background hides the chat surface)
+  (any opaque background on <html> or <body> hides the chat surface)
 
 Required HTML head tag:
   <meta name="color-scheme" content="light dark" />
-  (without this, browser adds opaque canvas backdrop in dark mode; light-dark() CSS values won't resolve)
+  CRITICAL: Keep this tag even though applyDocumentTheme() also sets color-scheme at runtime.
+  The tag covers the FIRST PAINT before your script runs and prevents an opaque-backdrop flash.
+  Both are needed — the static tag and the runtime API serve different purposes.
 
 Recommended resource meta:
-  _meta.ui.prefersBorder: false — removes host card border; Claude web defaults to borderless but other hosts differ; explicit keeps app portable
+  _meta.ui.prefersBorder: false — removes host card border; Claude web defaults to borderless
+  but other hosts differ; being explicit keeps app portable
 
 Host font loading (optional but expected):
-  Add https://assets.claude.ai to CSP resourceDomains to enable Anthropic Sans loading via applyHostFonts()
+  Add https://assets.claude.ai to CSP resourceDomains to enable Anthropic Sans loading
   _meta.ui.csp: { resourceDomains: ["https://assets.claude.ai"] }
+  SECURITY NOTE: resourceDomains also adds listed origins to script-src and style-src.
+  Only allowlist origins you trust to serve executable code. Prefer bundling third-party
+  fonts into your widget rather than allowlisting public CDNs.
 
-SDK helpers (apply in onhostcontextchanged and on connect):
-  applyDocumentTheme(theme) — sets <html data-theme> and root color-scheme
+hostContext theming fields (passed by Claude on connect and on hostcontextchanged):
+  theme:               "light" or "dark"
+  styles.variables:    CSS custom properties (--color-background-*, --color-text-*, etc.)
+  styles.css.fonts:    @font-face rules for Anthropic Sans, served from https://assets.claude.ai
+  Updates carry only the changed fields — guard with existence checks before applying.
+
+SDK helpers (import from @modelcontextprotocol/ext-apps):
+  applyDocumentTheme(theme)          — sets <html data-theme> and root color-scheme
   applyHostStyleVariables(variables) — writes all style tokens onto :root as CSS custom properties
-  applyHostFonts(fontCss) — injects @font-face rules once
+  applyHostFonts(fontCss)            — injects @font-face rules once
 
-PG status: uses useHostStyles(app) hook which calls applyHostStyleVariables. color-scheme meta tag status: verify in built HTML. prefersBorder: false — not currently set in resources_dupl.py. Background transparency: verify html/body CSS in main.css.
+React pattern (preferred):
+  useHostStyles(app, app?.getHostContext()) — applies all three helpers and re-applies
+  automatically on hostcontextchanged. This is the correct React hook for theming.
+  PG status: uses useHostStyles(app) — correct. ✅
+
+CSS fallback pattern (preferred — uses light-dark() for dual-mode fallbacks):
+  Once applyDocumentTheme sets color-scheme, light-dark() resolves correctly:
+  color: var(--color-text-primary, light-dark(#141413, #faf9f5));
+  border: var(--border-width-regular, 0.5px) solid var(--color-border-primary);
+  This is better than single-value fallbacks — handles both light and dark correctly
+  even when host tokens are not yet loaded.
+
+PG status:
+  useHostStyles(app) hook: ✅ correct
+  color-scheme meta tag: verified in pg-dashboard-claude.html ✅
+  prefersBorder: false: set in resources_dupl.py ✅
+  html/body background: transparent in main.css ✅
+  CSS fallbacks: currently single-value (not light-dark()) — acceptable but suboptimal
 
 4J. Token Efficiency Response size should be reasonable for the task (~150k character ceiling is a hard limit, but reviewers will reject responses far below this if they're unnecessarily verbose)
 Claude Code: Max 25,000 tokens per tool result (configurable)
 Do not return full database dumps when summaries were requested
 When possible, give users options to exclude unnecessary text
+
+⚠️ MCP Apps specific: If a tool result exceeds ~150,000 characters AND Claude's code execution sandbox is active,
+the result is written to the sandbox filesystem instead of passed inline. Your app receives a pointer to the
+stored file rather than the structured content it needs — the widget never hydrates.
+Mitigation strategies:
+- Paginate large results — return summary/first page, let user request more via follow-up interactions
+- Fetch details on demand — use app-initiated tool calls to load additional data as user explores
+- Defer heavy content — return identifiers/previews in initial result, provide separate tool for full content
+PG status: get_priorities returns ~1-6KB, render_weekly_report returns ~2-4KB — well within limit. ✅
+
+4O. MCP Apps Technical Requirements (from troubleshooting docs)
+Source: https://claude.com/docs/connectors/building/mcp-apps/troubleshooting
+
+app.connect() is mandatory:
+  Your widget MUST call app.connect() (Vanilla JS) or useApp() (React) to establish communication
+  with the host. Event handlers (ontoolinput, ontoolresult) are NOT invoked until connected.
+  Without app.connect(), the tool call appears in Claude but the widget is invisible.
+  PG status: uses useApp() React hook — correct. ✅
+
+Non-zero height required:
+  The widget iframe must have a non-zero height. Zero height causes the app to be invisible even
+  when fully connected. Ensure root element has explicit dimensions or content that gives it height.
+  Do NOT call sendSizeChanged({ width, height: 0 }) except to explicitly hide.
+  PG status: autoResize: true is set — height is driven by content. ✅
+
+Debugging in Claude Desktop:
+  Enable Developer Mode: Help > Troubleshooting > Enable Developer Mode
+  Open DevTools: Cmd+Option+I (Mac) or Ctrl+Shift+I (Windows)
+  Your app loads as content of the inner iframe (iframe nested inside another iframe)
+  After editing claude_desktop_config.json: Developer > Reload MCP Configuration
 
 
 5. Submission Form Requirements
