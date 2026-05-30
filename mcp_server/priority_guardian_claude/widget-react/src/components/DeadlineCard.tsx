@@ -203,7 +203,7 @@ export function DeadlineCard({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: 'var(--color-background-secondary, #f9f9f9)',
+            background: 'var(--color-background-secondary, #F5F4ED)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -218,11 +218,11 @@ export function DeadlineCard({
               <rect x="2" y="3" width="12" height="11" rx="1.5" />
               <path d="M5 1.5v3M11 1.5v3M2 7h12" />
             </svg>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #5c5c5c)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #3D3D3A)' }}>
               {deadlineDate}
             </span>
           </div>
-          <span style={{ fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary, #3D3D3A)' }}>
             {days !== null && (
               days > 0
                 ? t('dDaysLeft').replace('{n}', String(days))
@@ -273,11 +273,11 @@ export function DeadlineCard({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
               {doneCount}
-              <span style={{ fontSize: '18px', fontWeight: 400, color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+              <span style={{ fontSize: '18px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
                 /{totalCount}
               </span>
             </span>
-            <span style={{ fontSize: '14px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+            <span style={{ fontSize: '14px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
               {t('deliverablesDone')}
             </span>
           </div>
@@ -297,7 +297,7 @@ export function DeadlineCard({
                 border: 'none',
                 padding: 0,
                 cursor: 'pointer',
-                color: 'var(--color-text-tertiary, #8c8c8c)',
+                color: 'var(--color-text-tertiary, #73726C)',
               }}
               aria-expanded={deliverablesExpanded}
             >
@@ -321,7 +321,7 @@ export function DeadlineCard({
                     ))}
                   </ul>
                 ) : (
-                  <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+                  <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary, #3D3D3A)' }}>
                     {t('noDeliverablesHint')}
                   </p>
                 )}
@@ -368,7 +368,7 @@ export function DeadlineCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: 'var(--color-background-secondary, #f9f9f9)',
+          background: 'var(--color-background-secondary, #F5F4ED)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -383,11 +383,11 @@ export function DeadlineCard({
             <rect x="2" y="3" width="12" height="11" rx="1.5" />
             <path d="M5 1.5v3M11 1.5v3M2 7h12" />
           </svg>
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #5c5c5c)' }}>
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #3D3D3A)' }}>
             {deadlineDate}
           </span>
         </div>
-        <span style={{ fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+        <span style={{ fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary, #3D3D3A)' }}>
           {days !== null && (
             days > 0
               ? t('dDaysLeft').replace('{n}', String(days))
@@ -452,14 +452,14 @@ export function DeadlineCard({
               style={{
                 padding: '4px',
                 borderRadius: '4px',
-                background: isHoveredEdit ? 'var(--color-background-secondary, #f9f9f9)' : 'transparent',
+                background: isHoveredEdit ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
                 border: 'none',
                 cursor: 'pointer',
               }}
               title={t('edit')}
               aria-label={t('editPriority').replace('{name}', priority.name)}
             >
-              <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #8c8c8c)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #73726C)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
               </svg>
             </button>
@@ -480,7 +480,7 @@ export function DeadlineCard({
               title={t('delete')}
               aria-label={t('deleteItem').replace('{name}', priority.name)}
             >
-              <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #8c8c8c)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+              <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #73726C)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
                 <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
                 <path d="M6.5 7v5M9.5 7v5" />
@@ -524,11 +524,11 @@ export function DeadlineCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
           <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
             {doneCount}
-            <span style={{ fontSize: '18px', fontWeight: 400, color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+            <span style={{ fontSize: '18px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
               /{totalCount}
             </span>
           </span>
-          <span style={{ fontSize: '14px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+          <span style={{ fontSize: '14px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
             {t('deliverablesDone')}
           </span>
         </div>
@@ -592,10 +592,10 @@ export function DeadlineCard({
             }}
             aria-expanded={deliverablesExpanded}
           >
-            <span style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-tertiary, #73726C)' }}>
               {t('e2eDeliverables')}
             </span>
-            <span style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+            <span style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-tertiary, #73726C)' }}>
               ({doneCount}/{totalCount})
             </span>
             <span style={{ marginLeft: 'auto' }}>
@@ -619,7 +619,7 @@ export function DeadlineCard({
                   ))}
                 </ul>
               ) : (
-                <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary, #5c5c5c)', marginBottom: '8px' }}>
+                <p style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--color-text-secondary, #3D3D3A)', marginBottom: '8px' }}>
                   {t('noDeliverablesHint')}
                 </p>
               )}
@@ -636,7 +636,7 @@ export function DeadlineCard({
         {/* Edit mode actions */}
         {isEditing && onCancelEdit && (
           <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)' }}>
               {t('changesAutoSave')}
             </p>
             <Button

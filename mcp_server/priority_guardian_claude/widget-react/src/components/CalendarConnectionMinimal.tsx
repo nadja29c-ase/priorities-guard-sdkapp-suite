@@ -33,7 +33,7 @@ export function CalendarConnectionMinimal({ connected }: CalendarConnectionMinim
       <span
         style={{
           fontSize: '12px',
-          color: 'var(--color-text-tertiary, #8c8c8c)',
+          color: 'var(--color-text-tertiary, #73726C)',
         }}
       >
         {t('calendarConnected')}

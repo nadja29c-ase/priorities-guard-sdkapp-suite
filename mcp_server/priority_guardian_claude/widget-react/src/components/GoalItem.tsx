@@ -189,7 +189,7 @@ export function GoalItem({
             minWidth: 0,
             fontSize: '14px',
             overflowWrap: 'break-word',
-            color: goal.achieved ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-primary, #0d0d0d)',
+            color: goal.achieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
             textDecoration: goal.achieved ? 'line-through' : 'none',
           }}
         >
@@ -208,7 +208,7 @@ export function GoalItem({
           alignItems: 'center',
           gap: '8px',
           padding: '8px',
-          background: 'var(--color-background-secondary, #f9f9f9)',
+          background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '6px',
         }}
       >
@@ -354,7 +354,7 @@ export function GoalItem({
                 fontSize: '14px',
                 cursor: 'pointer',
                 overflowWrap: 'break-word',
-                color: displayedAchieved ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-primary, #0d0d0d)',
+                color: displayedAchieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
                 textDecoration: displayedAchieved ? 'line-through' : 'none',
               }}
               onDoubleClick={() => !disabled && onRename && setIsEditing(true)}
@@ -390,7 +390,7 @@ export function GoalItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #8c8c8c)',
+                  color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
@@ -417,7 +417,7 @@ export function GoalItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #8c8c8c)',
+                  color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',

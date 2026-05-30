@@ -163,7 +163,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
             fontWeight: 500,
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            color: 'var(--color-text-secondary, #5c5c5c)',
+            color: 'var(--color-text-secondary, #3D3D3A)',
           }}
         >
           {t('timeAllocationHeading')}
@@ -186,7 +186,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
                 border: 'none',
                 cursor: isRefreshing ? 'not-allowed' : 'pointer',
                 opacity: isRefreshing ? 0.4 : 1,
-                color: 'var(--color-text-tertiary, #8c8c8c)',
+                color: 'var(--color-text-tertiary, #73726C)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -215,7 +215,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
       </div>
 
       {/* Date range */}
-      <p style={{ fontSize: '12px', marginBottom: '10px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+      <p style={{ fontSize: '12px', marginBottom: '10px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
         {dateRange}
       </p>
 
@@ -266,7 +266,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
               style={{
                 fontSize: '12px',
                 fontVariantNumeric: 'tabular-nums',
-                color: item.isOther ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-secondary, #5c5c5c)',
+                color: item.isOther ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-secondary, #3D3D3A)',
                 fontStyle: item.isOther ? 'italic' : 'normal',
               }}
             >

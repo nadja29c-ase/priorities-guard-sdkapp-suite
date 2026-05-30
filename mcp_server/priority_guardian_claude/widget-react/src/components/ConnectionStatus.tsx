@@ -180,7 +180,7 @@ export function ConnectionStatus({
                   padding: '4px 8px',
                   borderRadius: '8px',
                   color: 'var(--color-text-secondary, #737373)',
-                  background: 'var(--color-background-secondary, #f9f9f9)',
+                  background: 'var(--color-background-secondary, #F5F4ED)',
                   border: 'none',
                   cursor: 'pointer',
                 }}
@@ -262,7 +262,7 @@ export function ConnectionStatus({
             display: 'flex',
             alignItems: 'flex-start',
             gap: '8px',
-            background: 'var(--color-background-secondary, #f9f9f9)',
+            background: 'var(--color-background-secondary, #F5F4ED)',
           }}
         >
           <svg
@@ -271,7 +271,7 @@ export function ConnectionStatus({
               height: '14px',
               flexShrink: 0,
               marginTop: '2px',
-              color: 'var(--color-text-tertiary, #8c8c8c)',
+              color: 'var(--color-text-tertiary, #73726C)',
             }}
             viewBox="0 0 16 16"
             fill="none"
@@ -300,7 +300,7 @@ export function ConnectionStatus({
             borderRadius: '8px',
             padding: '10px 12px',
             marginTop: '12px',
-            background: 'var(--color-background-secondary, #f9f9f9)',
+            background: 'var(--color-background-secondary, #F5F4ED)',
           }}
         >
           <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)' }}>

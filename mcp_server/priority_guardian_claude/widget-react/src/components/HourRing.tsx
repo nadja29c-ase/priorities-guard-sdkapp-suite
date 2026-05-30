@@ -91,7 +91,7 @@ export function HourRing({ actual, target, keyword }: HourRingProps) {
         <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary, #0d0d0d)', lineHeight: 1.2 }}>
           {formatHours(actual)}
         </span>
-        <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary, #8c8c8c)', lineHeight: 1.2 }}>
+        <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary, #73726C)', lineHeight: 1.2 }}>
           / {formatHours(target)}
         </span>
       </div>

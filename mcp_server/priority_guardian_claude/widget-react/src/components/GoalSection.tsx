@@ -113,7 +113,7 @@ export function GoalSection({
             border: 'none',
             padding: 0,
             cursor: isCollapsible ? 'pointer' : 'default',
-            color: 'var(--color-text-tertiary, #8c8c8c)',
+            color: 'var(--color-text-tertiary, #73726C)',
           }}
           onClick={() => isCollapsible && setExpanded(!expanded)}
           aria-expanded={expanded}
@@ -138,7 +138,7 @@ export function GoalSection({
             </span>
           )}
           {goals.length > 0 && (
-            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #5c5c5c)', marginLeft: 'auto' }}>
+            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #3D3D3A)', marginLeft: 'auto' }}>
               {achievedCount}/{goals.length}
             </span>
           )}
@@ -154,7 +154,7 @@ export function GoalSection({
                 ))}
               </ul>
             ) : (
-              <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #8c8c8c)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
+              <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
             )}
           </>
         )}
@@ -193,18 +193,18 @@ export function GoalSection({
             fontWeight: 500,
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
-            color: 'var(--color-text-tertiary, #8c8c8c)',
+            color: 'var(--color-text-tertiary, #73726C)',
           }}
         >
           {goals.length === 1 ? t('oneMonthGoal') : t('oneMonthGoals')}
         </span>
         {checkpointDate && (
-          <span style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)' }}>
             {t('by')} {formatDate(checkpointDate)}
           </span>
         )}
         {goals.length > 0 && (
-          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #5c5c5c)', marginLeft: 'auto' }}>
+          <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #3D3D3A)', marginLeft: 'auto' }}>
             {achievedCount}/{goals.length}
           </span>
         )}
@@ -227,7 +227,7 @@ export function GoalSection({
               ))}
             </ul>
           ) : (
-            <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #8c8c8c)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
           )}
 
           {/* Add goal input */}

@@ -159,7 +159,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
         >
           {semanticTargetLabel ? t('breakdown') + translateSliceLabel(semanticTargetLabel) : t('timeAllocationTitle')}
         </h2>
-        <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+        <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)' }}>
           {formatWeekRange()}
         </p>
       </div>
@@ -213,7 +213,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             x={center}
             y={center + 12}
             textAnchor="middle"
-            style={{ fill: 'var(--color-text-tertiary, #8c8c8c)', fontSize: '0.75rem' }}
+            style={{ fill: 'var(--color-text-tertiary, #73726C)', fontSize: '0.75rem' }}
           >
             {t('totalHours')}
           </text>
@@ -284,7 +284,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
               </span>
               <span
                 style={{
-                  color: 'var(--color-text-tertiary, #8c8c8c)',
+                  color: 'var(--color-text-tertiary, #73726C)',
                   fontSize: '12px',
                   width: '40px',
                   textAlign: 'right',

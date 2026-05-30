@@ -279,14 +279,14 @@ export function FlexibleCard({
                   <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
                     ~{Math.round(priority.avgTargetAchievement!)}%
                   </span>
-                  <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+                  <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
                     {t('ofWeeklyTargetOnAvg')}
                   </p>
                 </>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <svg
-                    style={{ width: '14px', height: '14px', flexShrink: 0, color: 'var(--color-text-tertiary, #8c8c8c)' }}
+                    style={{ width: '14px', height: '14px', flexShrink: 0, color: 'var(--color-text-tertiary, #73726C)' }}
                     viewBox="0 0 16 16"
                     fill="none"
                     stroke="currentColor"
@@ -297,7 +297,7 @@ export function FlexibleCard({
                   >
                     <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                   </svg>
-                  <span style={{ fontSize: '14px', fontStyle: 'italic', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+                  <span style={{ fontSize: '14px', fontStyle: 'italic', color: 'var(--color-text-tertiary, #73726C)' }}>
                     {t('trackingInProgress')}
                   </span>
                 </div>
@@ -413,14 +413,14 @@ export function FlexibleCard({
               padding: '4px',
               borderRadius: '4px',
               transition: 'background 0.15s',
-              background: isHoveredEdit ? 'var(--color-background-secondary, #f9f9f9)' : 'transparent',
+              background: isHoveredEdit ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
               border: 'none',
               cursor: 'pointer',
             }}
             title={t('edit')}
             aria-label={t('editPriority').replace('{name}', priority.name)}
           >
-            <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #8c8c8c)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+            <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #73726C)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z" />
             </svg>
           </button>
@@ -442,7 +442,7 @@ export function FlexibleCard({
             title={t('delete')}
             aria-label={t('deleteItem').replace('{name}', priority.name)}
           >
-            <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #8c8c8c)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+            <svg style={{ width: '14px', height: '14px', color: 'var(--color-text-tertiary, #73726C)' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
               <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4" />
               <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4" />
               <path d="M6.5 7v5M9.5 7v5" />
@@ -496,14 +496,14 @@ export function FlexibleCard({
                 <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
                   ~{Math.round(priority.avgTargetAchievement!)}%
                 </span>
-                <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+                <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
                   {t('ofWeeklyTargetOnAvg')}
                 </p>
               </>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <svg
-                  style={{ width: '14px', height: '14px', flexShrink: 0, color: 'var(--color-text-tertiary, #8c8c8c)' }}
+                  style={{ width: '14px', height: '14px', flexShrink: 0, color: 'var(--color-text-tertiary, #73726C)' }}
                   viewBox="0 0 16 16"
                   fill="none"
                   stroke="currentColor"
@@ -514,7 +514,7 @@ export function FlexibleCard({
                 >
                   <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                 </svg>
-                <span style={{ fontSize: '14px', fontStyle: 'italic', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+                <span style={{ fontSize: '14px', fontStyle: 'italic', color: 'var(--color-text-tertiary, #73726C)' }}>
                   {t('trackingInProgress')}
                 </span>
               </div>
@@ -605,7 +605,7 @@ export function FlexibleCard({
       {/* Edit mode actions */}
       {isEditing && onCancelEdit && (
         <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #8c8c8c)' }}>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)' }}>
             {t('changesAutoSave')}
           </p>
           <Button

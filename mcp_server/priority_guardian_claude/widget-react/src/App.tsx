@@ -518,8 +518,8 @@ function App() {
         padding: '24px',
         textAlign: 'center',
         fontSize: '14px',
-        color: 'var(--color-text-secondary, #5c5c5c)',
-        background: 'var(--color-background-secondary, #f9f9f9)',
+        color: 'var(--color-text-secondary, #3D3D3A)',
+        background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: '12px',
       }}>
         {t('loading')}
@@ -533,10 +533,10 @@ function App() {
       <div style={{
         padding: '24px',
         textAlign: 'center',
-        color: 'var(--color-text-secondary, #5c5c5c)',
+        color: 'var(--color-text-secondary, #3D3D3A)',
         fontSize: '13px',
         lineHeight: '1.5',
-        background: 'var(--color-background-secondary, #f9f9f9)',
+        background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: '12px',
       }}>
         <p style={{ marginBottom: '8px', fontWeight: 600 }}>
@@ -556,7 +556,7 @@ function App() {
         style={{
           borderRadius: '16px',
           padding: '16px',
-          background: 'var(--color-background-secondary, #f9f9f9)',
+          background: 'var(--color-background-secondary, #F5F4ED)',
           touchAction: 'pan-y',
           overscrollBehavior: 'contain',
           ...(isInline ? {} : { maxWidth: '672px', marginLeft: 'auto', marginRight: 'auto' }),
@@ -597,7 +597,7 @@ function App() {
         role="main"
         aria-label="Priority Guardian Dashboard"
         style={{
-          background: 'var(--color-background-secondary, #f9f9f9)',
+          background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '16px',
           padding: '16px',
           touchAction: 'pan-y',
@@ -663,7 +663,7 @@ function App() {
         {sortedPriorities.length > 0 && (
           <p style={{
             fontSize: '11px',
-            color: 'var(--color-text-tertiary, #8c8c8c)',
+            color: 'var(--color-text-tertiary, #73726C)',
             textAlign: 'center',
             marginTop: '8px',
             marginBottom: '0',
@@ -688,7 +688,7 @@ function App() {
         maxWidth: '672px',
         marginLeft: 'auto',
         marginRight: 'auto',
-        background: 'var(--color-background-secondary, #f9f9f9)',
+        background: 'var(--color-background-secondary, #F5F4ED)',
         touchAction: 'pan-y',
         overscrollBehavior: 'contain',
       }}
@@ -884,7 +884,7 @@ function EmptyState() {
       <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--color-text-primary, #0d0d0d)', marginBottom: '8px' }}>
         {t('noPriorities')}
       </p>
-      <p style={{ fontSize: '14px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+      <p style={{ fontSize: '14px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
         {t('noPrioritiesHint')}
       </p>
     </div>

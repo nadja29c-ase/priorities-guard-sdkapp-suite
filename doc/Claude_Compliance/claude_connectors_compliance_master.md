@@ -275,6 +275,9 @@ Mobile constraints:
 - Renders in WKWebView (iOS) / WebView (Android), not sandboxed iframe
 - Connectors must be added via web or desktop before appearing on mobile
 - Honor safeAreaInsets for notches and home indicator
+- Design responsively from 320px minimum width up to fullscreen — no fixed breakpoints
+- Full-width layouts — do not add side margins that waste mobile screen real estate
+- Avoid fixed-width layouts; content must reflow gracefully
 
 Styling requirements (mandatory):
 - Use host CSS variable tokens for ALL structural elements: backgrounds, text, borders, icons
@@ -282,6 +285,9 @@ Styling requirements (mandatory):
 - Brand accent colors are permitted for identity, but core UI must use host palette
 - All views must support both light and dark themes — tokens adapt automatically
 - Test both light and dark mode before submitting
+- Icons: use monochromatic, outlined icons matching host icon color tokens. Icons must SUPPORT understanding — never be the sole means of conveying information (provide aria-label or text alternative)
+- Typography: follow three-level size scale (heading, body, caption) and two weights (regular=400, emphasized=600). Avoid arbitrary font sizes outside the token scale.
+- Loading states: prefer skeleton screens over spinners for inline content — skeletons match the layout structure of the final content for seamless transition
 
 CSP declaration (mandatory for MCP Apps):
 Declare external origins per ui:// resource via _meta.ui.csp:
@@ -300,13 +306,65 @@ By default, all external origins are blocked. connectDomains = API endpoints the
 Display modes:
 Declare supported modes via appCapabilities.availableDisplayModes in ui/initialize. Modes: inline, fullscreen, pip. Host responds with supported modes. Request a switch with ui/request-display-mode.
 
-Key host CSS tokens (full table at design guidelines URL above):
-Backgrounds: --color-background-primary, --color-background-secondary, --color-background-tertiary
-Text: --color-text-primary, --color-text-secondary, --color-text-tertiary
-Borders: --color-border-primary, --color-border-secondary, --color-border-tertiary
-Status: --color-background-info/danger/success/warning, --color-text-info/danger/success/warning
-Typography: --font-sans, --font-text-sm-size (14px), --font-text-md-size (16px)
-Radius: --border-radius-sm (6px), --border-radius-md (8px), --border-radius-xl (12px)
+Complete host CSS token reference (source: https://claude.com/docs/connectors/building/mcp-apps/design-guidelines)
+IMPORTANT: Hardcoded fallback hex values MUST match official values below. Mismatches cause incorrect rendering when host tokens fail to load.
+
+Background tokens (Light / Dark):
+--color-background-primary:    #FFFFFF        / #30302E
+--color-background-secondary:  #F5F4ED        / #262624
+--color-background-tertiary:   #FAF9F5        / #141413
+--color-background-inverse:    #141413        / #FAF9F5
+--color-background-info:       #D6E4F6        / #253E5F
+--color-background-danger:     #F7ECEC        / #602A28
+--color-background-success:    #E9F1DC        / #1B4614
+--color-background-warning:    #F6EEDF        / #483A0F
+
+Text tokens (Light / Dark):
+--color-text-primary:          #141413        / #FAF9F5
+--color-text-secondary:        #3D3D3A        / #C2C0B6
+--color-text-tertiary:         #73726C        / #9C9A92
+--color-text-inverse:          #FFFFFF        / #141413
+--color-text-info:             #3266AD        / #80AADD
+--color-text-danger:           #7F2C28        / #EE8884
+--color-text-success:          #265B19        / #7AB948
+--color-text-warning:          #5A4815        / #D1A041
+
+Border tokens (Light / Dark):
+--color-border-primary:        #1F1E1D (40%)  / #DEDCD1 (40%)
+--color-border-secondary:      #1F1E1D (30%)  / #DEDCD1 (30%)
+--color-border-tertiary:       #1F1E1D (15%)  / #DEDCD1 (15%)
+--color-border-info:           #4682D5        / #4682D5
+--color-border-danger:         #A73D39        / #CD5C58
+--color-border-success:        #437426        / #599130
+--color-border-warning:        #805C1F        / #A87829
+
+Typography tokens:
+--font-sans: "Anthropic Sans, sans-serif" | --font-mono: "ui-monospace, monospace"
+Weights: normal=400, medium=500, semibold=600, bold=700
+Sizes: xs=12px, sm=14px, md=16px, lg=20px
+Line heights: xs/sm/md=1.4, lg=1.25
+
+Radius tokens:
+--border-radius-xs: 4px | --border-radius-sm: 6px | --border-radius-md: 8px
+--border-radius-lg: 10px | --border-radius-xl: 12px | --border-radius-full: 9999px
+
+Border width: --border-width-regular: 0.5px
+
+Shadow tokens:
+--shadow-hairline: 0 1px 2px 0 rgba(0,0,0,0.05)
+--shadow-sm: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1)
+--shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)
+--shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1)
+
+⚠️ NOTE: The -solid suffix tokens (e.g. --color-background-success-solid, --color-background-info-solid)
+are NOT in the official token table. These appear to be internal/undocumented tokens. Use with caution.
+Consider using the official non-solid equivalents as fallbacks.
+
+⚠️ PG FALLBACK MISMATCH — must correct before submission:
+- color-text-tertiary:         PG uses #8c8c8c  → correct is #73726C
+- color-text-secondary:        PG uses #5c5c5c  → correct is #3D3D3A
+- color-background-secondary:  PG uses #f9f9f9  → correct is #F5F4ED
+All other PG fallbacks match official values.
 
 PG widget pre-submission checklist (MCP Apps specific):
 [ ] All structural colors use var(--color-*) tokens with hex fallbacks
@@ -321,6 +379,9 @@ PG widget pre-submission checklist (MCP Apps specific):
 [ ] openLink() only called from user gesture handlers (not programmatically)
 [ ] Allowed link URIs declared in submission form for all openLink() destinations
 [ ] Widget handles multiple instances gracefully (BroadcastChannel supersession if stateful dashboard)
+[ ] Loading states use skeleton screens for inline content (not spinners)
+[ ] Icons have text alternatives (aria-label) — icons must not be essential to understanding
+[ ] No fixed-width layouts — content reflows gracefully at 320px minimum width
 
 4L. External Links Behavior (MCP Apps)
 Source: https://claude.com/docs/connectors/building/mcp-apps/external-links

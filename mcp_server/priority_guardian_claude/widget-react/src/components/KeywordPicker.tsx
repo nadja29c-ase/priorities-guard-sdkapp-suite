@@ -193,7 +193,7 @@ export function KeywordPicker({
           style={{
             marginTop: '12px',
             padding: '12px',
-            background: 'var(--color-background-secondary, #f9f9f9)',
+            background: 'var(--color-background-secondary, #F5F4ED)',
             borderRadius: '8px',
           }}
           role="region"

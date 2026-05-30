@@ -162,7 +162,7 @@ export function DeliverableItem({
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              background: deliverable.done ? 'var(--color-text-tertiary, #8c8c8c)' : 'transparent',
+              background: deliverable.done ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
               border: deliverable.done ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
             }}
             aria-hidden="true"
@@ -180,7 +180,7 @@ export function DeliverableItem({
               flex: 1,
               fontSize: '14px',
               overflowWrap: 'break-word',
-              color: deliverable.done ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-primary, #0d0d0d)',
+              color: deliverable.done ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
               textDecoration: deliverable.done ? 'line-through' : 'none',
             }}
           >
@@ -200,7 +200,7 @@ export function DeliverableItem({
           alignItems: 'center',
           gap: '8px',
           padding: '8px',
-          background: 'var(--color-background-secondary, #f9f9f9)',
+          background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '6px',
         }}
       >
@@ -286,7 +286,7 @@ export function DeliverableItem({
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            background: displayedDone ? 'var(--color-text-tertiary, #8c8c8c)' : 'transparent',
+            background: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
             border: displayedDone ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
             cursor: disabled ? 'not-allowed' : 'pointer',
             padding: '14px',
@@ -336,7 +336,7 @@ export function DeliverableItem({
               fontSize: '14px',
               cursor: 'pointer',
               overflowWrap: 'break-word',
-              color: displayedDone ? 'var(--color-text-tertiary, #8c8c8c)' : 'var(--color-text-primary, #0d0d0d)',
+              color: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
               textDecoration: displayedDone ? 'line-through' : 'none',
             }}
             onDoubleClick={() => !disabled && onRename && setIsEditing(true)}
@@ -370,7 +370,7 @@ export function DeliverableItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #8c8c8c)',
+                  color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
@@ -397,7 +397,7 @@ export function DeliverableItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #8c8c8c)',
+                  color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',

@@ -32,14 +32,14 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
         <div style={{
           padding: '24px',
           textAlign: 'center',
-          background: 'var(--color-background-secondary, #f9f9f9)',
+          background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '12px',
           fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
         }}>
           <p style={{ fontSize: '14px', color: 'var(--color-text-danger, #dc2626)', fontWeight: 600, marginBottom: '8px' }}>
             Dashboard unavailable
           </p>
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #5c5c5c)' }}>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
             Please refresh to try again.
           </p>
         </div>
