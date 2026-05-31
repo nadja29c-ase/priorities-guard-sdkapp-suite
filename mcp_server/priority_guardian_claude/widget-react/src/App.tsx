@@ -60,10 +60,21 @@ function App() {
   // App reference for CRUD operations
   const appRef = useRef<McpApp | null>(null)
 
+  // Ref for inline main element height diagnostic
+  const inlineMainRef = useRef<HTMLElement>(null)
+
   // Timestamp of last CRUD operation — suppress stale ontoolresult for 1500ms after
   const lastCrudAtRef = useRef(0)
 
   const isInline = displayMode !== 'fullscreen'
+
+  // DIAGNOSTIC: Log inline main height for 500px compliance check
+  useEffect(() => {
+    if (isInline && inlineMainRef.current && isInitialized) {
+      const height = inlineMainRef.current.scrollHeight
+      console.log(`[PG Diagnostic] Inline main scrollHeight: ${height}px (limit: 500px, ${height > 500 ? 'EXCEEDS LIMIT' : 'OK'})`)
+    }
+  }, [isInline, isInitialized, data, timeAllocation])
 
   // MCP Apps bridge: useApp hook to receive tool results
   const { app } = useApp({
@@ -623,6 +634,7 @@ function App() {
   if (isInline) {
     return (
       <main
+        ref={inlineMainRef}
         role="main"
         aria-label="Priority Guardian Dashboard"
         style={{
