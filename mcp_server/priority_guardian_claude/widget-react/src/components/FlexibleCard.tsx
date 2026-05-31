@@ -208,7 +208,7 @@ export function FlexibleCard({
       <article
         style={{
           borderRadius: '12px',
-          padding: '20px',
+          padding: '12px',
           background: 'var(--color-background-primary, #fff)',
           border: '1px solid var(--color-border, #e5e5e5)',
           borderLeft: `3px solid ${borderColor}`,
@@ -337,7 +337,7 @@ export function FlexibleCard({
       ref={cardRef}
       style={{
         borderRadius: '12px',
-        padding: '20px',
+        padding: '12px',
         background: 'var(--color-background-primary, #fff)',
         border: '1px solid var(--color-border, #e5e5e5)',
         borderLeft: `3px solid ${borderColor}`,
@@ -604,7 +604,7 @@ export function FlexibleCard({
 
       {/* Edit mode actions */}
       {isEditing && onCancelEdit && (
-        <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)' }}>
             {t('changesAutoSave')}
           </p>

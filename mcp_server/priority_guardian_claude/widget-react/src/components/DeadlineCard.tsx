@@ -234,7 +234,7 @@ export function DeadlineCard({
         </div>
 
         {/* Main content area */}
-        <div style={{ padding: '20px' }}>
+        <div style={{ padding: '12px' }}>
           {/* Header row: Badge + Name */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
             <span
@@ -399,7 +399,7 @@ export function DeadlineCard({
       </div>
 
       {/* Main content area */}
-      <div style={{ padding: '20px' }}>
+      <div style={{ padding: '12px' }}>
         {/* Header row: Badge + Name (read mode) or Badge + Edit/Trash (edit mode) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
           <span
@@ -635,7 +635,7 @@ export function DeadlineCard({
 
         {/* Edit mode actions */}
         {isEditing && onCancelEdit && (
-          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)' }}>
               {t('changesAutoSave')}
             </p>
