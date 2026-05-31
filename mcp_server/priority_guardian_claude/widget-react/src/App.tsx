@@ -50,9 +50,6 @@ function App() {
   // Safe area insets for mobile fullscreen (notch/home indicator)
   const [safeAreaBottom, setSafeAreaBottom] = useState(0)
 
-  // Platform detection for mobile-specific padding
-  const [platform, setPlatform] = useState<string | undefined>(undefined)
-
   // App reference for CRUD operations
   const appRef = useRef<McpApp | null>(null)
 
@@ -78,11 +75,6 @@ function App() {
       const safeInsets = hostContext?.safeAreaInsets
       if (safeInsets?.bottom) {
         setSafeAreaBottom(safeInsets.bottom)
-      }
-
-      // Read platform for mobile-specific padding
-      if (hostContext?.platform) {
-        setPlatform(hostContext.platform)
       }
 
       // Register handler for incoming tool results
@@ -127,9 +119,6 @@ function App() {
         }
         if (ctx.safeAreaInsets?.bottom !== undefined) {
           setSafeAreaBottom(ctx.safeAreaInsets.bottom)
-        }
-        if (ctx.platform !== undefined) {
-          setPlatform(ctx.platform)
         }
       }
     }, []),
@@ -688,16 +677,14 @@ function App() {
   }
 
   // Fullscreen mode: full CRUD
-  // Mobile gets 20px padding for breathing room; desktop stays at 16px
-  const basePadding = platform === 'mobile' ? 20 : 16
   return (
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
       style={{
         borderRadius: '16px',
-        padding: `${basePadding}px`,
-        paddingBottom: safeAreaBottom > 0 ? `${basePadding + safeAreaBottom}px` : `${basePadding}px`,
+        padding: '16px',
+        paddingBottom: safeAreaBottom > 0 ? `${16 + safeAreaBottom}px` : '16px',
         maxWidth: '672px',
         marginLeft: 'auto',
         marginRight: 'auto',
