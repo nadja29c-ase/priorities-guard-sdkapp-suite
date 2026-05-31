@@ -640,7 +640,7 @@ function App() {
         style={{
           background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '16px',
-          padding: '10px',
+          padding: '16px',
           touchAction: 'pan-y',
           overscrollBehavior: 'contain',
         }}

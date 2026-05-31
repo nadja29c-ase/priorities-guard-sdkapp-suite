@@ -199,7 +199,7 @@ export function DeadlineCard({
         {/* Deadline banner */}
         <div
           style={{
-            padding: '6px 12px',
+            padding: '10px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -234,7 +234,7 @@ export function DeadlineCard({
         </div>
 
         {/* Main content area */}
-        <div style={{ padding: '8px' }}>
+        <div style={{ padding: '12px' }}>
           {/* Header row: Badge + Name */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span

@@ -208,7 +208,7 @@ export function FlexibleCard({
       <article
         style={{
           borderRadius: '12px',
-          padding: '8px',
+          padding: '12px',
           background: 'var(--color-background-primary, #fff)',
           border: '1px solid var(--color-border, #e5e5e5)',
           borderLeft: `3px solid ${borderColor}`,
