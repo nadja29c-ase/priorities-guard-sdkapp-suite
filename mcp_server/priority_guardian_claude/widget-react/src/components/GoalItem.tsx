@@ -270,7 +270,7 @@ export function GoalItem({
 
   // Fullscreen mode - interactive with CRUD
   return (
-    <li>
+    <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
       {error && (
         <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '4px' }} role="alert">
           {error}
@@ -287,7 +287,6 @@ export function GoalItem({
           onClick={handleToggle}
           disabled={disabled || !onToggle}
           style={{
-            marginTop: '2px',
             flexShrink: 0,
             background: 'none',
             border: 'none',
@@ -305,6 +304,7 @@ export function GoalItem({
         >
           <span
             style={{
+              marginTop: '2px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
