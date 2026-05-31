@@ -269,7 +269,7 @@ export function DeliverableItem({
         </p>
       )}
       <div
-        style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}
         onMouseEnter={() => setIsGroupHovered(true)}
         onMouseLeave={() => setIsGroupHovered(false)}
       >
@@ -361,10 +361,14 @@ export function DeliverableItem({
           </span>
         )}
 
-        {/* Actions (visible on hover) */}
+        {/* Actions (visible on hover) — absolute to avoid inflating row height */}
         {!isEditing && !disabled && (onRename || onDelete) && (
           <div
             style={{
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',

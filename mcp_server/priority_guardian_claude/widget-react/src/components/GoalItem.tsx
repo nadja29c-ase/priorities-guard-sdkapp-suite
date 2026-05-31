@@ -277,7 +277,7 @@ export function GoalItem({
         </p>
       )}
       <div
-        style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}
+        style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: '10px' }}
         onMouseEnter={() => setIsGroupHovered(true)}
         onMouseLeave={() => setIsGroupHovered(false)}
       >
@@ -358,6 +358,7 @@ export function GoalItem({
           ) : (
             <p
               style={{
+                margin: 0,
                 fontSize: '14px',
                 cursor: 'pointer',
                 overflowWrap: 'break-word',
@@ -372,14 +373,17 @@ export function GoalItem({
           )}
         </div>
 
-        {/* Actions (visible on hover) */}
+        {/* Actions (visible on hover) — absolute to avoid inflating row height */}
         {!isEditing && !disabled && (onRename || onDelete) && (
           <div
             style={{
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
-              marginTop: '2px',
               opacity: isGroupHovered ? 1 : (isTouchDevice ? 0.4 : 0),
               transition: 'opacity 0.15s',
             }}
