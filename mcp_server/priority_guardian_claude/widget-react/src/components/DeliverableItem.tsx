@@ -152,8 +152,8 @@ export function DeliverableItem({
     return (
       <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* Checkbox (display only) */}
-          <div
+          {/* Checkbox (display only) — 16×16px visual element */}
+          <span
             style={{
               width: '16px',
               height: '16px',
@@ -163,16 +163,16 @@ export function DeliverableItem({
               justifyContent: 'center',
               flexShrink: 0,
               background: deliverable.done ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
-              border: deliverable.done ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
+              border: deliverable.done ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
             }}
             aria-hidden="true"
           >
             {deliverable.done && (
-              <svg style={{ width: '10px', height: '10px', color: '#fff' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+              <svg style={{ width: '10px', height: '10px', color: 'var(--color-background-primary, #fff)' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             )}
-          </div>
+          </span>
 
           {/* Name */}
           <span
@@ -281,13 +281,12 @@ export function DeliverableItem({
           style={{
             width: '16px',
             height: '16px',
-            borderRadius: '4px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            background: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
-            border: displayedDone ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
+            background: 'none',
+            border: 'none',
             cursor: disabled ? 'not-allowed' : 'pointer',
             padding: '14px',
             margin: '-14px',
@@ -300,11 +299,25 @@ export function DeliverableItem({
           aria-disabled={disabled}
           aria-label={t(displayedDone ? 'markAsNotDone' : 'markAsDone', { name: deliverable.name })}
         >
-          {displayedDone && (
-            <svg style={{ width: '10px', height: '10px', color: 'var(--color-background-primary, #fff)' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
-              <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          )}
+          {/* Visual checkbox — 16×16px, background/border here only */}
+          <span style={{
+            width: '16px',
+            height: '16px',
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            background: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
+            border: displayedDone ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
+            pointerEvents: 'none',
+          }}>
+            {displayedDone && (
+              <svg style={{ width: '10px', height: '10px', color: 'var(--color-background-primary, #fff)' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </span>
         </button>
 
         {/* Name (editable) */}

@@ -160,7 +160,7 @@ export function GoalItem({
     return (
       <li style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
         {/* Circular checkbox (display only) - 18px diameter */}
-        <div
+        <span
           style={{
             marginTop: '2px',
             width: '18px',
@@ -171,16 +171,16 @@ export function GoalItem({
             justifyContent: 'center',
             flexShrink: 0,
             background: goal.achieved ? 'var(--color-background-success-solid, #10b981)' : 'transparent',
-            border: goal.achieved ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
+            border: goal.achieved ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
           }}
           aria-hidden="true"
         >
           {goal.achieved && (
-            <svg style={{ width: '10px', height: '10px', color: '#fff' }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <svg style={{ width: '10px', height: '10px', color: 'var(--color-background-primary, #fff)' }} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M2 6l3 3 5-5" />
             </svg>
           )}
-        </div>
+        </span>
 
         {/* Goal text */}
         <p
@@ -313,7 +313,7 @@ export function GoalItem({
               borderRadius: '50%',
               transition: 'all 0.15s ease-out',
               background: displayedAchieved ? 'var(--color-background-success-solid, #10b981)' : 'transparent',
-              border: displayedAchieved ? 'none' : '1.5px solid var(--color-border, #e5e5e5)',
+              border: displayedAchieved ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
               opacity: disabled ? 0.5 : 1,
             }}
           >
