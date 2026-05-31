@@ -688,8 +688,8 @@ function App() {
   }
 
   // Fullscreen mode: full CRUD
-  // Mobile gets 70px padding for breathing room; desktop stays at 16px
-  const basePadding = platform === 'mobile' ? 70 : 16
+  // Mobile gets 20px padding for breathing room; desktop stays at 16px
+  const basePadding = platform === 'mobile' ? 20 : 16
   return (
     <main
       role="main"
