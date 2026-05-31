@@ -638,6 +638,10 @@ function App() {
         role="main"
         aria-label="Priority Guardian Dashboard"
         style={{
+          maxWidth: '560px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          width: '100%',
           background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '16px',
           padding: '12px',
