@@ -280,7 +280,7 @@ export function DeliverableItem({
           disabled={disabled || !onToggle}
           style={{
             width: '16px',
-            height: '16px',
+            height: '44px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -288,11 +288,12 @@ export function DeliverableItem({
             background: 'none',
             border: 'none',
             cursor: disabled ? 'not-allowed' : 'pointer',
-            padding: '14px 14px',
+            padding: '0 14px',
             margin: '0 -14px',
             boxSizing: 'content-box',
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent',
+            alignSelf: 'center',
           }}
           role="checkbox"
           aria-checked={displayedDone}

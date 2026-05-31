@@ -287,15 +287,21 @@ export function GoalItem({
           onClick={handleToggle}
           disabled={disabled || !onToggle}
           style={{
+            width: '18px',
+            height: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             flexShrink: 0,
             background: 'none',
             border: 'none',
-            padding: '13px 13px',
+            padding: '0 13px',
             margin: '0 -13px',
             boxSizing: 'content-box',
             cursor: disabled ? 'not-allowed' : 'pointer',
             touchAction: 'manipulation',
             WebkitTapHighlightColor: 'transparent',
+            alignSelf: 'center',
           }}
           role="checkbox"
           aria-checked={displayedAchieved}
@@ -304,7 +310,6 @@ export function GoalItem({
         >
           <span
             style={{
-              marginTop: '2px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
