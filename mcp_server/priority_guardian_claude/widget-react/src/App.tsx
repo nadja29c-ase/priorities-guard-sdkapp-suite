@@ -630,11 +630,6 @@ function App() {
   // When editing or adding, don't allow starting another edit
   const canEdit = !editingPriorityId && !isAddingPriority
 
-  // In inline mode, show max 2 priorities for 500px compliance
-  const inlineDisplayCount = 2
-  const inlinePriorities = sortedPriorities.slice(0, inlineDisplayCount)
-  const hiddenCount = sortedPriorities.length - inlineDisplayCount
-
   // Inline mode: display-only (no CRUD actions)
   if (isInline) {
     return (
@@ -674,40 +669,27 @@ function App() {
           />
         )}
 
-        {/* Priority Cards (display-only, max 2 for 500px compliance) */}
+        {/* Priority Cards (display-only) */}
         {sortedPriorities.length > 0 ? (
-          <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: platform === 'mobile' ? '20px' : '12px' }}>
-              {inlinePriorities.map((priority) => (
-                priority.type === 'deadline' ? (
-                  <DeadlineCard
-                    key={priority.id}
-                    priority={priority}
-                    isInline
-                    defaultDeliverablesExpanded={false}
-                  />
-                ) : (
-                  <FlexibleCard
-                    key={priority.id}
-                    priority={priority}
-                    isInline
-                    defaultGoalsExpanded={false}
-                  />
-                )
-              ))}
-            </div>
-            {hiddenCount > 0 && (
-              <p style={{
-                fontSize: '12px',
-                color: 'var(--color-text-tertiary, #73726C)',
-                textAlign: 'center',
-                marginTop: '8px',
-                fontStyle: 'italic',
-              }}>
-                {`+${hiddenCount} more — open full dashboard to view all`}
-              </p>
-            )}
-          </>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: platform === 'mobile' ? '20px' : '12px' }}>
+            {sortedPriorities.map((priority) => (
+              priority.type === 'deadline' ? (
+                <DeadlineCard
+                  key={priority.id}
+                  priority={priority}
+                  isInline
+                  defaultDeliverablesExpanded={false}
+                />
+              ) : (
+                <FlexibleCard
+                  key={priority.id}
+                  priority={priority}
+                  isInline
+                  defaultGoalsExpanded={false}
+                />
+              )
+            ))}
+          </div>
         ) : (
           <EmptyState />
         )}
