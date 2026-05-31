@@ -19,7 +19,7 @@ export const BAR_COLORS: Record<string, string> = {
   P1: '#0285ff',
   P2: '#924ff7',
   P3: '#ffc300',
-  other: 'var(--color-background-secondary, #e5e5e5)',
+  other: 'var(--color-text-tertiary, #73726C)',
 }
 
 // SVG stroke colors for HourRing

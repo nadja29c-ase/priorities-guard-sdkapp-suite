@@ -266,7 +266,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
               style={{
                 fontSize: '12px',
                 fontVariantNumeric: 'tabular-nums',
-                color: item.isOther ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-secondary, #3D3D3A)',
+                color: 'var(--color-text-secondary, #3D3D3A)',
                 fontStyle: item.isOther ? 'italic' : 'normal',
               }}
             >
