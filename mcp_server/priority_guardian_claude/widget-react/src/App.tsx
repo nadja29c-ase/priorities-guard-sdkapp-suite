@@ -659,7 +659,7 @@ function App() {
 
         {/* Priority Cards (display-only) */}
         {sortedPriorities.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: platform === 'mobile' ? '20px' : '12px' }}>
             {sortedPriorities.map((priority) => (
               priority.type === 'deadline' ? (
                 <DeadlineCard
@@ -765,7 +765,7 @@ function App() {
 
       {/* Priority Cards (full CRUD) */}
       {sortedPriorities.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: platform === 'mobile' ? '20px' : '12px' }}>
           {sortedPriorities.map((priority) => (
             <PriorityCardWrapper
               key={priority.id}
@@ -813,7 +813,7 @@ function App() {
 
       {/* Connection Status */}
       {appRef.current && (
-        <div style={{ marginTop: '24px' }}>
+        <div style={{ marginTop: platform === 'mobile' ? '24px' : '16px' }}>
           <ConnectionStatus
             app={appRef.current}
             connected={dashboardData?.google_connected ?? false}
