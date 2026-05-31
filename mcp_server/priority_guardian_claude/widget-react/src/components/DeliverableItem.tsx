@@ -262,7 +262,7 @@ export function DeliverableItem({
 
   // Fullscreen mode - interactive with CRUD
   return (
-    <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+    <li style={{ borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
       {error && (
         <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '4px' }} role="alert">
           {error}
