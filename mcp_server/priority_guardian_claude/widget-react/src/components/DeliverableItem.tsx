@@ -273,53 +273,54 @@ export function DeliverableItem({
         onMouseEnter={() => setIsGroupHovered(true)}
         onMouseLeave={() => setIsGroupHovered(false)}
       >
-        {/* Checkbox — 44pt tap target with negative margin to prevent layout shift */}
-        <button
-          type="button"
-          onClick={handleToggle}
-          disabled={disabled || !onToggle}
-          style={{
-            width: '16px',
-            height: '44px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            background: 'none',
-            border: 'none',
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            padding: '0 14px',
-            margin: '0 -14px',
-            boxSizing: 'content-box',
-            touchAction: 'manipulation',
-            WebkitTapHighlightColor: 'transparent',
-            alignSelf: 'center',
-          }}
-          role="checkbox"
-          aria-checked={displayedDone}
-          aria-disabled={disabled}
-          aria-label={t(displayedDone ? 'markAsNotDone' : 'markAsDone', { name: deliverable.name })}
-        >
-          {/* Visual checkbox — 16×16px, background/border here only */}
-          <span style={{
-            width: '16px',
-            height: '16px',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            background: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
-            border: displayedDone ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
-            pointerEvents: 'none',
-          }}>
+        {/* Checkbox — 44pt tap target via absolute positioning (no height inflation) */}
+        <div style={{ position: 'relative', width: '16px', height: '16px', flexShrink: 0, alignSelf: 'center' }}>
+          {/* Invisible tap target extender */}
+          <span
+            onClick={handleToggle}
+            style={{
+              position: 'absolute',
+              top: '-14px',
+              left: '-14px',
+              right: '-14px',
+              bottom: '-14px',
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            aria-hidden="true"
+          />
+          {/* Visual checkbox button — 16×16px, no height inflation */}
+          <button
+            type="button"
+            onClick={handleToggle}
+            disabled={disabled || !onToggle}
+            style={{
+              width: '16px',
+              height: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
+              border: displayedDone ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
+              borderRadius: '4px',
+              padding: 0,
+              cursor: disabled ? 'not-allowed' : 'pointer',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            role="checkbox"
+            aria-checked={displayedDone}
+            aria-disabled={disabled}
+            aria-label={t(displayedDone ? 'markAsNotDone' : 'markAsDone', { name: deliverable.name })}
+          >
             {displayedDone && (
               <svg style={{ width: '10px', height: '10px', color: 'var(--color-background-primary, #fff)' }} viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             )}
-          </span>
-        </button>
+          </button>
+        </div>
 
         {/* Name (editable) */}
         {isEditing ? (
