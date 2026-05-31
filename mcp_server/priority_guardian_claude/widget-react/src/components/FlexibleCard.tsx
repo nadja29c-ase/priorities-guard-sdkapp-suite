@@ -208,7 +208,7 @@ export function FlexibleCard({
       <article
         style={{
           borderRadius: '12px',
-          padding: '12px',
+          padding: '8px',
           background: 'var(--color-background-primary, #fff)',
           border: '1px solid var(--color-border, #e5e5e5)',
           borderLeft: `3px solid ${borderColor}`,
@@ -216,7 +216,7 @@ export function FlexibleCard({
         aria-label={priority.name}
       >
         {/* Header: Badge + Name + Streak pill */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
           <span
             style={{
               display: 'inline-flex',
@@ -267,7 +267,7 @@ export function FlexibleCard({
 
         {/* HourRing on left + Avg stats on right */}
         {priority.weeklyHourTarget != null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '6px' }}>
             <HourRing
               actual={priority.weeklyHourActual ?? 0}
               target={priority.weeklyHourTarget}

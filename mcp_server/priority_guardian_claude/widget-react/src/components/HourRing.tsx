@@ -38,7 +38,7 @@ export function HourRing({ actual, target, keyword }: HourRingProps) {
     .replace('{target}', formatHoursA11y(target))
 
   return (
-    <div style={{ position: 'relative', width: '64px', height: '64px', flexShrink: 0 }}>
+    <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
       {/* SVG Ring */}
       <svg
         viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}

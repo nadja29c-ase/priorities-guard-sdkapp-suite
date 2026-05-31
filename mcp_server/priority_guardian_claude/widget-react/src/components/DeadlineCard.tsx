@@ -199,7 +199,7 @@ export function DeadlineCard({
         {/* Deadline banner */}
         <div
           style={{
-            padding: '10px 20px',
+            padding: '6px 12px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -234,9 +234,9 @@ export function DeadlineCard({
         </div>
 
         {/* Main content area */}
-        <div style={{ padding: '12px' }}>
+        <div style={{ padding: '8px' }}>
           {/* Header row: Badge + Name */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span
               style={{
                 display: 'inline-flex',
@@ -270,10 +270,10 @@ export function DeadlineCard({
           </div>
 
           {/* Lead measure */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <span style={{ fontSize: '20px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
               {doneCount}
-              <span style={{ fontSize: '18px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
+              <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
                 /{totalCount}
               </span>
             </span>
@@ -283,7 +283,7 @@ export function DeadlineCard({
           </div>
 
           {/* E2E Deliverables - Collapsible */}
-          <div style={{ paddingTop: '12px', borderTop: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+          <div style={{ paddingTop: '8px', borderTop: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
             <button
               type="button"
               onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}

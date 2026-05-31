@@ -153,7 +153,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
   const ariaLabel = buildAriaLabel(timeAllocation, activeKeywords)
 
   return (
-    <section style={{ marginBottom: '20px' }} aria-labelledby="time-allocation-heading">
+    <section style={{ marginBottom: '6px' }} aria-labelledby="time-allocation-heading">
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
         <span
