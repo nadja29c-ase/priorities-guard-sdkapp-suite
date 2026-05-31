@@ -47,11 +47,15 @@ function App() {
   // Stale bridge detection — if onAppCreated never fires, widget is from old session
   const [isBridgeStale, setIsBridgeStale] = useState(false)
 
-  // Safe area insets for mobile fullscreen (notch/home indicator)
+  // Safe area insets for mobile fullscreen (notch/home indicator, native header)
+  const [safeAreaTop, setSafeAreaTop] = useState(0)
   const [safeAreaBottom, setSafeAreaBottom] = useState(0)
 
   // Platform detection for mobile-specific padding
   const [platform, setPlatform] = useState<string | undefined>(undefined)
+
+  // Track whether host accepted fullscreen (for hiding widget header on mobile)
+  const [hostFullscreen, setHostFullscreen] = useState(false)
 
   // App reference for CRUD operations
   const appRef = useRef<McpApp | null>(null)
@@ -76,6 +80,9 @@ function App() {
 
       // Read initial safe area insets for mobile fullscreen
       const safeInsets = hostContext?.safeAreaInsets
+      if (safeInsets?.top) {
+        setSafeAreaTop(safeInsets.top)
+      }
       if (safeInsets?.bottom) {
         setSafeAreaBottom(safeInsets.bottom)
       }
@@ -124,6 +131,13 @@ function App() {
       appInstance.onhostcontextchanged = (ctx) => {
         if (ctx.displayMode !== undefined) {
           setDisplayMode(ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline')
+          // Reset hostFullscreen when host closes fullscreen
+          if (ctx.displayMode === 'inline') {
+            setHostFullscreen(false)
+          }
+        }
+        if (ctx.safeAreaInsets?.top !== undefined) {
+          setSafeAreaTop(ctx.safeAreaInsets.top)
         }
         if (ctx.safeAreaInsets?.bottom !== undefined) {
           setSafeAreaBottom(ctx.safeAreaInsets.bottom)
@@ -501,7 +515,10 @@ function App() {
       const isMobile = ctx?.platform === 'mobile'
       if (isMobile && ctx?.availableDisplayModes?.includes('fullscreen')) {
         try {
-          await appRef.current.requestDisplayMode({ mode: 'fullscreen' })
+          const result = await appRef.current.requestDisplayMode({ mode: 'fullscreen' })
+          if (result?.mode === 'fullscreen') {
+            setHostFullscreen(true)
+          }
         } catch {
           // Silent — local fullscreen already set above
         }
@@ -510,6 +527,7 @@ function App() {
   }, [isBridgeStale])
 
   const handleMinimizeToInline = useCallback(async () => {
+    setHostFullscreen(false)
     if (appRef.current?.requestDisplayMode) {
       try {
         const result = await appRef.current.requestDisplayMode({ mode: 'inline' })
@@ -688,16 +706,25 @@ function App() {
   }
 
   // Fullscreen mode: full CRUD
-  // Mobile gets 70px padding for breathing room in host fullscreen; desktop stays at 16px
-  const basePadding = platform === 'mobile' ? 70 : 16
+  // On mobile in host fullscreen: use safeAreaInsets for precise padding (native header + home indicator)
+  // On desktop: fixed 16px padding
+  const isMobileHostFullscreen = platform === 'mobile' && hostFullscreen
+  const paddingTop = isMobileHostFullscreen
+    ? (safeAreaTop > 0 ? safeAreaTop : 16)
+    : 16
+  const paddingBottom = isMobileHostFullscreen
+    ? (safeAreaBottom > 0 ? safeAreaBottom + 16 : 32)
+    : 16
   return (
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
       style={{
         borderRadius: '16px',
-        padding: `${basePadding}px`,
-        paddingBottom: safeAreaBottom > 0 ? `${basePadding + safeAreaBottom}px` : `${basePadding}px`,
+        paddingTop: `${paddingTop}px`,
+        paddingLeft: '16px',
+        paddingRight: '16px',
+        paddingBottom: `${paddingBottom}px`,
         maxWidth: '672px',
         marginLeft: 'auto',
         marginRight: 'auto',
@@ -706,8 +733,8 @@ function App() {
         overscrollBehavior: 'contain',
       }}
     >
-      {/* Fullscreen header with minimize button */}
-      <FullscreenHeader onMinimize={handleMinimizeToInline} />
+      {/* Only show widget minimize header when host is NOT controlling fullscreen */}
+      {!hostFullscreen && <FullscreenHeader onMinimize={handleMinimizeToInline} />}
 
       {loadError && (
         <div
