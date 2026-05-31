@@ -5,6 +5,7 @@ import { t } from '../i18n'
 interface DeliverableItemProps {
   deliverable: Deliverable
   isInline?: boolean  // When true, display-only (no CRUD actions)
+  isLast?: boolean    // When true, no bottom border (last item in list)
   onToggle?: (deliverableId: string, done: boolean) => Promise<void>
   onRename?: (deliverableId: string, name: string) => Promise<void>
   onDelete?: (deliverableId: string) => Promise<void>
@@ -17,6 +18,7 @@ const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover
 export function DeliverableItem({
   deliverable,
   isInline = false,
+  isLast = false,
   onToggle,
   onRename,
   onDelete,
@@ -150,7 +152,7 @@ export function DeliverableItem({
   // Inline mode - display only (using inline styles for Claude widget)
   if (isInline) {
     return (
-      <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+      <li style={{ paddingBottom: '8px', borderBottom: isLast ? 'none' : '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {/* Checkbox (display only) — 16×16px visual element */}
           <span
@@ -262,7 +264,7 @@ export function DeliverableItem({
 
   // Fullscreen mode - interactive with CRUD
   return (
-    <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+    <li style={{ paddingBottom: '8px', borderBottom: isLast ? 'none' : '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))' }}>
       {error && (
         <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '4px' }} role="alert">
           {error}

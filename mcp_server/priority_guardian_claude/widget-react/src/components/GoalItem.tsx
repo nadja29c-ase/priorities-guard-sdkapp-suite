@@ -5,6 +5,7 @@ import { t } from '../i18n'
 interface GoalItemProps {
   goal: Goal
   isInline?: boolean  // When true, display-only (no CRUD actions)
+  isLast?: boolean    // When true, no bottom border (last item in list)
   onToggle?: (goalId: string, achieved: boolean) => Promise<void>
   onRename?: (goalId: string, text: string) => Promise<void>
   onDelete?: (goalId: string) => Promise<void>
@@ -24,6 +25,7 @@ const isTouchDevice = typeof window !== 'undefined' && window.matchMedia('(hover
 export function GoalItem({
   goal,
   isInline = false,
+  isLast = false,
   onToggle,
   onRename,
   onDelete,
@@ -270,7 +272,7 @@ export function GoalItem({
 
   // Fullscreen mode - interactive with CRUD
   return (
-    <li style={{ paddingBottom: '8px', borderBottom: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+    <li style={{ paddingBottom: '8px', borderBottom: isLast ? 'none' : '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))' }}>
       {error && (
         <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '4px' }} role="alert">
           {error}

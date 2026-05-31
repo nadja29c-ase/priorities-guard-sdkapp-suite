@@ -316,8 +316,8 @@ export function DeadlineCard({
               <>
                 {priority.deliverables.length > 0 ? (
                   <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }} aria-label="Deliverables list">
-                    {priority.deliverables.map((d) => (
-                      <DeliverableItem key={d.id} deliverable={d} isInline />
+                    {priority.deliverables.map((d, index) => (
+                      <DeliverableItem key={d.id} deliverable={d} isInline isLast={index === priority.deliverables.length - 1} />
                     ))}
                   </ul>
                 ) : (
@@ -607,10 +607,11 @@ export function DeadlineCard({
             <>
               {priority.deliverables.length > 0 ? (
                 <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }} aria-label="Deliverables list">
-                  {priority.deliverables.map((d) => (
+                  {priority.deliverables.map((d, index) => (
                     <DeliverableItem
                       key={d.id}
                       deliverable={d}
+                      isLast={index === priority.deliverables.length - 1}
                       onToggle={onToggleDeliverable}
                       onRename={onRenameDeliverable}
                       onDelete={onDeleteDeliverable}

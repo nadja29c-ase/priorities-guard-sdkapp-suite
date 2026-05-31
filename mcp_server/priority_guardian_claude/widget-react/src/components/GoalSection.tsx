@@ -98,7 +98,7 @@ export function GoalSection({
   // Inline mode - display only (using inline styles for Claude widget)
   if (isInline) {
     return (
-      <div style={{ borderTop: '1px solid var(--color-border-subtle, #f0f0f0)', paddingTop: '8px' }}>
+      <div style={{ borderTop: '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))', paddingTop: '8px' }}>
         {/* Header */}
         <button
           type="button"
@@ -149,8 +149,8 @@ export function GoalSection({
           <>
             {goals.length > 0 ? (
               <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }} aria-label={t('goalsList')}>
-                {goals.map((goal) => (
-                  <GoalItem key={goal.id} goal={goal} isInline />
+                {goals.map((goal, index) => (
+                  <GoalItem key={goal.id} goal={goal} isInline isLast={index === goals.length - 1} />
                 ))}
               </ul>
             ) : (
@@ -164,7 +164,7 @@ export function GoalSection({
 
   // Fullscreen mode - interactive with CRUD
   return (
-    <div style={{ borderTop: '1px solid var(--color-border-subtle, #f0f0f0)', paddingTop: '12px' }}>
+    <div style={{ borderTop: '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))', paddingTop: '12px' }}>
       {/* Header */}
       <button
         type="button"
@@ -215,10 +215,11 @@ export function GoalSection({
         <>
           {goals.length > 0 ? (
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }} aria-label={t('goalsList')}>
-              {goals.map((goal) => (
+              {goals.map((goal, index) => (
                 <GoalItem
                   key={goal.id}
                   goal={goal}
+                  isLast={index === goals.length - 1}
                   onToggle={onToggleGoal}
                   onRename={onRenameGoal}
                   onDelete={onDeleteGoal}
