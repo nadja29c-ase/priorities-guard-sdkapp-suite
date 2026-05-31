@@ -379,9 +379,9 @@ export function DeliverableItem({
                 onMouseEnter={() => setIsHoveredEdit(true)}
                 onMouseLeave={() => setIsHoveredEdit(false)}
                 style={{
-                  padding: '4px',
-                  minWidth: '44px',
-                  minHeight: '44px',
+                  padding: 0,
+                  width: '44px',
+                  height: '44px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -406,9 +406,9 @@ export function DeliverableItem({
                 onMouseEnter={() => setIsHoveredDelete(true)}
                 onMouseLeave={() => setIsHoveredDelete(false)}
                 style={{
-                  padding: '4px',
-                  minWidth: '44px',
-                  minHeight: '44px',
+                  padding: 0,
+                  width: '44px',
+                  height: '44px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
