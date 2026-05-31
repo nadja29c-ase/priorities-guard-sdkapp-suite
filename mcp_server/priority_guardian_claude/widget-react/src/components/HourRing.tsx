@@ -7,6 +7,7 @@ interface HourRingProps {
   actual: number        // weeklyHourActual (0 if null/undefined)
   target: number        // weeklyHourTarget
   keyword: CalendarKeyword  // P1, P2, P3 - determines ring color
+  size?: number         // Optional size override (default 48px)
 }
 
 // Ring geometry constants - copied exactly from ChatGPT widget
@@ -22,7 +23,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS  // ~163.36
  *
  * Copied from ChatGPT widget - uses inline styles instead of Tailwind.
  */
-export function HourRing({ actual, target, keyword }: HourRingProps) {
+export function HourRing({ actual, target, keyword, size = 48 }: HourRingProps) {
   // Calculate progress percentage (capped at 100%)
   const percentage = Math.min((actual / target) * 100, 100)
 
@@ -37,8 +38,13 @@ export function HourRing({ actual, target, keyword }: HourRingProps) {
     .replace('{hours}', formatHoursA11y(actual))
     .replace('{target}', formatHoursA11y(target))
 
+  // Calculate font sizes based on ring size (scale proportionally from 48px base)
+  const scale = size / 48
+  const actualFontSize = Math.round(13 * scale)
+  const targetFontSize = Math.round(10 * scale)
+
   return (
-    <div style={{ position: 'relative', width: '48px', height: '48px', flexShrink: 0 }}>
+    <div style={{ position: 'relative', width: `${size}px`, height: `${size}px`, flexShrink: 0 }}>
       {/* SVG Ring */}
       <svg
         viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
@@ -88,10 +94,10 @@ export function HourRing({ actual, target, keyword }: HourRingProps) {
         }}
         aria-hidden="true"
       >
-        <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--color-text-primary, #0d0d0d)', lineHeight: 1.2 }}>
+        <span style={{ fontWeight: 600, fontSize: `${actualFontSize}px`, color: 'var(--color-text-primary, #0d0d0d)', lineHeight: 1.2 }}>
           {formatHours(actual)}
         </span>
-        <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary, #73726C)', lineHeight: 1.2 }}>
+        <span style={{ fontSize: `${targetFontSize}px`, color: 'var(--color-text-tertiary, #73726C)', lineHeight: 1.2 }}>
           / {formatHours(target)}
         </span>
       </div>

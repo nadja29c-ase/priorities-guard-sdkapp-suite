@@ -178,7 +178,7 @@ export function DeliverableItem({
           <span
             style={{
               flex: 1,
-              fontSize: '14px',
+              fontSize: '11px',
               overflowWrap: 'break-word',
               color: deliverable.done ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
               textDecoration: deliverable.done ? 'line-through' : 'none',

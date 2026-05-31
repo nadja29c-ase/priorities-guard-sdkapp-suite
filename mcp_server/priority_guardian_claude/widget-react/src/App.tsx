@@ -640,7 +640,7 @@ function App() {
         style={{
           background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '16px',
-          padding: '16px',
+          padding: '12px',
           touchAction: 'pan-y',
           overscrollBehavior: 'contain',
         }}
@@ -671,7 +671,7 @@ function App() {
 
         {/* Priority Cards (display-only) */}
         {sortedPriorities.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {sortedPriorities.map((priority) => (
               priority.type === 'deadline' ? (
                 <DeadlineCard

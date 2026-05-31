@@ -98,7 +98,7 @@ export function GoalSection({
   // Inline mode - display only (using inline styles for Claude widget)
   if (isInline) {
     return (
-      <div style={{ borderTop: '1px solid var(--color-border-subtle, #f0f0f0)', paddingTop: '12px' }}>
+      <div style={{ borderTop: '1px solid var(--color-border-subtle, #f0f0f0)', paddingTop: '8px' }}>
         {/* Header */}
         <button
           type="button"
@@ -124,7 +124,7 @@ export function GoalSection({
           )}
           <span
             style={{
-              fontSize: '12px',
+              fontSize: '10px',
               fontWeight: 500,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
@@ -133,12 +133,12 @@ export function GoalSection({
             {goals.length === 1 ? t('oneMonthGoal') : t('oneMonthGoals')}
           </span>
           {checkpointDate && (
-            <span style={{ fontSize: '12px' }}>
+            <span style={{ fontSize: '10px' }}>
               {t('by')} {formatDate(checkpointDate)}
             </span>
           )}
           {goals.length > 0 && (
-            <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #3D3D3A)', marginLeft: 'auto' }}>
+            <span style={{ fontSize: '10px', color: 'var(--color-text-secondary, #3D3D3A)', marginLeft: 'auto' }}>
               {achievedCount}/{goals.length}
             </span>
           )}
@@ -154,7 +154,7 @@ export function GoalSection({
                 ))}
               </ul>
             ) : (
-              <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary, #73726C)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
             )}
           </>
         )}

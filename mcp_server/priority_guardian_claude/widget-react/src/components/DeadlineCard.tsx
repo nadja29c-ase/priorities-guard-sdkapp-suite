@@ -199,7 +199,7 @@ export function DeadlineCard({
         {/* Deadline banner */}
         <div
           style={{
-            padding: '10px 20px',
+            padding: '8px 12px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -218,11 +218,11 @@ export function DeadlineCard({
               <rect x="2" y="3" width="12" height="11" rx="1.5" />
               <path d="M5 1.5v3M11 1.5v3M2 7h12" />
             </svg>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #3D3D3A)' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #3D3D3A)' }}>
               {deadlineDate}
             </span>
           </div>
-          <span style={{ fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary, #3D3D3A)' }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-secondary, #3D3D3A)' }}>
             {days !== null && (
               days > 0
                 ? t('dDaysLeft').replace('{n}', String(days))
@@ -236,7 +236,7 @@ export function DeadlineCard({
         {/* Main content area */}
         <div style={{ padding: '12px' }}>
           {/* Header row: Badge + Name */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
             <span
               style={{
                 display: 'inline-flex',
@@ -256,7 +256,7 @@ export function DeadlineCard({
             <h3
               style={{
                 flex: 1,
-                fontSize: '14px',
+                fontSize: '12px',
                 fontWeight: 600,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -270,14 +270,14 @@ export function DeadlineCard({
           </div>
 
           {/* Lead measure */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <span style={{ fontSize: '20px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
               {doneCount}
-              <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
+              <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
                 /{totalCount}
               </span>
             </span>
-            <span style={{ fontSize: '14px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
               {t('deliverablesDone')}
             </span>
           </div>
@@ -301,10 +301,10 @@ export function DeadlineCard({
               }}
               aria-expanded={deliverablesExpanded}
             >
-              <span style={{ fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ fontSize: '10px', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t('e2eDeliverables')}
               </span>
-              <span style={{ fontSize: '12px', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: '10px', fontVariantNumeric: 'tabular-nums' }}>
                 ({doneCount}/{totalCount})
               </span>
               <span style={{ marginLeft: 'auto' }}>

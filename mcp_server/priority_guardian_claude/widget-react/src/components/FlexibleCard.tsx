@@ -216,7 +216,7 @@ export function FlexibleCard({
         aria-label={priority.name}
       >
         {/* Header: Badge + Name + Streak pill */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
           <span
             style={{
               display: 'inline-flex',
@@ -236,7 +236,7 @@ export function FlexibleCard({
           <h3
             style={{
               flex: 1,
-              fontSize: '14px',
+              fontSize: '12px',
               fontWeight: 600,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -251,7 +251,7 @@ export function FlexibleCard({
           {priority.streakCount != null && priority.streakCount > 0 && (
             <span
               style={{
-                fontSize: '12px',
+                fontSize: '10px',
                 fontVariantNumeric: 'tabular-nums',
                 padding: '2px 6px',
                 borderRadius: '9999px',
@@ -267,26 +267,27 @@ export function FlexibleCard({
 
         {/* HourRing on left + Avg stats on right */}
         {priority.weeklyHourTarget != null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
             <HourRing
               actual={priority.weeklyHourActual ?? 0}
               target={priority.weeklyHourTarget}
               keyword={kw}
+              size={40}
             />
             <div style={{ flex: 1 }}>
               {hasAvg ? (
                 <>
-                  <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
                     ~{Math.round(priority.avgTargetAchievement!)}%
                   </span>
-                  <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
+                  <p style={{ fontSize: '11px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
                     {t('ofWeeklyTargetOnAvg')}
                   </p>
                 </>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <svg
-                    style={{ width: '14px', height: '14px', flexShrink: 0, color: 'var(--color-text-tertiary, #73726C)' }}
+                    style={{ width: '12px', height: '12px', flexShrink: 0, color: 'var(--color-text-tertiary, #73726C)' }}
                     viewBox="0 0 16 16"
                     fill="none"
                     stroke="currentColor"
@@ -297,7 +298,7 @@ export function FlexibleCard({
                   >
                     <path d="M4 2h8M4 14h8M5 2v2c0 1.5 1 3 3 4-2 1-3 2.5-3 4v2M11 2v2c0 1.5-1 3-3 4 2 1 3 2.5 3 4v2" />
                   </svg>
-                  <span style={{ fontSize: '14px', fontStyle: 'italic', color: 'var(--color-text-tertiary, #73726C)' }}>
+                  <span style={{ fontSize: '11px', fontStyle: 'italic', color: 'var(--color-text-tertiary, #73726C)' }}>
                     {t('trackingInProgress')}
                   </span>
                 </div>

@@ -153,7 +153,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
   const ariaLabel = buildAriaLabel(timeAllocation, activeKeywords)
 
   return (
-    <section style={{ marginBottom: '6px' }} aria-labelledby="time-allocation-heading">
+    <section style={{ marginBottom: '8px' }} aria-labelledby="time-allocation-heading">
       {/* Header row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
         <span
@@ -215,7 +215,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
       </div>
 
       {/* Date range */}
-      <p style={{ fontSize: '12px', marginBottom: '10px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
+      <p style={{ fontSize: '11px', marginBottom: '8px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
         {dateRange}
       </p>
 
@@ -250,7 +250,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '10px' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginTop: '8px' }}>
         {legendItems.map((item) => (
           <div key={item.key} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span
@@ -264,7 +264,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
             />
             <span
               style={{
-                fontSize: '12px',
+                fontSize: '11px',
                 fontVariantNumeric: 'tabular-nums',
                 color: 'var(--color-text-secondary, #3D3D3A)',
                 fontStyle: item.isOther ? 'italic' : 'normal',

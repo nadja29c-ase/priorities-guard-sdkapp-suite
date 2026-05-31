@@ -187,7 +187,7 @@ export function GoalItem({
           style={{
             flex: 1,
             minWidth: 0,
-            fontSize: '14px',
+            fontSize: '11px',
             overflowWrap: 'break-word',
             color: goal.achieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
             textDecoration: goal.achieved ? 'line-through' : 'none',
