@@ -16,9 +16,9 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
       onMouseLeave={() => setIsHovered(false)}
       style={{
         width: '100%',
-        marginTop: '16px',
-        padding: '16px 0',
-        borderRadius: '12px',
+        marginTop: '8px',
+        padding: '10px 0',
+        borderRadius: '8px',
         fontSize: '12px',
         fontWeight: 500,
         display: 'flex',

@@ -13,7 +13,7 @@ export function CalendarConnectionMinimal({ connected }: CalendarConnectionMinim
   return (
     <div
       style={{
-        marginTop: '16px',
+        marginTop: '8px',
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
