@@ -226,7 +226,7 @@ export function KeywordPicker({
                 fontSize: '12px',
                 fontWeight: 500,
                 borderRadius: '8px',
-                background: pendingBadgeColor?.bg ?? 'var(--color-background-info-solid, #0285ff)',
+                background: pendingBadgeColor?.bg ?? '#0285ff',
                 color: pendingBadgeColor?.text ?? '#fff',
                 border: 'none',
                 cursor: isLoading ? 'not-allowed' : 'pointer',

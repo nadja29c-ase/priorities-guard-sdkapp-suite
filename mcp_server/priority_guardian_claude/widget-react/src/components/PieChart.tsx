@@ -42,18 +42,19 @@ const PRIORITY_COLORS: Record<CalendarKeyword, string> = {
 }
 
 // Semantic slice colors for non-priority categories.
-// All theme-adaptive SDK tokens. Distinct from P1 (blue), P2 (purple), P3 (yellow).
+// Data-viz accent colors — no official solid tokens exist for pie chart fills.
+// Distinct from P1 (blue), P2 (purple), P3 (yellow).
 // 5 colors covers typical breakdown slices; cycles if more needed.
 const SEMANTIC_COLORS = [
-  'var(--color-background-success-solid, #10b981)',    // green
-  'var(--color-background-danger-solid, #7F2C28)',     // red
-  'var(--color-background-warning-solid, #f59e0b)',    // orange/amber
-  'var(--color-background-primary-solid, #0285ff)',    // brand accent
-  'var(--color-background-secondary-solid, #73726C)',  // neutral dark
+  '#10b981',   // green
+  '#ef4444',   // red
+  '#f59e0b',   // amber
+  '#0285ff',   // brand blue
+  '#73726C',   // neutral
 ]
 
 // Muted neutral for "Other"/"Uncategorized" — subordinate to named categories
-const OTHER_GREY = 'var(--color-background-secondary-solid, #73726C)'
+const OTHER_GREY = '#73726C'
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTargetLabel }: PieChartProps) {
   // Filter out zero-hour slices
