@@ -79,7 +79,9 @@ function App() {
   // MCP Apps bridge: useApp hook to receive tool results
   const { app } = useApp({
     appInfo: { name: 'Priority Guardian', version: '1.0.0' },
-    capabilities: {},
+    capabilities: {
+      availableDisplayModes: ['inline', 'fullscreen'],
+    },
     onAppCreated: useCallback((appInstance: McpApp) => {
       appRef.current = appInstance
 
