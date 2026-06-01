@@ -154,7 +154,7 @@ export function GoalSection({
                 ))}
               </ul>
             ) : (
-              <p style={{ fontSize: '11px', color: 'var(--color-text-tertiary, #73726C)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
+              <p style={{ fontSize: '12px', color: 'var(--color-text-tertiary, #73726C)', marginBottom: '8px' }}>{t('noGoalsYet')}</p>
             )}
           </>
         )}

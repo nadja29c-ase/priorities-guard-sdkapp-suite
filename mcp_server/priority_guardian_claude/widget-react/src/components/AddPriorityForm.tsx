@@ -275,7 +275,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               onMouseLeave={() => setIsHoveredDeadline(false)}
               style={{
                 padding: '16px',
-                border: `1px solid ${isHoveredDeadline ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
+                border: `1px solid ${isHoveredDeadline ? 'var(--color-border-primary, rgba(31,30,29,0.4))' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
                 borderRadius: '8px',
                 background: isHoveredDeadline ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
                 textAlign: 'left',
@@ -296,7 +296,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               onMouseLeave={() => setIsHoveredFlexible(false)}
               style={{
                 padding: '16px',
-                border: `1px solid ${isHoveredFlexible ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
+                border: `1px solid ${isHoveredFlexible ? 'var(--color-border-primary, rgba(31,30,29,0.4))' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
                 borderRadius: '8px',
                 background: isHoveredFlexible ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
                 textAlign: 'left',
@@ -506,9 +506,9 @@ export function AddPriorityButton({ onClick }: { onClick: () => void }) {
       style={{
         width: '100%',
         padding: '16px',
-        border: `2px dashed ${isHovered ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
+        border: `2px dashed ${isHovered ? 'var(--color-border-primary, rgba(31,30,29,0.4))' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
         borderRadius: '12px',
-        background: isHovered ? 'var(--color-background-secondary, rgba(249, 249, 249, 0.5))' : 'transparent',
+        background: isHovered ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

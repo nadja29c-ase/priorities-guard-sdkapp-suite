@@ -161,7 +161,7 @@ export function ConnectionStatus({
                   padding: '4px 8px',
                   borderRadius: '8px',
                   color: 'var(--color-text-danger, #7F2C28)',
-                  background: 'rgba(220, 38, 38, 0.1)',
+                  background: 'var(--color-background-danger, #F7ECEC)',
                   border: 'none',
                   cursor: isDisconnecting ? 'not-allowed' : 'pointer',
                   opacity: isDisconnecting ? 0.6 : 1,
@@ -206,7 +206,7 @@ export function ConnectionStatus({
                 padding: '4px 12px',
                 borderRadius: '8px',
                 color: 'var(--color-text-danger, #7F2C28)',
-                background: 'rgba(220, 38, 38, 0.1)',
+                background: 'var(--color-background-danger, #F7ECEC)',
                 border: 'none',
                 cursor: 'pointer',
                 minHeight: '44px',
@@ -331,8 +331,8 @@ export function ConnectionStatus({
             borderRadius: '8px',
             padding: '10px 12px',
             marginTop: '12px',
-            background: 'rgba(220, 38, 38, 0.1)',
-            border: '1px solid rgba(220, 38, 38, 0.3)',
+            background: 'var(--color-background-danger, #F7ECEC)',
+            border: '1px solid var(--color-border-danger, #A73D39)',
           }}
           role="alert"
         >

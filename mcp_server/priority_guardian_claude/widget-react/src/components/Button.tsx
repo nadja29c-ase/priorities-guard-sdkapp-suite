@@ -28,8 +28,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       primary: {
         solid: {
           base: {
-            background: 'var(--color-background-info-solid, #0285ff)',
-            color: '#fff',
+            background: 'var(--color-background-info, #D6E4F6)',
+            color: 'var(--color-text-info, #3266AD)',
             border: 'none',
           },
           hover: { opacity: 0.9 },
@@ -37,25 +37,25 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ghost: {
           base: {
             background: 'transparent',
-            color: 'var(--color-text-info, #0285ff)',
+            color: 'var(--color-text-info, #3266AD)',
             border: 'none',
           },
-          hover: { background: 'var(--color-background-info-soft-alpha, rgba(2,133,255,0.1))' },
+          hover: { background: 'var(--color-background-info, #D6E4F6)' },
         },
         outline: {
           base: {
             background: 'transparent',
-            color: 'var(--color-text-info, #0285ff)',
-            border: '1px solid var(--color-border-info, #0285ff)',
+            color: 'var(--color-text-info, #3266AD)',
+            border: '1px solid var(--color-border-info, #4682D5)',
           },
-          hover: { background: 'var(--color-background-info-soft-alpha, rgba(2,133,255,0.1))' },
+          hover: { background: 'var(--color-background-info, #D6E4F6)' },
         },
       },
       secondary: {
         solid: {
           base: {
-            background: 'var(--color-background-secondary, rgba(31,30,29,0.4))',
-            color: 'var(--color-text-primary, #171717)',
+            background: 'var(--color-background-secondary, #F5F4ED)',
+            color: 'var(--color-text-primary, #141413)',
             border: 'none',
           },
           hover: { opacity: 0.9 },
@@ -66,7 +66,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             color: 'var(--color-text-secondary, #73726C)',
             border: 'none',
           },
-          hover: { background: 'var(--color-background-secondary, rgba(0,0,0,0.05))' },
+          hover: { background: 'var(--color-background-secondary, #F5F4ED)' },
         },
         outline: {
           base: {
@@ -74,14 +74,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             color: 'var(--color-text-secondary, #73726C)',
             border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
           },
-          hover: { background: 'var(--color-background-secondary, rgba(0,0,0,0.05))' },
+          hover: { background: 'var(--color-background-secondary, #F5F4ED)' },
         },
       },
       danger: {
         solid: {
           base: {
-            background: 'var(--color-background-danger-solid, #7F2C28)',
-            color: '#fff',
+            background: 'var(--color-background-danger, #F7ECEC)',
+            color: 'var(--color-text-danger, #7F2C28)',
             border: 'none',
           },
           hover: { opacity: 0.9 },
@@ -92,15 +92,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             color: 'var(--color-text-danger, #7F2C28)',
             border: 'none',
           },
-          hover: { background: 'var(--color-background-danger-soft-alpha, rgba(220,38,38,0.1))' },
+          hover: { background: 'var(--color-background-danger, #F7ECEC)' },
         },
         outline: {
           base: {
             background: 'transparent',
             color: 'var(--color-text-danger, #7F2C28)',
-            border: '1px solid var(--color-border-danger, #7F2C28)',
+            border: '1px solid var(--color-border-danger, #A73D39)',
           },
-          hover: { background: 'var(--color-background-danger-soft-alpha, rgba(220,38,38,0.1))' },
+          hover: { background: 'var(--color-background-danger, #F7ECEC)' },
         },
       },
     }
@@ -117,7 +117,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       transition: 'all 0.15s',
       cursor: isDisabled ? 'not-allowed' : 'pointer',
       opacity: isDisabled ? 0.5 : 1,
-      outline: isFocused ? '2px solid var(--color-border-focus, #0285ff)' : 'none',
+      outline: isFocused ? '2px solid var(--color-ring-primary, rgba(20,20,19,0.7))' : 'none',
       outlineOffset: '2px',
       ...sizeStyles[size],
       ...colorStyle.base,

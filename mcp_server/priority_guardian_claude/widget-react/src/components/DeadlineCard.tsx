@@ -473,7 +473,7 @@ export function DeadlineCard({
               style={{
                 padding: '4px',
                 borderRadius: '4px',
-                background: isHoveredDelete ? 'rgba(220, 38, 38, 0.1)' : 'transparent',
+                background: isHoveredDelete ? 'var(--color-background-danger, #F7ECEC)' : 'transparent',
                 border: 'none',
                 cursor: 'pointer',
               }}

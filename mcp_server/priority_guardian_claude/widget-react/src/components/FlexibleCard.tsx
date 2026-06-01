@@ -280,7 +280,7 @@ export function FlexibleCard({
                   <span style={{ fontSize: '20px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #141413)' }}>
                     ~{Math.round(priority.avgTargetAchievement!)}%
                   </span>
-                  <p style={{ fontSize: '11px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
+                  <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
                     {t('ofWeeklyTargetOnAvg')}
                   </p>
                 </>
@@ -436,7 +436,7 @@ export function FlexibleCard({
               padding: '4px',
               borderRadius: '4px',
               transition: 'background 0.15s',
-              background: isHoveredDelete ? 'rgba(220, 38, 38, 0.1)' : 'transparent',
+              background: isHoveredDelete ? 'var(--color-background-danger, #F7ECEC)' : 'transparent',
               border: 'none',
               cursor: 'pointer',
             }}
