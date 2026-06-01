@@ -353,6 +353,7 @@ export function DeliverableItem({
               fontSize: '14px',
               cursor: 'pointer',
               overflowWrap: 'break-word',
+              paddingRight: isTouchDevice ? '92px' : '0',
               color: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #141413)',
               textDecoration: displayedDone ? 'line-through' : 'none',
             }}
