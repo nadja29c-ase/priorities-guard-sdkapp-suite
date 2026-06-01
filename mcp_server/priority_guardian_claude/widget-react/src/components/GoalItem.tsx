@@ -364,7 +364,7 @@ export function GoalItem({
                 fontSize: '14px',
                 cursor: 'pointer',
                 overflowWrap: 'break-word',
-                paddingRight: isTouchDevice ? '92px' : '0',
+                paddingRight: isTouchDevice ? '52px' : '0',
                 color: displayedAchieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #141413)',
                 textDecoration: displayedAchieved ? 'line-through' : 'none',
               }}
@@ -398,21 +398,19 @@ export function GoalItem({
                 onMouseEnter={() => setIsHoveredEdit(true)}
                 onMouseLeave={() => setIsHoveredEdit(false)}
                 style={{
-                  padding: 0,
-                  width: '44px',
-                  height: '44px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: isHoveredEdit ? 'var(--color-text-primary, #141413)' : 'var(--color-text-tertiary, #73726C)',
-                  background: 'none',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  background: isHoveredEdit ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
                   border: 'none',
                   cursor: 'pointer',
+                  color: isHoveredEdit ? 'var(--color-text-primary, #141413)' : 'var(--color-text-tertiary, #73726C)',
                   touchAction: 'manipulation',
                   WebkitTapHighlightColor: 'transparent',
+                  position: 'relative',
                 }}
                 aria-label={t('editItem', { name: goal.text })}
               >
+                <span style={{ position: 'absolute', top: '-16px', left: '-16px', right: '-16px', bottom: '-16px' }} aria-hidden="true" />
                 <svg style={{ width: '14px', height: '14px' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                   <path d="M11.5 2.5l2 2M2 14l.5-2 9-9 2 2-9 9-2.5.5z"/>
                 </svg>
@@ -425,21 +423,19 @@ export function GoalItem({
                 onMouseEnter={() => setIsHoveredDelete(true)}
                 onMouseLeave={() => setIsHoveredDelete(false)}
                 style={{
-                  padding: 0,
-                  width: '44px',
-                  height: '44px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: isHoveredDelete ? 'var(--color-text-danger, #7F2C28)' : 'var(--color-text-tertiary, #73726C)',
-                  background: 'none',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  background: isHoveredDelete ? 'var(--color-background-danger, #F7ECEC)' : 'transparent',
                   border: 'none',
                   cursor: 'pointer',
+                  color: isHoveredDelete ? 'var(--color-text-danger, #7F2C28)' : 'var(--color-text-tertiary, #73726C)',
                   touchAction: 'manipulation',
                   WebkitTapHighlightColor: 'transparent',
+                  position: 'relative',
                 }}
                 aria-label={t('deleteItemAction', { name: goal.text })}
               >
+                <span style={{ position: 'absolute', top: '-16px', left: '-16px', right: '-16px', bottom: '-16px' }} aria-hidden="true" />
                 <svg style={{ width: '14px', height: '14px' }} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                   <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4"/>
                   <path d="M12.5 4v9a1.5 1.5 0 01-1.5 1.5H5a1.5 1.5 0 01-1.5-1.5V4"/>
