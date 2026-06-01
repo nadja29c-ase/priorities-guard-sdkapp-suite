@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 import httpx
 
@@ -174,17 +174,6 @@ async def health_check():
 async def robots_txt():
     """Serve robots.txt to block all crawlers from the backend domain."""
     return PlainTextResponse("User-agent: *\nDisallow: /\n")
-
-
-# -------------------------------------------------------------
-# Favicon — Redirect to static logo for Google favicon service.
-# Used by Claude MCP Apps directory.
-# -------------------------------------------------------------
-
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    """Redirect /favicon.ico to static logo for Google favicon service."""
-    return RedirectResponse(url="/static/logo-pg-64.svg", status_code=301)
 
 
 # Add custom exception handler for validation errors
