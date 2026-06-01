@@ -210,7 +210,7 @@ export function FlexibleCard({
           borderRadius: '12px',
           padding: '12px',
           background: 'var(--color-background-primary, #fff)',
-          border: '1px solid var(--color-border, #e5e5e5)',
+          border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
           borderLeft: `3px solid ${borderColor}`,
         }}
         aria-label={priority.name}
@@ -241,7 +241,7 @@ export function FlexibleCard({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              color: 'var(--color-text-primary, #0d0d0d)',
+              color: 'var(--color-text-primary, #141413)',
               margin: 0,
             }}
           >
@@ -256,8 +256,8 @@ export function FlexibleCard({
                 padding: '2px 6px',
                 borderRadius: '9999px',
                 fontWeight: 500,
-                color: 'var(--color-text-primary, #0d0d0d)',
-                background: 'var(--color-background-tertiary, #ebebeb)',
+                color: 'var(--color-text-primary, #141413)',
+                background: 'var(--color-background-tertiary, #FAF9F5)',
               }}
             >
               {t('weekStreak').replace('{n}', String(priority.streakCount))}
@@ -277,7 +277,7 @@ export function FlexibleCard({
             <div style={{ flex: 1 }}>
               {hasAvg ? (
                 <>
-                  <span style={{ fontSize: '18px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
+                  <span style={{ fontSize: '20px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #141413)' }}>
                     ~{Math.round(priority.avgTargetAchievement!)}%
                   </span>
                   <p style={{ fontSize: '11px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
@@ -340,7 +340,7 @@ export function FlexibleCard({
         borderRadius: '12px',
         padding: '12px',
         background: 'var(--color-background-primary, #fff)',
-        border: '1px solid var(--color-border, #e5e5e5)',
+        border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
         borderLeft: `3px solid ${borderColor}`,
       }}
       aria-label={priority.name}
@@ -374,7 +374,7 @@ export function FlexibleCard({
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               cursor: 'pointer',
-              color: 'var(--color-text-primary, #0d0d0d)',
+              color: 'var(--color-text-primary, #141413)',
               margin: 0,
             }}
             onClick={(e) => { e.stopPropagation(); onStartEdit?.(); }}
@@ -396,8 +396,8 @@ export function FlexibleCard({
               padding: '2px 6px',
               borderRadius: '9999px',
               fontWeight: 500,
-              color: 'var(--color-text-primary, #0d0d0d)',
-              background: 'var(--color-background-tertiary, #ebebeb)',
+              color: 'var(--color-text-primary, #141413)',
+              background: 'var(--color-background-tertiary, #FAF9F5)',
             }}
           >
             {t('weekStreak').replace('{n}', String(priority.streakCount))}
@@ -466,9 +466,9 @@ export function FlexibleCard({
             width: '100%',
             fontSize: '14px',
             fontWeight: 600,
-            color: 'var(--color-text-primary, #0d0d0d)',
+            color: 'var(--color-text-primary, #141413)',
             background: 'var(--color-background-primary, #fff)',
-            border: '1px solid var(--color-border, #e5e5e5)',
+            border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
             borderRadius: '8px',
             padding: '8px 12px',
             marginBottom: '12px',
@@ -480,7 +480,7 @@ export function FlexibleCard({
 
       {/* Error message */}
       {error && (
-        <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '8px' }} role="alert">{error}</p>
+        <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #7F2C28)', marginBottom: '8px' }} role="alert">{error}</p>
       )}
 
       {/* HourRing on left + Avg stats on right (not in edit mode) */}
@@ -494,7 +494,7 @@ export function FlexibleCard({
           <div style={{ flex: 1 }}>
             {hasAvg ? (
               <>
-                <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
+                <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #141413)' }}>
                   ~{Math.round(priority.avgTargetAchievement!)}%
                 </span>
                 <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--color-text-secondary, #3D3D3A)' }}>
@@ -537,7 +537,7 @@ export function FlexibleCard({
           )}
 
           <div>
-            <label htmlFor={`hours-${priority.id}`} style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary, #737373)', marginBottom: '4px' }}>
+            <label htmlFor={`hours-${priority.id}`} style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary, #73726C)', marginBottom: '4px' }}>
               {t('weeklyHourTarget')}
             </label>
             <input
@@ -552,9 +552,9 @@ export function FlexibleCard({
               style={{
                 width: '100%',
                 fontSize: '14px',
-                color: 'var(--color-text-primary, #0d0d0d)',
+                color: 'var(--color-text-primary, #141413)',
                 background: 'var(--color-background-primary, #fff)',
-                border: '1px solid var(--color-border, #e5e5e5)',
+                border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
                 borderRadius: '12px',
                 padding: '8px 12px',
                 outline: 'none',
@@ -563,7 +563,7 @@ export function FlexibleCard({
           </div>
 
           <div>
-            <label htmlFor={`checkpoint-${priority.id}`} style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary, #737373)', marginBottom: '4px' }}>
+            <label htmlFor={`checkpoint-${priority.id}`} style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary, #73726C)', marginBottom: '4px' }}>
               {t('checkpointDate')}
             </label>
             <input
@@ -577,9 +577,9 @@ export function FlexibleCard({
               style={{
                 width: '100%',
                 fontSize: '14px',
-                color: 'var(--color-text-primary, #0d0d0d)',
+                color: 'var(--color-text-primary, #141413)',
                 background: 'var(--color-background-primary, #fff)',
-                border: '1px solid var(--color-border, #e5e5e5)',
+                border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
                 borderRadius: '12px',
                 padding: '8px 12px',
                 outline: 'none',

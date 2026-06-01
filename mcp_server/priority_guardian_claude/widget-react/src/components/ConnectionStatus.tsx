@@ -125,7 +125,7 @@ export function ConnectionStatus({
         borderRadius: '12px',
         padding: '16px',
         background: 'var(--color-background-primary, #fff)',
-        border: '1px solid var(--color-border, #e5e5e5)',
+        border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
       }}
     >
       {/* V7: Connection indicator row */}
@@ -136,11 +136,11 @@ export function ConnectionStatus({
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              background: connected ? 'var(--color-background-success-solid, #10b981)' : 'var(--color-background-tertiary, #ebebeb)',
+              background: connected ? 'var(--color-background-success-solid, #10b981)' : 'var(--color-background-tertiary, #FAF9F5)',
             }}
             aria-hidden="true"
           />
-          <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary, #0d0d0d)' }}>
+          <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--color-text-primary, #141413)' }}>
             {t('googleCalendar')}
           </span>
         </div>
@@ -148,7 +148,7 @@ export function ConnectionStatus({
         {connected ? (
           showDisconnectConfirm ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)' }}>
+              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #73726C)' }}>
                 {t('disconnectConfirm')}
               </span>
               <button
@@ -160,11 +160,14 @@ export function ConnectionStatus({
                   fontWeight: 500,
                   padding: '4px 8px',
                   borderRadius: '8px',
-                  color: 'var(--color-text-danger, #dc2626)',
+                  color: 'var(--color-text-danger, #7F2C28)',
                   background: 'rgba(220, 38, 38, 0.1)',
                   border: 'none',
                   cursor: isDisconnecting ? 'not-allowed' : 'pointer',
                   opacity: isDisconnecting ? 0.6 : 1,
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
                 aria-label={t('disconnectYes')}
               >
@@ -179,10 +182,13 @@ export function ConnectionStatus({
                   fontWeight: 500,
                   padding: '4px 8px',
                   borderRadius: '8px',
-                  color: 'var(--color-text-secondary, #737373)',
+                  color: 'var(--color-text-secondary, #73726C)',
                   background: 'var(--color-background-secondary, #F5F4ED)',
                   border: 'none',
                   cursor: 'pointer',
+                  minHeight: '44px',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
                 aria-label={t('disconnectNo')}
               >
@@ -199,10 +205,13 @@ export function ConnectionStatus({
                 fontWeight: 500,
                 padding: '4px 12px',
                 borderRadius: '8px',
-                color: 'var(--color-text-danger, #dc2626)',
+                color: 'var(--color-text-danger, #7F2C28)',
                 background: 'rgba(220, 38, 38, 0.1)',
                 border: 'none',
                 cursor: 'pointer',
+                minHeight: '44px',
+                display: 'flex',
+                alignItems: 'center',
               }}
               aria-label={t('disconnect')}
             >
@@ -219,11 +228,14 @@ export function ConnectionStatus({
               fontWeight: 500,
               padding: '4px 12px',
               borderRadius: '8px',
-              color: 'var(--color-text-info, #2563eb)',
+              color: 'var(--color-text-info, #3266AD)',
               background: 'rgba(37, 99, 235, 0.1)',
               border: 'none',
               cursor: 'pointer',
               opacity: isRefreshing ? 0.6 : 1,
+              minHeight: '44px',
+              display: 'flex',
+              alignItems: 'center',
             }}
             aria-label={t('checkStatus')}
           >
@@ -239,11 +251,14 @@ export function ConnectionStatus({
               fontWeight: 500,
               padding: '4px 12px',
               borderRadius: '8px',
-              color: 'var(--color-text-info, #2563eb)',
+              color: 'var(--color-text-info, #3266AD)',
               background: 'rgba(37, 99, 235, 0.1)',
               border: 'none',
               cursor: 'pointer',
               opacity: (isConnecting || isRefreshing) ? 0.6 : 1,
+              minHeight: '44px',
+              display: 'flex',
+              alignItems: 'center',
             }}
             aria-label={t('connect')}
           >
@@ -282,12 +297,12 @@ export function ConnectionStatus({
             <rect x="2" y="3" width="12" height="11" rx="1.5" />
             <path d="M5 1.5v3M11 1.5v3M2 7h12" />
           </svg>
-          <p style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--color-text-secondary, #737373)' }}>
+          <p style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--color-text-secondary, #73726C)' }}>
             {t('calendarInstructionPrefix')}{' '}
-            <strong style={{ color: 'var(--color-text-primary, #0d0d0d)' }}>P1</strong>,{' '}
-            <strong style={{ color: 'var(--color-text-primary, #0d0d0d)' }}>P2</strong>,{' '}
+            <strong style={{ color: 'var(--color-text-primary, #141413)' }}>P1</strong>,{' '}
+            <strong style={{ color: 'var(--color-text-primary, #141413)' }}>P2</strong>,{' '}
             {t('calendarInstructionOr')}{' '}
-            <strong style={{ color: 'var(--color-text-primary, #0d0d0d)' }}>P3</strong>{' '}
+            <strong style={{ color: 'var(--color-text-primary, #141413)' }}>P3</strong>{' '}
             {t('calendarInstructionSuffix')}
           </p>
         </div>
@@ -303,7 +318,7 @@ export function ConnectionStatus({
             background: 'var(--color-background-secondary, #F5F4ED)',
           }}
         >
-          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)' }}>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #73726C)' }}>
             {t('awaitingOAuth')}
           </p>
         </div>
@@ -321,7 +336,7 @@ export function ConnectionStatus({
           }}
           role="alert"
         >
-          <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)' }}>{error}</p>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #7F2C28)' }}>{error}</p>
         </div>
       )}
     </section>

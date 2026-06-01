@@ -574,7 +574,7 @@ function App() {
         padding: '24px',
         textAlign: 'center',
         color: 'var(--color-text-secondary, #3D3D3A)',
-        fontSize: '13px',
+        fontSize: '12px',
         lineHeight: '1.5',
         background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: '12px',
@@ -654,7 +654,7 @@ function App() {
             marginBottom: '16px',
             padding: '12px',
             fontSize: '14px',
-            color: 'var(--color-text-danger, #dc2626)',
+            color: 'var(--color-text-danger, #7F2C28)',
             background: 'var(--color-background-primary, #fff)',
             borderRadius: '8px',
             border: '1px solid var(--color-border-danger, #fecaca)',
@@ -758,7 +758,7 @@ function App() {
             marginBottom: '16px',
             padding: '12px',
             fontSize: '14px',
-            color: 'var(--color-text-danger, #dc2626)',
+            color: 'var(--color-text-danger, #7F2C28)',
             background: 'var(--color-background-primary, #fff)',
             borderRadius: '8px',
             border: '1px solid var(--color-border-danger, #fecaca)',
@@ -935,9 +935,9 @@ function EmptyState() {
       textAlign: 'center',
       background: 'var(--color-background-primary, #fff)',
       borderRadius: '12px',
-      border: '1px solid var(--color-border, #e5e5e5)',
+      border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
     }}>
-      <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--color-text-primary, #0d0d0d)', marginBottom: '8px' }}>
+      <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--color-text-primary, #141413)', marginBottom: '8px' }}>
         {t('noPriorities')}
       </p>
       <p style={{ fontSize: '14px', color: 'var(--color-text-secondary, #3D3D3A)' }}>

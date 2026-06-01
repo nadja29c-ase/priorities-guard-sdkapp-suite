@@ -76,7 +76,7 @@ export function AddDeliverableInput({
           alignItems: 'center',
           gap: '4px',
           fontSize: '12px',
-          color: isHovered ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+          color: isHovered ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
           opacity: disabled ? 0.5 : 1,
           background: 'none',
           border: 'none',
@@ -110,9 +110,9 @@ export function AddDeliverableInput({
         style={{
           width: '100%',
           fontSize: '14px',
-          color: 'var(--color-text-primary, #0d0d0d)',
+          color: 'var(--color-text-primary, #141413)',
           background: 'var(--color-background-primary, #fff)',
-          border: '1px solid var(--color-border, #e5e5e5)',
+          border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
           borderRadius: '8px',
           padding: '8px 12px',
           outline: 'none',
@@ -146,7 +146,7 @@ export function AddDeliverableInput({
           id={errorId}
           style={{
             fontSize: '12px',
-            color: 'var(--color-text-danger, #dc2626)',
+            color: 'var(--color-text-danger, #7F2C28)',
           }}
           role="alert"
         >

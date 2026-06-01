@@ -135,9 +135,9 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
     boxSizing: 'border-box',          // Prevents iOS/Android width overflow
     WebkitAppearance: 'none',         // Prevents native date picker chrome
     fontSize: '14px',
-    color: 'var(--color-text-primary, #0d0d0d)',
+    color: 'var(--color-text-primary, #141413)',
     background: 'var(--color-background-primary, #fff)',
-    border: '1px solid var(--color-border, #e5e5e5)',
+    border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
     borderRadius: '6px',
     padding: '8px 12px',
     outline: 'none',
@@ -148,7 +148,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
     display: 'block',
     fontSize: '12px',
     fontWeight: 500,
-    color: 'var(--color-text-secondary, #737373)',
+    color: 'var(--color-text-secondary, #73726C)',
     marginBottom: '4px',
   }
 
@@ -157,7 +157,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
       style={{
         background: 'var(--color-background-primary, #fff)',
         borderRadius: '12px',
-        border: '1px solid var(--color-border, #e5e5e5)',
+        border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
         padding: '16px',
       }}
     >
@@ -167,7 +167,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
             style={{
               fontSize: '16px',
               fontWeight: 600,
-              color: 'var(--color-text-primary, #0d0d0d)',
+              color: 'var(--color-text-primary, #141413)',
               marginBottom: '12px',
             }}
           >
@@ -205,7 +205,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               <p
                 style={{
                   fontSize: '12px',
-                  color: 'var(--color-text-danger, #dc2626)',
+                  color: 'var(--color-text-danger, #7F2C28)',
                 }}
                 role="alert"
               >
@@ -244,7 +244,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               onMouseEnter={() => setIsHoveredBack(true)}
               onMouseLeave={() => setIsHoveredBack(false)}
               style={{
-                color: isHoveredBack ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+                color: isHoveredBack ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
@@ -260,7 +260,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               style={{
                 fontSize: '16px',
                 fontWeight: 600,
-                color: 'var(--color-text-primary, #0d0d0d)',
+                color: 'var(--color-text-primary, #141413)',
               }}
             >
               {t('whatKindOfPriority')}
@@ -275,7 +275,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               onMouseLeave={() => setIsHoveredDeadline(false)}
               style={{
                 padding: '16px',
-                border: `1px solid ${isHoveredDeadline ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border, #e5e5e5)'}`,
+                border: `1px solid ${isHoveredDeadline ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
                 borderRadius: '8px',
                 background: isHoveredDeadline ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
                 textAlign: 'left',
@@ -284,9 +284,9 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               }}
               aria-label={t('deadlinePriority')}
             >
-              <div style={{ fontSize: '18px', marginBottom: '4px' }}>{'\u23F1'}</div>
-              <div style={{ fontWeight: 500, color: 'var(--color-text-primary, #0d0d0d)' }}>{t('deadlineType')}</div>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)' }}>{t('deadlineTypeHint')}</div>
+              <div style={{ fontSize: '20px', marginBottom: '4px' }}>{'\u23F1'}</div>
+              <div style={{ fontWeight: 500, color: 'var(--color-text-primary, #141413)' }}>{t('deadlineType')}</div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary, #73726C)' }}>{t('deadlineTypeHint')}</div>
             </button>
 
             <button
@@ -296,7 +296,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               onMouseLeave={() => setIsHoveredFlexible(false)}
               style={{
                 padding: '16px',
-                border: `1px solid ${isHoveredFlexible ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border, #e5e5e5)'}`,
+                border: `1px solid ${isHoveredFlexible ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
                 borderRadius: '8px',
                 background: isHoveredFlexible ? 'var(--color-background-secondary, #F5F4ED)' : 'transparent',
                 textAlign: 'left',
@@ -305,9 +305,9 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               }}
               aria-label={t('flexiblePriority')}
             >
-              <div style={{ fontSize: '18px', marginBottom: '4px' }}>{'\u21BB'}</div>
-              <div style={{ fontWeight: 500, color: 'var(--color-text-primary, #0d0d0d)' }}>{t('flexibleType')}</div>
-              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)' }}>{t('flexibleTypeHint')}</div>
+              <div style={{ fontSize: '20px', marginBottom: '4px' }}>{'\u21BB'}</div>
+              <div style={{ fontWeight: 500, color: 'var(--color-text-primary, #141413)' }}>{t('flexibleType')}</div>
+              <div style={{ fontSize: '12px', color: 'var(--color-text-secondary, #73726C)' }}>{t('flexibleTypeHint')}</div>
             </button>
           </div>
 
@@ -332,7 +332,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               onMouseEnter={() => setIsHoveredBack(true)}
               onMouseLeave={() => setIsHoveredBack(false)}
               style={{
-                color: isHoveredBack ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+                color: isHoveredBack ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
@@ -348,7 +348,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               style={{
                 fontSize: '16px',
                 fontWeight: 600,
-                color: 'var(--color-text-primary, #0d0d0d)',
+                color: 'var(--color-text-primary, #141413)',
               }}
             >
               {priorityType === 'deadline' ? t('deadlinePriority') : t('flexiblePriority')}
@@ -360,7 +360,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
             {priorityType === 'deadline' && (
               <div>
                 <label htmlFor="priority-deadline" style={labelStyle}>
-                  {t('deadlineLabel')} <span style={{ color: 'var(--color-text-danger, #dc2626)' }}>*</span>
+                  {t('deadlineLabel')} <span style={{ color: 'var(--color-text-danger, #7F2C28)' }}>*</span>
                 </label>
                 <input
                   id="priority-deadline"
@@ -388,7 +388,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               <>
                 <div>
                   <label htmlFor="priority-hours" style={labelStyle}>
-                    {t('weeklyHourTarget')} <span style={{ color: 'var(--color-text-danger, #dc2626)' }}>*</span>
+                    {t('weeklyHourTarget')} <span style={{ color: 'var(--color-text-danger, #7F2C28)' }}>*</span>
                   </label>
                   <input
                     id="priority-hours"
@@ -414,7 +414,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
 
                 <div>
                   <label htmlFor="priority-checkpoint" style={labelStyle}>
-                    {t('checkpointDate')} <span style={{ color: 'var(--color-text-danger, #dc2626)' }}>*</span>
+                    {t('checkpointDate')} <span style={{ color: 'var(--color-text-danger, #7F2C28)' }}>*</span>
                   </label>
                   <input
                     id="priority-checkpoint"
@@ -432,7 +432,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
 
                 <div>
                   <label htmlFor="priority-goal" style={labelStyle}>
-                    {t('initialGoal')} <span style={{ color: 'var(--color-text-danger, #dc2626)' }}>*</span>
+                    {t('initialGoal')} <span style={{ color: 'var(--color-text-danger, #7F2C28)' }}>*</span>
                   </label>
                   <textarea
                     id="priority-goal"
@@ -459,7 +459,7 @@ export function AddPriorityForm({ availableKeywords, onAdd, onCancel }: AddPrior
               <p
                 style={{
                   fontSize: '12px',
-                  color: 'var(--color-text-danger, #dc2626)',
+                  color: 'var(--color-text-danger, #7F2C28)',
                 }}
                 role="alert"
               >
@@ -506,14 +506,14 @@ export function AddPriorityButton({ onClick }: { onClick: () => void }) {
       style={{
         width: '100%',
         padding: '16px',
-        border: `2px dashed ${isHovered ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border, #e5e5e5)'}`,
+        border: `2px dashed ${isHovered ? 'var(--color-border-strong, #a3a3a3)' : 'var(--color-border-primary, rgba(31,30,29,0.4))'}`,
         borderRadius: '12px',
         background: isHovered ? 'var(--color-background-secondary, rgba(249, 249, 249, 0.5))' : 'transparent',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         gap: '8px',
-        color: isHovered ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+        color: isHovered ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
         cursor: 'pointer',
         transition: 'border-color 0.15s, background 0.15s, color 0.15s',
       }}

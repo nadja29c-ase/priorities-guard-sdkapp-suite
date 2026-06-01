@@ -97,7 +97,7 @@ export function KeywordPicker({
     <div>
       {/* Keyword badges row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)' }}>{t('badgeLabel')}</span>
+        <span style={{ fontSize: '12px', color: 'var(--color-text-secondary, #73726C)' }}>{t('badgeLabel')}</span>
         <div style={{ display: 'flex', gap: '6px' }}>
           {ALL_KEYWORDS.map((kw) => {
             const isSelected = kw === currentKeyword
@@ -170,8 +170,8 @@ export function KeywordPicker({
                       marginBottom: '4px',
                       padding: '4px 8px',
                       fontSize: '12px',
-                      background: 'var(--color-background-tertiary, #ebebeb)',
-                      color: 'var(--color-text-secondary, #737373)',
+                      background: 'var(--color-background-tertiary, #FAF9F5)',
+                      color: 'var(--color-text-secondary, #73726C)',
                       borderRadius: '4px',
                       whiteSpace: 'nowrap',
                       pointerEvents: 'none',
@@ -201,13 +201,13 @@ export function KeywordPicker({
           aria-label={t('keywordChangeTitle')}
         >
           {/* Confirmation message */}
-          <p style={{ fontSize: '13px', color: 'var(--color-text-primary, #0d0d0d)', marginBottom: '8px' }}>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-primary, #141413)', marginBottom: '8px' }}>
             {t('keywordChangeInline', { oldKeyword: currentKeyword, newKeyword: pendingKeyword })}
           </p>
 
           {/* Swap hint if applicable */}
           {keywordHolders.get(pendingKeyword) && (
-            <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #737373)', marginBottom: '8px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--color-text-secondary, #73726C)', marginBottom: '8px' }}>
               {t('willSwapWith', { name: keywordHolders.get(pendingKeyword)! })}
             </p>
           )}
@@ -223,7 +223,7 @@ export function KeywordPicker({
               style={{
                 padding: '8px 16px',
                 minHeight: '44px',
-                fontSize: '13px',
+                fontSize: '12px',
                 fontWeight: 500,
                 borderRadius: '8px',
                 background: pendingBadgeColor?.bg ?? 'var(--color-background-info-solid, #0285ff)',
@@ -249,11 +249,11 @@ export function KeywordPicker({
               style={{
                 padding: '8px 16px',
                 minHeight: '44px',
-                fontSize: '13px',
+                fontSize: '12px',
                 fontWeight: 500,
                 borderRadius: '8px',
                 background: 'transparent',
-                color: isHoveredCancel ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+                color: isHoveredCancel ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
                 border: 'none',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 transition: 'color 0.15s',

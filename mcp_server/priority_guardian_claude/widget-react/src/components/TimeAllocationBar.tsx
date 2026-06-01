@@ -169,7 +169,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
           {t('timeAllocationHeading')}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-primary, #0d0d0d)' }}>
+          <span style={{ fontSize: '14px', fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'var(--color-text-primary, #141413)' }}>
             {formatHours(totalTrackedHours)}
           </span>
           {onRefresh && (
@@ -227,7 +227,7 @@ export function TimeAllocationBar({ timeAllocation, activeKeywords, onRefresh, i
           overflow: 'hidden',
           display: 'flex',
           gap: '1px',
-          background: 'var(--color-background-tertiary, #ebebeb)',
+          background: 'var(--color-background-tertiary, #FAF9F5)',
         }}
         role="img"
         aria-label={ariaLabel}

@@ -120,9 +120,9 @@ export function DeleteConfirmation({
         <h2
           id="delete-dialog-title"
           style={{
-            fontSize: '18px',
+            fontSize: '20px',
             fontWeight: 600,
-            color: 'var(--color-text-primary, #0d0d0d)',
+            color: 'var(--color-text-primary, #141413)',
             marginBottom: '8px',
           }}
         >
@@ -132,7 +132,7 @@ export function DeleteConfirmation({
           id="delete-dialog-description"
           style={{
             fontSize: '14px',
-            color: 'var(--color-text-secondary, #737373)',
+            color: 'var(--color-text-secondary, #73726C)',
             marginBottom: '24px',
           }}
         >

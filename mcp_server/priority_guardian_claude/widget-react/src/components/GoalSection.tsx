@@ -248,9 +248,9 @@ export function GoalSection({
                   style={{
                     width: '100%',
                     fontSize: '14px',
-                    color: 'var(--color-text-primary, #0d0d0d)',
+                    color: 'var(--color-text-primary, #141413)',
                     background: 'var(--color-background-primary, #fff)',
-                    border: '1px solid var(--color-border, #e5e5e5)',
+                    border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
                     borderRadius: '6px',
                     padding: '4px 8px',
                     outline: 'none',
@@ -258,7 +258,7 @@ export function GoalSection({
                   aria-label={t('newGoalText')}
                 />
                 {error && (
-                  <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginTop: '4px' }} role="alert">
+                  <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #7F2C28)', marginTop: '4px' }} role="alert">
                     {error}
                   </p>
                 )}
@@ -274,7 +274,7 @@ export function GoalSection({
                   alignItems: 'center',
                   gap: '4px',
                   fontSize: '12px',
-                  color: isHoveredAddButton ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+                  color: isHoveredAddButton ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
                   background: 'none',
                   border: 'none',
                   padding: 0,

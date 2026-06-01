@@ -28,7 +28,7 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
         transition: 'opacity 0.15s',
         opacity: isHovered ? 0.8 : 1,
         color: 'var(--color-text-inverse, #fff)',
-        background: 'var(--color-background-primary-solid, #0285ff)',
+        background: 'var(--color-background-inverse, #1f1e1d)',
         border: 'none',
         cursor: 'pointer',
       }}

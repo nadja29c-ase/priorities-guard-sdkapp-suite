@@ -173,7 +173,7 @@ export function GoalItem({
             justifyContent: 'center',
             flexShrink: 0,
             background: goal.achieved ? 'var(--color-background-success-solid, #10b981)' : 'transparent',
-            border: goal.achieved ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
+            border: goal.achieved ? 'none' : '1.5px solid var(--color-border-primary, rgba(31,30,29,0.4))',
           }}
           aria-hidden="true"
         >
@@ -191,7 +191,7 @@ export function GoalItem({
             minWidth: 0,
             fontSize: '11px',
             overflowWrap: 'break-word',
-            color: goal.achieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
+            color: goal.achieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #141413)',
             textDecoration: goal.achieved ? 'line-through' : 'none',
           }}
         >
@@ -214,7 +214,7 @@ export function GoalItem({
           borderRadius: '6px',
         }}
       >
-        <span style={{ fontSize: '12px', color: 'var(--color-text-primary, #0d0d0d)', flex: 1 }}>
+        <span style={{ fontSize: '12px', color: 'var(--color-text-primary, #141413)', flex: 1 }}>
           {t('removeItem', { name: goal.text })}
         </span>
         <button
@@ -223,7 +223,7 @@ export function GoalItem({
           disabled={isLoading}
           style={{
             fontSize: '12px',
-            color: 'var(--color-text-danger, #dc2626)',
+            color: 'var(--color-text-danger, #7F2C28)',
             fontWeight: 500,
             background: 'none',
             border: 'none',
@@ -249,7 +249,7 @@ export function GoalItem({
           disabled={isLoading}
           style={{
             fontSize: '12px',
-            color: isHoveredNo ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+            color: isHoveredNo ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
@@ -274,7 +274,7 @@ export function GoalItem({
   return (
     <li style={{ paddingBottom: '8px', borderBottom: isLast ? 'none' : '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))' }}>
       {error && (
-        <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '4px' }} role="alert">
+        <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #7F2C28)', marginBottom: '4px' }} role="alert">
           {error}
         </p>
       )}
@@ -312,7 +312,7 @@ export function GoalItem({
               alignItems: 'center',
               justifyContent: 'center',
               background: displayedAchieved ? 'var(--color-background-success-solid, #10b981)' : 'transparent',
-              border: displayedAchieved ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
+              border: displayedAchieved ? 'none' : '1.5px solid var(--color-border-primary, rgba(31,30,29,0.4))',
               borderRadius: '50%',
               padding: 0,
               cursor: disabled ? 'not-allowed' : 'pointer',
@@ -348,9 +348,9 @@ export function GoalItem({
               style={{
                 width: '100%',
                 fontSize: '14px',
-                color: 'var(--color-text-primary, #0d0d0d)',
+                color: 'var(--color-text-primary, #141413)',
                 background: 'var(--color-background-primary, #fff)',
-                border: '1px solid var(--color-border, #e5e5e5)',
+                border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
                 borderRadius: '8px',
                 padding: '8px 12px',
                 outline: 'none',
@@ -364,7 +364,7 @@ export function GoalItem({
                 fontSize: '14px',
                 cursor: 'pointer',
                 overflowWrap: 'break-word',
-                color: displayedAchieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
+                color: displayedAchieved ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #141413)',
                 textDecoration: displayedAchieved ? 'line-through' : 'none',
               }}
               onDoubleClick={() => !disabled && onRename && setIsEditing(true)}
@@ -403,7 +403,7 @@ export function GoalItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #73726C)',
+                  color: isHoveredEdit ? 'var(--color-text-primary, #141413)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
@@ -430,7 +430,7 @@ export function GoalItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #73726C)',
+                  color: isHoveredDelete ? 'var(--color-text-danger, #7F2C28)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',

@@ -54,7 +54,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       secondary: {
         solid: {
           base: {
-            background: 'var(--color-background-secondary, #e5e5e5)',
+            background: 'var(--color-background-secondary, rgba(31,30,29,0.4))',
             color: 'var(--color-text-primary, #171717)',
             border: 'none',
           },
@@ -63,7 +63,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ghost: {
           base: {
             background: 'transparent',
-            color: 'var(--color-text-secondary, #737373)',
+            color: 'var(--color-text-secondary, #73726C)',
             border: 'none',
           },
           hover: { background: 'var(--color-background-secondary, rgba(0,0,0,0.05))' },
@@ -71,8 +71,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         outline: {
           base: {
             background: 'transparent',
-            color: 'var(--color-text-secondary, #737373)',
-            border: '1px solid var(--color-border, #e5e5e5)',
+            color: 'var(--color-text-secondary, #73726C)',
+            border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
           },
           hover: { background: 'var(--color-background-secondary, rgba(0,0,0,0.05))' },
         },
@@ -80,7 +80,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       danger: {
         solid: {
           base: {
-            background: 'var(--color-background-danger-solid, #dc2626)',
+            background: 'var(--color-background-danger-solid, #7F2C28)',
             color: '#fff',
             border: 'none',
           },
@@ -89,7 +89,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ghost: {
           base: {
             background: 'transparent',
-            color: 'var(--color-text-danger, #dc2626)',
+            color: 'var(--color-text-danger, #7F2C28)',
             border: 'none',
           },
           hover: { background: 'var(--color-background-danger-soft-alpha, rgba(220,38,38,0.1))' },
@@ -97,8 +97,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         outline: {
           base: {
             background: 'transparent',
-            color: 'var(--color-text-danger, #dc2626)',
-            border: '1px solid var(--color-border-danger, #dc2626)',
+            color: 'var(--color-text-danger, #7F2C28)',
+            border: '1px solid var(--color-border-danger, #7F2C28)',
           },
           hover: { background: 'var(--color-background-danger-soft-alpha, rgba(220,38,38,0.1))' },
         },

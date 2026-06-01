@@ -46,14 +46,14 @@ const PRIORITY_COLORS: Record<CalendarKeyword, string> = {
 // 5 colors covers typical breakdown slices; cycles if more needed.
 const SEMANTIC_COLORS = [
   'var(--color-background-success-solid, #10b981)',    // green
-  'var(--color-background-danger-solid, #dc2626)',     // red
+  'var(--color-background-danger-solid, #7F2C28)',     // red
   'var(--color-background-warning-solid, #f59e0b)',    // orange/amber
   'var(--color-background-primary-solid, #0285ff)',    // brand accent
-  'var(--color-background-secondary-solid, #737373)',  // neutral dark
+  'var(--color-background-secondary-solid, #73726C)',  // neutral dark
 ]
 
 // Muted neutral for "Other"/"Uncategorized" — subordinate to named categories
-const OTHER_GREY = 'var(--color-background-secondary-solid, #737373)'
+const OTHER_GREY = 'var(--color-background-secondary-solid, #73726C)'
 
 export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTargetLabel }: PieChartProps) {
   // Filter out zero-hour slices
@@ -67,10 +67,10 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
           textAlign: 'center',
           background: 'var(--color-background-primary, #fff)',
           borderRadius: '12px',
-          border: '1px solid var(--color-border, #e5e5e5)',
+          border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
         }}
       >
-        <p style={{ fontSize: '14px', color: 'var(--color-text-secondary, #737373)' }}>
+        <p style={{ fontSize: '14px', color: 'var(--color-text-secondary, #73726C)' }}>
           {t('noTimeData')}
         </p>
       </div>
@@ -144,7 +144,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
       style={{
         background: 'var(--color-background-primary, #fff)',
         borderRadius: '12px',
-        border: '1px solid var(--color-border, #e5e5e5)',
+        border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
         padding: '24px',
       }}
     >
@@ -154,7 +154,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
           style={{
             fontSize: '16px',
             fontWeight: 600,
-            color: 'var(--color-text-primary, #0d0d0d)',
+            color: 'var(--color-text-primary, #141413)',
           }}
         >
           {semanticTargetLabel ? t('breakdown') + translateSliceLabel(semanticTargetLabel) : t('timeAllocationTitle')}
@@ -179,7 +179,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             cy={center}
             r={radius}
             fill="none"
-            stroke="var(--color-border-subtle, #e5e5e5)"
+            stroke="var(--color-border-tertiary, rgba(31,30,29,0.4))"
             strokeWidth={strokeWidth}
           />
 
@@ -205,7 +205,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             x={center}
             y={center - 8}
             textAnchor="middle"
-            style={{ fill: 'var(--color-text-primary, #0d0d0d)', fontSize: '1.25rem', fontWeight: 700 }}
+            style={{ fill: 'var(--color-text-primary, #141413)', fontSize: '1.25rem', fontWeight: 700 }}
           >
             {totalHours.toFixed(1)}h
           </text>
@@ -266,7 +266,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
               <span
                 aria-hidden="true"
                 style={{
-                  color: 'var(--color-text-primary, #0d0d0d)',
+                  color: 'var(--color-text-primary, #141413)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -279,7 +279,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
               style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: '8px' }}
               aria-hidden="true"
             >
-              <span style={{ color: 'var(--color-text-secondary, #737373)' }}>
+              <span style={{ color: 'var(--color-text-secondary, #73726C)' }}>
                 {seg.slice.hours.toFixed(1)}h
               </span>
               <span
@@ -304,7 +304,7 @@ export function PieChart({ slices, totalHours, weekStart, weekEnd, semanticTarge
             marginTop: '16px',
             fontSize: '12px',
             textAlign: 'center',
-            color: 'var(--color-text-secondary, #737373)',
+            color: 'var(--color-text-secondary, #73726C)',
           }}
         >
           {t('breakdownCta')}

@@ -18,14 +18,14 @@ export function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
         marginBottom: '16px',
         borderRadius: '12px',
         background: 'var(--color-background-primary, #fff)',
-        border: '1px solid var(--color-border, #e5e5e5)',
+        border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
       }}
     >
       <span
         style={{
           fontSize: '14px',
           fontWeight: 600,
-          color: 'var(--color-text-primary, #0d0d0d)',
+          color: 'var(--color-text-primary, #141413)',
         }}
       >
         {t('myPriorities')}
@@ -41,7 +41,7 @@ export function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
           borderRadius: '8px',
           transition: 'background 0.15s',
           background: isHovered ? 'var(--color-background-secondary, rgba(0,0,0,0.05))' : 'transparent',
-          color: 'var(--color-text-secondary, #737373)',
+          color: 'var(--color-text-secondary, #73726C)',
           border: 'none',
           cursor: 'pointer',
         }}

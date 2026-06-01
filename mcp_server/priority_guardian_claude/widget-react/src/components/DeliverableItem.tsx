@@ -165,7 +165,7 @@ export function DeliverableItem({
               justifyContent: 'center',
               flexShrink: 0,
               background: deliverable.done ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
-              border: deliverable.done ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
+              border: deliverable.done ? 'none' : '1.5px solid var(--color-border-primary, rgba(31,30,29,0.4))',
             }}
             aria-hidden="true"
           >
@@ -182,7 +182,7 @@ export function DeliverableItem({
               flex: 1,
               fontSize: '11px',
               overflowWrap: 'break-word',
-              color: deliverable.done ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
+              color: deliverable.done ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #141413)',
               textDecoration: deliverable.done ? 'line-through' : 'none',
             }}
           >
@@ -206,7 +206,7 @@ export function DeliverableItem({
           borderRadius: '6px',
         }}
       >
-        <span style={{ fontSize: '12px', color: 'var(--color-text-primary, #0d0d0d)', flex: 1 }}>
+        <span style={{ fontSize: '12px', color: 'var(--color-text-primary, #141413)', flex: 1 }}>
           {t('removeItem', { name: deliverable.name })}
         </span>
         <button
@@ -215,7 +215,7 @@ export function DeliverableItem({
           disabled={isLoading}
           style={{
             fontSize: '12px',
-            color: 'var(--color-text-danger, #dc2626)',
+            color: 'var(--color-text-danger, #7F2C28)',
             fontWeight: 500,
             background: 'none',
             border: 'none',
@@ -241,7 +241,7 @@ export function DeliverableItem({
           disabled={isLoading}
           style={{
             fontSize: '12px',
-            color: isHoveredNo ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-secondary, #737373)',
+            color: isHoveredNo ? 'var(--color-text-primary, #141413)' : 'var(--color-text-secondary, #73726C)',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
@@ -266,7 +266,7 @@ export function DeliverableItem({
   return (
     <li style={{ paddingBottom: '8px', borderBottom: isLast ? 'none' : '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))' }}>
       {error && (
-        <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '4px' }} role="alert">
+        <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #7F2C28)', marginBottom: '4px' }} role="alert">
           {error}
         </p>
       )}
@@ -304,7 +304,7 @@ export function DeliverableItem({
               alignItems: 'center',
               justifyContent: 'center',
               background: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'transparent',
-              border: displayedDone ? 'none' : '1.5px solid var(--color-border-primary, #e5e5e5)',
+              border: displayedDone ? 'none' : '1.5px solid var(--color-border-primary, rgba(31,30,29,0.4))',
               borderRadius: '4px',
               padding: 0,
               cursor: disabled ? 'not-allowed' : 'pointer',
@@ -337,9 +337,9 @@ export function DeliverableItem({
             style={{
               flex: 1,
               fontSize: '14px',
-              color: 'var(--color-text-primary, #0d0d0d)',
+              color: 'var(--color-text-primary, #141413)',
               background: 'var(--color-background-primary, #fff)',
-              border: '1px solid var(--color-border, #e5e5e5)',
+              border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
               borderRadius: '8px',
               padding: '8px 12px',
               outline: 'none',
@@ -353,7 +353,7 @@ export function DeliverableItem({
               fontSize: '14px',
               cursor: 'pointer',
               overflowWrap: 'break-word',
-              color: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #0d0d0d)',
+              color: displayedDone ? 'var(--color-text-tertiary, #73726C)' : 'var(--color-text-primary, #141413)',
               textDecoration: displayedDone ? 'line-through' : 'none',
             }}
             onDoubleClick={() => !disabled && onRename && setIsEditing(true)}
@@ -391,7 +391,7 @@ export function DeliverableItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredEdit ? 'var(--color-text-primary, #0d0d0d)' : 'var(--color-text-tertiary, #73726C)',
+                  color: isHoveredEdit ? 'var(--color-text-primary, #141413)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
@@ -418,7 +418,7 @@ export function DeliverableItem({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: isHoveredDelete ? 'var(--color-text-danger, #dc2626)' : 'var(--color-text-tertiary, #73726C)',
+                  color: isHoveredDelete ? 'var(--color-text-danger, #7F2C28)' : 'var(--color-text-tertiary, #73726C)',
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',

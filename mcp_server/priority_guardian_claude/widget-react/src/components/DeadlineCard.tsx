@@ -191,7 +191,7 @@ export function DeadlineCard({
           borderRadius: '12px',
           overflow: 'hidden',
           background: 'var(--color-background-primary, #fff)',
-          border: '1px solid var(--color-border, #e5e5e5)',
+          border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
           borderLeft: `3px solid ${borderColor}`,
         }}
         aria-label={priority.name}
@@ -261,7 +261,7 @@ export function DeadlineCard({
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: 'var(--color-text-primary, #0d0d0d)',
+                color: 'var(--color-text-primary, #141413)',
                 margin: 0,
               }}
             >
@@ -271,7 +271,7 @@ export function DeadlineCard({
 
           {/* Lead measure */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #141413)' }}>
               {doneCount}
               <span style={{ fontSize: '11px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
                 /{totalCount}
@@ -283,7 +283,7 @@ export function DeadlineCard({
           </div>
 
           {/* E2E Deliverables - Collapsible */}
-          <div style={{ paddingTop: '8px', borderTop: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+          <div style={{ paddingTop: '8px', borderTop: '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))' }}>
             <button
               type="button"
               onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}
@@ -355,7 +355,7 @@ export function DeadlineCard({
         borderRadius: '12px',
         overflow: 'hidden',
         background: 'var(--color-background-primary, #fff)',
-        border: '1px solid var(--color-border, #e5e5e5)',
+        border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
         borderLeft: `3px solid ${borderColor}`,
       }}
       aria-label={priority.name}
@@ -429,7 +429,7 @@ export function DeadlineCard({
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
-                color: 'var(--color-text-primary, #0d0d0d)',
+                color: 'var(--color-text-primary, #141413)',
                 margin: 0,
               }}
               onClick={(e) => { e.stopPropagation(); onStartEdit?.(); }}
@@ -503,9 +503,9 @@ export function DeadlineCard({
               width: '100%',
               fontSize: '14px',
               fontWeight: 600,
-              color: 'var(--color-text-primary, #0d0d0d)',
+              color: 'var(--color-text-primary, #141413)',
               background: 'var(--color-background-primary, #fff)',
-              border: '1px solid var(--color-border, #e5e5e5)',
+              border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
               borderRadius: '8px',
               padding: '8px 12px',
               marginBottom: '12px',
@@ -517,14 +517,14 @@ export function DeadlineCard({
 
         {/* Error message */}
         {error && (
-          <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #dc2626)', marginBottom: '8px' }} role="alert">{error}</p>
+          <p style={{ fontSize: '12px', color: 'var(--color-text-danger, #7F2C28)', marginBottom: '8px' }} role="alert">{error}</p>
         )}
 
         {/* Lead measure */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-          <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #0d0d0d)' }}>
+          <span style={{ fontSize: '24px', fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: 'var(--color-text-primary, #141413)' }}>
             {doneCount}
-            <span style={{ fontSize: '18px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
+            <span style={{ fontSize: '20px', fontWeight: 400, color: 'var(--color-text-tertiary, #73726C)' }}>
               /{totalCount}
             </span>
           </span>
@@ -546,7 +546,7 @@ export function DeadlineCard({
             )}
 
             <div>
-              <label htmlFor={`deadline-${priority.id}`} style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary, #737373)', marginBottom: '4px' }}>
+              <label htmlFor={`deadline-${priority.id}`} style={{ display: 'block', fontSize: '12px', fontWeight: 500, color: 'var(--color-text-secondary, #73726C)', marginBottom: '4px' }}>
                 {t('deadlineLabel')}
               </label>
               <input
@@ -560,9 +560,9 @@ export function DeadlineCard({
                 style={{
                   width: '100%',
                   fontSize: '14px',
-                  color: 'var(--color-text-primary, #0d0d0d)',
+                  color: 'var(--color-text-primary, #141413)',
                   background: 'var(--color-background-primary, #fff)',
-                  border: '1px solid var(--color-border, #e5e5e5)',
+                  border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
                   borderRadius: '12px',
                   padding: '8px 12px',
                   outline: 'none',
@@ -575,7 +575,7 @@ export function DeadlineCard({
         )}
 
         {/* E2E Deliverables - Collapsible */}
-        <div style={{ paddingTop: '12px', borderTop: '1px solid var(--color-border-subtle, #f0f0f0)' }}>
+        <div style={{ paddingTop: '12px', borderTop: '1px solid var(--color-border-tertiary, rgba(31,30,29,0.15))' }}>
           <button
             type="button"
             onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}

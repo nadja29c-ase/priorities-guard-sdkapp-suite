@@ -58,7 +58,7 @@ export function HourRing({ actual, target, keyword, size = 48 }: HourRingProps) 
           cy={CENTER}
           r={RADIUS}
           fill="none"
-          stroke="var(--color-border-subtle, #e5e5e5)"
+          stroke="var(--color-border-tertiary, rgba(31,30,29,0.4))"
           strokeWidth={STROKE_WIDTH}
         />
 
@@ -94,7 +94,7 @@ export function HourRing({ actual, target, keyword, size = 48 }: HourRingProps) 
         }}
         aria-hidden="true"
       >
-        <span style={{ fontWeight: 600, fontSize: `${actualFontSize}px`, color: 'var(--color-text-primary, #0d0d0d)', lineHeight: 1.2 }}>
+        <span style={{ fontWeight: 600, fontSize: `${actualFontSize}px`, color: 'var(--color-text-primary, #141413)', lineHeight: 1.2 }}>
           {formatHours(actual)}
         </span>
         <span style={{ fontSize: `${targetFontSize}px`, color: 'var(--color-text-tertiary, #73726C)', lineHeight: 1.2 }}>
