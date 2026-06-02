@@ -380,7 +380,7 @@ def create_app():
     from mcp.server.fastmcp import FastMCP
     from mcp import types as mcp_types
     from starlette.applications import Starlette
-    from starlette.responses import JSONResponse, PlainTextResponse
+    from starlette.responses import JSONResponse, PlainTextResponse, HTMLResponse
     from starlette.routing import Route
 
     from mcp_server.priority_guardian_claude.config import (
@@ -501,8 +501,19 @@ def create_app():
 
     # Health endpoints (for monitoring and reviewer reachability checks)
     async def health_root(request):  # noqa: ARG001
-        """Root health check - returns JSON for monitoring/reviewers."""
-        return JSONResponse({"status": "ok", "service": "priority-guardian-claude-mcp"})
+        """Root page with favicon links for Google crawler."""
+        html = '''<!DOCTYPE html>
+<html>
+<head>
+<link rel="icon" type="image/png" href="/favicon.ico">
+<link rel="shortcut icon" type="image/png" href="/favicon.ico">
+<title>Priority Guardian MCP</title>
+</head>
+<body>
+<p>Priority Guardian Claude MCP Server</p>
+</body>
+</html>'''
+        return HTMLResponse(content=html)
 
     async def health_check(request):  # noqa: ARG001
         """Simple health check endpoint."""
