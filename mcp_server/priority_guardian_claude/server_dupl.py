@@ -379,7 +379,7 @@ def create_app():
     from mcp.server.fastmcp import FastMCP
     from mcp import types as mcp_types
     from starlette.applications import Starlette
-    from starlette.responses import JSONResponse, PlainTextResponse
+    from starlette.responses import JSONResponse, PlainTextResponse, RedirectResponse
     from starlette.routing import Route
 
     from mcp_server.priority_guardian_claude.config import (
@@ -509,6 +509,16 @@ def create_app():
 
     fastmcp_app.add_route("/", health_root, methods=["GET"])
     fastmcp_app.add_route("/health", health_check, methods=["GET"])
+
+    # Favicon for Claude MCP Directory listing (Google favicon service)
+    async def favicon(request):  # noqa: ARG001
+        """Redirect to PG logo on shared backend for Claude MCP Directory."""
+        return RedirectResponse(
+            url="https://priorities-guard-sdkapp-suite.onrender.com/static/logo-pg-64.svg",
+            status_code=301,
+        )
+
+    fastmcp_app.add_route("/favicon.ico", favicon, methods=["GET"])
 
     # -------------------------------------------------------------------------
     # OAuth Proxy Routes
