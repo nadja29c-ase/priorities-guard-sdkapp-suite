@@ -505,8 +505,8 @@ def create_app():
         html = '''<!DOCTYPE html>
 <html>
 <head>
-<link rel="icon" type="image/png" href="/favicon.ico">
-<link rel="shortcut icon" type="image/png" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="96x96" href="/favicon.ico">
+<link rel="shortcut icon" type="image/png" sizes="96x96" href="/favicon.ico">
 <title>Priority Guardian MCP</title>
 </head>
 <body>
@@ -529,7 +529,7 @@ def create_app():
     async def favicon(request: Request) -> StarletteResponse:
         """Serve PG logo as favicon — Google favicon service requires same-origin PNG."""
         try:
-            logo_path = Path(__file__).parent / "static" / "logo-pg-64.png"
+            logo_path = Path(__file__).parent / "static" / "logo-pg-96.png"
             logger.info("favicon.request", path=str(logo_path), exists=logo_path.exists(), file=__file__)
             if logo_path.exists():
                 content = logo_path.read_bytes()
