@@ -379,7 +379,7 @@ def create_app():
     from mcp.server.fastmcp import FastMCP
     from mcp import types as mcp_types
     from starlette.applications import Starlette
-    from starlette.responses import JSONResponse, PlainTextResponse, RedirectResponse
+    from starlette.responses import JSONResponse, PlainTextResponse
     from starlette.routing import Route
 
     from mcp_server.priority_guardian_claude.config import (
@@ -512,11 +512,16 @@ def create_app():
 
     # Favicon for Claude MCP Directory listing (Google favicon service)
     async def favicon(request):  # noqa: ARG001
-        """Redirect to PG logo on shared backend for Claude MCP Directory."""
-        return RedirectResponse(
-            url="https://priorities-guard-sdkapp-suite.onrender.com/static/logo-pg-64.svg",
-            status_code=301,
-        )
+        """Serve PG logo as favicon — Google favicon service requires same-origin, no redirect."""
+        from starlette.responses import Response
+        logo_path = Path(__file__).parent / "static" / "logo-pg-64.svg"
+        if logo_path.exists():
+            return Response(
+                content=logo_path.read_bytes(),
+                media_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+        return Response(status_code=404)
 
     fastmcp_app.add_route("/favicon.ico", favicon, methods=["GET"])
 
