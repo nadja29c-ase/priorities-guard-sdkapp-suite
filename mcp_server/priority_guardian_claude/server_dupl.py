@@ -516,16 +516,16 @@ def create_app():
     from starlette.responses import Response as StarletteResponse
 
     async def favicon(request: Request) -> StarletteResponse:
-        """Serve PG logo as favicon — Google favicon service requires same-origin."""
+        """Serve PG logo as favicon — Google favicon service requires same-origin PNG."""
         try:
-            logo_path = Path(__file__).parent / "static" / "logo-pg-64.svg"
+            logo_path = Path(__file__).parent / "static" / "pg_logo_icon_128.png"
             logger.info("favicon.request", path=str(logo_path), exists=logo_path.exists(), file=__file__)
             if logo_path.exists():
                 content = logo_path.read_bytes()
                 logger.info("favicon.serving", bytes=len(content))
                 return StarletteResponse(
                     content=content,
-                    media_type="image/svg+xml",
+                    media_type="image/png",
                     headers={"Cache-Control": "public, max-age=86400"},
                 )
             logger.warning("favicon.file_not_found", path=str(logo_path))
