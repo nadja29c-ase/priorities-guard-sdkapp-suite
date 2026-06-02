@@ -519,8 +519,13 @@ def create_app():
         """Simple health check endpoint."""
         return PlainTextResponse("ok")
 
+    async def robots_txt(request):  # noqa: ARG001
+        """Allow all crawlers for favicon discovery."""
+        return PlainTextResponse("User-agent: *\nAllow: /\n", media_type="text/plain")
+
     fastmcp_app.add_route("/", health_root, methods=["GET"])
     fastmcp_app.add_route("/health", health_check, methods=["GET"])
+    fastmcp_app.add_route("/robots.txt", robots_txt, methods=["GET"])
 
     # Favicon for Claude MCP Directory listing (Google favicon service)
     from starlette.requests import Request
