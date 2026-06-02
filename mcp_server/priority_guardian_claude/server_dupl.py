@@ -516,14 +516,22 @@ def create_app():
 
     async def favicon(request: Request) -> StarletteResponse:
         """Serve PG logo as favicon — Google favicon service requires same-origin."""
-        logo_path = Path(__file__).parent / "static" / "logo-pg-64.svg"
-        if logo_path.exists():
-            return StarletteResponse(
-                content=logo_path.read_bytes(),
-                media_type="image/svg+xml",
-                headers={"Cache-Control": "public, max-age=86400"},
-            )
-        return StarletteResponse(status_code=404)
+        try:
+            logo_path = Path(__file__).parent / "static" / "logo-pg-64.svg"
+            logger.info("favicon.request", path=str(logo_path), exists=logo_path.exists(), file=__file__)
+            if logo_path.exists():
+                content = logo_path.read_bytes()
+                logger.info("favicon.serving", bytes=len(content))
+                return StarletteResponse(
+                    content=content,
+                    media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
+            logger.warning("favicon.file_not_found", path=str(logo_path))
+            return StarletteResponse(status_code=404)
+        except Exception as e:
+            logger.error("favicon.exception", error=str(e), type=type(e).__name__)
+            return StarletteResponse(status_code=500)
 
     fastmcp_app.add_route("/favicon.ico", favicon, methods=["GET"])
 
