@@ -511,17 +511,19 @@ def create_app():
     fastmcp_app.add_route("/health", health_check, methods=["GET"])
 
     # Favicon for Claude MCP Directory listing (Google favicon service)
-    async def favicon(request):  # noqa: ARG001
-        """Serve PG logo as favicon — Google favicon service requires same-origin, no redirect."""
-        from starlette.responses import Response
+    from starlette.requests import Request
+    from starlette.responses import Response as StarletteResponse
+
+    async def favicon(request: Request) -> StarletteResponse:
+        """Serve PG logo as favicon — Google favicon service requires same-origin."""
         logo_path = Path(__file__).parent / "static" / "logo-pg-64.svg"
         if logo_path.exists():
-            return Response(
+            return StarletteResponse(
                 content=logo_path.read_bytes(),
                 media_type="image/svg+xml",
                 headers={"Cache-Control": "public, max-age=86400"},
             )
-        return Response(status_code=404)
+        return StarletteResponse(status_code=404)
 
     fastmcp_app.add_route("/favicon.ico", favicon, methods=["GET"])
 
