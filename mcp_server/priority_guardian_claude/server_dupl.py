@@ -505,8 +505,8 @@ def create_app():
         html = '''<!DOCTYPE html>
 <html>
 <head>
-<link rel="icon" type="image/png" sizes="96x96" href="/favicon.ico">
-<link rel="shortcut icon" type="image/png" sizes="96x96" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png">
+<link rel="shortcut icon" href="/favicon.ico">
 <title>Priority Guardian MCP</title>
 </head>
 <body>
@@ -546,6 +546,7 @@ def create_app():
             return StarletteResponse(status_code=500)
 
     fastmcp_app.add_route("/favicon.ico", favicon, methods=["GET"])
+    fastmcp_app.add_route("/favicon-64.png", favicon, methods=["GET"])
 
     # -------------------------------------------------------------------------
     # OAuth Proxy Routes
