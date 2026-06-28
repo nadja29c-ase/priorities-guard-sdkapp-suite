@@ -13,6 +13,7 @@ Provides all required OAuth discovery endpoints:
 from mcp_server.mindsort_claude.config import (
     CLARITY_ISSUER,
     MCP_RESOURCE_URL,
+    OAUTH_ISSUER_BASE,
     OAUTH_ISSUER_URL,
     SCOPES_SUPPORTED,
 )
@@ -50,20 +51,23 @@ async def oauth_authorization_server():
     }
 
 
-# FIX (inc_05): authorization_servers now advertises CLARITY_ISSUER (root issuer,
-# https://www.priority-guard.com) instead of OAUTH_ISSUER_URL (path-qualified,
-# .../oauth/pg). This satisfies Claude's RFC 8414/9728 DCR discovery chain, which
-# expects authorization_servers to match the AS's self-declared issuer (root).
+# FIX (inc_05): authorization_servers now advertises root issuer instead of
+# path-qualified OAUTH_ISSUER_URL. This satisfies Claude's RFC 8414/9728 DCR
+# discovery chain, which expects authorization_servers to match the AS's
+# self-declared issuer (root).
+#
+# HARDENING (inc_05b): authorization_servers now sourced from dedicated
+# OAUTH_ISSUER_BASE config value (not CLARITY_ISSUER). Both hold the same
+# production value, but OAUTH_ISSUER_BASE is semantically correct for discovery
+# while CLARITY_ISSUER is for JWT validation. The same-origin guard in config.py
+# prevents future drift between OAUTH_ISSUER_BASE and OAUTH_ISSUER_URL.
 #
 # This does NOT violate Canonical Product Rule §0: this is the platform-coupled
-# _dupl Claude file; the ChatGPT server (clarity/discovery.py) is untouched and
-# retains its behavior. Structural hardening (dedicated OAUTH_ISSUER_BASE +
-# same-origin guard, mirroring PG) is tracked as inc_05b, to run after the
-# connection is confirmed.
+# _dupl Claude file; the ChatGPT server (clarity/discovery.py) is untouched.
 async def oauth_protected_resource():
     """OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
     return {
         "resource": MCP_RESOURCE_URL,
-        "authorization_servers": [CLARITY_ISSUER],
+        "authorization_servers": [OAUTH_ISSUER_BASE],
         "scopes_supported": SCOPES_SUPPORTED,
     }

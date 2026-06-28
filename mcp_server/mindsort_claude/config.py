@@ -23,6 +23,7 @@ Uses /oauth/pg/* endpoints (shared Priority Guardian OAuth provider).
 
 import os
 from typing import Optional
+from urllib.parse import urlparse
 
 
 # ============================================================================
@@ -173,6 +174,44 @@ OAUTH_ISSUER_URL = get_env(
     "CLARITY_CLAUDE_OAUTH_ISSUER_URL",
     default="http://localhost:8000/oauth/pg"
 )
+
+# Authorization server base URL (issuer identifier and authorization_servers reference)
+# Must match backend's OAUTH_ISSUER env var exactly.
+# Used for: issuer claim in AS metadata, authorization_servers in protected resource metadata.
+# Do NOT derive from OAUTH_ISSUER_URL — define explicitly to avoid path-change fragility.
+#
+# NOTE: CLARITY_ISSUER (JWT iss validation) and OAUTH_ISSUER_BASE (discovery advertisement)
+# hold the same production value (https://www.priority-guard.com) but serve different roles:
+# - CLARITY_ISSUER: validates the 'iss' claim in incoming JWTs
+# - OAUTH_ISSUER_BASE: advertised in oauth-protected-resource.authorization_servers
+# Keep both explicit to prevent coupling bugs.
+OAUTH_ISSUER_BASE = get_env(
+    "CLARITY_CLAUDE_OAUTH_ISSUER_BASE",
+    default="http://localhost:8000"
+)
+
+# Fail-fast: OAUTH_ISSUER_URL must share the same origin as OAUTH_ISSUER_BASE (RFC 8414)
+# Without this check, discovery could return issuer=www but token_endpoint=api,
+# which causes silent OAuth failures in Claude.
+# Note: startswith() is insufficient — "https://www.example.com.evil.com" starts with
+# "https://www.example.com" but has a completely different origin.
+_base_parsed = urlparse(OAUTH_ISSUER_BASE)
+_url_parsed = urlparse(OAUTH_ISSUER_URL)
+
+if (_base_parsed.scheme, _base_parsed.netloc) != (_url_parsed.scheme, _url_parsed.netloc):
+    raise RuntimeError(
+        f"CLARITY_CLAUDE_OAUTH_ISSUER_URL must share the same origin as CLARITY_CLAUDE_OAUTH_ISSUER_BASE (RFC 8414). "
+        f"Got CLARITY_CLAUDE_OAUTH_ISSUER_BASE={OAUTH_ISSUER_BASE!r} (origin: {_base_parsed.scheme}://{_base_parsed.netloc}), "
+        f"CLARITY_CLAUDE_OAUTH_ISSUER_URL={OAUTH_ISSUER_URL!r} (origin: {_url_parsed.scheme}://{_url_parsed.netloc})."
+    )
+
+# Fail-fast: OAUTH_ISSUER_BASE must not contain localhost in production
+# Uses MindSort's existing ENV convention: ("production", "staging")
+if ENV in ("production", "staging") and "localhost" in OAUTH_ISSUER_BASE:
+    raise RuntimeError(
+        "CLARITY_CLAUDE_OAUTH_ISSUER_BASE contains 'localhost' in production. "
+        "Set to production URL (e.g., https://www.priority-guard.com)."
+    )
 
 # Supported OAuth scopes for MindSort Claude MCP server
 # NOTE: This must mirror the clarity.* scopes in backend discovery

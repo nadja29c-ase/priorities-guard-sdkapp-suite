@@ -300,7 +300,8 @@ This service was dormant before the Poetry migration, so the Poetry build rule a
 |----------|-------|------|
 | `ENV` | `production` | enables the prod startup guards |
 | `CLARITY_CLAUDE_MCP_SERVER_URL` | `https://mindsort-mcp.priority-guard.com` (deployed origin, **NO** `/mcp`) | putting `/mcp` here produces `/mcp/mcp` and breaks the resource claim, .well-known URLs, AND the `ui.domain` hash. This is the custom domain mapped to the Render service `priorities-guard-sdkapp-suite-6jri.onrender.com`; the env var must use the custom domain, not the onrender.com URL, so the `ui.domain` hash matches the host Claude connects through. |
-| `CLARITY_CLAUDE_OAUTH_ISSUER_URL` | `https://www.priority-guard.com/oauth/pg` | |
+| `CLARITY_CLAUDE_OAUTH_ISSUER_URL` | `https://www.priority-guard.com/oauth/pg` | path-qualified endpoint base |
+| `CLARITY_CLAUDE_OAUTH_ISSUER_BASE` | `https://www.priority-guard.com` | root issuer for `authorization_servers`; **HARD-FAILS localhost in prod** (inc_05b) |
 | `CLARITY_CLAUDE_BACKEND_URL` | `https://www.priority-guard.com` | |
 | `CLARITY_CLAUDE_INTERNAL_API_SECRET` | matches backend `INTERNAL_API_SECRET` | empty string = dev-mode skip; MUST be set in prod |
 | `CLARITY_CLAUDE_JWKS_URL` | `https://www.priority-guard.com/oauth/pg/jwks` | |

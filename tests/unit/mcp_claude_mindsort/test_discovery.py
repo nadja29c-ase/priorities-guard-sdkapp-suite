@@ -1,7 +1,8 @@
 """
-MindSort Claude MCP Server discovery tests (inc_05).
+MindSort Claude MCP Server discovery tests (inc_05 + inc_05b).
 
 Tests OAuth discovery endpoints for RFC 8414/9728 compliance.
+Tests config guards for origin safety (inc_05b).
 Each test documents "what bug would still pass this test?"
 """
 
@@ -13,6 +14,14 @@ from urllib.parse import urlparse
 def set_dev_env(monkeypatch):
     """Set ENV=dev for all tests."""
     monkeypatch.setenv("ENV", "dev")
+
+
+@pytest.fixture
+def set_production_env(monkeypatch):
+    """Set production-like env vars for integration tests."""
+    monkeypatch.setenv("ENV", "dev")  # Keep dev to avoid prod guards
+    monkeypatch.setenv("CLARITY_CLAUDE_OAUTH_ISSUER_BASE", "https://www.priority-guard.com")
+    monkeypatch.setenv("CLARITY_CLAUDE_OAUTH_ISSUER_URL", "https://www.priority-guard.com/oauth/pg")
 
 
 @pytest.fixture(autouse=True)
@@ -59,12 +68,12 @@ class TestOAuthProtectedResource:
         The path-component assertion makes this test meaningful.
         """
         from mcp_server.mindsort_claude.discovery_dupl import oauth_protected_resource
-        from mcp_server.mindsort_claude.config import CLARITY_ISSUER
+        from mcp_server.mindsort_claude.config import OAUTH_ISSUER_BASE
 
         result = await oauth_protected_resource()
 
-        # Must equal CLARITY_ISSUER (root issuer)
-        assert result["authorization_servers"] == [CLARITY_ISSUER]
+        # Must equal OAUTH_ISSUER_BASE (root issuer, inc_05b hardening)
+        assert result["authorization_servers"] == [OAUTH_ISSUER_BASE]
 
         # Must have no path component (root, not /oauth/pg)
         parsed = urlparse(result["authorization_servers"][0])
@@ -72,6 +81,27 @@ class TestOAuthProtectedResource:
             f"authorization_servers must be root issuer (no path), "
             f"got path={parsed.path!r}"
         )
+
+    @pytest.mark.asyncio
+    async def test_authorization_servers_from_oauth_issuer_base(self, set_dev_env):
+        """
+        Test (inc_05b): authorization_servers sourced from OAUTH_ISSUER_BASE.
+
+        Bug that would still pass: leaving inc_05's CLARITY_ISSUER reference
+        (functionally fine in prod, but defeats the semantic separation inc_05b
+        exists for). This test explicitly verifies the source config var.
+        """
+        from mcp_server.mindsort_claude.discovery_dupl import oauth_protected_resource
+        from mcp_server.mindsort_claude.config import OAUTH_ISSUER_BASE, CLARITY_ISSUER
+
+        result = await oauth_protected_resource()
+
+        # Must come from OAUTH_ISSUER_BASE, not CLARITY_ISSUER
+        # In dev, these differ: OAUTH_ISSUER_BASE=localhost:8000, CLARITY_ISSUER=www.priority-guard.com
+        assert result["authorization_servers"] == [OAUTH_ISSUER_BASE]
+        # This would fail if still using CLARITY_ISSUER (different default in dev)
+        if OAUTH_ISSUER_BASE != CLARITY_ISSUER:
+            assert result["authorization_servers"] != [CLARITY_ISSUER]
 
     @pytest.mark.asyncio
     async def test_resource_equals_mcp_resource_url(self, set_dev_env):
@@ -169,12 +199,13 @@ class TestDiscoveryChainIntegration:
         Test 4: Discovery chain resolves to root well-known.
 
         Takes authorization_servers[0], constructs the well-known URL,
-        and asserts it equals the root-based URL (not /oauth/pg/.well-known/...).
+        and asserts it's a root-based URL (not /oauth/pg/.well-known/...).
 
         Bug that would still pass: any reintroduction of a path-qualified AS
         that field-level unit tests might miss.
         """
         from mcp_server.mindsort_claude.discovery_dupl import oauth_protected_resource
+        from mcp_server.mindsort_claude.config import OAUTH_ISSUER_BASE
 
         result = await oauth_protected_resource()
         auth_server = result["authorization_servers"][0]
@@ -182,8 +213,8 @@ class TestDiscoveryChainIntegration:
         # Claude's discovery chain: {authorization_servers[0]}/.well-known/oauth-authorization-server
         well_known_url = f"{auth_server}/.well-known/oauth-authorization-server"
 
-        # Must be root-based, NOT path-qualified
-        expected = "https://www.priority-guard.com/.well-known/oauth-authorization-server"
+        # Must use the config value (OAUTH_ISSUER_BASE)
+        expected = f"{OAUTH_ISSUER_BASE}/.well-known/oauth-authorization-server"
         assert well_known_url == expected, (
             f"Discovery chain must resolve to root well-known.\n"
             f"Got: {well_known_url}\n"
@@ -192,3 +223,143 @@ class TestDiscoveryChainIntegration:
 
         # Double-check: must NOT contain /oauth/pg/
         assert "/oauth/pg/" not in well_known_url
+
+        # The authorization_servers value must have no path (or just "/")
+        parsed = urlparse(auth_server)
+        assert parsed.path in ("", "/"), (
+            f"authorization_servers must be root (no path), got path={parsed.path!r}"
+        )
+
+
+class TestConfigGuards:
+    """Tests for config.py fail-fast guards (inc_05b)."""
+
+    def test_same_origin_guard_raises_on_differing_origins(self):
+        """
+        Guard test 1: Same-origin guard RAISES on differing origins.
+
+        Bug that would still pass: a no-op guard (e.g., startswith check
+        that passes https://www.example.com.evil.com vs https://www.example.com).
+
+        Uses subprocess because guards run at module import time.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://api.example.com/oauth/pg",  # Different origin!
+                "PATH": "",  # Minimal env
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must fail with RuntimeError mentioning same origin
+        assert result.returncode != 0, "Guard should have raised on differing origins"
+        assert "same origin" in result.stderr.lower() or "CLARITY_CLAUDE_OAUTH_ISSUER" in result.stderr, (
+            f"Expected same-origin error, got: {result.stderr}"
+        )
+
+    def test_same_origin_guard_passes_legitimate_pairing(self):
+        """
+        Guard test 2: Same-origin guard PASSES same-origin-different-path.
+
+        Bug that would still pass: an over-strict guard that rejects
+        same-origin-different-path (which would break the real config).
+        This is the critical asymmetry the guard must get right.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config; print('OK')"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",  # Same origin, different path
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must succeed - same origin with different path is valid
+        assert result.returncode == 0, (
+            f"Guard should pass same-origin-different-path.\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "OK" in result.stdout
+
+    def test_localhost_in_prod_guard_raises(self):
+        """
+        Guard test 3: localhost-in-prod guard raises.
+
+        Bug that would still pass: guard not wired to ENV check,
+        allowing localhost OAUTH_ISSUER_BASE in production.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "production",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "http://localhost:8000",  # localhost in prod!
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "http://localhost:8000/oauth/pg",
+                "CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS": "https://claude.ai",  # Avoid CORS guard
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must fail with RuntimeError mentioning localhost
+        assert result.returncode != 0, "Guard should have raised on localhost in production"
+        assert "localhost" in result.stderr.lower(), (
+            f"Expected localhost error, got: {result.stderr}"
+        )
+
+    def test_localhost_guard_does_not_raise_in_dev(self):
+        """
+        Sanity check: localhost guard does NOT raise in dev mode.
+
+        Bug that would still pass: guard always raises regardless of ENV.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config; print('OK')"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "http://localhost:8000",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "http://localhost:8000/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must succeed in dev
+        assert result.returncode == 0, (
+            f"localhost should be allowed in dev.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "OK" in result.stdout
