@@ -253,3 +253,89 @@ Changes to `backend/` are not live until the service is redeployed.
 
 - **Apex redirect:** `priority-guard.com` 301-redirects to `www.priority-guard.com` (configured in Render).
 - **robots.txt:** The backend serves `GET /robots.txt` returning `User-agent: *\nDisallow: /\n`. This is intentional — the backend is OAuth/API only, not a public content surface. The marketing site is `fulfilling-productivity.com`.
+
+---
+
+## MindSort Claude MCP — Deploy Runbook (Widget-A and after)
+
+This section is MindSort-Claude-specific. The PG widget guidance above is written for PG/ChatGPT paths and does NOT translate 1:1 — do not follow it verbatim for MindSort. Service code lives in `mcp_server/mindsort_claude/`; widget bundle at `mcp_server/mindsort_claude/widgets/mindsort-dashboard-claude.html`.
+
+### Widget bundle facts (verified)
+- Single source of truth for the URI: `WIDGET_URI` in `handlers/resources_dupl.py` (`ui://mindsort-claude/dashboard-v1.html`). Both consumers (`tools_list_dupl.py`, `handlers/tools_dupl.py`) IMPORT it. Do not hardcode it anywhere else.
+- The server loads the HTML ONCE at module import: `WIDGET_HTML = _load_widget_html()` in `resources_dupl.py`. A Render restart/redeploy reloads it fresh, so the file must be correct AND committed before deploy.
+- **Silent-failure trap:** `_load_widget_html()` catches FileNotFoundError/PermissionError/any error and returns `WIDGET_FALLBACK_HTML` ("Widget failed to load"). If the bundle is missing or uncommitted, the server starts FINE, serves the fallback, and logs a single `widget.load.file_not_found`. No crash, no failed deploy. The widget just shows the failure text. Watch for that log line after deploy.
+
+### Pre-commit / pre-deploy checks (any change under `widget-react/src/` or a WIDGET_URI bump)
+```bash
+# 1. Build the bundle
+cd mcp_server/mindsort_claude/widget-react && npm run build && cd -
+
+# 2. Verify it's the inlined bundle, NOT the placeholder
+grep -c "MindSort Widget (placeholder)" mcp_server/mindsort_claude/widgets/mindsort-dashboard-claude.html   # must be 0
+grep -c 'react.production.min' mcp_server/mindsort_claude/widgets/mindsort-dashboard-claude.html            # must be >=1
+
+# 3. Verify single-file inlining (no external asset split)
+grep -c '<script[^>]*src="' mcp_server/mindsort_claude/widgets/mindsort-dashboard-claude.html               # must be 0
+
+# 4. Verify single WIDGET_URI source of truth
+grep -rn "WIDGET_URI = " mcp_server/mindsort_claude/ --include="*.py" | grep -v __pycache__                  # exactly ONE match (resources_dupl.py)
+
+# 5. Bundle size sanity (current build ~470-480KB)
+ls -la mcp_server/mindsort_claude/widgets/mindsort-dashboard-claude.html
+
+# 6. CRITICAL: confirm the bundle is COMMITTED, not just built
+git status --porcelain mcp_server/mindsort_claude/widgets/mindsort-dashboard-claude.html                    # empty = committed; non-empty = STAGE + COMMIT before deploy
+```
+Built-but-uncommitted is the #1 deploy trap: Render builds from the committed tree, so an uncommitted bundle means production serves the OLD bytes (or the placeholder) while local looks correct.
+
+### Render service config — set BEFORE first deploy
+This service was dormant before the Poetry migration, so the Poetry build rule applies (see "Resuming a suspended Render service" above):
+- **Build Command:** `poetry install --no-root --only main`
+- **Env `POETRY_VERSION`** = `2.2.0` (without it, the build tries the removed `requirements_fullbackend.txt` and fails)
+- **Start Command:** `uvicorn mcp_server.mindsort_claude.server_dupl:create_app --factory --host 0.0.0.0 --port $PORT`
+
+**Required env vars** (from `mcp_server/mindsort_claude/config.py`). Two of these HARD-FAIL startup if unset in production — that is intentional fail-fast, but it means you must set them first:
+
+| Variable | Value | Note |
+|----------|-------|------|
+| `ENV` | `production` | enables the prod startup guards |
+| `CLARITY_CLAUDE_MCP_SERVER_URL` | deployed origin, **NO** `/mcp` (e.g. `https://mindsort-claude.priority-guard.com`) | putting `/mcp` here produces `/mcp/mcp` and breaks the resource claim, .well-known URLs, AND the `ui.domain` hash |
+| `CLARITY_CLAUDE_OAUTH_ISSUER_URL` | `https://www.priority-guard.com/oauth/pg` | |
+| `CLARITY_CLAUDE_BACKEND_URL` | `https://www.priority-guard.com` | |
+| `CLARITY_CLAUDE_INTERNAL_API_SECRET` | matches backend `INTERNAL_API_SECRET` | empty string = dev-mode skip; MUST be set in prod |
+| `CLARITY_CLAUDE_JWKS_URL` | `https://www.priority-guard.com/oauth/pg/jwks` | |
+| `CLARITY_CLAUDE_ISSUER` | `https://www.priority-guard.com` | JWT `iss` claim |
+| `CLARITY_CLAUDE_AUDIENCE` | `https://www.priority-guard.com` | JWT `aud` claim |
+| `CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS` | `https://claude.ai` | **HARD-FAILS startup if unset in prod/staging** |
+
+Optional but recommended (Better Stack log separation): `BETTER_STACK_SOURCE_TOKEN` and `SERVICE_NAME=mindsort-claude-mcp`. Note: `server_dupl.py` does not yet call `configure_logging()` — wiring Better Stack requires adding that call (same pattern as PG OpenAI MCP). Until then logs go to stdout only.
+
+### Deploy sequence
+1. Run all pre-commit checks above; confirm bundle committed (#6).
+2. `git status` clean; if `pyproject.toml` changed at any point, `poetry lock` and commit both (a stale lock fails EVERY service's build, not just this one).
+3. Push to the branch Render builds from.
+4. Confirm the Render service Build/Start commands + env vars above (especially `POETRY_VERSION`, `ENV=production`, `CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS`).
+5. Render Dashboard → MindSort Claude MCP service → **Manual Deploy → Deploy latest commit** (Render does not auto-deploy this repo).
+
+### Post-deploy verification
+```bash
+# OAuth discovery (issuer must be root domain, no path — same invariant as PG)
+curl https://<mindsort-origin>/.well-known/oauth-protected-resource
+#   "resource"               == https://<mindsort-origin>/mcp
+#   "authorization_servers[0]" == https://www.priority-guard.com
+curl https://<mindsort-origin>/.well-known/oauth-authorization-server
+#   "issuer" == https://www.priority-guard.com
+```
+Then check Render logs for the widget-load path at startup:
+- GOOD: a `resource.read.serving_widget` event appears when Claude first reads the resource, with a non-trivial `html_length`.
+- BAD: `widget.load.file_not_found` at startup → the server is serving `WIDGET_FALLBACK_HTML`. The bundle isn't on disk in the container (uncommitted, or wrong path). Fix and redeploy.
+
+### Client cache-bust (Claude — NOT the ChatGPT refresh dance)
+Widget bundle bytes change on every deploy; only the URI is frozen at approval. Claude caches the bundle. To force the new bytes:
+**Delete the MindSort connector and re-add it, then start a NEW conversation.** Disconnect/reconnect is NOT sufficient. (This differs from the PG/ChatGPT "Refresh in Settings → Apps" flow above.)
+
+### First-render smoke test (resolves parked questions)
+In a fresh Claude conversation, trigger a widget-producing tool (e.g. organize_thoughts). Confirm the inline summary renders. This is where the parked items resolve empirically:
+- Does MIME `text/html;profile=mcp-app` render? (PG ships `text/html+mcp`; if MindSort renders blank but PG renders, suspect MIME.)
+- Does the host need tool-level `domain` on `_meta`? (MindSort omits it; PG includes it.)
+Report findings before changing any server file — do not change MIME/domain without a confirmed root cause.

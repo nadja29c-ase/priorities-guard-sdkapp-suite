@@ -1,5 +1,5 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: May 2026 — Sources verified against live Anthropic documentation
+Last updated: June 2026 — Sources re-verified against live Anthropic documentation (June 23, 2026)
 Anthropic Software Directory Policy last updated: April 15, 2026
 Submission guide: https://claude.com/docs/connectors/building/submission
 Pre-submission checklist: https://claude.com/docs/connectors/building/review-criteria
@@ -256,14 +256,16 @@ Your MCP server must call your own first-party APIs or APIs you legitimately pro
 Source: https://claude.com/docs/connectors/building/mcp-apps/design-guidelines
 Required per policy §3H: developers must follow design guidelines Anthropic publishes.
 
-Inline card constraints (mandatory):
-- Max height: 500px — auto-fit content height, no nested scrolling
-- Max actions: 2, placed at the bottom of the card
-- Max data points: 4–5
+Inline card constraints:
+- **Height:** Auto-fits to content, no nested scrolling. Host caps and clips overflow. No published px limit. If a scroll viewport is needed, escalate to fullscreen via `ui/request-display-mode`
+- **Max actions:** 2, placed at the bottom of the card
+- **Max data points:** 4–5 (stated constraint — no "recommended" qualifier in official docs)
 - No drill-ins, breadcrumbs, or multiple views
 - No menus or popovers — use visible controls (segmented buttons, toggles, inline options)
 - Touch targets minimum 44×44pt on mobile
-- WCAG AA accessibility required: maintain high contrast (AA minimum), support keyboard navigation, provide text alternatives for visual content, test with assistive technologies — "Your app must be usable by everyone" (Anthropic design guidelines)
+- WCAG AA accessibility required: maintain high contrast (AA minimum), support keyboard navigation, provide text alternatives for visual content, test with assistive technologies
+
+**Source verified (June 2026):** Official design-guidelines page at https://claude.com/docs/connectors/building/mcp-apps/design-guidelines
 
 Fullscreen constraints (mandatory):
 - No floating panels — use collapsible sidebars, tabs, or pagination
@@ -271,8 +273,9 @@ Fullscreen constraints (mandatory):
 - Composer always visible — design UX to work with it
 
 Mobile constraints:
-- Fullscreen not yet available on mobile — inline only (coming soon)
+- **Fullscreen IS supported on mobile** (verified June 2026): App fills the entire screen with chat input and navigation bar overlaid on top. Keep critical UI within the safe area.
 - Renders in WKWebView (iOS) / WebView (Android), not sandboxed iframe
+- No camera/mic/location access on mobile
 - Connectors must be added via web or desktop before appearing on mobile
 - Honor safeAreaInsets for notches and home indicator
 - Design responsively from 320px minimum width up to fullscreen — no fixed breakpoints
@@ -389,7 +392,7 @@ PG widget pre-submission checklist (MCP Apps specific):
 [x] All structural colors use var(--color-*) tokens with hex fallbacks — verified 2025-05-30
 [x] Widget tested in both light and dark mode — useHostStyles hook active
 [x] _meta.ui.csp declared on ui:// resource (connectDomains, resourceDomains) — resources_dupl.py
-[x] Inline card ≤500px, ≤2 actions, no popovers, no nested scroll — App.tsx inline mode
+[x] Inline card: auto-fit height (no nested scroll), ≤2 actions, no popovers — App.tsx inline mode
 [x] All touch targets ≥44×44pt — verified across all components
 [x] safeAreaInsets honored for mobile layout — App.tsx line 52
 [x] html, body { background: transparent; margin: 0; } — main.css
@@ -709,8 +712,9 @@ All 17 tools lack title in ToolAnnotations. ToolDefinition dataclass has no titl
 Fix: Add title to ToolDefinition, pass it to ToolAnnotations in list_tools(). Affects all tools, requires redeploy.
 🔴 Blocker 1 — Documentation Page (Must Be Created Before Submission)
 No Claude-specific documentation page exists. Must be published at a stable HTTPS URL (e.g. priority-guard.com/docs/mcp-claude) before submission, containing all required sections including minimum 3 usage examples.
-🔴 Blocker 2 — MCP App Screenshots (Submission Prep)
-Screenshots of the widget rendering in Claude.ai are mandatory for MCP App directory listing. Cannot be collected until widget rendering is confirmed working (currently blocked by claude.ai host-side issue — widget implementation is correct per spec, platform rendering for third-party custom connectors is silently failing per anthropics/claude-ai-mcp issue #61).
+🟢 Blocker 2 — MCP App Screenshots (Submission Prep) — RESOLVED
+Screenshots of the widget rendering in Claude.ai are mandatory for MCP App directory listing.
+**Status (June 2026):** Widget rendering for third-party connectors is now working. Issue #61 resolved. Screenshots can be collected once widget increment ships.
 ✅ Resolved — OAuth Callback URLs (Fixed in Increment Claude-03)
 https://claude.ai/api/mcp/auth_callback and https://claude.com/api/mcp/auth_callback both added to backend/core/config.py allowlist. PKCE S256 already implemented. No further code change needed.
 🟡 Item — CORS Origins (Operational Verify)
@@ -721,8 +725,9 @@ Verify before submission:
 curl https://<CLAUDE_MCP_SERVER_URL>/.well-known/oauth-protected-resource
 
 # → "resource" field must equal <CLAUDE_MCP_SERVER_URL>
-🟡 Item — MCP App Widget Rendering (Platform Issue)
-Widget rendering for third-party custom connectors is silently failing in claude.ai. _meta.ui.resourceUri is set correctly on the wire (confirmed via logs), but claude.ai never calls resources/read. This is a known platform issue (anthropics/claude-ai-mcp GitHub issue #61, filed February 17, 2026, open, unacknowledged by Anthropic staff). Expected to resolve upon directory approval.
+🟢 Item — MCP App Widget Rendering — RESOLVED (June 2026)
+**Previous status:** Widget rendering for third-party custom connectors was silently failing (anthropics/claude-ai-mcp GitHub issue #61, filed February 17, 2026).
+**Current status (June 2026):** Issue #61 resolved. Widgets now render correctly for third-party custom connectors. resources/read is called as expected. No longer a blocker.
 
 
 10. Items That Do NOT Need Changes for Claude
@@ -737,7 +742,22 @@ Transport — FastMCP Streamable HTTP already in use; SSE deprecated path not us
 Error handling — implemented with structured error messages
 
 
-11. What Changed From Previous Version (May 2026 Update)
+11. What Changed From Previous Version
+
+### June 2026 Update (final — verified against official docs)
+| Item | Previous | Correct (per official docs) |
+|------|----------|----------------------------|
+| Inline height | "Max 500px (mandatory)" | "Auto-fits to content, no nested scrolling. Host caps and clips overflow. No published px limit." |
+| 4-5 data points | Listed as mandatory | Listed as "Constraint" — no "recommended" qualifier (earlier edit fabricating "recommended" was wrong) |
+| Mobile fullscreen | "not yet available" | **Supported** — "App fills the entire screen with chat input and navigation bar overlaid" |
+| Issue #61 widget rendering | "silently failing" | **RESOLVED** per owner confirmation |
+
+**Correction notes:**
+- The "500px hard limit" was from a stale/cached fetch; current official docs show "auto-fits to content" with no px value
+- The "recommended" qualifier for 4-5 data points was fabricated and has been removed
+- Mobile fullscreen IS supported per current official docs
+
+### May 2026 Update
 Item
 Previous
 Updated
