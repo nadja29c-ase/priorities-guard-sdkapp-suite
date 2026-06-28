@@ -299,7 +299,7 @@ This service was dormant before the Poetry migration, so the Poetry build rule a
 | Variable | Value | Note |
 |----------|-------|------|
 | `ENV` | `production` | enables the prod startup guards |
-| `CLARITY_CLAUDE_MCP_SERVER_URL` | deployed origin, **NO** `/mcp` (e.g. `https://mindsort-claude.priority-guard.com`) | putting `/mcp` here produces `/mcp/mcp` and breaks the resource claim, .well-known URLs, AND the `ui.domain` hash |
+| `CLARITY_CLAUDE_MCP_SERVER_URL` | `https://mindsort-mcp.priority-guard.com` (deployed origin, **NO** `/mcp`) | putting `/mcp` here produces `/mcp/mcp` and breaks the resource claim, .well-known URLs, AND the `ui.domain` hash. This is the custom domain mapped to the Render service `priorities-guard-sdkapp-suite-6jri.onrender.com`; the env var must use the custom domain, not the onrender.com URL, so the `ui.domain` hash matches the host Claude connects through. |
 | `CLARITY_CLAUDE_OAUTH_ISSUER_URL` | `https://www.priority-guard.com/oauth/pg` | |
 | `CLARITY_CLAUDE_BACKEND_URL` | `https://www.priority-guard.com` | |
 | `CLARITY_CLAUDE_INTERNAL_API_SECRET` | matches backend `INTERNAL_API_SECRET` | empty string = dev-mode skip; MUST be set in prod |
@@ -320,12 +320,13 @@ Optional but recommended (Better Stack log separation): `BETTER_STACK_SOURCE_TOK
 ### Post-deploy verification
 ```bash
 # OAuth discovery (issuer must be root domain, no path — same invariant as PG)
-curl https://<mindsort-origin>/.well-known/oauth-protected-resource
-#   "resource"               == https://<mindsort-origin>/mcp
+curl https://mindsort-mcp.priority-guard.com/.well-known/oauth-protected-resource
+#   "resource"               == https://mindsort-mcp.priority-guard.com/mcp
 #   "authorization_servers[0]" == https://www.priority-guard.com
-curl https://<mindsort-origin>/.well-known/oauth-authorization-server
+curl https://mindsort-mcp.priority-guard.com/.well-known/oauth-authorization-server
 #   "issuer" == https://www.priority-guard.com
 ```
+The `resource` claim must show the custom domain (`mindsort-mcp.priority-guard.com`), not the onrender.com URL. If it shows the onrender URL, `CLARITY_CLAUDE_MCP_SERVER_URL` did not take effect (or still points at onrender) — fix and redeploy, because the `ui.domain` hash is derived from this value and a mismatch breaks widget rendering.
 Then check Render logs for the widget-load path at startup:
 - GOOD: a `resource.read.serving_widget` event appears when Claude first reads the resource, with a non-trivial `html_length`.
 - BAD: `widget.load.file_not_found` at startup → the server is serving `WIDGET_FALLBACK_HTML`. The bundle isn't on disk in the container (uncommitted, or wrong path). Fix and redeploy.

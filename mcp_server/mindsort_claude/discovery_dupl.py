@@ -50,19 +50,20 @@ async def oauth_authorization_server():
     }
 
 
-# DEFERRED (MindSort-wide, post-OpenAI-review): authorization_servers advertises
-# OAUTH_ISSUER_URL (path-qualified, .../oauth/pg) while the backend AS declares
-# issuer = https://www.priority-guard.com (root, no path). RFC 8414/9728 expect the
-# authorization_servers entry to match the AS's self-declared issuer. The in-review
-# ChatGPT server (clarity/discovery.py) has the IDENTICAL behavior, so this is shared
-# MindSort behavior, not a Claude-port defect. Fixing it Claude-only would diverge from
-# ChatGPT MindSort (violates Canonical Product Rule §0) and is an unverified change to
-# the OAuth surface. Evaluate for BOTH platforms together after OpenAI review clears,
-# with a real OAuth client test. Do not fix in isolation.
+# FIX (inc_05): authorization_servers now advertises CLARITY_ISSUER (root issuer,
+# https://www.priority-guard.com) instead of OAUTH_ISSUER_URL (path-qualified,
+# .../oauth/pg). This satisfies Claude's RFC 8414/9728 DCR discovery chain, which
+# expects authorization_servers to match the AS's self-declared issuer (root).
+#
+# This does NOT violate Canonical Product Rule §0: this is the platform-coupled
+# _dupl Claude file; the ChatGPT server (clarity/discovery.py) is untouched and
+# retains its behavior. Structural hardening (dedicated OAUTH_ISSUER_BASE +
+# same-origin guard, mirroring PG) is tracked as inc_05b, to run after the
+# connection is confirmed.
 async def oauth_protected_resource():
     """OAuth 2.0 Protected Resource Metadata (RFC 9728)."""
     return {
         "resource": MCP_RESOURCE_URL,
-        "authorization_servers": [OAUTH_ISSUER_URL],
+        "authorization_servers": [CLARITY_ISSUER],
         "scopes_supported": SCOPES_SUPPORTED,
     }
