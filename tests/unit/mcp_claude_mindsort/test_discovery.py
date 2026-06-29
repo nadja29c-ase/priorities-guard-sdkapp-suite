@@ -263,8 +263,9 @@ class TestConfigGuards:
 
         # Must fail with RuntimeError mentioning same origin
         assert result.returncode != 0, "Guard should have raised on differing origins"
-        assert "same origin" in result.stderr.lower() or "CLARITY_CLAUDE_OAUTH_ISSUER" in result.stderr, (
-            f"Expected same-origin error, got: {result.stderr}"
+        # Tight assertion: must contain "same origin" (not just env var name, which could be ModuleNotFoundError)
+        assert "same origin" in result.stderr.lower(), (
+            f"Expected 'same origin' in error message, got: {result.stderr}"
         )
 
     def test_same_origin_guard_passes_legitimate_pairing(self):
@@ -360,6 +361,40 @@ class TestConfigGuards:
         # Must succeed in dev
         assert result.returncode == 0, (
             f"localhost should be allowed in dev.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "OK" in result.stdout
+
+    def test_production_config_loads_with_correct_env_vars(self):
+        """
+        Guard test (prod happy path): production config loads when all env vars correct.
+
+        Bug that would still pass: a guard that's too strict and rejects valid
+        production config. This test ensures the guards don't false-positive.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config; print('OK')"
+            ],
+            env={
+                "ENV": "production",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS": "https://claude.ai",
+                "CLARITY_CLAUDE_INTERNAL_API_SECRET": "test-secret",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must succeed with correct production config
+        assert result.returncode == 0, (
+            f"Production config should load with correct env vars.\n"
             f"stderr: {result.stderr}"
         )
         assert "OK" in result.stdout
