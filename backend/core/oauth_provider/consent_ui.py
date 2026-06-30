@@ -29,10 +29,15 @@ def _derive_app_name_from_scopes(scopes: list[str]) -> str:
     """
     Derive app name from OAuth scopes for GDPR audit trail.
 
+    NOTE (v2): This function is now ONLY used as a fallback for auth contexts
+    created by older deploys (during rolling update window) that don't have
+    the app_name field. New contexts carry app_name from authorize.py.
+
     Scope prefixes:
     - pg.* -> "priority_guardian"
     - clarity.* -> "mindsort"
-    - focused.* -> "focused" (default)
+    - focused.* -> "focused"
+    - unknown -> "unknown" (no known prefix matched)
 
     Args:
         scopes: List of OAuth scopes
@@ -45,7 +50,11 @@ def _derive_app_name_from_scopes(scopes: list[str]) -> str:
             return "priority_guardian"
         if scope.startswith("clarity."):
             return "mindsort"
-    return "focused"
+        if scope.startswith("focused."):
+            return "focused"
+    # No known app prefix matched - return explicit "unknown" label for accurate
+    # GDPR audit trail (do NOT default unknown scopes to "focused")
+    return "unknown"
 
 
 @router.post("/oauth/focused/consent")
@@ -185,7 +194,33 @@ async def consent_endpoint(
     # Record consent for GDPR compliance (Increment 17)
     # Handle both string ("focused.read focused.write") and list formats
     scopes_list = scope.split() if isinstance(scope, str) else scope
-    app_name = _derive_app_name_from_scopes(scopes_list)
+
+    # =========================================================================
+    # v2: Reuse app_name from auth context (threaded from authorize.py)
+    # =========================================================================
+    # New contexts carry app_name; old contexts (during rolling deploy) don't.
+    # Fallback to _derive_app_name_from_scopes for backward compatibility.
+    app_name = auth_context.get("app_name")
+    if app_name is None:
+        # Old context without app_name (rolling deploy window) - derive from scopes
+        app_name = _derive_app_name_from_scopes(scopes_list)
+        request_logger.debug(
+            "oauth.consent.app_name_derived",
+            client_id=mask_client_id(client_id),
+            app_name=app_name,
+            reason="auth_context_missing_app_name",
+        )
+
+    # Fail-loud on unknown app: log warning but STILL record consent under "unknown"
+    # (A token is being minted - consent record must be written. Accurate label + warning
+    # is better than omission, which would leave a minted token with no consent record.)
+    if app_name == "unknown":
+        request_logger.warning(
+            "oauth.consent.unknown_app_scope",
+            client_id=mask_client_id(client_id),
+            scopes=scopes_list,
+        )
+
     await record_consent(
         db=db,
         user_id=user_id,

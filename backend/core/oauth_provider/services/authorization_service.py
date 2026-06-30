@@ -34,6 +34,7 @@ async def create_authorization_context(
     state: str | None = None,
     nonce: str | None = None,
     resource: str | None = None,
+    app_name: str | None = None,  # v2: threaded for consent_ui.py to reuse
     correlation_id: str | None = None
 ) -> str:
     """
@@ -53,10 +54,18 @@ async def create_authorization_context(
         state: Optional CSRF token
         nonce: Optional OpenID Connect nonce
         resource: Optional resource parameter (RFC 9728 B2-5)
+        app_name: Optional resolved app name (v2: threaded to consent_ui.py)
         correlation_id: Optional correlation ID for logging
 
     Returns:
         str: Authorization context ID (UUID)
+
+    Note:
+        The app_name field is additive (v2 inc_consent_template_fallthrough_guard).
+        Schema version is NOT bumped because:
+        - Old contexts (no app_name) are handled by consent_ui.py fallback
+        - New contexts (with app_name) are ignored by old consent_ui.py code
+        Both rolling-deploy directions are safe.
 
     Example:
         >>> auth_context_id = await create_authorization_context(
@@ -72,7 +81,7 @@ async def create_authorization_context(
 
     # Build authorization context
     auth_context = {
-        "v": AUTH_CONTEXT_SCHEMA_VERSION,  # Schema version for future migrations
+        "v": AUTH_CONTEXT_SCHEMA_VERSION,  # Schema version for future migrations (NOT bumped for app_name - additive)
         "client_id": client_id,
         "client_name": client_name,
         "code_challenge": code_challenge,
@@ -83,6 +92,7 @@ async def create_authorization_context(
         "resource": resource,  # RFC 9728 B2-5
         "redirect_uri": redirect_uri,
         "user_id": user_id,
+        "app_name": app_name,  # v2: may be None for old deploys, consent_ui.py falls back
         "expires_at": int(time.time()) + AUTH_CONTEXT_TTL
     }
 

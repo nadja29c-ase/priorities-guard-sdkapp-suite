@@ -119,6 +119,68 @@ def _normalize(s: str | None) -> str | None:
     return s if s else None
 
 
+# =============================================================================
+# SCOPE CLASSIFICATION (v2 - inc_consent_template_fallthrough_guard)
+# =============================================================================
+# Classify scopes ONCE, BEFORE auth context creation. This closes:
+# - Mixed known+unknown bypass (v1 used any() which only required one match)
+# - Late rejection leaving live Redis context
+# - Cross-app scope hiding (scopes filtered per-app, hiding granted cross-app scopes)
+#
+# Prefix→app mapping is defined HERE, not imported from ROUTE_SCOPE_REGISTRY
+# (no coupling to registration module).
+
+# The three supported applications, identified by scope prefix
+APP_PREFIX_MAPPING = {
+    "clarity.": "mindsort",
+    "pg.": "priority_guardian",
+    "focused.": "focused",  # Legacy, deprecated but retained for compatibility
+}
+
+
+def classify_scopes(scopes: set[str]) -> tuple[str | None, set[str]]:
+    """
+    Classify requested scopes by application prefix.
+
+    Args:
+        scopes: Set of requested scope strings
+
+    Returns:
+        Tuple of (app_name, unknown_scopes) where:
+        - app_name: The single app these scopes belong to, or None if:
+          - scopes is empty
+          - scopes span multiple apps
+        - unknown_scopes: Set of scopes matching no known app prefix
+
+    The caller should:
+    1. Reject if unknown_scopes is non-empty (unknown scope present)
+    2. Reject if app_name is None and scopes is non-empty (multi-app)
+    3. Proceed if exactly one app and no unknown scopes
+    """
+    if not scopes:
+        return None, set()
+
+    unknown_scopes: set[str] = set()
+    apps_found: set[str] = set()
+
+    for scope in scopes:
+        matched = False
+        for prefix, app_name in APP_PREFIX_MAPPING.items():
+            if scope.startswith(prefix):
+                apps_found.add(app_name)
+                matched = True
+                break
+        if not matched:
+            unknown_scopes.add(scope)
+
+    # Determine the single app (if exactly one)
+    if len(apps_found) == 1:
+        return apps_found.pop(), unknown_scopes
+    else:
+        # Zero apps (all unknown) or multiple apps
+        return None, unknown_scopes
+
+
 def _normalize_redirect_uri(uri: str) -> str | None:
     """
     Normalize redirect_uri per RFC 3986 rules:
@@ -609,6 +671,45 @@ async def authorize_endpoint(
             description="Requested scopes exceed client's registered scopes"
         )
 
+    # =========================================================================
+    # SCOPE CLASSIFICATION (v2 - inc_consent_template_fallthrough_guard)
+    # =========================================================================
+    # Classify scopes ONCE, BEFORE any side effects (user resolution, auth context).
+    # This closes: mixed known+unknown bypass, late rejection, cross-app hiding.
+    app_name, unknown_scopes = classify_scopes(requested_scopes)
+
+    # Reject if ANY unknown scope is present (defense in depth - unknown scopes
+    # cannot be registered via DCR today, but this guards future additions)
+    if unknown_scopes:
+        request_logger.warning(
+            "oauth.authorize.unknown_scope_rejected",
+            client_id=mask_client_id(client_id),
+            unknown_scopes=sorted(unknown_scopes),
+            requested_scopes=sorted(requested_scopes),
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_scope",
+            description="Requested scopes include unknown scope(s).",
+        )
+
+    # Reject if scopes span multiple apps (no multi-app consent design)
+    if app_name is None and requested_scopes:
+        request_logger.warning(
+            "oauth.authorize.multi_app_scope_rejected",
+            client_id=mask_client_id(client_id),
+            requested_scopes=sorted(requested_scopes),
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="invalid_scope",
+            description="Requested scopes span multiple applications.",
+        )
+
+    # At this point: exactly one app, no unknown scopes. Proceed.
+
     # Resolve user identity via identity resolution chain (Increment 19)
     # Priority: 1. login_hint, 2. session cookie, 3. new anonymous user
     user = await _resolve_user_identity(request, db, login_hint, correlation_id)
@@ -619,6 +720,7 @@ async def authorize_endpoint(
 
     # Create authorization context in Redis (10 minute TTL)
     # IMPORTANT: Store internal user_id (UUID), NOT chatgpt_user_id
+    # v2: app_name threaded through context for consent_ui.py to reuse
     auth_context_id = await create_authorization_context(
         client_id=client_id,
         client_name=client_name,
@@ -630,29 +732,46 @@ async def authorize_endpoint(
         state=state,
         nonce=nonce,
         resource=resource,  # RFC 9728 B2-5
+        app_name=app_name,  # v2: threaded for consent_ui.py audit record
         correlation_id=correlation_id
     )
 
     # Detect user language preference
     language = _detect_language(request)
 
-    # Select template based on app (determined by scopes)
-    # Filter displayed scopes to only show relevant ones for each app
-    # Override client_name to show APP name, not OAuth CLIENT name
-    # (ChatGPT = OAuth client, MindSort AI = app being authorized)
-    if any(s.startswith("clarity.") for s in requested_scopes):
+    # =========================================================================
+    # TEMPLATE SELECTION (v2 - simplified, uses pre-classified app_name)
+    # =========================================================================
+    # At this point we have exactly one app (unknown/multi-app already rejected).
+    # No need for any() checks or fallthrough - just look up by app_name.
+    # display_scopes is ALL requested scopes (no cross-app hiding possible now).
+    display_scopes = requested_scopes
+
+    if app_name == "mindsort":
         template_name = f"oauth_consent_mindsort_{language}.html"
-        client_name = "MindSort AI"  # App name, not OAuth client name
-        # Only show clarity.* scopes on MindSort AI consent page
-        display_scopes = {s for s in requested_scopes if s.startswith("clarity.")}
-    elif any(s.startswith("pg.") for s in requested_scopes):
+        display_client_name = "MindSort AI"  # App name, not OAuth client name
+    elif app_name == "priority_guardian":
         template_name = f"oauth_consent_pg_{language}.html"
-        client_name = "Priority Guardian"  # App name, not OAuth client name
-        # Only show pg.* scopes on Priority Guardian consent page
-        display_scopes = {s for s in requested_scopes if s.startswith("pg.")}
+        display_client_name = "Priority Guardian"  # App name, not OAuth client name
+    elif app_name == "focused":
+        # Focused (legacy, deprecated but retained for compatibility)
+        # client_name stays as OAuth client name (not overridden like MindSort/PG)
+        template_name = f"oauth_consent_{language}.html"
+        display_client_name = client_name
     else:
-        template_name = f"oauth_consent_{language}.html"  # Focused (existing)
-        display_scopes = requested_scopes
+        # Should be unreachable - classify_scopes + rejection logic above guarantees
+        # exactly one of the three apps. But fail safe just in case.
+        request_logger.error(
+            "oauth.authorize.unexpected_app_name",
+            client_id=mask_client_id(client_id),
+            app_name=app_name,
+        )
+        return _error_redirect(
+            redirect_uri,
+            state,
+            error="server_error",
+            description="Internal error during consent rendering.",
+        )
 
     # Use module-level scope descriptions (localized)
     scope_descriptions = SCOPE_DESCRIPTIONS_DE if language == "de" else SCOPE_DESCRIPTIONS_EN
@@ -661,7 +780,8 @@ async def authorize_endpoint(
         "oauth.authorize.consent_rendered",
         user_id=str(user.id),
         client_id=mask_client_id(client_id),
-        client_name=client_name,
+        app_name=app_name,
+        display_client_name=display_client_name,
         language=language
     )
 
@@ -670,7 +790,7 @@ async def authorize_endpoint(
         {
             "request": request,
             "auth_context_id": auth_context_id,
-            "client_name": client_name,
+            "client_name": display_client_name,
             "scopes": display_scopes,
             "scope_descriptions": scope_descriptions,
         }
