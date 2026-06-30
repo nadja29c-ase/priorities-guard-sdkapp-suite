@@ -7,10 +7,13 @@ Implements sliding window rate limiting to prevent abuse with structured logging
 from typing import Optional
 
 from fastapi import HTTPException, Request
-from backend.core.logging import get_logger
+from backend.core.logging import get_logger, mask_client_id
 from backend.core.redis_client import redis_client
 
 logger = get_logger(__name__)
+
+# Valid OAuth grant types for sanitization (attacker-controlled Form input)
+VALID_GRANT_TYPES = {"authorization_code", "refresh_token"}
 
 
 class RateLimitExceeded(HTTPException):
@@ -131,20 +134,48 @@ async def rate_limit_authorize(request: Request) -> None:
     await check_rate_limit(key, limit=500, window=60, request=request)
 
 
-async def rate_limit_token(request: Request, client_id: str) -> None:
+async def rate_limit_token(
+    request: Request,
+    client_id: str,
+    grant_type: str | None = None
+) -> None:
     """
-    Rate limit /token endpoint: 5 requests per minute per client+IP.
+    Rate limit /token endpoint: 30 requests per minute per client+IP.
+
+    ChatGPT and Claude.ai fire multiple parallel requests on reconnect (code
+    exchange + immediate refresh rotation + platform retries), all sharing one
+    bucket. 5/min was causing 429s on reconnect, blocking the code→token
+    exchange. Raised to 30/min to match /register precedent.
 
     Args:
         request: FastAPI request object
         client_id: OAuth client ID
+        grant_type: OAuth grant type (for rate-limit exceed logging only)
 
     Raises:
         RateLimitExceeded: If rate limit exceeded
     """
     ip = get_client_ip(request)
     key = f"ratelimit:oauth:token:{client_id}:{ip}"
-    await check_rate_limit(key, limit=5, window=60, request=request)
+
+    # Extract correlation_id for logging
+    correlation_id = getattr(request.state, 'correlation_id', 'system') if request else 'system'
+    request_logger = logger.bind(correlation_id=correlation_id)
+
+    try:
+        await check_rate_limit(key, limit=30, window=60, request=request)
+    except RateLimitExceeded:
+        # Log grant_type on exceed ONLY (not on success) for follow-up bucket-split decision.
+        # Sanitize grant_type: it's attacker-controlled Form(...) input — validate against
+        # known set, log "unknown" for anything else (prevents log injection).
+        sanitized_grant_type = grant_type if grant_type in VALID_GRANT_TYPES else "unknown"
+
+        request_logger.warning(
+            "oauth.token.rate_limited",
+            client_id=mask_client_id(client_id),
+            grant_type=sanitized_grant_type,
+        )
+        raise
 
 
 async def rate_limit_revoke(request: Request, client_id: str) -> None:

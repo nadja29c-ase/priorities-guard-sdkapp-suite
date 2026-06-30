@@ -159,8 +159,8 @@ async def token_endpoint(
             headers={"WWW-Authenticate": 'Bearer realm="oauth"'}
         )
 
-    # Rate limit check
-    await rate_limit_token(request, client_id)
+    # Rate limit check (pass grant_type for rate-limit exceed logging)
+    await rate_limit_token(request, client_id, grant_type=grant_type)
 
     # Validate grant_type
     valid, error = validate_grant_type(grant_type)
