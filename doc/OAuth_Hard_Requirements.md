@@ -1,8 +1,11 @@
 # OAuth 2.1 — Hard Requirements
 
-**Version:** 1.0  
-**Date:** 2026-03-05  
-**Scope:** Priority Guardian OAuth provider (inbound: ChatGPT → Priority Guardian)
+**Version:** 1.1
+**Date:** 2026-07-02
+**Scope:** Priority Guardian OAuth provider (Authorization Server requirements for ChatGPT and Claude inbound flows)
+
+**Changelog:**
+- v1.1 (2026-07-02): Fixed issuer URL (api→www), clarified scope to include Claude, replaced "one discovery document" claim with ADR_005 cross-reference. See ADR_005 for platform-specific discovery shapes. Added /oauth/mindsort/* endpoints to §7 TLS table. Clarified §9 to document Claude's PRM + S256 requirements.
 
 ---
 
@@ -16,11 +19,10 @@ OAuth 2.1 is not a new protocol. It consolidates OAuth 2.0 + a decade of securit
 
 ## Issuer Model (Priority Guardian)
 
-- **One issuer:** `https://api.priority-guard.com` (or configured `OAUTH_ISSUER`)
-- **Active authorization server:** `/oauth/pg/*` routes
+- **One issuer:** `https://www.priority-guard.com` (configured via `OAUTH_ISSUER`)
+- **Active authorization server:** `/oauth/pg/*` routes (Priority Guardian), `/oauth/mindsort/*` routes (MindSort)
 - **Deprecated:** `/oauth/focused/*` (kept for backward compatibility only)
-- **One discovery document:** `/.well-known/openid-configuration` → points to `/oauth/pg/authorize`
-- This is correct and intentional. One AS = one discovery document = one `authorization_endpoint`.
+- **Multiple discovery documents by design:** One AS/issuer, multiple platform-specific discovery facades. See `doc/ADR_005_platform_oauth_discovery_contracts.md` for the three intentional shapes and why they exist.
 
 ---
 
@@ -121,8 +123,14 @@ All endpoints must require HTTPS. No exceptions.
 | `/oauth/pg/token` | HTTPS |
 | `/oauth/pg/revoke` | HTTPS |
 | `/oauth/pg/jwks` | HTTPS |
-| `/.well-known/openid-configuration` | HTTPS |
 | `/oauth/pg/register` | HTTPS |
+| `/oauth/mindsort/authorize` | HTTPS |
+| `/oauth/mindsort/token` | HTTPS |
+| `/oauth/mindsort/jwks` | HTTPS |
+| `/oauth/mindsort/register` | HTTPS |
+| `/.well-known/openid-configuration` | HTTPS |
+| `/.well-known/oauth-authorization-server` | HTTPS |
+| `/.well-known/oauth-protected-resource` | HTTPS |
 
 HTTP requests must be rejected (or redirected to HTTPS at infrastructure level — not in application code).
 
@@ -143,15 +151,17 @@ Priority Guardian accepts `state` and echoes it in error redirects and authoriza
 
 **Not an OAuth 2.1 MUST** — the spec explicitly says endpoint discovery is out of scope and that metadata is "typically provided."
 
-**Is required by OpenAI** — the Apps SDK OAuth integration requires one of the well-known discovery documents to be present.
+**Required by both platforms:**
+- **OpenAI (ChatGPT)**: Apps SDK OAuth integration requires `/.well-known/openid-configuration` or `/.well-known/oauth-authorization-server`.
+- **Claude (Anthropic)**: MCP OAuth spec requires `/.well-known/oauth-protected-resource` (RFC 9728) advertising `authorization_servers`, plus `/.well-known/oauth-authorization-server` at that AS with `code_challenge_methods_supported: ["S256"]`. Claude refuses to connect if S256 is not advertised.
 
-Priority Guardian exposes: `GET /.well-known/openid-configuration`
+Priority Guardian exposes all three discovery documents. See `doc/ADR_005_platform_oauth_discovery_contracts.md` for the platform-specific shapes.
 
 Minimum required fields:
 
 ```json
 {
-  "issuer": "https://api.priority-guard.com",
+  "issuer": "https://www.priority-guard.com",
   "authorization_endpoint": "...",
   "token_endpoint": "...",
   "jwks_uri": "...",
@@ -251,7 +261,7 @@ Purpose: prevent brute force against `code_verifier`, `client_secret`, and `refr
 | Scope enforcement | OAuth 2.1 |
 | Token revocation endpoint | RFC 7009 (referenced by OAuth 2.1) |
 | JWKS + JWT signing | Best practice / required by OpenAI |
-| Discovery endpoint | **OpenAI requirement** (not OAuth 2.1 MUST) |
+| Discovery endpoint | **OpenAI + Claude requirement** (not OAuth 2.1 MUST) |
 | Rate limiting | Security BCP (not OAuth 2.1 MUST) |
 | Encrypted token storage | Security BCP / GDPR |
 

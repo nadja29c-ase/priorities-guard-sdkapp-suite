@@ -14,7 +14,18 @@ Provides all required OAuth discovery endpoints:
 
 www.priority-guard.com is the Authorization Server (AS).
 pg-claude.priority-guard.com is the Resource Server (RS).
-All AS metadata endpoints point to www for consistency.
+
+PLATFORM-SPECIFIC SHAPE (Claude — Shape #3 per ADR_005):
+All AS metadata endpoints point to www (root issuer) because Claude's
+RFC 8414/9728-literal discovery chain requires authorization_servers to
+match the AS's self-declared issuer (root). This is CORRECT for Claude,
+but would be FATAL for ChatGPT — never port this shape to the OpenAI twin
+(mcp_server/priority_guardian/discovery.py uses a different mixed-origin
+shape required by ChatGPT's same-origin discovery→token chain).
+
+See:
+- doc/ADR_005_platform_oauth_discovery_contracts.md
+- claude increments/SHARED ARCHITECTURE/hotfix_pg_openai_discovery_restore.md
 """
 
 from mcp_server.priority_guardian_claude.config import (

@@ -66,6 +66,7 @@ A separate repo would require syncing tool logic, backend schema changes, migrat
 | OAuth callback URLs | — | ✅ diverges by platform |
 | CORS allowed origins | — | ✅ diverges by platform |
 | `PG_MCP_SERVER_URL` / `resource` claim | — | ✅ diverges by platform |
+| OAuth discovery shape (AS metadata / `authorization_servers`) | — | ✅ diverges by platform → see ADR_005 |
 | Render service | — | ✅ separate per platform |
 
 **Rule: duplicate UI, never duplicate logic.**

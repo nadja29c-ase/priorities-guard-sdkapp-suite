@@ -22,62 +22,61 @@ The Clarity MCP server is deployed on Render as a web service.
 
 | Endpoint | URL |
 |----------|-----|
-| MCP Server | `https://priorities-guard-clarity-mcp.onrender.com` |
-| MCP Endpoint | `https://priorities-guard-clarity-mcp.onrender.com/mcp` |
-| OAuth Discovery | `https://priorities-guard-clarity-mcp.onrender.com/.well-known/oauth-protected-resource` |
+| MCP Server | `https://mindsort.priority-guard.com` |
+| MCP Endpoint | `https://mindsort.priority-guard.com/mcp` |
+| OAuth Discovery | `https://mindsort.priority-guard.com/.well-known/oauth-protected-resource` |
 
 ## ChatGPT Connector Registration
 
-**Note:** ChatGPT connector registration is not yet available. This section documents the expected process for when it becomes available.
+MindSort is registered as a ChatGPT dev connector. The connector uses OAuth 2.0 with PKCE for authentication.
 
-### Expected Steps
+### Connector Configuration
 
-1. **Access Developer Console**
-   - Go to ChatGPT developer console (URL TBD)
-   - Log in with your OpenAI account
+- **MCP URL:** `https://mindsort.priority-guard.com/mcp`
+- **Authorization URL:** `{BACKEND_URL}/oauth/pg/authorize`
+- **Token URL:** `{BACKEND_URL}/oauth/pg/token`
+- **Scopes:** `clarity.write`
+- **PKCE:** Required
 
-2. **Create New Connector**
-   - Click "Create Connector" or equivalent
-   - Select "MCP Server" type
+### After Registration
 
-3. **Configure OAuth**
-   - **Authorization URL:** `{BACKEND_URL}/oauth/pg/authorize`
-   - **Token URL:** `{BACKEND_URL}/oauth/pg/token`
-   - **Scopes:** `clarity.write`
-   - **PKCE:** Required
+1. Copy the generated `client_id` from the ChatGPT developer console
+2. Set as `CHATGPT_CLIENT_ID_CLARITY` environment variable on Render
+3. Redeploy the service
 
-4. **Configure MCP Endpoint**
-   - **MCP URL:** `https://priorities-guard-clarity-mcp.onrender.com/mcp`
-
-5. **Copy Client ID**
-   - After registration, copy the generated `client_id`
-   - Set as `CHATGPT_CLIENT_ID_CLARITY` environment variable
-
-6. **Redeploy**
-   - Update environment variable on Render
-   - Service will automatically redeploy
-
-## Manual URL Connection (Current Method)
-
-Until ChatGPT connector registration is available, you can test the MCP server manually:
+## Manual Testing
 
 ### Using MCP Inspector
 
 1. Install MCP Inspector (if not already installed)
-2. Connect to: `https://priorities-guard-clarity-mcp.onrender.com/mcp`
-3. Authenticate using your OAuth provider
+2. Connect to: `https://mindsort.priority-guard.com/mcp`
+3. Authenticate using your OAuth provider (Inspector supports guided OAuth flow)
 
 ### Using curl
 
 ```bash
 # Check OAuth discovery
-curl https://priorities-guard-clarity-mcp.onrender.com/.well-known/oauth-protected-resource
+curl https://mindsort.priority-guard.com/.well-known/oauth-protected-resource
 
 # Call tool (requires valid JWT)
-curl -X POST https://priorities-guard-clarity-mcp.onrender.com/mcp \
+curl -X POST https://mindsort.priority-guard.com/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -d '{"method": "tools/call", "params": {"name": "cluster_raw_thoughts", "arguments": {...}}}'
+  -d '{
+    "method": "tools/call",
+    "params": {
+      "name": "organize_thoughts",
+      "arguments": {
+        "user_thoughts_exhausted_verbatim": "that is it",
+        "user_confirmed_no_more_thoughts": true,
+        "thoughts_exhausted": true,
+        "clusters": [
+          {"cluster_name": "Work", "thought_items": ["Finish report", "Email client"]},
+          {"cluster_name": "Personal", "thought_items": ["Buy groceries", "Call mom"]}
+        ]
+      }
+    }
+  }'
 ```
 
 ## Verification Checklist

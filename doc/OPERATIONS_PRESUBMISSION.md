@@ -176,6 +176,19 @@ curl https://<MCP_SERVER>/\.well-known/oauth-authorization-server
 curl -I https://<MCP_SERVER>/mcp
 ```
 
+### OAuth Discovery Chain Verification (ADR_005)
+
+**Run before any discovery-related deploy or submission.**
+
+The live discovery chain tests verify that all four MCP servers return the correct platform-specific discovery shapes. These tests catch env-value regressions (e.g., production Render env set incorrectly) that the unit tests cannot detect. They also catch regressions like 5854d50 (which broke PG-OpenAI by consolidating endpoints to www).
+
+```bash
+# Run live discovery tests against production (excluded from default pytest runs)
+pytest -m live tests/integration/oauth_discovery/ -v
+```
+
+See `doc/ADR_005_platform_oauth_discovery_contracts.md` for the three intentional shapes and why they differ.
+
 ## Latency Testing
 
 **Tool calls must complete within 8 seconds (ChatGPT server-side timeout).**

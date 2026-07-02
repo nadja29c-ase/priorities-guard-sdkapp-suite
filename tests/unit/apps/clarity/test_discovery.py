@@ -58,15 +58,16 @@ class TestClarityDiscovery:
     async def test_oauth_protected_resource_includes_mcp_path(self):
         """oauth_protected_resource should return resource URL with /mcp path."""
         from mcp_server.clarity.discovery import oauth_protected_resource
-        from mcp_server.clarity.config import CLARITY_ISSUER, MCP_SERVER_URL, SCOPES_SUPPORTED
+        from mcp_server.clarity.config import MCP_SERVER_URL, OAUTH_ISSUER_URL, SCOPES_SUPPORTED
 
         result = await oauth_protected_resource()
 
         # resource must include /mcp path (RFC 9728 alignment with PG)
         assert result["resource"] == f"{MCP_SERVER_URL}/mcp"
 
-        # authorization_servers must be domain-only (not path-qualified)
-        assert result["authorization_servers"] == [CLARITY_ISSUER]
+        # authorization_servers must be path-qualified for Shape #2 (MindSort-OpenAI)
+        # See doc/ADR_005_platform_oauth_discovery_contracts.md
+        assert result["authorization_servers"] == [OAUTH_ISSUER_URL]
         assert result["scopes_supported"] == SCOPES_SUPPORTED
 
     @pytest.mark.asyncio

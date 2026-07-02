@@ -6,7 +6,7 @@ Environment variables for Render deployment.
 
 | Variable | Example Value | Description |
 |----------|--------------|-------------|
-| `CLARITY_MCP_SERVER_URL` | `https://priorities-guard-clarity-mcp.onrender.com` | Public URL of the Clarity MCP server |
+| `CLARITY_MCP_SERVER_URL` | `https://mindsort.priority-guard.com` | Public URL of the MindSort MCP server |
 | `CLARITY_OAUTH_ISSUER_URL` | `https://priorities-guard-sdkapp-suite.onrender.com/oauth/pg` | OAuth authorization server base URL |
 | `CLARITY_JWKS_URL` | `https://priorities-guard-sdkapp-suite.onrender.com/oauth/pg/jwks` | JWKS endpoint for JWT verification |
 | `CLARITY_ISSUER` | `https://www.priority-guard.com` | Expected `iss` claim in JWT tokens |
@@ -19,7 +19,7 @@ Environment variables for Render deployment.
 
 | Variable | Example Value | Description |
 |----------|--------------|-------------|
-| `CHATGPT_CLIENT_ID_CLARITY` | `<from-chatgpt-console>` | ChatGPT client ID for `azp` validation. Not yet available - leave empty until ChatGPT connector marketplace launches. |
+| `CHATGPT_CLIENT_ID_CLARITY` | `<from-chatgpt-console>` | ChatGPT client ID for `azp` validation. Obtain from ChatGPT developer console after connector registration. |
 
 ## How to Set on Render
 
@@ -48,6 +48,6 @@ openssl rand -base64 32
 ## Notes
 
 - `CLARITY_ISSUER` and `CLARITY_AUDIENCE` should match what your OAuth provider puts in tokens
-- `CHATGPT_CLIENT_ID_CLARITY` will be obtained after registering your connector in ChatGPT (not yet available)
+- `CHATGPT_CLIENT_ID_CLARITY` is obtained from the ChatGPT developer console after connector registration
 - In dev mode, leave `INTERNAL_API_SECRET` empty to skip verification
 - When `CHATGPT_CLIENT_ID_CLARITY` is empty, `azp` claim validation is skipped

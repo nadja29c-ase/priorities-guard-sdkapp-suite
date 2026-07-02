@@ -1,10 +1,19 @@
 """
-Configuration for Clarity MCP Server.
+Configuration for Clarity MCP Server (MindSort-OpenAI).
 
 Centralizes all MCP-specific settings including JWT validation,
 JWKS fetching, and OAuth client configuration.
 
-Uses /oauth/pg/* endpoints (shared Priority Guardian OAuth provider).
+PRODUCTION CONFIG (Render-confirmed 2026-07-02):
+  CLARITY_OAUTH_ISSUER_URL = https://www.priority-guard.com/oauth/mindsort
+
+The dev default below differs (/oauth/pg) for local testing against the
+shared backend discovery. Changing the dev default to /oauth/mindsort
+requires verifying the local backend mounts that path in dev mode —
+flagged as follow-up, not changed in this increment.
+
+See doc/ADR_005_platform_oauth_discovery_contracts.md for the three
+intentional discovery shapes and why MindSort-OpenAI uses /oauth/mindsort.
 """
 
 import os
@@ -138,10 +147,21 @@ MCP_SERVER_URL = get_env(
     default="http://localhost:8002"
 ).rstrip("/")
 
-# OAuth Authorization Server URL (uses /oauth/pg/)
+# OAuth Authorization Server URL
 # NOTE: This is the authorization server base URL for discovery, NOT the JWT 'iss' claim.
-# - OAUTH_ISSUER_URL: http://localhost:8000/oauth/pg (authorization server endpoints)
-# - CLARITY_ISSUER: https://www.priority-guard.com (JWT iss claim value)
+#
+# PRODUCTION (Render-confirmed 2026-07-02):
+#   CLARITY_OAUTH_ISSUER_URL = https://www.priority-guard.com/oauth/mindsort
+#
+# DEV DEFAULT: http://localhost:8000/oauth/pg
+#   The dev default points to /oauth/pg (shared backend discovery) rather than
+#   /oauth/mindsort because the local backend may not mount /oauth/mindsort in
+#   dev mode. Production MUST use /oauth/mindsort per ADR_005 (Shape #2).
+#   Changing this dev default requires verifying the local backend mounts
+#   /oauth/mindsort — flagged as follow-up.
+#
+# - OAUTH_ISSUER_URL: authorization server endpoints (path-qualified)
+# - CLARITY_ISSUER: JWT iss claim value (root domain only)
 # These differ because the OAuth provider uses a domain-only issuer in tokens.
 OAUTH_ISSUER_URL = get_env(
     "CLARITY_OAUTH_ISSUER_URL",
