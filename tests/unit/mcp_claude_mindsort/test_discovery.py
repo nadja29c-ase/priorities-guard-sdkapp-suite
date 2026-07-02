@@ -398,3 +398,413 @@ class TestConfigGuards:
             f"stderr: {result.stderr}"
         )
         assert "OK" in result.stdout
+
+    def test_env_prod_alias_raises_on_localhost_defaults(self):
+        """
+        Guard test 5 (inc_05b-fix): ENV=prod + unset OAuth env → MUST raise.
+
+        This is the exact Finding-1 bypass: with ENV=prod (a common alias),
+        the old guard using ("production", "staging") would pass, letting
+        localhost defaults leak into production.
+
+        Bug that would still pass: _is_production_env() not including "prod".
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "prod",  # Common alias — must be treated as production
+                # OAuth env vars NOT set → fall back to localhost defaults
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must fail — "prod" is now treated as production, so localhost guard fires
+        assert result.returncode != 0, (
+            "ENV=prod should be treated as production and reject localhost defaults.\n"
+            f"stderr: {result.stderr}"
+        )
+        # Assert the localhost guard (not ModuleNotFoundError) fired
+        assert "localhost" in result.stderr.lower(), (
+            f"Expected localhost error for ENV=prod bypass, got: {result.stderr}"
+        )
+
+    def test_unknown_env_raises(self):
+        """
+        Guard test 6 (inc_05b-fix): ENV=produciton (typo) → MUST raise.
+
+        Defense-in-depth: unknown ENV values are rejected at startup, preventing
+        a typo from silently running with dev-mode guards disabled.
+
+        Bug that would still pass: raise-on-unknown-ENV being absent.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "produciton",  # Typo — unknown value
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must fail with "unknown ENV" message
+        assert result.returncode != 0, (
+            "Unknown ENV value should raise RuntimeError.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "unknown env" in result.stderr.lower(), (
+            f"Expected 'unknown ENV' error, got: {result.stderr}"
+        )
+
+    def test_oauth_issuer_base_with_path_raises(self):
+        """
+        Guard test 7 (inc_05b-fix): OAUTH_ISSUER_BASE with path → MUST raise.
+
+        Finding-2: the same-origin guard only checked (scheme, netloc), so a
+        path-qualified value like /oauth/pg would pass but break discovery.
+
+        Bug that would still pass: shape guard missing (origin check but no path check).
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "dev",  # Dev to isolate the shape guard
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com/oauth/pg",  # Path!
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        # Must fail with path-rejection message
+        assert result.returncode != 0, (
+            "OAUTH_ISSUER_BASE with path should raise RuntimeError.\n"
+            f"stderr: {result.stderr}"
+        )
+        # Assert the path guard (not same-origin or other) fired
+        assert "path" in result.stderr.lower() or "root issuer" in result.stderr.lower(), (
+            f"Expected path-rejection error, got: {result.stderr}"
+        )
+
+    def test_oauth_issuer_base_trailing_slash_normalized(self):
+        """
+        Guard test 8 (inc_05b-fix): OAUTH_ISSUER_BASE trailing slash → normalized.
+
+        The .rstrip("/") should normalize trailing slash, so the config loads
+        AND authorization_servers[0] equals exactly the root (no trailing slash).
+
+        Bug that would still pass: .rstrip("/") missing → trailing slash leaks.
+        """
+        import subprocess
+        import sys
+
+        # Test 1: Config should load without error
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config; print('OK')"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com/",  # Trailing slash
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"Trailing slash should be normalized, not rejected.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "OK" in result.stdout
+
+        # Test 2: Verify the normalized value
+        result2 = subprocess.run(
+            [
+                sys.executable, "-c",
+                "from mcp_server.mindsort_claude.config import OAUTH_ISSUER_BASE; "
+                "print(OAUTH_ISSUER_BASE)"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com/",  # Trailing slash
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result2.returncode == 0, f"stderr: {result2.stderr}"
+        # Must be normalized to no trailing slash
+        assert result2.stdout.strip() == "https://www.priority-guard.com", (
+            f"Expected normalized value without trailing slash, got: {result2.stdout.strip()!r}"
+        )
+
+    def test_production_authorization_servers_exact_root(self):
+        """
+        Guard test 9 (inc_05b-fix): Full production env → authorization_servers exact root.
+
+        End-to-end verification that:
+        1. Config imports cleanly with correct production env
+        2. authorization_servers[0] equals exactly "https://www.priority-guard.com"
+
+        Bug that would still pass: any guard false-positive OR trailing slash leak
+        OR path leak in the advertised value.
+        """
+        import subprocess
+        import sys
+
+        # Test the exact production values
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import asyncio; "
+                "from mcp_server.mindsort_claude.discovery_dupl import oauth_protected_resource; "
+                "result = asyncio.run(oauth_protected_resource()); "
+                "print(result['authorization_servers'][0])"
+            ],
+            env={
+                "ENV": "production",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS": "https://claude.ai",
+                "CLARITY_CLAUDE_INTERNAL_API_SECRET": "test-secret",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"Production config should load cleanly.\n"
+            f"stderr: {result.stderr}"
+        )
+        # Must be exactly the root — no trailing slash, no path
+        assert result.stdout.strip() == "https://www.priority-guard.com", (
+            f"authorization_servers[0] must be exact root issuer.\n"
+            f"Expected: 'https://www.priority-guard.com'\n"
+            f"Got: {result.stdout.strip()!r}"
+        )
+
+    def test_env_test_imports_clean(self):
+        """
+        Guard test 10 (inc_05b addendum): ENV=test → config imports cleanly.
+
+        The inc_05b addendum required "test" and "ci" in the known non-production
+        ENV set to avoid breaking test/CI harnesses. A future "cleanup" that
+        removes test/ci from _DEV_ENV_VALUES would pass CI silently without this
+        test — the exact unverified-guard pattern the addendum forbids.
+
+        Bug that would still pass: removing "test" from _DEV_ENV_VALUES.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config; print('OK')"
+            ],
+            env={
+                "ENV": "test",  # Common test harness value
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"ENV=test should import cleanly (required by inc_05b addendum).\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "OK" in result.stdout
+
+    def test_env_ci_imports_clean(self):
+        """
+        Guard test 11 (inc_05b addendum): ENV=ci → config imports cleanly.
+
+        The inc_05b addendum required "test" and "ci" in the known non-production
+        ENV set to avoid breaking CI pipelines that use ENV=ci.
+
+        Bug that would still pass: removing "ci" from _DEV_ENV_VALUES.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config; print('OK')"
+            ],
+            env={
+                "ENV": "ci",  # Common CI pipeline value
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, (
+            f"ENV=ci should import cleanly (required by inc_05b addendum).\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "OK" in result.stdout
+
+    def test_oauth_issuer_base_with_query_raises(self):
+        """
+        Guard test 12: OAUTH_ISSUER_BASE with query string → MUST raise.
+
+        The root-shape guard rejects query strings, but this was untested.
+
+        Bug that would still pass: refactoring away the query check.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com?foo=bar",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "OAUTH_ISSUER_BASE with query string should raise.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "root issuer" in result.stderr.lower() or "query" in result.stderr.lower(), (
+            f"Expected root-shape error, got: {result.stderr}"
+        )
+
+    def test_oauth_issuer_base_with_fragment_raises(self):
+        """
+        Guard test 13: OAUTH_ISSUER_BASE with fragment → MUST raise.
+
+        The root-shape guard rejects fragments, but this was untested.
+
+        Bug that would still pass: refactoring away the fragment check.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com#evil",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "OAUTH_ISSUER_BASE with fragment should raise.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "root issuer" in result.stderr.lower() or "fragment" in result.stderr.lower(), (
+            f"Expected root-shape error, got: {result.stderr}"
+        )
+
+    def test_same_origin_guard_rejects_scheme_mismatch(self):
+        """
+        Guard test 14: Same-origin guard rejects http vs https mismatch.
+
+        The guard compares (scheme, netloc) tuples, rejecting scheme mismatches.
+
+        Bug that would still pass: weakening to netloc-only comparison.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "dev",
+                "CLARITY_CLAUDE_OAUTH_ISSUER_BASE": "http://www.priority-guard.com",  # http
+                "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",  # https
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "Scheme mismatch (http vs https) should raise.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "same origin" in result.stderr.lower(), (
+            f"Expected same-origin error, got: {result.stderr}"
+        )
+
+    def test_env_uppercase_production_raises(self):
+        """
+        Guard test 15: ENV=Production (capital P) → MUST raise as unknown.
+
+        Case variants intentionally fail via unknown-ENV guard rather than
+        being normalized — maximally explicit, no silent coercion.
+
+        Bug that would still pass: normalizing ENV to lowercase.
+        """
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.mindsort_claude.config"
+            ],
+            env={
+                "ENV": "Production",  # Capital P — not in _KNOWN_ENV_VALUES
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "ENV=Production should raise as unknown ENV.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "unknown env" in result.stderr.lower(), (
+            f"Expected unknown-ENV error, got: {result.stderr}"
+        )

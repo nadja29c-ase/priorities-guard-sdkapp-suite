@@ -55,6 +55,8 @@ def _is_production_env(env: str) -> bool:
 # Fail-fast: raise on unknown ENV to prevent guards being bypassed
 # Without this, a typo like ENV=produciton silently runs in non-production mode,
 # letting localhost defaults leak into what the operator thinks is production.
+# Note: Case and whitespace variants (ENV=Production, ENV=" production ") intentionally
+# fail here rather than being normalized — maximally explicit, no silent coercion.
 if ENV not in _KNOWN_ENV_VALUES:
     raise RuntimeError(
         f"Unknown ENV value {ENV!r}. "
@@ -286,6 +288,8 @@ CORS_ALLOWED_ORIGINS: list[str] = (
 # (Anthropic origin-validation requirement: unknown Origin on /mcp → 403).
 # Widening to all non-production ENVs is deliberate: MCP Inspector needs localhost origins
 # in dev/test/ci, and none of those ENVs is deployable to production.
+# Note: staging is deliberately treated as production (IS_DEV=False) — it gets the same
+# strict origin validation as production to catch CORS issues before they hit prod.
 IS_DEV = not _is_production_env(ENV)
 
 

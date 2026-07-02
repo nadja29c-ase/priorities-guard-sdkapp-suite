@@ -384,6 +384,129 @@ class TestConfigGuards:
         )
         assert "OK" in result.stdout
 
+    def test_oauth_issuer_base_with_query_raises(self):
+        """
+        Guard test 12: OAUTH_ISSUER_BASE with query string → MUST raise.
+
+        The root-shape guard rejects query strings, but this was untested.
+
+        Bug that would still pass: refactoring away the query check.
+        """
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.priority_guardian_claude.config"
+            ],
+            env={
+                "ENV": "dev",
+                "PG_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com?foo=bar",
+                "PG_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "OAUTH_ISSUER_BASE with query string should raise.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "root issuer" in result.stderr.lower() or "query" in result.stderr.lower(), (
+            f"Expected root-shape error, got: {result.stderr}"
+        )
+
+    def test_oauth_issuer_base_with_fragment_raises(self):
+        """
+        Guard test 13: OAUTH_ISSUER_BASE with fragment → MUST raise.
+
+        The root-shape guard rejects fragments, but this was untested.
+
+        Bug that would still pass: refactoring away the fragment check.
+        """
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.priority_guardian_claude.config"
+            ],
+            env={
+                "ENV": "dev",
+                "PG_CLAUDE_OAUTH_ISSUER_BASE": "https://www.priority-guard.com#evil",
+                "PG_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "OAUTH_ISSUER_BASE with fragment should raise.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "root issuer" in result.stderr.lower() or "fragment" in result.stderr.lower(), (
+            f"Expected root-shape error, got: {result.stderr}"
+        )
+
+    def test_same_origin_guard_rejects_scheme_mismatch(self):
+        """
+        Guard test 14: Same-origin guard rejects http vs https mismatch.
+
+        The guard compares (scheme, netloc) tuples, rejecting scheme mismatches.
+
+        Bug that would still pass: weakening to netloc-only comparison.
+        """
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.priority_guardian_claude.config"
+            ],
+            env={
+                "ENV": "dev",
+                "PG_CLAUDE_OAUTH_ISSUER_BASE": "http://www.priority-guard.com",  # http
+                "PG_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",  # https
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "Scheme mismatch (http vs https) should raise.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "same origin" in result.stderr.lower(), (
+            f"Expected same-origin error, got: {result.stderr}"
+        )
+
+    def test_env_uppercase_production_raises(self):
+        """
+        Guard test 15: ENV=Production (capital P) → MUST raise as unknown.
+
+        Case variants intentionally fail via unknown-ENV guard rather than
+        being normalized — maximally explicit, no silent coercion.
+
+        Bug that would still pass: normalizing ENV to lowercase.
+        """
+        result = subprocess.run(
+            [
+                sys.executable, "-c",
+                "import mcp_server.priority_guardian_claude.config"
+            ],
+            env={
+                "ENV": "Production",  # Capital P — not in _KNOWN_ENV_VALUES
+                "PATH": "",
+            },
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            "ENV=Production should raise as unknown ENV.\n"
+            f"stderr: {result.stderr}"
+        )
+        assert "unknown env" in result.stderr.lower(), (
+            f"Expected unknown-ENV error, got: {result.stderr}"
+        )
+
 
 class TestOAuthProtectedResource:
     """Tests for oauth_protected_resource() - RFC 9728."""

@@ -9,7 +9,7 @@ Uses /oauth/pg/* endpoints (shared Priority Guardian OAuth provider).
 # ============================================================================
 # Required Render Environment Variables (for future deployment)
 # ============================================================================
-# CLARITY_CLAUDE_MCP_SERVER_URL   = <deployed Claude origin, NO /mcp>   e.g. https://mindsort-claude.priority-guard.com
+# CLARITY_CLAUDE_MCP_SERVER_URL   = <deployed Claude origin, NO /mcp>   e.g. https://mindsort-mcp.priority-guard.com
 # CLARITY_CLAUDE_MCP_RESOURCE_URL = <origin>/mcp                        (derives automatically; only set if overriding)
 # CLARITY_CLAUDE_OAUTH_ISSUER_URL = https://www.priority-guard.com/oauth/pg
 # CLARITY_CLAUDE_BACKEND_URL      = https://www.priority-guard.com
@@ -31,6 +31,34 @@ from urllib.parse import urlparse
 # ============================================================================
 
 ENV = os.getenv("ENV", "dev")
+
+# Known ENV values — fail fast on unknown to prevent production guards being silently bypassed
+# Production values trigger required-env guards; dev/test values use defaults.
+_PRODUCTION_ENV_VALUES = {"production", "prod", "staging"}
+_DEV_ENV_VALUES = {"dev", "development", "local", "test", "ci"}
+_KNOWN_ENV_VALUES = _PRODUCTION_ENV_VALUES | _DEV_ENV_VALUES
+
+
+def _is_production_env(env: str) -> bool:
+    """Return True if env is a production-like environment.
+
+    Canonical predicate — use this everywhere instead of inline tuples.
+    Includes "prod" alias that PG uses, preventing ENV=prod from bypassing guards.
+    """
+    return env in _PRODUCTION_ENV_VALUES
+
+
+# Fail-fast: raise on unknown ENV to prevent guards being bypassed
+# Without this, a typo like ENV=produciton silently runs in non-production mode,
+# letting localhost defaults leak into what the operator thinks is production.
+# Note: Case and whitespace variants (ENV=Production, ENV=" production ") intentionally
+# fail here rather than being normalized — maximally explicit, no silent coercion.
+if ENV not in _KNOWN_ENV_VALUES:
+    raise RuntimeError(
+        f"Unknown ENV value {ENV!r}. "
+        f"Known values: {sorted(_KNOWN_ENV_VALUES)}. "
+        f"Refusing to start — this prevents production guards from being silently bypassed."
+    )
 
 
 # ============================================================================
@@ -60,7 +88,7 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
     value = os.getenv(key, default)
 
     if required and value is None:
-        if ENV in ("production", "staging"):
+        if _is_production_env(ENV):
             raise RuntimeError(
                 f"Required environment variable {key} not set. "
                 f"This is required in {ENV} environment."
@@ -188,14 +216,25 @@ OAUTH_ISSUER_URL = get_env(
 OAUTH_ISSUER_BASE = get_env(
     "CLARITY_CLAUDE_OAUTH_ISSUER_BASE",
     default="http://localhost:8000"
-)
+).rstrip("/")  # Normalize: remove trailing slash to ensure root comparison works
+
+# Fail-fast: OAUTH_ISSUER_BASE must be a root issuer (no path, query, or fragment)
+# A path like /oauth/pg would make authorization_servers non-root, breaking Claude discovery.
+# The .rstrip("/") handles trailing slash; this rejects real paths.
+_base_parsed = urlparse(OAUTH_ISSUER_BASE)
+if _base_parsed.path not in ("", "/") or _base_parsed.query or _base_parsed.fragment:
+    raise RuntimeError(
+        f"CLARITY_CLAUDE_OAUTH_ISSUER_BASE must be a root issuer (no path, query, or fragment). "
+        f"Got {OAUTH_ISSUER_BASE!r} with path={_base_parsed.path!r}, "
+        f"query={_base_parsed.query!r}, fragment={_base_parsed.fragment!r}."
+    )
 
 # Fail-fast: OAUTH_ISSUER_URL must share the same origin as OAUTH_ISSUER_BASE (RFC 8414)
 # Without this check, discovery could return issuer=www but token_endpoint=api,
 # which causes silent OAuth failures in Claude.
 # Note: startswith() is insufficient — "https://www.example.com.evil.com" starts with
 # "https://www.example.com" but has a completely different origin.
-_base_parsed = urlparse(OAUTH_ISSUER_BASE)
+# _base_parsed already defined above (shape guard); only need _url_parsed here.
 _url_parsed = urlparse(OAUTH_ISSUER_URL)
 
 if (_base_parsed.scheme, _base_parsed.netloc) != (_url_parsed.scheme, _url_parsed.netloc):
@@ -206,8 +245,8 @@ if (_base_parsed.scheme, _base_parsed.netloc) != (_url_parsed.scheme, _url_parse
     )
 
 # Fail-fast: OAUTH_ISSUER_BASE must not contain localhost in production
-# Uses MindSort's existing ENV convention: ("production", "staging")
-if ENV in ("production", "staging") and "localhost" in OAUTH_ISSUER_BASE:
+# Uses canonical _is_production_env() predicate (includes "prod" alias)
+if _is_production_env(ENV) and "localhost" in OAUTH_ISSUER_BASE:
     raise RuntimeError(
         "CLARITY_CLAUDE_OAUTH_ISSUER_BASE contains 'localhost' in production. "
         "Set to production URL (e.g., https://www.priority-guard.com)."
@@ -250,7 +289,10 @@ LOG_LEVEL = get_env("LOG_LEVEL", default="INFO")
 # ============================================================================
 
 # Environment detection for CORS
-IS_DEV = ENV in ("dev", "development", "local")
+# Uses the inverse of canonical _is_production_env() for consistency.
+# Note: staging is deliberately treated as production (IS_DEV=False) — it gets the same
+# strict origin validation as production to catch CORS issues before they hit prod.
+IS_DEV = not _is_production_env(ENV)
 
 # Default allowed origins for Claude
 # NOTE: Claude proxies widget calls, so direct browser access may not be needed.
@@ -265,7 +307,7 @@ _DEFAULT_CORS_ORIGINS = [
 # SECURITY: Required in production to prevent silent breakage
 CORS_ALLOWED_ORIGINS_RAW = get_env("CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS")
 
-if ENV in ("production", "staging") and not CORS_ALLOWED_ORIGINS_RAW:
+if _is_production_env(ENV) and not CORS_ALLOWED_ORIGINS_RAW:
     raise RuntimeError(
         "CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS must be explicitly set in production/staging. "
         "Set to comma-separated list of allowed origins "
