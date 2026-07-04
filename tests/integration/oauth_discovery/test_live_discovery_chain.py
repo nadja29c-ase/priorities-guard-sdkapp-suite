@@ -365,7 +365,22 @@ class TestUnauthenticatedMCPEndpoint:
     WWW-Authenticate header with resource_metadata pointer on 401.
     """
 
-    @pytest.mark.parametrize("server_name", PRODUCTION_SERVERS.keys())
+    @pytest.mark.parametrize("server_name", [
+        "pg_openai",
+        pytest.param(
+            "mindsort_openai",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    "MindSort-OpenAI accepts unauthenticated initialize (handshake-before-auth); "
+                    "tools are scope-protected — triaged 2026-07-02, see doc/OAuth/platform_quirk_mindsort_openai_401.md; "
+                    "revisit at OpenAI resubmission."
+                ),
+            ),
+        ),
+        "pg_claude",
+        "mindsort_claude",
+    ])
     def test_post_mcp_returns_401_with_www_authenticate(self, http_client, server_name):
         """
         POST /mcp without auth must return 401 with WWW-Authenticate

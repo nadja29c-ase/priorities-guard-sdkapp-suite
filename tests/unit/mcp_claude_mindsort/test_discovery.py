@@ -776,14 +776,20 @@ class TestConfigGuards:
             f"Expected same-origin error, got: {result.stderr}"
         )
 
-    def test_env_uppercase_production_raises(self):
+    @pytest.mark.parametrize("bad_env", ["Production", " production "])
+    def test_env_case_and_whitespace_variants_raise(self, bad_env):
         """
-        Guard test 15: ENV=Production (capital P) → MUST raise as unknown.
+        Guard test 15: ENV case/whitespace variants → MUST raise as unknown.
 
-        Case variants intentionally fail via unknown-ENV guard rather than
-        being normalized — maximally explicit, no silent coercion.
+        Parametrized over:
+        - "Production" (capital P) — case variant
+        - " production " (leading/trailing whitespace) — whitespace variant
 
-        Bug that would still pass: normalizing ENV to lowercase.
+        Both intentionally fail via unknown-ENV guard rather than being
+        normalized — maximally explicit, no silent coercion. This test-locks
+        the comment in config.py about case/whitespace fail-fast.
+
+        Bug that would still pass: normalizing ENV to lowercase or stripping.
         """
         import subprocess
         import sys
@@ -794,7 +800,7 @@ class TestConfigGuards:
                 "import mcp_server.mindsort_claude.config"
             ],
             env={
-                "ENV": "Production",  # Capital P — not in _KNOWN_ENV_VALUES
+                "ENV": bad_env,  # Not in _KNOWN_ENV_VALUES
                 "PATH": "",
             },
             capture_output=True,
@@ -802,9 +808,9 @@ class TestConfigGuards:
         )
 
         assert result.returncode != 0, (
-            "ENV=Production should raise as unknown ENV.\n"
+            f"ENV={bad_env!r} should raise as unknown ENV.\n"
             f"stderr: {result.stderr}"
         )
         assert "unknown env" in result.stderr.lower(), (
-            f"Expected unknown-ENV error, got: {result.stderr}"
+            f"Expected unknown-ENV error for ENV={bad_env!r}, got: {result.stderr}"
         )

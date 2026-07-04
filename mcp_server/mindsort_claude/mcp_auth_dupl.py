@@ -1,5 +1,22 @@
 # (duplicate) — exists only because it imports platform-specific config.
 # Mirrors mcp_server/clarity/mcp_auth.py. Maintain alongside; consolidate only on demonstrated churn.
+#
+# WARNING — PROCESS-WIDE SIDE EFFECT:
+# Importing this module MUTATES mcp_server.clarity.mcp_auth's module-level globals
+# (TOOL_SCOPES, CLARITY_ISSUER, etc.) to MindSort-Claude values. This rebinding is
+# intentional for production (single-app process), but creates a test hazard:
+#
+#   If a test session imports this shim (or server_dupl, which imports it transitively)
+#   AND later runs tests that import clarity.mcp_auth directly, those clarity tests
+#   will see MindSort-Claude's rebound values, not clarity's originals.
+#
+# Known test imports (as of 2026-07-04):
+#   tests/unit/mcp_claude_mindsort/test_scaffold.py:53,64 — server_dupl (transitive)
+#   tests/unit/mcp_claude_mindsort/test_scaffold.py:168 — mcp_auth_dupl (direct)
+#
+# Safe pattern: scope invariant tests import only config modules, never auth modules.
+# If cross-contamination becomes a problem, isolate MindSort-Claude tests in a
+# separate pytest session (--forked or CI matrix split).
 
 import mcp_server.clarity.mcp_auth as _shared
 
@@ -16,6 +33,21 @@ from mcp_server.mindsort_claude.config import (
 )
 
 # Rebind config-dependent module globals to Claude platform values
+# NOTE: REBOUND_GLOBALS is the authoritative list of what this shim mutates.
+# The test fixture (restore_mcp_auth_globals) MUST save/restore all of these.
+# If you add a rebinding below, add its name to REBOUND_GLOBALS.
+REBOUND_GLOBALS = (
+    "CLARITY_JWKS_URL",
+    "CLARITY_ISSUER",
+    "CLARITY_AUDIENCE",
+    "MCP_SERVER_URL",
+    "TOOL_SCOPES",
+    "TOKEN_EXPIRY_GRACE_SECONDS",
+    "JWKS_CACHE_TTL_SECONDS",
+    "JWKS_MAX_STALE_SECONDS",
+    "JWKS_FETCH_TIMEOUT_SECONDS",
+)
+
 _shared.CLARITY_JWKS_URL = CLARITY_JWKS_URL
 _shared.CLARITY_ISSUER = CLARITY_ISSUER
 _shared.CLARITY_AUDIENCE = CLARITY_AUDIENCE

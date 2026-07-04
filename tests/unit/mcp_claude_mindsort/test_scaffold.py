@@ -19,32 +19,36 @@ def restore_mcp_auth_globals():
     """
     Restore clarity.mcp_auth globals after each test.
 
-    Importing mcp_auth_dupl rebinds clarity.mcp_auth.MCP_SERVER_URL (and other globals)
-    to Claude config values. This is intentional for runtime but leaks state across tests.
-    This fixture saves and restores the original values to prevent cross-test pollution.
+    Importing mcp_auth_dupl rebinds clarity.mcp_auth globals to MindSort-Claude values.
+    This is intentional for runtime but leaks state across tests.
+    This fixture saves and restores all rebound values to prevent cross-test pollution.
+
+    The authoritative list of rebound globals is mcp_auth_dupl.REBOUND_GLOBALS —
+    this fixture dynamically reads that list to avoid hand-list drift.
     """
+    import copy
     import mcp_server.clarity.mcp_auth as clarity_mcp_auth
     import mcp_server.clarity.config as clarity_config
+    from mcp_server.mindsort_claude.mcp_auth_dupl import REBOUND_GLOBALS
 
-    # Save original values
-    original_values = {
-        "mcp_auth.MCP_SERVER_URL": clarity_mcp_auth.MCP_SERVER_URL,
-        "mcp_auth.CLARITY_JWKS_URL": clarity_mcp_auth.CLARITY_JWKS_URL,
-        "mcp_auth.CLARITY_ISSUER": clarity_mcp_auth.CLARITY_ISSUER,
-        "mcp_auth.CLARITY_AUDIENCE": clarity_mcp_auth.CLARITY_AUDIENCE,
-        "mcp_auth.TOOL_SCOPES": clarity_mcp_auth.TOOL_SCOPES.copy(),
-        "config.MCP_SERVER_URL": clarity_config.MCP_SERVER_URL,
-    }
+    # Save original values for all rebound globals
+    # Use deepcopy for mutable values (dicts like TOOL_SCOPES)
+    original_mcp_auth = {}
+    for name in REBOUND_GLOBALS:
+        value = getattr(clarity_mcp_auth, name)
+        original_mcp_auth[name] = copy.deepcopy(value) if isinstance(value, (dict, list)) else value
+
+    # Also save clarity_config.MCP_SERVER_URL (not rebound but sometimes mutated by tests)
+    original_config_mcp_server_url = clarity_config.MCP_SERVER_URL
 
     yield
 
-    # Restore original values
-    clarity_mcp_auth.MCP_SERVER_URL = original_values["mcp_auth.MCP_SERVER_URL"]
-    clarity_mcp_auth.CLARITY_JWKS_URL = original_values["mcp_auth.CLARITY_JWKS_URL"]
-    clarity_mcp_auth.CLARITY_ISSUER = original_values["mcp_auth.CLARITY_ISSUER"]
-    clarity_mcp_auth.CLARITY_AUDIENCE = original_values["mcp_auth.CLARITY_AUDIENCE"]
-    clarity_mcp_auth.TOOL_SCOPES = original_values["mcp_auth.TOOL_SCOPES"]
-    clarity_config.MCP_SERVER_URL = original_values["config.MCP_SERVER_URL"]
+    # Restore all rebound globals
+    for name in REBOUND_GLOBALS:
+        setattr(clarity_mcp_auth, name, original_mcp_auth[name])
+
+    # Restore clarity_config
+    clarity_config.MCP_SERVER_URL = original_config_mcp_server_url
 
 
 @pytest.fixture
@@ -141,7 +145,8 @@ async def test_config_isolation(set_dev_env, monkeypatch):
     """Config isolation: mindsort_claude config does not affect clarity config.
 
     NOTE: The autouse restore_mcp_auth_globals fixture handles cleanup of
-    globals modified by mcp_auth_dupl import.
+    mcp_auth globals. This test's finally block restores mindsort_claude.config
+    to prevent pollution of subsequent tests that import it.
     """
     import importlib
     import mcp_server.clarity.config as clarity_config
@@ -156,22 +161,27 @@ async def test_config_isolation(set_dev_env, monkeypatch):
     importlib.reload(clarity_config)
     importlib.reload(claude_config)
 
-    # Verify isolation: claude config should have our test value
-    assert claude_config.MCP_SERVER_URL == "http://test-claude:9999"
-    # clarity config should have its default (localhost:8002)
-    assert clarity_config.MCP_SERVER_URL == "http://localhost:8002"
+    try:
+        # Verify isolation: claude config should have our test value
+        assert claude_config.MCP_SERVER_URL == "http://test-claude:9999"
+        # clarity config should have its default (localhost:8002)
+        assert clarity_config.MCP_SERVER_URL == "http://localhost:8002"
 
-    # Now test mcp_auth rebinding
-    # After importing mcp_auth_dupl, clarity.mcp_auth.MCP_SERVER_URL should reflect Claude's value
-    # NOTE: This rebinding is INTENTIONAL and SAFE — the two servers never run
-    # in the same process in production. Documents the known limitation.
-    import mcp_server.mindsort_claude.mcp_auth_dupl as mcp_auth_dupl
+        # Now test mcp_auth rebinding
+        # After importing mcp_auth_dupl, clarity.mcp_auth.MCP_SERVER_URL should reflect Claude's value
+        # NOTE: This rebinding is INTENTIONAL and SAFE — the two servers never run
+        # in the same process in production. Documents the known limitation.
+        import mcp_server.mindsort_claude.mcp_auth_dupl as mcp_auth_dupl
 
-    # Reload mcp_auth_dupl to pick up the new config values and re-apply rebinding
-    importlib.reload(mcp_auth_dupl)
+        # Reload mcp_auth_dupl to pick up the new config values and re-apply rebinding
+        importlib.reload(mcp_auth_dupl)
 
-    # After reloading mcp_auth_dupl, the shared module's MCP_SERVER_URL is rebound
-    assert clarity_mcp_auth.MCP_SERVER_URL == "http://test-claude:9999"
+        # After reloading mcp_auth_dupl, the shared module's MCP_SERVER_URL is rebound
+        assert clarity_mcp_auth.MCP_SERVER_URL == "http://test-claude:9999"
+    finally:
+        # Restore mindsort_claude.config to default state for subsequent tests
+        monkeypatch.delenv("CLARITY_CLAUDE_MCP_SERVER_URL", raising=False)
+        importlib.reload(claude_config)
 
 
 # ============================================================================
