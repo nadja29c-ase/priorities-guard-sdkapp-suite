@@ -12,7 +12,7 @@ import pytest
 import time
 from unittest.mock import Mock, AsyncMock, patch
 
-from mcp.focused.mcp_auth import (
+from mcp_server.focused.mcp_auth import (
     extract_authorization_header,
     extract_bearer_token,
     check_scopes,

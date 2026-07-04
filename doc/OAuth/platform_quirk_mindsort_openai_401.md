@@ -20,7 +20,7 @@ This differs from PG-Claude's "presence-gate" pattern where unauthenticated requ
 
 ## Evidence (2026-07-02 triage)
 
-### Probe 1: Empty body without token → 200 OK
+### Probe 1: Empty body without token → 400 (not 401)
 
 ```bash
 curl -s -X POST https://mindsort.priority-guard.com/mcp \
@@ -79,7 +79,7 @@ curl -s -X POST https://mindsort.priority-guard.com/mcp \
 | Auth check timing | At tool dispatch | At /mcp middleware |
 | Security model | Equivalent | Equivalent |
 
-PG-Claude uses `MCPAuthMiddleware` to gate all `/mcp` requests before they reach the MCP layer. MindSort-OpenAI lets the MCP handshake through and enforces auth at tool dispatch. Both are valid implementations of RFC 9728 / OpenAI MCP Authentication.
+PG-Claude uses `BearerAuthMiddleware` to gate all `/mcp` requests before they reach the MCP layer. MindSort-OpenAI lets the MCP handshake through and enforces auth at tool dispatch. Both are valid implementations of RFC 9728 / OpenAI MCP Authentication.
 
 ---
 

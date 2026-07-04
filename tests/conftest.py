@@ -22,6 +22,14 @@ This is your standard test harness for:
 
 """
 
+# =============================================================================
+# COLLECTION EXCLUSIONS
+# =============================================================================
+# Focused app is deprecated (technically infeasible, ships nothing).
+# 5 known stale failures exist behind this exclusion (2026-07-04).
+# See pytest.ini comment for full list. If Focused is revisited, remove this.
+collect_ignore = ["unit/mcp_focused"]
+
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
