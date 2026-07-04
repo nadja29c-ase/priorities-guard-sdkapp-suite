@@ -28,6 +28,18 @@ The `alembic_version` table has a unique index `idx_alembic_version_single_row` 
 
 ## Local Pre-Deploy Checks
 
+### Git Stash-Before-Overwrite Rule
+
+Before any `git checkout`, `git restore`, or full-file overwrite of tracked files, **stash first**:
+
+```bash
+git stash push -m "before <operation>"
+```
+
+This applies even to "obviously safe" operations. A stash entry costs nothing and makes traceless loss of uncommitted work unrepresentable — if work disappears, it's recoverable from `git stash list` or `git fsck --lost-found`.
+
+**Why this matters:** Without a stash, uncommitted-but-made work can be overwritten by a checkout or paste, leaving no recoverable trace. Git forensics can only prove "no trace exists" — they cannot distinguish "never made" from "made and traceless-overwritten." The stash closes this ambiguity path.
+
 ### Alembic Migration Fork Detection
 
 Before pushing, verify there's only one migration head:
