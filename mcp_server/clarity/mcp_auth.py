@@ -285,11 +285,20 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
 
         # Step 4: Verify JWT with all required checks
         # RFC 9728 B2-5: Accept any valid audience for this resource
-        # - aud = MCP_RESOURCE_URL (e.g. .../mcp) — current: client sends resource=
-        #   in authorize request, backend echoes it into aud
-        # - aud = MCP_SERVER_URL (origin without /mcp) — fallback
-        # - aud = CLARITY_AUDIENCE (issuer URL) — legacy tokens without resource param
-        # PyJWT accepts list of valid audiences for exact string matching
+        #
+        # Production reality (verified 2026-07-04, DB query on oauth_access_tokens):
+        # ALL tokens carry /mcp-qualified aud — zero legacy tokens without resource=.
+        # Both OpenAI and Claude clients always send resource= in authorize request.
+        #
+        # - aud = MCP_RESOURCE_URL (e.g. .../mcp) — canonical: client sends resource=,
+        #   backend echoes it into aud; this is what production tokens carry
+        # - aud = MCP_SERVER_URL (origin without /mcp) — theoretical fallback, unused
+        # - aud = CLARITY_AUDIENCE — in production this env var is SET TO THE RESOURCE
+        #   URL (https://mindsort.priority-guard.com/mcp), making this entry redundant
+        #   with MCP_RESOURCE_URL. The redundancy is intentional defense-in-depth:
+        #   if the env drifts to issuer-shape, validation still passes for actual tokens.
+        #
+        # PyJWT accepts list of valid audiences for exact string matching.
         # leeway: accepts tokens expired up to N seconds ago (handles clock skew)
         valid_audiences = [MCP_RESOURCE_URL, MCP_SERVER_URL, CLARITY_AUDIENCE]
         payload = jwt.decode(

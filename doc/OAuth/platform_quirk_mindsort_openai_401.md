@@ -120,3 +120,44 @@ Prior to MindSort-OpenAI resubmission, confirm:
 3. **Runtime _meta challenge** — VERIFIED: `authenticate_request()` returns `mcp/www_authenticate` with resource_metadata on auth failure.
 
 All three verified — pattern is compliant with OpenAI Apps SDK auth documentation.
+
+---
+
+## Evidence record (2026-07-04)
+
+This section persists the investigation findings to prevent re-running the same audit.
+
+### Per-app aud distribution (DB query on oauth_access_tokens)
+
+| Row | App / resource pattern | Active | Revoked | Observation |
+|-----|------------------------|--------|---------|-------------|
+| 1 | MindSort-Claude (`mindsort-mcp.../mcp`) | 1 | 0 | Current reviewer flow — healthy |
+| 2 | MindSort-OpenAI (`mindsort.../mcp`) | 60 | 3 | Production load — healthy |
+| 3 | PG-OpenAI (`pg.../mcp`) | 125 | 36 | Production load — healthy |
+| 4 | PG-Claude (`mcp.priority-guard.com/mcp`) | 41 | 1 | Production load — healthy |
+| 5 | PG-Claude onrender (`priorities-guard-sdkapp-suite-6jri.onrender.com/mcp`) | 9 | 0 | Zombie legacy tokens — see below |
+
+**Key finding:** Zero NULL-resource rows. ALL tokens carry `/mcp`-qualified `aud`. Both OpenAI and Claude clients always send `resource=` in authorize requests; the "falls-back-to-issuer" code path does not exist in production.
+
+### Row 5 analysis (legacy zombie tokens)
+
+The 9 active tokens with onrender `aud` are pre-custom-domain artifacts:
+- They exist because the PRM advertised the onrender resource URL before `PG_CLAUDE_MCP_RESOURCE_URL` was set to the custom domain.
+- Refresh carry-forward (`resource=matching_token.resource` in token refresh flow) preserves the stale `aud` indefinitely.
+- These tokens FAIL validation today (onrender aud ∉ valid_audiences list) but their refreshes succeed (refresh doesn't validate aud, just carries it forward).
+- **Impact:** A zombie client 401s on every tool call and re-mints broken tokens forever. Harmless to review; mildly noisy in auth logs.
+- **Cleanup:** Find and delete/re-add the stale Claude client config, or `UPDATE oauth_access_tokens SET revoked = true WHERE resource LIKE '%onrender%' AND revoked = false;`.
+
+### CLARITY_AUDIENCE env compensation
+
+Production deploys set `CLARITY_AUDIENCE` / `CLARITY_CLAUDE_AUDIENCE` to the **resource URL** (e.g., `https://mindsort.priority-guard.com/mcp`), not the issuer URL the code defaults imply. This is correct — it matches what tokens actually carry. The code defaults remain issuer-shaped for local dev; production env compensation is the source of truth.
+
+### Verified code artifacts
+
+1. **securitySchemes metadata** — `clarity/tools/__init__.py:58-62` emits per-tool `securitySchemes: [{type: "oauth2", scopes: [...]}]` in `_meta`.
+
+2. **redirect-URI allowlist** — `backend/core/config.py:58` includes `"https://chatgpt.com/connector/oauth/"` (prefix match), supporting `{callback_id}` pattern per OpenAI March 2026 docs.
+
+3. **Runtime _meta challenge** — `authenticate_request()` returns `mcp/www_authenticate` with resource_metadata on auth failure (fail-closed).
+
+4. **MCP_RESOURCE_URL in valid_audiences** — Commit `ef7f554` added `MCP_RESOURCE_URL` to the three-form audience list, making token validation match production token shape.

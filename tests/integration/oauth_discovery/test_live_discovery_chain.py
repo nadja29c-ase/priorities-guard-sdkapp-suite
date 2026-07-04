@@ -372,9 +372,9 @@ class TestUnauthenticatedMCPEndpoint:
             marks=pytest.mark.xfail(
                 strict=True,
                 reason=(
-                    "MindSort-OpenAI uses tool-level OAuth pattern (anonymous handshake allowed); "
-                    "per-tool securitySchemes triggers auth UI; official per OpenAI Apps SDK. "
-                    "See doc/OAuth/platform_quirk_mindsort_openai_401.md."
+                    "MindSort-OpenAI implements tool-level OAuth (official pattern #2 per OpenAI Apps SDK); "
+                    "anonymous handshake allowed, per-tool securitySchemes triggers auth UI. "
+                    "See doc/OAuth/platform_quirk_mindsort_openai_401.md (documented pattern record)."
                 ),
             ),
         ),

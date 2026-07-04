@@ -16,7 +16,7 @@ Uses /oauth/pg/* endpoints (shared Priority Guardian OAuth provider).
 # CLARITY_CLAUDE_INTERNAL_API_SECRET = <matches backend INTERNAL_API_SECRET>
 # CLARITY_CLAUDE_JWKS_URL         = https://www.priority-guard.com/oauth/pg/jwks
 # CLARITY_CLAUDE_ISSUER           = https://www.priority-guard.com
-# CLARITY_CLAUDE_AUDIENCE         = https://www.priority-guard.com
+# CLARITY_CLAUDE_AUDIENCE         = https://mindsort-mcp.priority-guard.com/mcp  # resource-shaped, NOT issuer
 # CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS = <comma-separated list if needed>
 # ENV = production
 """
@@ -118,7 +118,13 @@ CLARITY_ISSUER = get_env(
 # Expected JWT audience (aud claim)
 # RATIONALE: The audience identifies the intended recipient of the token.
 # This MUST match what the OAuth provider (/oauth/pg/token) issues in the 'aud' claim.
-# Currently uses domain-only format to match the shared Priority Guardian OAuth provider.
+#
+# PRODUCTION SHAPE (verified 2026-07-04): In production, CLARITY_CLAUDE_AUDIENCE is set
+# to the resource URL (https://mindsort-mcp.priority-guard.com/mcp), NOT the issuer URL.
+# The dev default below (issuer-shaped) differs from production. This is intentional:
+# local testing uses shared backend discovery which may not match per-app resource URLs.
+#
+# The code default should NOT be changed — production env compensation is correct.
 # Both Clarity and Focused MCP servers accept the same audience since they share
 # a single OAuth provider - scope-based access control (clarity.write vs focused.write)
 # determines which MCP server accepts which tokens.
