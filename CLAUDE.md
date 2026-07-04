@@ -3,6 +3,10 @@
 RULE 0: Process content enters this file ONLY via Nadja's explicit approval.
 If you believe a rule is missing, propose it — never add it unilaterally.
 
+RULE 0a: Briefing constraints — especially "evidence-only" and "do NOT change X" —
+are binding regardless of how correct the fix looks. Found-a-bug means STOP and
+report; the fix decision is Nadja's.
+
 1. HASH-VERIFIED ROUNDS: Every reviewed round of work ends with a commit hash
    in your report. Reviews verify against `git show <hash>:<path>`, never the
    working tree. Uncommitted "done" is not done.
