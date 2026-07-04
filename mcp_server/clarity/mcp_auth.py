@@ -38,6 +38,7 @@ from mcp_server.clarity.config import (
     JWKS_FETCH_TIMEOUT_SECONDS,
     TOOL_SCOPES,
     MCP_SERVER_URL,
+    MCP_RESOURCE_URL,
 )
 from mcp_server.clarity.request_context import auth_header_var
 
@@ -283,12 +284,14 @@ async def validate_jwt(token: str, correlation_id: str) -> Dict[str, Any]:
                 raise jwt.InvalidTokenError(f"Unknown kid: {kid}")
 
         # Step 4: Verify JWT with all required checks
-        # RFC 9728 B2-5: Accept either MCP server URL or legacy OAUTH_ISSUER as aud
-        # - New tokens (post-B2-5 fix) will have aud = MCP_SERVER_URL
-        # - Legacy tokens (pre-B2-5 fix) will have aud = CLARITY_AUDIENCE (OAUTH_ISSUER)
+        # RFC 9728 B2-5: Accept any valid audience for this resource
+        # - aud = MCP_RESOURCE_URL (e.g. .../mcp) — current: client sends resource=
+        #   in authorize request, backend echoes it into aud
+        # - aud = MCP_SERVER_URL (origin without /mcp) — fallback
+        # - aud = CLARITY_AUDIENCE (issuer URL) — legacy tokens without resource param
         # PyJWT accepts list of valid audiences for exact string matching
         # leeway: accepts tokens expired up to N seconds ago (handles clock skew)
-        valid_audiences = [MCP_SERVER_URL, CLARITY_AUDIENCE]
+        valid_audiences = [MCP_RESOURCE_URL, MCP_SERVER_URL, CLARITY_AUDIENCE]
         payload = jwt.decode(
             token,
             signing_key.key,

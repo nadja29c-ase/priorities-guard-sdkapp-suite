@@ -19,7 +19,9 @@ See `doc/OPERATIONS_PREDEPLOY.md` for the full pre-deploy checklist. Key rules:
 
 ## Test Baseline
 
-Full suite is ~2292 tests (as of 2026-07-04). The `mcp_focused` directory is excluded via `conftest.py` — 5 known stale failures behind that exclusion.
+Full suite is ~2292 tests. **~154 known-red in included suite** plus 5 excluded behind `mcp_focused`. See `doc/testing_baseline_2026-07-04.md` for the discriminated classification (areas, counts, natures, untriaged items).
+
+Do not assume green-minus-nothing. New failures beyond the baseline are regressions; failures matching the baseline are known-red awaiting post-submission re-baseline.
 
 Run scope-isolation invariant tests after any tool registration change:
 ```bash

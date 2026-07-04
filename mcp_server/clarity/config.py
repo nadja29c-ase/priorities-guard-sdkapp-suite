@@ -147,6 +147,13 @@ MCP_SERVER_URL = get_env(
     default="http://localhost:8002"
 ).rstrip("/")
 
+# MCP Resource URL (the resource claim value)
+# Defaults to {MCP_SERVER_URL}/mcp — only override if you need a different value
+MCP_RESOURCE_URL = get_env(
+    "CLARITY_MCP_RESOURCE_URL",
+    default=f"{MCP_SERVER_URL}/mcp"
+)
+
 # OAuth Authorization Server URL
 # NOTE: This is the authorization server base URL for discovery, NOT the JWT 'iss' claim.
 #

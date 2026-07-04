@@ -13,7 +13,7 @@ Provides all required OAuth discovery endpoints:
 - openid-configuration (OpenID Connect Discovery)
 
 www.priority-guard.com is the Authorization Server (AS).
-pg-claude.priority-guard.com is the Resource Server (RS).
+mcp.priority-guard.com is the Resource Server (RS).
 
 PLATFORM-SPECIFIC SHAPE (Claude — Shape #3 per ADR_005):
 All AS metadata endpoints point to www (root issuer) because Claude's
