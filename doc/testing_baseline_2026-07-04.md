@@ -21,20 +21,19 @@
 | `tests/unit/mcp_priority_guardian/` | ~130 | Stale mocks against old service signatures, missing fixtures, removed dependencies. PG-OpenAI is stable in production; tests lag refactors. | Yes — failures are test staleness, not product bugs. |
 | `tests/unit/mcp_pg_claude/` | 5 | Stale mocks (same pattern as PG-OpenAI). PG-Claude is deprecated pending Claude MCP Directory submission. | Yes — test staleness. |
 | `tests/unit/celery/` | 2 | Celery beat schedule tests expect old task names or timing. Tasks work in production. | Yes — test staleness. |
-| `tests/unit/core/` + `tests/unit/oauth_provider/` | 5 | Mixed. 2 confirmed stale (old OAuth validator signatures). **3 untriaged** — see below. | Partial — 3 require triage. |
+| `tests/unit/core/` + `tests/unit/oauth_provider/` | 5 | All triaged — stale test expectations (see table below). | Yes — test staleness. |
 
-### Untriaged (core/oauth, 3 tests)
+### Triaged (core/oauth, 5 tests) — all stale expectations
 
-These three tests failed in the baseline run but were not root-caused. They may be:
-- Stale mocks (same pattern as above) — likely
-- Real regressions — unlikely but not ruled out
-- Environment-specific (missing test DB, Redis, etc.) — possible
+| Test | Failure | Classification |
+|------|---------|---------------|
+| `test_state_over_512_chars_returns_error_redirect` | Expects redirect, behavior changed | Stale expectation |
+| `test_consent_rate_limit_uses_correct_key` | Expects limit=20, gets limit=100 | Stale — rate limit intentionally raised (commit 68b8f51) |
+| `test_authorize_missing_login_hint_returns_error` | Expects 302, gets 200 (consent rendered) | Stale — behavior changed to render consent |
+| `test_authorize_invalid_client_returns_error` | Expects 302, gets 400 | Stale — security improvement (no redirect to unknown client's URI) |
+| `test_authorize_invalid_redirect_uri_returns_error` | Expects 302, gets 400 | Stale — security improvement (no redirect to malicious URI) |
 
-**Action required:** Triage before post-submission re-baseline. Run in isolation, inspect failure messages, classify.
-
-```
-tests/unit/oauth_provider/test_<TBD>.py  # Exact test names to be filled from next baseline run
-```
+**Verdict:** All 5 are stale test expectations, not regressions. The 400 responses for invalid_client/invalid_redirect_uri are correct — RFC 6749 says "If the request fails due to a missing, invalid, or mismatching redirection URI... the authorization server SHOULD inform the resource owner of the error and MUST NOT automatically redirect."
 
 ---
 
