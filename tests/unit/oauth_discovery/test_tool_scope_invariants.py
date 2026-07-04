@@ -145,7 +145,8 @@ class TestToolScopeInvariants:
 
         Bug this catches: adding a tool to the registry but forgetting to add
         it to TOOL_SCOPES → tool appears in tools/list but enforce_tool_scope
-        raises KeyError at dispatch time, causing a 500 instead of graceful rejection.
+        raises InsufficientScopeError("<tool not registered>") — fail-closed but
+        with a confusing scope error instead of a clear "unknown tool" message.
         """
         from mcp_server.clarity.tools import TOOL_REGISTRY
         from mcp_server.clarity.config import TOOL_SCOPES
@@ -157,7 +158,7 @@ class TestToolScopeInvariants:
 
         assert not missing_from_dict, (
             f"MindSort-OpenAI tools in TOOL_REGISTRY but missing from TOOL_SCOPES "
-            f"(will KeyError at dispatch): {missing_from_dict}"
+            f"(fail-closed with confusing scope error at dispatch): {missing_from_dict}"
         )
 
     def test_mindsort_claude_registry_keys_in_tool_scopes(self):
@@ -165,10 +166,10 @@ class TestToolScopeInvariants:
         MindSort-Claude: Every TOOL_REGISTRY key must have an entry in TOOL_SCOPES.
 
         Bug this catches: same as MindSort-OpenAI — tool-added-dict-forgotten
-        causes dispatch-time lockout (KeyError → 500).
+        causes fail-closed dispatch with confusing scope error.
 
         Valid because tools_list_dupl iterates the clarity registry unfiltered:
-        mcp_server/mindsort_claude/handlers/tools_dupl.py imports TOOL_REGISTRY
+        mcp_server/mindsort_claude/tools_list_dupl.py imports TOOL_REGISTRY
         from mcp_server.clarity.tools.
         """
         from mcp_server.clarity.tools import TOOL_REGISTRY
@@ -181,7 +182,7 @@ class TestToolScopeInvariants:
 
         assert not missing_from_dict, (
             f"MindSort-Claude tools in TOOL_REGISTRY but missing from TOOL_SCOPES "
-            f"(will KeyError at dispatch): {missing_from_dict}"
+            f"(fail-closed with confusing scope error at dispatch): {missing_from_dict}"
         )
 
     # =========================================================================
