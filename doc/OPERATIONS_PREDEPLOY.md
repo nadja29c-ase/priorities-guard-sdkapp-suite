@@ -40,6 +40,28 @@ This applies even to "obviously safe" operations. A stash entry costs nothing an
 
 **Why this matters:** Without a stash, uncommitted-but-made work can be overwritten by a checkout or paste, leaving no recoverable trace. Git forensics can only prove "no trace exists" — they cannot distinguish "never made" from "made and traceless-overwritten." The stash closes this ambiguity path.
 
+### Never Amend After Hook Failure
+
+Pre-commit hook failures mean the commit **did not happen**. After fixing the issue:
+
+```bash
+git add <fixed-files>
+git commit -m "..."   # NEW commit, not --amend
+```
+
+Never use `--amend` after a hook failure — it modifies the **previous** commit, which may contain unrelated work. This is how commits get silently corrupted.
+
+### Stage Specific Files
+
+Prefer explicit file staging over bulk operations:
+
+```bash
+git add path/to/file.py path/to/other.py   # Good
+git add -A                                  # Avoid — risks staging secrets or large binaries
+```
+
+Review `git status` before every commit. Secrets (`.env`, credentials) and large binaries should never reach the repo.
+
 ### Alembic Migration Fork Detection
 
 Before pushing, verify there's only one migration head:
