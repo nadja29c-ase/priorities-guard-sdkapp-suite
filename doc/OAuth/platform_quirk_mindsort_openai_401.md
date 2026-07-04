@@ -1,18 +1,22 @@
-# Platform Quirk: MindSort-OpenAI — Unauthenticated Initialize Returns 200
+# Documented Pattern: MindSort-OpenAI — Tool-Level OAuth (Anonymous Handshake)
 
 **Date documented:** 2026-07-04
-**Status:** Accepted quirk — handshake-before-auth pattern, tools are scope-protected.
+**Status:** Official pattern per OpenAI Apps SDK auth documentation.
 **Affects:** MindSort-OpenAI MCP server (`mindsort.priority-guard.com`)
-**Does not affect:** PG-OpenAI, PG-Claude, MindSort-Claude (all return 401 on unauthenticated /mcp)
-**Submission impact:** None — app is on hold; will revisit at OpenAI resubmission.
+**Contrast:** PG-OpenAI uses transport-level 401 pattern (the other official option).
+**Submission impact:** None — this is one of two officially documented patterns.
 
 ---
 
 ## Plain-language summary
 
-MindSort-OpenAI returns HTTP 200 (not 401) when receiving an unauthenticated POST to `/mcp` with an empty body. This is the "handshake-before-auth" pattern: the MCP initialize/tools-list handshake succeeds without a token, but actual tool calls (`tools/call`) are scope-protected and fail with proper `mcp/www_authenticate` headers.
+MindSort-OpenAI returns HTTP 200 (not 401) when receiving an unauthenticated POST to `/mcp`. This is the **tool-level OAuth pattern** per OpenAI Apps SDK: the MCP initialize/tools-list handshake succeeds without a token, but actual tool calls (`tools/call`) are scope-protected and return `_meta["mcp/www_authenticate"]` challenges.
 
-This differs from PG-Claude's "presence-gate" pattern where unauthenticated requests to `/mcp` immediately receive 401 with `WWW-Authenticate`. Both patterns are valid; the difference affects OAuth discovery flow timing but not security.
+Per [OpenAI Apps SDK Auth Documentation](https://developers.openai.com/apps-sdk/build/auth), two patterns are officially supported:
+1. **Transport-level 401** — Unauthenticated requests to `/mcp` receive 401 + `WWW-Authenticate` header (used by PG-OpenAI)
+2. **Tool-level OAuth** — Anonymous handshake allowed; per-tool `securitySchemes` metadata triggers auth UI (used by MindSort-OpenAI)
+
+Both patterns are valid; MindSort-OpenAI implements pattern #2.
 
 **Security assessment:** No data-access hole. The 200 response only confirms handshake capability. All tool dispatch goes through `authenticate_request()` → `enforce_tool_scope()`, which fails closed on missing/invalid tokens and returns `mcp/www_authenticate` with resource_metadata pointer.
 
@@ -105,9 +109,14 @@ pytest.param(
 
 ---
 
-## Trigger for revisit
+## Resubmission checklist (verified 2026-07-04)
 
-- OpenAI resubmission prep (the 401-discovery-pointer expectation becomes load-bearing for fresh OAuth flows)
-- If adding presence-gate middleware to MindSort-OpenAI for other reasons
+Prior to MindSort-OpenAI resubmission, confirm:
 
-Until then, this quirk is accepted and documented.
+1. **securitySchemes metadata** — VERIFIED: `clarity/tools/__init__.py` emits per-tool `securitySchemes: [{type: "oauth2", scopes: [...]}]` in `_meta`. This is the metadata half of tool-level OAuth.
+
+2. **redirect-URI allowlist** — VERIFIED: `backend/core/config.py` line 58 has `"https://chatgpt.com/connector/oauth/"` (prefix match), supporting the new `{callback_id}` pattern per OpenAI March 2026 docs.
+
+3. **Runtime _meta challenge** — VERIFIED: `authenticate_request()` returns `mcp/www_authenticate` with resource_metadata on auth failure.
+
+All three verified — pattern is compliant with OpenAI Apps SDK auth documentation.

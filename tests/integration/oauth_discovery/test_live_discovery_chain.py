@@ -372,9 +372,9 @@ class TestUnauthenticatedMCPEndpoint:
             marks=pytest.mark.xfail(
                 strict=True,
                 reason=(
-                    "MindSort-OpenAI accepts unauthenticated initialize (handshake-before-auth); "
-                    "tools are scope-protected — triaged 2026-07-02, see doc/OAuth/platform_quirk_mindsort_openai_401.md; "
-                    "revisit at OpenAI resubmission."
+                    "MindSort-OpenAI uses tool-level OAuth pattern (anonymous handshake allowed); "
+                    "per-tool securitySchemes triggers auth UI; official per OpenAI Apps SDK. "
+                    "See doc/OAuth/platform_quirk_mindsort_openai_401.md."
                 ),
             ),
         ),
