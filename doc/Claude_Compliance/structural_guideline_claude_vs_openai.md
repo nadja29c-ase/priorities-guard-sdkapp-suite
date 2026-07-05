@@ -137,6 +137,38 @@ Feature work on tool logic (new tool, new endpoint, backend change) is done once
 
 ---
 
+## Platform Divergence: Model-Visible Channel (Critical)
+
+**Discovered:** 2026-07-05 (MindSort-Claude live experiment)
+**Status:** Confirmed — most consequential platform difference for tool response design
+
+### The divergence
+
+| Platform | Model sees | Model ignores |
+|----------|-----------|---------------|
+| ChatGPT | `structuredContent` only | `content` |
+| Claude | `content` only | `structuredContent` |
+
+This is a **complete inversion**. The two platforms use opposite fields as the model-visible channel.
+
+### Evidence (2026-07-05)
+
+MindSort-Claude was deployed with `assistant_guidance` inside `structuredContent` (the ChatGPT pattern). Claude's model never saw the guidance — it only reads `content`. The board state was invisible to the model, causing incorrect responses. Moving guidance to `content` restored correct behaviour.
+
+This confirms that `structuredContent` on Claude goes **exclusively** to the widget via `ui/notifications/tool-result`. The model receives `content` only.
+
+### Design implication
+
+Any tool that needs the model to see data must:
+- **ChatGPT:** Put it in `structuredContent`
+- **Claude:** Put it in `content`
+
+The response adapter layer is not optional — it must transform the model-visible channel per platform. For Claude, this means surfacing a compact board representation into `content` (respecting the ~4K token constraint from PG's existing limits).
+
+The fix — adapter surfaces a compact board representation into `content` for Claude — is a design decision requiring a dedicated briefing, not a drive-by change.
+
+---
+
 ## MCP Server Response Adapter — Required for Claude
 
 The assumption that only the widget needs changing is incorrect. The MCP server layer for Claude also requires a **response adapter** due to fundamental differences in how ChatGPT and Claude handle tool response fields.
@@ -145,7 +177,7 @@ The assumption that only the widget needs changing is incorrect. The MCP server 
 
 ChatGPT behaviour (documented in compliance_master): when both `content` and `structuredContent` are returned, ChatGPT ignores `content` entirely. This is why PG puts `assistant_guidance` inside `structuredContent` — it is the only channel ChatGPT passes to the model.
 
-Claude behaviour (MCP Apps standard): `content` is what the LLM sees. `structuredContent` is data for the UI. Claude reads `content` correctly and passes `structuredContent` to the widget via `ui/notifications/tool-result`. The model receives both.
+Claude behaviour (confirmed 2026-07-05): `content` is what the LLM sees. `structuredContent` goes to the widget only — the model does **not** see it. See "Platform Divergence: Model-Visible Channel" above for evidence.
 
 This creates two specific problems in PG's current tool responses:
 
