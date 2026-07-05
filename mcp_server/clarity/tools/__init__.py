@@ -48,12 +48,14 @@ async def list_tools() -> List[mcp_types.Tool]:
 
     # Sort by name for deterministic output
     for tool_def in sorted(TOOL_REGISTRY.values(), key=lambda t: t.name):
-        # Build annotations from tool definition
-        annotations = {
-            "readOnlyHint": tool_def.read_only_hint,
-            "destructiveHint": tool_def.destructive_hint,
-            "openWorldHint": tool_def.open_world_hint,
-        }
+        # Build typed ToolAnnotations object (not raw dict)
+        # Per MCP SDK: annotations is a typed field on Tool, not embedded in _meta
+        # Clarity's ToolDefinition has no title field, so we omit it
+        tool_annotations = mcp_types.ToolAnnotations(
+            readOnlyHint=tool_def.read_only_hint,
+            destructiveHint=tool_def.destructive_hint,
+            openWorldHint=tool_def.open_world_hint,
+        )
 
         # Build securitySchemes based on required_scopes
         # SECURITY: Empty scopes means "auth required, no specific scope" (any authenticated user)
@@ -80,7 +82,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "openai/outputTemplate": tool_def.widget_uri,  # compat alias
                 "openai/toolInvocation/invoking": "Processing...",
                 "openai/toolInvocation/invoked": "Done.",
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_uri:
@@ -94,7 +95,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 "openai/outputTemplate": tool_def.widget_uri,  # compat alias
                 "openai/toolInvocation/invoking": "Processing...",
                 "openai/toolInvocation/invoked": "Done.",
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         elif tool_def.widget_accessible:
@@ -106,7 +106,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 },
                 "openai/toolInvocation/invoking": "Processing...",
                 "openai/toolInvocation/invoked": "Done.",
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
         else:
@@ -118,7 +117,6 @@ async def list_tools() -> List[mcp_types.Tool]:
                 },
                 "openai/toolInvocation/invoking": "Processing...",
                 "openai/toolInvocation/invoked": "Done.",
-                "annotations": annotations,
                 "securitySchemes": security_schemes,
             }
 
@@ -129,9 +127,9 @@ async def list_tools() -> List[mcp_types.Tool]:
             _meta=meta,
         )
 
-        # Future-proof: mirror annotations at top level if SDK supports it
-        if hasattr(tool, "annotations"):
-            tool.annotations = annotations
+        # Set typed ToolAnnotations on the tool object
+        # This is the correct location per MCP SDK - not in _meta
+        tool.annotations = tool_annotations
 
         tools.append(tool)
 

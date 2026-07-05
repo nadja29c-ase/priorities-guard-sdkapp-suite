@@ -1,4 +1,6 @@
 import pytest
+from mcp import types as mcp_types
+
 from mcp_server.clarity.tools import list_tools
 
 
@@ -11,26 +13,37 @@ async def test_tools_returned_in_alphabetical_order():
 
 
 @pytest.mark.asyncio
-async def test_annotations_in_meta():
-    """All tools have annotations in _meta."""
+async def test_annotations_typed_not_in_meta():
+    """All tools have typed ToolAnnotations, not raw dict in _meta.
+
+    inc_92: Annotations must be typed mcp_types.ToolAnnotations objects
+    on tool.annotations, NOT raw dicts embedded in _meta["annotations"].
+    The raw dict pattern caused Pydantic serialization warnings.
+    """
     tools = await list_tools()
     for tool in tools:
+        # tool.annotations must be a typed ToolAnnotations instance
+        assert tool.annotations is not None, f"{tool.name}: missing annotations"
+        assert isinstance(tool.annotations, mcp_types.ToolAnnotations), (
+            f"{tool.name}: annotations is {type(tool.annotations).__name__}, "
+            f"expected ToolAnnotations"
+        )
+
+        # Verify annotation values are set (not None)
+        assert tool.annotations.readOnlyHint is not None, (
+            f"{tool.name}: readOnlyHint is None"
+        )
+        assert tool.annotations.destructiveHint is not None, (
+            f"{tool.name}: destructiveHint is None"
+        )
+        assert tool.annotations.openWorldHint is not None, (
+            f"{tool.name}: openWorldHint is None"
+        )
+
+        # _meta must NOT contain annotations key
+        # (annotations live on tool.annotations, not in _meta)
         assert tool.meta is not None, f"{tool.name}: missing meta"
-        assert "annotations" in tool.meta, f"{tool.name}: missing annotations in meta"
-        annotations = tool.meta["annotations"]
-        # Verify annotation structure
-        assert "readOnlyHint" in annotations
-        assert "destructiveHint" in annotations
-        assert "openWorldHint" in annotations
-
-
-@pytest.mark.asyncio
-async def test_annotations_mirrored_at_top_level_if_supported():
-    """Annotations mirrored at top level if SDK supports it."""
-    tools = await list_tools()
-    for tool in tools:
-        # Check if SDK supports top-level annotations
-        if hasattr(tool, "annotations") and tool.annotations is not None:
-            # If supported and set, verify it matches _meta.annotations
-            meta_annotations = tool.meta.get("annotations", {})
-            assert tool.annotations == meta_annotations, f"{tool.name}: annotations mismatch"
+        assert "annotations" not in tool.meta, (
+            f"{tool.name}: _meta should not contain 'annotations' key - "
+            f"annotations belong on tool.annotations (typed field)"
+        )
