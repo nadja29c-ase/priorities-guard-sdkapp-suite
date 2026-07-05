@@ -131,12 +131,13 @@ class TestLivePersistRoundtrip:
                     original_board = sc["clusters"]
 
         # Step 2: Call organize_thoughts with test data
+        # NOTE: thought_items are plain strings, not dicts
         test_clusters = [
             {
                 "cluster_name": "Live Roundtrip Test",
                 "thought_items": [
-                    {"text": "Test item 1 (live roundtrip)", "tag": "work"},
-                    {"text": "Test item 2 (live roundtrip)", "tag": "personal"},
+                    "Test item 1 (live roundtrip)",
+                    "Test item 2 (live roundtrip)",
                 ],
             }
         ]
@@ -149,6 +150,10 @@ class TestLivePersistRoundtrip:
                 "arguments": {
                     "clusters": test_clusters,
                     "thoughts_exhausted": False,
+                    # Required provenance fields — without these, provenance check fails
+                    # before persist is even attempted
+                    "user_thoughts_exhausted_verbatim": "that's everything for the test",
+                    "user_confirmed_no_more_thoughts": True,
                 },
             },
         )
@@ -203,6 +208,8 @@ class TestLivePersistRoundtrip:
                         "arguments": {
                             "clusters": original_board,
                             "thoughts_exhausted": False,
+                            "user_thoughts_exhausted_verbatim": "restoring original board",
+                            "user_confirmed_no_more_thoughts": True,
                         },
                     },
                 )
