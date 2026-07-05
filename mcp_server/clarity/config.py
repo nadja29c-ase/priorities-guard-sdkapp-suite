@@ -26,6 +26,16 @@ from typing import Optional
 
 ENV = os.getenv("ENV", "dev")
 
+# Canonical production predicate — use this everywhere instead of inline tuples.
+# Includes "prod" alias that PG uses, preventing ENV=prod from bypassing guards.
+# Pattern copied from mindsort_claude/config.py to ensure parity.
+_PRODUCTION_ENV_VALUES = {"production", "prod", "staging"}
+
+
+def _is_production_env(env: str) -> bool:
+    """Return True if env is a production-like environment."""
+    return env in _PRODUCTION_ENV_VALUES
+
 
 # ============================================================================
 # Helper Functions
@@ -54,7 +64,7 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
     value = os.getenv(key, default)
 
     if required and value is None:
-        if ENV in ("production", "staging"):
+        if _is_production_env(ENV):
             raise RuntimeError(
                 f"Required environment variable {key} not set. "
                 f"This is required in {ENV} environment."
@@ -145,7 +155,7 @@ BACKEND_URL = get_env(
 # Fail-fast: BACKEND_URL must not contain localhost in production
 # Without this guard, persistence silently fails (connects to nothing) and
 # organize_thoughts falsely logs "auto_persisted" while data is lost.
-if ENV in ("production", "staging") and "localhost" in BACKEND_URL:
+if _is_production_env(ENV) and "localhost" in BACKEND_URL:
     raise RuntimeError(
         "CLARITY_BACKEND_URL contains 'localhost' in production. "
         "Set to production URL (e.g., https://www.priority-guard.com). "
@@ -239,7 +249,10 @@ LOG_LEVEL = get_env("LOG_LEVEL", default="INFO")
 # ============================================================================
 
 # Environment detection for CORS
-IS_DEV = ENV in ("dev", "development", "local")
+# Uses the inverse of canonical _is_production_env() for consistency.
+# Note: staging is deliberately treated as production (IS_DEV=False) — it gets the same
+# strict origin validation as production to catch CORS issues before they hit prod.
+IS_DEV = not _is_production_env(ENV)
 
 # Default allowed origins (ChatGPT/OpenAI domains)
 # Used in dev mode only - production requires explicit configuration
@@ -253,7 +266,7 @@ _DEFAULT_CORS_ORIGINS = [
 # SECURITY: Required in production to prevent silent breakage when OpenAI adds domains
 CORS_ALLOWED_ORIGINS_RAW = get_env("CORS_ALLOWED_ORIGINS")
 
-if ENV in ("production", "staging") and not CORS_ALLOWED_ORIGINS_RAW:
+if _is_production_env(ENV) and not CORS_ALLOWED_ORIGINS_RAW:
     raise RuntimeError(
         "CORS_ALLOWED_ORIGINS must be explicitly set in production/staging. "
         "OpenAI may add subdomains without notice. "

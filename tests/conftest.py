@@ -28,7 +28,7 @@ This is your standard test harness for:
 # Focused app is deprecated (technically infeasible, ships nothing).
 # 5 known stale failures exist behind this exclusion (2026-07-04).
 # See pytest.ini comment for full list. If Focused is revisited, remove this.
-collect_ignore = ["unit/mcp_focused"]
+collect_ignore = ["unit/mcp_focused", "integration/mcp_focused", "E2E_tests/focused"]
 
 import pytest
 import pytest_asyncio

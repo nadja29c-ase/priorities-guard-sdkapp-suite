@@ -1,9 +1,9 @@
 """
 Live Persist Roundtrip Test — Production Verification.
 
-This test exercises an authenticated persist + retrieve roundtrip against the
-deployed MindSort-Claude backend. It verifies that persistence actually works
-end-to-end, which unit tests cannot confirm.
+This test exercises an authenticated persist + retrieve roundtrip through the
+DEPLOYED MindSort-Claude MCP server. It calls /mcp with JSON-RPC tools/call,
+which exercises the full MCP → backend path internally (X-User-ID + X-Internal-Secret).
 
 EXCLUDED FROM DEFAULT CI — requires:
   1. External network access to production
@@ -12,25 +12,31 @@ EXCLUDED FROM DEFAULT CI — requires:
 To run manually:
     MINDSORT_CLAUDE_TEST_TOKEN=<token> pytest -m live tests/integration/clarity/test_live_persist_roundtrip.py -v
 
+WARNING — DESTRUCTIVE TEST:
+This test OVERWRITES the user's MindSort board with test data. The test saves
+the existing board first and restores it after. If the test fails mid-run,
+manual restoration may be needed.
+
 INCIDENT CONTEXT (2026-07-05):
 This test was added after a silent persistence failure on MindSort-Claude that
 went undetected for days. The failure occurred because CLARITY_BACKEND_URL was
-unset, falling back to localhost:8000, while organize_thoughts logged
-"auto_persisted" anyway. Five audits, two adversarial reviewers, and a full
-compliance read all passed because nothing ever exercised a real persist roundtrip.
-
-Evidence beats review, every time it's available.
+unset in the MCP server, falling back to localhost:8000, while organize_thoughts
+logged "auto_persisted" anyway. This test exercises the actual MCP→backend path
+that failed — calling the backend directly would not detect this class of failure.
 
 TOKEN HANDLING:
 - Token is read from env var MINDSORT_CLAUDE_TEST_TOKEN
 - Test is skipped if token is not provided
 - Token is NEVER logged (security requirement)
-- To obtain a token: run organize_thoughts in Claude, extract from Better Stack logs
+- To obtain a token: use MCP Inspector to connect to the MCP server, copy the
+  access_token from the successful auth flow. Do NOT extract from logs (tokens
+  are correctly not logged).
 
 See doc/OAuth/platform_quirk_mindsort_openai_401.md for the full incident record.
 """
 
 import os
+import json
 
 import httpx
 import pytest
@@ -38,11 +44,20 @@ import pytest
 # Mark all tests as live (excluded from default runs via addopts = -m "not live")
 pytestmark = pytest.mark.live
 
-# Production backend URL
-BACKEND_URL = "https://www.priority-guard.com"
+# Production MCP server URL (the service that had the localhost BACKEND_URL bug)
+MCP_SERVER_URL = "https://mindsort-mcp.priority-guard.com"
 
 # Token env var name
 TOKEN_ENV_VAR = "MINDSORT_CLAUDE_TEST_TOKEN"
+
+# JSON-RPC request counter
+_request_id = 0
+
+
+def _next_request_id() -> int:
+    global _request_id
+    _request_id += 1
+    return _request_id
 
 
 @pytest.fixture
@@ -60,109 +75,137 @@ def http_client():
     return httpx.Client(timeout=30.0)
 
 
+def _mcp_call(client: httpx.Client, token: str, method: str, params: dict) -> dict:
+    """Make a JSON-RPC call to the MCP server."""
+    request = {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": _next_request_id(),
+    }
+    response = client.post(
+        f"{MCP_SERVER_URL}/mcp",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        json=request,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 class TestLivePersistRoundtrip:
     """
-    Live verification of persist + retrieve roundtrip.
+    Live verification of persist + retrieve roundtrip through MCP server.
 
-    This class of failure survived every audit because nothing live ever called
-    a tool with a valid token. This test closes that gap.
+    This test goes through /mcp → MCP server → backend, exercising the full
+    path that failed in the 2026-07-05 incident.
     """
 
-    def test_persist_and_retrieve_roundtrip(self, http_client, access_token):
+    def test_organize_and_load_roundtrip(self, http_client, access_token):
         """
-        Persist a test cluster, then retrieve it.
+        Exercise the full persist + retrieve path through the MCP server.
 
-        This is the minimal roundtrip that proves:
-        1. CLARITY_BACKEND_URL is correctly set (not localhost)
-        2. INTERNAL_API_SECRET is correctly set (auth succeeds)
-        3. The persist/retrieve cycle actually works end-to-end
+        Steps:
+        1. Save existing board (if any) for restoration
+        2. Call organize_thoughts with test data
+        3. Verify no isError in response (persist succeeded)
+        4. Call load_saved_board to verify data persisted
+        5. Restore original board
         """
-        # Test data — minimal valid cluster
-        test_cluster = {
-            "cluster_data": {
-                "clusters": [
-                    {
-                        "name": "Test Cluster (live roundtrip)",
-                        "thought_items": [
-                            {"text": "Live roundtrip test item", "tag": "work"}
-                        ],
-                    }
-                ]
+        # Step 1: Save existing board for restoration
+        load_result = _mcp_call(
+            http_client, access_token,
+            "tools/call",
+            {"name": "load_saved_board", "arguments": {}},
+        )
+
+        original_board = None
+        if "result" in load_result:
+            result = load_result["result"]
+            # Check if board exists (not persistence_error, not no_board)
+            if not result.get("isError"):
+                sc = result.get("structuredContent", {})
+                if sc.get("success") and sc.get("clusters"):
+                    original_board = sc["clusters"]
+
+        # Step 2: Call organize_thoughts with test data
+        test_clusters = [
+            {
+                "cluster_name": "Live Roundtrip Test",
+                "thought_items": [
+                    {"text": "Test item 1 (live roundtrip)", "tag": "work"},
+                    {"text": "Test item 2 (live roundtrip)", "tag": "personal"},
+                ],
+            }
+        ]
+
+        organize_result = _mcp_call(
+            http_client, access_token,
+            "tools/call",
+            {
+                "name": "organize_thoughts",
+                "arguments": {
+                    "clusters": test_clusters,
+                    "thoughts_exhausted": False,
+                },
             },
-            "thoughts_exhausted": False,
-            "correctly_clustered": None,
-            "content_hash": "test_roundtrip_hash",
-        }
-
-        # Headers — note: we do NOT log the token
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        }
-
-        # Step 1: Persist
-        persist_url = f"{BACKEND_URL}/api/clarity/clusters"
-        persist_resp = http_client.post(persist_url, headers=headers, json=test_cluster)
-
-        assert persist_resp.status_code == 201, (
-            f"Persist failed with {persist_resp.status_code}. "
-            f"Response: {persist_resp.text[:200]}. "
-            f"If 401/403: token may be expired or INTERNAL_API_SECRET mismatch. "
-            f"If connection error: CLARITY_BACKEND_URL may still be localhost."
         )
 
-        cluster_id = persist_resp.json().get("cluster_id")
-        assert cluster_id is not None, "Persist returned 201 but no cluster_id"
-
-        # Step 2: Retrieve
-        retrieve_url = f"{BACKEND_URL}/api/clarity/clusters"
-        retrieve_resp = http_client.get(retrieve_url, headers=headers)
-
-        assert retrieve_resp.status_code == 200, (
-            f"Retrieve failed with {retrieve_resp.status_code}. "
-            f"Response: {retrieve_resp.text[:200]}."
+        # Step 3: Verify no isError (persist succeeded)
+        assert "result" in organize_result, (
+            f"MCP call failed: {organize_result}. "
+            f"If error contains 'connection' or 'timeout', CLARITY_BACKEND_URL "
+            f"may still be localhost in the MCP server."
         )
 
-        data = retrieve_resp.json()
-        assert data.get("cluster_id") == cluster_id, (
-            f"Retrieved cluster_id mismatch: expected {cluster_id}, got {data.get('cluster_id')}"
+        result = organize_result["result"]
+        assert not result.get("isError"), (
+            f"organize_thoughts returned isError=True: {result}. "
+            f"structuredContent: {result.get('structuredContent', {})}. "
+            f"If error='persist_failed', this test caught a real persistence failure."
         )
 
-        # Verify cluster data shape (minimal check)
-        cluster_data = data.get("cluster_data", {})
-        clusters = cluster_data.get("clusters", [])
-        assert len(clusters) >= 1, "Retrieved data has no clusters"
-
-    def test_persist_without_internal_secret_fails(self, http_client, access_token):
-        """
-        Verify that persistence without internal secret fails.
-
-        This confirms the backend is checking INTERNAL_API_SECRET, not just
-        accepting any request. If this test passes (401/403), the auth layer
-        is working correctly.
-        """
-        test_cluster = {
-            "cluster_data": {"clusters": []},
-            "thoughts_exhausted": False,
-            "correctly_clustered": None,
-        }
-
-        # Headers with token but WITHOUT internal secret
-        # (normal MCP flow includes internal secret; this simulates direct attack)
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-            # Note: X-Internal-Secret is intentionally missing
-        }
-
-        persist_url = f"{BACKEND_URL}/api/clarity/clusters"
-        persist_resp = http_client.post(persist_url, headers=headers, json=test_cluster)
-
-        # We expect this to succeed because the backend uses the JWT for auth,
-        # and X-Internal-Secret is for MCP→backend trust, not client auth.
-        # If the endpoint requires X-Internal-Secret, this will 401/403.
-        # Either behavior is acceptable — this test documents what happens.
-        assert persist_resp.status_code in (201, 401, 403), (
-            f"Unexpected status {persist_resp.status_code} when testing without internal secret. "
-            f"Response: {persist_resp.text[:200]}"
+        # Step 4: Call load_saved_board to verify data persisted
+        load_result = _mcp_call(
+            http_client, access_token,
+            "tools/call",
+            {"name": "load_saved_board", "arguments": {}},
         )
+
+        assert "result" in load_result, f"load_saved_board call failed: {load_result}"
+        result = load_result["result"]
+        assert not result.get("isError"), (
+            f"load_saved_board returned isError=True: {result}. "
+            f"If error='persistence_error', the backend is unreachable."
+        )
+
+        sc = result.get("structuredContent", {})
+        assert sc.get("success"), f"load_saved_board success=false: {sc}"
+        assert sc.get("clusters"), f"load_saved_board returned no clusters: {sc}"
+
+        # Verify test data is present
+        loaded_clusters = sc["clusters"]
+        assert any(
+            c.get("name") == "Live Roundtrip Test" or c.get("cluster_name") == "Live Roundtrip Test"
+            for c in loaded_clusters
+        ), f"Test cluster not found in loaded data: {loaded_clusters}"
+
+        # Step 5: Restore original board (best effort)
+        if original_board is not None:
+            try:
+                _mcp_call(
+                    http_client, access_token,
+                    "tools/call",
+                    {
+                        "name": "organize_thoughts",
+                        "arguments": {
+                            "clusters": original_board,
+                            "thoughts_exhausted": False,
+                        },
+                    },
+                )
+            except Exception:
+                # Don't fail the test if restoration fails
+                pass
