@@ -126,10 +126,31 @@ JWKS_FETCH_TIMEOUT_SECONDS = int(get_env(
 # Backend Configuration
 # ============================================================================
 
+# BACKEND_URL: used by persistence.py for persist/retrieve API calls.
+#
+# INCIDENT GUARD (2026-07-05): This guard was added after a silent data loss incident.
+# MindSort-Claude deployed with CLARITY_CLAUDE_BACKEND_URL (correct value, read by nothing)
+# while persistence.py imports CLARITY_BACKEND_URL from this file. The missing env var
+# silently fell to localhost:8000, causing every persist operation to fail for days.
+# "Latent defense-in-depth" became "actual data loss" — never deploy without this guard.
+#
+# NOTE TO MINDSORT-CLAUDE DEPLOYERS: This module is shared. MindSort-Claude MUST set
+# CLARITY_BACKEND_URL (not CLARITY_CLAUDE_BACKEND_URL) for persistence to work.
+# The shim (mcp_auth_dupl.py) rebinds auth globals only — BACKEND_URL is NOT rebound.
 BACKEND_URL = get_env(
     "CLARITY_BACKEND_URL",
     default="http://localhost:8000"
 ).rstrip("/")
+
+# Fail-fast: BACKEND_URL must not contain localhost in production
+# Without this guard, persistence silently fails (connects to nothing) and
+# organize_thoughts falsely logs "auto_persisted" while data is lost.
+if ENV in ("production", "staging") and "localhost" in BACKEND_URL:
+    raise RuntimeError(
+        "CLARITY_BACKEND_URL contains 'localhost' in production. "
+        "Set to production URL (e.g., https://www.priority-guard.com). "
+        "Incident: 2026-07-05 silent persistence failure on MindSort-Claude."
+    )
 
 # Internal API secret for authenticated backend calls
 # Must match INTERNAL_API_SECRET in backend config

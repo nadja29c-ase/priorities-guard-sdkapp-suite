@@ -532,10 +532,13 @@ async def handle(
     # ============================================================
     # AUTO-PERSIST TO DB — runs only after clustering succeeds (fatal on failure)
     # ============================================================
+    # TRUTHFULNESS FIX (2026-07-05): persist_cluster returns None on failure instead
+    # of raising, so we must check the return value. Logging "auto_persisted" when
+    # persist actually failed caused silent data loss on MindSort-Claude for days.
     try:
         clusters_for_storage = {"clusters": clusters}
         content_hash = compute_content_hash(clusters)
-        await persist_cluster(
+        cluster_id = await persist_cluster(
             user_id=user_id,
             cluster_data=clusters_for_storage,
             thoughts_exhausted=validated_request.thoughts_exhausted,
@@ -543,7 +546,29 @@ async def handle(
             correlation_id=correlation_id,
             content_hash=content_hash,
         )
-        logger.info("organize_thoughts.auto_persisted", user_id=user_id)
+        if cluster_id is None:
+            # persist_cluster returned None (failure) — do NOT log success
+            logger.error("organize_thoughts.persist_returned_none", user_id=user_id)
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(
+                    type="text",
+                    text="Your board could not be saved."
+                )],
+                structuredContent={
+                    "success": False,
+                    "error": "persist_failed",
+                    "assistant_guidance": {
+                        "action": "RETRY",
+                        "instruction": (
+                            "Board clustering succeeded but could not be saved to the database. "
+                            "Tell the user their board was not saved and ask them to try again. "
+                            "Do NOT imply the board was updated."
+                        ),
+                    },
+                },
+                isError=True,
+            )
+        logger.info("organize_thoughts.auto_persisted", user_id=user_id, cluster_id=cluster_id)
     except Exception as e:
         logger.error("organize_thoughts.persist_failed", user_id=user_id, error=str(e))
         return mcp_types.CallToolResult(

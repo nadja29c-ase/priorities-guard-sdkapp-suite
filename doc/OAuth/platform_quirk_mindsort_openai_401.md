@@ -161,3 +161,60 @@ Production deploys set `CLARITY_AUDIENCE` / `CLARITY_CLAUDE_AUDIENCE` to the **r
 3. **Runtime _meta challenge** — `authenticate_request()` returns `mcp/www_authenticate` with resource_metadata on auth failure (fail-closed).
 
 4. **MCP_RESOURCE_URL in valid_audiences** — Commit `ef7f554` added `MCP_RESOURCE_URL` to the three-form audience list, making token validation match production token shape.
+
+---
+
+## Incident record: MindSort-Claude silent persistence failure (2026-07-05)
+
+This section documents a distinct incident discovered during the OAuth audit.
+
+### Root cause (100% confirmed)
+
+`mcp_server/clarity/persistence.py` imports `BACKEND_URL` from `clarity/config.py`, which reads env var `CLARITY_BACKEND_URL`. MindSort-Claude's Render service set only `CLARITY_CLAUDE_BACKEND_URL` (correct value, read by nothing in the persistence path). The `mcp_auth_dupl.py` shim rebinds auth globals only — `BACKEND_URL` is not in its contract.
+
+Result: `BACKEND_URL` silently fell to the dev default (`http://localhost:8000`) **in production**, and every persist/retrieve operation since first deploy connected to a port on the container where nothing listens.
+
+### Failure masking
+
+`organize_thoughts` logged `auto_persisted` unconditionally after calling `persist_cluster`, even when `persist_cluster` returned `None` (failure). The `persist_cluster` function catches all exceptions internally and returns `None` instead of raising, so the calling code's try/except never triggered. Users saw success responses while their data was silently discarded.
+
+### Affected window
+
+- **Start:** First MindSort-Claude deploy (date: deployment day)
+- **End:** 2026-07-05 hotfix applied (`CLARITY_BACKEND_URL=https://www.priority-guard.com`)
+
+### Data impact (GDPR statement)
+
+During the affected window, MindSort-Claude boards were never persisted:
+- **Data stored:** None (persist operations failed silently)
+- **Data at risk:** None (nothing was written)
+- **Affected users:** 1 (Nadja only — pre-submission, no external users)
+- **Retention impact:** N/A (no data to retain or delete)
+
+This incident occurred entirely pre-submission. No external user data was affected.
+
+### Why this survived audits
+
+Five audits, two adversarial reviewers, and a full compliance read all passed because:
+1. Unit tests mock persistence — they don't call production endpoints
+2. Integration tests use test databases — they don't touch production
+3. No live test exercised an authenticated persist roundtrip with a real token
+4. The `auto_persisted` log message falsely indicated success
+
+**Evidence beats review, every time it's available.**
+
+### Remediation
+
+1. **Hotfix (immediate):** Add `CLARITY_BACKEND_URL=https://www.priority-guard.com` to MindSort-Claude Render env — applied 2026-07-05.
+
+2. **D1 — Production guard:** `clarity/config.py` now fails at boot if `CLARITY_BACKEND_URL` contains `localhost` in production. The guard comment documents this incident.
+
+3. **D2 — Truthfulness fix:** `organize_thoughts`, `edit_board`, `start_prioritization_flow` now check `persist_cluster` return value. If `None`, they log `persist_returned_none` and return error with `assistant_guidance` telling the model to inform the user their board was NOT saved.
+
+4. **D3 — Namespace contract:** `mcp_auth_dupl.py` header now documents that `CLARITY_BACKEND_URL` and `INTERNAL_API_SECRET` are NOT rebound and must be set per-service.
+
+5. **D4 — Live roundtrip test:** `tests/integration/clarity/test_live_persist_roundtrip.py` exercises authenticated persist + retrieve against production. Requires token via env var; skipped if not provided.
+
+### Lesson
+
+This is Codex finding #2 materialized: "BACKEND_URL still has localhost defaults that aren't rejected in production" was classified as defense-in-depth/latent in the audit. It just produced actual silent data loss on the submission app. "Latent" means "will happen" — the only question is when.

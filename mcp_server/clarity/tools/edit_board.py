@@ -916,10 +916,12 @@ async def handle(
     # ============================================================
     # AUTO-PERSIST UPDATED BOARD TO DB (fatal on failure)
     # ============================================================
+    # TRUTHFULNESS FIX (2026-07-05): persist_cluster returns None on failure instead
+    # of raising, so we must check the return value. See organize_thoughts.py.
     try:
         storage_data = {"clusters": clusters_data}
         content_hash = compute_content_hash(clusters_data)
-        await persist_cluster(
+        cluster_id = await persist_cluster(
             user_id=user_id,
             cluster_data=storage_data,
             thoughts_exhausted=False,
@@ -927,7 +929,28 @@ async def handle(
             correlation_id=correlation_id,
             content_hash=content_hash,
         )
-        logger.info("edit_board.auto_persisted", user_id=user_id)
+        if cluster_id is None:
+            logger.error("edit_board.persist_returned_none", user_id=user_id)
+            return mcp_types.CallToolResult(
+                content=[mcp_types.TextContent(
+                    type="text",
+                    text="Your edits could not be saved."
+                )],
+                structuredContent={
+                    "success": False,
+                    "error": "persist_failed",
+                    "assistant_guidance": {
+                        "action": "RETRY",
+                        "instruction": (
+                            "Edit operations succeeded but could not be saved to the database. "
+                            "Tell the user their edits were not saved and ask them to try again. "
+                            "Do NOT imply the board was updated."
+                        ),
+                    },
+                },
+                isError=True,
+            )
+        logger.info("edit_board.auto_persisted", user_id=user_id, cluster_id=cluster_id)
     except Exception as e:
         logger.error("edit_board.persist_failed", user_id=user_id, error=str(e))
         return mcp_types.CallToolResult(

@@ -17,6 +17,24 @@
 # Safe pattern: scope invariant tests import only config modules, never auth modules.
 # If cross-contamination becomes a problem, isolate MindSort-Claude tests in a
 # separate pytest session (--forked or CI matrix split).
+#
+# ============================================================================
+# PERSISTENCE NAMESPACE CONTRACT (2026-07-05 — incident-driven documentation)
+# ============================================================================
+# The following clarity/config.py variables are NOT rebound by this shim:
+#   - CLARITY_BACKEND_URL (used by persistence.py)
+#   - INTERNAL_API_SECRET (used by persistence.py)
+#
+# These must be set explicitly in the MindSort-Claude Render env. If missing,
+# they fall back to clarity's defaults (localhost), causing silent persistence
+# failures. The localhost guard in clarity/config.py now fails at boot in
+# production if CLARITY_BACKEND_URL contains localhost — but the env var must
+# still be set. See clarity/config.py comment block for the full incident story.
+#
+# Env vars required for MindSort-Claude persistence:
+#   CLARITY_BACKEND_URL = https://www.priority-guard.com
+#   INTERNAL_API_SECRET = <matches backend>
+# ============================================================================
 
 import mcp_server.clarity.mcp_auth as _shared
 
