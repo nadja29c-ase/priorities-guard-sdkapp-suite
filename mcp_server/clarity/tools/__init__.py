@@ -56,10 +56,16 @@ async def list_tools() -> List[mcp_types.Tool]:
         }
 
         # Build securitySchemes based on required_scopes
-        if tool_def.required_scopes:
-            security_schemes = [{"type": "oauth2", "scopes": tool_def.required_scopes}]
-        else:
+        # SECURITY: Empty scopes means "auth required, no specific scope" (any authenticated user)
+        # NOT "no auth required" - runtime always requires valid JWT via authenticate_request()
+        # Using oauth2 with empty scopes array to match runtime behavior
+        if tool_def.required_scopes is None:
+            # Explicitly None = no auth (not used by any current tool, kept for future)
             security_schemes = [{"type": "noauth"}]
+        else:
+            # List (including empty []) = oauth2 with those scopes
+            # Empty [] means "any authenticated user, no specific scope"
+            security_schemes = [{"type": "oauth2", "scopes": tool_def.required_scopes}]
 
         # Build _meta based on tool capabilities
         # Use new ui.* keys per OpenAI Apps SDK (March 2026)
