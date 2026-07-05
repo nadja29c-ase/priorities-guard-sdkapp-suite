@@ -19,6 +19,10 @@ intentional discovery shapes and why MindSort-OpenAI uses /oauth/mindsort.
 import os
 from typing import Optional
 
+import structlog
+
+logger = structlog.get_logger(__name__)
+
 
 # ============================================================================
 # Environment Detection
@@ -231,6 +235,24 @@ OAUTH_ISSUER_URL = get_env(
     default="http://localhost:8000/oauth/pg"
 )
 
+# Clarity's expected production OAuth issuer (ADR_005 Shape #2: path-qualified)
+# This is app-specific — other apps have different expected values per ADR_005.
+_CLARITY_EXPECTED_OAUTH_ISSUER = "https://www.priority-guard.com/oauth/mindsort"
+
+# Fail-fast: OAUTH_ISSUER_URL must be the exact expected value in production/staging
+# This guard is assert-known-good (exact match), not blocklist — catches ANY wrong value.
+# Without this guard, a wrong OAUTH_ISSUER_URL silently breaks the OAuth discovery chain:
+# ChatGPT follows authorization_servers to the wrong AS metadata, gets wrong endpoints,
+# and OAuth fails or uses the wrong consent screen.
+if _is_production_env(ENV) and OAUTH_ISSUER_URL != _CLARITY_EXPECTED_OAUTH_ISSUER:
+    raise RuntimeError(
+        f"CLARITY_OAUTH_ISSUER_URL must be {_CLARITY_EXPECTED_OAUTH_ISSUER!r} in production/staging. "
+        f"Got: {OAUTH_ISSUER_URL!r}. "
+        f"Known drift vectors: localhost defaults, http://localhost:8000/oauth/pg, "
+        f"bare https://www.priority-guard.com, https://www.priority-guard.com/oauth/pg. "
+        f"See doc/ADR_005_platform_oauth_discovery_contracts.md Shape #2."
+    )
+
 # Supported OAuth scopes for Clarity MCP server
 # NOTE: This must mirror the clarity.* scopes in backend discovery
 # (backend/core/oauth_provider/discovery.py → SCOPES_SUPPORTED).
@@ -301,4 +323,21 @@ CORS_ALLOWED_ORIGINS: list[str] = (
     [origin.strip() for origin in CORS_ALLOWED_ORIGINS_RAW.split(",") if origin.strip()]
     if CORS_ALLOWED_ORIGINS_RAW
     else _DEFAULT_CORS_ORIGINS
+)
+
+
+# ============================================================================
+# Startup Logging — Resolved OAuth Config
+# ============================================================================
+# Log resolved OAuth config at import time to eliminate dashboard-vs-runtime ambiguity.
+# These URLs are non-secret (public discovery endpoints) — safe to log.
+# inc_94: Added after a production discovery drift that resolved before runtime
+# value was captured, making diagnosis a guessing game.
+
+logger.info(
+    "clarity.config.oauth_resolved",
+    oauth_issuer_url=OAUTH_ISSUER_URL,
+    mcp_server_url=MCP_SERVER_URL,
+    mcp_resource_url=MCP_RESOURCE_URL,
+    env=ENV,
 )

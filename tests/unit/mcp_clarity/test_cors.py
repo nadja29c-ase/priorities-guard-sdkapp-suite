@@ -101,6 +101,9 @@ class TestCORSConfiguration:
             "ENV": "production",
             # CHATGPT_CLIENT_ID_CLARITY is also required in production
             "CHATGPT_CLIENT_ID_CLARITY": "test-client-id",
+            # Other required production env vars (to reach the CORS guard)
+            "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+            "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
@@ -122,6 +125,9 @@ class TestCORSConfiguration:
             "ENV": "staging",
             # CHATGPT_CLIENT_ID_CLARITY is also required in staging
             "CHATGPT_CLIENT_ID_CLARITY": "test-client-id",
+            # Other required production env vars (to reach the CORS guard)
+            "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+            "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
@@ -142,6 +148,9 @@ class TestCORSConfiguration:
             "CORS_ALLOWED_ORIGINS": "https://chatgpt.com,https://web-sandbox.oaiusercontent.com",
             # CHATGPT_CLIENT_ID_CLARITY is also required in production
             "CHATGPT_CLIENT_ID_CLARITY": "test-client-id",
+            # Other required production env vars
+            "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+            "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
@@ -200,6 +209,9 @@ class TestCORSConfiguration:
             "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
             # CHATGPT_CLIENT_ID_CLARITY is also required in production
             "CHATGPT_CLIENT_ID_CLARITY": "test-client-id",
+            # Other required production env vars
+            "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+            "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
