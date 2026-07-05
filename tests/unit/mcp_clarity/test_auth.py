@@ -19,7 +19,7 @@ from mcp_server.clarity.mcp_auth import (
     build_forbidden_meta,
 )
 from mcp_server.clarity.discovery import oauth_protected_resource
-from mcp_server.clarity.config import MCP_SERVER_URL, OAUTH_ISSUER_URL, SCOPES_SUPPORTED, TOOL_SCOPES
+from mcp_server.clarity.config import MCP_SERVER_URL, MCP_RESOURCE_URL, OAUTH_ISSUER_URL, SCOPES_SUPPORTED, TOOL_SCOPES
 
 
 class TestExtractBearerToken:
@@ -452,11 +452,12 @@ class TestOAuthResourceDiscovery:
 
     @pytest.mark.asyncio
     async def test_discovery_returns_resource_url(self):
-        """Discovery returns correct resource URL (MCP server URL)."""
+        """Discovery returns correct resource URL (MCP resource URL with /mcp suffix)."""
         result = await oauth_protected_resource()
 
         assert "resource" in result
-        assert result["resource"] == MCP_SERVER_URL
+        # Resource URL is MCP_SERVER_URL + /mcp (the actual MCP endpoint)
+        assert result["resource"] == MCP_RESOURCE_URL
 
     @pytest.mark.asyncio
     async def test_discovery_points_to_oauth_pg_authorization_server(self):
@@ -648,11 +649,31 @@ class TestToolScopeConfig:
         assert "organize_thoughts" in TOOL_SCOPES
         assert "clarity.write" in TOOL_SCOPES["organize_thoughts"]
 
-    def test_all_tools_have_scopes(self):
-        """All registered tools have at least one scope."""
+    def test_all_tools_have_scopes_or_explicit_empty(self):
+        """All registered tools have scopes defined (may be empty for internal tools).
+
+        Security invariant:
+        - Most tools require specific scopes (e.g., clarity.write)
+        - Internal/diagnostic tools may have empty scopes []
+        - Empty scopes [] still requires authentication (oauth2 with empty scopes
+          means "any authenticated user") — this is NOT the same as no auth
+
+        The _diagnostic_tiny_widget is explicitly allowed to have empty scopes
+        because it's an internal diagnostic tool that any authenticated user
+        should be able to call. The runtime still validates the JWT.
+        """
+        # Tools explicitly allowed to have empty scopes (internal/diagnostic)
+        ALLOWED_EMPTY_SCOPES = {"_diagnostic_tiny_widget"}
+
         for tool_name, scopes in TOOL_SCOPES.items():
             assert isinstance(scopes, list), f"{tool_name} scopes should be a list"
-            assert len(scopes) > 0, f"{tool_name} should have at least one scope"
+            if tool_name in ALLOWED_EMPTY_SCOPES:
+                # Explicitly allowed to be empty — document the exemption
+                continue
+            assert len(scopes) > 0, (
+                f"{tool_name} should have at least one scope. "
+                f"If this is an internal/diagnostic tool, add it to ALLOWED_EMPTY_SCOPES."
+            )
 
     def test_scopes_are_strings(self):
         """All scope values are strings."""
