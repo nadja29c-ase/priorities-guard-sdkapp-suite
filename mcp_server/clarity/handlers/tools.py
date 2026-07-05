@@ -37,6 +37,10 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
     arguments = req.params.arguments or {}
     meta = getattr(req.params, '_meta', None) or {}
 
+    # MCP request-type logging: tools/call
+    # Distinct from tool.dispatch.* events for consistency with resources logging
+    logger.info("mcp.request.tools_call", tool_name=name)
+
     logger.debug("tool.dispatch.received",
                 tool_name=name,
                 argument_keys=list(arguments.keys()))

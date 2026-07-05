@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MindSort Diagnostic Widget</title>
+  <!--
+    CSP-MATCHING: This diagnostic widget must reference an external CDN asset
+    to match the real widget's CSP behavior. The real clarity-clusters.html
+    loads KaTeX fonts from cdn.openai.com. We reference the same CDN here so
+    that CSP behavior (empty resourceDomains blocking external assets) is held
+    constant. This isolates SIZE as the only variable between diagnostic and real.
+    Without this, a "diagnostic renders but real doesn't" result could be CSP,
+    not size, producing an ambiguous verdict.
+  -->
+  <link rel="preconnect" href="https://cdn.openai.com" crossorigin>
+  <link rel="stylesheet" href="https://cdn.openai.com/katex/v0.16.9/katex.min.css" crossorigin>
+  <style>
+    /* OpenAI design tokens - light mode defaults */
+    :root {
+      --color-text-primary: #0d0d0d;
+      --color-text-secondary: #666666;
+      --color-bg-primary: #ffffff;
+      --color-bg-secondary: #f7f7f8;
+      --color-border: #e5e5e5;
+      --color-success: #10a37f;
+      --color-danger: #ef4444;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --radius-md: 8px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+    }
+    /* Dark mode */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-text-primary: #ececec;
+        --color-text-secondary: #999999;
+        --color-bg-primary: #212121;
+        --color-bg-secondary: #2f2f2f;
+        --color-border: #444444;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-bg-primary);
+      color: var(--color-text-primary);
+      padding: var(--spacing-lg);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-md);
+      margin-bottom: var(--spacing-md);
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+    }
+    .subtitle {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      margin-bottom: var(--spacing-md);
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: var(--color-bg-primary);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-success);
+    }
+    .status-text {
+      font-size: 14px;
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      margin-top: var(--spacing-md);
+    }
+    .meta-item {
+      margin-bottom: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1 class="title">Diagnostic Widget</h1>
+      <p class="subtitle">MindSort AI - Size Isolation Test</p>
+      <div class="status">
+        <span class="status-dot"></span>
+        <span class="status-text">Widget rendered successfully</span>
+      </div>
+      <div class="meta">
+        <div class="meta-item">Version: diagnostic-v1</div>
+        <div class="meta-item">Size: &lt;10KB (tiny)</div>
+        <div class="meta-item" id="timestamp">Rendered: --</div>
+      </div>
+    </div>
+    <div class="card">
+      <p class="subtitle">This widget confirms:</p>
+      <ul style="padding-left: 20px; font-size: 14px; line-height: 1.6;">
+        <li>resources/read was called</li>
+        <li>Widget HTML was fetched</li>
+        <li>Widget rendered in client</li>
+      </ul>
+    </div>
+  </div>
+  <script>
+    // Display render timestamp
+    document.getElementById('timestamp').textContent =
+      'Rendered: ' + new Date().toISOString();
+  </script>
+</body>
+</html>

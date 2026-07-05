@@ -145,3 +145,4 @@ from . import read_board_before_editing  # noqa: F401, E402
 from . import start_prioritization_flow  # noqa: F401, E402
 from . import edit_board  # noqa: F401, E402
 from . import delete_my_data  # noqa: F401, E402
+from . import diagnostic_widget  # noqa: F401, E402 - inc_91 diagnostic

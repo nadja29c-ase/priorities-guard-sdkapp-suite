@@ -283,7 +283,10 @@ async def _list_tools():
     registry_tools = await list_tools()
     # Get any tools registered via @mcp.tool() decorator
     decorator_tools = await mcp.list_tools()
-    return registry_tools + list(decorator_tools)
+    all_tools = registry_tools + list(decorator_tools)
+    # MCP request-type logging: tools/list
+    logger.info("mcp.request.tools_list", tool_count=len(all_tools))
+    return all_tools
 
 
 mcp._mcp_server.request_handlers[mcp_types.CallToolRequest] = call_tool_request
