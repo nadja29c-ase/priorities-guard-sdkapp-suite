@@ -81,6 +81,45 @@ class TestBackendUrlGuard:
         assert "localhost" in config.BACKEND_URL
 
 
+class TestUnknownEnvGuard:
+    """Tests for unknown ENV fail-fast guard.
+
+    Prevents typos like ENV=produciton from silently disabling production guards.
+    """
+
+    def test_unknown_env_raises_runtime_error(self, monkeypatch):
+        """Unknown ENV value fails at import with clear error message."""
+        with pytest.raises(RuntimeError, match="Unknown ENV value 'produciton'"):
+            _reimport_config_with_env(monkeypatch, {
+                "ENV": "produciton",  # Typo
+            })
+
+    def test_case_sensitive_env_fails(self, monkeypatch):
+        """ENV values are case-sensitive — Production != production."""
+        with pytest.raises(RuntimeError, match="Unknown ENV value 'Production'"):
+            _reimport_config_with_env(monkeypatch, {
+                "ENV": "Production",  # Wrong case
+            })
+
+    def test_all_known_dev_values_accepted(self, monkeypatch):
+        """All known dev ENV values import cleanly."""
+        for env_val in ("dev", "development", "local", "test", "ci"):
+            config = _reimport_config_with_env(monkeypatch, {"ENV": env_val})
+            assert config.ENV == env_val
+            assert config.IS_DEV is True
+
+    def test_all_known_production_values_accepted(self, monkeypatch):
+        """All known production ENV values import cleanly (with required env vars)."""
+        for env_val in ("production", "prod", "staging"):
+            config = _reimport_config_with_env(monkeypatch, {
+                "ENV": env_val,
+                "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
+                "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+            })
+            assert config.ENV == env_val
+            assert config.IS_DEV is False
+
+
 class TestProductionPredicateParity:
     """Tests for canonical _is_production_env predicate parity."""
 

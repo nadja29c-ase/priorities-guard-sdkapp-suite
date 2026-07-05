@@ -26,15 +26,34 @@ from typing import Optional
 
 ENV = os.getenv("ENV", "dev")
 
-# Canonical production predicate — use this everywhere instead of inline tuples.
-# Includes "prod" alias that PG uses, preventing ENV=prod from bypassing guards.
+# Known ENV values — fail fast on unknown to prevent production guards being silently bypassed
+# Production values trigger required-env guards; dev/test values use defaults.
 # Pattern copied from mindsort_claude/config.py to ensure parity.
 _PRODUCTION_ENV_VALUES = {"production", "prod", "staging"}
+_DEV_ENV_VALUES = {"dev", "development", "local", "test", "ci"}
+_KNOWN_ENV_VALUES = _PRODUCTION_ENV_VALUES | _DEV_ENV_VALUES
 
 
 def _is_production_env(env: str) -> bool:
-    """Return True if env is a production-like environment."""
+    """Return True if env is a production-like environment.
+
+    Canonical predicate — use this everywhere instead of inline tuples.
+    Includes "prod" alias that PG uses, preventing ENV=prod from bypassing guards.
+    """
     return env in _PRODUCTION_ENV_VALUES
+
+
+# Fail-fast: raise on unknown ENV to prevent guards being bypassed
+# Without this, a typo like ENV=produciton silently runs in non-production mode,
+# letting localhost defaults leak into what the operator thinks is production.
+# Note: Case and whitespace variants (ENV=Production, ENV=" production ") intentionally
+# fail here rather than being normalized — maximally explicit, no silent coercion.
+if ENV not in _KNOWN_ENV_VALUES:
+    raise RuntimeError(
+        f"Unknown ENV value {ENV!r}. "
+        f"Known values: {sorted(_KNOWN_ENV_VALUES)}. "
+        f"Refusing to start — this prevents production guards from being silently bypassed."
+    )
 
 
 # ============================================================================

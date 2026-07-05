@@ -34,6 +34,24 @@
 # Env vars required for MindSort-Claude persistence:
 #   CLARITY_BACKEND_URL = https://www.priority-guard.com
 #   INTERNAL_API_SECRET = <matches backend>
+#
+# ============================================================================
+# EXPLICITLY NOT REBOUND (architecture decision — do not add)
+# ============================================================================
+# The following config.py variables are NOT rebound by this shim AND MUST NOT BE:
+#   - OAUTH_ISSUER_URL (used by discovery.py)
+#   - SCOPES_SUPPORTED (used by discovery.py)
+#
+# Rationale: MindSort-Claude uses its own discovery_dupl.py importing from its own
+# config.py — discovery is DELIBERATELY DUPLICATED per the _dupl convention, not
+# shared. clarity.mcp_auth never reads OAUTH_ISSUER_URL or SCOPES_SUPPORTED, so
+# rebinding them would be dead code. Worse, adding them to REBOUND_GLOBALS would
+# desynchronize the tuple from the actual _shared.* assignments, causing the AST
+# and drift meta-tests to fail by design.
+#
+# If a future reviewer suggests adding these: re-read this comment and the
+# discovery_dupl.py/config.py separation. The shim rebinds AUTH globals because
+# auth is shared; discovery is intentionally per-service.
 # ============================================================================
 
 import mcp_server.clarity.mcp_auth as _shared
