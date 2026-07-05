@@ -77,7 +77,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                     "domain": WIDGET_DOMAIN,
                     "csp": {
                         "connectDomains": [],
-                        "resourceDomains": [],
+                        "resourceDomains": ["https://cdn.openai.com"],
                     },
                 },
                 "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
@@ -95,7 +95,7 @@ async def list_resources() -> List[mcp_types.Resource]:
                     "domain": WIDGET_DOMAIN,
                     "csp": {
                         "connectDomains": [],
-                        "resourceDomains": [],
+                        "resourceDomains": ["https://cdn.openai.com"],
                     },
                 },
                 "openai/widgetDescription": "Diagnostic widget for render testing.",
@@ -122,7 +122,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                     "domain": WIDGET_DOMAIN,
                     "csp": {
                         "connectDomains": [],
-                        "resourceDomains": [],
+                        "resourceDomains": ["https://cdn.openai.com"],
                     },
                 },
                 "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
@@ -140,7 +140,7 @@ async def list_resource_templates() -> List[mcp_types.ResourceTemplate]:
                     "domain": WIDGET_DOMAIN,
                     "csp": {
                         "connectDomains": [],
-                        "resourceDomains": [],
+                        "resourceDomains": ["https://cdn.openai.com"],
                     },
                 },
                 "openai/widgetDescription": "Diagnostic widget for render testing.",
@@ -180,7 +180,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 "domain": WIDGET_DOMAIN,
                 "csp": {
                     "connectDomains": [],
-                    "resourceDomains": [],
+                    "resourceDomains": ["https://cdn.openai.com"],
                 },
             },
             "openai/widgetDescription": "Shows all user's thought clusters. User decides which to prioritize.",
@@ -209,7 +209,7 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
                 "domain": WIDGET_DOMAIN,
                 "csp": {
                     "connectDomains": [],
-                    "resourceDomains": [],
+                    "resourceDomains": ["https://cdn.openai.com"],
                 },
             },
             "openai/widgetDescription": "Diagnostic widget for render testing.",
