@@ -250,6 +250,9 @@ TOOL_SCOPES = {
     "start_prioritization_flow": ["clarity.write"],
     "edit_board": ["clarity.write"],
     "delete_my_data": ["clarity.write"],
+    # inc_91 diagnostic tool - no scopes required, but must be registered
+    # to pass enforce_tool_scope()'s fail-closed check on unknown tools
+    "_diagnostic_tiny_widget": [],
 }
 
 

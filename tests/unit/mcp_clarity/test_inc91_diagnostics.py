@@ -116,7 +116,12 @@ class TestDiagnosticWidgetToolStructure:
 
     @pytest.mark.asyncio
     async def test_diagnostic_tool_meta_structure_matches_organize_thoughts(self):
-        """Diagnostic tool _meta must have same keys as organize_thoughts."""
+        """Diagnostic tool _meta must have EXACT same keys as organize_thoughts.
+
+        Bug fix: Previous version used a hardcoded key list and never called
+        organize_thoughts, so it wouldn't catch organize_thoughts gaining an
+        extra _meta key that diagnostic lacks.
+        """
         from mcp_server.clarity.tools.diagnostic_widget import handle as diag_handle
         from mcp_server.clarity.tools.organize_thoughts import handle as org_handle
         from mcp_server.clarity.handlers.resources import WIDGET_URI
@@ -129,27 +134,55 @@ class TestDiagnosticWidgetToolStructure:
             arguments={"test_id": "unit-test"},
         )
 
-        # Verify _meta has required keys
-        # Note: MCP SDK exposes _meta as .meta attribute
+        # Call organize_thoughts with valid arguments to get its actual _meta
+        # Must mock persist_cluster since it's auto-persist
+        with patch("mcp_server.clarity.tools.organize_thoughts.persist_cluster") as mock_persist:
+            mock_persist.return_value = "mock-cluster-id"
+
+            org_result = await org_handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_thoughts_exhausted_verbatim": "that's everything",
+                    "user_confirmed_no_more_thoughts": True,
+                    "thoughts_exhausted": True,
+                    "clusters": [
+                        {"cluster_name": "Test", "thought_items": ["item1", "item2"]}
+                    ],
+                },
+            )
+
+        # Both should succeed
+        assert org_result.isError is not True, "organize_thoughts failed"
+        assert diag_result.isError is not True, "diagnostic failed"
+
+        # Get actual _meta from both tools
         diag_meta = diag_result.meta
-        required_keys = [
-            "ui",
-            "openai/outputTemplate",
-            "openai/toolInvocation/invoking",
-            "openai/toolInvocation/invoked",
-            "openai/widgetAccessible",
-            "openai/resultCanProduceWidget",
-        ]
-        for key in required_keys:
-            assert key in diag_meta, f"Missing key: {key}"
+        org_meta = org_result.meta
 
-        # Verify ui.resourceUri structure
-        assert "resourceUri" in diag_meta["ui"]
+        # CRITICAL: Compare key sets - diagnostic must have ALL keys organize_thoughts has
+        diag_keys = set(diag_meta.keys())
+        org_keys = set(org_meta.keys())
 
-        # Verify outputTemplate matches resourceUri
-        assert diag_meta["openai/outputTemplate"] == diag_meta["ui"]["resourceUri"]
+        missing_in_diagnostic = org_keys - diag_keys
+        extra_in_diagnostic = diag_keys - org_keys
 
-        # Verify it points to diagnostic widget, not main widget
+        assert not missing_in_diagnostic, (
+            f"Diagnostic _meta missing keys from organize_thoughts: {missing_in_diagnostic}. "
+            f"This breaks the structural clone requirement."
+        )
+        assert not extra_in_diagnostic, (
+            f"Diagnostic _meta has extra keys not in organize_thoughts: {extra_in_diagnostic}. "
+            f"This may confound the experiment."
+        )
+
+        # Verify nested ui structure matches
+        assert set(diag_meta["ui"].keys()) == set(org_meta["ui"].keys()), (
+            f"ui structure mismatch: diagnostic={diag_meta['ui'].keys()}, "
+            f"organize_thoughts={org_meta['ui'].keys()}"
+        )
+
+        # Verify outputTemplate points to diagnostic widget, not main widget
         assert diag_meta["openai/outputTemplate"] == DIAGNOSTIC_WIDGET_URI
         assert diag_meta["openai/outputTemplate"] != WIDGET_URI
 
