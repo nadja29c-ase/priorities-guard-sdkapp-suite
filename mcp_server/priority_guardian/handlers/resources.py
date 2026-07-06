@@ -5,16 +5,54 @@ Handles widget resource discovery and serving.
 """
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from urllib.parse import urlparse
 
 import structlog
 from mcp import types as mcp_types
 
 from mcp_server.priority_guardian.config import BACKEND_URL, MCP_SERVER_URL
+from mcp_server.priority_guardian.mcp_auth import extract_or_generate_correlation_id
 from mcp_server.priority_guardian.tools.widget_tools.constants import WIDGET_URI
 
 logger = structlog.get_logger(__name__)
+
+
+# ============================================================================
+# URI Sanitization for Logging (inc_99)
+# ============================================================================
+
+# Maximum URI length to log — prevents pathological inputs from bloating logs
+_MAX_URI_LOG_LENGTH = 512
+
+
+def _sanitize_uri_for_logging(uri: str) -> str:
+    """
+    Sanitize URI for safe logging.
+
+    inc_99: Defensive hygiene against pathological URIs from authenticated clients.
+    - Strips query string and fragment (could contain tokens/PII)
+    - Caps length to prevent log bloat
+    - Preserves scheme, host, and path for diagnostic value
+
+    Args:
+        uri: Raw URI string from request
+
+    Returns:
+        Sanitized URI safe for production logs
+    """
+    try:
+        parsed = urlparse(uri)
+        # Reconstruct without query/fragment
+        clean_uri = f"{parsed.scheme}://{parsed.netloc}{parsed.path}" if parsed.netloc else uri
+    except Exception:
+        # If parsing fails, just use the raw string (capped)
+        clean_uri = uri
+
+    # Cap length
+    if len(clean_uri) > _MAX_URI_LOG_LENGTH:
+        return clean_uri[:_MAX_URI_LOG_LENGTH] + "...[truncated]"
+    return clean_uri
 
 
 def _extract_origin(url: str) -> str:
@@ -128,19 +166,35 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     """
     uri_str = str(req.params.uri)
 
+    # inc_99: Extract correlation_id for log correlation with tools/call
+    # This enables the binary verdict: correlate resources/read with tools/call in same session
+    meta = getattr(req.params, '_meta', None) or getattr(req.params, 'meta', None)
+    correlation_id = extract_or_generate_correlation_id(meta)
+
+    # inc_99: Sanitize URI for logging (strip query/fragment, cap length)
+    safe_uri = _sanitize_uri_for_logging(uri_str)
+
     # inc_98: Promoted to INFO for production observability.
+    # inc_99: Added correlation_id + URI sanitization.
     # Enables binary verdict on widget render failures: if resources/read is absent
     # in session logs but tools/call is present → host-side issue (ChatGPT didn't fetch).
-    logger.info("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
+    logger.info(
+        "resource.read.requested",
+        uri=safe_uri,
+        widget_version=WIDGET_VERSION,
+        correlation_id=correlation_id,
+    )
 
     if uri_str == WIDGET_URI:
         # inc_98: Promoted to INFO for production observability.
+        # inc_99: Added correlation_id.
         # Logs html_length (not content) — no PII, GDPR-safe.
         logger.info(
             "resource.read.serving_widget",
-            uri=uri_str,
+            uri=safe_uri,
             html_length=len(WIDGET_HTML),
             widget_version=WIDGET_VERSION,
+            correlation_id=correlation_id,
         )
 
         # Build _meta for the widget resource
@@ -173,11 +227,12 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
         return mcp_types.ReadResourceResult(contents=contents)
 
     # Unknown resource — inc_98: log at INFO for observability
+    # inc_99: Added correlation_id + sanitized URI
     # If ChatGPT requests wrong URI, this log helps diagnose schema drift
-    logger.info("resource.read.unknown_uri", uri=uri_str)
+    logger.info("resource.read.unknown_uri", uri=safe_uri, correlation_id=correlation_id)
     return mcp_types.ReadResourceResult(
         contents=[],
-        _meta={"error": f"Unknown resource: {uri_str}"},
+        _meta={"error": f"Unknown resource: {safe_uri}"},
     )
 
 
