@@ -101,10 +101,12 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 # ============================================================================
 
 # JWKS URL - uses /oauth/pg/ (Priority Guardian shared OAuth)
+# NOTE: .strip() prevents trailing newline/whitespace from deploy tooling causing
+# false-positive guard failures (inc_95 hardening per Codex review).
 CLARITY_JWKS_URL = get_env(
     "CLARITY_JWKS_URL",
     default="http://localhost:8000/oauth/pg/jwks"
-)
+).strip()
 
 # Clarity's expected production JWKS URL (ADR_005 Shape #2: /oauth/mindsort endpoints)
 # This is app-specific — derived from mindsort_discovery.py (backend AS metadata).
@@ -194,7 +196,7 @@ JWKS_FETCH_TIMEOUT_SECONDS = int(get_env(
 BACKEND_URL = get_env(
     "CLARITY_BACKEND_URL",
     default="http://localhost:8000"
-).rstrip("/")
+).strip().rstrip("/")
 
 # Fail-fast: BACKEND_URL must not contain localhost in production
 # Without this guard, persistence silently fails (connects to nothing) and
@@ -226,14 +228,14 @@ INTERNAL_API_SECRET = get_env(
 MCP_SERVER_URL = get_env(
     "CLARITY_MCP_SERVER_URL",
     default="http://localhost:8002"
-).rstrip("/")
+).strip().rstrip("/")
 
 # MCP Resource URL (the resource claim value)
 # Defaults to {MCP_SERVER_URL}/mcp — only override if you need a different value
 MCP_RESOURCE_URL = get_env(
     "CLARITY_MCP_RESOURCE_URL",
     default=f"{MCP_SERVER_URL}/mcp"
-)
+).strip()
 
 # OAuth Authorization Server URL
 # NOTE: This is the authorization server base URL for discovery, NOT the JWT 'iss' claim.
@@ -254,7 +256,7 @@ MCP_RESOURCE_URL = get_env(
 OAUTH_ISSUER_URL = get_env(
     "CLARITY_OAUTH_ISSUER_URL",
     default="http://localhost:8000/oauth/pg"
-)
+).strip()
 
 # Clarity's expected production OAuth issuer (ADR_005 Shape #2: path-qualified)
 # This is app-specific — other apps have different expected values per ADR_005.

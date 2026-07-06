@@ -4,6 +4,7 @@ Unit tests for Clarity config production guards.
 Verifies that:
 - CLARITY_BACKEND_URL localhost rejection works correctly (2026-07-05 incident)
 - CLARITY_OAUTH_ISSUER_URL exact-value assertion works correctly (inc_94)
+- CLARITY_JWKS_URL exact-value assertion works correctly (inc_95)
 
 Uses subprocess reimport pattern to test config-time guards that raise
 RuntimeError during module import.
@@ -14,15 +15,44 @@ import sys
 import pytest
 
 
+# All Clarity config env vars that affect guards/behavior.
+# The helper clears these before each test to ensure hermetic testing.
+# inc_95 hardening: prevents ambient shell env from invalidating test premises.
+_CLARITY_CONFIG_ENV_VARS = [
+    "ENV",
+    "CLARITY_JWKS_URL",
+    "CLARITY_BACKEND_URL",
+    "CLARITY_OAUTH_ISSUER_URL",
+    "CLARITY_ISSUER",
+    "CLARITY_AUDIENCE",
+    "CLARITY_MCP_SERVER_URL",
+    "CLARITY_MCP_RESOURCE_URL",
+    "CORS_ALLOWED_ORIGINS",
+    "INTERNAL_API_SECRET",
+]
+
+
 def _reimport_config_with_env(monkeypatch, env_vars: dict):
-    """Reimport the config module with specified env vars set."""
+    """Reimport the config module with specified env vars set.
+
+    Clears all known Clarity config env vars first, then applies the
+    specified values. This ensures tests are hermetic and don't depend
+    on ambient shell environment (inc_95 hardening per Codex review).
+    """
     # Remove the module from sys.modules so reimport re-runs top-level code
     sys.modules.pop("mcp_server.clarity.config", None)
+
+    # Clear all known config vars first to ensure hermetic test
+    for key in _CLARITY_CONFIG_ENV_VARS:
+        monkeypatch.delenv(key, raising=False)
+
+    # Apply test-specific env vars
     for key, value in env_vars.items():
         if value is None:
             monkeypatch.delenv(key, raising=False)
         else:
             monkeypatch.setenv(key, value)
+
     return importlib.import_module("mcp_server.clarity.config")
 
 
@@ -452,21 +482,36 @@ class TestOAuthConfigLogging:
     """
 
     def test_logging_emits_resolved_urls(self, monkeypatch, capsys):
-        """Startup logging emits resolved OAuth URLs.
+        """Startup logging emits resolved OAuth URLs with actual values.
 
         Structlog logs to stdout, so we capture stdout instead of using caplog.
-        inc_95: Extended to include jwks_url.
+        inc_95: Extended to include jwks_url and assert resolved VALUES appear,
+        not just field names (per Codex review — proves the log is actionable).
         """
-        _reimport_config_with_env(monkeypatch, {"ENV": "dev"})
+        config = _reimport_config_with_env(monkeypatch, {"ENV": "dev"})
 
         captured = capsys.readouterr()
-        # Check that the log contains the resolved values
+        # Check that the log entry exists
         assert "clarity.config.oauth_resolved" in captured.out, \
             f"Expected oauth_resolved log entry not found in stdout: {captured.out}"
+
+        # Check field names appear (basic structure check)
         assert "oauth_issuer_url" in captured.out
-        assert "jwks_url" in captured.out  # inc_95: JWKS URL now logged
+        assert "jwks_url" in captured.out
         assert "mcp_server_url" in captured.out
         assert "mcp_resource_url" in captured.out
+
+        # inc_95 hardening: assert resolved VALUES appear, not just field names.
+        # This proves the log is actionable for debugging — you can see the
+        # actual runtime value, not just "oauth_issuer_url=<something>".
+        assert config.OAUTH_ISSUER_URL in captured.out, \
+            f"Expected OAUTH_ISSUER_URL value {config.OAUTH_ISSUER_URL!r} in log"
+        assert config.CLARITY_JWKS_URL in captured.out, \
+            f"Expected CLARITY_JWKS_URL value {config.CLARITY_JWKS_URL!r} in log"
+        assert config.MCP_SERVER_URL in captured.out, \
+            f"Expected MCP_SERVER_URL value {config.MCP_SERVER_URL!r} in log"
+        assert config.MCP_RESOURCE_URL in captured.out, \
+            f"Expected MCP_RESOURCE_URL value {config.MCP_RESOURCE_URL!r} in log"
 
     def test_logged_urls_are_non_secret(self, monkeypatch):
         """Logged URLs contain no secrets or PII.
