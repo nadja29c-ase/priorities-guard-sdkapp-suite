@@ -3,11 +3,17 @@ Configuration for Priority Guardian MCP Server (Increment 01).
 
 Centralizes all MCP-specific settings including JWT validation,
 JWKS fetching, and OAuth client configuration.
+
+inc_97: Added unknown-ENV fail-fast guard and startup logging of resolved config.
 """
 
 import os
 from typing import Optional
 from urllib.parse import urlparse
+
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 # ============================================================================
@@ -15,6 +21,34 @@ from urllib.parse import urlparse
 # ============================================================================
 
 ENV = os.getenv("ENV", "dev")
+
+# Known ENV values — fail fast on unknown to prevent production guards being silently bypassed.
+# Production values trigger required-env guards; dev/test values use defaults.
+# Pattern copied from clarity/config.py (inc_94/95) to ensure parity across apps.
+_PRODUCTION_ENV_VALUES = {"production", "prod", "staging"}
+_DEV_ENV_VALUES = {"dev", "development", "local", "test", "ci"}
+_KNOWN_ENV_VALUES = _PRODUCTION_ENV_VALUES | _DEV_ENV_VALUES
+
+
+def _is_production_env(env: str) -> bool:
+    """Return True if env is a production-like environment.
+
+    Canonical predicate — use this everywhere instead of inline tuples.
+    Includes "prod" alias that PG uses, preventing ENV=prod from bypassing guards.
+    """
+    return env in _PRODUCTION_ENV_VALUES
+
+
+# Fail-fast: raise on unknown ENV to prevent guards being bypassed.
+# Without this, a typo like ENV=produciton silently runs in non-production mode,
+# disabling every production guard in this file (CORS, INTERNAL_API_SECRET,
+# _prod_url_invariants, RFC 8414 origin check).
+if ENV not in _KNOWN_ENV_VALUES:
+    raise RuntimeError(
+        f"Unknown ENV value {ENV!r}. "
+        f"Known values: {sorted(_KNOWN_ENV_VALUES)}. "
+        f"Refusing to start — this prevents production guards from being silently bypassed."
+    )
 
 
 # ============================================================================
@@ -40,7 +74,7 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 
     if required and value is None:
         # In production, critical configs must be set
-        if ENV in ("production", "prod", "staging"):
+        if _is_production_env(ENV):
             raise RuntimeError(
                 f"Required environment variable {key} not set. "
                 f"This is required in {ENV} environment."
@@ -135,7 +169,7 @@ INTERNAL_API_SECRET = get_env(
 
 # Fail-fast: INTERNAL_API_SECRET required in production
 # Without this, every request would silently 403 - better to fail at startup
-if ENV in ("production", "prod", "staging") and not INTERNAL_API_SECRET:
+if _is_production_env(ENV) and not INTERNAL_API_SECRET:
     raise RuntimeError(
         "INTERNAL_API_SECRET is required in production. "
         "Set ENV=dev to disable this check for local development."
@@ -197,7 +231,7 @@ if (_base_parsed.scheme, _base_parsed.netloc) != (_url_parsed.scheme, _url_parse
     )
 
 # Fail-fast: warn if OAUTH_ISSUER_BASE contains localhost in production
-if ENV in ("production", "prod", "staging") and "localhost" in OAUTH_ISSUER_BASE:
+if _is_production_env(ENV) and "localhost" in OAUTH_ISSUER_BASE:
     raise RuntimeError(
         "PG_OAUTH_ISSUER_BASE contains 'localhost' in production. "
         "Set to production URL (e.g., https://www.priority-guard.com)."
@@ -208,7 +242,7 @@ if ENV in ("production", "prod", "staging") and "localhost" in OAUTH_ISSUER_BASE
 # silently accepting them in production causes subtle failures (JWKS unreachable,
 # discovery publishes wrong URL, reconcile calls hit localhost). Fail loudly at
 # startup instead of serving a broken stack.
-if ENV in ("production", "prod", "staging"):
+if _is_production_env(ENV):
     _prod_url_invariants = {
         "PG_JWKS_URL": PG_JWKS_URL,
         "PG_MCP_SERVER_URL (MCP_SERVER_URL)": MCP_SERVER_URL,
@@ -242,7 +276,7 @@ SCOPES_SUPPORTED = ["pg.access"]
 # In dev, empty string allows all origins.
 CORS_ALLOWED_ORIGINS_RAW = get_env("CORS_ALLOWED_ORIGINS")
 
-if ENV in ("production", "prod", "staging") and not CORS_ALLOWED_ORIGINS_RAW:
+if _is_production_env(ENV) and not CORS_ALLOWED_ORIGINS_RAW:
     raise RuntimeError(
         "CORS_ALLOWED_ORIGINS must be explicitly set in production/staging. "
         "Example: 'https://chatgpt.com,https://chat.openai.com'"
@@ -276,3 +310,22 @@ MAX_MCP_BODY_SIZE_BYTES = int(get_env(
 
 # Log level
 LOG_LEVEL = get_env("LOG_LEVEL", default="INFO")
+
+
+# ============================================================================
+# Startup Logging — Resolved OAuth Config
+# ============================================================================
+# Log resolved OAuth config at import time to eliminate dashboard-vs-runtime ambiguity.
+# These URLs are non-secret (public discovery endpoints) — safe to log.
+# inc_97: Added after MindSort discovery drift diagnosis showed the value of
+# capturing resolved config at startup rather than inferring from dashboard.
+
+logger.info(
+    "pg.config.oauth_resolved",
+    pg_jwks_url=PG_JWKS_URL,
+    mcp_server_url=MCP_SERVER_URL,
+    mcp_resource_url=MCP_RESOURCE_URL,
+    oauth_issuer_url=OAUTH_ISSUER_URL,
+    oauth_issuer_base=OAUTH_ISSUER_BASE,
+    env=ENV,
+)
