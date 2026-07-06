@@ -1,5 +1,5 @@
 """
-Unit tests for widget render path observability (inc_98 + inc_99 + inc_100 hardening).
+Unit tests for widget render path observability (inc_98 → inc_101).
 
 Verifies that:
 - resource.read.* events fire at INFO level for production visibility
@@ -8,7 +8,8 @@ Verifies that:
 - URI sanitization works (query stripped, length capped)
 - Logged values contain no PII (URIs and lengths only)
 - Tool outputTemplate URI matches served resource URI (consistency guard)
-- inc_100: Opaque schemes redacted, userinfo stripped, non-dict _meta handled
+- inc_100: Userinfo stripped, non-dict _meta handled
+- inc_101: Allowlist closes scheme class, params guard, malformed port regression
 """
 
 import pytest
@@ -318,27 +319,37 @@ class TestOutputTemplateConsistency:
 
 
 class TestSanitizerInc100Fixes:
-    """Tests for inc_100 sanitizer fixes (High-severity bug fixes)."""
+    """Tests for inc_100/101 sanitizer fixes (High-severity bug fixes)."""
 
-    def test_opaque_schemes_redacted(self):
-        """data:, javascript:, vbscript: URIs have payload redacted.
+    def test_non_allowlisted_schemes_redacted(self):
+        """All non-allowlisted schemes have payload redacted.
 
-        inc_100: Prevents data URIs (could contain PII/images) from leaking to logs.
+        inc_101: Switched from blocklist to allowlist. Only http/https/ui/file
+        pass through; everything else is redacted. Closes the class.
 
-        Bug this test catches: data:image/png;base64,... logged in full.
-        Bug that would still pass: Rare opaque schemes not in the list.
+        Bug this test catches: Any scheme not in allowlist leaking payload.
+        Bug that would still pass: None — allowlist approach closes the class.
         """
         from mcp_server.priority_guardian.handlers.resources import _sanitize_uri_for_logging
 
-        # data: URI should be redacted
+        # Original blocklist schemes still redacted
         assert _sanitize_uri_for_logging("data:text/html,<h1>Hello</h1>") == "data:[redacted]"
-        assert _sanitize_uri_for_logging("data:image/png;base64,iVBORw0KGgo...") == "data:[redacted]"
-
-        # javascript: URI should be redacted
         assert _sanitize_uri_for_logging("javascript:alert('xss')") == "javascript:[redacted]"
-
-        # vbscript: URI should be redacted
         assert _sanitize_uri_for_logging("vbscript:msgbox('hello')") == "vbscript:[redacted]"
+
+        # inc_101: mailto: and blob: now also redacted (was: leaked in inc_100)
+        assert _sanitize_uri_for_logging("mailto:secret@example.com?subject=x") == "mailto:[redacted]"
+        assert _sanitize_uri_for_logging("blob:https://example.com/uuid-here") == "blob:[redacted]"
+
+        # Other opaque schemes
+        assert _sanitize_uri_for_logging("about:blank") == "about:[redacted]"
+        assert _sanitize_uri_for_logging("tel:+1234567890") == "tel:[redacted]"
+
+        # Allowlisted schemes pass through (with sanitization)
+        assert _sanitize_uri_for_logging("https://example.com/path") == "https://example.com/path"
+        assert _sanitize_uri_for_logging("http://example.com/path") == "http://example.com/path"
+        assert "ui:" in _sanitize_uri_for_logging("ui://widget/test.html")
+        assert "file:" in _sanitize_uri_for_logging("file:///path/to/file")
 
     def test_userinfo_stripped_from_netloc(self):
         """Userinfo (user:pass@) is stripped from logged URIs.
@@ -411,42 +422,75 @@ class TestSanitizerInc100Fixes:
         assert result is not None
         assert len(result) > 0
 
+    def test_malformed_port_returns_parse_error(self):
+        """Malformed port triggers [parse-error] — fails safe, not crash.
+
+        inc_101: Regression test for Codex Finding #2. Accessing parsed.port
+        raises ValueError for non-numeric ports; broad except catches it.
+
+        Bug this test catches: Crash on malformed port.
+        Bug that would still pass: Diagnostic detail lost (acceptable).
+        """
+        from mcp_server.priority_guardian.handlers.resources import _sanitize_uri_for_logging
+
+        # Non-numeric port → ValueError on parsed.port access → [parse-error]
+        result = _sanitize_uri_for_logging("http://example.com:bad/path")
+        assert result == "[parse-error]"
+
+        # Out-of-range port also triggers ValueError
+        result = _sanitize_uri_for_logging("http://example.com:99999/path")
+        assert result == "[parse-error]"
+
 
 class TestMetaExtractionInc100Fixes:
     """Tests for inc_100 _meta extraction fixes (Medium-severity bug fixes)."""
 
     @pytest.mark.asyncio
-    async def test_non_dict_meta_does_not_crash(self):
-        """Non-dict _meta (string, list, int) does not crash handler.
+    async def test_non_dict_meta_does_not_crash_and_generates_correlation_id(self):
+        """Non-dict _meta (string, list, int) does not crash and generates valid correlation_id.
 
-        inc_100: Fixed Medium-severity bug where non-dict _meta would crash
-        extract_or_generate_correlation_id.
+        inc_100: Fixed Medium-severity bug where non-dict _meta would crash.
+        inc_101: Extended to verify correlation_id is actually generated (Codex Finding #4).
 
-        Bug this test catches: Handler crashes on _meta="string".
-        Bug that would still pass: Handler works but logs wrong correlation_id.
+        Bug this test catches: Handler crashes on _meta="string", OR silently
+        logs without correlation_id.
+        Bug that would still pass: None — we verify both no-crash AND correlation_id.
         """
         from mcp_server.priority_guardian.handlers.resources import (
             handle_read_resource,
             WIDGET_URI,
         )
 
-        # _meta as string
+        # _meta as string — should not crash AND should generate correlation_id
         req = MagicMock()
         req.params.uri = WIDGET_URI
         req.params._meta = "not-a-dict"
-        # Should not raise
-        result = await handle_read_resource(req)
+        req.params.meta = None  # Ensure no fallback
+
+        with capture_logs() as cap_logs:
+            result = await handle_read_resource(req)
+
         assert result is not None
+        requested_logs = [l for l in cap_logs if l.get("event") == "resource.read.requested"]
+        assert len(requested_logs) == 1
+        assert "correlation_id" in requested_logs[0], "correlation_id should be generated for non-dict _meta"
+        assert len(requested_logs[0]["correlation_id"]) > 0, "Generated correlation_id should not be empty"
 
         # _meta as list
         req.params._meta = ["list", "of", "things"]
-        result = await handle_read_resource(req)
+        with capture_logs() as cap_logs:
+            result = await handle_read_resource(req)
         assert result is not None
+        requested_logs = [l for l in cap_logs if l.get("event") == "resource.read.requested"]
+        assert "correlation_id" in requested_logs[0]
 
         # _meta as int
         req.params._meta = 42
-        result = await handle_read_resource(req)
+        with capture_logs() as cap_logs:
+            result = await handle_read_resource(req)
         assert result is not None
+        requested_logs = [l for l in cap_logs if l.get("event") == "resource.read.requested"]
+        assert "correlation_id" in requested_logs[0]
 
     @pytest.mark.asyncio
     async def test_empty_dict_meta_used_not_fallthrough(self):
@@ -498,6 +542,51 @@ class TestMetaExtractionInc100Fixes:
 
         requested_logs = [l for l in cap_logs if l.get("event") == "resource.read.requested"]
         assert requested_logs[0]["correlation_id"] == "from-meta-attribute"
+
+
+class TestInvalidRequestGuard:
+    """Tests for inc_101 params guard (Codex Finding #3)."""
+
+    @pytest.mark.asyncio
+    async def test_params_none_returns_error_not_crash(self):
+        """params=None returns error result, does not crash.
+
+        inc_101: Guard against AttributeError when req.params is None.
+
+        Bug this test catches: Handler crashes with AttributeError.
+        Bug that would still pass: Error result has wrong format.
+        """
+        from mcp_server.priority_guardian.handlers.resources import handle_read_resource
+
+        req = MagicMock()
+        req.params = None  # Malformed request
+
+        with capture_logs() as cap_logs:
+            result = await handle_read_resource(req)
+
+        # Should return empty result with error, not crash
+        assert result is not None
+        assert len(result.contents) == 0
+
+        # Should log warning
+        warning_logs = [l for l in cap_logs if l.get("event") == "resource.read.invalid_request"]
+        assert len(warning_logs) == 1
+
+    @pytest.mark.asyncio
+    async def test_uri_none_returns_error_not_crash(self):
+        """params.uri=None returns error result, does not crash.
+
+        Bug this test catches: str(None) doesn't crash but logs "None" as URI.
+        """
+        from mcp_server.priority_guardian.handlers.resources import handle_read_resource
+
+        req = MagicMock()
+        req.params.uri = None  # Missing URI
+
+        # str(None) = "None" which won't match WIDGET_URI, returns empty
+        result = await handle_read_resource(req)
+        assert result is not None
+        assert len(result.contents) == 0
 
 
 class TestLogEventDistinguishability:

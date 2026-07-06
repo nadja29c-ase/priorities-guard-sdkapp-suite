@@ -26,14 +26,20 @@ logger = structlog.get_logger(__name__)
 _MAX_URI_LOG_LENGTH = 512
 
 
+# inc_101: Allowlist of schemes safe to log with path/components.
+# Everything else is redacted. Closes the class — no more whack-a-mole.
+_SAFE_SCHEMES = frozenset({"http", "https", "ui", "file"})
+
+
 def _sanitize_uri_for_logging(uri: str) -> str:
     """
     Sanitize URI for safe logging.
 
     inc_99: Defensive hygiene against pathological URIs from authenticated clients.
-    inc_100: Fixed two High-severity leaks from Codex review:
-      - Always strip query/fragment, even for non-netloc URIs (was: else uri)
-      - Strip userinfo from netloc (was: parsed.netloc includes user:pass)
+    inc_100: Strip query/fragment for all URIs, strip userinfo from netloc.
+    inc_101: Switched from blocklist to allowlist. Only http/https/ui/file pass
+             through with components; all other schemes (mailto:, blob:, data:,
+             javascript:, etc.) are redacted. Closes the class of PII leaks.
 
     Args:
         uri: Raw URI string from request
@@ -47,8 +53,9 @@ def _sanitize_uri_for_logging(uri: str) -> str:
     try:
         parsed = urlparse(uri)
 
-        # Handle opaque schemes (data:, javascript:, etc.) — don't log payload
-        if parsed.scheme in ("data", "javascript", "vbscript"):
+        # inc_101: Allowlist approach — only known-safe schemes pass through
+        # Everything else (mailto:, blob:, data:, javascript:, etc.) redacted
+        if parsed.scheme and parsed.scheme not in _SAFE_SCHEMES:
             return f"{parsed.scheme}:[redacted]"
 
         # Build sanitized netloc: hostname + port only (strips userinfo)
@@ -193,7 +200,16 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     Called by ChatGPT to load widget HTML, hydrate UI after tool call,
     or restore a widget (scroll, fullscreen, etc.).
     """
-    uri_str = str(req.params.uri)
+    # inc_101: Guard against malformed request (params=None or missing uri)
+    # Prevents AttributeError crash before reaching _meta guards
+    try:
+        uri_str = str(req.params.uri)
+    except (AttributeError, TypeError):
+        logger.warning("resource.read.invalid_request", error="params or uri missing")
+        return mcp_types.ReadResourceResult(
+            contents=[],
+            _meta={"error": "Invalid request: missing params or uri"},
+        )
 
     # inc_99: Extract correlation_id for log correlation with tools/call
     # This enables the binary verdict: correlate resources/read with tools/call in same session
