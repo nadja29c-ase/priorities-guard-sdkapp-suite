@@ -128,10 +128,15 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     """
     uri_str = str(req.params.uri)
 
-    logger.debug("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
+    # inc_98: Promoted to INFO for production observability.
+    # Enables binary verdict on widget render failures: if resources/read is absent
+    # in session logs but tools/call is present → host-side issue (ChatGPT didn't fetch).
+    logger.info("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
 
     if uri_str == WIDGET_URI:
-        logger.debug(
+        # inc_98: Promoted to INFO for production observability.
+        # Logs html_length (not content) — no PII, GDPR-safe.
+        logger.info(
             "resource.read.serving_widget",
             uri=uri_str,
             html_length=len(WIDGET_HTML),
@@ -167,7 +172,9 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
         ]
         return mcp_types.ReadResourceResult(contents=contents)
 
-    # Unknown resource
+    # Unknown resource — inc_98: log at INFO for observability
+    # If ChatGPT requests wrong URI, this log helps diagnose schema drift
+    logger.info("resource.read.unknown_uri", uri=uri_str)
     return mcp_types.ReadResourceResult(
         contents=[],
         _meta={"error": f"Unknown resource: {uri_str}"},
