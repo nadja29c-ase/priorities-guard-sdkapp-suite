@@ -31,9 +31,9 @@ def _sanitize_uri_for_logging(uri: str) -> str:
     Sanitize URI for safe logging.
 
     inc_99: Defensive hygiene against pathological URIs from authenticated clients.
-    - Strips query string and fragment (could contain tokens/PII)
-    - Caps length to prevent log bloat
-    - Preserves scheme, host, and path for diagnostic value
+    inc_100: Fixed two High-severity leaks from Codex review:
+      - Always strip query/fragment, even for non-netloc URIs (was: else uri)
+      - Strip userinfo from netloc (was: parsed.netloc includes user:pass)
 
     Args:
         uri: Raw URI string from request
@@ -41,13 +41,42 @@ def _sanitize_uri_for_logging(uri: str) -> str:
     Returns:
         Sanitized URI safe for production logs
     """
+    if not uri:
+        return "[empty]"
+
     try:
         parsed = urlparse(uri)
-        # Reconstruct without query/fragment
-        clean_uri = f"{parsed.scheme}://{parsed.netloc}{parsed.path}" if parsed.netloc else uri
+
+        # Handle opaque schemes (data:, javascript:, etc.) — don't log payload
+        if parsed.scheme in ("data", "javascript", "vbscript"):
+            return f"{parsed.scheme}:[redacted]"
+
+        # Build sanitized netloc: hostname + port only (strips userinfo)
+        # parsed.netloc includes userinfo; parsed.hostname excludes it
+        if parsed.hostname:
+            sanitized_netloc = parsed.hostname
+            if parsed.port:
+                sanitized_netloc += f":{parsed.port}"
+        else:
+            sanitized_netloc = ""
+
+        # Always reconstruct from components — NEVER fall back to raw uri
+        # This ensures query/fragment are stripped even for non-netloc URIs
+        if sanitized_netloc:
+            clean_uri = f"{parsed.scheme}://{sanitized_netloc}{parsed.path}"
+        elif parsed.scheme:
+            # Scheme but no netloc (e.g., ui:widget/path or file:///path)
+            clean_uri = f"{parsed.scheme}:{parsed.path}"
+        elif parsed.path:
+            # No scheme, just path (e.g., /path?token=x)
+            clean_uri = parsed.path
+        else:
+            # Unparseable — return safe placeholder
+            clean_uri = "[unparseable]"
+
     except Exception:
-        # If parsing fails, just use the raw string (capped)
-        clean_uri = uri
+        # If parsing fails completely, return safe placeholder (not raw uri!)
+        clean_uri = "[parse-error]"
 
     # Cap length
     if len(clean_uri) > _MAX_URI_LOG_LENGTH:
@@ -168,7 +197,17 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
 
     # inc_99: Extract correlation_id for log correlation with tools/call
     # This enables the binary verdict: correlate resources/read with tools/call in same session
-    meta = getattr(req.params, '_meta', None) or getattr(req.params, 'meta', None)
+    # inc_100: Fixed two Medium-severity bugs from Codex review:
+    #   - Non-dict _meta (e.g., string, list) would crash extract_or_generate_correlation_id
+    #   - `or` truthiness made empty dict {} fall through to `meta` (semantic mismatch)
+    # Now: explicit isinstance check, explicit None precedence
+    _meta = getattr(req.params, '_meta', None)
+    if isinstance(_meta, dict):
+        meta = _meta
+    else:
+        # _meta absent or non-dict — try `meta` (some MCP impls use this)
+        meta_attr = getattr(req.params, 'meta', None)
+        meta = meta_attr if isinstance(meta_attr, dict) else None
     correlation_id = extract_or_generate_correlation_id(meta)
 
     # inc_99: Sanitize URI for logging (strip query/fragment, cap length)

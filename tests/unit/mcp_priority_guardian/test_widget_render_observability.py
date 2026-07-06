@@ -1,5 +1,5 @@
 """
-Unit tests for widget render path observability (inc_98 + inc_99 hardening).
+Unit tests for widget render path observability (inc_98 + inc_99 + inc_100 hardening).
 
 Verifies that:
 - resource.read.* events fire at INFO level for production visibility
@@ -8,6 +8,7 @@ Verifies that:
 - URI sanitization works (query stripped, length capped)
 - Logged values contain no PII (URIs and lengths only)
 - Tool outputTemplate URI matches served resource URI (consistency guard)
+- inc_100: Opaque schemes redacted, userinfo stripped, non-dict _meta handled
 """
 
 import pytest
@@ -314,6 +315,189 @@ class TestOutputTemplateConsistency:
         for name, tool in widget_tools:
             assert tool.widget_uri == WIDGET_URI, \
                 f"Tool {name} uses {tool.widget_uri!r}, expected {WIDGET_URI!r}"
+
+
+class TestSanitizerInc100Fixes:
+    """Tests for inc_100 sanitizer fixes (High-severity bug fixes)."""
+
+    def test_opaque_schemes_redacted(self):
+        """data:, javascript:, vbscript: URIs have payload redacted.
+
+        inc_100: Prevents data URIs (could contain PII/images) from leaking to logs.
+
+        Bug this test catches: data:image/png;base64,... logged in full.
+        Bug that would still pass: Rare opaque schemes not in the list.
+        """
+        from mcp_server.priority_guardian.handlers.resources import _sanitize_uri_for_logging
+
+        # data: URI should be redacted
+        assert _sanitize_uri_for_logging("data:text/html,<h1>Hello</h1>") == "data:[redacted]"
+        assert _sanitize_uri_for_logging("data:image/png;base64,iVBORw0KGgo...") == "data:[redacted]"
+
+        # javascript: URI should be redacted
+        assert _sanitize_uri_for_logging("javascript:alert('xss')") == "javascript:[redacted]"
+
+        # vbscript: URI should be redacted
+        assert _sanitize_uri_for_logging("vbscript:msgbox('hello')") == "vbscript:[redacted]"
+
+    def test_userinfo_stripped_from_netloc(self):
+        """Userinfo (user:pass@) is stripped from logged URIs.
+
+        inc_100: Fixed High-severity bug where parsed.netloc includes userinfo.
+        Now uses parsed.hostname + parsed.port to exclude credentials.
+
+        Bug this test catches: user:password@ logged to production.
+        Bug that would still pass: Port incorrectly handled after stripping userinfo.
+        """
+        from mcp_server.priority_guardian.handlers.resources import _sanitize_uri_for_logging
+
+        # Userinfo should be stripped
+        result = _sanitize_uri_for_logging("https://user:password@example.com/path")
+        assert "user" not in result
+        assert "password" not in result
+        assert "example.com/path" in result
+
+        # Port should be preserved
+        result = _sanitize_uri_for_logging("https://user:pass@example.com:8080/path")
+        assert "user" not in result
+        assert "pass" not in result
+        assert "example.com:8080/path" in result
+
+    def test_non_netloc_uri_query_stripped(self):
+        """Non-netloc URIs (ui://...) still have query/fragment stripped.
+
+        inc_100: Fixed High-severity bug where `else uri` returned raw URI.
+        Now reconstructs from components for ALL URI types.
+
+        Bug this test catches: ui://widget/foo?token=secret logged with token.
+        Bug that would still pass: Fragment stripped but query not stripped for ui://.
+        """
+        from mcp_server.priority_guardian.handlers.resources import _sanitize_uri_for_logging
+
+        # ui:// scheme with query should strip query
+        result = _sanitize_uri_for_logging("ui://widget/test.html?token=secret")
+        assert "token=secret" not in result
+        assert "?" not in result
+        # Should still have the path
+        assert "ui:" in result
+        assert "/widget/test.html" in result
+
+        # file:/// with query/fragment
+        result = _sanitize_uri_for_logging("file:///path/to/file?secret=123#anchor")
+        assert "secret=123" not in result
+        assert "#anchor" not in result
+
+    def test_empty_uri_safe_placeholder(self):
+        """Empty URI returns safe placeholder, not empty string.
+
+        Bug this test catches: Empty string logged, confusing diagnostics.
+        """
+        from mcp_server.priority_guardian.handlers.resources import _sanitize_uri_for_logging
+
+        assert _sanitize_uri_for_logging("") == "[empty]"
+        assert _sanitize_uri_for_logging(None) == "[empty]"  # Falsy
+
+    def test_unparseable_uri_safe_placeholder(self):
+        """Completely unparseable URI returns safe placeholder.
+
+        Bug this test catches: Crash on malformed URI or raw URI leaked.
+        """
+        from mcp_server.priority_guardian.handlers.resources import _sanitize_uri_for_logging
+
+        # URI with no scheme, no path — edge case
+        # urlparse("") gives all empty components
+        result = _sanitize_uri_for_logging("   ")  # Whitespace-only
+        # Should not crash, should return something safe
+        assert result is not None
+        assert len(result) > 0
+
+
+class TestMetaExtractionInc100Fixes:
+    """Tests for inc_100 _meta extraction fixes (Medium-severity bug fixes)."""
+
+    @pytest.mark.asyncio
+    async def test_non_dict_meta_does_not_crash(self):
+        """Non-dict _meta (string, list, int) does not crash handler.
+
+        inc_100: Fixed Medium-severity bug where non-dict _meta would crash
+        extract_or_generate_correlation_id.
+
+        Bug this test catches: Handler crashes on _meta="string".
+        Bug that would still pass: Handler works but logs wrong correlation_id.
+        """
+        from mcp_server.priority_guardian.handlers.resources import (
+            handle_read_resource,
+            WIDGET_URI,
+        )
+
+        # _meta as string
+        req = MagicMock()
+        req.params.uri = WIDGET_URI
+        req.params._meta = "not-a-dict"
+        # Should not raise
+        result = await handle_read_resource(req)
+        assert result is not None
+
+        # _meta as list
+        req.params._meta = ["list", "of", "things"]
+        result = await handle_read_resource(req)
+        assert result is not None
+
+        # _meta as int
+        req.params._meta = 42
+        result = await handle_read_resource(req)
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_empty_dict_meta_used_not_fallthrough(self):
+        """Empty dict _meta is used, not fallen through to `meta`.
+
+        inc_100: Fixed Medium-severity bug where `or` truthiness made
+        empty dict {} fall through to `meta` attribute.
+
+        Bug this test catches: Empty _meta={} ignored, uses meta instead.
+        Bug that would still pass: Non-empty _meta works correctly.
+        """
+        from mcp_server.priority_guardian.handlers.resources import (
+            handle_read_resource,
+            WIDGET_URI,
+        )
+
+        req = MagicMock()
+        req.params.uri = WIDGET_URI
+        req.params._meta = {}  # Empty dict — should be used (generates new correlation_id)
+        req.params.meta = {"correlation_id": "should-not-be-used"}
+
+        with capture_logs() as cap_logs:
+            await handle_read_resource(req)
+
+        requested_logs = [l for l in cap_logs if l.get("event") == "resource.read.requested"]
+        # Should NOT use the meta.correlation_id since _meta is present (even if empty)
+        # It should generate a new correlation_id
+        assert requested_logs[0]["correlation_id"] != "should-not-be-used"
+
+    @pytest.mark.asyncio
+    async def test_meta_attribute_used_when_underscore_meta_absent(self):
+        """When _meta is absent, `meta` attribute is used.
+
+        Bug this test catches: meta attribute ignored even when _meta absent.
+        """
+        from mcp_server.priority_guardian.handlers.resources import (
+            handle_read_resource,
+            WIDGET_URI,
+        )
+
+        req = MagicMock()
+        req.params.uri = WIDGET_URI
+        # No _meta attribute at all
+        del req.params._meta
+        req.params.meta = {"correlation_id": "from-meta-attribute"}
+
+        with capture_logs() as cap_logs:
+            await handle_read_resource(req)
+
+        requested_logs = [l for l in cap_logs if l.get("event") == "resource.read.requested"]
+        assert requested_logs[0]["correlation_id"] == "from-meta-attribute"
 
 
 class TestLogEventDistinguishability:
