@@ -104,6 +104,7 @@ class TestCORSConfiguration:
             # Other required production env vars (to reach the CORS guard)
             "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
             "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+            "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
@@ -128,6 +129,7 @@ class TestCORSConfiguration:
             # Other required production env vars (to reach the CORS guard)
             "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
             "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+            "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
@@ -151,6 +153,7 @@ class TestCORSConfiguration:
             # Other required production env vars
             "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
             "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+            "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):
@@ -212,6 +215,7 @@ class TestCORSConfiguration:
             # Other required production env vars
             "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
             "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+            "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
         }
 
         with patch.dict(os.environ, env_vars, clear=False):

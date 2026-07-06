@@ -106,6 +106,27 @@ CLARITY_JWKS_URL = get_env(
     default="http://localhost:8000/oauth/pg/jwks"
 )
 
+# Clarity's expected production JWKS URL (ADR_005 Shape #2: /oauth/mindsort endpoints)
+# This is app-specific — derived from mindsort_discovery.py (backend AS metadata).
+# The JWKS URL is the JWT trust anchor — if it falls to dev default in production,
+# auth fails closed (can't fetch keys from localhost) or validates against wrong keys.
+_CLARITY_EXPECTED_JWKS_URL = "https://www.priority-guard.com/oauth/mindsort/jwks"
+
+# Fail-fast: CLARITY_JWKS_URL must be the exact expected value in production/staging
+# This guard is assert-known-good (exact match), not blocklist — catches ANY wrong value.
+# Without this guard, a wrong JWKS URL silently breaks JWT validation:
+# - localhost default in prod → can't fetch keys → auth fails closed (full outage)
+# - wrong production JWKS → validates against wrong key set → potential security issue
+if _is_production_env(ENV) and CLARITY_JWKS_URL != _CLARITY_EXPECTED_JWKS_URL:
+    raise RuntimeError(
+        f"CLARITY_JWKS_URL must be {_CLARITY_EXPECTED_JWKS_URL!r} in production/staging. "
+        f"Got: {CLARITY_JWKS_URL!r}. "
+        f"Known drift vectors: localhost defaults (http://localhost:8000/oauth/pg/jwks), "
+        f"wrong path (/oauth/pg/jwks instead of /oauth/mindsort/jwks). "
+        f"See doc/ADR_005_platform_oauth_discovery_contracts.md Shape #2. "
+        f"ENV={ENV!r}."
+    )
+
 # Expected JWT issuer (iss claim)
 # NOTE: Uses domain-only issuer to match existing Focused pattern.
 # Path-qualified issuer (e.g., .../oauth/pg) is a future hardening task.
@@ -337,6 +358,7 @@ CORS_ALLOWED_ORIGINS: list[str] = (
 logger.info(
     "clarity.config.oauth_resolved",
     oauth_issuer_url=OAUTH_ISSUER_URL,
+    jwks_url=CLARITY_JWKS_URL,
     mcp_server_url=MCP_SERVER_URL,
     mcp_resource_url=MCP_RESOURCE_URL,
     env=ENV,

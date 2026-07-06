@@ -35,6 +35,8 @@ class TestBackendUrlGuard:
             _reimport_config_with_env(monkeypatch, {
                 "ENV": "production",
                 "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
+                # Set JWKS to valid value to reach BACKEND_URL guard
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
                 # CLARITY_BACKEND_URL not set -> falls to localhost default
             })
 
@@ -48,6 +50,8 @@ class TestBackendUrlGuard:
             _reimport_config_with_env(monkeypatch, {
                 "ENV": "prod",  # The alias that was missing
                 "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
+                # Set JWKS to valid value to reach BACKEND_URL guard
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
                 # CLARITY_BACKEND_URL not set -> falls to localhost default
             })
 
@@ -57,6 +61,8 @@ class TestBackendUrlGuard:
             _reimport_config_with_env(monkeypatch, {
                 "ENV": "staging",
                 "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
+                # Set JWKS to valid value to reach BACKEND_URL guard
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
                 # CLARITY_BACKEND_URL not set -> falls to localhost default
             })
 
@@ -68,6 +74,7 @@ class TestBackendUrlGuard:
             "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
             "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
             "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+            "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
         })
         assert config.BACKEND_URL == "https://www.priority-guard.com"
 
@@ -117,6 +124,7 @@ class TestUnknownEnvGuard:
                 "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
                 "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
                 "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
             })
             assert config.ENV == env_val
             assert config.IS_DEV is False
@@ -144,6 +152,7 @@ class TestProductionPredicateParity:
             "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
             "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
             "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+            "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
         })
         assert config_prod.IS_DEV is False
 
@@ -163,10 +172,12 @@ class TestOAuthIssuerUrlGuard:
     EXPECTED_ISSUER = "https://www.priority-guard.com/oauth/mindsort"
 
     # Base production env vars (all required guards satisfied)
+    # inc_95: CLARITY_JWKS_URL added to pass JWKS guard (fires before OAUTH_ISSUER_URL guard)
     _PROD_BASE = {
         "ENV": "production",
         "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
         "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+        "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
     }
 
     def test_prod_rejects_localhost_default(self, monkeypatch):
@@ -245,6 +256,7 @@ class TestOAuthIssuerUrlGuard:
                 "ENV": "staging",
                 "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
                 "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
                 "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
             })
 
@@ -255,6 +267,7 @@ class TestOAuthIssuerUrlGuard:
                 "ENV": "prod",
                 "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
                 "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks",
                 "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
             })
 
@@ -280,6 +293,157 @@ class TestOAuthIssuerUrlGuard:
         assert config.OAUTH_ISSUER_URL == "https://example.com/anything"
 
 
+class TestJwksUrlGuard:
+    """Tests for CLARITY_JWKS_URL exact-value assertion in production.
+
+    inc_95: Guard is assert-known-good (exact match), not blocklist.
+    Expected production value: https://www.priority-guard.com/oauth/mindsort/jwks
+    (ADR_005 Shape #2 for MindSort-OpenAI).
+
+    JWKS URL is the JWT trust anchor — if wrong in production:
+    - localhost default → can't fetch keys → auth fails closed (full outage)
+    - wrong production URL → validates against wrong key set → security issue
+
+    For each test, we document what bug would still pass it — this proves
+    the test is assert-known-good, not blocklist.
+    """
+
+    # The expected production value per ADR_005 Shape #2
+    EXPECTED_JWKS_URL = "https://www.priority-guard.com/oauth/mindsort/jwks"
+
+    # Base production env vars (all required guards satisfied)
+    _PROD_BASE = {
+        "ENV": "production",
+        "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
+        "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+        "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+    }
+
+    def test_prod_rejects_localhost_default(self, monkeypatch):
+        """Production rejects localhost dev-default CLARITY_JWKS_URL.
+
+        Bug this test catches: env var not set, falls to localhost default.
+        Bug that would still pass: any non-localhost wrong value.
+        """
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                **self._PROD_BASE,
+                # CLARITY_JWKS_URL not set -> falls to localhost default
+            })
+
+    def test_prod_rejects_oauth_pg_path(self, monkeypatch):
+        """Production rejects /oauth/pg/jwks path (wrong for Clarity).
+
+        Bug this test catches: using PG's JWKS path instead of MindSort's.
+        Bug that would still pass: any other non-expected path.
+        """
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                **self._PROD_BASE,
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/pg/jwks",
+            })
+
+    def test_prod_rejects_bare_domain(self, monkeypatch):
+        """Production rejects bare domain without path.
+
+        Bug this test catches: JWKS URL missing the path entirely.
+        Bug that would still pass: any path-qualified wrong value.
+        """
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                **self._PROD_BASE,
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/jwks",
+            })
+
+    def test_prod_rejects_arbitrary_wrong_value(self, monkeypatch):
+        """Production rejects any arbitrary wrong value (proves assert-known-good).
+
+        Bug this test catches: any value that's not the expected one.
+        Bug that would still pass: NONE — this proves the guard is exact-match,
+        not a blocklist of known-bad values.
+        """
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                **self._PROD_BASE,
+                "CLARITY_JWKS_URL": "https://example.com/.well-known/jwks.json",
+            })
+
+    def test_prod_rejects_trailing_slash_variant(self, monkeypatch):
+        """Production rejects trailing-slash variant (exact match required).
+
+        Bug this test catches: trailing slash typo in env var.
+        Bug that would still pass: any other typo/variant.
+        """
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                **self._PROD_BASE,
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/mindsort/jwks/",
+            })
+
+    def test_prod_rejects_http_instead_of_https(self, monkeypatch):
+        """Production rejects http:// (must be https://).
+
+        Bug this test catches: http scheme typo.
+        Bug that would still pass: any other scheme/domain issue.
+        """
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                **self._PROD_BASE,
+                "CLARITY_JWKS_URL": "http://www.priority-guard.com/oauth/mindsort/jwks",
+            })
+
+    def test_prod_accepts_exact_expected_value(self, monkeypatch):
+        """Production accepts the exact expected CLARITY_JWKS_URL."""
+        config = _reimport_config_with_env(monkeypatch, {
+            **self._PROD_BASE,
+            "CLARITY_JWKS_URL": self.EXPECTED_JWKS_URL,
+        })
+        assert config.CLARITY_JWKS_URL == self.EXPECTED_JWKS_URL
+
+    def test_staging_also_enforces_guard(self, monkeypatch):
+        """Staging environment also enforces the CLARITY_JWKS_URL guard."""
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                "ENV": "staging",
+                "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
+                "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+                "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/pg/jwks",
+            })
+
+    def test_prod_alias_also_enforces_guard(self, monkeypatch):
+        """ENV=prod (alias) also enforces the CLARITY_JWKS_URL guard."""
+        with pytest.raises(RuntimeError, match="CLARITY_JWKS_URL must be"):
+            _reimport_config_with_env(monkeypatch, {
+                "ENV": "prod",
+                "CORS_ALLOWED_ORIGINS": "https://chatgpt.com",
+                "CLARITY_BACKEND_URL": "https://www.priority-guard.com",
+                "CLARITY_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/mindsort",
+                "CLARITY_JWKS_URL": "https://www.priority-guard.com/oauth/pg/jwks",
+            })
+
+    def test_dev_allows_localhost_default(self, monkeypatch):
+        """Dev environment allows localhost JWKS URL without failing.
+
+        This is critical: dev legitimately uses localhost defaults for local
+        testing. The guard must NOT fire in dev.
+        """
+        config = _reimport_config_with_env(monkeypatch, {
+            "ENV": "dev",
+            # No CLARITY_JWKS_URL set — uses localhost default
+        })
+        assert config.ENV == "dev"
+        assert "localhost" in config.CLARITY_JWKS_URL
+
+    def test_test_env_allows_any_value(self, monkeypatch):
+        """Test environment allows any CLARITY_JWKS_URL without failing."""
+        config = _reimport_config_with_env(monkeypatch, {
+            "ENV": "test",
+            "CLARITY_JWKS_URL": "https://example.com/any/jwks",
+        })
+        assert config.CLARITY_JWKS_URL == "https://example.com/any/jwks"
+
+
 class TestOAuthConfigLogging:
     """Tests for startup logging of resolved OAuth config.
 
@@ -291,6 +455,7 @@ class TestOAuthConfigLogging:
         """Startup logging emits resolved OAuth URLs.
 
         Structlog logs to stdout, so we capture stdout instead of using caplog.
+        inc_95: Extended to include jwks_url.
         """
         _reimport_config_with_env(monkeypatch, {"ENV": "dev"})
 
@@ -299,24 +464,27 @@ class TestOAuthConfigLogging:
         assert "clarity.config.oauth_resolved" in captured.out, \
             f"Expected oauth_resolved log entry not found in stdout: {captured.out}"
         assert "oauth_issuer_url" in captured.out
+        assert "jwks_url" in captured.out  # inc_95: JWKS URL now logged
         assert "mcp_server_url" in captured.out
         assert "mcp_resource_url" in captured.out
 
     def test_logged_urls_are_non_secret(self, monkeypatch):
         """Logged URLs contain no secrets or PII.
 
-        The logged values (OAUTH_ISSUER_URL, MCP_SERVER_URL, MCP_RESOURCE_URL)
-        are public discovery endpoint URLs, not secrets.
+        The logged values (OAUTH_ISSUER_URL, CLARITY_JWKS_URL, MCP_SERVER_URL,
+        MCP_RESOURCE_URL) are public discovery endpoint URLs, not secrets.
+        inc_95: Extended to include CLARITY_JWKS_URL.
         """
         config = _reimport_config_with_env(monkeypatch, {"ENV": "dev"})
 
         # These are public URLs, not secrets
         assert "localhost" in config.OAUTH_ISSUER_URL or "priority-guard" in config.OAUTH_ISSUER_URL
+        assert "localhost" in config.CLARITY_JWKS_URL or "priority-guard" in config.CLARITY_JWKS_URL
         assert "localhost" in config.MCP_SERVER_URL or "priority-guard" in config.MCP_SERVER_URL
         assert "localhost" in config.MCP_RESOURCE_URL or "priority-guard" in config.MCP_RESOURCE_URL
 
         # None of these should contain secret patterns
-        for url in [config.OAUTH_ISSUER_URL, config.MCP_SERVER_URL, config.MCP_RESOURCE_URL]:
+        for url in [config.OAUTH_ISSUER_URL, config.CLARITY_JWKS_URL, config.MCP_SERVER_URL, config.MCP_RESOURCE_URL]:
             assert "password" not in url.lower()
             assert "secret" not in url.lower()
             assert "token" not in url.lower()
