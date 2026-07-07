@@ -106,7 +106,7 @@ class TestAddPriorityTool:
     async def test_success_returns_fresh_list(
         self, user_id, correlation_id, mock_create_response, mock_fresh_priority_list
     ):
-        """Success response returns fresh priority list with widget template."""
+        """Success response returns fresh priority list (CRUD tool, no widget binding)."""
         from mcp_server.priority_guardian.tools.widget_tools.add_priority import handle
 
         with patch(
@@ -114,7 +114,7 @@ class TestAddPriorityTool:
             new_callable=AsyncMock,
             return_value=mock_create_response(keyword="P1"),
         ), patch(
-            "mcp_server.priority_guardian.http_client.backend_get",
+            "mcp_server.priority_guardian.tools.widget_tools.add_priority.backend_get",
             new_callable=AsyncMock,
             return_value=mock_fresh_priority_list(),
         ):
@@ -132,8 +132,9 @@ class TestAddPriorityTool:
         assert result.structuredContent["success"] is True
         assert "data" in result.structuredContent
         assert "priorities" in result.structuredContent["data"]
-        assert "_meta" in result.structuredContent
-        assert result.structuredContent["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard.html"
+        # CRUD tools (widget_uri=None) don't return widget bindings
+        assert "_meta" not in result.structuredContent
+        assert result.meta is None
 
     @pytest.mark.asyncio
     async def test_missing_name_raises_tool_usage_error(self, user_id, correlation_id):
