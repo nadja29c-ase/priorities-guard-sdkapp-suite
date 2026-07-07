@@ -139,10 +139,15 @@ Single transformation at the dispatcher chokepoint (`mindsort_claude/handlers/to
 1. **Guidance → `content`.** Move `assistant_guidance` out of `structuredContent` into a `content` text block.
    - Two input shapes exist: flat string (success paths) and nested `{"action","instruction"}` (some error paths).
    - **Normalization (decided):** render `instruction` only. **Drop `action`** — `ASK_CLARIFYING` etc. is internal control metadata, not model-facing prose.
-2. **Strip `openai/*` from `_meta`:** `openai/outputTemplate`, `openai/toolInvocation/*`, `openai/widgetAccessible`, `openai/resultCanProduceWidget`.
-3. **Discriminate, don't blanket-strip `_meta`.** Preserve non-OpenAI data keys. Canonical example: `read_board_before_editing` returns `_meta={saved_board_hash, openai/toolInvocation/*}` — keep `saved_board_hash`, strip the rest.
-4. **Set top-level widget linking:** `_meta.ui.resourceUri` + `_meta.ui.domain` (see §5).
-5. **Leave `structuredContent` as clean widget-only data.**
+2. **Model-visible board projection (Group A tools).** Surface a compact, model-actionable board projection (cluster/subcluster names + item counts, bounded by `MAX_PROJECTION_ITEMS=10`) into `content` for tools where the model must act on board structure:
+   - **Group A (model MUST see structure):** `read_board_before_editing`, `edit_board` — the model needs cluster names to target edits.
+   - **Group B (widget-display only):** `organize_thoughts`, `load_saved_board`, `start_prioritization_flow` — guidance tells model not to re-list; full data is widget-only.
+   - Do NOT surface full `clusters` array (token cost). The projection is bounded and structural only.
+   - **Platform divergence:** Claude reads `content` only; `structuredContent` is widget-only (inverse of ChatGPT where the model sees `structuredContent`).
+3. **Strip `openai/*` from `_meta`:** `openai/outputTemplate`, `openai/toolInvocation/*`, `openai/widgetAccessible`, `openai/resultCanProduceWidget`.
+4. **Discriminate, don't blanket-strip `_meta`.** Preserve non-OpenAI data keys. Canonical example: `read_board_before_editing` returns `_meta={saved_board_hash, openai/toolInvocation/*}` — keep `saved_board_hash`, strip the rest.
+5. **Set top-level widget linking:** `_meta.ui.resourceUri` + `_meta.ui.domain` (see §5).
+6. **Leave `structuredContent` as clean widget-only data.**
 
 The shared `handle()` bodies are not modified. The adapter rewrites their output. This is the "import by reference + adapt tail" approach — the Claude module depends on `clarity/` as its source of truth for all business logic.
 

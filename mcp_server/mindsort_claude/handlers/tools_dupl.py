@@ -153,7 +153,7 @@ async def call_tool_request(req: mcp_types.CallToolRequest) -> mcp_types.CallToo
         and "resourceUri" in result.meta["ui"]
     )
 
-    result = adapt_tool_result(result)
+    result = adapt_tool_result(result, tool_name=name)
 
     # Widget-0b: inject Claude widget URI for widget-producing tools
     # that had a widget URI on entry (pure translation, no behavior change).

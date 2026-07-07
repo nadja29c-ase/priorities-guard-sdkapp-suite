@@ -1465,6 +1465,326 @@ print(repr(shim.REBOUND_GLOBALS))
     )
 
 
+# ============================================================================
+# MindSort-Claude Model-Visible Channel Tests (inc_model_visible_channel)
+# ============================================================================
+
+
+def test_compact_projection_from_cluster_names():
+    """
+    _build_compact_board_projection builds projection from cluster_names.
+
+    Bug this catches: projection function returns None when cluster_names present.
+    """
+    from mcp_server.mindsort_claude.response_adapter_dupl import _build_compact_board_projection
+
+    structured = {
+        "cluster_names": ["Work", "Personal", "Ideas"],
+        "clusters": [],  # cluster_names takes precedence
+    }
+
+    projection = _build_compact_board_projection(structured)
+
+    assert projection is not None
+    assert "Board structure:" in projection
+    assert "- Work" in projection
+    assert "- Personal" in projection
+    assert "- Ideas" in projection
+
+
+def test_compact_projection_from_full_clusters():
+    """
+    _build_compact_board_projection builds projection from clusters with item counts.
+
+    Bug this catches: projection fails when only clusters (not cluster_names) present.
+    """
+    from mcp_server.mindsort_claude.response_adapter_dupl import _build_compact_board_projection
+
+    structured = {
+        "clusters": [
+            {"name": "Work", "items": ["Task 1", "Task 2", "Task 3"]},
+            {"name": "Personal", "items": ["Buy milk"]},
+        ],
+    }
+
+    projection = _build_compact_board_projection(structured)
+
+    assert projection is not None
+    assert "Board structure:" in projection
+    assert "Work (3 items)" in projection
+    assert "Personal (1 items)" in projection
+
+
+def test_compact_projection_includes_subclusters():
+    """
+    _build_compact_board_projection includes subcluster names when present.
+
+    Bug this catches: subclusters silently dropped from projection.
+    """
+    from mcp_server.mindsort_claude.response_adapter_dupl import _build_compact_board_projection
+
+    structured = {
+        "clusters": [
+            {
+                "name": "Work",
+                "items": ["Task 1", "Task 2"],
+                "subclusters": [
+                    {"name": "Urgent"},
+                    {"name": "Low Priority"},
+                ],
+            },
+        ],
+    }
+
+    projection = _build_compact_board_projection(structured)
+
+    assert projection is not None
+    assert "Urgent" in projection
+    assert "Low Priority" in projection
+    assert "subclusters:" in projection
+
+
+def test_compact_projection_bounded_by_max():
+    """
+    _build_compact_board_projection respects MAX_PROJECTION_ITEMS bound.
+
+    Bug this catches: unbounded projection bloats tokens on large boards.
+    """
+    from mcp_server.mindsort_claude.response_adapter_dupl import (
+        _build_compact_board_projection,
+        MAX_PROJECTION_ITEMS,
+    )
+
+    # Create more clusters than MAX_PROJECTION_ITEMS
+    cluster_names = [f"Cluster {i}" for i in range(MAX_PROJECTION_ITEMS + 5)]
+
+    structured = {"cluster_names": cluster_names}
+
+    projection = _build_compact_board_projection(structured)
+
+    assert projection is not None
+    # Should show truncation indicator
+    assert "... and 5 more clusters" in projection
+    # Should NOT contain all clusters
+    assert f"Cluster {MAX_PROJECTION_ITEMS + 1}" not in projection
+
+
+def test_compact_projection_empty_board_returns_none():
+    """
+    _build_compact_board_projection returns None for empty board.
+
+    Bug this catches: empty string returned instead of None.
+    """
+    from mcp_server.mindsort_claude.response_adapter_dupl import _build_compact_board_projection
+
+    # Empty board: no cluster_names, no clusters
+    structured = {}
+    assert _build_compact_board_projection(structured) is None
+
+    # Also test explicitly empty lists
+    structured = {"cluster_names": [], "clusters": []}
+    assert _build_compact_board_projection(structured) is None
+
+
+def test_adapter_surfaces_projection_for_group_a():
+    """
+    adapt_tool_result surfaces board projection into content for Group A tools.
+
+    Bug this catches: Group A tools return empty content, model can't target edits.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "clusters": [
+                {"name": "Work", "items": ["Task 1", "Task 2"]},
+                {"name": "Personal", "items": ["Buy milk"]},
+            ],
+            "assistant_guidance": "Board loaded.",
+        },
+        isError=False,
+    )
+
+    # read_board_before_editing is Group A
+    adapted = adapt_tool_result(original, tool_name="read_board_before_editing")
+
+    # Content should contain guidance AND projection
+    assert len(adapted.content) == 1
+    content_text = adapted.content[0].text
+    assert "Board loaded." in content_text
+    assert "Board structure:" in content_text
+    assert "Work" in content_text
+
+
+def test_adapter_surfaces_projection_for_edit_board():
+    """
+    adapt_tool_result surfaces board projection for edit_board (Group A).
+
+    Bug this catches: edit_board treated as Group B, model can't see board structure.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "cluster_names": ["Work", "Personal"],
+            "assistant_guidance": "Edit complete.",
+        },
+        isError=False,
+    )
+
+    adapted = adapt_tool_result(original, tool_name="edit_board")
+
+    content_text = adapted.content[0].text
+    assert "Board structure:" in content_text
+    assert "Work" in content_text
+    assert "Personal" in content_text
+
+
+def test_adapter_no_projection_for_group_b():
+    """
+    adapt_tool_result does NOT surface projection for Group B tools.
+
+    Bug this catches: projection added to organize_thoughts, bloating tokens unnecessarily.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "clusters": [
+                {"name": "Work", "items": ["Task 1"]},
+            ],
+            "assistant_guidance": "Board organized.",
+        },
+        isError=False,
+    )
+
+    # organize_thoughts is Group B
+    adapted = adapt_tool_result(original, tool_name="organize_thoughts")
+
+    content_text = adapted.content[0].text
+    # Should have guidance, but NOT projection
+    assert "Board organized." in content_text
+    assert "Board structure:" not in content_text
+
+
+def test_adapter_no_projection_for_load_saved_board():
+    """
+    adapt_tool_result does NOT surface projection for load_saved_board (Group B).
+
+    Bug this catches: Group B tools leaking projection.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "clusters": [{"name": "Ideas", "items": ["A", "B"]}],
+            "assistant_guidance": "Board loaded for display.",
+        },
+        isError=False,
+    )
+
+    adapted = adapt_tool_result(original, tool_name="load_saved_board")
+
+    content_text = adapted.content[0].text
+    assert "Board structure:" not in content_text
+
+
+def test_adapter_no_projection_when_no_tool_name():
+    """
+    adapt_tool_result does NOT surface projection when tool_name is None.
+
+    Bug this catches: default behavior surfaces projection for all tools.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "clusters": [{"name": "Work", "items": ["Task"]}],
+            "assistant_guidance": "Done.",
+        },
+        isError=False,
+    )
+
+    # No tool_name passed (backward compatible)
+    adapted = adapt_tool_result(original)
+
+    content_text = adapted.content[0].text
+    assert "Board structure:" not in content_text
+
+
+def test_adapter_projection_combined_with_guidance():
+    """
+    adapt_tool_result combines guidance + projection correctly (guidance first).
+
+    Bug this catches: projection overwrites guidance instead of appending.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "cluster_names": ["Work", "Personal"],
+            "assistant_guidance": "Your board is ready for editing.",
+        },
+        isError=False,
+    )
+
+    adapted = adapt_tool_result(original, tool_name="read_board_before_editing")
+
+    content_text = adapted.content[0].text
+    # Both should be present
+    assert "Your board is ready for editing." in content_text
+    assert "Board structure:" in content_text
+    # Guidance should come before projection
+    guidance_pos = content_text.find("Your board is ready")
+    projection_pos = content_text.find("Board structure:")
+    assert guidance_pos < projection_pos
+
+
+def test_adapter_group_a_preserves_structured_content():
+    """
+    adapt_tool_result preserves structuredContent for Group A tools (widget still needs it).
+
+    Bug this catches: projection logic strips clusters from structuredContent.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    clusters = [{"name": "Work", "items": ["Task 1", "Task 2"]}]
+
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "clusters": clusters,
+            "assistant_guidance": "Board loaded.",
+        },
+        isError=False,
+    )
+
+    adapted = adapt_tool_result(original, tool_name="read_board_before_editing")
+
+    # structuredContent still has clusters (for widget)
+    assert adapted.structuredContent["clusters"] == clusters
+    # But assistant_guidance is stripped
+    assert "assistant_guidance" not in adapted.structuredContent
+
+
+# ============================================================================
+# Fixture Meta-Tests: Drift-Check and Acceptance Proof
+# ============================================================================
+
+
 def test_fixture_mechanics_pollute_then_restore():
     """
     Mechanics test: deliberately pollute a global, invoke restore, verify cleanup.
