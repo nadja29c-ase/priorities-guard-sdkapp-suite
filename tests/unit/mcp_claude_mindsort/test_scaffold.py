@@ -1497,13 +1497,15 @@ def test_compact_projection_from_full_clusters():
     _build_compact_board_projection builds projection from clusters with item counts.
 
     Bug this catches: projection fails when only clusters (not cluster_names) present.
+    Uses real enrich_clusters keys: cluster_name, thought_items, sum_thought_items.
     """
     from mcp_server.mindsort_claude.response_adapter_dupl import _build_compact_board_projection
 
+    # Real enrich_clusters shape (from clarity/tool_logic.py)
     structured = {
         "clusters": [
-            {"name": "Work", "items": ["Task 1", "Task 2", "Task 3"]},
-            {"name": "Personal", "items": ["Buy milk"]},
+            {"cluster_name": "Work", "thought_items": ["Task 1", "Task 2", "Task 3"], "sum_thought_items": 3},
+            {"cluster_name": "Personal", "thought_items": ["Buy milk"], "sum_thought_items": 1},
         ],
     }
 
@@ -1520,17 +1522,20 @@ def test_compact_projection_includes_subclusters():
     _build_compact_board_projection includes subcluster names when present.
 
     Bug this catches: subclusters silently dropped from projection.
+    Uses real enrich_clusters keys: cluster_name, thought_items, subclusters[].subcluster_name.
     """
     from mcp_server.mindsort_claude.response_adapter_dupl import _build_compact_board_projection
 
+    # Real enrich_clusters shape (from clarity/tool_logic.py)
     structured = {
         "clusters": [
             {
-                "name": "Work",
-                "items": ["Task 1", "Task 2"],
+                "cluster_name": "Work",
+                "thought_items": ["Task 1", "Task 2"],
+                "sum_thought_items": 2,
                 "subclusters": [
-                    {"name": "Urgent"},
-                    {"name": "Low Priority"},
+                    {"subcluster_name": "Urgent", "thought_items": [], "sum_thought_items": 0},
+                    {"subcluster_name": "Low Priority", "thought_items": [], "sum_thought_items": 0},
                 ],
             },
         ],
@@ -1591,16 +1596,18 @@ def test_adapter_surfaces_projection_for_group_a():
     adapt_tool_result surfaces board projection into content for Group A tools.
 
     Bug this catches: Group A tools return empty content, model can't target edits.
+    Uses real enrich_clusters keys: cluster_name, thought_items, sum_thought_items.
     """
     from mcp import types as mcp_types
     from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
 
+    # Real enrich_clusters shape (from clarity/tool_logic.py)
     original = mcp_types.CallToolResult(
         content=[],
         structuredContent={
             "clusters": [
-                {"name": "Work", "items": ["Task 1", "Task 2"]},
-                {"name": "Personal", "items": ["Buy milk"]},
+                {"cluster_name": "Work", "thought_items": ["Task 1", "Task 2"], "sum_thought_items": 2},
+                {"cluster_name": "Personal", "thought_items": ["Buy milk"], "sum_thought_items": 1},
             ],
             "assistant_guidance": "Board loaded.",
         },
@@ -1649,15 +1656,17 @@ def test_adapter_no_projection_for_group_b():
     adapt_tool_result does NOT surface projection for Group B tools.
 
     Bug this catches: projection added to organize_thoughts, bloating tokens unnecessarily.
+    Uses real enrich_clusters keys to ensure test would catch wrong-key bugs.
     """
     from mcp import types as mcp_types
     from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
 
+    # Real enrich_clusters shape (from clarity/tool_logic.py)
     original = mcp_types.CallToolResult(
         content=[],
         structuredContent={
             "clusters": [
-                {"name": "Work", "items": ["Task 1"]},
+                {"cluster_name": "Work", "thought_items": ["Task 1"], "sum_thought_items": 1},
             ],
             "assistant_guidance": "Board organized.",
         },
@@ -1678,14 +1687,16 @@ def test_adapter_no_projection_for_load_saved_board():
     adapt_tool_result does NOT surface projection for load_saved_board (Group B).
 
     Bug this catches: Group B tools leaking projection.
+    Uses real enrich_clusters keys to ensure test would catch wrong-key bugs.
     """
     from mcp import types as mcp_types
     from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
 
+    # Real enrich_clusters shape (from clarity/tool_logic.py)
     original = mcp_types.CallToolResult(
         content=[],
         structuredContent={
-            "clusters": [{"name": "Ideas", "items": ["A", "B"]}],
+            "clusters": [{"cluster_name": "Ideas", "thought_items": ["A", "B"], "sum_thought_items": 2}],
             "assistant_guidance": "Board loaded for display.",
         },
         isError=False,
@@ -1702,14 +1713,16 @@ def test_adapter_no_projection_when_no_tool_name():
     adapt_tool_result does NOT surface projection when tool_name is None.
 
     Bug this catches: default behavior surfaces projection for all tools.
+    Uses real enrich_clusters keys to ensure test would catch wrong-key bugs.
     """
     from mcp import types as mcp_types
     from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
 
+    # Real enrich_clusters shape (from clarity/tool_logic.py)
     original = mcp_types.CallToolResult(
         content=[],
         structuredContent={
-            "clusters": [{"name": "Work", "items": ["Task"]}],
+            "clusters": [{"cluster_name": "Work", "thought_items": ["Task"], "sum_thought_items": 1}],
             "assistant_guidance": "Done.",
         },
         isError=False,
@@ -1752,16 +1765,82 @@ def test_adapter_projection_combined_with_guidance():
     assert guidance_pos < projection_pos
 
 
+def test_adapter_edit_board_clusters_only_real_keys():
+    """
+    edit_board returns clusters (no cluster_names) - projection must use real keys.
+
+    This is the CRITICAL test that catches the wrong-key bug. edit_board's success
+    return has {"clusters": enriched, "assistant_guidance": ...} with NO cluster_names.
+    The adapter must correctly parse cluster_name/sum_thought_items/subcluster_name.
+
+    Bug this catches: adapter uses name/items/name instead of cluster_name/thought_items/subcluster_name,
+    causing projection to show "Unnamed (0 items)" for every cluster.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
+
+    # Exact edit_board success return shape (verified from edit_board.py)
+    # clusters only, NO cluster_names - forces the elif clusters branch
+    original = mcp_types.CallToolResult(
+        content=[],
+        structuredContent={
+            "clusters": [
+                {
+                    "cluster_name": "Work Tasks",
+                    "thought_items": ["Email inbox", "Code review"],
+                    "sum_thought_items": 2,
+                    "subclusters": [
+                        {"subcluster_name": "Urgent", "thought_items": ["Deploy fix"], "sum_thought_items": 1},
+                    ],
+                },
+                {
+                    "cluster_name": "Personal",
+                    "thought_items": ["Groceries", "Call mom", "Exercise"],
+                    "sum_thought_items": 3,
+                    "subclusters": [],
+                },
+            ],
+            "assistant_guidance": "Edit complete. Here's your updated board.",
+        },
+        isError=False,
+    )
+
+    adapted = adapt_tool_result(original, tool_name="edit_board")
+
+    content_text = adapted.content[0].text
+
+    # Guidance present
+    assert "Edit complete." in content_text
+
+    # Projection present with REAL cluster names (not "Unnamed")
+    assert "Board structure:" in content_text
+    assert "Work Tasks" in content_text
+    assert "Personal" in content_text
+
+    # Item counts correct (not 0)
+    assert "(2 items)" in content_text  # Work Tasks
+    assert "(3 items)" in content_text  # Personal
+
+    # Subcluster name correct (not "Unnamed")
+    assert "Urgent" in content_text
+
+    # NEGATIVE ASSERTIONS: catch the bug this test exists for
+    assert "Unnamed" not in content_text, "Bug: adapter using wrong keys, got 'Unnamed'"
+    assert "(0 items)" not in content_text, "Bug: adapter using wrong keys, got 0 items"
+
+
 def test_adapter_group_a_preserves_structured_content():
     """
     adapt_tool_result preserves structuredContent for Group A tools (widget still needs it).
 
     Bug this catches: projection logic strips clusters from structuredContent.
+    Uses real enrich_clusters keys to ensure test would catch wrong-key bugs.
     """
     from mcp import types as mcp_types
     from mcp_server.mindsort_claude.response_adapter_dupl import adapt_tool_result
 
-    clusters = [{"name": "Work", "items": ["Task 1", "Task 2"]}]
+    # Real enrich_clusters shape (from clarity/tool_logic.py)
+    clusters = [{"cluster_name": "Work", "thought_items": ["Task 1", "Task 2"], "sum_thought_items": 2}]
 
     original = mcp_types.CallToolResult(
         content=[],

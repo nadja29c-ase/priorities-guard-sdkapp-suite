@@ -52,20 +52,24 @@ def _build_compact_board_projection(structured: dict) -> Optional[str]:
             lines.append(f"  ... and {len(cluster_names) - MAX_PROJECTION_ITEMS} more clusters")
 
     # If we have full clusters, extract structure (names + item counts)
+    # Keys from enrich_clusters: cluster_name, thought_items, sum_thought_items, subclusters[].subcluster_name
     elif clusters and isinstance(clusters, list):
         clusters_to_show = clusters[:MAX_PROJECTION_ITEMS]
         truncated = len(clusters) > MAX_PROJECTION_ITEMS
 
         lines.append("Board structure:")
         for cluster in clusters_to_show:
-            cluster_name = cluster.get("name", "Unnamed")
-            items = cluster.get("items", [])
-            item_count = len(items) if isinstance(items, list) else 0
+            cluster_name = cluster.get("cluster_name", "Unnamed")
+            # Prefer pre-computed sum_thought_items; fall back to len(thought_items)
+            item_count = cluster.get("sum_thought_items")
+            if item_count is None:
+                thought_items = cluster.get("thought_items", [])
+                item_count = len(thought_items) if isinstance(thought_items, list) else 0
 
             # Check for subclusters
             subclusters = cluster.get("subclusters", [])
             if subclusters and isinstance(subclusters, list):
-                subcluster_names = [s.get("name", "Unnamed") for s in subclusters[:5]]
+                subcluster_names = [s.get("subcluster_name", "Unnamed") for s in subclusters[:5]]
                 sub_str = ", ".join(subcluster_names)
                 if len(subclusters) > 5:
                     sub_str += f", +{len(subclusters) - 5} more"
