@@ -580,11 +580,15 @@ class TestResponseShape:
 
         sc = result.structuredContent
 
-        # Top-level keys
+        # Top-level keys in structuredContent
         assert sc["success"] is True
         assert "data" in sc
-        assert "_meta" in sc
         assert "assistant_guidance" in sc
+        # inc_96: _meta moved to top-level result (not nested in structuredContent)
+        assert "_meta" not in sc
+        assert result.meta is not None
+        assert result.meta["ui"]["resourceUri"] is not None
+        assert result.meta["openai/outputTemplate"] is not None
 
         # Data keys
         data = sc["data"]

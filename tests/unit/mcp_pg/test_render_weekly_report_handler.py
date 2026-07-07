@@ -1168,9 +1168,11 @@ class TestHandlerEmptyPriorities:
                 arguments={"week_start": "2026-02-16"},
             )
 
-        # Widget SHOULD be triggered - _meta with outputTemplate
-        assert "_meta" in result.structuredContent
-        assert result.structuredContent["_meta"]["openai/outputTemplate"] == WIDGET_URI
+        # inc_96: Widget binding moved to top-level _meta (not nested in structuredContent)
+        assert "_meta" not in result.structuredContent
+        assert result.meta is not None
+        assert result.meta["ui"]["resourceUri"] == WIDGET_URI
+        assert result.meta["openai/outputTemplate"] == WIDGET_URI
 
 
 # ============================================================================
@@ -1603,9 +1605,10 @@ class TestDataMinimizationIncrement75:
 
         assert result.isError is not True
         assert result.structuredContent["success"] is True
-        # Call 1 should have _meta — widget renders
-        assert "_meta" in result.structuredContent
-        assert "openai/outputTemplate" in result.structuredContent["_meta"]
+        # inc_96: Widget binding moved to top-level _meta (not nested in structuredContent)
+        assert "_meta" not in result.structuredContent
+        assert result.meta is not None
+        assert "openai/outputTemplate" in result.meta
 
     @pytest.mark.asyncio
     async def test_priority_groupings_confirmed_has_meta(self):
@@ -1662,8 +1665,9 @@ class TestDataMinimizationIncrement75:
 
         assert result.isError is not True
         assert result.structuredContent["success"] is True
-        # Final call should have _meta — widget renders
-        assert "_meta" in result.structuredContent
+        # inc_96: Widget binding moved to top-level _meta (not nested in structuredContent)
+        assert "_meta" not in result.structuredContent
+        assert result.meta is not None
         # Slices should be exploded (P1 replaced with subcategories)
         slices = result.structuredContent["data"]["slices"]
         slice_labels = [s["label"] for s in slices]

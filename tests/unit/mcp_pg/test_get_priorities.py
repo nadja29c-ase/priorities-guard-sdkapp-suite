@@ -271,8 +271,10 @@ class TestHandleFunction:
                 arguments={},
             )
 
-        structured = result.structuredContent
-        assert structured["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard-v12.html"
+        # inc_96: Widget binding moved to top-level _meta (not nested in structuredContent)
+        assert result.meta is not None
+        assert result.meta["ui"]["resourceUri"] == "ui://widget/pg-dashboard-v12.html"
+        assert result.meta["openai/outputTemplate"] == "ui://widget/pg-dashboard-v12.html"
 
     @pytest.mark.asyncio
     async def test_includes_google_connection_status(self, sample_backend_priority):

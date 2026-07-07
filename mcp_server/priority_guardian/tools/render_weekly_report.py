@@ -624,7 +624,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         data, priorities, other_events, has_semantic_groupings
     )
 
-    # ALWAYS include _meta — render tool always produces widget
+    # inc_96: Widget binding at top-level _meta (not nested in structuredContent).
+    # Host reads top-level _meta for hydration; nested placement broke widget render.
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
@@ -645,10 +646,11 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                 "otherEvents": other_events,
                 "priorityEvents": priority_events,
             },
-            "_meta": {
-                "openai/outputTemplate": WIDGET_URI,
-            },
             "assistant_guidance": assistant_guidance,
+        },
+        _meta={
+            "ui": {"resourceUri": WIDGET_URI},
+            "openai/outputTemplate": WIDGET_URI,
         },
     )
 

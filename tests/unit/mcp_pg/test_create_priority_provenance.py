@@ -502,8 +502,10 @@ class TestBackendCalls:
             assert payload["weekly_hour_target"] == 5
             assert payload["checkpoint_date"] == "2026-03-15"
 
-            # Verify response includes widget URI
-            assert result.structuredContent["_meta"]["openai/outputTemplate"] == WIDGET_URI
+            # inc_96: Widget binding moved to top-level _meta
+            assert result.meta is not None
+            assert result.meta["ui"]["resourceUri"] == WIDGET_URI
+            assert result.meta["openai/outputTemplate"] == WIDGET_URI
 
     @pytest.mark.asyncio
     async def test_verbatim_fields_not_sent_to_backend(
@@ -575,7 +577,10 @@ class TestSuccessResponse:
                 arguments=valid_deadline_args,
             )
 
-            assert result.structuredContent["_meta"]["openai/outputTemplate"] == "ui://widget/pg-dashboard-v12.html"
+            # inc_96: Widget binding moved to top-level _meta
+            assert result.meta is not None
+            assert result.meta["ui"]["resourceUri"] == "ui://widget/pg-dashboard-v12.html"
+            assert result.meta["openai/outputTemplate"] == "ui://widget/pg-dashboard-v12.html"
 
     @pytest.mark.asyncio
     async def test_success_guidance_has_remaining_slots_when_under_3(
@@ -885,7 +890,10 @@ class TestGetFailureAfterPostSuccess:
             assert priorities[0]["calendarKeyword"] == "P1"
 
             # Should still have widget template
-            assert result.structuredContent["_meta"]["openai/outputTemplate"] == WIDGET_URI
+            # inc_96: Widget binding moved to top-level _meta
+            assert result.meta is not None
+            assert result.meta["ui"]["resourceUri"] == WIDGET_URI
+            assert result.meta["openai/outputTemplate"] == WIDGET_URI
 
             # Guidance should use defensive fallback (no remaining_slots)
             guidance = result.structuredContent["assistant_guidance"]

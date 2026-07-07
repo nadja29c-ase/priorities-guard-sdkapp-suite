@@ -594,6 +594,8 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             correlation_id=correlation_id,
         )
 
+        # inc_96: Widget binding at top-level _meta (not nested in structuredContent).
+        # Host reads top-level _meta for hydration; nested placement broke widget render.
         return mcp_types.CallToolResult(
             content=[mcp_types.TextContent(
                 type="text",
@@ -607,10 +609,11 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
                     # Default to [] for widget, but _build_success_guidance handles None defensively
                     "available_keywords": fresh_available_keywords if fresh_available_keywords is not None else [],
                 },
-                "_meta": {
-                    "openai/outputTemplate": WIDGET_URI,
-                },
                 "assistant_guidance": guidance,
+            },
+            _meta={
+                "ui": {"resourceUri": WIDGET_URI},
+                "openai/outputTemplate": WIDGET_URI,
             },
         )
 

@@ -289,9 +289,6 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
             "priorities": priorities,
             "available_keywords": available_keywords,
         },
-        "_meta": {
-            "openai/outputTemplate": WIDGET_URI,
-        },
         "assistant_guidance": (
             "The dashboard is now showing the user's current priorities. "
             "Do not repeat or list the priorities in text — the widget displays them. "
@@ -303,12 +300,18 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
     if time_allocation:
         structured_content["data"]["timeAllocation"] = time_allocation
 
+    # inc_96: Widget binding at top-level _meta (not nested in structuredContent).
+    # Host reads top-level _meta for hydration; nested placement broke widget render.
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(
             type="text",
             text=text
         )],
         structuredContent=structured_content,
+        _meta={
+            "ui": {"resourceUri": WIDGET_URI},
+            "openai/outputTemplate": WIDGET_URI,
+        },
     )
 
 
