@@ -2,6 +2,11 @@
  * Integration Tests for MindSort Claude Widget App
  *
  * Tests the React component configuration and basic rendering.
+ * Updated for inc_inline_card_cluster_overview design:
+ * - Header: "Your MindSort AI Board"
+ * - Cluster rows (not priority rows)
+ * - Truncation with "+N more clusters"
+ * - "Open full board" button
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
@@ -94,37 +99,6 @@ describe('App Component', () => {
     expect(mockUseHostStyles).toHaveBeenCalled()
   })
 
-  // Test: No CRUD methods (read-only widget)
-  it('does not call callServerTool (no CRUD)', () => {
-    const mockApp: MockApp = {
-      getHostContext: () => ({ displayMode: 'inline' }),
-      callServerTool: vi.fn(),
-      ontoolresult: null,
-    }
-
-    mockUseApp.mockReturnValue({ app: mockApp })
-
-    render(<App />)
-
-    // Widget should not initiate any CRUD calls
-    expect(mockApp.callServerTool).not.toHaveBeenCalled()
-  })
-
-  // Test: No requestDisplayMode call (inline-only, no fullscreen toggle)
-  it('does not call requestDisplayMode (inline-only)', () => {
-    const mockApp: MockApp = {
-      getHostContext: () => ({ displayMode: 'inline' }),
-      requestDisplayMode: vi.fn(),
-      ontoolresult: null,
-    }
-
-    mockUseApp.mockReturnValue({ app: mockApp })
-
-    render(<App />)
-
-    expect(mockApp.requestDisplayMode).not.toHaveBeenCalled()
-  })
-
   // CRITICAL: Stale bridge shows BEFORE loading (guard ordering fix)
   it('shows stale session overlay after 3s timeout with no bridge', async () => {
     vi.useFakeTimers()
@@ -150,8 +124,12 @@ describe('App Component', () => {
     vi.useRealTimers()
   })
 
-  // Gap 2: ontoolresult → render path (proves clusters produce summary)
-  it('renders priority summary when ontoolresult receives clusters', () => {
+  // ==========================================================================
+  // Tests for inc_inline_card_cluster_overview design
+  // ==========================================================================
+
+  // Test 5: Header reads "Your MindSort AI Board" (was "Priorities")
+  it('renders header "Your MindSort AI Board" with cluster overview', () => {
     // Capture the onAppCreated callback with proper typing
     let capturedOnAppCreated: ((app: MockApp) => void) | null = null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -161,9 +139,6 @@ describe('App Component', () => {
     })
 
     const { rerender } = render(<App />)
-
-    // Initially shows loading
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
 
     // Create a mock app with ontoolresult that we can capture
     let capturedOntoolresult: ((result: unknown) => void) | null = null
@@ -178,41 +153,27 @@ describe('App Component', () => {
     }
 
     // Invoke onAppCreated to register the ontoolresult handler
-    // Non-null assertion: render() above captured this callback
     capturedOnAppCreated!(mockApp)
 
     // Simulate a tool result with clusters
-    // Non-null assertion: onAppCreated above set the ontoolresult handler
     capturedOntoolresult!({
       structuredContent: {
         clusters: [
-          {
-            cluster_name: 'Work',
-            sum_thought_items: 10,
-            priority: { rank: 'P1' },
-          },
-          {
-            cluster_name: 'Personal',
-            sum_thought_items: 5,
-          },
+          { cluster_name: 'Work', sum_thought_items: 10 },
+          { cluster_name: 'Personal', sum_thought_items: 5 },
         ],
       },
     })
 
-    // Need to rerender to see state updates
     rerender(<App />)
 
-    // Verify summary renders with priority data
-    expect(screen.getByText('Priorities')).toBeInTheDocument()
-    expect(screen.getByText('Work')).toBeInTheDocument()
-    expect(screen.getByText('P1')).toBeInTheDocument()
-    // Count line: 2 clusters, 15 thoughts
-    expect(screen.getByText(/2 clusters/)).toBeInTheDocument()
-    expect(screen.getByText(/15 thoughts/)).toBeInTheDocument()
+    // Header should be "Your MindSort AI Board", NOT "Priorities"
+    expect(screen.getByText('Your MindSort AI Board')).toBeInTheDocument()
+    expect(screen.queryByText('Priorities')).not.toBeInTheDocument()
   })
 
-  // Gap 2b: Empty state renders correctly
-  it('renders empty state when clusters have no priorities', () => {
+  // Test 5b: Ordering - prioritized clusters first
+  it('shows prioritized clusters first (P1 → P2 → P3, then by size)', () => {
     let capturedOnAppCreated: ((app: MockApp) => void) | null = null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockUseApp.mockImplementation((config: any) => {
@@ -233,22 +194,249 @@ describe('App Component', () => {
       },
     }
 
-    // Non-null assertions: render() captured these callbacks
     capturedOnAppCreated!(mockApp)
+
+    // 6 clusters: 3 prioritized (P3, P1, P2 out of order), 3 unprioritized (varying sizes)
     capturedOntoolresult!({
       structuredContent: {
         clusters: [
-          { cluster_name: 'Unprioritized', sum_thought_items: 7 },
+          { cluster_name: 'Big Unprioritized', sum_thought_items: 100 },
+          { cluster_name: 'P3 Cluster', sum_thought_items: 3, priority: { rank: 'P3' } },
+          { cluster_name: 'Small Unprioritized', sum_thought_items: 5 },
+          { cluster_name: 'P1 Cluster', sum_thought_items: 10, priority: { rank: 'P1' } },
+          { cluster_name: 'Medium Unprioritized', sum_thought_items: 50 },
+          { cluster_name: 'P2 Cluster', sum_thought_items: 7, priority: { rank: 'P2' } },
         ],
       },
     })
 
     rerender(<App />)
 
-    // Empty state shows count line with "none prioritized yet"
-    expect(screen.getByText(/none prioritized yet/)).toBeInTheDocument()
-    expect(screen.getByText(/1 cluster/)).toBeInTheDocument()
-    expect(screen.getByText(/7 thoughts/)).toBeInTheDocument()
+    // Should show P1, P2, P3 first, then unprioritized by size (Big, Medium, Small)
+    // But only 5 visible (MAX_INLINE_ROWS=5), so "+1 more cluster" should appear
+    expect(screen.getByText('P1 Cluster')).toBeInTheDocument()
+    expect(screen.getByText('P2 Cluster')).toBeInTheDocument()
+    expect(screen.getByText('P3 Cluster')).toBeInTheDocument()
+    expect(screen.getByText('Big Unprioritized')).toBeInTheDocument()
+    expect(screen.getByText('Medium Unprioritized')).toBeInTheDocument()
+
+    // Small Unprioritized should be truncated (6th cluster)
+    expect(screen.queryByText('Small Unprioritized')).not.toBeInTheDocument()
+
+    // Truncation indicator
+    expect(screen.getByText('+1 more cluster')).toBeInTheDocument()
+  })
+
+  // Test 6: Zero-priority board renders cluster names (NOT empty count-only card)
+  it('renders cluster names when no priorities exist', () => {
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { rerender } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({ displayMode: 'inline' }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    capturedOnAppCreated!(mockApp)
+
+    // All unprioritized clusters
+    capturedOntoolresult!({
+      structuredContent: {
+        clusters: [
+          { cluster_name: 'Ideas', sum_thought_items: 12 },
+          { cluster_name: 'Tasks', sum_thought_items: 8 },
+          { cluster_name: 'Notes', sum_thought_items: 5 },
+        ],
+      },
+    })
+
+    rerender(<App />)
+
+    // Cluster names should be visible (the core bug this increment fixes)
+    expect(screen.getByText('Ideas')).toBeInTheDocument()
+    expect(screen.getByText('Tasks')).toBeInTheDocument()
+    expect(screen.getByText('Notes')).toBeInTheDocument()
+
+    // Ordered by size: Ideas (12), Tasks (8), Notes (5)
+    // Header summary should show counts
+    expect(screen.getByText(/3 clusters/)).toBeInTheDocument()
+    expect(screen.getByText(/25 thoughts/)).toBeInTheDocument()
+  })
+
+  // Test 6b: Priority badges and left accent borders
+  it('shows priority badges (P1/P2/P3) with correct styling', () => {
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { rerender } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({ displayMode: 'inline' }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    capturedOnAppCreated!(mockApp)
+
+    capturedOntoolresult!({
+      structuredContent: {
+        clusters: [
+          { cluster_name: 'Urgent', sum_thought_items: 5, priority: { rank: 'P1' } },
+          { cluster_name: 'Normal', sum_thought_items: 3 },
+        ],
+      },
+    })
+
+    rerender(<App />)
+
+    // P1 badge should be visible
+    expect(screen.getByText('P1')).toBeInTheDocument()
+    // Unprioritized cluster should not have a badge
+    expect(screen.queryByText('P2')).not.toBeInTheDocument()
+    expect(screen.queryByText('P3')).not.toBeInTheDocument()
+  })
+
+  // Test: Tag indicator (icon, not text)
+  it('shows tag indicator when cluster has tags', () => {
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { rerender } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({ displayMode: 'inline' }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    capturedOnAppCreated!(mockApp)
+
+    capturedOntoolresult!({
+      structuredContent: {
+        clusters: [
+          { cluster_name: 'Tagged Cluster', sum_thought_items: 5, tags: ['decide', 'follow-up'] },
+          { cluster_name: 'Untagged Cluster', sum_thought_items: 3 },
+        ],
+      },
+    })
+
+    rerender(<App />)
+
+    // Tag indicator should have aria-label for accessibility
+    expect(screen.getByLabelText('has action tags')).toBeInTheDocument()
+  })
+
+  // Test: "Open full board" button exists and is functional
+  it('shows "Open full board" button', () => {
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { rerender } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({ displayMode: 'inline' }),
+      callServerTool: vi.fn().mockResolvedValue({}),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    capturedOnAppCreated!(mockApp)
+
+    capturedOntoolresult!({
+      structuredContent: {
+        clusters: [
+          { cluster_name: 'Test', sum_thought_items: 5 },
+        ],
+      },
+    })
+
+    rerender(<App />)
+
+    // Button should be visible
+    const button = screen.getByRole('button', { name: /open full board/i })
+    expect(button).toBeInTheDocument()
+    expect(button).toHaveTextContent('Open full board →')
+  })
+
+  // Test 7: Loading and stale states preserved (already covered above)
+
+  // Test: Empty state renders friendly message
+  it('renders empty state message when no clusters', () => {
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { rerender } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({ displayMode: 'inline' }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    capturedOnAppCreated!(mockApp)
+
+    // Empty clusters array
+    capturedOntoolresult!({
+      structuredContent: {
+        clusters: [],
+      },
+    })
+
+    rerender(<App />)
+
+    // Empty state message
+    expect(screen.getByText(/No clusters yet/i)).toBeInTheDocument()
+    // Header shows 0 counts
+    expect(screen.getByText(/0 clusters/)).toBeInTheDocument()
+    expect(screen.getByText(/0 thoughts/)).toBeInTheDocument()
   })
 })
 

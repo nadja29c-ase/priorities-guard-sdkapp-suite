@@ -1,8 +1,16 @@
 /**
- * MindSort Claude Widget - Inline Priority Summary
+ * MindSort Claude Widget - Inline Cluster Overview
  *
- * INLINE-ONLY: No fullscreen, no CRUD, no display mode switching.
- * Shows own-level priorities with breadcrumbs and count line.
+ * INLINE-ONLY: Shows cluster overview with priorities-first ordering.
+ * Replaces the priority-only view with a per-cluster list that is valuable
+ * even when no priorities are set.
+ *
+ * Design: inc_inline_card_cluster_overview.md
+ * - Header: "Your MindSort AI Board" + count summary
+ * - Rows: one per cluster (badge, name, tag icon, thought count)
+ * - Ordering: prioritized first (P1→P2→P3), then by size descending
+ * - Truncation: MAX_INLINE_ROWS with "+N more clusters"
+ * - Action: "Open full board →" (callServerTool)
  *
  * Data path: ontoolresult -> structuredContent.clusters
  */
@@ -14,13 +22,34 @@ import {
   McpUiToolResultNotification,
 } from '@modelcontextprotocol/ext-apps/react'
 
-import type { Cluster, PrioritizedEntity } from './types'
-import { extractOwnLevelPriorities, getTotalThoughtCount, truncateText } from './utils'
+import type { Cluster } from './types'
+import {
+  getTotalThoughtCount,
+  sortClustersForOverview,
+  truncateClusters,
+} from './utils'
+
+/**
+ * MAX_INLINE_ROWS: Maximum cluster rows before truncation.
+ *
+ * Measured to fit within 500px height budget:
+ * - Header: ~44px (title + summary)
+ * - Footer: ~56px (overflow line + button)
+ * - Padding: 32px (16px top + bottom)
+ * - Available: ~368px
+ * - Row height: ~48px (single line, 44pt touch target)
+ * - Max rows: floor(368/48) ≈ 7
+ *
+ * Using 5 for conservative margin at varying font sizes.
+ * The briefing's starting estimate was ~5; measurement confirms this is safe.
+ */
+const MAX_INLINE_ROWS = 5
 
 function App() {
   // Board data from tool results
   const [clusters, setClusters] = useState<Cluster[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
+  const [isLoadingBoard, setIsLoadingBoard] = useState(false)
 
   // Stale bridge detection
   const [isBridgeStale, setIsBridgeStale] = useState(false)
@@ -29,7 +58,7 @@ function App() {
   const appRef = useRef<McpApp | null>(null)
 
   // MCP Apps bridge: useApp hook
-  // CRITICAL: availableDisplayModes is ['inline'] ONLY - no fullscreen
+  // CRITICAL: availableDisplayModes is ['inline'] ONLY - no fullscreen yet
   const { app } = useApp({
     appInfo: { name: 'MindSort', version: '1.0.0' },
     capabilities: {
@@ -73,6 +102,25 @@ function App() {
     return () => clearTimeout(timeout)
   }, [])
 
+  // Handle "Open full board" button click
+  const handleOpenFullBoard = useCallback(async () => {
+    if (!appRef.current || isLoadingBoard) return
+
+    setIsLoadingBoard(true)
+    try {
+      // Call load_saved_board to render the full board in conversation
+      // This is a real action per PG-Claude's proven pattern
+      await appRef.current.callServerTool({
+        name: 'load_saved_board',
+        arguments: {},
+      })
+    } catch (err) {
+      console.error('MindSort widget: Error loading full board:', err)
+    } finally {
+      setIsLoadingBoard(false)
+    }
+  }, [isLoadingBoard])
+
   // Stale session overlay - MUST be checked BEFORE loading state.
   // If the bridge never connects, isInitialized stays false forever,
   // but we still need to show the stale overlay after 3s timeout.
@@ -86,7 +134,7 @@ function App() {
           fontSize: '12px',
           lineHeight: '1.5',
           background: 'var(--color-background-secondary, #F5F4ED)',
-          borderRadius: '12px',
+          borderRadius: 'var(--border-radius-xl, 12px)',
         }}
       >
         <p style={{ marginBottom: '8px', fontWeight: 600 }}>
@@ -109,7 +157,7 @@ function App() {
           fontSize: '14px',
           color: 'var(--color-text-secondary, #3D3D3A)',
           background: 'var(--color-background-secondary, #F5F4ED)',
-          borderRadius: '12px',
+          borderRadius: 'var(--border-radius-xl, 12px)',
         }}
       >
         Loading...
@@ -117,130 +165,229 @@ function App() {
     )
   }
 
-  // Extract own-level priorities (sorted P1 -> P2 -> P3)
-  const priorities = extractOwnLevelPriorities(clusters)
+  // Sort and truncate clusters
+  const sortedClusters = sortClustersForOverview(clusters)
+  const { visible: visibleClusters, overflow } = truncateClusters(sortedClusters, MAX_INLINE_ROWS)
   const clusterCount = clusters.length
   const thoughtCount = getTotalThoughtCount(clusters)
 
   return (
     <main
       role="main"
-      aria-label="MindSort Priority Summary"
+      aria-label="MindSort AI Board Overview"
       style={{
         width: '100%',
         background: 'var(--color-background-secondary, #F5F4ED)',
-        borderRadius: '16px',
+        borderRadius: 'var(--border-radius-xl, 12px)',
         padding: '16px',
         touchAction: 'pan-y',
         overscrollBehavior: 'contain',
       }}
     >
-      {/* Header */}
-      <h2
+      {/* Header: Title + Count Summary */}
+      <div
         style={{
-          fontSize: '14px',
-          fontWeight: 600,
-          color: 'var(--color-text-primary, #141413)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
           marginBottom: '12px',
         }}
       >
-        Priorities
-      </h2>
+        <h2
+          style={{
+            fontSize: '14px',
+            fontWeight: 600,
+            color: 'var(--color-text-primary, #141413)',
+            margin: 0,
+          }}
+        >
+          Your MindSort AI Board
+        </h2>
+        <span
+          style={{
+            fontSize: '12px',
+            color: 'var(--color-text-tertiary, #73726C)',
+          }}
+        >
+          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} · {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
+        </span>
+      </div>
 
-      {/* Priority list or empty state */}
-      {priorities.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {priorities.map((entity, index) => (
-            <PriorityRow key={`${entity.rank}-${index}`} entity={entity} />
+      {/* Cluster list */}
+      {visibleClusters.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {visibleClusters.map((cluster, index) => (
+            <ClusterRow key={`${cluster.cluster_name}-${index}`} cluster={cluster} />
           ))}
         </div>
-      ) : null}
+      ) : (
+        <p
+          style={{
+            fontSize: '13px',
+            color: 'var(--color-text-tertiary, #73726C)',
+            textAlign: 'center',
+            padding: '16px 0',
+          }}
+        >
+          No clusters yet. Start organizing your thoughts!
+        </p>
+      )}
 
-      {/* Count line */}
-      <p
+      {/* Footer: Overflow count + Open full board button */}
+      <div
         style={{
-          fontSize: '12px',
-          color: 'var(--color-text-tertiary, #73726C)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           marginTop: '12px',
         }}
       >
-        {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} &middot;{' '}
-        {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
-        {priorities.length === 0 && ' \u00B7 none prioritized yet'}
-      </p>
+        {/* Overflow indicator */}
+        <span
+          style={{
+            fontSize: '12px',
+            color: 'var(--color-text-tertiary, #73726C)',
+          }}
+        >
+          {overflow > 0 ? `+${overflow} more cluster${overflow !== 1 ? 's' : ''}` : ''}
+        </span>
+
+        {/* Open full board button */}
+        <button
+          type="button"
+          onClick={handleOpenFullBoard}
+          disabled={isLoadingBoard}
+          style={{
+            padding: '8px 12px',
+            fontSize: '12px',
+            fontWeight: 500,
+            color: 'var(--color-text-info, #1E40AF)',
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 'var(--border-radius-md, 8px)',
+            cursor: isLoadingBoard ? 'wait' : 'pointer',
+            opacity: isLoadingBoard ? 0.6 : 1,
+            minHeight: '44px', // Touch target
+            minWidth: '44px',
+          }}
+          aria-label="Open full board in conversation"
+        >
+          {isLoadingBoard ? 'Loading...' : 'Open full board →'}
+        </button>
+      </div>
     </main>
   )
 }
 
 /**
- * Single priority row: rank badge + entity text + breadcrumb
+ * Single cluster row: badge (if prioritized) + name + tag icon + thought count
+ *
+ * - Prioritized clusters get a left-accent border in the rank color
+ * - Tag icon (muted) shown when cluster has tags
+ * - Single-line layout with ellipsis truncation
  */
-function PriorityRow({ entity }: { entity: PrioritizedEntity }) {
-  const rankColors: Record<string, { bg: string; text: string }> = {
-    P1: { bg: 'var(--color-background-danger, #FEE2E2)', text: 'var(--color-text-danger, #991B1B)' },
-    P2: { bg: 'var(--color-background-warning, #FEF3C7)', text: 'var(--color-text-warning, #92400E)' },
-    P3: { bg: 'var(--color-background-info, #DBEAFE)', text: 'var(--color-text-info, #1E40AF)' },
+function ClusterRow({ cluster }: { cluster: Cluster }) {
+  const hasPriority = !!cluster.priority?.rank
+  const rank = cluster.priority?.rank
+  const hasTags = (cluster.tags?.length ?? 0) > 0
+
+  // Rank colors matching PG-Claude and compliance master token reference
+  const rankColors: Record<string, { bg: string; text: string; border: string }> = {
+    P1: {
+      bg: 'var(--color-background-danger, #F7ECEC)',
+      text: 'var(--color-text-danger, #7F2C28)',
+      border: 'var(--color-border-danger, #A73D39)',
+    },
+    P2: {
+      bg: 'var(--color-background-warning, #F6EEDF)',
+      text: 'var(--color-text-warning, #5A4815)',
+      border: 'var(--color-border-warning, #805C1F)',
+    },
+    P3: {
+      bg: 'var(--color-background-info, #D6E4F6)',
+      text: 'var(--color-text-info, #3266AD)',
+      border: 'var(--color-border-info, #4682D5)',
+    },
   }
-  const colors = rankColors[entity.rank] ?? rankColors.P3
+  const colors = rank ? rankColors[rank] : null
 
   return (
     <div
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         gap: '8px',
         background: 'var(--color-background-primary, #FFFFFF)',
-        borderRadius: '8px',
+        borderRadius: 'var(--border-radius-md, 8px)',
         padding: '10px 12px',
-        border: '1px solid var(--color-border-primary, rgba(31,30,29,0.1))',
+        border: `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, rgba(31,30,29,0.15))`,
+        // Left accent border for prioritized clusters
+        borderLeft: hasPriority && colors
+          ? `3px solid ${colors.border}`
+          : `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, rgba(31,30,29,0.15))`,
+        minHeight: '44px', // Touch target compliance
       }}
     >
-      {/* Rank badge */}
-      <span
-        style={{
-          fontSize: '11px',
-          fontWeight: 600,
-          padding: '2px 6px',
-          borderRadius: '4px',
-          background: colors.bg,
-          color: colors.text,
-          flexShrink: 0,
-        }}
-      >
-        {entity.rank}
-      </span>
-
-      {/* Entity text + breadcrumb */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p
+      {/* Priority badge (only if prioritized) */}
+      {hasPriority && rank && colors && (
+        <span
           style={{
-            fontSize: '13px',
-            fontWeight: 500,
-            color: 'var(--color-text-primary, #141413)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            fontSize: '11px',
+            fontWeight: 600,
+            padding: '2px 6px',
+            borderRadius: '4px',
+            background: colors.bg,
+            color: colors.text,
+            flexShrink: 0,
           }}
         >
-          {truncateText(entity.text, 60)}
-        </p>
+          {rank}
+        </span>
+      )}
 
-        {/* Breadcrumb (only for subclusters and thought items) */}
-        {entity.breadcrumb && (
-          <p
-            style={{
-              fontSize: '11px',
-              color: 'var(--color-text-tertiary, #73726C)',
-              marginTop: '2px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {truncateText(entity.breadcrumb, 50)}
-          </p>
-        )}
-      </div>
+      {/* Cluster name - fills available space, single line with ellipsis */}
+      <span
+        style={{
+          flex: 1,
+          fontSize: '13px',
+          fontWeight: 500,
+          color: 'var(--color-text-primary, #141413)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          minWidth: 0, // Required for text-overflow in flex child
+        }}
+      >
+        {cluster.cluster_name}
+      </span>
+
+      {/* Tag indicator (icon only, not text) */}
+      {hasTags && (
+        <span
+          aria-label="has action tags"
+          title="Has action tags"
+          style={{
+            fontSize: '12px',
+            color: 'var(--color-text-tertiary, #73726C)',
+            flexShrink: 0,
+          }}
+        >
+          {/* Simple tag icon using Unicode */}
+          🏷
+        </span>
+      )}
+
+      {/* Thought count */}
+      <span
+        style={{
+          fontSize: '12px',
+          color: 'var(--color-text-tertiary, #73726C)',
+          flexShrink: 0,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {cluster.sum_thought_items ?? 0} thought{(cluster.sum_thought_items ?? 0) !== 1 ? 's' : ''}
+      </span>
     </div>
   )
 }

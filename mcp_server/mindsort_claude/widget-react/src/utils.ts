@@ -126,3 +126,49 @@ export function extractOwnLevelPriorities(clusters: Cluster[]): PrioritizedEntit
 export function getTotalThoughtCount(clusters: Cluster[]): number {
   return clusters.reduce((sum, c) => sum + (c.sum_thought_items ?? 0), 0)
 }
+
+/**
+ * Sort clusters for inline overview display.
+ *
+ * Ordering: Prioritized clusters first (P1 → P2 → P3), then unprioritized
+ * by sum_thought_items descending (largest first).
+ *
+ * Data Rule 4: Does NOT assume unique ranks or <=3 priorities.
+ * Handles duplicates and >3 prioritized clusters.
+ */
+export function sortClustersForOverview(clusters: Cluster[]): Cluster[] {
+  return [...clusters].sort((a, b) => {
+    const rankA = rankToNumber(a.priority?.rank)
+    const rankB = rankToNumber(b.priority?.rank)
+
+    // Primary: prioritized first (lower rank number = higher priority)
+    if (rankA !== rankB) {
+      return rankA - rankB
+    }
+
+    // Secondary (for unprioritized or same rank): larger thought count first
+    const countA = a.sum_thought_items ?? 0
+    const countB = b.sum_thought_items ?? 0
+    return countB - countA
+  })
+}
+
+/**
+ * Truncate cluster list to fit MAX_INLINE_ROWS.
+ *
+ * Returns:
+ * - visible: clusters to render (up to maxRows)
+ * - overflow: number of hidden clusters (for "+N more" display)
+ */
+export function truncateClusters(
+  clusters: Cluster[],
+  maxRows: number
+): { visible: Cluster[]; overflow: number } {
+  if (clusters.length <= maxRows) {
+    return { visible: clusters, overflow: 0 }
+  }
+  return {
+    visible: clusters.slice(0, maxRows),
+    overflow: clusters.length - maxRows,
+  }
+}
