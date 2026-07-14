@@ -318,7 +318,10 @@ describe('App Component', () => {
   })
 
   // Test: Tag indicator (icon, not text)
-  it('shows tag indicator when cluster has tags', () => {
+  // CRITICAL: Must verify an SVG renders, not just aria-label presence.
+  // An emoji would also pass the aria-label check but violate the guideline
+  // ("monochromatic, outlined icons that match the host's icon color tokens").
+  it('shows tag indicator as SVG icon when cluster has tags', () => {
     let capturedOnAppCreated: ((app: MockApp) => void) | null = null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockUseApp.mockImplementation((config: any) => {
@@ -353,7 +356,53 @@ describe('App Component', () => {
     rerender(<App />)
 
     // Tag indicator should have aria-label for accessibility
-    expect(screen.getByLabelText('has action tags')).toBeInTheDocument()
+    const tagIndicator = screen.getByLabelText('has action tags')
+    expect(tagIndicator).toBeInTheDocument()
+
+    // CRITICAL: Must be an SVG icon, NOT an emoji
+    // This test would FAIL if someone reverts to an emoji (🏷)
+    const svgIcon = tagIndicator.querySelector('svg')
+    expect(svgIcon).not.toBeNull()
+    expect(svgIcon).toHaveAttribute('stroke', 'currentColor') // Inherits muted color
+  })
+
+  // Test: Tag indicator does NOT render when cluster has no tags
+  it('does NOT show tag indicator when cluster has no tags', () => {
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { rerender } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({ displayMode: 'inline' }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    capturedOnAppCreated!(mockApp)
+
+    capturedOntoolresult!({
+      structuredContent: {
+        clusters: [
+          { cluster_name: 'No Tags', sum_thought_items: 5 },
+          { cluster_name: 'Also No Tags', sum_thought_items: 3, tags: [] }, // Empty array
+        ],
+      },
+    })
+
+    rerender(<App />)
+
+    // No tag indicator should be present
+    expect(screen.queryByLabelText('has action tags')).not.toBeInTheDocument()
   })
 
   // Test: "Open full board" button exists and is functional
