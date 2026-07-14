@@ -51,7 +51,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
           <p style={{
             fontSize: '14px',
             color: 'var(--color-text-danger, #dc2626)',
-            fontWeight: 600,
+            fontWeight: 500,
             marginBottom: '8px',
           }}>
             Widget unavailable
