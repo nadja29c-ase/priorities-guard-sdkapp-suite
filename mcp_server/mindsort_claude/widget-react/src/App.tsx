@@ -14,7 +14,7 @@
  *
  * Data path: ontoolresult -> structuredContent.clusters
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
 import {
   useApp,
   useHostStyles,
@@ -56,6 +56,9 @@ function App() {
 
   // App reference for bridge connection
   const appRef = useRef<McpApp | null>(null)
+
+  // Ref for height guard diagnostic (500px limit verification)
+  const inlineMainRef = useRef<HTMLElement | null>(null)
 
   // MCP Apps bridge: useApp hook
   // CRITICAL: availableDisplayModes is ['inline'] ONLY - no fullscreen yet
@@ -102,6 +105,28 @@ function App() {
     return () => clearTimeout(timeout)
   }, [])
 
+  // Height guard diagnostic - verify inline card ≤500px
+  // Runs after render when clusters change; logs violation for post-deploy verification
+  useLayoutEffect(() => {
+    if (!inlineMainRef.current || !isInitialized) return
+
+    const height = inlineMainRef.current.scrollHeight
+    const limit = 500
+
+    // Always log for diagnostic visibility
+    console.log(
+      `[MindSort Diagnostic] Inline main scrollHeight: ${height}px` +
+        (height > limit ? ` — EXCEEDS ${limit}px LIMIT` : '')
+    )
+
+    if (height > limit) {
+      console.warn(
+        `[MindSort Diagnostic] Height violation: ${height}px > ${limit}px. ` +
+          `Reduce MAX_INLINE_ROWS or row height.`
+      )
+    }
+  }, [isInitialized, clusters])
+
   // Handle "Open full board" button click
   const handleOpenFullBoard = useCallback(async () => {
     if (!appRef.current || isLoadingBoard) return
@@ -137,7 +162,7 @@ function App() {
           borderRadius: 'var(--border-radius-xl, 12px)',
         }}
       >
-        <p style={{ marginBottom: '8px', fontWeight: 600 }}>
+        <p style={{ marginBottom: '8px', fontWeight: 500 }}>
           Session expired
         </p>
         <p style={{ margin: 0 }}>
@@ -173,6 +198,7 @@ function App() {
 
   return (
     <main
+      ref={inlineMainRef}
       role="main"
       aria-label="MindSort AI Board Overview"
       style={{
@@ -196,7 +222,7 @@ function App() {
         <h2
           style={{
             fontSize: '14px',
-            fontWeight: 600,
+            fontWeight: 500, // Guideline: two weights only (400, 500)
             color: 'var(--color-text-primary, #141413)',
             margin: 0,
           }}
@@ -333,7 +359,7 @@ function ClusterRow({ cluster }: { cluster: Cluster }) {
         <span
           style={{
             fontSize: '11px',
-            fontWeight: 600,
+            fontWeight: 500, // Guideline: two weights only (400, 500)
             padding: '2px 6px',
             borderRadius: '4px',
             background: colors.bg,
@@ -361,19 +387,34 @@ function ClusterRow({ cluster }: { cluster: Cluster }) {
         {cluster.cluster_name}
       </span>
 
-      {/* Tag indicator (icon only, not text) */}
+      {/* Tag indicator (monochrome outlined icon, not emoji) */}
       {hasTags && (
         <span
           aria-label="has action tags"
           title="Has action tags"
           style={{
-            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
             color: 'var(--color-text-tertiary, #73726C)',
             flexShrink: 0,
           }}
         >
-          {/* Simple tag icon using Unicode */}
-          🏷
+          {/* Outlined tag icon - stroke="currentColor" inherits muted color */}
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            {/* Tag shape: angled rectangle with circle */}
+            <path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.42 0l6.58-6.58a1 1 0 0 0 0-1.42L12 2Z" />
+            <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none" />
+          </svg>
         </span>
       )}
 
