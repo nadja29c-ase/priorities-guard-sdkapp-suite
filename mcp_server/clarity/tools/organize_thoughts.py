@@ -228,10 +228,13 @@ class ClusterInput(BaseModel):
                 f"Cluster '{self.cluster_name}' is empty. Must have thought_items or subclusters."
             )
         if has_items and len(self.thought_items) < 2:
-            raise ValueError(
-                f"Cluster '{self.cluster_name}' has only {len(self.thought_items)} item. "
-                "Minimum 2 required — merge into another cluster."
-            )
+            # Unclustered is exempt from min-2 rule (per schema: single-item clusters
+            # are placed in Unclustered automatically by the repair loop)
+            if self.cluster_name != "Unclustered":
+                raise ValueError(
+                    f"Cluster '{self.cluster_name}' has only {len(self.thought_items)} item. "
+                    "Minimum 2 required — merge into another cluster."
+                )
         if len(self.tags) > 3:
             raise ValueError(
                 f"Cluster '{self.cluster_name}' has {len(self.tags)} tags. Maximum is 3."
@@ -487,7 +490,11 @@ async def handle(
                 }]
 
         if clusters_data is None:
-            logger.error("organize_thoughts.repair_failed", reason="unrecognized_format")
+            logger.error(
+                "organize_thoughts.repair_failed",
+                reason="no_applicable_repair",
+                validation_error_type=list({err["type"] for err in e.errors()}),
+            )
             return mcp_types.CallToolResult(
                 content=[mcp_types.TextContent(
                     type="text",
