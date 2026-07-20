@@ -477,20 +477,37 @@ class TestNegativeRoundTrip:
         self, valid_provenance_args
     ):
         """
-        Payload with genuinely no recognizable clusters returns invalid-params.
+        Payload with genuinely no recognizable clusters returns invalid-params
+        via no_applicable_repair path.
 
-        Bug that would still pass: If error path changed behavior.
+        Uses empty dict {} which is falsy, skips both repair branches cleanly,
+        and triggers no_applicable_repair. Avoids pre-existing KeyError bug
+        with non-empty dicts.
+
+        Bug that would still pass: If error path changed behavior or log reason.
         """
-        result = await handle(
-            user_id="test",
-            correlation_id="test",
-            arguments={
-                **valid_provenance_args,
-                "clusters": "not an array",
-            },
-        )
+        with patch(
+            "mcp_server.clarity.tools.organize_thoughts.logger"
+        ) as mock_logger:
+            result = await handle(
+                user_id="test",
+                correlation_id="test",
+                arguments={
+                    **valid_provenance_args,
+                    "clusters": {},  # Empty dict: falsy, skips repair branches
+                },
+            )
 
-        assert result.isError is True
-        # The error text should contain the invalid-params structure
-        assert len(result.content) > 0
-        assert "Invalid input format" in result.content[0].text
+            assert result.isError is True
+            # The error text should contain the invalid-params structure
+            assert len(result.content) > 0
+            assert "Invalid input format" in result.content[0].text
+
+            # Verify correct log path (no_applicable_repair, not revalidation_failed)
+            error_calls = [
+                call for call in mock_logger.error.call_args_list
+                if call[0] and "repair_failed" in call[0][0]
+            ]
+            assert len(error_calls) >= 1
+            log_kwargs = error_calls[0][1]
+            assert log_kwargs.get("reason") == "no_applicable_repair"
