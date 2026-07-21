@@ -147,9 +147,10 @@ function computeDetailCapacity(
   const detailRowWithGap = LAYOUT.detailRowH + LAYOUT.detailRowGap
   const provisionalCapacity = Math.floor(available / detailRowWithGap)
 
-  // If content exceeds provisional capacity, reserve overflow row height
+  // If content exceeds provisional capacity, reserve overflow row height + gap before it
   if (totalContentUnits > provisionalCapacity) {
-    available -= LAYOUT.overflowActionRowH
+    // Reserve: overflowActionRowH + detailRowGap (gap between last detail row and overflow button)
+    available -= LAYOUT.overflowActionRowH + LAYOUT.detailRowGap
     const finalCapacity = Math.floor(available / detailRowWithGap)
     return Math.max(0, finalCapacity)
   }
@@ -333,6 +334,26 @@ function App() {
   // ==========================================================================
   // Primary layout is bounded by deterministic limits.
   // This guard handles host-rendering variance (fonts, accessibility text scaling).
+  //
+  // CRITICAL: Use refs for state values to avoid effect recreation cascade.
+  // If deps included finalDetailCapacity/guardedDetailCount, each decrement would
+  // recreate the observer, which fires on .observe(), causing a cascade that
+  // over-strips detail rows on first paint.
+  const expandedClusterIdRef = useRef(expandedClusterId)
+  const finalDetailCapacityRef = useRef(finalDetailCapacity)
+  const guardedDetailCountRef = useRef(guardedDetailCount)
+
+  // Keep refs in sync
+  useEffect(() => {
+    expandedClusterIdRef.current = expandedClusterId
+  }, [expandedClusterId])
+  useEffect(() => {
+    finalDetailCapacityRef.current = finalDetailCapacity
+  }, [finalDetailCapacity])
+  useEffect(() => {
+    guardedDetailCountRef.current = guardedDetailCount
+  }, [guardedDetailCount])
+
   useLayoutEffect(() => {
     if (!inlineMainRef.current || !isInitialized) return
 
@@ -360,15 +381,20 @@ function App() {
             (height > target ? ` — above ${target}px target` : '')
         )
 
+        // Read current values from refs (not closure) to avoid stale reads
+        const currentExpandedId = expandedClusterIdRef.current
+        const currentCapacity = finalDetailCapacityRef.current
+        const currentGuardedCount = guardedDetailCountRef.current
+
         // Only decrement if over target AND we have an expanded cluster
-        if (height > target && expandedClusterId && finalDetailCapacity > 0) {
-          const nextCount = finalDetailCapacity - 1
+        if (height > target && currentExpandedId && currentCapacity > 0) {
+          const nextCount = currentCapacity - 1
 
           // No-op if count unchanged (prevents thrash)
-          if (nextCount !== guardedDetailCount) {
+          if (nextCount !== currentGuardedCount) {
             setGuardedDetailCount(nextCount)
           }
-        } else if (height > target && expandedClusterId && finalDetailCapacity === 0) {
+        } else if (height > target && currentExpandedId && currentCapacity === 0) {
           // Zero-capacity reached but still over target - log the failure
           console.warn(
             `[MindSort Diagnostic] guard reached zero, card still exceeds target: ${height}px`
@@ -386,7 +412,7 @@ function App() {
       }
       observer.disconnect()
     }
-  }, [isInitialized, expandedClusterId, finalDetailCapacity, guardedDetailCount])
+  }, [isInitialized]) // Only depends on isInitialized - observer lifecycle decoupled from state
 
   // ==========================================================================
   // HANDLERS
@@ -875,24 +901,42 @@ function DetailRow({ unit }: DetailRowProps) {
         padding: '8px 10px',
         height: `${LAYOUT.detailRowH}px`,
         maxHeight: `${LAYOUT.detailRowH}px`,
+        boxSizing: 'border-box', // CRITICAL: padding included in height, else 36+16=52px
       }}
       role="listitem"
       aria-label={`${typeLabel}: ${unit.text}${unit.count !== undefined ? `, ${unit.count} thoughts` : ''}`}
     >
-      {/* Type icon */}
+      {/* Type icon - monochrome SVG, NOT emoji (compliance: design-guidelines) */}
       <span
         aria-hidden="true"
         style={{
-          fontSize: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           color: 'var(--color-text-tertiary, #73726C)',
           flexShrink: 0,
           width: '16px',
-          textAlign: 'center',
         }}
       >
-        {unit.type === 'summary' && '📝'}
-        {unit.type === 'thought' && '💭'}
-        {unit.type === 'subcluster' && '📁'}
+        {unit.type === 'summary' && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+          </svg>
+        )}
+        {unit.type === 'thought' && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        )}
+        {unit.type === 'subcluster' && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+        )}
       </span>
 
       {/* Priority badge for thoughts/subclusters */}
