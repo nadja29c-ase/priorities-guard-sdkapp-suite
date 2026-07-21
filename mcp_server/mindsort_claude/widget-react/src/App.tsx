@@ -243,10 +243,15 @@ function App() {
           // MindSort uses structuredContent.clusters (not .data)
           const resultClusters = result?.structuredContent?.clusters
           if (Array.isArray(resultClusters)) {
-            // Validate clusters have required structure
+            // Validate clusters have required structure (strict type guard)
+            // Must validate actual types, not just property existence, to prevent
+            // runtime crashes on malformed data (e.g., cluster_name: null)
             const validClusters = resultClusters.filter(
               (c): c is Cluster =>
-                c !== null && typeof c === 'object' && 'cluster_name' in c
+                c !== null &&
+                typeof c === 'object' &&
+                typeof (c as Record<string, unknown>).cluster_name === 'string' &&
+                typeof (c as Record<string, unknown>).sum_thought_items === 'number'
             )
             setClusters(validClusters)
             setIsInitialized(true)
@@ -282,16 +287,44 @@ function App() {
   )
 
   // Determine max rows based on accordion state
+  // When expanded, we need to ensure the expanded cluster stays visible
   const maxRows = expandedClusterId ? MAX_INLINE_ROWS_EXPANDED : MAX_INLINE_ROWS
-  const { visible: visibleClusters, overflow: boardOverflow } = useMemo(
-    () => truncateClusters(sortedClusters, maxRows),
-    [sortedClusters, maxRows]
-  )
 
-  // Find the expanded cluster (if any)
-  const expandedCluster = expandedClusterId
-    ? visibleClusters.find((c) => c.cluster_name === expandedClusterId) ?? null
-    : null
+  // Compute visible clusters, ensuring expanded cluster is always included
+  // BUG FIX: Without this, clicking cluster 4 or 5 (visible when collapsed)
+  // would make it disappear when maxRows shrinks from 5 to 3
+  const { visibleClusters, boardOverflow, expandedCluster } = useMemo(() => {
+    if (!expandedClusterId) {
+      // Not expanded: normal truncation
+      const { visible, overflow } = truncateClusters(sortedClusters, maxRows)
+      return { visibleClusters: visible, boardOverflow: overflow, expandedCluster: null }
+    }
+
+    // Find the expanded cluster in the full sorted list
+    const expanded = sortedClusters.find((c) => c.cluster_name === expandedClusterId) ?? null
+
+    if (!expanded) {
+      // Expanded cluster no longer exists (data changed) - fall back to normal truncation
+      const { visible, overflow } = truncateClusters(sortedClusters, maxRows)
+      return { visibleClusters: visible, boardOverflow: overflow, expandedCluster: null }
+    }
+
+    // Build visible list: expanded cluster first, then fill remaining slots
+    const expandedIndex = sortedClusters.indexOf(expanded)
+    const otherClusters = sortedClusters.filter((_, i) => i !== expandedIndex)
+    const remainingSlots = maxRows - 1 // Reserve 1 slot for expanded cluster
+    const visibleOthers = otherClusters.slice(0, remainingSlots)
+
+    // Final visible list: expanded cluster in its original position
+    // (or at the end if it was beyond the truncation point)
+    const visible = [...visibleOthers]
+    const insertIndex = Math.min(expandedIndex, visible.length)
+    visible.splice(insertIndex, 0, expanded)
+
+    const overflow = sortedClusters.length - visible.length
+
+    return { visibleClusters: visible, boardOverflow: overflow, expandedCluster: expanded }
+  }, [sortedClusters, maxRows, expandedClusterId])
 
   // Compute detail units and capacity for expanded cluster
   const detailUnits = useMemo(
@@ -581,7 +614,7 @@ function App() {
                 {isExpanded && (
                   <div
                     id={detailRegionId}
-                    role="region"
+                    role="list"
                     aria-label={`Details for ${cluster.cluster_name}`}
                     style={{
                       marginTop: `${LAYOUT.sectionGap}px`,
@@ -590,7 +623,7 @@ function App() {
                       gap: `${LAYOUT.detailRowGap}px`,
                     }}
                   >
-                    {/* Detail rows */}
+                    {/* Detail rows - role="listitem" requires parent role="list" */}
                     {visibleDetailUnits.map((unit, index) => (
                       <DetailRow key={`${unit.type}-${index}`} unit={unit} />
                     ))}
@@ -735,10 +768,10 @@ function ClusterRowToggle({
         background: 'var(--color-background-primary, #FFFFFF)',
         borderRadius: 'var(--border-radius-md, 8px)',
         padding: '10px 12px',
-        border: `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, rgba(31,30,29,0.15))`,
+        border: `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, #E0DFDB)`,
         borderLeft: hasPriority && colors
           ? `3px solid ${colors.border}`
-          : `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, rgba(31,30,29,0.15))`,
+          : `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, #E0DFDB)`,
         minHeight: `${LAYOUT.collapsedRowH}px`,
         cursor: 'pointer',
         textAlign: 'left',

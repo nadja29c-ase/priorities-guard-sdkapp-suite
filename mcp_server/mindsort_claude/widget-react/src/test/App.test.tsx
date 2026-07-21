@@ -857,9 +857,11 @@ describe('Accordion Expansion (inc_inline_accordion_bounded)', () => {
     fireEvent.click(row)
 
     // Detail region should exist with that ID
+    // Detail region uses role="list" to satisfy ARIA requirement
+    // (role="listitem" on detail rows requires parent with role="list")
     const detailRegion = document.getElementById(controlsId)
     expect(detailRegion).toBeInTheDocument()
-    expect(detailRegion).toHaveAttribute('role', 'region')
+    expect(detailRegion).toHaveAttribute('role', 'list')
   })
 
   // Test 9: Overflow control - "View remaining cluster content"
