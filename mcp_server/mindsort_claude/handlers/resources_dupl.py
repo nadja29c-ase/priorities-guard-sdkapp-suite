@@ -36,7 +36,7 @@ logger = structlog.get_logger(__name__)
 # must import WIDGET_URI from here. Do not duplicate this string elsewhere.
 # See OPERATIONS_PREDEPLOY "Widget Bundle Changes" and ADR "Widget URI Consistency".
 
-WIDGET_VERSION = "1"
+WIDGET_VERSION = "2"
 WIDGET_URI = f"ui://mindsort-claude/dashboard-v{WIDGET_VERSION}.html"
 
 # MIME type: SDK declares "text/html;profile=mcp-app", PG ships "text/html+mcp"
