@@ -753,18 +753,31 @@ function ClusterRowToggle({
         e.currentTarget.style.boxShadow = 'none'
       }}
     >
-      {/* Expand/collapse indicator */}
+      {/* Expand/collapse indicator - SVG chevron (compliance: design-guidelines) */}
       <span
         aria-hidden="true"
         style={{
-          fontSize: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           color: 'var(--color-text-tertiary, #73726C)',
           flexShrink: 0,
           transition: 'transform 0.15s ease',
           transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
         }}
       >
-        ▶
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
       </span>
 
       {/* Priority badge (only if prioritized) - TEXT conveys priority, not only color */}
