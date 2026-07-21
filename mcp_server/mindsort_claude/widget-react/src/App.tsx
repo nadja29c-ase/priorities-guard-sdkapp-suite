@@ -1,20 +1,24 @@
 /**
- * MindSort Claude Widget - Inline Cluster Overview
+ * MindSort Claude Widget - Inline Cluster Overview with Accordion Expansion
+ *
+ * COMPLIANCE: This uses permitted in-place expand/collapse behavior (explicitly
+ * listed under "Handle within your app" in the design guidelines) and does NOT
+ * introduce navigation, breadcrumbs, nested views, or internal scrolling.
  *
  * INLINE-ONLY: Shows cluster overview with priorities-first ordering.
- * Replaces the priority-only view with a per-cluster list that is valuable
- * even when no priorities are set.
+ * One-cluster-at-a-time accordion expansion within 500px height limit.
  *
- * Design: inc_inline_card_cluster_overview.md
+ * Design: inc_inline_accordion_bounded.md
  * - Header: "Your MindSort AI Board" + count summary
- * - Rows: one per cluster (badge, name, tag icon, thought count)
- * - Ordering: prioritized first (P1→P2→P3), then by size descending
- * - Truncation: MAX_INLINE_ROWS with "+N more clusters"
- * - Action: "Open full board →" (callServerTool)
+ * - Rows: one per cluster (badge, name, tag icon, thought count) - TOGGLEABLE
+ * - Expanded detail: summary → thoughts → subclusters (as rows, NOT nested cards)
+ * - NO tag pills in inline detail (indicator only on collapsed row)
+ * - Deterministic bounded-row layout with explicit height model
+ * - "View remaining cluster content" overflow → load_saved_board (whole board)
  *
  * Data path: ontoolresult -> structuredContent.clusters
  */
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
+import { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react'
 import {
   useApp,
   useHostStyles,
@@ -27,29 +31,191 @@ import {
   getTotalThoughtCount,
   sortClustersForOverview,
   truncateClusters,
+  normalizeThoughtItem,
+  rankToNumber,
 } from './utils'
 
+// =============================================================================
+// LAYOUT MODEL CONSTANTS
+// =============================================================================
+// These are explicit CSS dimensions verified against the real Claude host.
+// Every visible element belongs to exactly one term. No element is unaccounted.
+//
+// Heights are bounded (fixed height or max-height + 1-line clamp), not assumed.
+// Post-deploy: verify via [MindSort Diagnostic] console logs.
+
+const LAYOUT = {
+  /** Card padding: 16px top + 16px bottom */
+  outerPadding: 32,
+  /** Board header: "Your MindSort AI Board" + counts line */
+  boardHeaderHeight: 44,
+  /** Collapsed cluster row height (44px touch target + padding) */
+  collapsedRowH: 48,
+  /** Gap between collapsed rows */
+  collapsedRowGap: 6,
+  /** Expanded detail row height (1-line clamped content) */
+  detailRowH: 36,
+  /** Gap between detail rows */
+  detailRowGap: 4,
+  /** Gap between expanded detail and next collapsed row */
+  sectionGap: 8,
+  /** Overflow action row: "View remaining cluster content" (touch target) */
+  overflowActionRowH: 44,
+  /** Board-level overflow row: "+N more clusters" text height */
+  boardOverflowRowH: 20,
+  /** Footer: "Open full board" button area */
+  actionFooterHeight: 56,
+  /** Safety margin: target ≤480px to give host variance headroom */
+  safetyMargin: 20,
+  /** Maximum height limit per guidelines */
+  maxHeight: 500,
+  /** Target threshold (maxHeight - safetyMargin) */
+  targetThreshold: 480,
+} as const
+
 /**
- * MAX_INLINE_ROWS: Maximum cluster rows before truncation.
- *
- * Measured to fit within 500px height budget:
- * - Header: ~44px (title + summary)
- * - Footer: ~56px (overflow line + button)
- * - Padding: 32px (16px top + bottom)
- * - Available: ~368px
- * - Row height: ~48px (single line, 44pt touch target)
- * - Max rows: floor(368/48) ≈ 7
- *
- * Using 5 for conservative margin at varying font sizes.
- * The briefing's starting estimate was ~5; measurement confirms this is safe.
+ * MAX_INLINE_ROWS: Maximum collapsed cluster rows before truncation.
+ * Used when NO cluster is expanded.
  */
 const MAX_INLINE_ROWS = 5
+
+/**
+ * MAX_INLINE_ROWS_EXPANDED: Maximum collapsed cluster rows when one is expanded.
+ * Reduced to make room for expanded detail content.
+ */
+const MAX_INLINE_ROWS_EXPANDED = 3
+
+// =============================================================================
+// LAYOUT MODEL HELPERS
+// =============================================================================
+
+/**
+ * Represents a single unit of expanded detail content.
+ * Used for deterministic capacity computation and rendering.
+ */
+interface DetailUnit {
+  type: 'summary' | 'thought' | 'subcluster'
+  text: string
+  priority?: { rank: 'P1' | 'P2' | 'P3' }
+  /** For subclusters: thought count */
+  count?: number
+}
+
+/**
+ * Compute the final detail capacity for expanded cluster content.
+ *
+ * Uses the deterministic layout model with explicit terms.
+ * Reserves overflow row height BEFORE computing final capacity.
+ *
+ * @param visibleCollapsedRows - Number of visible collapsed cluster rows
+ * @param hasBoardOverflow - Whether "+N more clusters" is shown
+ * @param totalContentUnits - Total units the expanded cluster has
+ * @returns finalDetailCapacity (may be 0 for zero-capacity fallback)
+ */
+function computeDetailCapacity(
+  visibleCollapsedRows: number,
+  hasBoardOverflow: boolean,
+  totalContentUnits: number
+): number {
+  // Account for all fixed elements
+  let fixed =
+    LAYOUT.outerPadding +
+    LAYOUT.boardHeaderHeight +
+    LAYOUT.actionFooterHeight +
+    LAYOUT.safetyMargin
+
+  // Collapsed rows (including the expanded cluster's own header row)
+  // Each row + gap, minus one gap for the last row
+  const collapsedRowsTotal =
+    visibleCollapsedRows * LAYOUT.collapsedRowH +
+    Math.max(0, visibleCollapsedRows - 1) * LAYOUT.collapsedRowGap
+
+  fixed += collapsedRowsTotal
+
+  // Board-level overflow ("+N more clusters")
+  if (hasBoardOverflow) {
+    fixed += LAYOUT.boardOverflowRowH
+  }
+
+  // Section gap between expanded detail and rest
+  fixed += LAYOUT.sectionGap
+
+  // Available space for detail content
+  let available = LAYOUT.targetThreshold - fixed
+
+  // Provisional capacity (before overflow row reservation)
+  const detailRowWithGap = LAYOUT.detailRowH + LAYOUT.detailRowGap
+  const provisionalCapacity = Math.floor(available / detailRowWithGap)
+
+  // If content exceeds provisional capacity, reserve overflow row height
+  if (totalContentUnits > provisionalCapacity) {
+    available -= LAYOUT.overflowActionRowH
+    const finalCapacity = Math.floor(available / detailRowWithGap)
+    return Math.max(0, finalCapacity)
+  }
+
+  return Math.max(0, provisionalCapacity)
+}
+
+/**
+ * Extract detail units from a cluster in OpenAI order:
+ * (1) summary → (2) thought items → (3) subclusters
+ *
+ * Thoughts are priority-sorted (P1 → P2 → P3 → unprioritized).
+ * Subclusters are shown as named rows with count, NOT nested cards.
+ * NO tag pills (tags are indicator-only on collapsed row).
+ */
+function extractDetailUnits(cluster: Cluster): DetailUnit[] {
+  const units: DetailUnit[] = []
+
+  // (1) Summary - 1 unit if present
+  if (cluster.summary) {
+    units.push({ type: 'summary', text: cluster.summary })
+  }
+
+  // (2) Thought items - priority-sorted
+  const thoughts = (cluster.thought_items ?? []).map(normalizeThoughtItem)
+  const sortedThoughts = [...thoughts].sort((a, b) => {
+    return rankToNumber(a.priority?.rank) - rankToNumber(b.priority?.rank)
+  })
+  for (const thought of sortedThoughts) {
+    units.push({
+      type: 'thought',
+      text: thought.text,
+      priority: thought.priority,
+    })
+  }
+
+  // (3) Subclusters - as named rows with count, NOT nested
+  const subclusters = cluster.subclusters ?? []
+  for (const sub of subclusters) {
+    units.push({
+      type: 'subcluster',
+      text: sub.subcluster_name,
+      count: sub.sum_thought_items,
+      priority: sub.priority,
+    })
+  }
+
+  return units
+}
+
+// =============================================================================
+// MAIN APP COMPONENT
+// =============================================================================
 
 function App() {
   // Board data from tool results
   const [clusters, setClusters] = useState<Cluster[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
   const [isLoadingBoard, setIsLoadingBoard] = useState(false)
+
+  // Accordion state: only ONE cluster expanded at a time
+  const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null)
+
+  // ResizeObserver guard: current detail count for the expanded cluster
+  // Used for monotonic decrement when host renders larger than expected
+  const [guardedDetailCount, setGuardedDetailCount] = useState<number | null>(null)
 
   // Stale bridge detection
   const [isBridgeStale, setIsBridgeStale] = useState(false)
@@ -61,7 +227,7 @@ function App() {
   const inlineMainRef = useRef<HTMLElement | null>(null)
 
   // MCP Apps bridge: useApp hook
-  // CRITICAL: availableDisplayModes is ['inline'] ONLY - no fullscreen yet
+  // CRITICAL: availableDisplayModes is ['inline'] ONLY - no fullscreen yet (increment 2)
   const { app } = useApp({
     appInfo: { name: 'MindSort', version: '1.0.0' },
     capabilities: {
@@ -83,6 +249,9 @@ function App() {
             )
             setClusters(validClusters)
             setIsInitialized(true)
+            // Reset accordion state on new data
+            setExpandedClusterId(null)
+            setGuardedDetailCount(null)
           }
         } catch (err) {
           console.error('MindSort widget: Error processing tool result:', err)
@@ -105,27 +274,128 @@ function App() {
     return () => clearTimeout(timeout)
   }, [])
 
-  // Height guard diagnostic - verify inline card ≤500px
-  // Runs after render when clusters change; logs violation for post-deploy verification
+  // Sort and truncate clusters - memoized for performance
+  const sortedClusters = useMemo(
+    () => sortClustersForOverview(clusters),
+    [clusters]
+  )
+
+  // Determine max rows based on accordion state
+  const maxRows = expandedClusterId ? MAX_INLINE_ROWS_EXPANDED : MAX_INLINE_ROWS
+  const { visible: visibleClusters, overflow: boardOverflow } = useMemo(
+    () => truncateClusters(sortedClusters, maxRows),
+    [sortedClusters, maxRows]
+  )
+
+  // Find the expanded cluster (if any)
+  const expandedCluster = expandedClusterId
+    ? visibleClusters.find((c) => c.cluster_name === expandedClusterId) ?? null
+    : null
+
+  // Compute detail units and capacity for expanded cluster
+  const detailUnits = useMemo(
+    () => (expandedCluster ? extractDetailUnits(expandedCluster) : []),
+    [expandedCluster]
+  )
+
+  const computedCapacity = useMemo(() => {
+    if (!expandedCluster) return 0
+    return computeDetailCapacity(
+      visibleClusters.length,
+      boardOverflow > 0,
+      detailUnits.length
+    )
+  }, [expandedCluster, visibleClusters.length, boardOverflow, detailUnits.length])
+
+  // Final detail capacity: use guarded count if set (for ResizeObserver decrement),
+  // otherwise use computed capacity
+  const finalDetailCapacity =
+    guardedDetailCount !== null
+      ? Math.min(guardedDetailCount, computedCapacity)
+      : computedCapacity
+
+  // Visible detail units and overflow count
+  const visibleDetailUnits = detailUnits.slice(0, finalDetailCapacity)
+  const hiddenDetailUnits = detailUnits.slice(finalDetailCapacity)
+  // N = hidden THOUGHT items + hidden SUBCLUSTERS (summary omission not counted)
+  const overflowCount = hiddenDetailUnits.filter(
+    (u) => u.type === 'thought' || u.type === 'subcluster'
+  ).length
+  const hasDetailOverflow = overflowCount > 0 || finalDetailCapacity === 0
+
+  // Reset guarded count when cluster changes or collapses
+  useEffect(() => {
+    setGuardedDetailCount(null)
+  }, [expandedClusterId])
+
+  // ==========================================================================
+  // ResizeObserver GUARD - monotonic decrement, strict termination
+  // ==========================================================================
+  // Primary layout is bounded by deterministic limits.
+  // This guard handles host-rendering variance (fonts, accessibility text scaling).
   useLayoutEffect(() => {
     if (!inlineMainRef.current || !isInitialized) return
 
-    const height = inlineMainRef.current.scrollHeight
-    const limit = 500
+    const target = LAYOUT.targetThreshold // ≤480px, not 500
+    let rafId: number | null = null
+    let isDisconnected = false
 
-    // Always log for diagnostic visibility
-    console.log(
-      `[MindSort Diagnostic] Inline main scrollHeight: ${height}px` +
-        (height > limit ? ` — EXCEEDS ${limit}px LIMIT` : '')
-    )
+    const observer = new ResizeObserver((_entries) => {
+      if (isDisconnected) return
 
-    if (height > limit) {
-      console.warn(
-        `[MindSort Diagnostic] Height violation: ${height}px > ${limit}px. ` +
-          `Reduce MAX_INLINE_ROWS or row height.`
-      )
+      // Cancel any pending RAF
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+
+      rafId = requestAnimationFrame(() => {
+        if (isDisconnected || !inlineMainRef.current) return
+
+        const height = inlineMainRef.current.scrollHeight
+
+        // Always log for diagnostic visibility
+        console.log(
+          `[MindSort Diagnostic] Inline main scrollHeight: ${height}px` +
+            (height > LAYOUT.maxHeight ? ` — EXCEEDS ${LAYOUT.maxHeight}px LIMIT` : '') +
+            (height > target ? ` — above ${target}px target` : '')
+        )
+
+        // Only decrement if over target AND we have an expanded cluster
+        if (height > target && expandedClusterId && finalDetailCapacity > 0) {
+          const nextCount = finalDetailCapacity - 1
+
+          // No-op if count unchanged (prevents thrash)
+          if (nextCount !== guardedDetailCount) {
+            setGuardedDetailCount(nextCount)
+          }
+        } else if (height > target && expandedClusterId && finalDetailCapacity === 0) {
+          // Zero-capacity reached but still over target - log the failure
+          console.warn(
+            `[MindSort Diagnostic] guard reached zero, card still exceeds target: ${height}px`
+          )
+        }
+      })
+    })
+
+    observer.observe(inlineMainRef.current)
+
+    return () => {
+      isDisconnected = true
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+      observer.disconnect()
     }
-  }, [isInitialized, clusters])
+  }, [isInitialized, expandedClusterId, finalDetailCapacity, guardedDetailCount])
+
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
+
+  // Toggle cluster expansion (accordion: opening one closes the previous)
+  const handleToggleCluster = useCallback((clusterId: string) => {
+    setExpandedClusterId((prev) => (prev === clusterId ? null : clusterId))
+  }, [])
 
   // Handle "Open full board" button click
   const handleOpenFullBoard = useCallback(async () => {
@@ -134,7 +404,9 @@ function App() {
     setIsLoadingBoard(true)
     try {
       // Call load_saved_board to render the full board in conversation
-      // This is a real action per PG-Claude's proven pattern
+      // NOTE: This renders the WHOLE board, not a specific cluster.
+      // Both "Open full board" and "View remaining cluster content" use this
+      // (intentional redundancy, resolved in increment 2 fullscreen).
       await appRef.current.callServerTool({
         name: 'load_saved_board',
         arguments: {},
@@ -146,9 +418,31 @@ function App() {
     }
   }, [isLoadingBoard])
 
-  // Stale session overlay - MUST be checked BEFORE loading state.
-  // If the bridge never connects, isInitialized stays false forever,
-  // but we still need to show the stale overlay after 3s timeout.
+  // Handle "View remaining cluster content" overflow action
+  const handleViewRemainingContent = useCallback(async () => {
+    if (!appRef.current || isLoadingBoard || !expandedCluster) return
+
+    setIsLoadingBoard(true)
+    try {
+      // CONFIRMED MECHANISM: callServerTool('load_saved_board', {})
+      // No cluster-scoped tool exists. This renders the whole board.
+      // The user will see all cluster contents including this one.
+      await appRef.current.callServerTool({
+        name: 'load_saved_board',
+        arguments: {},
+      })
+    } catch (err) {
+      console.error('MindSort widget: Error loading full board:', err)
+    } finally {
+      setIsLoadingBoard(false)
+    }
+  }, [isLoadingBoard, expandedCluster])
+
+  // ==========================================================================
+  // RENDER: Loading/Stale states
+  // ==========================================================================
+
+  // Stale session overlay - MUST be checked BEFORE loading state
   if (isBridgeStale) {
     return (
       <div
@@ -172,7 +466,7 @@ function App() {
     )
   }
 
-  // Loading state - checked AFTER stale, so stale wins if bridge never connects
+  // Loading state
   if (!isInitialized) {
     return (
       <div
@@ -190,9 +484,10 @@ function App() {
     )
   }
 
-  // Sort and truncate clusters
-  const sortedClusters = sortClustersForOverview(clusters)
-  const { visible: visibleClusters, overflow } = truncateClusters(sortedClusters, MAX_INLINE_ROWS)
+  // ==========================================================================
+  // RENDER: Main card
+  // ==========================================================================
+
   const clusterCount = clusters.length
   const thoughtCount = getTotalThoughtCount(clusters)
 
@@ -222,7 +517,7 @@ function App() {
         <h2
           style={{
             fontSize: '14px',
-            fontWeight: 500, // Guideline: two weights only (400, 500)
+            fontWeight: 500,
             color: 'var(--color-text-primary, #141413)',
             margin: 0,
           }}
@@ -241,10 +536,54 @@ function App() {
 
       {/* Cluster list */}
       {visibleClusters.length > 0 ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {visibleClusters.map((cluster, index) => (
-            <ClusterRow key={`${cluster.cluster_name}-${index}`} cluster={cluster} />
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: `${LAYOUT.collapsedRowGap}px` }}>
+          {visibleClusters.map((cluster) => {
+            const isExpanded = expandedClusterId === cluster.cluster_name
+            const detailRegionId = `cluster-detail-${cluster.cluster_name.replace(/\s+/g, '-')}`
+
+            return (
+              <div key={cluster.cluster_name}>
+                {/* Cluster row - now a toggle button */}
+                <ClusterRowToggle
+                  cluster={cluster}
+                  isExpanded={isExpanded}
+                  detailRegionId={detailRegionId}
+                  onToggle={() => handleToggleCluster(cluster.cluster_name)}
+                />
+
+                {/* Expanded detail section */}
+                {isExpanded && (
+                  <div
+                    id={detailRegionId}
+                    role="region"
+                    aria-label={`Details for ${cluster.cluster_name}`}
+                    style={{
+                      marginTop: `${LAYOUT.sectionGap}px`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: `${LAYOUT.detailRowGap}px`,
+                    }}
+                  >
+                    {/* Detail rows */}
+                    {visibleDetailUnits.map((unit, index) => (
+                      <DetailRow key={`${unit.type}-${index}`} unit={unit} />
+                    ))}
+
+                    {/* Zero-capacity fallback: show overflow action even with no detail rows */}
+                    {/* Overflow control: "View remaining cluster content" */}
+                    {hasDetailOverflow && (
+                      <OverflowActionRow
+                        clusterName={cluster.cluster_name}
+                        overflowCount={overflowCount}
+                        isLoading={isLoadingBoard}
+                        onAction={handleViewRemainingContent}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       ) : (
         <p
@@ -268,14 +607,14 @@ function App() {
           marginTop: '12px',
         }}
       >
-        {/* Overflow indicator */}
+        {/* Board-level overflow indicator */}
         <span
           style={{
             fontSize: '12px',
             color: 'var(--color-text-tertiary, #73726C)',
           }}
         >
-          {overflow > 0 ? `+${overflow} more cluster${overflow !== 1 ? 's' : ''}` : ''}
+          {boardOverflow > 0 ? `+${boardOverflow} more cluster${boardOverflow !== 1 ? 's' : ''}` : ''}
         </span>
 
         {/* Open full board button */}
@@ -293,7 +632,7 @@ function App() {
             borderRadius: 'var(--border-radius-md, 8px)',
             cursor: isLoadingBoard ? 'wait' : 'pointer',
             opacity: isLoadingBoard ? 0.6 : 1,
-            minHeight: '44px', // Touch target
+            minHeight: '44px',
             minWidth: '44px',
           }}
           aria-label="Open full board in conversation"
@@ -305,14 +644,33 @@ function App() {
   )
 }
 
+// =============================================================================
+// CLUSTER ROW TOGGLE
+// =============================================================================
+
+interface ClusterRowToggleProps {
+  cluster: Cluster
+  isExpanded: boolean
+  detailRegionId: string
+  onToggle: () => void
+}
+
 /**
- * Single cluster row: badge (if prioritized) + name + tag icon + thought count
+ * Cluster row as a toggle button for accordion expansion.
  *
- * - Prioritized clusters get a left-accent border in the rank color
- * - Tag icon (muted) shown when cluster has tags
- * - Single-line layout with ellipsis truncation
+ * Accessibility:
+ * - Real button: Enter AND Space activate
+ * - aria-expanded reflects state
+ * - aria-controls references the detail region
+ * - Focus ring using --color-ring-primary
+ * - Priority expressed by badge TEXT (not only color)
  */
-function ClusterRow({ cluster }: { cluster: Cluster }) {
+function ClusterRowToggle({
+  cluster,
+  isExpanded,
+  detailRegionId,
+  onToggle,
+}: ClusterRowToggleProps) {
   const hasPriority = !!cluster.priority?.rank
   const rank = cluster.priority?.rank
   const hasTags = (cluster.tags?.length ?? 0) > 0
@@ -338,34 +696,64 @@ function ClusterRow({ cluster }: { cluster: Cluster }) {
   const colors = rank ? rankColors[rank] : null
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={isExpanded}
+      aria-controls={detailRegionId}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
+        width: '100%',
         background: 'var(--color-background-primary, #FFFFFF)',
         borderRadius: 'var(--border-radius-md, 8px)',
         padding: '10px 12px',
         border: `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, rgba(31,30,29,0.15))`,
-        // Left accent border for prioritized clusters
         borderLeft: hasPriority && colors
           ? `3px solid ${colors.border}`
           : `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, rgba(31,30,29,0.15))`,
-        minHeight: '44px', // Touch target compliance
+        minHeight: `${LAYOUT.collapsedRowH}px`,
+        cursor: 'pointer',
+        textAlign: 'left',
+        // Focus ring
+        outline: 'none',
+      }}
+      // Focus ring via CSS-in-JS workaround (onFocus/onBlur for inline styles)
+      onFocus={(e) => {
+        e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #3B82F6)'
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.boxShadow = 'none'
       }}
     >
-      {/* Priority badge (only if prioritized) */}
+      {/* Expand/collapse indicator */}
+      <span
+        aria-hidden="true"
+        style={{
+          fontSize: '12px',
+          color: 'var(--color-text-tertiary, #73726C)',
+          flexShrink: 0,
+          transition: 'transform 0.15s ease',
+          transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+        }}
+      >
+        ▶
+      </span>
+
+      {/* Priority badge (only if prioritized) - TEXT conveys priority, not only color */}
       {hasPriority && rank && colors && (
         <span
           style={{
             fontSize: '11px',
-            fontWeight: 500, // Guideline: two weights only (400, 500)
+            fontWeight: 500,
             padding: '2px 6px',
             borderRadius: '4px',
             background: colors.bg,
             color: colors.text,
             flexShrink: 0,
           }}
+          // Screen reader: badge text "P1"/"P2"/"P3" conveys priority without color
         >
           {rank}
         </span>
@@ -381,8 +769,9 @@ function ClusterRow({ cluster }: { cluster: Cluster }) {
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          minWidth: 0, // Required for text-overflow in flex child
+          minWidth: 0,
         }}
+        title={cluster.cluster_name} // Full text for truncated names
       >
         {cluster.cluster_name}
       </span>
@@ -399,7 +788,6 @@ function ClusterRow({ cluster }: { cluster: Cluster }) {
             flexShrink: 0,
           }}
         >
-          {/* Outlined tag icon - stroke="currentColor" inherits muted color */}
           <svg
             width="14"
             height="14"
@@ -411,7 +799,6 @@ function ClusterRow({ cluster }: { cluster: Cluster }) {
             strokeLinejoin="round"
             aria-hidden="true"
           >
-            {/* Tag shape: angled rectangle with circle */}
             <path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.42 0l6.58-6.58a1 1 0 0 0 0-1.42L12 2Z" />
             <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none" />
           </svg>
@@ -429,7 +816,206 @@ function ClusterRow({ cluster }: { cluster: Cluster }) {
       >
         {cluster.sum_thought_items ?? 0} thought{(cluster.sum_thought_items ?? 0) !== 1 ? 's' : ''}
       </span>
+    </button>
+  )
+}
+
+// =============================================================================
+// DETAIL ROW
+// =============================================================================
+
+interface DetailRowProps {
+  unit: DetailUnit
+}
+
+/**
+ * Single row in expanded detail section.
+ *
+ * - Summary: 1-line clamped, tertiary text
+ * - Thought: 1-line clamped, optional priority badge
+ * - Subcluster: name + count, optional priority badge
+ *
+ * All have fixed height via max-height + 1-line clamp.
+ * Full text preserved via title attribute for accessibility.
+ */
+function DetailRow({ unit }: DetailRowProps) {
+  const hasPriority = !!unit.priority?.rank
+  const rank = unit.priority?.rank
+
+  const rankColors: Record<string, { bg: string; text: string }> = {
+    P1: {
+      bg: 'var(--color-background-danger, #F7ECEC)',
+      text: 'var(--color-text-danger, #7F2C28)',
+    },
+    P2: {
+      bg: 'var(--color-background-warning, #F6EEDF)',
+      text: 'var(--color-text-warning, #5A4815)',
+    },
+    P3: {
+      bg: 'var(--color-background-info, #D6E4F6)',
+      text: 'var(--color-text-info, #3266AD)',
+    },
+  }
+  const colors = rank ? rankColors[rank] : null
+
+  // Type-specific prefix for screen readers
+  const typeLabel = unit.type === 'summary' ? 'Summary' :
+                    unit.type === 'thought' ? 'Thought' : 'Subcluster'
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: unit.type === 'summary'
+          ? 'var(--color-background-tertiary, #FAFAF8)'
+          : 'var(--color-background-primary, #FFFFFF)',
+        borderRadius: 'var(--border-radius-sm, 6px)',
+        padding: '8px 10px',
+        height: `${LAYOUT.detailRowH}px`,
+        maxHeight: `${LAYOUT.detailRowH}px`,
+      }}
+      role="listitem"
+      aria-label={`${typeLabel}: ${unit.text}${unit.count !== undefined ? `, ${unit.count} thoughts` : ''}`}
+    >
+      {/* Type icon */}
+      <span
+        aria-hidden="true"
+        style={{
+          fontSize: '10px',
+          color: 'var(--color-text-tertiary, #73726C)',
+          flexShrink: 0,
+          width: '16px',
+          textAlign: 'center',
+        }}
+      >
+        {unit.type === 'summary' && '📝'}
+        {unit.type === 'thought' && '💭'}
+        {unit.type === 'subcluster' && '📁'}
+      </span>
+
+      {/* Priority badge for thoughts/subclusters */}
+      {hasPriority && rank && colors && unit.type !== 'summary' && (
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 500,
+            padding: '1px 4px',
+            borderRadius: '3px',
+            background: colors.bg,
+            color: colors.text,
+            flexShrink: 0,
+          }}
+        >
+          {rank}
+        </span>
+      )}
+
+      {/* Content text - 1-line clamp */}
+      <span
+        style={{
+          flex: 1,
+          fontSize: '12px',
+          fontWeight: unit.type === 'summary' ? 400 : 500,
+          color: unit.type === 'summary'
+            ? 'var(--color-text-secondary, #3D3D3A)'
+            : 'var(--color-text-primary, #141413)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          minWidth: 0,
+          fontStyle: unit.type === 'summary' ? 'italic' : 'normal',
+        }}
+        title={unit.text} // Full text for accessibility
+      >
+        {unit.text}
+      </span>
+
+      {/* Subcluster count */}
+      {unit.type === 'subcluster' && unit.count !== undefined && (
+        <span
+          style={{
+            fontSize: '11px',
+            color: 'var(--color-text-tertiary, #73726C)',
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {unit.count} thought{unit.count !== 1 ? 's' : ''}
+        </span>
+      )}
     </div>
+  )
+}
+
+// =============================================================================
+// OVERFLOW ACTION ROW
+// =============================================================================
+
+interface OverflowActionRowProps {
+  clusterName: string
+  overflowCount: number
+  isLoading: boolean
+  onAction: () => void
+}
+
+/**
+ * "View remaining cluster content" overflow control.
+ *
+ * Fixed height, single line, touch-target compliant.
+ * Accessible name includes cluster name.
+ * Calls load_saved_board (renders whole board).
+ *
+ * N = hidden THOUGHT items + hidden SUBCLUSTERS
+ * (summary omission is not counted as "remaining content")
+ */
+function OverflowActionRow({
+  clusterName,
+  overflowCount,
+  isLoading,
+  onAction,
+}: OverflowActionRowProps) {
+  // Build count string (optional, fits on one line)
+  const countStr = overflowCount > 0 ? ` (${overflowCount} more)` : ''
+
+  return (
+    <button
+      type="button"
+      onClick={onAction}
+      disabled={isLoading}
+      aria-label={`View remaining content in ${clusterName}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        width: '100%',
+        height: `${LAYOUT.overflowActionRowH}px`,
+        minHeight: `${LAYOUT.overflowActionRowH}px`,
+        padding: '8px 12px',
+        fontSize: '12px',
+        fontWeight: 500,
+        color: 'var(--color-text-info, #1E40AF)',
+        background: 'var(--color-background-info, #EFF6FF)',
+        border: 'none',
+        borderRadius: 'var(--border-radius-md, 8px)',
+        cursor: isLoading ? 'wait' : 'pointer',
+        opacity: isLoading ? 0.6 : 1,
+        outline: 'none',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #3B82F6)'
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.boxShadow = 'none'
+      }}
+    >
+      {isLoading ? 'Loading...' : `View remaining cluster content${countStr}`}
+    </button>
   )
 }
 
