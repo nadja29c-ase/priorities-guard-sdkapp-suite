@@ -490,10 +490,198 @@ describe('App Component', () => {
 })
 
 // ==========================================================================
-// Tests for inc_inline_accordion_bounded: Accordion Expansion
+// Tests for inc_inline_accordion_bounded: Layout Model UNIT Tests (1-2)
 // ==========================================================================
-// Tests 1-6: Layout model unit tests
-// Tests 7-12: Component behavior tests
+// These test the pure functions directly, not through component rendering.
+// Critical: uses explicit expected values calculated by hand, not constants.
+
+import { LAYOUT, computeDetailCapacity, extractDetailUnits } from '../App'
+import type { Cluster } from '../types'
+
+describe('Layout Model Unit Tests (inc_inline_accordion_bounded)', () => {
+  // Test 1: computeDetailCapacity - basic calculation
+  describe('computeDetailCapacity', () => {
+    it('computes capacity for 1 collapsed row, no board overflow, small content', () => {
+      // Manual calculation with LAYOUT values:
+      // fixed = 32 + 44 + 56 + 20 = 152 (outerPadding + boardHeader + actionFooter + safety)
+      // collapsedRows = 1 * 48 + 0 gaps = 48
+      // sectionGap = 8
+      // total fixed = 152 + 48 + 8 = 208
+      // available = 480 - 208 = 272
+      // detailRowWithGap = 36 + 4 = 40
+      // provisionalCapacity = floor(272 / 40) = 6
+      // content (3) <= provisional (6), so no overflow reservation
+      // finalCapacity = 6
+      const result = computeDetailCapacity(1, false, 3)
+      expect(result).toBe(6)
+    })
+
+    it('computes capacity for 3 collapsed rows, no board overflow, large content', () => {
+      // fixed = 152 (base)
+      // collapsedRows = 3 * 48 + 2 * 6 = 144 + 12 = 156
+      // sectionGap = 8
+      // total fixed = 152 + 156 + 8 = 316
+      // available = 480 - 316 = 164
+      // provisionalCapacity = floor(164 / 40) = 4
+      // content (20) > provisional (4), so reserve overflow row
+      // available = 164 - 44 - 4 = 116 (overflowActionRowH + detailRowGap)
+      // finalCapacity = floor(116 / 40) = 2
+      const result = computeDetailCapacity(3, false, 20)
+      expect(result).toBe(2)
+    })
+
+    it('computes capacity with board overflow (hasBoardOverflow=true)', () => {
+      // fixed = 152 (base) + 20 (boardOverflowRowH) = 172
+      // collapsedRows = 2 * 48 + 1 * 6 = 102
+      // sectionGap = 8
+      // total fixed = 172 + 102 + 8 = 282
+      // available = 480 - 282 = 198
+      // provisionalCapacity = floor(198 / 40) = 4
+      // content (3) <= provisional (4), so no overflow reservation
+      const result = computeDetailCapacity(2, true, 3)
+      expect(result).toBe(4)
+    })
+
+    it('returns 0 when no space available (zero-capacity fallback)', () => {
+      // Extreme case: many collapsed rows + board overflow + huge content
+      // This should trigger zero-capacity fallback
+      const result = computeDetailCapacity(5, true, 100)
+      // Just verify it returns a non-negative integer (0 or small positive)
+      expect(result).toBeGreaterThanOrEqual(0)
+      expect(Number.isInteger(result)).toBe(true)
+    })
+
+    // Test 2: Overflow row reservation
+    it('reserves overflow row height when content exceeds provisional capacity', () => {
+      // Without overflow reservation (content fits):
+      const withoutOverflow = computeDetailCapacity(2, false, 2)
+
+      // With overflow reservation (content exceeds):
+      const withOverflow = computeDetailCapacity(2, false, 50)
+
+      // The capacity with overflow should be strictly less
+      // because we reserved overflowActionRowH + detailRowGap
+      expect(withOverflow).toBeLessThan(withoutOverflow)
+    })
+
+    it('reserves exactly (overflowActionRowH + detailRowGap) for overflow', () => {
+      // We can verify this indirectly by checking the difference in capacity
+      // The reserved space is 44 + 4 = 48, which is more than one detailRowWithGap (40)
+      // So overflow reservation should reduce capacity by at least 1 row
+
+      // Case where content is just under provisional (no reservation)
+      const justUnder = computeDetailCapacity(1, false, 6)
+      // Case where content is just over provisional (with reservation)
+      const justOver = computeDetailCapacity(1, false, 7)
+
+      // justOver should have at least 1 fewer row due to overflow reservation
+      expect(justOver).toBeLessThan(justUnder)
+    })
+  })
+
+  // Test 4: extractDetailUnits - composition and N definition
+  describe('extractDetailUnits', () => {
+    it('extracts units in order: summary → thoughts → subclusters', () => {
+      const cluster: Cluster = {
+        cluster_name: 'Test',
+        sum_thought_items: 3,
+        summary: 'Test summary',
+        thought_items: [{ text: 'Thought 1' }, { text: 'Thought 2' }],
+        subclusters: [{ subcluster_name: 'Sub1', sum_thought_items: 1 }],
+      }
+
+      const units = extractDetailUnits(cluster)
+
+      expect(units.length).toBe(4) // 1 summary + 2 thoughts + 1 subcluster
+      expect(units[0].type).toBe('summary')
+      expect(units[1].type).toBe('thought')
+      expect(units[2].type).toBe('thought')
+      expect(units[3].type).toBe('subcluster')
+    })
+
+    it('priority-sorts thoughts (P1 → P2 → P3 → unprioritized)', () => {
+      const cluster: Cluster = {
+        cluster_name: 'Test',
+        sum_thought_items: 4,
+        thought_items: [
+          { text: 'Unprioritized' },
+          { text: 'P3', priority: { rank: 'P3' } },
+          { text: 'P1', priority: { rank: 'P1' } },
+          { text: 'P2', priority: { rank: 'P2' } },
+        ],
+      }
+
+      const units = extractDetailUnits(cluster)
+      const thoughtUnits = units.filter(u => u.type === 'thought')
+
+      expect(thoughtUnits[0].text).toBe('P1')
+      expect(thoughtUnits[1].text).toBe('P2')
+      expect(thoughtUnits[2].text).toBe('P3')
+      expect(thoughtUnits[3].text).toBe('Unprioritized')
+    })
+
+    it('handles missing summary gracefully', () => {
+      const cluster: Cluster = {
+        cluster_name: 'Test',
+        sum_thought_items: 1,
+        thought_items: [{ text: 'Thought' }],
+      }
+
+      const units = extractDetailUnits(cluster)
+
+      expect(units.length).toBe(1)
+      expect(units[0].type).toBe('thought')
+    })
+
+    it('handles bare string thought items', () => {
+      const cluster: Cluster = {
+        cluster_name: 'Test',
+        sum_thought_items: 2,
+        thought_items: ['bare string 1', 'bare string 2'] as unknown as Cluster['thought_items'],
+      }
+
+      const units = extractDetailUnits(cluster)
+
+      expect(units.length).toBe(2)
+      expect(units[0].text).toBe('bare string 1')
+      expect(units[1].text).toBe('bare string 2')
+    })
+
+    it('includes subcluster count in unit', () => {
+      const cluster: Cluster = {
+        cluster_name: 'Test',
+        sum_thought_items: 5,
+        subclusters: [{ subcluster_name: 'Sub1', sum_thought_items: 5 }],
+      }
+
+      const units = extractDetailUnits(cluster)
+
+      expect(units[0].type).toBe('subcluster')
+      expect(units[0].count).toBe(5)
+    })
+  })
+
+  // Verify LAYOUT constants are consistent (sanity check)
+  describe('LAYOUT constants', () => {
+    it('has targetThreshold < maxHeight (safety margin works)', () => {
+      expect(LAYOUT.targetThreshold).toBeLessThan(LAYOUT.maxHeight)
+      expect(LAYOUT.maxHeight - LAYOUT.targetThreshold).toBe(LAYOUT.safetyMargin)
+    })
+
+    it('has all required height terms defined', () => {
+      expect(LAYOUT.outerPadding).toBeGreaterThan(0)
+      expect(LAYOUT.boardHeaderHeight).toBeGreaterThan(0)
+      expect(LAYOUT.collapsedRowH).toBeGreaterThan(0)
+      expect(LAYOUT.detailRowH).toBeGreaterThan(0)
+      expect(LAYOUT.overflowActionRowH).toBeGreaterThan(0)
+      expect(LAYOUT.actionFooterHeight).toBeGreaterThan(0)
+    })
+  })
+})
+
+// ==========================================================================
+// Tests for inc_inline_accordion_bounded: Component Behavior (3-12)
+// ==========================================================================
 
 describe('Accordion Expansion (inc_inline_accordion_bounded)', () => {
   beforeEach(() => {

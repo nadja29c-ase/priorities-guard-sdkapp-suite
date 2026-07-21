@@ -44,7 +44,7 @@ import {
 // Heights are bounded (fixed height or max-height + 1-line clamp), not assumed.
 // Post-deploy: verify via [MindSort Diagnostic] console logs.
 
-const LAYOUT = {
+export const LAYOUT = {
   /** Card padding: 16px top + 16px bottom */
   outerPadding: 32,
   /** Board header: "Your MindSort AI Board" + counts line */
@@ -86,14 +86,14 @@ const MAX_INLINE_ROWS = 5
 const MAX_INLINE_ROWS_EXPANDED = 3
 
 // =============================================================================
-// LAYOUT MODEL HELPERS
+// LAYOUT MODEL HELPERS (exported for unit testing)
 // =============================================================================
 
 /**
  * Represents a single unit of expanded detail content.
  * Used for deterministic capacity computation and rendering.
  */
-interface DetailUnit {
+export interface DetailUnit {
   type: 'summary' | 'thought' | 'subcluster'
   text: string
   priority?: { rank: 'P1' | 'P2' | 'P3' }
@@ -112,7 +112,7 @@ interface DetailUnit {
  * @param totalContentUnits - Total units the expanded cluster has
  * @returns finalDetailCapacity (may be 0 for zero-capacity fallback)
  */
-function computeDetailCapacity(
+export function computeDetailCapacity(
   visibleCollapsedRows: number,
   hasBoardOverflow: boolean,
   totalContentUnits: number
@@ -166,7 +166,7 @@ function computeDetailCapacity(
  * Subclusters are shown as named rows with count, NOT nested cards.
  * NO tag pills (tags are indicator-only on collapsed row).
  */
-function extractDetailUnits(cluster: Cluster): DetailUnit[] {
+export function extractDetailUnits(cluster: Cluster): DetailUnit[] {
   const units: DetailUnit[] = []
 
   // (1) Summary - 1 unit if present
