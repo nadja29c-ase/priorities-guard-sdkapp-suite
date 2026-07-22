@@ -1125,26 +1125,40 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     // This is the legacy behavior when fullscreen is unavailable
   })
 
-  // Test 6: Shared view-model - both inline and fullscreen use same sort/group
-  it('inline and fullscreen use the same cluster sort order', async () => {
-    // This is verified by code review: both use sortClustersForOverview()
-    // from utils.ts and don't duplicate sorting logic
-    // The test ensures the shared helper exists and works correctly
-
+  // Test 6: Shared view-model - verify shared helpers exist and work correctly
+  // The REAL verification is that App.tsx imports and uses these helpers rather
+  // than duplicating logic. This test ensures the helpers behave correctly.
+  it('shared helpers exist: sortClustersForOverview, sortThoughtsByPriority, RANK_COLORS', async () => {
     const utils = await import('../utils')
 
+    // sortClustersForOverview: clusters by priority then by thought count
     const clusters = [
       { cluster_name: 'Low', sum_thought_items: 5 },
       { cluster_name: 'P1', sum_thought_items: 3, priority: { rank: 'P1' as const } },
       { cluster_name: 'P3', sum_thought_items: 2, priority: { rank: 'P3' as const } },
     ]
+    const sortedClusters = utils.sortClustersForOverview(clusters)
+    expect(sortedClusters[0].cluster_name).toBe('P1')
+    expect(sortedClusters[1].cluster_name).toBe('P3')
+    expect(sortedClusters[2].cluster_name).toBe('Low')
 
-    const sorted = utils.sortClustersForOverview(clusters)
+    // sortThoughtsByPriority: thoughts by priority (normalizes first)
+    const thoughts = [
+      'bare string thought',
+      { text: 'P2 thought', priority: { rank: 'P2' as const } },
+      { text: 'P1 thought', priority: { rank: 'P1' as const } },
+    ]
+    const sortedThoughts = utils.sortThoughtsByPriority(thoughts)
+    expect(sortedThoughts[0].text).toBe('P1 thought')
+    expect(sortedThoughts[1].text).toBe('P2 thought')
+    expect(sortedThoughts[2].text).toBe('bare string thought')
 
-    // P1 first, then P3, then unprioritized
-    expect(sorted[0].cluster_name).toBe('P1')
-    expect(sorted[1].cluster_name).toBe('P3')
-    expect(sorted[2].cluster_name).toBe('Low')
+    // RANK_COLORS: shared constant with consistent fallbacks
+    expect(utils.RANK_COLORS).toBeDefined()
+    expect(utils.RANK_COLORS.P1).toBeDefined()
+    expect(utils.RANK_COLORS.P1.bg).toContain('--color-background-danger')
+    expect(utils.RANK_COLORS.P2).toBeDefined()
+    expect(utils.RANK_COLORS.P3).toBeDefined()
   })
 
   // Test 7: Content - fullscreen renders tag pills, inline does NOT

@@ -29,8 +29,8 @@ import {
   getTotalThoughtCount,
   sortClustersForOverview,
   truncateClusters,
-  normalizeThoughtItem,
-  rankToNumber,
+  sortThoughtsByPriority,
+  RANK_COLORS,
 } from './utils'
 
 // =============================================================================
@@ -185,11 +185,8 @@ export function extractDetailUnits(cluster: Cluster): DetailUnit[] {
     units.push({ type: 'summary', text: cluster.summary })
   }
 
-  // (2) Thought items - priority-sorted
-  const thoughts = (cluster.thought_items ?? []).map(normalizeThoughtItem)
-  const sortedThoughts = [...thoughts].sort((a, b) => {
-    return rankToNumber(a.priority?.rank) - rankToNumber(b.priority?.rank)
-  })
+  // (2) Thought items - priority-sorted via shared helper
+  const sortedThoughts = sortThoughtsByPriority(cluster.thought_items ?? [])
   for (const thought of sortedThoughts) {
     units.push({
       type: 'thought',
@@ -876,25 +873,8 @@ function ClusterRowToggle({
   const rank = cluster.priority?.rank
   const hasTags = (cluster.tags?.length ?? 0) > 0
 
-  // Rank colors matching PG-Claude and compliance master token reference
-  const rankColors: Record<string, { bg: string; text: string; border: string }> = {
-    P1: {
-      bg: 'var(--color-background-danger, #F7ECEC)',
-      text: 'var(--color-text-danger, #7F2C28)',
-      border: 'var(--color-border-danger, #A73D39)',
-    },
-    P2: {
-      bg: 'var(--color-background-warning, #F6EEDF)',
-      text: 'var(--color-text-warning, #5A4815)',
-      border: 'var(--color-border-warning, #805C1F)',
-    },
-    P3: {
-      bg: 'var(--color-background-info, #D6E4F6)',
-      text: 'var(--color-text-info, #3266AD)',
-      border: 'var(--color-border-info, #4682D5)',
-    },
-  }
-  const colors = rank ? rankColors[rank] : null
+  // Use shared RANK_COLORS from utils.ts
+  const colors = rank ? RANK_COLORS[rank] : null
 
   return (
     <button
@@ -922,7 +902,7 @@ function ClusterRowToggle({
       }}
       // Focus ring via CSS-in-JS workaround (onFocus/onBlur for inline styles)
       onFocus={(e) => {
-        e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #3B82F6)'
+        e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #141413)'
       }}
       onBlur={(e) => {
         e.currentTarget.style.boxShadow = 'none'
@@ -1056,21 +1036,8 @@ function DetailRow({ unit }: DetailRowProps) {
   const hasPriority = !!unit.priority?.rank
   const rank = unit.priority?.rank
 
-  const rankColors: Record<string, { bg: string; text: string }> = {
-    P1: {
-      bg: 'var(--color-background-danger, #F7ECEC)',
-      text: 'var(--color-text-danger, #7F2C28)',
-    },
-    P2: {
-      bg: 'var(--color-background-warning, #F6EEDF)',
-      text: 'var(--color-text-warning, #5A4815)',
-    },
-    P3: {
-      bg: 'var(--color-background-info, #D6E4F6)',
-      text: 'var(--color-text-info, #3266AD)',
-    },
-  }
-  const colors = rank ? rankColors[rank] : null
+  // Use shared RANK_COLORS from utils.ts
+  const colors = rank ? RANK_COLORS[rank] : null
 
   // Type-specific prefix for screen readers
   const typeLabel = unit.type === 'summary' ? 'Summary' :
@@ -1240,7 +1207,7 @@ function OverflowActionRow({
         textOverflow: 'ellipsis',
       }}
       onFocus={(e) => {
-        e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #3B82F6)'
+        e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #141413)'
       }}
       onBlur={(e) => {
         e.currentTarget.style.boxShadow = 'none'
@@ -1515,7 +1482,7 @@ function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
           outline: 'none',
         }}
         onFocus={(e) => {
-          e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #3B82F6)'
+          e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #141413)'
         }}
         onBlur={(e) => {
           e.currentTarget.style.boxShadow = 'none'
@@ -1564,32 +1531,9 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
   const rank = cluster.priority?.rank
   const hasTags = (cluster.tags?.length ?? 0) > 0
 
-  // Rank colors
-  const rankColors: Record<string, { bg: string; text: string; border: string }> = {
-    P1: {
-      bg: 'var(--color-background-danger, #F7ECEC)',
-      text: 'var(--color-text-danger, #7F2C28)',
-      border: 'var(--color-border-danger, #A73D39)',
-    },
-    P2: {
-      bg: 'var(--color-background-warning, #F6EEDF)',
-      text: 'var(--color-text-warning, #5A4815)',
-      border: 'var(--color-border-warning, #805C1F)',
-    },
-    P3: {
-      bg: 'var(--color-background-info, #D6E4F6)',
-      text: 'var(--color-text-info, #3266AD)',
-      border: 'var(--color-border-info, #4682D5)',
-    },
-  }
-  const colors = rank ? rankColors[rank] : null
-
-  // Get thoughts sorted by priority
-  const thoughts = (cluster.thought_items ?? []).map(normalizeThoughtItem)
-  const sortedThoughts = [...thoughts].sort((a, b) => {
-    return rankToNumber(a.priority?.rank) - rankToNumber(b.priority?.rank)
-  })
-
+  // Use shared RANK_COLORS and sortThoughtsByPriority from utils.ts
+  const colors = rank ? RANK_COLORS[rank] : null
+  const sortedThoughts = sortThoughtsByPriority(cluster.thought_items ?? [])
   const subclusters = cluster.subclusters ?? []
 
   return (
@@ -1776,21 +1720,8 @@ function FullscreenThoughtItem({ thought }: FullscreenThoughtItemProps) {
   const hasPriority = !!thought.priority?.rank
   const rank = thought.priority?.rank
 
-  const rankColors: Record<string, { bg: string; text: string }> = {
-    P1: {
-      bg: 'var(--color-background-danger, #F7ECEC)',
-      text: 'var(--color-text-danger, #7F2C28)',
-    },
-    P2: {
-      bg: 'var(--color-background-warning, #F6EEDF)',
-      text: 'var(--color-text-warning, #5A4815)',
-    },
-    P3: {
-      bg: 'var(--color-background-info, #D6E4F6)',
-      text: 'var(--color-text-info, #3266AD)',
-    },
-  }
-  const colors = rank ? rankColors[rank] : null
+  // Use shared RANK_COLORS from utils.ts
+  const colors = rank ? RANK_COLORS[rank] : null
 
   return (
     <li
@@ -1869,30 +1800,9 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
   const rank = subcluster.priority?.rank
   const hasTags = (subcluster.tags?.length ?? 0) > 0
 
-  const rankColors: Record<string, { bg: string; text: string; border: string }> = {
-    P1: {
-      bg: 'var(--color-background-danger, #F7ECEC)',
-      text: 'var(--color-text-danger, #7F2C28)',
-      border: 'var(--color-border-danger, #A73D39)',
-    },
-    P2: {
-      bg: 'var(--color-background-warning, #F6EEDF)',
-      text: 'var(--color-text-warning, #5A4815)',
-      border: 'var(--color-border-warning, #805C1F)',
-    },
-    P3: {
-      bg: 'var(--color-background-info, #D6E4F6)',
-      text: 'var(--color-text-info, #3266AD)',
-      border: 'var(--color-border-info, #4682D5)',
-    },
-  }
-  const colors = rank ? rankColors[rank] : null
-
-  // Get thoughts sorted by priority
-  const thoughts = (subcluster.thought_items ?? []).map(normalizeThoughtItem)
-  const sortedThoughts = [...thoughts].sort((a, b) => {
-    return rankToNumber(a.priority?.rank) - rankToNumber(b.priority?.rank)
-  })
+  // Use shared RANK_COLORS and sortThoughtsByPriority from utils.ts
+  const colors = rank ? RANK_COLORS[rank] : null
+  const sortedThoughts = sortThoughtsByPriority(subcluster.thought_items ?? [])
 
   return (
     <div
@@ -2012,14 +1922,20 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
                 lineHeight: 1.4,
               }}
             >
+              {/* SVG bullet - no Unicode glyphs */}
               <span
                 aria-hidden="true"
                 style={{
+                  display: 'flex',
+                  alignItems: 'center',
                   color: 'var(--color-text-tertiary, #73726C)',
                   marginTop: '4px',
+                  flexShrink: 0,
                 }}
               >
-                •
+                <svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="6" />
+                </svg>
               </span>
               {thought.priority?.rank && (
                 <span
@@ -2028,8 +1944,8 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
                     fontWeight: 500,
                     padding: '0 4px',
                     borderRadius: '2px',
-                    background: rankColors[thought.priority.rank]?.bg,
-                    color: rankColors[thought.priority.rank]?.text,
+                    background: RANK_COLORS[thought.priority.rank]?.bg,
+                    color: RANK_COLORS[thought.priority.rank]?.text,
                     flexShrink: 0,
                   }}
                 >

@@ -172,3 +172,47 @@ export function truncateClusters(
     overflow: clusters.length - maxRows,
   }
 }
+
+// =============================================================================
+// SHARED VIEW-MODEL HELPERS (increment 2)
+// =============================================================================
+// These helpers ensure ONE model for both inline and fullscreen renderers.
+// Do NOT duplicate this logic in components — call these helpers.
+
+/**
+ * Sort thought items by priority (P1 → P2 → P3 → unprioritized).
+ * Normalizes items first (bare strings have no priority).
+ *
+ * SHARED: Used by both inline (extractDetailUnits) and fullscreen (FullscreenClusterCard,
+ * FullscreenSubclusterCard). Do NOT duplicate this sort in components.
+ */
+export function sortThoughtsByPriority(items: ThoughtItemInput[]): ThoughtItem[] {
+  const normalized = items.map(normalizeThoughtItem)
+  return [...normalized].sort((a, b) => {
+    return rankToNumber(a.priority?.rank) - rankToNumber(b.priority?.rank)
+  })
+}
+
+/**
+ * Rank color tokens for priority badges.
+ * Uses Claude host tokens with hex fallbacks matching the compliance master.
+ *
+ * SHARED: Used by inline and fullscreen components. Do NOT duplicate these definitions.
+ */
+export const RANK_COLORS: Record<Rank, { bg: string; text: string; border: string }> = {
+  P1: {
+    bg: 'var(--color-background-danger, #FEE2E2)',
+    text: 'var(--color-text-danger, #991B1B)',
+    border: 'var(--color-border-danger, #DC2626)',
+  },
+  P2: {
+    bg: 'var(--color-background-warning, #FEF3C7)',
+    text: 'var(--color-text-warning, #92400E)',
+    border: 'var(--color-border-warning, #D97706)',
+  },
+  P3: {
+    bg: 'var(--color-background-info, #DBEAFE)',
+    text: 'var(--color-text-info, #1E40AF)',
+    border: 'var(--color-border-info, #3B82F6)',
+  },
+}
