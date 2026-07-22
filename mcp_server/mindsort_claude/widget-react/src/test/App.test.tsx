@@ -1263,4 +1263,166 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
 
     // Also verify icons are SVG (not emoji) - already tested in tag indicator test
   })
+
+  // ==========================================================================
+  // FULLSCREEN RENDER TEST - the critical missing coverage
+  // ==========================================================================
+  // Tests fullscreen content by starting in fullscreen mode (host-initiated).
+  // This verifies: (a) tag pills, (b) subclusters, (c) no edit buttons,
+  // (d) priority badges, (e) full content rendering
+
+  it('fullscreen mode renders full board with tag pills, subclusters, and all content', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen', // Start in fullscreen
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      requestDisplayMode: vi.fn().mockResolvedValue({ mode: 'inline' }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            {
+              cluster_name: 'Test Cluster',
+              sum_thought_items: 5,
+              priority: { rank: 'P1' },
+              tags: ['decide', 'urgent'],
+              summary: 'This is a test summary',
+              thought_items: [
+                { text: 'Thought 1', priority: { rank: 'P2' } },
+                'Bare string thought',
+              ],
+              subclusters: [
+                {
+                  subcluster_name: 'Sub Cluster A',
+                  sum_thought_items: 2,
+                  priority: { rank: 'P3' },
+                  tags: ['review'],
+                  thought_items: ['sub thought 1', 'sub thought 2'],
+                },
+              ],
+            },
+          ],
+        },
+      })
+    })
+
+    // Verify fullscreen main element
+    expect(screen.getByRole('main', { name: /full board/i })).toBeInTheDocument()
+    expect(screen.getByText('Your MindSort AI Board')).toBeInTheDocument()
+
+    // (a) Tag pills render in fullscreen (not just indicator icons)
+    expect(screen.getByText('decide')).toBeInTheDocument()
+    expect(screen.getByText('urgent')).toBeInTheDocument()
+    expect(screen.getByText('review')).toBeInTheDocument()
+
+    // (b) Subcluster cards render with full content
+    expect(screen.getByText('Sub Cluster A')).toBeInTheDocument()
+    expect(screen.getByText('sub thought 1')).toBeInTheDocument()
+    expect(screen.getByText('sub thought 2')).toBeInTheDocument()
+
+    // (c) No edit/delete buttons (read-only)
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove/i })).not.toBeInTheDocument()
+
+    // (d) Priority badges render with text (not color-only)
+    expect(screen.getByText('P1')).toBeInTheDocument()
+    expect(screen.getByText('P2')).toBeInTheDocument()
+    expect(screen.getByText('P3')).toBeInTheDocument()
+
+    // (e) Summary and thought items render fully
+    expect(screen.getByText('This is a test summary')).toBeInTheDocument()
+    expect(screen.getByText('Thought 1')).toBeInTheDocument()
+    expect(screen.getByText('Bare string thought')).toBeInTheDocument()
+
+    // Host-initiated fullscreen = hostFullscreen=true = NO minimize button
+    // (host provides native close chrome)
+    expect(screen.queryByRole('button', { name: /minimize/i })).not.toBeInTheDocument()
+  })
+
+  // Test: widget-initiated fullscreen shows minimize button
+  it('widget-initiated fullscreen shows minimize button (hostFullscreen=false)', async () => {
+    const { act, fireEvent, waitFor } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockRequestDisplayMode = vi.fn().mockResolvedValue({ mode: 'inline' })
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'inline', // Start inline
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      requestDisplayMode: mockRequestDisplayMode,
+      callServerTool: vi.fn().mockResolvedValue({}),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [{ cluster_name: 'Test', sum_thought_items: 1 }],
+        },
+      })
+    })
+
+    // Should be in inline mode
+    expect(screen.getByRole('main', { name: /board overview/i })).toBeInTheDocument()
+
+    // Click "Open full board" to enter fullscreen (widget-initiated)
+    const openButton = screen.getByRole('button', { name: /open full board/i })
+    await act(async () => {
+      fireEvent.click(openButton)
+    })
+
+    // Now should be in fullscreen mode
+    await waitFor(() => {
+      expect(screen.getByRole('main', { name: /full board/i })).toBeInTheDocument()
+    })
+
+    // Widget-initiated fullscreen = hostFullscreen=false = minimize button visible
+    const minimizeButton = screen.getByRole('button', { name: /minimize/i })
+    expect(minimizeButton).toBeInTheDocument()
+
+    // Clicking minimize calls requestDisplayMode
+    await act(async () => {
+      fireEvent.click(minimizeButton)
+    })
+    expect(mockRequestDisplayMode).toHaveBeenCalledWith({ mode: 'inline' })
+  })
 })
