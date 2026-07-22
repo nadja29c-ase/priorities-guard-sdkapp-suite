@@ -1,20 +1,18 @@
 /**
- * MindSort Claude Widget - Inline Cluster Overview with Accordion Expansion
+ * MindSort Claude Widget - Cluster Overview with Inline Accordion + Fullscreen
  *
  * COMPLIANCE: This uses permitted in-place expand/collapse behavior (explicitly
  * listed under "Handle within your app" in the design guidelines) and does NOT
  * introduce navigation, breadcrumbs, nested views, or internal scrolling.
  *
- * INLINE-ONLY: Shows cluster overview with priorities-first ordering.
- * One-cluster-at-a-time accordion expansion within 500px height limit.
+ * DISPLAY MODES:
+ * - Inline: Accordion expansion within 500px height limit (increment 1)
+ * - Fullscreen: Full board view with all content expanded (increment 2)
  *
- * Design: inc_inline_accordion_bounded.md
- * - Header: "Your MindSort AI Board" + count summary
- * - Rows: one per cluster (badge, name, tag icon, thought count) - TOGGLEABLE
- * - Expanded detail: summary → thoughts → subclusters (as rows, NOT nested cards)
- * - NO tag pills in inline detail (indicator only on collapsed row)
- * - Deterministic bounded-row layout with explicit height model
- * - "View remaining cluster content" overflow → load_saved_board (whole board)
+ * Host context is authoritative — local displayMode state only ever reconciles
+ * toward host context. Host decides mode availability; widget adapts.
+ *
+ * Design: inc_inline_accordion_bounded.md (inline), inc_fullscreen_full_board_readonly.md (fullscreen)
  *
  * Data path: ontoolresult -> structuredContent.clusters
  */
@@ -26,7 +24,7 @@ import {
   McpUiToolResultNotification,
 } from '@modelcontextprotocol/ext-apps/react'
 
-import type { Cluster } from './types'
+import type { Cluster, Subcluster, Rank } from './types'
 import {
   getTotalThoughtCount,
   sortClustersForOverview,
@@ -34,6 +32,19 @@ import {
   normalizeThoughtItem,
   rankToNumber,
 } from './utils'
+
+// =============================================================================
+// DISPLAY MODE TYPES
+// =============================================================================
+
+type DisplayMode = 'inline' | 'fullscreen'
+
+interface HostContextState {
+  displayMode: DisplayMode
+  availableDisplayModes: DisplayMode[]
+  safeAreaInsets: { top: number; bottom: number; left: number; right: number }
+  platform: string | null
+}
 
 // =============================================================================
 // LAYOUT MODEL CONSTANTS
@@ -202,6 +213,17 @@ export function extractDetailUnits(cluster: Cluster): DetailUnit[] {
 }
 
 // =============================================================================
+// PERFORMANCE CONSTANTS
+// =============================================================================
+// Fullscreen scale target: must remain responsive for boards up to this size.
+// Beyond this, virtualization kicks in.
+const FULLSCREEN_SCALE_TARGET = {
+  maxClusters: 30,
+  maxThoughts: 300,
+  maxSubclusters: 60,
+} as const
+
+// =============================================================================
 // MAIN APP COMPONENT
 // =============================================================================
 
@@ -211,7 +233,7 @@ function App() {
   const [isInitialized, setIsInitialized] = useState(false)
   const [isLoadingBoard, setIsLoadingBoard] = useState(false)
 
-  // Accordion state: only ONE cluster expanded at a time
+  // Accordion state: only ONE cluster expanded at a time (inline mode)
   const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null)
 
   // ResizeObserver guard: current detail count for the expanded cluster
@@ -221,21 +243,89 @@ function App() {
   // Stale bridge detection
   const [isBridgeStale, setIsBridgeStale] = useState(false)
 
+  // ==========================================================================
+  // DISPLAY MODE STATE
+  // ==========================================================================
+  // Host context is authoritative; local state only reconciles toward it.
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('inline')
+  const [hostFullscreen, setHostFullscreen] = useState(false)
+  const [hostContext, setHostContext] = useState<HostContextState>({
+    displayMode: 'inline',
+    availableDisplayModes: [],
+    safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+    platform: null,
+  })
+
   // App reference for bridge connection
   const appRef = useRef<McpApp | null>(null)
 
   // Ref for height guard diagnostic (500px limit verification)
   const inlineMainRef = useRef<HTMLElement | null>(null)
 
+  // Ref for focus restoration on fullscreen exit
+  const fullscreenOpenerRef = useRef<HTMLButtonElement | null>(null)
+
+  // Helper to check if fullscreen is available from host
+  const isFullscreenAvailable = hostContext.availableDisplayModes.includes('fullscreen')
+
   // MCP Apps bridge: useApp hook
-  // CRITICAL: availableDisplayModes is ['inline'] ONLY - no fullscreen yet (increment 2)
+  // Declares support for both inline AND fullscreen; host decides availability
   const { app } = useApp({
     appInfo: { name: 'MindSort', version: '1.0.0' },
     capabilities: {
-      availableDisplayModes: ['inline'],
+      availableDisplayModes: ['inline', 'fullscreen'],
     },
     onAppCreated: useCallback((appInstance: McpApp) => {
       appRef.current = appInstance
+
+      // Read initial host context for display mode sync
+      const ctx = appInstance.getHostContext?.()
+      if (ctx) {
+        const initialMode: DisplayMode = ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline'
+        setDisplayMode(initialMode)
+        if (initialMode === 'fullscreen') {
+          setHostFullscreen(true)
+        }
+        setHostContext({
+          displayMode: initialMode,
+          availableDisplayModes: (ctx.availableDisplayModes as DisplayMode[]) ?? [],
+          safeAreaInsets: ctx.safeAreaInsets ?? { top: 0, bottom: 0, left: 0, right: 0 },
+          platform: ctx.platform ?? null,
+        })
+      }
+
+      // Register handler for host context changes (mode transitions, safe area, etc.)
+      appInstance.onhostcontextchanged = (ctx) => {
+        if (ctx.displayMode !== undefined) {
+          const newMode: DisplayMode = ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline'
+          setDisplayMode(newMode)
+          if (newMode === 'inline') {
+            setHostFullscreen(false)
+            // Focus restoration: return focus to the opener button
+            if (fullscreenOpenerRef.current) {
+              fullscreenOpenerRef.current.focus()
+            }
+          }
+        }
+        if (ctx.availableDisplayModes !== undefined) {
+          setHostContext((prev) => ({
+            ...prev,
+            availableDisplayModes: ctx.availableDisplayModes as DisplayMode[],
+          }))
+        }
+        if (ctx.safeAreaInsets !== undefined) {
+          setHostContext((prev) => ({
+            ...prev,
+            safeAreaInsets: ctx.safeAreaInsets as HostContextState['safeAreaInsets'],
+          }))
+        }
+        if (ctx.platform !== undefined) {
+          setHostContext((prev) => ({
+            ...prev,
+            platform: ctx.platform as string | null,
+          }))
+        }
+      }
 
       // Register handler for incoming tool results
       appInstance.ontoolresult = (result: McpUiToolResultNotification['params']) => {
@@ -456,16 +546,53 @@ function App() {
     setExpandedClusterId((prev) => (prev === clusterId ? null : clusterId))
   }, [])
 
+  // ==========================================================================
+  // DISPLAY MODE HANDLERS
+  // ==========================================================================
+  // Entry: LOCAL STATE only (setDisplayMode) - per PG-Claude pattern
+  // Exit: requestDisplayMode({ mode: 'inline' }) with try/catch
+
+  // Expand to fullscreen - LOCAL STATE only (no requestDisplayMode call on entry)
+  // This is the pattern used by PG-Claude (verified 2026-07-22)
+  const handleExpandToFullscreen = useCallback(() => {
+    if (isBridgeStale || !isFullscreenAvailable) return
+    setDisplayMode('fullscreen')
+  }, [isBridgeStale, isFullscreenAvailable])
+
+  // Minimize to inline - calls requestDisplayMode with try/catch
+  // Reconciles from returned mode; never wedges on failure
+  const handleMinimizeToInline = useCallback(async () => {
+    setHostFullscreen(false)
+    if (appRef.current?.requestDisplayMode) {
+      try {
+        const result = await appRef.current.requestDisplayMode({ mode: 'inline' })
+        setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
+      } catch {
+        // Silent — inline is the default, failure here is harmless
+        // Host context will reconcile via onhostcontextchanged
+        setDisplayMode('inline')
+      }
+    } else {
+      setDisplayMode('inline')
+    }
+    // Focus restoration happens in onhostcontextchanged when host confirms exit
+  }, [])
+
   // Handle "Open full board" button click
+  // When fullscreen is available: enters fullscreen mode
+  // When not available (fallback): calls load_saved_board (legacy behavior)
   const handleOpenFullBoard = useCallback(async () => {
     if (!appRef.current || isLoadingBoard) return
 
+    // If fullscreen is available, use it
+    if (isFullscreenAvailable) {
+      handleExpandToFullscreen()
+      return
+    }
+
+    // Fallback: call load_saved_board (for hosts without fullscreen)
     setIsLoadingBoard(true)
     try {
-      // Call load_saved_board to render the full board in conversation
-      // NOTE: This renders the WHOLE board, not a specific cluster.
-      // Both "Open full board" and "View remaining cluster content" use this
-      // (intentional redundancy, resolved in increment 2 fullscreen).
       await appRef.current.callServerTool({
         name: 'load_saved_board',
         arguments: {},
@@ -475,7 +602,7 @@ function App() {
     } finally {
       setIsLoadingBoard(false)
     }
-  }, [isLoadingBoard])
+  }, [isLoadingBoard, isFullscreenAvailable, handleExpandToFullscreen])
 
   // Handle "View remaining cluster content" overflow action
   const handleViewRemainingContent = useCallback(async () => {
@@ -544,7 +671,21 @@ function App() {
   }
 
   // ==========================================================================
-  // RENDER: Main card
+  // RENDER: Fullscreen mode
+  // ==========================================================================
+  if (displayMode === 'fullscreen') {
+    return (
+      <FullscreenBoardView
+        clusters={sortedClusters}
+        hostFullscreen={hostFullscreen}
+        safeAreaInsets={hostContext.safeAreaInsets}
+        onMinimize={handleMinimizeToInline}
+      />
+    )
+  }
+
+  // ==========================================================================
+  // RENDER: Inline mode (main card)
   // ==========================================================================
 
   const clusterCount = clusters.length
@@ -676,8 +817,9 @@ function App() {
           {boardOverflow > 0 ? `+${boardOverflow} more cluster${boardOverflow !== 1 ? 's' : ''}` : ''}
         </span>
 
-        {/* Open full board button */}
+        {/* Open full board button - ref for focus restoration on fullscreen exit */}
         <button
+          ref={fullscreenOpenerRef}
           type="button"
           onClick={handleOpenFullBoard}
           disabled={isLoadingBoard}
@@ -694,7 +836,7 @@ function App() {
             minHeight: '44px',
             minWidth: '44px',
           }}
-          aria-label="Open full board in conversation"
+          aria-label={isFullscreenAvailable ? 'Open full board in fullscreen' : 'Open full board in conversation'}
         >
           {isLoadingBoard ? 'Loading...' : 'Open full board →'}
         </button>
@@ -1106,6 +1248,800 @@ function OverflowActionRow({
     >
       {isLoading ? 'Loading...' : `View remaining cluster content${countStr}`}
     </button>
+  )
+}
+
+// =============================================================================
+// FULLSCREEN BOARD VIEW
+// =============================================================================
+// Renders the full board (all clusters, all thoughts, all subclusters, tag pills)
+// READ-ONLY: No mutation controls, no CRUD calls, no edit handlers
+// Performance target: 30 clusters / 300 thoughts / 60 subclusters
+// Beyond target: virtualization via intersection observer
+
+interface FullscreenBoardViewProps {
+  clusters: Cluster[]
+  hostFullscreen: boolean
+  safeAreaInsets: { top: number; bottom: number; left: number; right: number }
+  onMinimize: () => void
+}
+
+/**
+ * Fullscreen full-board view.
+ *
+ * - Shows ALL clusters expanded (not accordion)
+ * - Full summary text (no clamp)
+ * - All thought items (priority-sorted)
+ * - Subclusters as nested cards with their thoughts
+ * - Tag PILLS (deferred from inline to here)
+ * - Native fullscreen close not duplicated (gated on hostFullscreen)
+ * - Responsive grid layout
+ * - READ-ONLY: no mutation, no CRUD, no edit handlers
+ */
+function FullscreenBoardView({
+  clusters,
+  hostFullscreen,
+  safeAreaInsets,
+  onMinimize,
+}: FullscreenBoardViewProps) {
+  const clusterCount = clusters.length
+  const thoughtCount = getTotalThoughtCount(clusters)
+
+  // Virtualization: for large boards, only render clusters in viewport
+  // Track which clusters are visible via intersection observer
+  const [visibleClusterIds, setVisibleClusterIds] = useState<Set<string>>(new Set())
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const clusterRefs = useRef<Map<string, HTMLElement>>(new Map())
+
+  // Check if board exceeds scale target (needs virtualization)
+  const totalSubclusters = clusters.reduce(
+    (sum, c) => sum + (c.subclusters?.length ?? 0),
+    0
+  )
+  const needsVirtualization =
+    clusterCount > FULLSCREEN_SCALE_TARGET.maxClusters ||
+    thoughtCount > FULLSCREEN_SCALE_TARGET.maxThoughts ||
+    totalSubclusters > FULLSCREEN_SCALE_TARGET.maxSubclusters
+
+  // Set up intersection observer for virtualization
+  useEffect(() => {
+    if (!needsVirtualization) {
+      // No virtualization needed - all clusters visible
+      setVisibleClusterIds(new Set(clusters.map((c) => c.cluster_name)))
+      return
+    }
+
+    // Create observer for lazy rendering
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        setVisibleClusterIds((prev) => {
+          const next = new Set(prev)
+          for (const entry of entries) {
+            const clusterId = entry.target.getAttribute('data-cluster-id')
+            if (clusterId) {
+              if (entry.isIntersecting) {
+                next.add(clusterId)
+              }
+              // Don't remove - once rendered, keep rendered for scroll stability
+            }
+          }
+          return next
+        })
+      },
+      { rootMargin: '200px' } // Pre-load 200px before entering viewport
+    )
+
+    // Observe all cluster placeholders
+    clusterRefs.current.forEach((el) => {
+      observerRef.current?.observe(el)
+    })
+
+    return () => {
+      observerRef.current?.disconnect()
+    }
+  }, [needsVirtualization, clusters])
+
+  // Register cluster ref for intersection observer
+  const registerClusterRef = useCallback((clusterId: string, el: HTMLElement | null) => {
+    if (el) {
+      clusterRefs.current.set(clusterId, el)
+      if (observerRef.current) {
+        observerRef.current.observe(el)
+      }
+    }
+  }, [])
+
+  return (
+    <div
+      role="main"
+      aria-label="MindSort AI Full Board"
+      style={{
+        width: '100%',
+        minHeight: '100vh',
+        background: 'var(--color-background-primary, #FFFFFF)',
+        padding: `${safeAreaInsets.top + 16}px ${safeAreaInsets.right + 16}px ${safeAreaInsets.bottom + 16}px ${safeAreaInsets.left + 16}px`,
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* Fullscreen header with minimize button - only when NOT host-provided fullscreen */}
+      {!hostFullscreen && (
+        <FullscreenHeader onMinimize={onMinimize} />
+      )}
+
+      {/* Board header */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          marginBottom: '24px',
+          paddingTop: !hostFullscreen ? '8px' : '0',
+        }}
+      >
+        <h1
+          style={{
+            fontSize: '20px',
+            fontWeight: 500,
+            color: 'var(--color-text-primary, #141413)',
+            margin: 0,
+          }}
+        >
+          Your MindSort AI Board
+        </h1>
+        <span
+          style={{
+            fontSize: '14px',
+            color: 'var(--color-text-tertiary, #73726C)',
+          }}
+        >
+          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} · {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Large board indicator */}
+      {needsVirtualization && (
+        <div
+          style={{
+            padding: '12px 16px',
+            marginBottom: '16px',
+            background: 'var(--color-background-info, #EFF6FF)',
+            borderRadius: 'var(--border-radius-md, 8px)',
+            fontSize: '13px',
+            color: 'var(--color-text-info, #1E40AF)',
+          }}
+        >
+          Large board detected. Clusters load as you scroll for best performance.
+        </div>
+      )}
+
+      {/* Cluster grid - responsive layout */}
+      {clusters.length > 0 ? (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+            gap: '16px',
+          }}
+        >
+          {clusters.map((cluster) => {
+            const isVisible = !needsVirtualization || visibleClusterIds.has(cluster.cluster_name)
+            return (
+              <div
+                key={cluster.cluster_name}
+                ref={(el) => needsVirtualization && registerClusterRef(cluster.cluster_name, el)}
+                data-cluster-id={cluster.cluster_name}
+                style={{
+                  minHeight: isVisible ? 'auto' : '200px', // Placeholder height for virtualization
+                }}
+              >
+                {isVisible ? (
+                  <FullscreenClusterCard cluster={cluster} />
+                ) : (
+                  // Placeholder for virtualized cluster
+                  <div
+                    style={{
+                      height: '200px',
+                      background: 'var(--color-background-secondary, #F5F4ED)',
+                      borderRadius: 'var(--border-radius-xl, 12px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--color-text-tertiary, #73726C)',
+                      fontSize: '13px',
+                    }}
+                  >
+                    Loading {cluster.cluster_name}...
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p
+          style={{
+            fontSize: '14px',
+            color: 'var(--color-text-tertiary, #73726C)',
+            textAlign: 'center',
+            padding: '48px 0',
+          }}
+        >
+          No clusters yet. Start organizing your thoughts!
+        </p>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// FULLSCREEN HEADER
+// =============================================================================
+
+interface FullscreenHeaderProps {
+  onMinimize: () => void
+}
+
+/**
+ * Fullscreen header with minimize button.
+ * Only rendered when !hostFullscreen (host does NOT provide native close).
+ * Keyboard accessible: Enter/Space activate.
+ */
+function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        marginBottom: '8px',
+      }}
+    >
+      <button
+        type="button"
+        onClick={onMinimize}
+        aria-label="Minimize to inline view"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '8px 12px',
+          fontSize: '13px',
+          fontWeight: 500,
+          color: 'var(--color-text-secondary, #3D3D3A)',
+          background: 'var(--color-background-secondary, #F5F4ED)',
+          border: 'none',
+          borderRadius: 'var(--border-radius-md, 8px)',
+          cursor: 'pointer',
+          minHeight: '36px',
+          outline: 'none',
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #3B82F6)'
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.boxShadow = 'none'
+        }}
+      >
+        {/* Minimize icon - SVG chevron down */}
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+        Minimize
+      </button>
+    </div>
+  )
+}
+
+// =============================================================================
+// FULLSCREEN CLUSTER CARD
+// =============================================================================
+
+interface FullscreenClusterCardProps {
+  cluster: Cluster
+}
+
+/**
+ * Full cluster card for fullscreen view.
+ *
+ * Shows:
+ * - Header: name, priority badge, thought count
+ * - Full summary (no clamp)
+ * - All thought items (priority-sorted)
+ * - All subclusters as nested cards
+ * - Tag PILLS (full pills, not just indicator)
+ */
+function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
+  const hasPriority = !!cluster.priority?.rank
+  const rank = cluster.priority?.rank
+  const hasTags = (cluster.tags?.length ?? 0) > 0
+
+  // Rank colors
+  const rankColors: Record<string, { bg: string; text: string; border: string }> = {
+    P1: {
+      bg: 'var(--color-background-danger, #F7ECEC)',
+      text: 'var(--color-text-danger, #7F2C28)',
+      border: 'var(--color-border-danger, #A73D39)',
+    },
+    P2: {
+      bg: 'var(--color-background-warning, #F6EEDF)',
+      text: 'var(--color-text-warning, #5A4815)',
+      border: 'var(--color-border-warning, #805C1F)',
+    },
+    P3: {
+      bg: 'var(--color-background-info, #D6E4F6)',
+      text: 'var(--color-text-info, #3266AD)',
+      border: 'var(--color-border-info, #4682D5)',
+    },
+  }
+  const colors = rank ? rankColors[rank] : null
+
+  // Get thoughts sorted by priority
+  const thoughts = (cluster.thought_items ?? []).map(normalizeThoughtItem)
+  const sortedThoughts = [...thoughts].sort((a, b) => {
+    return rankToNumber(a.priority?.rank) - rankToNumber(b.priority?.rank)
+  })
+
+  const subclusters = cluster.subclusters ?? []
+
+  return (
+    <article
+      aria-label={`Cluster: ${cluster.cluster_name}`}
+      style={{
+        background: 'var(--color-background-secondary, #F5F4ED)',
+        borderRadius: 'var(--border-radius-xl, 12px)',
+        padding: '16px',
+        borderLeft: hasPriority && colors
+          ? `4px solid ${colors.border}`
+          : 'none',
+      }}
+    >
+      {/* Header row: name, priority badge, thought count */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '12px',
+        }}
+      >
+        {/* Priority badge */}
+        {hasPriority && rank && colors && (
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 500,
+              padding: '2px 8px',
+              borderRadius: '4px',
+              background: colors.bg,
+              color: colors.text,
+              flexShrink: 0,
+            }}
+          >
+            {rank}
+          </span>
+        )}
+
+        {/* Cluster name */}
+        <h2
+          style={{
+            flex: 1,
+            fontSize: '15px',
+            fontWeight: 500,
+            color: 'var(--color-text-primary, #141413)',
+            margin: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {cluster.cluster_name}
+        </h2>
+
+        {/* Thought count */}
+        <span
+          style={{
+            fontSize: '13px',
+            color: 'var(--color-text-tertiary, #73726C)',
+            flexShrink: 0,
+          }}
+        >
+          {cluster.sum_thought_items ?? 0} thought{(cluster.sum_thought_items ?? 0) !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Tag pills - FULL PILLS, not just indicator */}
+      {hasTags && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px',
+            marginBottom: '12px',
+          }}
+          aria-label="Action tags"
+        >
+          {cluster.tags!.map((tag) => (
+            <TagPill key={tag} tag={tag} />
+          ))}
+        </div>
+      )}
+
+      {/* Summary - full text, no clamp */}
+      {cluster.summary && (
+        <p
+          style={{
+            fontSize: '13px',
+            fontStyle: 'italic',
+            color: 'var(--color-text-secondary, #3D3D3A)',
+            margin: '0 0 12px 0',
+            lineHeight: 1.5,
+          }}
+        >
+          {cluster.summary}
+        </p>
+      )}
+
+      {/* Thought items - priority sorted */}
+      {sortedThoughts.length > 0 && (
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+          aria-label={`Thoughts in ${cluster.cluster_name}`}
+        >
+          {sortedThoughts.map((thought, index) => (
+            <FullscreenThoughtItem key={`thought-${index}`} thought={thought} />
+          ))}
+        </ul>
+      )}
+
+      {/* Subclusters as nested cards */}
+      {subclusters.length > 0 && (
+        <div
+          style={{
+            marginTop: sortedThoughts.length > 0 ? '16px' : '0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          {subclusters.map((subcluster) => (
+            <FullscreenSubclusterCard key={subcluster.subcluster_name} subcluster={subcluster} />
+          ))}
+        </div>
+      )}
+    </article>
+  )
+}
+
+// =============================================================================
+// TAG PILL
+// =============================================================================
+
+interface TagPillProps {
+  tag: string
+}
+
+/**
+ * Tag pill component for fullscreen view.
+ * Uses Claude tokens (surfaces/text/border), NOT hardcoded colors.
+ */
+function TagPill({ tag }: TagPillProps) {
+  return (
+    <span
+      role="listitem"
+      aria-label={`Tag: ${tag}`}
+      style={{
+        fontSize: '11px',
+        fontWeight: 500,
+        padding: '3px 8px',
+        borderRadius: '12px',
+        background: 'var(--color-background-tertiary, #EDECEA)',
+        color: 'var(--color-text-secondary, #3D3D3A)',
+        border: '1px solid var(--color-border-tertiary, #E0DFDB)',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {tag}
+    </span>
+  )
+}
+
+// =============================================================================
+// FULLSCREEN THOUGHT ITEM
+// =============================================================================
+
+interface FullscreenThoughtItemProps {
+  thought: { text: string; priority?: { rank: Rank } }
+}
+
+/**
+ * Thought item in fullscreen view.
+ * Full text (no clamp), optional priority badge.
+ */
+function FullscreenThoughtItem({ thought }: FullscreenThoughtItemProps) {
+  const hasPriority = !!thought.priority?.rank
+  const rank = thought.priority?.rank
+
+  const rankColors: Record<string, { bg: string; text: string }> = {
+    P1: {
+      bg: 'var(--color-background-danger, #F7ECEC)',
+      text: 'var(--color-text-danger, #7F2C28)',
+    },
+    P2: {
+      bg: 'var(--color-background-warning, #F6EEDF)',
+      text: 'var(--color-text-warning, #5A4815)',
+    },
+    P3: {
+      bg: 'var(--color-background-info, #D6E4F6)',
+      text: 'var(--color-text-info, #3266AD)',
+    },
+  }
+  const colors = rank ? rankColors[rank] : null
+
+  return (
+    <li
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '8px',
+        padding: '8px 12px',
+        background: 'var(--color-background-primary, #FFFFFF)',
+        borderRadius: 'var(--border-radius-md, 8px)',
+      }}
+    >
+      {/* Bullet icon */}
+      <span
+        aria-hidden="true"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--color-text-tertiary, #73726C)',
+          flexShrink: 0,
+          marginTop: '3px',
+        }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="4" />
+        </svg>
+      </span>
+
+      {/* Priority badge */}
+      {hasPriority && rank && colors && (
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 500,
+            padding: '1px 5px',
+            borderRadius: '3px',
+            background: colors.bg,
+            color: colors.text,
+            flexShrink: 0,
+          }}
+        >
+          {rank}
+        </span>
+      )}
+
+      {/* Thought text - full, no clamp */}
+      <span
+        style={{
+          flex: 1,
+          fontSize: '13px',
+          color: 'var(--color-text-primary, #141413)',
+          lineHeight: 1.5,
+        }}
+      >
+        {thought.text}
+      </span>
+    </li>
+  )
+}
+
+// =============================================================================
+// FULLSCREEN SUBCLUSTER CARD
+// =============================================================================
+
+interface FullscreenSubclusterCardProps {
+  subcluster: Subcluster
+}
+
+/**
+ * Subcluster as nested card in fullscreen view.
+ * Shows: name, priority badge, thought count, all thoughts.
+ */
+function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps) {
+  const hasPriority = !!subcluster.priority?.rank
+  const rank = subcluster.priority?.rank
+  const hasTags = (subcluster.tags?.length ?? 0) > 0
+
+  const rankColors: Record<string, { bg: string; text: string; border: string }> = {
+    P1: {
+      bg: 'var(--color-background-danger, #F7ECEC)',
+      text: 'var(--color-text-danger, #7F2C28)',
+      border: 'var(--color-border-danger, #A73D39)',
+    },
+    P2: {
+      bg: 'var(--color-background-warning, #F6EEDF)',
+      text: 'var(--color-text-warning, #5A4815)',
+      border: 'var(--color-border-warning, #805C1F)',
+    },
+    P3: {
+      bg: 'var(--color-background-info, #D6E4F6)',
+      text: 'var(--color-text-info, #3266AD)',
+      border: 'var(--color-border-info, #4682D5)',
+    },
+  }
+  const colors = rank ? rankColors[rank] : null
+
+  // Get thoughts sorted by priority
+  const thoughts = (subcluster.thought_items ?? []).map(normalizeThoughtItem)
+  const sortedThoughts = [...thoughts].sort((a, b) => {
+    return rankToNumber(a.priority?.rank) - rankToNumber(b.priority?.rank)
+  })
+
+  return (
+    <div
+      aria-label={`Subcluster: ${subcluster.subcluster_name}`}
+      style={{
+        background: 'var(--color-background-primary, #FFFFFF)',
+        borderRadius: 'var(--border-radius-md, 8px)',
+        padding: '12px',
+        borderLeft: hasPriority && colors
+          ? `3px solid ${colors.border}`
+          : '3px solid var(--color-border-tertiary, #E0DFDB)',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: sortedThoughts.length > 0 || hasTags ? '10px' : '0',
+        }}
+      >
+        {/* Folder icon */}
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            color: 'var(--color-text-tertiary, #73726C)',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+        </span>
+
+        {/* Priority badge */}
+        {hasPriority && rank && colors && (
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 500,
+              padding: '1px 5px',
+              borderRadius: '3px',
+              background: colors.bg,
+              color: colors.text,
+              flexShrink: 0,
+            }}
+          >
+            {rank}
+          </span>
+        )}
+
+        {/* Subcluster name */}
+        <span
+          style={{
+            flex: 1,
+            fontSize: '13px',
+            fontWeight: 500,
+            color: 'var(--color-text-primary, #141413)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {subcluster.subcluster_name}
+        </span>
+
+        {/* Thought count */}
+        <span
+          style={{
+            fontSize: '12px',
+            color: 'var(--color-text-tertiary, #73726C)',
+            flexShrink: 0,
+          }}
+        >
+          {subcluster.sum_thought_items} thought{subcluster.sum_thought_items !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Tag pills */}
+      {hasTags && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '4px',
+            marginBottom: sortedThoughts.length > 0 ? '10px' : '0',
+          }}
+        >
+          {subcluster.tags!.map((tag) => (
+            <TagPill key={tag} tag={tag} />
+          ))}
+        </div>
+      )}
+
+      {/* Thoughts */}
+      {sortedThoughts.length > 0 && (
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+          }}
+        >
+          {sortedThoughts.map((thought, index) => (
+            <li
+              key={`sub-thought-${index}`}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '6px',
+                fontSize: '12px',
+                color: 'var(--color-text-primary, #141413)',
+                lineHeight: 1.4,
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  color: 'var(--color-text-tertiary, #73726C)',
+                  marginTop: '4px',
+                }}
+              >
+                •
+              </span>
+              {thought.priority?.rank && (
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 500,
+                    padding: '0 4px',
+                    borderRadius: '2px',
+                    background: rankColors[thought.priority.rank]?.bg,
+                    color: rankColors[thought.priority.rank]?.text,
+                    flexShrink: 0,
+                  }}
+                >
+                  {thought.priority.rank}
+                </span>
+              )}
+              <span>{thought.text}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
