@@ -48,13 +48,3 @@ export interface Cluster {
   summary?: string
 }
 
-/**
- * Prioritized entity - an item that has an own-level priority.
- * Can be a cluster, subcluster, or thought item.
- */
-export interface PrioritizedEntity {
-  rank: Rank
-  text: string
-  breadcrumb: string | null  // null for clusters (top-level)
-  entityType: 'cluster' | 'subcluster' | 'thought_item'
-}

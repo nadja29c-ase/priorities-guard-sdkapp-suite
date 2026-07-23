@@ -292,16 +292,14 @@ function App() {
       }
 
       // Register handler for host context changes (mode transitions, safe area, etc.)
+      // Host context is authoritative; local state reconciles toward it.
       appInstance.onhostcontextchanged = (ctx) => {
         if (ctx.displayMode !== undefined) {
           const newMode: DisplayMode = ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline'
           setDisplayMode(newMode)
           if (newMode === 'inline') {
             setHostFullscreen(false)
-            // Focus restoration: return focus to the opener button
-            if (fullscreenOpenerRef.current) {
-              fullscreenOpenerRef.current.focus()
-            }
+            // Focus restoration handled by useEffect on displayMode change
           }
         }
         if (ctx.availableDisplayModes !== undefined) {
@@ -356,6 +354,26 @@ function App() {
 
   // Inject host theme CSS variables (must pass hostContext for dark mode)
   useHostStyles(app, app?.getHostContext())
+
+  // Track previous displayMode for focus restoration
+  const prevDisplayModeRef = useRef<DisplayMode>(displayMode)
+
+  // Focus restoration: when displayMode transitions to inline, restore focus
+  // to the opener button. Uses requestAnimationFrame to ensure the inline
+  // tree has remounted before focusing (the button doesn't exist in fullscreen).
+  useEffect(() => {
+    const prevMode = prevDisplayModeRef.current
+    prevDisplayModeRef.current = displayMode
+
+    if (prevMode === 'fullscreen' && displayMode === 'inline') {
+      // Schedule focus after the inline tree remounts
+      requestAnimationFrame(() => {
+        if (fullscreenOpenerRef.current) {
+          fullscreenOpenerRef.current.focus()
+        }
+      })
+    }
+  }, [displayMode])
 
   // Stale bridge detection - if onAppCreated hasn't fired within 3s
   useEffect(() => {
@@ -557,49 +575,32 @@ function App() {
   }, [isBridgeStale, isFullscreenAvailable])
 
   // Minimize to inline - calls requestDisplayMode with try/catch
-  // Reconciles from returned mode; never wedges on failure
+  // Host context is authoritative; local state only reconciles toward it.
+  // On rejection, do NOT force inline - let onhostcontextchanged reconcile.
   const handleMinimizeToInline = useCallback(async () => {
     setHostFullscreen(false)
     if (appRef.current?.requestDisplayMode) {
       try {
         const result = await appRef.current.requestDisplayMode({ mode: 'inline' })
+        // Only update from successful result
         setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
       } catch {
-        // Silent — inline is the default, failure here is harmless
-        // Host context will reconcile via onhostcontextchanged
-        setDisplayMode('inline')
+        // On rejection, do NOT force inline - host context is authoritative.
+        // If host rejected and stays fullscreen, let onhostcontextchanged reconcile.
+        // This prevents divergence between widget state and actual host mode.
       }
     } else {
+      // No requestDisplayMode available - fall back to inline
       setDisplayMode('inline')
     }
-    // Focus restoration happens in onhostcontextchanged when host confirms exit
   }, [])
 
-  // Handle "Open full board" button click
-  // When fullscreen is available: enters fullscreen mode
-  // When not available (fallback): calls load_saved_board (legacy behavior)
-  const handleOpenFullBoard = useCallback(async () => {
-    if (!appRef.current || isLoadingBoard) return
-
-    // If fullscreen is available, use it
-    if (isFullscreenAvailable) {
-      handleExpandToFullscreen()
-      return
-    }
-
-    // Fallback: call load_saved_board (for hosts without fullscreen)
-    setIsLoadingBoard(true)
-    try {
-      await appRef.current.callServerTool({
-        name: 'load_saved_board',
-        arguments: {},
-      })
-    } catch (err) {
-      console.error('MindSort widget: Error loading full board:', err)
-    } finally {
-      setIsLoadingBoard(false)
-    }
-  }, [isLoadingBoard, isFullscreenAvailable, handleExpandToFullscreen])
+  // Handle "Open full board" button click - enters fullscreen mode.
+  // Button is only rendered when isFullscreenAvailable (capability-gated),
+  // so this handler always has fullscreen available.
+  const handleOpenFullBoard = useCallback(() => {
+    handleExpandToFullscreen()
+  }, [handleExpandToFullscreen])
 
   // Handle "View remaining cluster content" overflow action
   const handleViewRemainingContent = useCallback(async () => {
@@ -823,7 +824,6 @@ function App() {
             ref={fullscreenOpenerRef}
             type="button"
             onClick={handleOpenFullBoard}
-            disabled={isLoadingBoard}
             style={{
               padding: '8px 12px',
               fontSize: '12px',
@@ -832,33 +832,28 @@ function App() {
               background: 'transparent',
               border: 'none',
               borderRadius: 'var(--border-radius-md, 8px)',
-              cursor: isLoadingBoard ? 'wait' : 'pointer',
-              opacity: isLoadingBoard ? 0.6 : 1,
+              cursor: 'pointer',
               minHeight: '44px',
               minWidth: '44px',
             }}
             aria-label="Open full board in fullscreen"
           >
             {/* SVG arrow - no Unicode glyphs per briefing */}
-            {isLoadingBoard ? 'Loading...' : (
-              <>
-                Open full board{' '}
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ verticalAlign: 'middle', marginLeft: '2px' }}
-                  aria-hidden="true"
-                >
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              </>
-            )}
+            Open full board{' '}
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ verticalAlign: 'middle', marginLeft: '2px' }}
+              aria-hidden="true"
+            >
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
           </button>
         )}
       </div>
