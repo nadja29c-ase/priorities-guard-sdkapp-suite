@@ -1539,3 +1539,342 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     expect(mockRequestDisplayMode).toHaveBeenCalledWith({ mode: 'inline' })
   })
 })
+
+// ==========================================================================
+// Tests for inc_fullscreen_visual_alignment_openai (Tests 1-5)
+// ==========================================================================
+// These tests verify the visual alignment changes made in increment 3.
+// Each test has a "Catches:" comment explaining what regression it prevents.
+
+describe('Fullscreen Visual Alignment (inc_fullscreen_visual_alignment_openai)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  // Test 1: Tags render LAST in the fullscreen cluster card
+  // Catches: section-order regression (the main fix)
+  it('tags render LAST in fullscreen cluster card (after subclusters)', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            {
+              cluster_name: 'Test Cluster',
+              sum_thought_items: 3,
+              tags: ['decide', 'follow-up'],
+              thought_items: ['thought 1'],
+              subclusters: [
+                { subcluster_name: 'Sub A', sum_thought_items: 2 },
+              ],
+            },
+          ],
+        },
+      })
+    })
+
+    // Get the cluster card article element
+    const clusterCard = screen.getByRole('article', { name: /Test Cluster/i })
+    const cardHtml = clusterCard.innerHTML
+
+    // Tags should appear AFTER subcluster content in DOM order
+    const subclusterPos = cardHtml.indexOf('Sub A')
+    const tagPos = cardHtml.indexOf('decide')
+
+    expect(subclusterPos).toBeGreaterThan(-1)
+    expect(tagPos).toBeGreaterThan(-1)
+    expect(tagPos).toBeGreaterThan(subclusterPos) // Tags LAST
+  })
+
+  // Test 2: Thought item has no bullet icon and badge follows text
+  // Catches: reverting to bullet/badge-first
+  it('thought item has NO bullet SVG and priority badge follows text', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            {
+              cluster_name: 'Test',
+              sum_thought_items: 1,
+              thought_items: [
+                { text: 'Priority thought', priority: { rank: 'P1' } },
+              ],
+            },
+          ],
+        },
+      })
+    })
+
+    // Find the thought list item
+    const thoughtItems = screen.getAllByRole('listitem')
+    // Filter to find the thought item (contains "Priority thought")
+    const thoughtItem = thoughtItems.find(item => item.textContent?.includes('Priority thought'))
+    expect(thoughtItem).toBeDefined()
+
+    // NO bullet SVG inside the thought item (no filled circle)
+    // The old implementation had a bullet SVG with fill="currentColor" and a circle
+    const bulletSvgs = thoughtItem!.querySelectorAll('svg[fill="currentColor"]')
+    bulletSvgs.forEach(svg => {
+      const hasFilledCircle = svg.querySelector('circle[r="4"]') || svg.querySelector('circle[r="6"]')
+      expect(hasFilledCircle).toBeNull()
+    })
+
+    // Badge (P1) should follow text in DOM order
+    const itemHtml = thoughtItem!.innerHTML
+    const textPos = itemHtml.indexOf('Priority thought')
+    const badgePos = itemHtml.indexOf('P1')
+
+    expect(textPos).toBeGreaterThan(-1)
+    expect(badgePos).toBeGreaterThan(-1)
+    expect(badgePos).toBeGreaterThan(textPos) // Badge AFTER text
+  })
+
+  // Test 3: Count is a pill containing only the number
+  // Catches: reverting to "N thoughts" plain text
+  it('count is an outlined pill with number only, not "N thoughts" text', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            {
+              cluster_name: 'Test',
+              sum_thought_items: 7,
+            },
+          ],
+        },
+      })
+    })
+
+    // The count pill should show just "7", not "7 thoughts"
+    // Find element containing just "7" (aria-hidden pill)
+    const countPill = screen.getByText('7', { selector: '[aria-hidden="true"]' })
+    expect(countPill).toBeInTheDocument()
+
+    // The "7 thoughts" full text should be screen-reader only (sr-only)
+    // It should exist but be visually hidden
+    const srOnlyText = screen.getByText('7 items')
+    expect(srOnlyText).toBeInTheDocument()
+    // Verify it has sr-only styling (position: absolute, clipped)
+    expect(srOnlyText).toHaveStyle({ position: 'absolute' })
+
+    // The plain text "7 thoughts" should NOT be visible
+    expect(screen.queryByText('7 thoughts')).not.toBeInTheDocument()
+  })
+
+  // Test 4: Subcluster left accent only when prioritized
+  // Catches: the always-on border regression
+  it('subcluster has left accent ONLY when prioritized', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            {
+              cluster_name: 'Parent',
+              sum_thought_items: 4,
+              subclusters: [
+                { subcluster_name: 'Prioritized Sub', sum_thought_items: 2, priority: { rank: 'P2' } },
+                { subcluster_name: 'Unprioritized Sub', sum_thought_items: 2 },
+              ],
+            },
+          ],
+        },
+      })
+    })
+
+    // Find both subclusters by their aria-label
+    const prioritizedSub = screen.getByLabelText('Subcluster: Prioritized Sub')
+    const unprioritizedSub = screen.getByLabelText('Subcluster: Unprioritized Sub')
+
+    // Get the raw style attribute to check what was actually set
+    const prioritizedStyleAttr = prioritizedSub.getAttribute('style') || ''
+    const unprioritizedStyleAttr = unprioritizedSub.getAttribute('style') || ''
+
+    // Prioritized: has left accent (border-left with 4px solid)
+    expect(prioritizedStyleAttr).toMatch(/border-left:\s*4px/)
+    // Should also have other borders set to none (not a full border)
+    expect(prioritizedStyleAttr).not.toMatch(/border:\s*1px/)
+
+    // Unprioritized: should NOT have border-left: 4px (no accent)
+    // Instead it has a regular 1px border on all sides
+    expect(unprioritizedStyleAttr).not.toMatch(/border-left:\s*4px/)
+    // And it should have a regular 1px border
+    expect(unprioritizedStyleAttr).toMatch(/border:\s*1px/)
+  })
+
+  // Test 5: No Unicode glyphs / no OpenAI imports
+  // Catches: the recurring glyph regression
+  it('no Unicode glyphs (▲▼·→›•) in rendered output', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { container } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            {
+              cluster_name: 'Test',
+              sum_thought_items: 3,
+              tags: ['tag1'],
+              thought_items: [
+                { text: 'Thought 1', priority: { rank: 'P1' } },
+                'Thought 2',
+              ],
+              subclusters: [
+                { subcluster_name: 'Sub', sum_thought_items: 1, thought_items: ['sub thought'] },
+              ],
+            },
+          ],
+        },
+      })
+    })
+
+    // Get the entire rendered HTML
+    const fullHtml = container.innerHTML
+
+    // Check for forbidden Unicode glyphs
+    const forbiddenGlyphs = ['▲', '▼', '·', '→', '›', '•']
+    for (const glyph of forbiddenGlyphs) {
+      expect(fullHtml).not.toContain(glyph)
+    }
+  })
+
+  // Additional test: Verify module imports cleanly (no OpenAI SDK)
+  it('module loads without OpenAI SDK imports', async () => {
+    // This test passes if the module loads without errors
+    // OpenAI SDK imports would cause module resolution failures
+    const AppModule = await import('../App')
+    expect(AppModule.default).toBeDefined()
+
+    // Also verify utils loads cleanly
+    const UtilsModule = await import('../utils')
+    expect(UtilsModule.RANK_COLORS).toBeDefined()
+  })
+})

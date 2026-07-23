@@ -1530,6 +1530,22 @@ function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
 // =============================================================================
 // FULLSCREEN CLUSTER CARD
 // =============================================================================
+// VISUAL ALIGNMENT: Matches OpenAI ClusterCard structure (inc_fullscreen_visual_alignment_openai.md)
+// - Container: rounded-2xl (16px), p-5 (20px), shadow-lg, min-h-[120px], flex flex-col
+// - Prioritized: border-l-4 + pl-6 (24px left padding)
+// - Header: name + badge on left, count pill on right
+// - Order: header → summary → thoughts → subclusters → TAGS LAST
+// - Count: outlined pill with number only + sr-only full text
+//
+// COMPLIANCE DEVIATIONS (kept from OpenAI):
+// - fontWeight: 500 max (Anthropic guideline; OpenAI uses font-semibold/600)
+// - Collapse indicators: SVG chevrons (not Unicode ▲/▼)
+// - Styling: Claude tokens + inline styles (no Tailwind, no OpenAI SDK)
+// - Focus ring: --color-ring-primary (Claude's ring token)
+// - Collapsibility: NOT added (fullscreen shows everything expanded by design)
+//
+// PRODUCT DEVIATION (intentional, not compliance):
+// - Summary: full text, no 100-char clamp (fullscreen has room)
 
 interface FullscreenClusterCardProps {
   cluster: Cluster
@@ -1539,11 +1555,11 @@ interface FullscreenClusterCardProps {
  * Full cluster card for fullscreen view.
  *
  * Shows:
- * - Header: name, priority badge, thought count
- * - Full summary (no clamp)
+ * - Header: name + priority badge on left, count pill on right
+ * - Full summary (no clamp - product deviation)
  * - All thought items (priority-sorted)
  * - All subclusters as nested cards
- * - Tag PILLS (full pills, not just indicator)
+ * - Tag PILLS at the END (OpenAI order)
  */
 function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
   const hasPriority = !!cluster.priority?.rank
@@ -1554,95 +1570,105 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
   const colors = rank ? RANK_COLORS[rank] : null
   const sortedThoughts = sortThoughtsByPriority(cluster.thought_items ?? [])
   const subclusters = cluster.subclusters ?? []
+  const thoughtCount = cluster.sum_thought_items ?? 0
 
   return (
     <article
-      aria-label={`Cluster: ${cluster.cluster_name}`}
+      aria-label={`Cluster: ${cluster.cluster_name}${hasPriority ? `, Priority ${rank?.replace('P', '')}` : ''}, ${thoughtCount} items`}
       style={{
+        // OpenAI: rounded-2xl (16px), p-5 (20px), shadow-lg, min-h-[120px], flex flex-col
         background: 'var(--color-background-secondary, #F5F4ED)',
-        borderRadius: 'var(--border-radius-xl, 12px)',
-        padding: '16px',
+        borderRadius: 'var(--border-radius-2xl, 16px)',
+        padding: hasPriority ? '20px 20px 20px 24px' : '20px', // pl-6 (24px) when prioritized
+        minHeight: '120px',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: 'var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))',
         borderLeft: hasPriority && colors
           ? `4px solid ${colors.border}`
           : 'none',
       }}
     >
-      {/* Header row: name, priority badge, thought count */}
+      {/* Header row: name + badge LEFT, count pill RIGHT (OpenAI layout) */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
           gap: '8px',
           marginBottom: '12px',
         }}
       >
-        {/* Priority badge */}
-        {hasPriority && rank && colors && (
+        {/* Left side: name + priority badge */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {/* Cluster name FIRST (OpenAI order) */}
+          <h2
+            style={{
+              fontSize: '14px', // text-sm
+              fontWeight: 500, // COMPLIANCE: 500 max (not font-semibold/600)
+              color: 'var(--color-text-primary, #141413)',
+              margin: 0,
+              wordBreak: 'break-word',
+              minWidth: 0,
+            }}
+          >
+            {cluster.cluster_name || 'Untitled cluster'}
+          </h2>
+
+          {/* Priority badge AFTER name (OpenAI order) */}
+          {hasPriority && rank && colors && (
+            <span
+              style={{
+                fontSize: '12px',
+                fontWeight: 500,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                background: colors.bg,
+                color: colors.text,
+                flexShrink: 0,
+              }}
+            >
+              {rank}
+            </span>
+          )}
+        </div>
+
+        {/* Right side: count pill (outlined, number only + sr-only text) */}
+        <span role="text" aria-label={`${thoughtCount} items in this cluster`}>
           <span
+            aria-hidden="true"
             style={{
               fontSize: '12px',
               fontWeight: 500,
               padding: '2px 8px',
-              borderRadius: '4px',
-              background: colors.bg,
-              color: colors.text,
+              borderRadius: '9999px', // pill shape
+              background: 'transparent',
+              color: 'var(--color-text-secondary, #3D3D3A)',
+              border: '1px solid var(--color-border-tertiary, #E0DFDB)',
               flexShrink: 0,
             }}
           >
-            {rank}
+            {thoughtCount}
           </span>
-        )}
-
-        {/* Cluster name */}
-        <h2
-          style={{
-            flex: 1,
-            fontSize: '15px',
-            fontWeight: 500,
-            color: 'var(--color-text-primary, #141413)',
-            margin: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {cluster.cluster_name}
-        </h2>
-
-        {/* Thought count */}
-        <span
-          style={{
-            fontSize: '13px',
-            color: 'var(--color-text-tertiary, #73726C)',
-            flexShrink: 0,
-          }}
-        >
-          {cluster.sum_thought_items ?? 0} thought{(cluster.sum_thought_items ?? 0) !== 1 ? 's' : ''}
+          <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+            {thoughtCount} items
+          </span>
         </span>
       </div>
 
-      {/* Tag pills - FULL PILLS, not just indicator */}
-      {hasTags && (
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '6px',
-            marginBottom: '12px',
-          }}
-          aria-label="Action tags"
-        >
-          {cluster.tags!.map((tag) => (
-            <TagPill key={tag} tag={tag} />
-          ))}
-        </div>
-      )}
-
-      {/* Summary - full text, no clamp */}
+      {/* Summary - full text, no clamp (PRODUCT DEVIATION: fullscreen has room) */}
       {cluster.summary && (
         <p
           style={{
             fontSize: '13px',
-            fontStyle: 'italic',
             color: 'var(--color-text-secondary, #3D3D3A)',
             margin: '0 0 12px 0',
             lineHeight: 1.5,
@@ -1655,6 +1681,7 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
       {/* Thought items - priority sorted */}
       {sortedThoughts.length > 0 && (
         <ul
+          role="list"
           style={{
             listStyle: 'none',
             margin: 0,
@@ -1675,7 +1702,7 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
       {subclusters.length > 0 && (
         <div
           style={{
-            marginTop: sortedThoughts.length > 0 ? '16px' : '0',
+            marginTop: sortedThoughts.length > 0 ? '12px' : '0',
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
@@ -1683,6 +1710,25 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
         >
           {subclusters.map((subcluster) => (
             <FullscreenSubclusterCard key={subcluster.subcluster_name} subcluster={subcluster} />
+          ))}
+        </div>
+      )}
+
+      {/* Tags LAST (OpenAI order: mt-auto pt-4) */}
+      {hasTags && (
+        <div
+          role="list"
+          aria-label="Suggested actions"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px',
+            marginTop: 'auto',
+            paddingTop: '16px', // pt-4
+          }}
+        >
+          {cluster.tags!.map((tag) => (
+            <TagPill key={tag} tag={tag} />
           ))}
         </div>
       )}
@@ -1726,57 +1772,76 @@ function TagPill({ tag }: TagPillProps) {
 // =============================================================================
 // FULLSCREEN THOUGHT ITEM
 // =============================================================================
+// VISUAL ALIGNMENT: Matches OpenAI ThoughtItem structure (inc_fullscreen_visual_alignment_openai.md)
+// - Left priority bar (border-l-4 when prioritized, border-l-2 otherwise)
+// - NO bullet icon, NO card background, NO border-radius
+// - Text FIRST, priority badge AFTER text
+// - size="small" variant for thoughts inside subclusters
+//
+// COMPLIANCE DEVIATIONS (kept from OpenAI):
+// - fontWeight: 500 max (Anthropic guideline; OpenAI uses 600)
+// - Styling: Claude tokens + inline styles (no Tailwind, no OpenAI SDK)
 
 interface FullscreenThoughtItemProps {
   thought: { text: string; priority?: { rank: Rank } }
+  size?: 'normal' | 'small'
 }
 
 /**
  * Thought item in fullscreen view.
- * Full text (no clamp), optional priority badge.
+ * Left priority bar, text first, badge after. No bullet, no card background.
  */
-function FullscreenThoughtItem({ thought }: FullscreenThoughtItemProps) {
+function FullscreenThoughtItem({ thought, size = 'normal' }: FullscreenThoughtItemProps) {
   const hasPriority = !!thought.priority?.rank
   const rank = thought.priority?.rank
 
   // Use shared RANK_COLORS from utils.ts
   const colors = rank ? RANK_COLORS[rank] : null
 
+  // OpenAI ThoughtItem: border-l-4 border-l-strong when prioritized, border-l-2 border-default otherwise
+  // Padding: pl-3 py-1 (normal), pl-2 py-0.5 (small)
+  const borderWidth = hasPriority ? '4px' : '2px'
+  const borderColor = hasPriority
+    ? (colors?.border ?? 'var(--color-border-strong, #141413)')
+    : 'var(--color-border-tertiary, #E0DFDB)'
+
+  const isSmall = size === 'small'
+  const paddingLeft = isSmall ? '8px' : '12px'   // pl-2 / pl-3
+  const paddingY = isSmall ? '2px' : '4px'        // py-0.5 / py-1
+  const fontSize = isSmall ? '12px' : '13px'      // text-xs / text-sm
+
   return (
     <li
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         gap: '8px',
-        padding: '8px 12px',
-        background: 'var(--color-background-primary, #FFFFFF)',
-        borderRadius: 'var(--border-radius-md, 8px)',
+        paddingLeft,
+        paddingTop: paddingY,
+        paddingBottom: paddingY,
+        borderLeft: `${borderWidth} solid ${borderColor}`,
+        // NO background, NO border-radius (matches OpenAI)
       }}
     >
-      {/* Bullet icon */}
+      {/* Text FIRST (OpenAI order) */}
       <span
-        aria-hidden="true"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--color-text-tertiary, #73726C)',
-          flexShrink: 0,
-          marginTop: '3px',
+          flex: 1,
+          fontSize,
+          color: 'var(--color-text-primary, #141413)',
+          lineHeight: 1.5,
         }}
       >
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-          <circle cx="12" cy="12" r="4" />
-        </svg>
+        {thought.text}
       </span>
 
-      {/* Priority badge */}
+      {/* Priority badge AFTER text (OpenAI order) */}
       {hasPriority && rank && colors && (
         <span
           style={{
-            fontSize: '10px',
-            fontWeight: 500,
-            padding: '1px 5px',
+            fontSize: isSmall ? '9px' : '10px',
+            fontWeight: 500, // COMPLIANCE: 500 max (not 600)
+            padding: isSmall ? '0 4px' : '1px 5px',
             borderRadius: '3px',
             background: colors.bg,
             color: colors.text,
@@ -1786,18 +1851,6 @@ function FullscreenThoughtItem({ thought }: FullscreenThoughtItemProps) {
           {rank}
         </span>
       )}
-
-      {/* Thought text - full, no clamp */}
-      <span
-        style={{
-          flex: 1,
-          fontSize: '13px',
-          color: 'var(--color-text-primary, #141413)',
-          lineHeight: 1.5,
-        }}
-      >
-        {thought.text}
-      </span>
     </li>
   )
 }
@@ -1805,6 +1858,17 @@ function FullscreenThoughtItem({ thought }: FullscreenThoughtItemProps) {
 // =============================================================================
 // FULLSCREEN SUBCLUSTER CARD
 // =============================================================================
+// VISUAL ALIGNMENT: Matches OpenAI SubclusterCard structure (inc_fullscreen_visual_alignment_openai.md)
+// - Container: rounded-lg (8px), p-3 (12px), surface background
+// - Left accent: border-l-4 ONLY when prioritized (NOT always-on)
+// - Header: name + badge on left, count pill on right
+// - Order: header → thoughts → TAGS LAST (mt-auto pt-2)
+// - Count: outlined pill with number only + sr-only full text
+// - Thoughts: size="small" variant
+//
+// COMPLIANCE DEVIATIONS (kept from OpenAI):
+// - fontWeight: 500 max (Anthropic guideline; OpenAI uses font-medium which is 500 anyway)
+// - Styling: Claude tokens + inline styles (no Tailwind, no OpenAI SDK)
 
 interface FullscreenSubclusterCardProps {
   subcluster: Subcluster
@@ -1812,7 +1876,7 @@ interface FullscreenSubclusterCardProps {
 
 /**
  * Subcluster as nested card in fullscreen view.
- * Shows: name, priority badge, thought count, all thoughts.
+ * Shows: name + badge left, count pill right, thoughts (small), tags LAST.
  */
 function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps) {
   const hasPriority = !!subcluster.priority?.rank
@@ -1822,159 +1886,149 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
   // Use shared RANK_COLORS and sortThoughtsByPriority from utils.ts
   const colors = rank ? RANK_COLORS[rank] : null
   const sortedThoughts = sortThoughtsByPriority(subcluster.thought_items ?? [])
+  const thoughtCount = subcluster.sum_thought_items ?? sortedThoughts.length
+
+  // Compute border styles to avoid shorthand/longhand conflicts
+  const borderStyles = hasPriority && colors
+    ? {
+        borderLeft: `4px solid ${colors.border}`,
+        borderTop: 'none',
+        borderRight: 'none',
+        borderBottom: 'none',
+      }
+    : {
+        border: '1px solid var(--color-border-tertiary, #E0DFDB)',
+      }
 
   return (
     <div
       aria-label={`Subcluster: ${subcluster.subcluster_name}`}
       style={{
+        // OpenAI: rounded-lg (8px), p-3 (12px), bg-surface
         background: 'var(--color-background-primary, #FFFFFF)',
-        borderRadius: 'var(--border-radius-md, 8px)',
+        borderRadius: 'var(--border-radius-lg, 8px)',
         padding: '12px',
-        borderLeft: hasPriority && colors
-          ? `3px solid ${colors.border}`
-          : '3px solid var(--color-border-tertiary, #E0DFDB)',
+        display: 'flex',
+        flexDirection: 'column',
+        // OpenAI: border-l-4 border-l-strong ONLY when prioritized, otherwise border-subtle (no left accent)
+        ...borderStyles,
       }}
     >
-      {/* Header */}
+      {/* Header: name + badge LEFT, count pill RIGHT (OpenAI layout) */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
           gap: '8px',
-          marginBottom: sortedThoughts.length > 0 || hasTags ? '10px' : '0',
+          marginBottom: sortedThoughts.length > 0 || hasTags ? '8px' : '0',
         }}
       >
-        {/* Folder icon */}
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            color: 'var(--color-text-tertiary, #73726C)',
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
-        </span>
-
-        {/* Priority badge */}
-        {hasPriority && rank && colors && (
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 500,
-              padding: '1px 5px',
-              borderRadius: '3px',
-              background: colors.bg,
-              color: colors.text,
-              flexShrink: 0,
-            }}
-          >
-            {rank}
-          </span>
-        )}
-
-        {/* Subcluster name */}
-        <span
-          style={{
-            flex: 1,
-            fontSize: '13px',
-            fontWeight: 500,
-            color: 'var(--color-text-primary, #141413)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {subcluster.subcluster_name}
-        </span>
-
-        {/* Thought count */}
-        <span
-          style={{
-            fontSize: '12px',
-            color: 'var(--color-text-tertiary, #73726C)',
-            flexShrink: 0,
-          }}
-        >
-          {subcluster.sum_thought_items} thought{subcluster.sum_thought_items !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      {/* Tag pills */}
-      {hasTags && (
+        {/* Left side: name + priority badge */}
         <div
           style={{
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: '4px',
-            marginBottom: sortedThoughts.length > 0 ? '10px' : '0',
+            alignItems: 'center',
+            gap: '8px',
+            flex: 1,
+            minWidth: 0,
           }}
         >
-          {subcluster.tags!.map((tag) => (
-            <TagPill key={tag} tag={tag} />
-          ))}
-        </div>
-      )}
+          {/* Subcluster name FIRST (OpenAI order) */}
+          <h4
+            style={{
+              fontSize: '14px', // text-sm
+              fontWeight: 500, // font-medium
+              color: 'var(--color-text-primary, #141413)',
+              margin: 0,
+              wordBreak: 'break-word',
+              minWidth: 0,
+            }}
+          >
+            {subcluster.subcluster_name || 'Untitled'}
+          </h4>
 
-      {/* Thoughts */}
+          {/* Priority badge AFTER name (OpenAI order) */}
+          {hasPriority && rank && colors && (
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 500,
+                padding: '1px 5px',
+                borderRadius: '3px',
+                background: colors.bg,
+                color: colors.text,
+                flexShrink: 0,
+              }}
+            >
+              {rank}
+            </span>
+          )}
+        </div>
+
+        {/* Right side: count pill (outlined, number only + sr-only text) */}
+        <span role="text" aria-label={`${thoughtCount} items in this subcluster`}>
+          <span
+            aria-hidden="true"
+            style={{
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '1px 6px',
+              borderRadius: '9999px', // pill shape
+              background: 'transparent',
+              color: 'var(--color-text-secondary, #3D3D3A)',
+              border: '1px solid var(--color-border-tertiary, #E0DFDB)',
+              flexShrink: 0,
+            }}
+          >
+            {thoughtCount}
+          </span>
+          <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+            {thoughtCount} items
+          </span>
+        </span>
+      </div>
+
+      {/* Thoughts - using size="small" variant (OpenAI: ThoughtItem size="small") */}
       {sortedThoughts.length > 0 && (
         <ul
+          role="list"
           style={{
             listStyle: 'none',
             margin: 0,
             padding: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: '6px',
+            gap: '4px', // space-y-1 equivalent
           }}
         >
           {sortedThoughts.map((thought, index) => (
-            <li
+            <FullscreenThoughtItem
               key={`sub-thought-${index}`}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '6px',
-                fontSize: '12px',
-                color: 'var(--color-text-primary, #141413)',
-                lineHeight: 1.4,
-              }}
-            >
-              {/* SVG bullet - no Unicode glyphs */}
-              <span
-                aria-hidden="true"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  color: 'var(--color-text-tertiary, #73726C)',
-                  marginTop: '4px',
-                  flexShrink: 0,
-                }}
-              >
-                <svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="12" r="6" />
-                </svg>
-              </span>
-              {thought.priority?.rank && (
-                <span
-                  style={{
-                    fontSize: '9px',
-                    fontWeight: 500,
-                    padding: '0 4px',
-                    borderRadius: '2px',
-                    background: RANK_COLORS[thought.priority.rank]?.bg,
-                    color: RANK_COLORS[thought.priority.rank]?.text,
-                    flexShrink: 0,
-                  }}
-                >
-                  {thought.priority.rank}
-                </span>
-              )}
-              <span>{thought.text}</span>
-            </li>
+              thought={thought}
+              size="small"
+            />
           ))}
         </ul>
+      )}
+
+      {/* Tags LAST (OpenAI order: mt-auto pt-2) */}
+      {hasTags && (
+        <div
+          role="list"
+          aria-label="Suggested actions"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px', // gap-1.5
+            marginTop: 'auto',
+            paddingTop: '8px', // pt-2
+          }}
+        >
+          {subcluster.tags!.map((tag) => (
+            <TagPill key={tag} tag={tag} />
+          ))}
+        </div>
       )}
     </div>
   )
