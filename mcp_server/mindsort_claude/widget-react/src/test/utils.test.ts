@@ -315,16 +315,261 @@ describe('truncateClusters', () => {
   })
 })
 
-// Meta test: Verify getEffectiveRank is NOT in utils
-describe('forbidden functions', () => {
-  it('does NOT export getEffectiveRank', async () => {
-    // Bug that would pass: using getEffectiveRank for extraction
-    const utils = await import('../utils')
-    expect('getEffectiveRank' in utils).toBe(false)
+// =============================================================================
+// EFFECTIVE-RANK ORDERING TESTS (increment 5)
+// =============================================================================
+// Tests for getBestThoughtItemRank, getEffectiveSubclusterRank, getEffectiveRank,
+// and sortSubclustersByPriority. These functions were added in increment 5 to
+// implement effective-rank ordering (supersedes prior "forbidden functions" test).
+
+import {
+  getBestThoughtItemRank,
+  getEffectiveSubclusterRank,
+  getEffectiveRank,
+  sortSubclustersByPriority,
+} from '../utils'
+import type { Subcluster } from '../types'
+
+describe('getBestThoughtItemRank', () => {
+  it('returns best rank among items', () => {
+    // Bug that would pass: returning last or first instead of best
+    const items = [
+      { text: 'P3 thought', priority: { rank: 'P3' as const } },
+      { text: 'P1 thought', priority: { rank: 'P1' as const } },
+      { text: 'P2 thought', priority: { rank: 'P2' as const } },
+    ]
+    expect(getBestThoughtItemRank(items)).toBe('P1')
   })
 
-  it('does NOT export getEffectiveSubclusterRank', async () => {
-    const utils = await import('../utils')
-    expect('getEffectiveSubclusterRank' in utils).toBe(false)
+  it('returns null when no items have priority', () => {
+    // Bug that would pass: returning undefined or throwing
+    const items = [{ text: 'no rank' }, { text: 'also no rank' }]
+    expect(getBestThoughtItemRank(items)).toBeNull()
+  })
+
+  it('handles bare strings (no priority)', () => {
+    // Bug that would pass: not normalizing, crashing on .priority access
+    const items = ['bare string 1', 'bare string 2']
+    expect(getBestThoughtItemRank(items)).toBeNull()
+  })
+
+  it('handles mixed bare strings and objects', () => {
+    // Bug that would pass: only checking objects
+    const items = [
+      'bare string',
+      { text: 'P2 thought', priority: { rank: 'P2' as const } },
+    ]
+    expect(getBestThoughtItemRank(items)).toBe('P2')
+  })
+
+  it('returns null for empty array', () => {
+    expect(getBestThoughtItemRank([])).toBeNull()
+  })
+})
+
+describe('getEffectiveSubclusterRank', () => {
+  it('returns own rank when no item ranks', () => {
+    // Bug that would pass: ignoring own rank
+    const sub: Subcluster = {
+      subcluster_name: 'Test',
+      sum_thought_items: 1,
+      priority: { rank: 'P2' },
+      thought_items: [{ text: 'no rank' }],
+    }
+    expect(getEffectiveSubclusterRank(sub)).toBe('P2')
+  })
+
+  it('returns item rank when no own rank', () => {
+    // Bug that would pass: ignoring item ranks
+    const sub: Subcluster = {
+      subcluster_name: 'Test',
+      sum_thought_items: 1,
+      thought_items: [{ text: 'P1', priority: { rank: 'P1' } }],
+    }
+    expect(getEffectiveSubclusterRank(sub)).toBe('P1')
+  })
+
+  it('returns better rank when both exist (item better)', () => {
+    // Bug that would pass: always preferring own rank
+    const sub: Subcluster = {
+      subcluster_name: 'Test',
+      sum_thought_items: 1,
+      priority: { rank: 'P3' },
+      thought_items: [{ text: 'P1', priority: { rank: 'P1' } }],
+    }
+    expect(getEffectiveSubclusterRank(sub)).toBe('P1')
+  })
+
+  it('returns better rank when both exist (own better)', () => {
+    // Bug that would pass: always preferring item rank
+    const sub: Subcluster = {
+      subcluster_name: 'Test',
+      sum_thought_items: 1,
+      priority: { rank: 'P1' },
+      thought_items: [{ text: 'P3', priority: { rank: 'P3' } }],
+    }
+    expect(getEffectiveSubclusterRank(sub)).toBe('P1')
+  })
+
+  it('returns null when neither exists', () => {
+    const sub: Subcluster = {
+      subcluster_name: 'Test',
+      sum_thought_items: 1,
+      thought_items: [{ text: 'no rank' }],
+    }
+    expect(getEffectiveSubclusterRank(sub)).toBeNull()
+  })
+})
+
+describe('getEffectiveRank', () => {
+  it('cluster with NO own rank but P1 thought returns P1', () => {
+    // Bug that would pass: only checking own rank (the exact bug this increment fixes)
+    const cluster: Cluster = {
+      cluster_name: 'Test',
+      sum_thought_items: 1,
+      thought_items: [{ text: 'P1', priority: { rank: 'P1' } }],
+    }
+    expect(getEffectiveRank(cluster)).toBe('P1')
+  })
+
+  it('cluster with NO own rank but P1 subcluster thought returns P1', () => {
+    // Bug that would pass: not recursing into subclusters
+    const cluster: Cluster = {
+      cluster_name: 'Test',
+      sum_thought_items: 1,
+      subclusters: [{
+        subcluster_name: 'Sub',
+        sum_thought_items: 1,
+        thought_items: [{ text: 'P1', priority: { rank: 'P1' } }],
+      }],
+    }
+    expect(getEffectiveRank(cluster)).toBe('P1')
+  })
+
+  it('own P2 + child P1 returns P1 (child wins)', () => {
+    // Bug that would pass: own rank taking precedence over better child rank
+    const cluster: Cluster = {
+      cluster_name: 'Test',
+      sum_thought_items: 1,
+      priority: { rank: 'P2' },
+      thought_items: [{ text: 'P1', priority: { rank: 'P1' } }],
+    }
+    expect(getEffectiveRank(cluster)).toBe('P1')
+  })
+
+  it('nothing anywhere returns null', () => {
+    const cluster: Cluster = {
+      cluster_name: 'Test',
+      sum_thought_items: 1,
+      thought_items: [{ text: 'no rank' }],
+      subclusters: [{
+        subcluster_name: 'Sub',
+        sum_thought_items: 1,
+        thought_items: [{ text: 'also no rank' }],
+      }],
+    }
+    expect(getEffectiveRank(cluster)).toBeNull()
+  })
+
+  it('considers subcluster own rank too', () => {
+    // Bug that would pass: only checking subcluster items, not subcluster priority
+    const cluster: Cluster = {
+      cluster_name: 'Test',
+      sum_thought_items: 1,
+      subclusters: [{
+        subcluster_name: 'Sub',
+        sum_thought_items: 1,
+        priority: { rank: 'P2' },
+      }],
+    }
+    expect(getEffectiveRank(cluster)).toBe('P2')
+  })
+})
+
+describe('sortClustersForOverview with effective rank', () => {
+  // Test 4 (inc 5 spec): Cluster comparator uses effective rank + size tiebreaker
+  it('uses EFFECTIVE rank (nested P1 thought sorts first)', () => {
+    // Bug that would pass: using own rank only (the exact bug this increment fixes)
+    const clusters: Cluster[] = [
+      { cluster_name: 'Own P2', sum_thought_items: 10, priority: { rank: 'P2' } },
+      { cluster_name: 'Nested P1', sum_thought_items: 5, thought_items: [{ text: 'P1', priority: { rank: 'P1' } }] },
+      { cluster_name: 'No Priority', sum_thought_items: 100 },
+    ]
+
+    const sorted = sortClustersForOverview(clusters)
+
+    // Nested P1 has effective rank P1 → should be first
+    expect(sorted[0].cluster_name).toBe('Nested P1')
+    expect(sorted[1].cluster_name).toBe('Own P2')
+    expect(sorted[2].cluster_name).toBe('No Priority')
+  })
+
+  it('size tiebreaker for equal effective rank (INTENTIONAL DEVIATION)', () => {
+    // Bug that would pass: no tiebreaker (OpenAI has none; Claude keeps it)
+    const clusters: Cluster[] = [
+      { cluster_name: 'Small P1', sum_thought_items: 5, priority: { rank: 'P1' } },
+      { cluster_name: 'Large P1', sum_thought_items: 50, priority: { rank: 'P1' } },
+    ]
+
+    const sorted = sortClustersForOverview(clusters)
+
+    // Same effective rank → larger first (Claude's tiebreaker)
+    expect(sorted[0].cluster_name).toBe('Large P1')
+    expect(sorted[1].cluster_name).toBe('Small P1')
+  })
+})
+
+describe('sortSubclustersByPriority', () => {
+  it('orders by effective subcluster rank', () => {
+    // Bug that would pass: not sorting at all (the prior behavior)
+    const subclusters: Subcluster[] = [
+      { subcluster_name: 'No Priority', sum_thought_items: 1 },
+      { subcluster_name: 'P2 Own', sum_thought_items: 1, priority: { rank: 'P2' } },
+      { subcluster_name: 'P1 Item', sum_thought_items: 1, thought_items: [{ text: 'P1', priority: { rank: 'P1' } }] },
+    ]
+
+    const sorted = sortSubclustersByPriority(subclusters)
+
+    expect(sorted[0].subcluster_name).toBe('P1 Item') // effective P1
+    expect(sorted[1].subcluster_name).toBe('P2 Own') // effective P2
+    expect(sorted[2].subcluster_name).toBe('No Priority') // no rank
+  })
+
+  it('unranked subclusters sort last', () => {
+    const subclusters: Subcluster[] = [
+      { subcluster_name: 'Unranked', sum_thought_items: 1 },
+      { subcluster_name: 'P3', sum_thought_items: 1, priority: { rank: 'P3' } },
+    ]
+
+    const sorted = sortSubclustersByPriority(subclusters)
+
+    expect(sorted[0].subcluster_name).toBe('P3')
+    expect(sorted[1].subcluster_name).toBe('Unranked')
+  })
+
+  it('stable for equal effective ranks (no tiebreaker)', () => {
+    // Bug that would pass: unstable sort causing order changes
+    const subclusters: Subcluster[] = [
+      { subcluster_name: 'First P2', sum_thought_items: 1, priority: { rank: 'P2' } },
+      { subcluster_name: 'Second P2', sum_thought_items: 1, priority: { rank: 'P2' } },
+    ]
+
+    const sorted = sortSubclustersByPriority(subclusters)
+
+    // Same rank → preserve input order (stable)
+    expect(sorted[0].subcluster_name).toBe('First P2')
+    expect(sorted[1].subcluster_name).toBe('Second P2')
+  })
+
+  it('does not mutate original array', () => {
+    const subclusters: Subcluster[] = [
+      { subcluster_name: 'B', sum_thought_items: 1, priority: { rank: 'P2' } },
+      { subcluster_name: 'A', sum_thought_items: 1, priority: { rank: 'P1' } },
+    ]
+    const original = [...subclusters]
+
+    sortSubclustersByPriority(subclusters)
+
+    expect(subclusters).toEqual(original)
   })
 })

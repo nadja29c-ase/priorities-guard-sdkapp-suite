@@ -30,6 +30,7 @@ import {
   sortClustersForOverview,
   truncateClusters,
   sortThoughtsByPriority,
+  sortSubclustersByPriority,
   RANK_COLORS,
 } from './utils'
 
@@ -196,8 +197,9 @@ export function extractDetailUnits(cluster: Cluster): DetailUnit[] {
   }
 
   // (3) Subclusters - as named rows with count, NOT nested
-  const subclusters = cluster.subclusters ?? []
-  for (const sub of subclusters) {
+  // Sorted by effective subcluster rank (inc 5) via shared helper
+  const sortedSubclusters = sortSubclustersByPriority(cluster.subclusters ?? [])
+  for (const sub of sortedSubclusters) {
     units.push({
       type: 'subcluster',
       text: sub.subcluster_name,
@@ -1360,7 +1362,9 @@ function FullscreenBoardView({
         // Safe-area insets: KEPT (Claude requirement, no OpenAI equivalent)
         width: '100%',
         background: 'var(--color-background-secondary, #F5F4ED)',
-        borderRadius: 'var(--border-radius-2xl, 16px)',
+        // 16px: matches OpenAI's rounded-2xl. No --border-radius-2xl token exists;
+        // using literal to avoid referencing non-existent token (inc 5 token audit).
+        borderRadius: '16px',
         padding: `${safeAreaInsets.top + 24}px ${safeAreaInsets.right + 32}px ${safeAreaInsets.bottom + 24}px ${safeAreaInsets.left + 32}px`,
         boxSizing: 'border-box',
       }}
@@ -1599,7 +1603,8 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
   // Use shared RANK_COLORS and sortThoughtsByPriority from utils.ts
   const colors = rank ? RANK_COLORS[rank] : null
   const sortedThoughts = sortThoughtsByPriority(cluster.thought_items ?? [])
-  const subclusters = cluster.subclusters ?? []
+  // Sort subclusters by effective rank (inc 5) via shared helper
+  const subclusters = sortSubclustersByPriority(cluster.subclusters ?? [])
   const thoughtCount = cluster.sum_thought_items ?? 0
 
   // Compute border styles to avoid shorthand/longhand conflicts (same pattern as subcluster)
@@ -1622,7 +1627,9 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
         // OpenAI: rounded-2xl (16px), p-5 (20px), shadow-lg, min-h-[120px], flex flex-col
         // Cards are PRIMARY surface on SECONDARY board, with BORDER + shadow (figure/ground)
         background: 'var(--color-background-primary, #FFFFFF)',
-        borderRadius: 'var(--border-radius-2xl, 16px)',
+        // 16px: matches OpenAI's rounded-2xl. No --border-radius-2xl token exists;
+        // using literal to avoid referencing non-existent token (inc 5 token audit).
+        borderRadius: '16px',
         padding: hasPriority ? '20px 20px 20px 24px' : '20px', // pl-6 (24px) when prioritized
         minHeight: '120px',
         display: 'flex',
@@ -1958,7 +1965,8 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
       style={{
         // OpenAI: rounded-lg (8px), p-3 (12px), bg-surface
         // NOTE: --border-radius-lg is 10px in Anthropic tokens; use --border-radius-md for 8px
-        background: 'var(--color-background-primary, #FFFFFF)',
+        // SECONDARY background for tonal nesting contrast against PRIMARY cluster card (inc 5)
+        background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: 'var(--border-radius-md, 8px)',
         padding: '12px',
         display: 'flex',

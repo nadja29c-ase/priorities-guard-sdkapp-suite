@@ -995,13 +995,228 @@ describe('Accordion Expansion (inc_inline_accordion_bounded)', () => {
   })
 })
 
-// Source file check: Verify forbidden functions are NOT used
-// Using dynamic import check instead of Node fs to avoid type issues
-describe('Source file compliance', () => {
-  it('utils.ts does NOT export getEffectiveRank', async () => {
+// ==========================================================================
+// Tests for inc_effective_rank_ordering_and_nesting (increment 5)
+// ==========================================================================
+// NOTE: Prior "Source file compliance" test asserting getEffectiveRank does NOT exist
+// is DELETED — that decision is superseded by increment 5. See spec tripwire note.
+
+describe('Effective-rank ordering and nesting contrast (inc 5)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  // Test 6 (inc 5 spec): Inline cluster rows reflect effective-rank order
+  it('inline cluster rows reflect effective-rank order (nested P1 first)', async () => {
+    // Bug that would pass: using own rank only
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'inline',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            { cluster_name: 'Own P2', sum_thought_items: 10, priority: { rank: 'P2' } },
+            { cluster_name: 'Nested P1', sum_thought_items: 5, thought_items: [{ text: 'P1', priority: { rank: 'P1' } }] },
+            { cluster_name: 'No Priority', sum_thought_items: 100 },
+          ],
+        },
+      })
+    })
+
+    // Get cluster row buttons - they're named after cluster names
+    // In effective-rank order: Nested P1 (effective P1), Own P2, No Priority
+    const nestedP1 = screen.getByRole('button', { name: /Nested P1/i })
+    const ownP2 = screen.getByRole('button', { name: /Own P2/i })
+    const noPriority = screen.getByRole('button', { name: /No Priority/i })
+
+    // All should exist and be in the document
+    expect(nestedP1).toBeInTheDocument()
+    expect(ownP2).toBeInTheDocument()
+    expect(noPriority).toBeInTheDocument()
+
+    // Verify order by checking DOM positions
+    // Nested P1 should appear before Own P2 in the DOM
+    const nestedP1Index = Array.from(document.querySelectorAll('button')).indexOf(nestedP1 as HTMLButtonElement)
+    const ownP2Index = Array.from(document.querySelectorAll('button')).indexOf(ownP2 as HTMLButtonElement)
+    expect(nestedP1Index).toBeLessThan(ownP2Index)
+  })
+
+  // Test 7 (inc 5 spec): Fullscreen uses same order as inline (shared model)
+  it('fullscreen cluster cards use same effective-rank order as inline', async () => {
+    // Bug that would pass: two divergent sort implementations
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+        safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            { cluster_name: 'Own P2', sum_thought_items: 10, priority: { rank: 'P2' } },
+            { cluster_name: 'Nested P1', sum_thought_items: 5, thought_items: [{ text: 'P1', priority: { rank: 'P1' } }] },
+            { cluster_name: 'No Priority', sum_thought_items: 100 },
+          ],
+        },
+      })
+    })
+
+    // Get all cluster cards in order
+    const cards = screen.getAllByRole('article')
+    // First card should be "Nested P1" (effective rank P1)
+    expect(cards[0]).toHaveAccessibleName(/Nested P1/)
+  })
+
+  // Test 8 (inc 5 spec): Subclusters priority-ordered in fullscreen
+  it('subclusters render priority-ordered in fullscreen nested cards', async () => {
+    // Bug that would pass: subclusters in raw array order
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { container } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+        safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [{
+            cluster_name: 'Parent',
+            sum_thought_items: 3,
+            subclusters: [
+              { subcluster_name: 'Unranked Sub', sum_thought_items: 1 },
+              { subcluster_name: 'P1 Sub', sum_thought_items: 1, priority: { rank: 'P1' } },
+              { subcluster_name: 'P2 Sub', sum_thought_items: 1, priority: { rank: 'P2' } },
+            ],
+          }],
+        },
+      })
+    })
+
+    // Find subcluster labels in DOM order
+    const subclusterLabels = container.querySelectorAll('[aria-label^="Subcluster:"]')
+    expect(subclusterLabels).toHaveLength(3)
+    // Should be P1 first, then P2, then Unranked
+    expect(subclusterLabels[0]).toHaveAttribute('aria-label', 'Subcluster: P1 Sub')
+    expect(subclusterLabels[1]).toHaveAttribute('aria-label', 'Subcluster: P2 Sub')
+    expect(subclusterLabels[2]).toHaveAttribute('aria-label', 'Subcluster: Unranked Sub')
+  })
+
+  // Test 9 (inc 5 spec): Subcluster card uses secondary background; cluster uses primary
+  it('subcluster card uses secondary background (tonal nesting contrast)', async () => {
+    // Bug that would pass: white-on-white (both primary)
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { container } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+        safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [{
+            cluster_name: 'Parent',
+            sum_thought_items: 2,
+            subclusters: [{ subcluster_name: 'Child', sum_thought_items: 1 }],
+          }],
+        },
+      })
+    })
+
+    // Get cluster card (article) and subcluster card (div with aria-label)
+    const clusterCard = screen.getByRole('article', { name: /Parent/ })
+    const subclusterCard = container.querySelector('[aria-label="Subcluster: Child"]')
+
+    const clusterStyle = clusterCard.getAttribute('style') || ''
+    const subclusterStyle = subclusterCard?.getAttribute('style') || ''
+
+    // Cluster uses PRIMARY background
+    expect(clusterStyle).toContain('--color-background-primary')
+    // Subcluster uses SECONDARY background (different, for tonal contrast)
+    expect(subclusterStyle).toContain('--color-background-secondary')
+  })
+
+  // Test: utils.ts NOW exports getEffectiveRank (reverses prior decision)
+  it('utils.ts exports getEffectiveRank and getEffectiveSubclusterRank (inc 5 reversal)', async () => {
+    // This test documents the reversal of the prior "forbidden functions" decision
     const utils = await import('../utils')
-    expect('getEffectiveRank' in utils).toBe(false)
-    expect('getEffectiveSubclusterRank' in utils).toBe(false)
+    expect('getEffectiveRank' in utils).toBe(true)
+    expect('getEffectiveSubclusterRank' in utils).toBe(true)
+    expect('getBestThoughtItemRank' in utils).toBe(true)
+    expect('sortSubclustersByPriority' in utils).toBe(true)
   })
 })
 

@@ -7,10 +7,11 @@
  * - normalizeThoughtItem
  * - truncateText
  * - rankToNumber
+ * - getBestThoughtItemRank, getEffectiveSubclusterRank, getEffectiveRank (inc 5)
+ * - sortSubclustersByPriority (inc 5)
  *
- * FORBIDDEN (not imported):
- * - getEffectiveRank / getEffectiveSubclusterRank (wrong semantic for inline summary)
- * - getToolOutput (OpenAI-specific)
+ * NOT PORTED (OpenAI-specific):
+ * - getToolOutput (window.openai)
  */
 
 import type {
@@ -18,6 +19,7 @@ import type {
   ThoughtItem,
   ThoughtItemInput,
   Cluster,
+  Subcluster,
 } from './types'
 
 /**
@@ -50,6 +52,84 @@ export function rankToNumber(rank: Rank | null | undefined): number {
   return 999
 }
 
+// =============================================================================
+// EFFECTIVE-RANK ORDERING (increment 5)
+// =============================================================================
+// Port of clarity/utils.ts effective-rank logic.
+// Effective rank = min(own rank, best subcluster effective rank, best thought-item rank).
+// This determines cluster/subcluster display order in BOTH inline and fullscreen.
+
+/**
+ * Get the best (highest priority / lowest number) rank among thought items.
+ * Normalizes items first (bare strings have no priority).
+ * Returns null if no items have a priority.
+ */
+export function getBestThoughtItemRank(items: ThoughtItemInput[]): Rank | null {
+  let bestRank: Rank | null = null
+  for (const item of items) {
+    const normalized = normalizeThoughtItem(item)
+    const itemRank = normalized.priority?.rank ?? null
+    if (itemRank && (!bestRank || rankToNumber(itemRank) < rankToNumber(bestRank))) {
+      bestRank = itemRank
+    }
+  }
+  return bestRank
+}
+
+/**
+ * Get effective rank for a subcluster.
+ * Effective = min(own rank, best thought-item rank).
+ * Returns null if neither exists.
+ */
+export function getEffectiveSubclusterRank(subcluster: Subcluster): Rank | null {
+  const ownRank = subcluster.priority?.rank ?? null
+  const bestItemRank = getBestThoughtItemRank(subcluster.thought_items ?? [])
+
+  if (!ownRank && !bestItemRank) return null
+  if (!ownRank) return bestItemRank
+  if (!bestItemRank) return ownRank
+  return rankToNumber(ownRank) <= rankToNumber(bestItemRank) ? ownRank : bestItemRank
+}
+
+/**
+ * Get effective rank for a cluster.
+ * Effective = min(own rank, best subcluster effective rank, best direct thought-item rank).
+ * Returns null if none exist.
+ */
+export function getEffectiveRank(cluster: Cluster): Rank | null {
+  const ownRank = cluster.priority?.rank ?? null
+  const bestDirectItemRank = getBestThoughtItemRank(cluster.thought_items ?? [])
+
+  // Best effective rank from subclusters
+  let bestSubclusterRank: Rank | null = null
+  for (const sub of cluster.subclusters ?? []) {
+    const subEffectiveRank = getEffectiveSubclusterRank(sub)
+    if (subEffectiveRank && (!bestSubclusterRank || rankToNumber(subEffectiveRank) < rankToNumber(bestSubclusterRank))) {
+      bestSubclusterRank = subEffectiveRank
+    }
+  }
+
+  // Find the best among all sources
+  const candidates = [ownRank, bestSubclusterRank, bestDirectItemRank].filter((r): r is Rank => r !== null)
+  if (candidates.length === 0) return null
+
+  return candidates.reduce((best, current) =>
+    rankToNumber(current) < rankToNumber(best) ? current : best
+  )
+}
+
+/**
+ * Sort subclusters by effective rank (P1 → P2 → P3 → unranked).
+ * No size tiebreaker (matches OpenAI; no established Claude behavior to preserve).
+ *
+ * SHARED: Used by both inline (extractDetailUnits) and fullscreen (FullscreenClusterCard).
+ */
+export function sortSubclustersByPriority(subclusters: Subcluster[]): Subcluster[] {
+  return [...subclusters].sort((a, b) => {
+    return rankToNumber(getEffectiveSubclusterRank(a)) - rankToNumber(getEffectiveSubclusterRank(b))
+  })
+}
+
 /**
  * Calculate total thought count from clusters.
  * Uses sum_thought_items field (precomputed by enrich_clusters).
@@ -59,25 +139,30 @@ export function getTotalThoughtCount(clusters: Cluster[]): number {
 }
 
 /**
- * Sort clusters for inline overview display.
+ * Sort clusters by EFFECTIVE rank for display (BOTH inline and fullscreen).
  *
- * Ordering: Prioritized clusters first (P1 → P2 → P3), then unprioritized
- * by sum_thought_items descending (largest first).
+ * Effective rank = min(own rank, best subcluster effective rank, best thought-item rank).
+ * A cluster with no own rank but containing a P1 thought sorts as P1.
  *
- * Data Rule 4: Does NOT assume unique ranks or <=3 priorities.
- * Handles duplicates and >3 prioritized clusters.
+ * Ordering: Effective rank ASC (P1 → P2 → P3 → unranked), then sum_thought_items DESC.
+ *
+ * INTENTIONAL DEVIATION from OpenAI: Claude keeps the size tiebreaker for equal-rank
+ * clusters (larger first). OpenAI has no tiebreaker (array order). Decided in inc 5.
+ *
+ * SHARED: Used by BOTH inline and fullscreen via the single view-model.
  */
 export function sortClustersForOverview(clusters: Cluster[]): Cluster[] {
   return [...clusters].sort((a, b) => {
-    const rankA = rankToNumber(a.priority?.rank)
-    const rankB = rankToNumber(b.priority?.rank)
+    const rankA = rankToNumber(getEffectiveRank(a))
+    const rankB = rankToNumber(getEffectiveRank(b))
 
-    // Primary: prioritized first (lower rank number = higher priority)
+    // Primary: effective rank (lower number = higher priority)
     if (rankA !== rankB) {
       return rankA - rankB
     }
 
-    // Secondary (for unprioritized or same rank): larger thought count first
+    // Secondary (for equal effective rank): larger thought count first
+    // INTENTIONAL DEVIATION: OpenAI has no tiebreaker; Claude sorts by size.
     const countA = a.sum_thought_items ?? 0
     const countB = b.sum_thought_items ?? 0
     return countB - countA
