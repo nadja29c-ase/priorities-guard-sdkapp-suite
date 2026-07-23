@@ -727,7 +727,7 @@ function App() {
             color: 'var(--color-text-tertiary, #73726C)',
           }}
         >
-          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} · {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
+          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} / {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -814,29 +814,53 @@ function App() {
           {boardOverflow > 0 ? `+${boardOverflow} more cluster${boardOverflow !== 1 ? 's' : ''}` : ''}
         </span>
 
-        {/* Open full board button - ref for focus restoration on fullscreen exit */}
-        <button
-          ref={fullscreenOpenerRef}
-          type="button"
-          onClick={handleOpenFullBoard}
-          disabled={isLoadingBoard}
-          style={{
-            padding: '8px 12px',
-            fontSize: '12px',
-            fontWeight: 500,
-            color: 'var(--color-text-info, #1E40AF)',
-            background: 'transparent',
-            border: 'none',
-            borderRadius: 'var(--border-radius-md, 8px)',
-            cursor: isLoadingBoard ? 'wait' : 'pointer',
-            opacity: isLoadingBoard ? 0.6 : 1,
-            minHeight: '44px',
-            minWidth: '44px',
-          }}
-          aria-label={isFullscreenAvailable ? 'Open full board in fullscreen' : 'Open full board in conversation'}
-        >
-          {isLoadingBoard ? 'Loading...' : 'Open full board →'}
-        </button>
+        {/* Open full board button - ONLY when host advertises fullscreen capability.
+            Briefing: "do NOT render the fullscreen affordance" when unavailable;
+            "a dead/no-op button is prohibited." The inline accordion is the
+            intended experience on hosts without fullscreen. */}
+        {isFullscreenAvailable && (
+          <button
+            ref={fullscreenOpenerRef}
+            type="button"
+            onClick={handleOpenFullBoard}
+            disabled={isLoadingBoard}
+            style={{
+              padding: '8px 12px',
+              fontSize: '12px',
+              fontWeight: 500,
+              color: 'var(--color-text-info, #1E40AF)',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: 'var(--border-radius-md, 8px)',
+              cursor: isLoadingBoard ? 'wait' : 'pointer',
+              opacity: isLoadingBoard ? 0.6 : 1,
+              minHeight: '44px',
+              minWidth: '44px',
+            }}
+            aria-label="Open full board in fullscreen"
+          >
+            {/* SVG arrow - no Unicode glyphs per briefing */}
+            {isLoadingBoard ? 'Loading...' : (
+              <>
+                Open full board{' '}
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ verticalAlign: 'middle', marginLeft: '2px' }}
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </>
+            )}
+          </button>
+        )}
       </div>
     </main>
   )
@@ -1361,7 +1385,7 @@ function FullscreenBoardView({
             color: 'var(--color-text-tertiary, #73726C)',
           }}
         >
-          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} · {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
+          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} / {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
         </span>
       </div>
 

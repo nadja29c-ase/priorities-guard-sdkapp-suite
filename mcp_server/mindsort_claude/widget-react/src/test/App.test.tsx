@@ -407,8 +407,8 @@ describe('App Component', () => {
     expect(screen.queryByLabelText('has action tags')).not.toBeInTheDocument()
   })
 
-  // Test: "Open full board" button exists and is functional
-  it('shows "Open full board" button', () => {
+  // Test: "Open full board" button exists when host advertises fullscreen
+  it('shows "Open full board" button when fullscreen is available', () => {
     let capturedOnAppCreated: ((app: MockApp) => void) | null = null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     mockUseApp.mockImplementation((config: any) => {
@@ -420,7 +420,10 @@ describe('App Component', () => {
 
     let capturedOntoolresult: ((result: unknown) => void) | null = null
     const mockApp: MockApp = {
-      getHostContext: () => ({ displayMode: 'inline' }),
+      getHostContext: () => ({
+        displayMode: 'inline',
+        availableDisplayModes: ['inline', 'fullscreen'], // Host advertises fullscreen
+      }),
       callServerTool: vi.fn().mockResolvedValue({}),
       get ontoolresult() {
         return capturedOntoolresult
@@ -442,10 +445,12 @@ describe('App Component', () => {
 
     rerender(<App />)
 
-    // Button should be visible
+    // Button should be visible when fullscreen is available
     const button = screen.getByRole('button', { name: /open full board/i })
     expect(button).toBeInTheDocument()
-    expect(button).toHaveTextContent('Open full board →')
+    // Button text + SVG arrow (no Unicode glyph)
+    expect(button).toHaveTextContent('Open full board')
+    expect(button.querySelector('svg')).not.toBeNull()
   })
 
   // Test 7: Loading and stale states preserved (already covered above)
@@ -1078,11 +1083,12 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     // Full behavior test requires host simulation (manual test 11)
   })
 
-  // Test 5: Capability gating - fullscreen affordance based on host capability
-  it('fullscreen affordance hidden when host does NOT advertise fullscreen', async () => {
+  // Test 5: Capability gating - fullscreen affordance ABSENT when host lacks fullscreen
+  // Briefing: "do NOT render the fullscreen affordance" and "no dead/no-op button"
+  it('fullscreen affordance ABSENT when host does NOT advertise fullscreen', async () => {
     // When host returns availableDisplayModes without 'fullscreen',
-    // the widget should NOT show a dead fullscreen button
-    // This is verified by the handleOpenFullBoard fallback behavior
+    // the widget must NOT render the "Open full board" button at all.
+    // The inline accordion is the intended, standard experience there.
 
     let capturedOnAppCreated: ((app: MockApp) => void) | null = null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1094,13 +1100,11 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     const { rerender } = render(<App />)
 
     let capturedOntoolresult: ((result: unknown) => void) | null = null
-    const mockCallServerTool = vi.fn().mockResolvedValue({})
     const mockApp: MockApp = {
       getHostContext: () => ({
         displayMode: 'inline',
         availableDisplayModes: ['inline'], // NO fullscreen
       }),
-      callServerTool: mockCallServerTool,
       get ontoolresult() {
         return capturedOntoolresult
       },
@@ -1117,12 +1121,12 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     })
     rerender(<App />)
 
-    // Button should still exist but should fall back to load_saved_board
-    const openButton = screen.getByRole('button', { name: /open full board/i })
-    expect(openButton).toBeInTheDocument()
+    // Button must NOT exist when fullscreen is unavailable
+    // This catches the "dead button" / "no-op fullscreen affordance" defect
+    expect(screen.queryByRole('button', { name: /open full board/i })).not.toBeInTheDocument()
 
-    // Behavior when clicked: falls back to load_saved_board (not fullscreen)
-    // This is the legacy behavior when fullscreen is unavailable
+    // The inline accordion remains the experience - verify cluster row exists
+    expect(screen.getByRole('button', { name: /Test/i })).toBeInTheDocument()
   })
 
   // Test 6: Shared view-model - verify shared helpers exist and work correctly
