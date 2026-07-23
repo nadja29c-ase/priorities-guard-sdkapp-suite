@@ -1240,10 +1240,20 @@ function OverflowActionRow({
 // =============================================================================
 // FULLSCREEN BOARD VIEW
 // =============================================================================
-// Renders the full board (all clusters, all thoughts, all subclusters, tag pills)
+// VISUAL ALIGNMENT (inc_fullscreen_shell_primitives_alignment.md):
+// - Grid: 240px min-width (matches OpenAI), 16px gap
+// - Board container: secondary background, 16px radius, 32px horizontal / 24px vertical padding
+// - Header: title + subtitle stacked, NO count (count removed for OpenAI parity)
+// - Empty state: OpenAI copy
+// - Auto-save footer: "Changes are saved automatically"
+// - Safe-area insets: KEPT (Claude requirement, no OpenAI equivalent)
+//
 // READ-ONLY: No mutation controls, no CRUD calls, no edit handlers
 // Performance target: 30 clusters / 300 thoughts / 60 subclusters
 // Beyond target: virtualization via intersection observer
+//
+// INTENTIONAL ASYMMETRY: Inline card KEEPS its count; fullscreen has none.
+// This matches OpenAI and is not a bug.
 
 interface FullscreenBoardViewProps {
   clusters: Cluster[]
@@ -1261,7 +1271,9 @@ interface FullscreenBoardViewProps {
  * - Subclusters as nested cards with their thoughts
  * - Tag PILLS (deferred from inline to here)
  * - Native fullscreen close not duplicated (gated on hostFullscreen)
- * - Responsive grid layout
+ * - Responsive grid layout (240px min, matches OpenAI)
+ * - Header: title + subtitle, NO count (OpenAI parity)
+ * - Auto-save footer at the end
  * - READ-ONLY: no mutation, no CRUD, no edit handlers
  */
 function FullscreenBoardView({
@@ -1270,6 +1282,8 @@ function FullscreenBoardView({
   safeAreaInsets,
   onMinimize,
 }: FullscreenBoardViewProps) {
+  // Counts needed for virtualization check, NOT displayed in header (OpenAI parity)
+  // INTENTIONAL ASYMMETRY: Inline card shows count; fullscreen header does not.
   const clusterCount = clusters.length
   const thoughtCount = getTotalThoughtCount(clusters)
 
@@ -1342,10 +1356,12 @@ function FullscreenBoardView({
       role="main"
       aria-label="MindSort AI Full Board"
       style={{
+        // OpenAI: bg-surface-secondary rounded-2xl px-8 py-6 (tinted rounded card)
+        // Safe-area insets: KEPT (Claude requirement, no OpenAI equivalent)
         width: '100%',
-        minHeight: '100vh',
-        background: 'var(--color-background-primary, #FFFFFF)',
-        padding: `${safeAreaInsets.top + 16}px ${safeAreaInsets.right + 16}px ${safeAreaInsets.bottom + 16}px ${safeAreaInsets.left + 16}px`,
+        background: 'var(--color-background-secondary, #F5F4ED)',
+        borderRadius: 'var(--border-radius-2xl, 16px)',
+        padding: `${safeAreaInsets.top + 24}px ${safeAreaInsets.right + 32}px ${safeAreaInsets.bottom + 24}px ${safeAreaInsets.left + 32}px`,
         boxSizing: 'border-box',
       }}
     >
@@ -1354,34 +1370,34 @@ function FullscreenBoardView({
         <FullscreenHeader onMinimize={onMinimize} />
       )}
 
-      {/* Board header */}
+      {/* Board header: title + subtitle, NO count (OpenAI parity)
+          INTENTIONAL ASYMMETRY: Inline card keeps count; fullscreen header has none. */}
       <div
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'baseline',
-          marginBottom: '24px',
+          marginBottom: '24px', // mb-6 (OpenAI Header)
           paddingTop: !hostFullscreen ? '8px' : '0',
         }}
       >
         <h1
           style={{
-            fontSize: '20px',
-            fontWeight: 500,
+            fontSize: '14px', // heading-sm (OpenAI)
+            fontWeight: 500, // COMPLIANCE: 500 max
             color: 'var(--color-text-primary, #141413)',
             margin: 0,
+            marginBottom: '4px', // mb-1 (OpenAI)
           }}
         >
           Your MindSort AI Board
         </h1>
-        <span
+        <p
           style={{
-            fontSize: '14px',
-            color: 'var(--color-text-tertiary, #73726C)',
+            fontSize: '14px', // text-sm
+            color: 'var(--color-text-secondary, #3D3D3A)',
+            margin: 0,
           }}
         >
-          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} / {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
-        </span>
+          Your thoughts grouped into clusters. Use the chat to rename, split, or reprioritize them.
+        </p>
       </div>
 
       {/* Large board indicator */}
@@ -1400,13 +1416,13 @@ function FullscreenBoardView({
         </div>
       )}
 
-      {/* Cluster grid - responsive layout */}
+      {/* Cluster grid - responsive layout (240px matches OpenAI) */}
       {clusters.length > 0 ? (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-            gap: '16px',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '16px', // gap-4
           }}
         >
           {clusters.map((cluster) => {
@@ -1444,17 +1460,31 @@ function FullscreenBoardView({
           })}
         </div>
       ) : (
-        <p
+        <div
           style={{
-            fontSize: '14px',
-            color: 'var(--color-text-tertiary, #73726C)',
+            padding: '24px',
             textAlign: 'center',
-            padding: '48px 0',
+            fontSize: '14px', // text-sm
+            color: 'var(--color-text-secondary, #3D3D3A)',
+            background: 'var(--color-background-primary, #FFFFFF)',
+            borderRadius: 'var(--border-radius-xl, 12px)',
           }}
         >
-          No clusters yet. Start organizing your thoughts!
-        </p>
+          No saved board yet. Start one by sharing what's on your mind in the chat.
+        </div>
       )}
+
+      {/* Auto-save footer (OpenAI parity) - FULLSCREEN ONLY */}
+      <p
+        style={{
+          fontSize: '12px', // text-xs
+          color: 'var(--color-text-secondary, #3D3D3A)',
+          marginTop: '12px', // mt-3
+          textAlign: 'left',
+        }}
+      >
+        Changes are saved automatically
+      </p>
     </div>
   )
 }
@@ -1572,21 +1602,33 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
   const subclusters = cluster.subclusters ?? []
   const thoughtCount = cluster.sum_thought_items ?? 0
 
+  // Compute border styles to avoid shorthand/longhand conflicts (same pattern as subcluster)
+  // OpenAI: border + border-default ALWAYS; when prioritized ALSO border-l-4 border-l-strong + pl-6
+  const borderStyles = hasPriority && colors
+    ? {
+        borderLeft: `4px solid ${colors.border}`,
+        borderTop: '1px solid var(--color-border-tertiary, #E0DFDB)',
+        borderRight: '1px solid var(--color-border-tertiary, #E0DFDB)',
+        borderBottom: '1px solid var(--color-border-tertiary, #E0DFDB)',
+      }
+    : {
+        border: '1px solid var(--color-border-tertiary, #E0DFDB)',
+      }
+
   return (
     <article
       aria-label={`Cluster: ${cluster.cluster_name}${hasPriority ? `, Priority ${rank?.replace('P', '')}` : ''}, ${thoughtCount} items`}
       style={{
         // OpenAI: rounded-2xl (16px), p-5 (20px), shadow-lg, min-h-[120px], flex flex-col
-        background: 'var(--color-background-secondary, #F5F4ED)',
+        // Cards are PRIMARY surface on SECONDARY board, with BORDER + shadow (figure/ground)
+        background: 'var(--color-background-primary, #FFFFFF)',
         borderRadius: 'var(--border-radius-2xl, 16px)',
         padding: hasPriority ? '20px 20px 20px 24px' : '20px', // pl-6 (24px) when prioritized
         minHeight: '120px',
         display: 'flex',
         flexDirection: 'column',
         boxShadow: 'var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))',
-        borderLeft: hasPriority && colors
-          ? `4px solid ${colors.border}`
-          : 'none',
+        ...borderStyles,
       }}
     >
       {/* Header row: name + badge LEFT, count pill RIGHT (OpenAI layout) */}
@@ -1623,9 +1665,14 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
             {cluster.cluster_name || 'Untitled cluster'}
           </h2>
 
-          {/* Priority badge AFTER name (OpenAI order) */}
+          {/* Priority badge AFTER name (OpenAI order)
+              INTENTIONAL DEVIATION: Color-coded badges (P1 danger / P2 warning / P3 info).
+              OpenAI uses Badge variant="solid" color="secondary" (neutral).
+              Claude keeps RANK_COLORS to reinforce rank visually; priority is ALSO
+              conveyed by badge TEXT ("P1") so it stays WCAG-compliant without color. */}
           {hasPriority && rank && colors && (
             <span
+              aria-label={`Priority ${rank.replace('P', '')}`}
               style={{
                 fontSize: '12px',
                 fontWeight: 500,
@@ -1739,6 +1786,10 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
 // =============================================================================
 // TAG PILL
 // =============================================================================
+// VISUAL ALIGNMENT: OpenAI TagPill uses Badge color="secondary" variant="soft"
+// - Lowercase visible text (tag.toLowerCase())
+// - Soft variant = filled tint, NO border
+// - Accessible label uses ORIGINAL casing: "Suggested action: ${tag}"
 
 interface TagPillProps {
   tag: string
@@ -1746,25 +1797,26 @@ interface TagPillProps {
 
 /**
  * Tag pill component for fullscreen view.
- * Uses Claude tokens (surfaces/text/border), NOT hardcoded colors.
+ * Soft variant: filled tint, no border. Lowercase visible text.
+ * Accessible label preserves original casing.
  */
 function TagPill({ tag }: TagPillProps) {
   return (
     <span
       role="listitem"
-      aria-label={`Tag: ${tag}`}
+      aria-label={`Suggested action: ${tag}`}
       style={{
         fontSize: '11px',
         fontWeight: 500,
         padding: '3px 8px',
         borderRadius: '12px',
+        // Soft variant: filled tint, NO border (OpenAI Badge variant="soft")
         background: 'var(--color-background-tertiary, #EDECEA)',
         color: 'var(--color-text-secondary, #3D3D3A)',
-        border: '1px solid var(--color-border-tertiary, #E0DFDB)',
         whiteSpace: 'nowrap',
       }}
     >
-      {tag}
+      {tag.toLowerCase()}
     </span>
   )
 }

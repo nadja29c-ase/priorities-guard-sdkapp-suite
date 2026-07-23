@@ -1878,3 +1878,288 @@ describe('Fullscreen Visual Alignment (inc_fullscreen_visual_alignment_openai)',
     expect(UtilsModule.RANK_COLORS).toBeDefined()
   })
 })
+
+// ==========================================================================
+// Tests for inc_fullscreen_shell_primitives_alignment (Tests 1-11)
+// ==========================================================================
+// These tests verify the shell and primitive alignment changes in increment 4.
+// Each test has a "Catches:" comment explaining what regression it prevents.
+
+describe('Fullscreen Shell & Primitives Alignment (inc_fullscreen_shell_primitives_alignment)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  // Helper to setup fullscreen mode with given clusters
+  async function setupFullscreen(clusters: unknown[]) {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const result = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+        safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: { clusters },
+      })
+    })
+
+    return result
+  }
+
+  // Test 1: Grid uses 240px minmax
+  // Catches: revert to 320px
+  it('grid uses 240px minmax (not 320px)', async () => {
+    const { container } = await setupFullscreen([
+      { cluster_name: 'Cluster 1', sum_thought_items: 3 },
+      { cluster_name: 'Cluster 2', sum_thought_items: 2 },
+    ])
+
+    // Find the grid container (parent of cluster cards)
+    const gridContainer = container.querySelector('[style*="grid-template-columns"]')
+    expect(gridContainer).not.toBeNull()
+
+    const styleAttr = gridContainer!.getAttribute('style') || ''
+    // Should contain 240px, NOT 320px
+    expect(styleAttr).toContain('240px')
+    expect(styleAttr).not.toContain('320px')
+  })
+
+  // Test 2: Board container uses secondary background + new padding
+  // Catches: figure/ground revert (primary background instead of secondary)
+  it('board container uses secondary background and 16px border-radius', async () => {
+    await setupFullscreen([{ cluster_name: 'Test', sum_thought_items: 1 }])
+
+    const mainElement = screen.getByRole('main', { name: /full board/i })
+    const styleAttr = mainElement.getAttribute('style') || ''
+
+    // Should use secondary background
+    expect(styleAttr).toContain('--color-background-secondary')
+    // Should have 16px border radius
+    expect(styleAttr).toContain('16px')
+  })
+
+  // Test 3: Cluster card ALWAYS has a border; prioritized also has 4px left accent
+  // Catches: borderless unprioritized cards
+  it('cluster card always has border; prioritized has 4px left accent', async () => {
+    await setupFullscreen([
+      { cluster_name: 'With Priority', sum_thought_items: 2, priority: { rank: 'P1' } },
+      { cluster_name: 'No Priority', sum_thought_items: 2 },
+    ])
+
+    // Find both cluster cards by their aria-label (includes "Cluster:" prefix)
+    const prioritizedCard = screen.getByRole('article', { name: /With Priority/i })
+    const unprioritizedCard = screen.getByRole('article', { name: /No Priority/i })
+
+    const prioritizedStyle = prioritizedCard.getAttribute('style') || ''
+    const unprioritizedStyle = unprioritizedCard.getAttribute('style') || ''
+
+    // Both must have some form of border (not borderless)
+    // Prioritized: border-left: 4px + border-top/right/bottom: 1px
+    expect(prioritizedStyle).toMatch(/border-left:\s*4px/)
+    expect(prioritizedStyle).toMatch(/border-top:\s*1px/)
+
+    // Unprioritized: border: 1px (all sides)
+    expect(unprioritizedStyle).toMatch(/border:\s*1px/)
+    expect(unprioritizedStyle).not.toMatch(/border-left:\s*4px/) // no accent
+  })
+
+  // Test 4: Header renders title AND subtitle, NO count
+  // Catches: missing subtitle; count left in place
+  it('header renders title + subtitle, NO cluster/thought count', async () => {
+    await setupFullscreen([
+      { cluster_name: 'Test', sum_thought_items: 5 },
+      { cluster_name: 'Test2', sum_thought_items: 3 },
+    ])
+
+    // Title should exist
+    expect(screen.getByText('Your MindSort AI Board')).toBeInTheDocument()
+
+    // Subtitle should exist (the specific text from OpenAI Header)
+    expect(screen.getByText(/Your thoughts grouped into clusters/i)).toBeInTheDocument()
+    expect(screen.getByText(/Use the chat to rename, split, or reprioritize/i)).toBeInTheDocument()
+
+    // Count should NOT be in the fullscreen header
+    // INTENTIONAL ASYMMETRY: inline has count, fullscreen does not
+    const mainElement = screen.getByRole('main', { name: /full board/i })
+
+    // The header area should NOT contain "N clusters" or "N thoughts" text
+    // Note: we check the header specifically, not the whole page
+    const headerSection = mainElement.querySelector('h1')?.parentElement
+    expect(headerSection).not.toBeNull()
+    const headerText = headerSection!.textContent || ''
+    expect(headerText).not.toMatch(/\d+\s*cluster/)
+    expect(headerText).not.toMatch(/\d+\s*thought/)
+  })
+
+  // Test 5: Tag pill text is lowercase; accessible label uses original casing
+  // Catches: casing/label regressions
+  it('tag pill displays lowercase text but preserves original casing in aria-label', async () => {
+    await setupFullscreen([
+      { cluster_name: 'Test', sum_thought_items: 1, tags: ['Decide', 'URGENT', 'follow-Up'] },
+    ])
+
+    // Visible text should be lowercase
+    expect(screen.getByText('decide')).toBeInTheDocument()
+    expect(screen.getByText('urgent')).toBeInTheDocument()
+    expect(screen.getByText('follow-up')).toBeInTheDocument()
+
+    // Accessible labels should preserve original casing with "Suggested action:" prefix
+    expect(screen.getByLabelText('Suggested action: Decide')).toBeInTheDocument()
+    expect(screen.getByLabelText('Suggested action: URGENT')).toBeInTheDocument()
+    expect(screen.getByLabelText('Suggested action: follow-Up')).toBeInTheDocument()
+  })
+
+  // Test 6: Fullscreen empty state uses OpenAI copy
+  // Catches: copy revert to old message
+  it('fullscreen empty state uses OpenAI copy', async () => {
+    await setupFullscreen([])
+
+    // Should show the OpenAI empty state message, not the old one
+    expect(screen.getByText(/No saved board yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/Start one by sharing what's on your mind/i)).toBeInTheDocument()
+
+    // Should NOT show the old message
+    expect(screen.queryByText(/Start organizing your thoughts/i)).not.toBeInTheDocument()
+  })
+
+  // Test 7: Auto-save footer renders
+  // Catches: missing/removed footer
+  it('auto-save footer renders at end of fullscreen board', async () => {
+    await setupFullscreen([{ cluster_name: 'Test', sum_thought_items: 1 }])
+
+    // The auto-save footer should be present
+    expect(screen.getByText('Changes are saved automatically')).toBeInTheDocument()
+  })
+
+  // Test 8: Priority badges remain color-coded (intentional deviation)
+  // Catches: someone "aligning" to OpenAI's neutral badges
+  it('priority badges are color-coded (P1 danger, P2 warning, P3 info) - intentional deviation', async () => {
+    await setupFullscreen([
+      { cluster_name: 'P1 Cluster', sum_thought_items: 1, priority: { rank: 'P1' } },
+      { cluster_name: 'P2 Cluster', sum_thought_items: 1, priority: { rank: 'P2' } },
+      { cluster_name: 'P3 Cluster', sum_thought_items: 1, priority: { rank: 'P3' } },
+    ])
+
+    // Find the priority badges in cluster cards
+    const p1Badge = screen.getAllByText('P1')[0]
+    const p2Badge = screen.getAllByText('P2')[0]
+    const p3Badge = screen.getAllByText('P3')[0]
+
+    // Check they use color-coded backgrounds (not neutral)
+    const p1Style = p1Badge.getAttribute('style') || ''
+    const p2Style = p2Badge.getAttribute('style') || ''
+    const p3Style = p3Badge.getAttribute('style') || ''
+
+    // P1 should use danger token
+    expect(p1Style).toContain('--color-background-danger')
+    // P2 should use warning token
+    expect(p2Style).toContain('--color-background-warning')
+    // P3 should use info token
+    expect(p3Style).toContain('--color-background-info')
+  })
+
+  // Test 9: Inline card STILL shows its count (intentional asymmetry)
+  // Catches: accidentally stripping the inline count
+  it('inline card still shows cluster/thought count (intentional asymmetry)', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'inline', // INLINE mode
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            { cluster_name: 'Test', sum_thought_items: 5 },
+            { cluster_name: 'Test2', sum_thought_items: 3 },
+          ],
+        },
+      })
+    })
+
+    // Inline mode should still show the count
+    expect(screen.getByText(/2 clusters/)).toBeInTheDocument()
+    expect(screen.getByText(/8 thoughts/)).toBeInTheDocument()
+  })
+
+  // Test 10: No Unicode glyphs; no OpenAI imports
+  // Catches: the recurring glyph regression (same as increment 3, ensures no regression)
+  it('no Unicode glyphs in fullscreen rendered output', async () => {
+    const { container } = await setupFullscreen([
+      {
+        cluster_name: 'Test',
+        sum_thought_items: 2,
+        tags: ['tag1'],
+        thought_items: [{ text: 'thought', priority: { rank: 'P1' } }],
+        subclusters: [{ subcluster_name: 'Sub', sum_thought_items: 1 }],
+      },
+    ])
+
+    const fullHtml = container.innerHTML
+    const forbiddenGlyphs = ['▲', '▼', '·', '→', '›', '•']
+    for (const glyph of forbiddenGlyphs) {
+      expect(fullHtml).not.toContain(glyph)
+    }
+  })
+
+  // Test 11: Tag pill has NO border (soft variant)
+  // Catches: reverting to bordered tag pills
+  it('tag pill has no border (soft variant)', async () => {
+    await setupFullscreen([
+      { cluster_name: 'Test', sum_thought_items: 1, tags: ['decide'] },
+    ])
+
+    const tagPill = screen.getByText('decide')
+    const styleAttr = tagPill.getAttribute('style') || ''
+
+    // Should NOT have border property
+    // Soft variant = filled tint, no outline
+    expect(styleAttr).not.toContain('border:')
+    expect(styleAttr).not.toContain('border-color')
+  })
+})
