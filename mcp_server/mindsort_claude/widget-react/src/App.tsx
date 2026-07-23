@@ -1905,8 +1905,9 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
       aria-label={`Subcluster: ${subcluster.subcluster_name}`}
       style={{
         // OpenAI: rounded-lg (8px), p-3 (12px), bg-surface
+        // NOTE: --border-radius-lg is 10px in Anthropic tokens; use --border-radius-md for 8px
         background: 'var(--color-background-primary, #FFFFFF)',
-        borderRadius: 'var(--border-radius-lg, 8px)',
+        borderRadius: 'var(--border-radius-md, 8px)',
         padding: '12px',
         display: 'flex',
         flexDirection: 'column',
