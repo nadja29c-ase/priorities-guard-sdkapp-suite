@@ -956,7 +956,10 @@ function ClusterRowToggle({
         </svg>
       </span>
 
-      {/* Priority badge (only if prioritized) - TEXT conveys priority, not only color */}
+      {/* Priority badge (only if OWN rank set) - TEXT conveys priority, not only color.
+          DESIGN: Badge shows OWN rank only, not effective rank. A cluster is only labeled
+          P1 if explicitly prioritized. Effective rank determines ORDER (via sortClustersForOverview).
+          Matches OpenAI (ClusterCard uses cluster.priority?.rank for badge). */}
       {hasPriority && rank && colors && (
         <span
           style={{
@@ -1673,6 +1676,10 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
           </h2>
 
           {/* Priority badge AFTER name (OpenAI order)
+              DESIGN: Badge shows OWN rank only, not effective rank. A cluster is only
+              labeled P1 if explicitly prioritized. Effective rank determines ORDER
+              (via sortClustersForOverview). Matches OpenAI (ClusterCard uses
+              cluster.priority?.rank for badge, getEffectiveRank for sort).
               INTENTIONAL DEVIATION: Color-coded badges (P1 danger / P2 warning / P3 info).
               OpenAI uses Badge variant="solid" color="secondary" (neutral).
               Claude keeps RANK_COLORS to reinforce rank visually; priority is ALSO

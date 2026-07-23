@@ -58,6 +58,12 @@ export function rankToNumber(rank: Rank | null | undefined): number {
 // Port of clarity/utils.ts effective-rank logic.
 // Effective rank = min(own rank, best subcluster effective rank, best thought-item rank).
 // This determines cluster/subcluster display order in BOTH inline and fullscreen.
+//
+// DESIGN DECISION: Effective rank affects ORDER only. Badges and accents show OWN rank.
+// A cluster is only labeled P1 if explicitly prioritized; inherited priority surfaces
+// the item via ordering but doesn't assert something the user never set.
+// Matches OpenAI (ClusterCard uses cluster.priority?.rank for display, getEffectiveRank
+// for sort). Documented here; tested in App.test.tsx "sorts first but shows no badge".
 
 /**
  * Get the best (highest priority / lowest number) rank among thought items.

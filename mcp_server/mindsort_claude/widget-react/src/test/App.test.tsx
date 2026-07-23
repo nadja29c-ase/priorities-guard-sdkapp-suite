@@ -1218,6 +1218,125 @@ describe('Effective-rank ordering and nesting contrast (inc 5)', () => {
     expect('getBestThoughtItemRank' in utils).toBe(true)
     expect('sortSubclustersByPriority' in utils).toBe(true)
   })
+
+  // Test (inc 5 follow-up): Cluster with no own rank but P1 thought sorts first AND shows no badge.
+  // This pins the deliberate design: effective rank orders, own rank displays.
+  // A cluster is only labeled P1 if explicitly prioritized; inherited priority surfaces
+  // via ordering but doesn't assert something the user never set. Matches OpenAI.
+  it('cluster with no own rank but P1 thought sorts first AND shows no badge', async () => {
+    const { act } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'inline',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [
+            // Own P2 cluster - has explicit priority, will show P2 badge
+            { cluster_name: 'Own P2', sum_thought_items: 10, priority: { rank: 'P2' } },
+            // No own rank but contains P1 thought - effective rank P1, but NO badge
+            { cluster_name: 'Nested P1 No Badge', sum_thought_items: 5, thought_items: [{ text: 'urgent', priority: { rank: 'P1' } }] },
+          ],
+        },
+      })
+    })
+
+    // 1. "Nested P1 No Badge" should sort FIRST (effective rank P1)
+    const nestedCluster = screen.getByRole('button', { name: /Nested P1 No Badge/i })
+    const ownP2 = screen.getByRole('button', { name: /Own P2/i })
+
+    const buttons = Array.from(document.querySelectorAll('button'))
+    const nestedIndex = buttons.indexOf(nestedCluster as HTMLButtonElement)
+    const ownP2Index = buttons.indexOf(ownP2 as HTMLButtonElement)
+    expect(nestedIndex).toBeLessThan(ownP2Index) // Nested P1 sorts before Own P2
+
+    // 2. "Nested P1 No Badge" should show NO P1 badge (no own rank set)
+    // The badge text "P1" should NOT appear in its row
+    // "Own P2" should have a P2 badge visible
+    expect(screen.getByText('P2')).toBeInTheDocument() // Own P2 has badge
+    // P1 badge should NOT exist anywhere (the nested thought has P1 but cluster has no own rank)
+    expect(screen.queryByText('P1')).not.toBeInTheDocument()
+  })
+
+  // Test (inc 5 follow-up): Inline detail rows show subclusters in effective-rank order.
+  // Codex identified this as missing coverage — subclusters are sorted in extractDetailUnits
+  // but nothing asserted inline detail row order.
+  it('inline expanded detail rows show subclusters in effective-rank order', async () => {
+    const { act, fireEvent } = await import('@testing-library/react')
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const { container } = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'inline',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [{
+            cluster_name: 'Parent Cluster',
+            sum_thought_items: 3,
+            subclusters: [
+              { subcluster_name: 'Unranked Sub', sum_thought_items: 1 },
+              { subcluster_name: 'P1 Sub', sum_thought_items: 1, priority: { rank: 'P1' } },
+              { subcluster_name: 'P2 Sub', sum_thought_items: 1, priority: { rank: 'P2' } },
+            ],
+          }],
+        },
+      })
+    })
+
+    // Expand the cluster to see detail rows
+    const clusterRow = screen.getByRole('button', { name: /Parent Cluster/i })
+    await act(async () => {
+      fireEvent.click(clusterRow)
+    })
+
+    // Find all detail rows with "subcluster" in aria-label
+    // DetailRow uses aria-label like "Subcluster: P1 Sub, 1 thoughts"
+    const detailRows = container.querySelectorAll('[role="listitem"]')
+    const subclusterRows = Array.from(detailRows).filter(row =>
+      row.getAttribute('aria-label')?.startsWith('Subcluster:')
+    )
+
+    expect(subclusterRows).toHaveLength(3)
+    // Should be ordered by effective rank: P1 first, then P2, then Unranked
+    expect(subclusterRows[0].getAttribute('aria-label')).toContain('P1 Sub')
+    expect(subclusterRows[1].getAttribute('aria-label')).toContain('P2 Sub')
+    expect(subclusterRows[2].getAttribute('aria-label')).toContain('Unranked Sub')
+  })
 })
 
 // ==========================================================================
