@@ -3,9 +3,9 @@
 **Scope run:** Option (a) — implement, build, tests green, report. **Stopped before deploy.**
 Nadja owns the deploy gate; manual checks A–H happen on prod on her side.
 
-**Status: CODE COMPLETE, UNCOMMITTED.** Per RULE 1 this round is not "done" until a
-commit hash exists. No commit was made (not requested; current branch is `main`, and
-commit/deploy is Nadja's). Hash to be filled at commit time.
+**Status: COMMITTED — round hash `ad4608f`** (`ad4608ff637c58b1bdc5eb1764b474deabb932a0`,
+on `main`). Verify against `git show ad4608f:<path>`. OPERATIONS_PREDEPLOY.md read + all
+MindSort pre-commit checks passed before commit. Deploy is Nadja's, not done here.
 
 ---
 
