@@ -357,6 +357,27 @@ function App() {
   // Inject host theme CSS variables (must pass hostContext for dark mode)
   useHostStyles(app, app?.getHostContext())
 
+  // inc 6 §1 (width): stamp the current display mode on <html> so main.css can
+  // scope the 600px #root cap to inline only. Fullscreen must fill its container;
+  // the cap stays on every mode EXCEPT explicit fullscreen (see main.css). The
+  // attribute lives on documentElement (sanctioned by §1: "#root/<html>") so the
+  // mechanism is observable even where #root is not the mount node.
+  //
+  // useLayoutEffect (not useEffect): runs BEFORE paint, so a fullscreen-initial
+  // mount (getHostContext() → 'fullscreen' in onAppCreated) never flashes the
+  // capped/narrow board for a frame before widening.
+  //
+  // Cleanup REMOVES the attribute on unmount. Absent = inline-capped (the safe
+  // default), so a widget that unmounts while fullscreen (Claude iOS teardown /
+  // instance supersession) can't strand data-display-mode="fullscreen" on a
+  // shared <html> and silently uncap a later inline card — the mirror-image bug.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    if (!root) return
+    root.setAttribute('data-display-mode', displayMode)
+    return () => root.removeAttribute('data-display-mode')
+  }, [displayMode])
+
   // Track previous displayMode for focus restoration
   const prevDisplayModeRef = useRef<DisplayMode>(displayMode)
 
@@ -1365,10 +1386,11 @@ function FullscreenBoardView({
         // Safe-area insets: KEPT (Claude requirement, no OpenAI equivalent)
         width: '100%',
         background: 'var(--color-background-secondary, #F5F4ED)',
-        // 16px: matches OpenAI's rounded-2xl. No --border-radius-2xl token exists;
-        // using literal to avoid referencing non-existent token (inc 5 token audit).
-        borderRadius: '16px',
-        padding: `${safeAreaInsets.top + 24}px ${safeAreaInsets.right + 32}px ${safeAreaInsets.bottom + 24}px ${safeAreaInsets.left + 32}px`,
+        // inc 6 §3: board container radius → --border-radius-xl (12px), off the
+        // former 16px literal (no --border-radius-2xl token exists). Padding
+        // tightened to 16px vertical / 20px horizontal + safe-area insets (kept).
+        borderRadius: 'var(--border-radius-xl, 12px)',
+        padding: `${safeAreaInsets.top + 16}px ${safeAreaInsets.right + 20}px ${safeAreaInsets.bottom + 16}px ${safeAreaInsets.left + 20}px`,
         boxSizing: 'border-box',
       }}
     >
@@ -1381,24 +1403,26 @@ function FullscreenBoardView({
           INTENTIONAL ASYMMETRY: Inline card keeps count; fullscreen header has none. */}
       <div
         style={{
-          marginBottom: '24px', // mb-6 (OpenAI Header)
+          marginBottom: '16px', // inc 6 §3: board header bottom margin 24→16
           paddingTop: !hostFullscreen ? '8px' : '0',
         }}
       >
         <h1
           style={{
-            fontSize: '14px', // heading-sm (OpenAI)
+            fontSize: 'var(--font-text-sm-size, 14px)', // heading-sm (keep 14)
+            lineHeight: 'var(--font-text-sm-line-height, 1.4)', // inc 6 §2: off 1.5
             fontWeight: 500, // COMPLIANCE: 500 max
             color: 'var(--color-text-primary, #141413)',
             margin: 0,
-            marginBottom: '4px', // mb-1 (OpenAI)
+            marginBottom: '2px', // inc 6 §3: board title bottom margin 4→2
           }}
         >
           Your MindSort AI Board
         </h1>
         <p
           style={{
-            fontSize: '14px', // text-sm
+            fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: board subtitle 14→12
+            lineHeight: 'var(--font-text-xs-line-height, 1.4)',
             color: 'var(--color-text-secondary, #3D3D3A)',
             margin: 0,
           }}
@@ -1415,7 +1439,8 @@ function FullscreenBoardView({
             marginBottom: '16px',
             background: 'var(--color-background-info, #EFF6FF)',
             borderRadius: 'var(--border-radius-md, 8px)',
-            fontSize: '13px',
+            fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: large-board notice 13→12
+            lineHeight: 'var(--font-text-xs-line-height, 1.4)',
             color: 'var(--color-text-info, #1E40AF)',
           }}
         >
@@ -1429,7 +1454,7 @@ function FullscreenBoardView({
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '16px', // gap-4
+            gap: '12px', // inc 6 §3: grid gap 16→12 (240px min kept — 3–4 cols at desktop)
           }}
         >
           {clusters.map((cluster) => {
@@ -1456,7 +1481,8 @@ function FullscreenBoardView({
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: 'var(--color-text-tertiary, #73726C)',
-                      fontSize: '13px',
+                      fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: on-scale (was 13)
+                      lineHeight: 'var(--font-text-xs-line-height, 1.4)',
                     }}
                   >
                     Loading {cluster.cluster_name}...
@@ -1471,7 +1497,8 @@ function FullscreenBoardView({
           style={{
             padding: '24px',
             textAlign: 'center',
-            fontSize: '14px', // text-sm
+            fontSize: 'var(--font-text-sm-size, 14px)', // text-sm (keep, tokenized)
+            lineHeight: 'var(--font-text-sm-line-height, 1.4)',
             color: 'var(--color-text-secondary, #3D3D3A)',
             background: 'var(--color-background-primary, #FFFFFF)',
             borderRadius: 'var(--border-radius-xl, 12px)',
@@ -1484,9 +1511,10 @@ function FullscreenBoardView({
       {/* Auto-save footer (OpenAI parity) - FULLSCREEN ONLY */}
       <p
         style={{
-          fontSize: '12px', // text-xs
+          fontSize: 'var(--font-text-xs-size, 12px)', // text-xs (keep, tokenized)
+          lineHeight: 'var(--font-text-xs-line-height, 1.4)',
           color: 'var(--color-text-secondary, #3D3D3A)',
-          marginTop: '12px', // mt-3
+          marginTop: '12px', // mt-3 (auto-save footer margin unchanged per §2/§4)
           textAlign: 'left',
         }}
       >
@@ -1527,13 +1555,18 @@ function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
           alignItems: 'center',
           gap: '6px',
           padding: '8px 12px',
-          fontSize: '13px',
+          fontSize: 'var(--font-text-sm-size, 14px)', // inc 6 §2: was off-scale 13px (test 3)
+          lineHeight: 'var(--font-text-sm-line-height, 1.4)',
           fontWeight: 500,
           color: 'var(--color-text-secondary, #3D3D3A)',
           background: 'var(--color-background-secondary, #F5F4ED)',
           border: 'none',
           borderRadius: 'var(--border-radius-md, 8px)',
           cursor: 'pointer',
+          // NOTE (inc 6): pre-existing minHeight 36px is BELOW the 44pt tap-target
+          // guideline. NOT modified here (outside §2/§3 tables; RULE 0a — reporting,
+          // not fixing). Flagged for manual F / Nadja's decision. Only shown when
+          // !hostFullscreen (host provides native close on real host).
           minHeight: '36px',
           outline: 'none',
         }}
@@ -1569,7 +1602,9 @@ function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
 // =============================================================================
 // VISUAL ALIGNMENT: Matches OpenAI ClusterCard structure (inc_fullscreen_visual_alignment_openai.md)
 // - Container: rounded-2xl (16px), p-5 (20px), shadow-lg, min-h-[120px], flex flex-col
-// - Prioritized: border-l-4 + pl-6 (24px left padding)
+//   ^ describes OpenAI's original. inc 6 (density) DEVIATES: radius 12px, p-3 (12px),
+//     shadow-sm, no min-height. Structure/order unchanged; only sizes/spacing tightened.
+// - Prioritized: border-l-4 + pl-6 (24px left padding)  [inc 6: pl 16px]
 // - Header: name + badge on left, count pill on right
 // - Order: header → summary → thoughts → subclusters → TAGS LAST
 // - Count: outlined pill with number only + sr-only full text
@@ -1630,14 +1665,18 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
         // OpenAI: rounded-2xl (16px), p-5 (20px), shadow-lg, min-h-[120px], flex flex-col
         // Cards are PRIMARY surface on SECONDARY board, with BORDER + shadow (figure/ground)
         background: 'var(--color-background-primary, #FFFFFF)',
-        // 16px: matches OpenAI's rounded-2xl. No --border-radius-2xl token exists;
-        // using literal to avoid referencing non-existent token (inc 5 token audit).
-        borderRadius: '16px',
-        padding: hasPriority ? '20px 20px 20px 24px' : '20px', // pl-6 (24px) when prioritized
-        minHeight: '120px',
+        // inc 6 §3: radius → --border-radius-xl (12px) off the 16px literal.
+        borderRadius: 'var(--border-radius-xl, 12px)',
+        // inc 6 §3: padding 20→12 (16px left rail when prioritized, was 24).
+        padding: hasPriority ? '12px 12px 12px 16px' : '12px',
+        // inc 6 §3: minHeight 120px REMOVED (cards fit content, no forced stretch).
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: 'var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))',
+        // inc 6 §3: shadow-lg → shadow-sm. Cards already carry a 1px border for
+        // figure/ground on the tinted board; at reduced padding + 12px radius the
+        // large lg blur read heavy and inflated inter-card spacing. sm keeps a
+        // subtle lift. Flagged for Nadja's manual B/G visual confirmation.
+        boxShadow: 'var(--shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.05))',
         ...borderStyles,
       }}
     >
@@ -1648,7 +1687,7 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
           alignItems: 'flex-start',
           justifyContent: 'space-between',
           gap: '8px',
-          marginBottom: '12px',
+          marginBottom: '8px', // inc 6 §3: header→content margin 12→8
         }}
       >
         {/* Left side: name + priority badge */}
@@ -1664,7 +1703,8 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
           {/* Cluster name FIRST (OpenAI order) */}
           <h2
             style={{
-              fontSize: '14px', // text-sm
+              fontSize: 'var(--font-text-sm-size, 14px)', // text-sm (keep 14 — cluster heading)
+              lineHeight: 'var(--font-text-sm-line-height, 1.4)',
               fontWeight: 500, // COMPLIANCE: 500 max (not font-semibold/600)
               color: 'var(--color-text-primary, #141413)',
               margin: 0,
@@ -1688,9 +1728,10 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
             <span
               aria-label={`Priority ${rank.replace('P', '')}`}
               style={{
-                fontSize: '12px',
+                fontSize: 'var(--font-text-xs-size, 12px)', // keep 12 (tokenized)
+                lineHeight: 'var(--font-text-xs-line-height, 1.4)',
                 fontWeight: 500,
-                padding: '2px 8px',
+                padding: '1px 6px', // inc 6 §3: priority badge padding (cluster) 2px 8px → 1px 6px
                 borderRadius: '4px',
                 background: colors.bg,
                 color: colors.text,
@@ -1707,10 +1748,11 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
           <span
             aria-hidden="true"
             style={{
-              fontSize: '12px',
+              fontSize: 'var(--font-text-xs-size, 12px)', // count pill (cluster) keep 12
+              lineHeight: 'var(--font-text-xs-line-height, 1.4)',
               fontWeight: 500,
-              padding: '2px 8px',
-              borderRadius: '9999px', // pill shape
+              padding: '1px 6px', // inc 6 §3: count pill padding 2px 8px → 1px 6px
+              borderRadius: 'var(--border-radius-full, 9999px)', // pill shape (tokenized)
               background: 'transparent',
               color: 'var(--color-text-secondary, #3D3D3A)',
               border: '1px solid var(--color-border-tertiary, #E0DFDB)',
@@ -1729,10 +1771,10 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
       {cluster.summary && (
         <p
           style={{
-            fontSize: '13px',
+            fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: cluster summary 13→12
             color: 'var(--color-text-secondary, #3D3D3A)',
-            margin: '0 0 12px 0',
-            lineHeight: 1.5,
+            margin: '0 0 8px 0', // inc 6 §3: summary bottom margin 12→8
+            lineHeight: 'var(--font-text-xs-line-height, 1.4)', // inc 6 §2: off 1.5
           }}
         >
           {cluster.summary}
@@ -1749,7 +1791,7 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
             padding: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
+            gap: '4px', // inc 6 §3: thought list gap 8→4
           }}
           aria-label={`Thoughts in ${cluster.cluster_name}`}
         >
@@ -1763,10 +1805,10 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
       {subclusters.length > 0 && (
         <div
           style={{
-            marginTop: sortedThoughts.length > 0 ? '12px' : '0',
+            marginTop: sortedThoughts.length > 0 ? '8px' : '0', // inc 6 §3: subcluster block top margin 12→8
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '8px', // inc 6 §3: subcluster card gap 12→8
           }}
         >
           {subclusters.map((subcluster) => (
@@ -1785,7 +1827,7 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
             flexWrap: 'wrap',
             gap: '8px',
             marginTop: 'auto',
-            paddingTop: '16px', // pt-4
+            paddingTop: '10px', // inc 6 §3: tags padding-top (cluster) 16→10
           }}
         >
           {cluster.tags!.map((tag) => (
@@ -1820,10 +1862,11 @@ function TagPill({ tag }: TagPillProps) {
       role="listitem"
       aria-label={`Suggested action: ${tag}`}
       style={{
-        fontSize: '11px',
+        fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: tag pill 11→12
+        lineHeight: 'var(--font-text-xs-line-height, 1.4)',
         fontWeight: 500,
-        padding: '3px 8px',
-        borderRadius: '12px',
+        padding: '2px 6px', // inc 6 §3: tag pill padding 3px 8px → 2px 6px
+        borderRadius: 'var(--border-radius-full, 9999px)', // inc 6 §3: was 12px literal
         // Soft variant: filled tint, NO border (OpenAI Badge variant="soft")
         background: 'var(--color-background-tertiary, #EDECEA)',
         color: 'var(--color-text-secondary, #3D3D3A)',
@@ -1872,9 +1915,9 @@ function FullscreenThoughtItem({ thought, size = 'normal' }: FullscreenThoughtIt
     : 'var(--color-border-tertiary, #E0DFDB)'
 
   const isSmall = size === 'small'
-  const paddingLeft = isSmall ? '8px' : '12px'   // pl-2 / pl-3
-  const paddingY = isSmall ? '2px' : '4px'        // py-0.5 / py-1
-  const fontSize = isSmall ? '12px' : '13px'      // text-xs / text-sm
+  const paddingLeft = isSmall ? '8px' : '10px'   // inc 6 §3: normal pl 12→10 (small 8 kept)
+  const paddingY = isSmall ? '1px' : '2px'        // inc 6 §3: py 4→2 (small 2→1)
+  const fontSize = 'var(--font-text-xs-size, 12px)' // inc 6 §2: 12 for both (was 12/13)
 
   return (
     <li
@@ -1895,7 +1938,7 @@ function FullscreenThoughtItem({ thought, size = 'normal' }: FullscreenThoughtIt
           flex: 1,
           fontSize,
           color: 'var(--color-text-primary, #141413)',
-          lineHeight: 1.5,
+          lineHeight: 'var(--font-text-xs-line-height, 1.4)', // inc 6 §2: off 1.5
         }}
       >
         {thought.text}
@@ -1905,9 +1948,10 @@ function FullscreenThoughtItem({ thought, size = 'normal' }: FullscreenThoughtIt
       {hasPriority && rank && colors && (
         <span
           style={{
-            fontSize: isSmall ? '9px' : '10px',
+            fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: thought badge 9/10→12
+            lineHeight: 'var(--font-text-xs-line-height, 1.4)',
             fontWeight: 500, // COMPLIANCE: 500 max (not 600)
-            padding: isSmall ? '0 4px' : '1px 5px',
+            padding: '0 5px', // inc 6 §3: priority badge padding (thought) → 0 5px
             borderRadius: '3px',
             background: colors.bg,
             color: colors.text,
@@ -1975,7 +2019,7 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
         // SECONDARY background for tonal nesting contrast against PRIMARY cluster card (inc 5)
         background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: 'var(--border-radius-md, 8px)',
-        padding: '12px',
+        padding: '10px', // inc 6 §3: subcluster card padding 12→10
         display: 'flex',
         flexDirection: 'column',
         // OpenAI: border-l-4 border-l-strong ONLY when prioritized, otherwise border-subtle (no left accent)
@@ -1989,7 +2033,7 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
           alignItems: 'flex-start',
           justifyContent: 'space-between',
           gap: '8px',
-          marginBottom: sortedThoughts.length > 0 || hasTags ? '8px' : '0',
+          marginBottom: sortedThoughts.length > 0 || hasTags ? '6px' : '0', // inc 6 §3: subcluster header bottom margin 8→6
         }}
       >
         {/* Left side: name + priority badge */}
@@ -2005,7 +2049,8 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
           {/* Subcluster name FIRST (OpenAI order) */}
           <h4
             style={{
-              fontSize: '14px', // text-sm
+              fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: subcluster name 14→12 (subordinate to cluster name)
+              lineHeight: 'var(--font-text-xs-line-height, 1.4)',
               fontWeight: 500, // font-medium
               color: 'var(--color-text-primary, #141413)',
               margin: 0,
@@ -2020,9 +2065,10 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
           {hasPriority && rank && colors && (
             <span
               style={{
-                fontSize: '10px',
+                fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: subcluster badge 10→12
+                lineHeight: 'var(--font-text-xs-line-height, 1.4)',
                 fontWeight: 500,
-                padding: '1px 5px',
+                padding: '0 5px', // inc 6 §3: priority badge padding (subcluster) → 0 5px
                 borderRadius: '3px',
                 background: colors.bg,
                 color: colors.text,
@@ -2039,10 +2085,11 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
           <span
             aria-hidden="true"
             style={{
-              fontSize: '11px',
+              fontSize: 'var(--font-text-xs-size, 12px)', // inc 6 §2: count pill (subcluster) 11→12
+              lineHeight: 'var(--font-text-xs-line-height, 1.4)',
               fontWeight: 500,
-              padding: '1px 6px',
-              borderRadius: '9999px', // pill shape
+              padding: '1px 6px', // inc 6 §3: count pill padding (kept 1px 6px)
+              borderRadius: 'var(--border-radius-full, 9999px)', // pill shape (tokenized)
               background: 'transparent',
               color: 'var(--color-text-secondary, #3D3D3A)',
               border: '1px solid var(--color-border-tertiary, #E0DFDB)',
@@ -2067,7 +2114,7 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
             padding: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: '4px', // space-y-1 equivalent
+            gap: '3px', // inc 6 §3: subcluster thought list gap 4→3
           }}
         >
           {sortedThoughts.map((thought, index) => (
@@ -2090,7 +2137,7 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
             flexWrap: 'wrap',
             gap: '6px', // gap-1.5
             marginTop: 'auto',
-            paddingTop: '8px', // pt-2
+            paddingTop: '6px', // inc 6 §3: tags padding-top (subcluster) 8→6
           }}
         >
           {subcluster.tags!.map((tag) => (

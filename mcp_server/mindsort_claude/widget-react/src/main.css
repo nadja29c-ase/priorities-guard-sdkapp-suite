@@ -33,8 +33,16 @@ body {
 
 #root {
   width: 100%;
-  max-width: 600px;
   margin: 0 auto;
+}
+
+/* Inline card lives in the chat column, where a 600px cap is correct.
+   Fullscreen must fill its container (inc 6 §1). App.tsx stamps
+   data-display-mode on <html> from displayMode; the cap therefore applies to
+   every mode EXCEPT explicit fullscreen. The attribute is ABSENT on first
+   paint and treated as inline, so inline never renders uncapped. */
+html:not([data-display-mode="fullscreen"]) #root {
+  max-width: 600px;
 }
 
 /* Remove default button styles */
