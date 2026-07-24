@@ -3,9 +3,11 @@
 **Scope run:** Option (a) — implement, build, tests green, report. **Stopped before deploy.**
 Nadja owns the deploy gate; manual checks A–H happen on prod on her side.
 
-**Status: COMMITTED — round hash `ad4608f`** (`ad4608ff637c58b1bdc5eb1764b474deabb932a0`,
-on `main`). Verify against `git show ad4608f:<path>`. OPERATIONS_PREDEPLOY.md read + all
-MindSort pre-commit checks passed before commit. Deploy is Nadja's, not done here.
+**Status: COMMITTED — round HEAD `e5c8463`** (on `main`). Two commits:
+`ad4608f` = the increment (code + tests + bundle + version); `e5c8463` = Codex-review
+follow-up (docs + test-claim accuracy + two `.sr-only` lines, no production behaviour change).
+**Verify code against `git show e5c8463:<path>`.** OPERATIONS_PREDEPLOY.md read + all MindSort
+pre-commit checks passed before each commit. Deploy is Nadja's, not done here.
 
 ---
 
