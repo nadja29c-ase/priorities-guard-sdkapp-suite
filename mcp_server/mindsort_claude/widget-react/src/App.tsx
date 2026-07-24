@@ -1761,7 +1761,7 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
           >
             {thoughtCount}
           </span>
-          <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+          <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0, lineHeight: 'var(--font-text-xs-line-height, 1.4)' }}>
             {thoughtCount} items
           </span>
         </span>
@@ -2098,7 +2098,7 @@ function FullscreenSubclusterCard({ subcluster }: FullscreenSubclusterCardProps)
           >
             {thoughtCount}
           </span>
-          <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 }}>
+          <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0, lineHeight: 'var(--font-text-xs-line-height, 1.4)' }}>
             {thoughtCount} items
           </span>
         </span>

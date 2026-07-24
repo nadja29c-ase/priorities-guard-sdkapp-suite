@@ -2282,9 +2282,12 @@ describe('Fullscreen Shell & Primitives Alignment (inc_fullscreen_shell_primitiv
     expect(styleAttr).not.toContain('320px')
   })
 
-  // Test 2: Board container uses secondary background + new padding
-  // Catches: figure/ground revert (primary background instead of secondary)
-  it('board container uses secondary background and 16px border-radius', async () => {
+  // Test 2: Board container uses secondary background + tokenized radius
+  // Catches: figure/ground revert (primary background instead of secondary).
+  // Radius updated by inc 6 §3: 16px literal → var(--border-radius-xl, 12px).
+  // (Prior version asserted toContain('16px'), which passed only coincidentally
+  // via the container padding, not the radius — masked-invariant trap; fixed.)
+  it('board container uses secondary background and the xl radius token', async () => {
     await setupFullscreen([{ cluster_name: 'Test', sum_thought_items: 1 }])
 
     const mainElement = screen.getByRole('main', { name: /full board/i })
@@ -2292,8 +2295,9 @@ describe('Fullscreen Shell & Primitives Alignment (inc_fullscreen_shell_primitiv
 
     // Should use secondary background
     expect(styleAttr).toContain('--color-background-secondary')
-    // Should have 16px border radius
-    expect(styleAttr).toContain('16px')
+    // Radius must be the xl token, and must NOT be the old 16px literal radius.
+    expect(styleAttr).toContain('var(--border-radius-xl')
+    expect(styleAttr).not.toMatch(/border-radius:\s*16px/)
   })
 
   // Test 3: Cluster card ALWAYS has a border; prioritized also has 4px left accent
@@ -2595,11 +2599,14 @@ describe('Fullscreen width + density (inc_fullscreen_width_and_density)', () => 
     },
   ]
 
-  // Test 1: Fullscreen frees the #root cap; inline keeps it.
-  // Catches: widening leaking into inline, or the ancestor cap winning in fullscreen.
-  // jsdom can't apply main.css, so we assert the mechanism main.css keys off:
-  // <html data-display-mode> — 'fullscreen' removes the cap, anything else keeps it.
-  it('sets data-display-mode=fullscreen in fullscreen and inline otherwise (width gate)', async () => {
+  // Test 1: Verifies the ATTRIBUTE CONTRACT only (the JS half of the width gate):
+  // <html data-display-mode> is 'fullscreen' in fullscreen and 'inline' otherwise.
+  // main.css keys the 600px #root cap off this attribute, but jsdom applies no
+  // stylesheet — so this test does NOT prove the cap actually caps/frees width.
+  // Catches: the attribute being wrong/stuck for a displayMode. It does NOT catch a
+  // broken/mistyped/deleted main.css selector — that (the CSS half) is verified ONLY
+  // by manual check A on prod.
+  it('stamps data-display-mode=fullscreen in fullscreen, inline otherwise (attribute contract)', async () => {
     const { unmount } = await setupFullscreen([{ cluster_name: 'Test', sum_thought_items: 1 }])
     expect(document.documentElement.getAttribute('data-display-mode')).toBe('fullscreen')
     unmount()
@@ -2648,9 +2655,13 @@ describe('Fullscreen width + density (inc_fullscreen_width_and_density)', () => 
     expect(document.documentElement.getAttribute('data-display-mode')).toBe('inline')
   })
 
-  // Test 2: No new fixed board max-width introduced in fullscreen.
-  // Catches: replacing the 600px cap with a different fixed number (e.g. 1100px).
-  it('fullscreen board sets no fixed max-width and fills via auto-fit grid', async () => {
+  // Test 2: Verifies the INLINE-STYLE CONTRACT only — the board container sets no
+  // fixed max-width in its own inline styles and uses an auto-fit grid. jsdom applies
+  // no stylesheet, so this does NOT prove the rendered width fills the container.
+  // Catches: a fixed max-width reintroduced on the board container's inline style
+  // (e.g. swapping the 600px cap for a 1100px one INLINE). It does NOT catch a fixed
+  // width reintroduced via main.css — the CSS half is verified ONLY by manual check A.
+  it('fullscreen board sets no fixed max-width inline and uses an auto-fit grid', async () => {
     const { container } = await setupFullscreen([
       { cluster_name: 'A', sum_thought_items: 1 },
       { cluster_name: 'B', sum_thought_items: 1 },

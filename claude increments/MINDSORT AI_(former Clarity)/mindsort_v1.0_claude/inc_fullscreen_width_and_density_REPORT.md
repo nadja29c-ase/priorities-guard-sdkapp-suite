@@ -99,9 +99,11 @@ needed). No off-scale literal remains; enforced by Test 3.
 
 **Line-height sweep (as requested):** I set an explicit `line-height` token on **every**
 fullscreen text element — including the ones NOT in the §2 table (tag pills, count pills,
-priority badges, large-board notice, placeholder, minimize button). None inherit the global
-`body { line-height: 1.5 }` anymore. Body's 1.5 is unchanged (inline depends on it). Test 3
-fails if any inline `line-height: 1.5` reappears.
+priority badges, large-board notice, placeholder, minimize button) **and the two `.sr-only`
+count spans** (added post-Codex-review; they had inherited `body`'s 1.5 — visually hidden, so
+zero visual impact, but the "nothing inherits 1.5" claim was literally false until fixed). None
+inherit the global `body { line-height: 1.5 }` anymore. Body's 1.5 is unchanged (inline depends
+on it). Test 3 fails if any inline `line-height: 1.5` reappears.
 
 **Weights:** unchanged — only `font-weight: 500` explicit + default 400. No 600/700 (Test 8).
 
@@ -173,6 +175,35 @@ doesn't exist). Test 5 enforces.
 
 ---
 
+## Codex adversarial review (post-commit `ad4608f`) — adjudication
+
+Four findings; three were about verification/claims being more confident than the evidence,
+not broken behaviour. Adjudicated with Nadja:
+
+- **#1 — Multi-instance `<html>` race (KNOWN LIMITATION, no fix now).** The width gate is a
+  single global `<html data-display-mode>` flag with unconditional unmount cleanup. Two widget
+  instances mounted in **one** document would race — whichever layout effect runs last controls
+  the cap for every `#root`, and cleanup doesn't check ownership. **Assessed unreachable in
+  Claude today:** each MCP-App tool render mounts a **new iframe**, and the instance-supersession
+  pattern uses BroadcastChannel precisely *because* instances are in separate iframes sharing an
+  origin — separate iframes ⇒ separate documents ⇒ separate `<html>`, so no shared flag. Codex's
+  own confidence was Medium ("normal iframe isolation may make this unreachable"). **If it ever
+  becomes reachable** (multiple instances in one document), the fix is to scope the attribute to
+  the widget's own root element instead of `<html>`, or ref-count ownership. Not built now.
+- **#2 — Width tests overclaimed (FIXED, framing).** jsdom applies no stylesheet, so Tests 1/2
+  never prove the CSS cap caps/frees anything — a broken `main.css` selector would pass them.
+  Reworded both tests' names + "Catches:" to state they verify only the **attribute/inline-style
+  contract**; the CSS half is explicitly manual-A. No behavioural change.
+- **#3 — `.sr-only` spans inherited 1.5 (FIXED, 2 lines).** Added `line-height` token to both
+  fullscreen count `.sr-only` spans. Visually hidden (zero impact) but makes the claim literally
+  true. See §2 note.
+- **#4 — inc-4 Test 2 masked invariant (FIXED).** It named a "16px border-radius" but passed only
+  because `16px` appears in the padding; radius is now `--border-radius-xl`. Updated it to assert
+  `var(--border-radius-xl` and to reject a literal `border-radius: 16px`. Now validates its name.
+
+Process note: Claude Code had already self-disclosed #2 and #4 in this report before Codex flagged
+them; #1 was Codex's genuinely new escalation; #3 was a real (trivial) miss.
+
 ## Version + URI (mandatory)
 - `WIDGET_VERSION`: **"6" → "7"**
 - **OLD URI:** `ui://mindsort-claude/dashboard-v6.html`
@@ -181,8 +212,11 @@ doesn't exist). Test 5 enforces.
 
 ## Build + tests
 - `vite build`: ✓ clean (171 modules) → `widgets/mindsort-dashboard-claude.html`
-- `vitest run`: ✓ **130 passed** (121 pre-existing unchanged + 9 new).
-- Tests 1–8 + 1b (this increment) all green; each carries its "Catches:" line.
+- `vitest run`: ✓ **130 passed** (120 pre-existing unchanged + **1 pre-existing updated** —
+  inc-4 Test 2 radius assertion, see Codex #4 below — + 9 new).
+- Tests 1–8 + 1b (this increment) all green; each carries its "Catches:" line. The two width
+  tests (1, 2) are named/scoped to the **attribute contract** only — the CSS cap itself is
+  jsdom-invisible and is verified ONLY by manual check A (Codex #2).
 - Inc 1–5 inline + fullscreen behaviour tests: pass **unchanged**.
 
 ## Tests 1–8 — what each catches
