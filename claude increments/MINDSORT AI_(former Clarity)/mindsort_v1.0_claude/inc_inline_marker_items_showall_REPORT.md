@@ -3,7 +3,9 @@
 **Scope run:** implement, build, tests green, report. **Stopped before deploy.** Item 3's
 real acceptance gate is your manual A–E on prod (esp. C: which element scrolls).
 
-**Status: CODE COMPLETE, UNCOMMITTED.** Hash filled at commit time (RULE 1).
+**Status: COMMITTED — round hash `0c56ab4`** (on `main`). Verify code against
+`git show 0c56ab4:<path>`. OPERATIONS_PREDEPLOY.md read + all MindSort pre-commit checks
+passed before commit. Deploy + manual A–E are Nadja's, not done here.
 
 ---
 
