@@ -97,6 +97,21 @@ const MAX_INLINE_ROWS = 5
  */
 const MAX_INLINE_ROWS_EXPANDED = 3
 
+/**
+ * INLINE_SHOW_ALL_ITEMS (inc 7 §3): when true, an expanded cluster renders ALL of
+ * its detail units (no per-item capacity cap) and lets height auto-fit — the
+ * published Anthropic guidance ("auto-fits to content, no nested scrolling") sets
+ * no numeric height limit, so the old ~500px budget was self-imposed.
+ *
+ * PHASED / ROLLBACK: the capacity machinery (computeDetailCapacity, finalDetailCapacity,
+ * OverflowActionRow, the ResizeObserver row-stripping) is kept DORMANT, not deleted.
+ * Flip this to `false` to restore the capped behaviour in one line if prod validation
+ * (manual C) shows the host CLIPS content or the CARD develops its own scrollbar
+ * (nested scrolling — prohibited). Delete the dormant machinery only in a follow-up
+ * increment, and only after prod confirms outcome (1): the PAGE scrolls, not the card.
+ */
+const INLINE_SHOW_ALL_ITEMS = true
+
 // =============================================================================
 // LAYOUT MODEL HELPERS (exported for unit testing)
 // =============================================================================
@@ -476,14 +491,23 @@ function App() {
       ? Math.min(guardedDetailCount, computedCapacity)
       : computedCapacity
 
-  // Visible detail units and overflow count
-  const visibleDetailUnits = detailUnits.slice(0, finalDetailCapacity)
-  const hiddenDetailUnits = detailUnits.slice(finalDetailCapacity)
+  // Visible detail units and overflow count.
+  // inc 7 §3: under show-all, render EVERY unit and treat nothing as hidden. The
+  // capacity slice stays computed above (dormant) so rollback is a one-line flag flip.
+  const visibleDetailUnits = INLINE_SHOW_ALL_ITEMS
+    ? detailUnits
+    : detailUnits.slice(0, finalDetailCapacity)
+  const hiddenDetailUnits = INLINE_SHOW_ALL_ITEMS
+    ? []
+    : detailUnits.slice(finalDetailCapacity)
   // N = hidden THOUGHT items + hidden SUBCLUSTERS (summary omission not counted)
   const overflowCount = hiddenDetailUnits.filter(
     (u) => u.type === 'thought' || u.type === 'subcluster'
   ).length
-  const hasDetailOverflow = overflowCount > 0 || finalDetailCapacity === 0
+  // inc 7 §3: no overflow affordance while show-all is active (nothing is hidden).
+  const hasDetailOverflow = INLINE_SHOW_ALL_ITEMS
+    ? false
+    : overflowCount > 0 || finalDetailCapacity === 0
 
   // Reset guarded count when cluster changes or collapses
   useEffect(() => {
@@ -541,6 +565,13 @@ function App() {
             (height > LAYOUT.maxHeight ? ` — EXCEEDS ${LAYOUT.maxHeight}px LIMIT` : '') +
             (height > target ? ` — above ${target}px target` : '')
         )
+
+        // inc 7 §3: while show-all is active the observer is DIAGNOSTIC ONLY — it logs
+        // the height above but must NOT strip rows (setGuardedDetailCount). Height is
+        // allowed to auto-fit; prod check C decides whether that page-scrolls (good),
+        // clips (revert), or nested-scrolls (fix). Row-stripping stays wired for the
+        // flag=false rollback path.
+        if (INLINE_SHOW_ALL_ITEMS) return
 
         // Read current values from refs (not closure) to avoid stale reads
         const currentExpandedId = expandedClusterIdRef.current
@@ -751,7 +782,7 @@ function App() {
             color: 'var(--color-text-tertiary, #73726C)',
           }}
         >
-          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} / {thoughtCount} thought{thoughtCount !== 1 ? 's' : ''}
+          {clusterCount} cluster{clusterCount !== 1 ? 's' : ''} / {thoughtCount} item{thoughtCount !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -1053,7 +1084,7 @@ function ClusterRowToggle({
           whiteSpace: 'nowrap',
         }}
       >
-        {cluster.sum_thought_items ?? 0} thought{(cluster.sum_thought_items ?? 0) !== 1 ? 's' : ''}
+        {cluster.sum_thought_items ?? 0} item{(cluster.sum_thought_items ?? 0) !== 1 ? 's' : ''}
       </span>
     </button>
   )
@@ -1088,6 +1119,20 @@ function DetailRow({ unit }: DetailRowProps) {
   const typeLabel = unit.type === 'summary' ? 'Summary' :
                     unit.type === 'thought' ? 'Thought' : 'Subcluster'
 
+  // inc 7 §1: thought rows carry a LEFT VERTICAL BAR marker (4px prioritized / 2px
+  // otherwise), reusing FullscreenThoughtItem's exact weights + colours, in place of
+  // the former circle icon. Summary/subcluster keep their SVG icons this increment.
+  const isThought = unit.type === 'thought'
+  const thoughtBar = isThought
+    ? {
+        borderLeft: `${hasPriority ? '4px' : '2px'} solid ${
+          hasPriority
+            ? colors?.border ?? 'var(--color-border-strong, #141413)'
+            : 'var(--color-border-tertiary, #E0DFDB)'
+        }`,
+      }
+    : {}
+
   return (
     <div
       style={{
@@ -1102,42 +1147,41 @@ function DetailRow({ unit }: DetailRowProps) {
         height: `${LAYOUT.detailRowH}px`,
         maxHeight: `${LAYOUT.detailRowH}px`,
         boxSizing: 'border-box', // CRITICAL: padding included in height, else 36+16=52px
+        ...thoughtBar, // inc 7 §1: left bar for thought rows (marker parity w/ fullscreen)
       }}
       role="listitem"
-      aria-label={`${typeLabel}: ${unit.text}${unit.count !== undefined ? `, ${unit.count} thoughts` : ''}`}
+      aria-label={`${typeLabel}: ${unit.text}${unit.count !== undefined ? `, ${unit.count} items` : ''}`}
     >
-      {/* Type icon - monochrome SVG, NOT emoji (compliance: design-guidelines) */}
-      <span
-        aria-hidden="true"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--color-text-tertiary, #73726C)',
-          flexShrink: 0,
-          width: '16px',
-        }}
-      >
-        {unit.type === 'summary' && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <path d="M14 2v6h6" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-          </svg>
-        )}
-        {unit.type === 'thought' && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        )}
-        {unit.type === 'subcluster' && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-          </svg>
-        )}
-      </span>
+      {/* Type icon for summary/subcluster — monochrome SVG, NOT emoji (compliance).
+          inc 7 §1: thought rows use the left bar above instead of an icon, so no
+          icon column is rendered for thoughts. */}
+      {!isThought && (
+        <span
+          aria-hidden="true"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--color-text-tertiary, #73726C)',
+            flexShrink: 0,
+            width: '16px',
+          }}
+        >
+          {unit.type === 'summary' && (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          )}
+          {unit.type === 'subcluster' && (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+          )}
+        </span>
+      )}
 
       {/* Priority badge for thoughts/subclusters */}
       {hasPriority && rank && colors && unit.type !== 'summary' && (
@@ -1186,7 +1230,7 @@ function DetailRow({ unit }: DetailRowProps) {
             whiteSpace: 'nowrap',
           }}
         >
-          {unit.count} thought{unit.count !== 1 ? 's' : ''}
+          {unit.count} item{unit.count !== 1 ? 's' : ''}
         </span>
       )}
     </div>
