@@ -2686,6 +2686,39 @@ describe('Inline marker + items label + show-all (inc_inline_marker_items_showal
     expect(regionStyle).not.toContain('max-height')
   })
 
+  // Test (post-review fix): detail rows WRAP to full text under show-all — no 1-line clamp.
+  // Catches: the clamp bug where show-all lists every item but truncates each to one line
+  // (height/maxHeight 36 + white-space:nowrap + ellipsis). Asserts on STYLE, because the DOM
+  // text node holds the full string under BOTH clamp and wrap — the defect is CSS-visual.
+  it('expanded detail rows wrap (no nowrap / no maxHeight clamp) under show-all', async () => {
+    const { fireEvent } = await import('@testing-library/react')
+    const longText = 'Work on priority design deliverables during the morning deep work block'
+    const { container } = setupInline([
+      { cluster_name: 'LongCluster', sum_thought_items: 1, thought_items: [{ text: longText }] },
+    ])
+    fireEvent.click(screen.getByRole('button', { name: /LongCluster/i }))
+
+    const row = thoughtRows(container)[0]
+    expect(row.getAttribute('style') || '').not.toContain('max-height') // row not height-clamped
+    // The content span wraps: no nowrap, and overflow-wrap set so long tokens can't scroll.
+    const contentSpan = Array.from(row.querySelectorAll('span')).find(
+      (s) => (s.textContent || '').includes(longText)
+    )!
+    const spanStyle = contentSpan.getAttribute('style') || ''
+    expect(spanStyle).not.toContain('white-space: nowrap')
+    expect(spanStyle).toContain('overflow-wrap')
+  })
+
+  // Test (post-review): fullscreen thought list aria-label says "Items in", not "Thoughts in".
+  // Catches: the item-2 aria miss on the fullscreen cluster <ul>.
+  it('fullscreen thought list aria-label uses "Items in" (item 2 aria completeness)', async () => {
+    const { container } = await setupFullscreen([
+      { cluster_name: 'FSC', sum_thought_items: 1, thought_items: ['only one'] },
+    ])
+    expect(container.querySelector('[aria-label="Items in FSC"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label^="Thoughts in"]')).toBeNull()
+  })
+
   // Test 6: overflow machinery still present in the module (dormant), not deleted.
   // Catches: premature removal that would block the one-line rollback.
   it('computeDetailCapacity is still exported and functional (machinery dormant, not deleted)', () => {

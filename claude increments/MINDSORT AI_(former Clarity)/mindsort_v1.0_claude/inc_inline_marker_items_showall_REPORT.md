@@ -67,11 +67,33 @@ empty-state "…organizing your thoughts!" — and Test 2 is scoped to counts (a
 
 ### Worst-case expanded height (from `LAYOUT`, as §3 asks)
 A 16-thought cluster **+ summary (17 detail rows @36px+4gap) + expanded row + 2 sibling collapsed
-rows + header + footer + "+N more clusters"** ≈ **~1000px** (16 items without a summary ≈ ~960px).
-That is roughly **2× the former ~500px budget** — the intended auto-fit. It exceeds the old
-`maxHeight:500`/`target:480`, so the diagnostic will log "EXCEEDS 500px" — now just a log, not an
-action. **Whether ~1000px is compliant depends entirely on manual C** (page scrolls = good;
-card nested-scrolls = violation; host clips = revert).
+rows + header + footer + "+N more clusters"** ≈ **~1000px** at one line per row (16 items without a
+summary ≈ ~960px). That is roughly **2× the former ~500px budget** — the intended auto-fit. It
+exceeds the old `maxHeight:500`/`target:480`, so the diagnostic will log "EXCEEDS 500px" — now just
+a log, not an action. **Whether it is compliant depends entirely on manual C** (page scrolls = good;
+card nested-scrolls = violation; host clips = revert). **NOTE (post-review):** rows now WRAP to full
+text (see below), so real row height is variable and typically **taller** than the 36px-per-row
+estimate — the ~1000px figure is a floor. This makes manual C even more the gate; the diagnostic
+`scrollHeight` log gives the true number on prod.
+
+## Post-review fix (reviewer-found clamp bug) — follow-up commit
+Adversarial review found a **real bug** that this increment exposed: `DetailRow` still clamped every
+expanded item to a single 36px line (`height`/`maxHeight` + `white-space:nowrap` + `text-overflow:
+ellipsis`), so show-all listed all items but truncated the long ones — the founding "hidden content"
+complaint reappearing one level down. Fixed:
+
+- **Un-clamp under show-all, all 3 row types** (thought/summary/subcluster): rows drop the fixed
+  height (→ `minHeight` + grow), text drops `nowrap`/`ellipsis` and wraps with `overflow-wrap:
+  anywhere`; `align-items` → `flex-start` so marker/badge top-align with line 1. Now matches
+  `FullscreenThoughtItem`.
+- **Gated on `INLINE_SHOW_ALL_ITEMS`** (the key safety point): the fixed 36px is load-bearing for the
+  DORMANT capacity model (`computeDetailCapacity` assumes `detailRowH`). Un-clamping only under
+  show-all keeps the **flag=false rollback path byte-faithful** to the 36px model it depends on —
+  the one-line rollback stays correct.
+- **aria miss fixed:** fullscreen thought `<ul>` `aria-label` "Thoughts in {cluster}" → "Items in
+  {cluster}" — an item-2 completeness miss the review caught (item 2 listed aria-labels).
+
+Decision on scope (yours): all three types wrap. Two new tests added (wrap-on-style, aria).
 
 ## Compliance preserved
 Remaining icons are monochrome outlined SVG; no Unicode glyphs; Claude tokens + inline styles;
@@ -85,7 +107,8 @@ Remaining icons are monochrome outlined SVG; no Unicode glyphs; Claude tokens + 
 
 ## Build + tests
 - `vite build`: ✓ clean (171 modules) → 510KB inlined bundle.
-- `vitest run`: ✓ **128 passed** (116 pre-existing unchanged + **5 sanctioned updates** + 7 new).
+- `vitest run`: ✓ **130 passed** (116 pre-existing unchanged + **5 sanctioned updates** + 9 new —
+  7 original + 2 post-review: detail-row wrap-under-show-all, and the fullscreen "Items in" aria).
 
 ### Tests 1–7 (new) — each with its Catches
 1. Inline thought row = left bar (4px prioritized / 2px not), no circle/svg icon — marker parity.

@@ -1133,19 +1133,31 @@ function DetailRow({ unit }: DetailRowProps) {
       }
     : {}
 
+  // inc 7 (post-review): under show-all, detail rows WRAP to full text (parity with
+  // FullscreenThoughtItem) — the whole point of removing the cap was to READ items, not
+  // just list them. The fixed 36px height is load-bearing for the DORMANT capacity model
+  // (computeDetailCapacity assumes detailRowH), so keep the 1-line clamp on the flag=false
+  // rollback path and only un-clamp when show-all is active. Applies to all 3 row types.
+  const rowSizing = INLINE_SHOW_ALL_ITEMS
+    ? { minHeight: `${LAYOUT.detailRowH}px` }
+    : { height: `${LAYOUT.detailRowH}px`, maxHeight: `${LAYOUT.detailRowH}px` }
+  const textClamp = INLINE_SHOW_ALL_ITEMS
+    ? { overflowWrap: 'anywhere' as const } // wrap; a long unbroken token can't overflow-scroll
+    : { whiteSpace: 'nowrap' as const, overflow: 'hidden' as const, textOverflow: 'ellipsis' as const }
+
   return (
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
+        // Top-align marker/badge with line 1 when text wraps; center for single-line clamp.
+        alignItems: INLINE_SHOW_ALL_ITEMS ? 'flex-start' : 'center',
         gap: '8px',
         background: unit.type === 'summary'
           ? 'var(--color-background-tertiary, #FAFAF8)'
           : 'var(--color-background-primary, #FFFFFF)',
         borderRadius: 'var(--border-radius-sm, 6px)',
         padding: '8px 10px',
-        height: `${LAYOUT.detailRowH}px`,
-        maxHeight: `${LAYOUT.detailRowH}px`,
+        ...rowSizing, // inc 7: fixed 36px when capped (rollback fidelity); minHeight + grow under show-all
         boxSizing: 'border-box', // CRITICAL: padding included in height, else 36+16=52px
         ...thoughtBar, // inc 7 §1: left bar for thought rows (marker parity w/ fullscreen)
       }}
@@ -1200,7 +1212,7 @@ function DetailRow({ unit }: DetailRowProps) {
         </span>
       )}
 
-      {/* Content text - 1-line clamp */}
+      {/* Content text - wraps to full text under show-all; 1-line ellipsis on rollback */}
       <span
         style={{
           flex: 1,
@@ -1209,13 +1221,11 @@ function DetailRow({ unit }: DetailRowProps) {
           color: unit.type === 'summary'
             ? 'var(--color-text-secondary, #3D3D3A)'
             : 'var(--color-text-primary, #141413)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          ...textClamp, // inc 7: wrap under show-all / 1-line ellipsis when capped
           minWidth: 0,
           fontStyle: unit.type === 'summary' ? 'italic' : 'normal',
         }}
-        title={unit.text} // Full text for accessibility
+        title={unit.text} // Full text for accessibility (redundant under show-all, harmless)
       >
         {unit.text}
       </span>
@@ -1837,7 +1847,7 @@ function FullscreenClusterCard({ cluster }: FullscreenClusterCardProps) {
             flexDirection: 'column',
             gap: '4px', // inc 6 §3: thought list gap 8→4
           }}
-          aria-label={`Thoughts in ${cluster.cluster_name}`}
+          aria-label={`Items in ${cluster.cluster_name}`}
         >
           {sortedThoughts.map((thought, index) => (
             <FullscreenThoughtItem key={`thought-${index}`} thought={thought} />
