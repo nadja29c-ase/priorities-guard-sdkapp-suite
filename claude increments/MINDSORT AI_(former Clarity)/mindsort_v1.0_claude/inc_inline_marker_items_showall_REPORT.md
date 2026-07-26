@@ -3,10 +3,12 @@
 **Scope run:** implement, build, tests green, report. **Stopped before deploy.** Item 3's
 real acceptance gate is your manual A–E on prod (esp. C: which element scrolls).
 
-**Status: COMMITTED — round HEAD `701c486`** (on `main`). Two code commits:
-`0c56ab4` = the increment; `701c486` = post-review fix (detail-row un-clamp + aria).
-**Verify code against `git show 701c486:<path>`.** OPERATIONS_PREDEPLOY.md read + all MindSort
-pre-commit checks passed before each commit. Deploy + manual A–E are Nadja's, not done here.
+**Status: COMMITTED — round HEAD `79c1e0b`** (on `main`). Three code commits:
+`0c56ab4` = the increment; `701c486` = post-review un-clamp + aria fix; `79c1e0b` = restore of
+inc-6 tests a stale buffer had wiped (test-only). **Verify code against `git show 79c1e0b:<path>`**
+(source is identical to `701c486`; `79c1e0b` changes only `App.test.tsx` + this report).
+OPERATIONS_PREDEPLOY.md read + all MindSort pre-commit checks passed before each commit. Deploy +
+manual A–E are Nadja's, not done here.
 
 ---
 
