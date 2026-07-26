@@ -258,6 +258,22 @@ Required per policy §3H: developers must follow design guidelines Anthropic pub
 
 Inline card constraints:
 - **Height:** Auto-fits to content, no nested scrolling. Host caps and clips overflow. No published px limit. If a scroll viewport is needed, escalate to fullscreen via `ui/request-display-mode`
+  ⚠️ **On the "500px" figure used in our widgets — read this before citing it as a requirement.**
+  The host constrains inline widget height, but Anthropic publishes **no px value**. Our widgets
+  (PG-Claude, MindSort-Claude) target **~500px (480px threshold)** as a *conservative engineering
+  budget* to avoid host clipping while remaining compatible with current Claude host behaviour.
+  This is an **implementation target, not a documented platform specification.**
+  Consequences: exceeding 500px is **not** automatically a compliance violation — the real
+  requirements are (a) auto-fit to content and (b) never nested-scroll. Do not brief increments as
+  though 500px were a published Anthropic limit (this has caused incorrect constraints twice).
+- **Width:** **No documented width limit and no fixed breakpoints.** Official guidance: *"Apps always
+  fill the container width—there are no fixed breakpoints. Design responsively from 320px up to
+  fullscreen."* Also: *"Full-width layouts — don't add side margins that waste screen real estate"*
+  and *"avoid fixed-width layouts; content must reflow gracefully."*
+  ⚠️ A `max-width` cap on the widget root (e.g. `#root { max-width: 600px }`) is **not** a compliance
+  requirement and is arguably counter to the fixed-width/side-margin guidance — especially in
+  fullscreen, which is meant to use the full viewport. Any such cap is a product/design choice and
+  should be documented as one, not as compliance.
 - **Max actions:** 2, placed at the bottom of the card
 - **Max data points:** 4–5 (stated constraint — no "recommended" qualifier in official docs)
 - No drill-ins, breadcrumbs, or multiple views
