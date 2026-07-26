@@ -96,6 +96,30 @@ complaint reappearing one level down. Fixed:
 
 Decision on scope (yours): all three types wrap. Two new tests added (wrap-on-style, aria).
 
+## ⚠️ Regression + root cause (test-coverage loss, found by Codex — now fixed)
+A second Codex adversarial pass caught that the inc-7 commit `0c56ab4` **silently deleted 9 inc-6
+tests** (the `Fullscreen width + density` block) **and** reverted my inc-6 fix to inc4-Test-2 (the
+radius assertion) — 239 deletions in `App.test.tsx` I never scrutinized. My earlier "116 pre-existing
+unchanged" claim was **false**.
+
+**Root cause:** the `App.test.tsx` I edited at inc-7 start was a **stale, pre-inc-6 buffer** — almost
+certainly the IDE re-saving an open pre-inc-6 version of the file over the committed one on disk. I
+did **not** `git diff` the large committed test file against HEAD before editing, so the stale copy
+overwrote committed work without a trace, and my inc-7 commit captured the deletion. The tell was
+visible and I missed it: the inc-7 baseline suite ran **121** tests while inc-6 ended at **130**. The
+inc-6 *source* (main.css cap-scoping, App.tsx `data-display-mode` effect) was never affected — only
+the test file. Every prior review passed against the *code*; the regression lived in an unexamined
+test file, which is exactly why an adversarial pass on the committed tree caught what code review
+could not.
+
+**Fix (this follow-up):** restored the fullscreen block byte-for-byte from `098791a` (one sanctioned
+deviation: `/8 thoughts/` → `/8 items/`, the inc-7 rename — triaged as a legitimate label change, not
+a code revert), and re-applied the inc4-Test-2 token-radius fix. Suite 130 → **139**, green. Test-only;
+no source/bundle change (`WIDGET_VERSION` stays 8).
+
+**Standing practice adopted:** before editing any large committed file, `git status` / `git diff` it
+against HEAD first, so a stale working copy can never silently overwrite committed work again.
+
 ## Compliance preserved
 Remaining icons are monochrome outlined SVG; no Unicode glyphs; Claude tokens + inline styles;
 `fontWeight` 400/500; read-only; `var(--token, #hex)` fallbacks. No `@openai/apps-sdk-ui`, no
@@ -108,8 +132,13 @@ Remaining icons are monochrome outlined SVG; no Unicode glyphs; Claude tokens + 
 
 ## Build + tests
 - `vite build`: ✓ clean (171 modules) → 510KB inlined bundle.
-- `vitest run`: ✓ **130 passed** (116 pre-existing unchanged + **5 sanctioned updates** + 9 new —
-  7 original + 2 post-review: detail-row wrap-under-show-all, and the fullscreen "Items in" aria).
+- `vitest run`: ✓ **139 passed**. Composition (corrected — see regression note): the inc-6
+  fullscreen width+density block (9 tests) + my inc-6 inc4-Test-2 radius fix had been **silently
+  reverted** by a stale test-file buffer at inc-7 start and were absent at `0c56ab4`/`701c486`;
+  both are now **restored** (block byte-identical to `098791a` except one sanctioned `/8 items/`
+  rename). Net: pre-existing inc 1–6 (incl. the restored 9) + 5 sanctioned inc-7 updates + 9 new
+  inc-7 tests = 139, all green. The restored fullscreen tests pass under inc-7 code, confirming
+  inc-7 introduced no fullscreen regression.
 
 ### Tests 1–7 (new) — each with its Catches
 1. Inline thought row = left bar (4px prioritized / 2px not), no circle/svg icon — marker parity.

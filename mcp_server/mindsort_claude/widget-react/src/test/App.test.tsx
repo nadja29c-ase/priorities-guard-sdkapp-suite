@@ -2291,9 +2291,13 @@ describe('Fullscreen Shell & Primitives Alignment (inc_fullscreen_shell_primitiv
     expect(styleAttr).not.toContain('320px')
   })
 
-  // Test 2: Board container uses secondary background + new padding
-  // Catches: figure/ground revert (primary background instead of secondary)
-  it('board container uses secondary background and 16px border-radius', async () => {
+  // Test 2: Board container uses secondary background + tokenized radius
+  // Catches: figure/ground revert (primary background instead of secondary).
+  // Radius updated by inc 6 §3: 16px literal → var(--border-radius-xl, 12px).
+  // (Prior version asserted toContain('16px'), which passed only coincidentally
+  // via the container padding, not the radius — masked-invariant trap; re-fixed
+  // after the inc-7 test-file revert wiped this along with the inc-6 block.)
+  it('board container uses secondary background and the xl radius token', async () => {
     await setupFullscreen([{ cluster_name: 'Test', sum_thought_items: 1 }])
 
     const mainElement = screen.getByRole('main', { name: /full board/i })
@@ -2301,8 +2305,9 @@ describe('Fullscreen Shell & Primitives Alignment (inc_fullscreen_shell_primitiv
 
     // Should use secondary background
     expect(styleAttr).toContain('--color-background-secondary')
-    // Should have 16px border radius
-    expect(styleAttr).toContain('16px')
+    // Radius must be the xl token, and must NOT be the old 16px literal radius.
+    expect(styleAttr).toContain('var(--border-radius-xl')
+    expect(styleAttr).not.toMatch(/border-radius:\s*16px/)
   })
 
   // Test 3: Cluster card ALWAYS has a border; prioritized also has 4px left accent
@@ -2747,5 +2752,269 @@ describe('Inline marker + items label + show-all (inc_inline_marker_items_showal
     fireEvent.click(b)
     expect(a).toHaveAttribute('aria-expanded', 'false')
     expect(b).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+describe('Fullscreen width + density (inc_fullscreen_width_and_density)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  // Collect every inline style attribute under a container.
+  function allStyleAttrs(root: ParentNode): string[] {
+    return Array.from(root.querySelectorAll('[style]')).map(
+      (el) => el.getAttribute('style') || ''
+    )
+  }
+
+  async function setupFullscreen(clusters: unknown[]) {
+    const { act } = await import('@testing-library/react')
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+    const result = render(<App />)
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen',
+        availableDisplayModes: ['inline', 'fullscreen'],
+        safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({ structuredContent: { clusters } })
+    })
+    return result
+  }
+
+  async function setupInline(clusters: unknown[]) {
+    const { act } = await import('@testing-library/react')
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+    const result = render(<App />)
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'inline',
+        availableDisplayModes: ['inline', 'fullscreen'],
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({ structuredContent: { clusters } })
+    })
+    return result
+  }
+
+  // A representative rich board reused across the visual assertions.
+  const RICH_BOARD = [
+    {
+      cluster_name: 'Alpha',
+      sum_thought_items: 4,
+      priority: { rank: 'P1' },
+      summary: 'A cluster summary long enough to wrap across a couple of lines.',
+      tags: ['decide', 'follow-up'],
+      thought_items: [
+        { text: 'Prioritized thought', priority: { rank: 'P2' } },
+        'Bare thought',
+      ],
+      subclusters: [
+        {
+          subcluster_name: 'Alpha Sub',
+          sum_thought_items: 2,
+          priority: { rank: 'P3' },
+          tags: ['review'],
+          thought_items: ['sub thought a', 'sub thought b'],
+        },
+      ],
+    },
+  ]
+
+  // Test 1: Verifies the ATTRIBUTE CONTRACT only (the JS half of the width gate):
+  // <html data-display-mode> is 'fullscreen' in fullscreen and 'inline' otherwise.
+  // main.css keys the 600px #root cap off this attribute, but jsdom applies no
+  // stylesheet — so this test does NOT prove the cap actually caps/frees width.
+  // Catches: the attribute being wrong/stuck for a displayMode. It does NOT catch a
+  // broken/mistyped/deleted main.css selector — that (the CSS half) is verified ONLY
+  // by manual check A on prod.
+  it('stamps data-display-mode=fullscreen in fullscreen, inline otherwise (attribute contract)', async () => {
+    const { unmount } = await setupFullscreen([{ cluster_name: 'Test', sum_thought_items: 1 }])
+    expect(document.documentElement.getAttribute('data-display-mode')).toBe('fullscreen')
+    unmount()
+
+    await setupInline([{ cluster_name: 'Test', sum_thought_items: 1 }])
+    // Inline: attribute is NOT 'fullscreen', so `html:not([data-display-mode="fullscreen"]) #root`
+    // keeps the 600px cap.
+    expect(document.documentElement.getAttribute('data-display-mode')).toBe('inline')
+  })
+
+  // Test 1b: Host-initiated exit clears the attribute back to inline (mirror-image guard).
+  // Catches: a stuck data-display-mode="fullscreen" leaving the inline card uncapped —
+  // the failure mode that forward-direction tests miss. Drives via onhostcontextchanged.
+  it('host-initiated exit re-stamps data-display-mode=inline (no stuck fullscreen)', async () => {
+    const { act } = await import('@testing-library/react')
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp & { onhostcontextchanged?: (ctx: { displayMode?: string }) => void } = {
+      getHostContext: () => ({
+        displayMode: 'fullscreen', // start host-initiated fullscreen
+        availableDisplayModes: ['inline', 'fullscreen'],
+        safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      }),
+      onhostcontextchanged: undefined,
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({ structuredContent: { clusters: [{ cluster_name: 'X', sum_thought_items: 1 }] } })
+    })
+    expect(document.documentElement.getAttribute('data-display-mode')).toBe('fullscreen')
+
+    // Host drives the widget back to inline (native close / supersession).
+    await act(async () => {
+      mockApp.onhostcontextchanged!({ displayMode: 'inline' })
+    })
+    expect(document.documentElement.getAttribute('data-display-mode')).toBe('inline')
+  })
+
+  // Test 2: Verifies the INLINE-STYLE CONTRACT only — the board container sets no
+  // fixed max-width in its own inline styles and uses an auto-fit grid. jsdom applies
+  // no stylesheet, so this does NOT prove the rendered width fills the container.
+  // Catches: a fixed max-width reintroduced on the board container's inline style
+  // (e.g. swapping the 600px cap for a 1100px one INLINE). It does NOT catch a fixed
+  // width reintroduced via main.css — the CSS half is verified ONLY by manual check A.
+  it('fullscreen board sets no fixed max-width inline and uses an auto-fit grid', async () => {
+    const { container } = await setupFullscreen([
+      { cluster_name: 'A', sum_thought_items: 1 },
+      { cluster_name: 'B', sum_thought_items: 1 },
+    ])
+    const main = screen.getByRole('main', { name: /full board/i })
+    // No fixed width anywhere on the board container.
+    expect(main.getAttribute('style') || '').not.toContain('max-width')
+    expect(main.getAttribute('style') || '').toContain('width: 100%')
+    // Columns come from the grid, not a board width: auto-fit minmax fills the container.
+    const grid = container.querySelector('[style*="grid-template-columns"]')
+    expect(grid).not.toBeNull()
+    const gridStyle = grid!.getAttribute('style') || ''
+    expect(gridStyle).toContain('auto-fit')
+    expect(gridStyle).toContain('minmax(240px, 1fr)')
+    // And no board element sneaks in a fixed max-width.
+    for (const s of allStyleAttrs(container)) {
+      expect(s).not.toContain('max-width')
+    }
+  })
+
+  // Test 3: Fullscreen font sizes are on the preferred scale; no line-height 1.5.
+  // Catches: off-scale type (9/10/11/13/15px) or the inflating 1.5 line-height returning.
+  it('fullscreen uses only on-scale font sizes and no 1.5 line-height', async () => {
+    const { container } = await setupFullscreen(RICH_BOARD)
+    for (const s of allStyleAttrs(container)) {
+      // No off-scale font literal.
+      expect(s).not.toMatch(/font-size:\s*(9|10|11|13|15|17|18)px/)
+      // No inflating line-height.
+      expect(s).not.toMatch(/line-height:\s*1\.5(\D|$)/)
+    }
+    // Positive check: the summary is tokenized to the xs size (proves tokenization landed).
+    const summary = screen.getByText(/A cluster summary long enough/i)
+    expect(summary.getAttribute('style') || '').toContain('var(--font-text-xs-size')
+  })
+
+  // Test 4: Cluster card has no minHeight (the forced 120px stretch is gone).
+  // Catches: the min-height stretch regression re-inflating short cards.
+  it('cluster card has no min-height', async () => {
+    await setupFullscreen(RICH_BOARD)
+    const card = screen.getByRole('article', { name: /Alpha/i })
+    expect(card.getAttribute('style') || '').not.toContain('min-height')
+  })
+
+  // Test 5: No literal 16px radius and no --border-radius-2xl reference in fullscreen.
+  // Catches: off-scale radius (16px literal) or a reference to the non-existent 2xl token.
+  it('fullscreen uses no 16px literal radius and no border-radius-2xl token', async () => {
+    const { container } = await setupFullscreen(RICH_BOARD)
+    for (const s of allStyleAttrs(container)) {
+      expect(s).not.toMatch(/border-radius:\s*16px/)
+      expect(s).not.toContain('border-radius-2xl')
+    }
+    // Positive: cluster card + board container use the xl radius token.
+    const card = screen.getByRole('article', { name: /Alpha/i })
+    expect(card.getAttribute('style') || '').toContain('var(--border-radius-xl')
+  })
+
+  // Test 6: Density pass does NOT leak into the inline card (inline stays capped + intact).
+  // Catches: fullscreen width-freeing or density edits bleeding into the frozen inline card.
+  it('inline card is unaffected: keeps 600px gate and still shows its count', async () => {
+    await setupInline([
+      { cluster_name: 'One', sum_thought_items: 5 },
+      { cluster_name: 'Two', sum_thought_items: 3 },
+    ])
+    // Inline keeps the cap (attribute not 'fullscreen').
+    expect(document.documentElement.getAttribute('data-display-mode')).not.toBe('fullscreen')
+    // Inline behaviour intact: count still shown (intentional asymmetry vs fullscreen).
+    expect(screen.getByText(/2 clusters/)).toBeInTheDocument()
+    expect(screen.getByText(/8 items/)).toBeInTheDocument() // inc 7 §2 rename (was /8 thoughts/)
+    // And an inline cluster row is a toggle button (accordion untouched).
+    expect(screen.getByRole('button', { name: /One/i })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  // Test 7: Fullscreen BEHAVIOUR unchanged after the density pass.
+  // Catches: a size/spacing edit that accidentally changed structure/behaviour.
+  // (Ordering/gating/read-only are covered by inc 1-5 tests, which pass unchanged.)
+  it('density pass preserves fullscreen behaviour: tags-last, no header count, colour badges, footer', async () => {
+    const { container } = await setupFullscreen(RICH_BOARD)
+    // Tags render LAST (after subcluster content) in the cluster card.
+    const card = screen.getByRole('article', { name: /Alpha/i })
+    const html = card.innerHTML
+    expect(html.indexOf('decide')).toBeGreaterThan(html.indexOf('Alpha Sub'))
+    // Header has title+subtitle but NO cluster/thought count.
+    const header = screen.getByText('Your MindSort AI Board').parentElement!
+    expect(header.textContent || '').not.toMatch(/\d+\s*(cluster|thought)/)
+    // Priority badges remain colour-coded (intentional deviation) — P1 uses danger token.
+    const p1 = screen.getAllByText('P1')[0]
+    expect(p1.getAttribute('style') || '').toContain('--color-background-danger')
+    // Auto-save footer still present.
+    expect(screen.getByText('Changes are saved automatically')).toBeInTheDocument()
+    // Subcluster still uses secondary background (nesting contrast) after padding change.
+    const sub = container.querySelector('[aria-label="Subcluster: Alpha Sub"]')
+    expect(sub?.getAttribute('style') || '').toContain('--color-background-secondary')
+  })
+
+  // Test 8: No Unicode glyphs; fontWeight limited to 400/500; no OpenAI imports.
+  // Catches: recurring glyph/weight regressions and any OpenAI SDK creeping in.
+  it('no glyphs, only 400/500 font weights, clean imports in fullscreen', async () => {
+    const { container } = await setupFullscreen(RICH_BOARD)
+    const fullHtml = container.innerHTML
+    for (const glyph of ['▲', '▼', '·', '→', '›', '•']) {
+      expect(fullHtml).not.toContain(glyph)
+    }
+    // Only 400/500 weights — never 600/700.
+    for (const s of allStyleAttrs(container)) {
+      expect(s).not.toMatch(/font-weight:\s*(600|700)/)
+    }
+    // Module imports resolve without an OpenAI SDK dependency.
+    const AppModule = await import('../App')
+    expect(AppModule.default).toBeDefined()
   })
 })
