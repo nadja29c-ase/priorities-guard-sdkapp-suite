@@ -2171,19 +2171,87 @@ def test_untrusted_content_is_delimited_and_escaped():
     assert "Ignore all previous instructions" in body
 
 
-def test_malformed_board_data_is_handled_safely():
+def _prioritized_board_fixture():
     """
-    Malformed items/tags/keys degrade safely — no crash, no object stringification.
+    Board as apply_priorities actually persists it: a MIX of bare strings and
+    {"text": ..., "priority": {...}} objects.
 
-    Bug this catches: repr() leaking internal metadata into model-visible output
-    (D2), and adapter fragility on unexpected shapes.
+    normalize_thought_item (clarity/tools/board_utils.py) converts a string item to a
+    dict the moment a priority is set, and enrich_clusters passes thought_items through
+    unchanged — so this is the shape read_board_before_editing really returns.
+    """
+    return [
+        {
+            "cluster_name": "Work",
+            "thought_items": [
+                {"text": "important task", "priority": {"rank": "P1", "reason": None}},
+                "regular task",
+            ],
+            "sum_thought_items": 2,
+            "tags": ["research"],
+            "priority": None,
+            "subclusters": [
+                {
+                    "subcluster_name": "Urgent",
+                    "thought_items": [
+                        {"text": "ship the fix", "priority": {"rank": "P2", "reason": None}},
+                    ],
+                    "sum_thought_items": 1,
+                    "tags": [],
+                    "priority": None,
+                },
+            ],
+        },
+    ]
+
+
+def test_prioritized_items_render_their_text():
+    """
+    Prioritized thought items (dict shape) render their text and count as shown.
+
+    Bug this catches: THE DATA-LOSS BUG. Setting a priority converts an item from a
+    string to {"text": ..., "priority": {...}}. Treating that as malformed dropped
+    every prioritized item from the projection, so the model reconstructed a board
+    missing them and organize_thoughts full-replace destroyed them permanently.
+    Triggers on any board with a single prioritized item — the normal case.
+    """
+    adapted = _adapt_read(_prioritized_board_fixture())
+    content = adapted.content[0].text
+
+    # Every item's text is visible, dict-shaped and string-shaped alike
+    assert "important task" in content
+    assert "regular task" in content
+    assert "ship the fix" in content
+
+    # The board is COMPLETE — not failed closed, not partial
+    assert adapted.meta["projection_complete"] is True
+    assert adapted.meta["items_shown"] == adapted.meta["items_total"] == 3
+    assert "<board_data>" in content
+    assert "could not be projected in full" not in content
+
+    # D2: the priority object rides along on the item but must never be surfaced
+    assert "P1" not in content
+    assert "P2" not in content
+    assert "rank" not in content
+    assert "priority" not in content.lower()
+    assert "{" not in content and "}" not in content
+
+
+def test_unrenderable_items_fail_closed():
+    """
+    Genuinely unrenderable items fail closed — no partial board, no prose-note fallback.
+
+    Bug this catches: failing OPEN on incomplete data. A partial <board_data> block plus
+    a "some items could not be displayed" note relies on the model heeding prose, which
+    is the same unsafe pattern rejected for the over-budget case; the completeness flag
+    in _meta is not model-visible on Claude and cannot restrain it.
     """
     clusters = [
         {
             "cluster_name": "Work",
             "thought_items": [
                 "valid item",
-                {"secret": "leaked", "created_at": "2026-07-27"},  # object — must skip
+                {"secret": "leaked", "created_at": "2026-07-27"},  # no text key
                 None,
             ],
             "sum_thought_items": 3,
@@ -2196,21 +2264,23 @@ def test_malformed_board_data_is_handled_safely():
     adapted = _adapt_read(clusters)
     content = adapted.content[0].text
 
-    assert "valid item" in content
-    assert "ok" in content
+    # Failed closed: structure only, no item text at all
+    assert "<board_data>" not in content
+    assert "valid item" not in content
+    assert "Work" in content  # names retained so narrow-scope stays actionable
+    assert "could not be projected in full" in content
+    assert "Do NOT call organize_thoughts" in content
 
-    # Nothing stringified
+    assert adapted.meta["projection_complete"] is False
+    assert adapted.meta["items_shown"] == 0
+    assert adapted.meta["items_total"] == 3
+
+    # D2: nothing stringified, no crash on unexpected shapes
     assert "secret" not in content
     assert "leaked" not in content
     assert "created_at" not in content
     assert "internal" not in content
     assert "{" not in content and "}" not in content
-
-    # Skipped items are counted and surfaced, never silently dropped
-    assert adapted.meta["items_total"] == 3
-    assert adapted.meta["items_shown"] == 1
-    assert adapted.meta["projection_complete"] is False
-    assert "could not be displayed" in content
 
 
 def test_edit_board_stays_names_and_counts():
