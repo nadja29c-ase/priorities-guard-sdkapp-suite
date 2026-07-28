@@ -24,6 +24,11 @@ MAX_PROJECTION_ITEMS = 10
 # scope" message), while setting it too low breaks reclustering outright.
 MAX_FULL_TEXT_PROJECTION_CHARS = 40_000
 
+# Per-name bound for the names+counts projection. Names are user-controlled and
+# unbounded, and on the fail-closed path they are the only board content emitted, so a
+# single pathological name must not dominate the response.
+MAX_PROJECTION_NAME_CHARS = 120
+
 # Group A tools: model MUST see board structure to act (surface compact projection)
 # See inc_mindsort_claude_model_visible_channel.md for classification rationale
 _GROUP_A_TOOLS = frozenset({
@@ -105,6 +110,36 @@ def _safe_text(value: Any) -> Optional[str]:
     if isinstance(value, (bool, int, float)):
         return str(value)
     return None
+
+
+def _clip(text: str, limit: int) -> str:
+    """Bound a single rendered value. Deterministic; clips at a character boundary."""
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _safe_name(value: Any) -> str:
+    """
+    Render a cluster/subcluster name for the names+counts projection.
+
+    Runs through _safe_text, so a non-string name is never stringified (D2) and any
+    literal <board_data> delimiter is escaped. This matters because the names+counts
+    output sits OUTSIDE the <board_data> boundary — on the fail-closed path it is the
+    only board content the model sees, so unsanitized names would both leak DB metadata
+    and inject instructions with no boundary to contain them.
+    """
+    text = _safe_text(value)
+    if text is None:
+        return "Unnamed"
+    return _clip(text, MAX_PROJECTION_NAME_CHARS)
+
+
+def _safe_count(cluster: dict) -> int:
+    """Item count for a names+counts line, coerced to int so it can never stringify."""
+    count = cluster.get("sum_thought_items")
+    if isinstance(count, bool) or not isinstance(count, int):
+        items = cluster.get("thought_items")
+        return len(items) if isinstance(items, list) else 0
+    return count
 
 
 def _safe_item_text(item: Any) -> Optional[str]:
@@ -228,20 +263,20 @@ def _build_names_and_counts(clusters: list) -> Optional[str]:
 
     lines = ["Board structure:"]
     for cluster in clusters_to_show:
-        cluster_name = cluster.get("cluster_name", "Unnamed")
-        # Prefer pre-computed sum_thought_items; fall back to len(thought_items)
-        item_count = cluster.get("sum_thought_items")
-        if item_count is None:
-            thought_items = cluster.get("thought_items", [])
-            item_count = len(thought_items) if isinstance(thought_items, list) else 0
+        # Every user-controlled value below is sanitized before interpolation: this
+        # output is model-visible and, on the fail-closed path, is NOT wrapped in the
+        # <board_data> boundary.
+        cluster_name = _safe_name(cluster.get("cluster_name"))
+        item_count = _safe_count(cluster)
 
         # Check for subclusters
         subclusters = cluster.get("subclusters", [])
         if subclusters and isinstance(subclusters, list):
-            subcluster_names = [s.get("subcluster_name", "Unnamed") for s in subclusters[:5]]
+            subs = [s for s in subclusters if isinstance(s, dict)]
+            subcluster_names = [_safe_name(s.get("subcluster_name")) for s in subs[:5]]
             sub_str = ", ".join(subcluster_names)
-            if len(subclusters) > 5:
-                sub_str += f", +{len(subclusters) - 5} more"
+            if len(subs) > 5:
+                sub_str += f", +{len(subs) - 5} more"
             lines.append(f"  - {cluster_name} ({item_count} items) → subclusters: {sub_str}")
         else:
             lines.append(f"  - {cluster_name} ({item_count} items)")
@@ -282,7 +317,19 @@ def _build_full_text_projection(clusters: list) -> tuple[str, dict]:
             if over_budget
             else _INCOMPLETE_MESSAGE.format(missing=total - shown, items_total=total)
         )
-        parts = [_build_names_and_counts(clusters), reason]
+
+        # The fail-closed output must itself be bounded. Names are user-controlled and
+        # unbounded in length, so a board with enormous names could otherwise blow the
+        # budget on the very path that exists to keep the response safe and small.
+        # The safety message is never dropped — the overview is.
+        overview = _build_names_and_counts(clusters)
+        if overview and len(overview) + len(reason) + 2 > MAX_FULL_TEXT_PROJECTION_CHARS:
+            overview = (
+                f"Board structure: {len([c for c in clusters if isinstance(c, dict)])} "
+                "clusters (names omitted — too large to summarize)."
+            )
+
+        parts = [overview, reason]
         return "\n\n".join(p for p in parts if p), {
             "projection_complete": False,
             "items_shown": 0,
