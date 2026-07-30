@@ -150,6 +150,23 @@ Deploy. Fresh Claude conversation with a saved multi-item board; ask to recluste
 - an OVER-BUDGET board does NOT present a usable partial board and the model does NOT proceed to a whole-board recluster.
 Record each observation.
 
+## ROUND-5 OUTCOME (2026-07-30) — review loop CLOSED
+Fifth adversarial review found three defensive-path gaps. Decision (Nadja): fix the one
+with data-loss shape, log the rest, stop the loop, deploy.
+- **FIXED in `64c1272`** — malformed item containers failed OPEN: a present-but-non-list
+  `thought_items` rendered as empty-but-COMPLETE, silently dropping content on a
+  full-replace path. Now counts as one unrenderable unit and fails closed. Absent
+  containers stay "empty, not malformed" so healthy boards don't fail-close.
+- **NOT FIXED, filed** — `_guidance_to_str`'s `str(guidance)` fallback stringifies a
+  malformed guidance dict (D2); `_sanitize_content_blocks` bounds per-block with no
+  aggregate cap. Neither is reachable from validated producers.
+- **The real finding is the pattern, not any defect.** Five rounds, each closing one
+  instance while the next round found the next container type. The durable fix is to
+  normalise the board ONCE at the adapter boundary and reject non-conforming shapes, so
+  "malformed fails closed" holds by construction. Filed as a follow-up; NOT a
+  pre-deploy blocker. Reachability of everything outstanding requires the user to
+  corrupt their own stored board.
+
 ## RESOLVED — round-4 defects, fixed in `c7ba402` (2026-07-30)
 Both were logged as deferred behind the production DB `ipAllowList` work, then fixed.
 A THIRD instance of the same class was found while fixing them (the
