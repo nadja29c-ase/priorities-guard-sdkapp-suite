@@ -211,7 +211,15 @@ def _render_full_text_board(clusters: list) -> tuple[str, int, int]:
 
     for cluster in clusters:
         if not isinstance(cluster, dict):
-            continue  # unknown shape — ignored, never stringified
+            # Unknown shape — never stringified, but NEVER silently dropped either.
+            # Its true item count is unknowable, so count 1 unrenderable unit: that
+            # makes items_shown != items_total, which routes the board through the
+            # SAME fail-closed path as an unrenderable item or an over-budget board.
+            # Skipping it silently left projection_complete True on a board that was
+            # missing a whole cluster — and organize_thoughts full-replaces, so the
+            # model would have destroyed everything in it.
+            items_total += 1
+            continue
 
         name = _safe_text(cluster.get("cluster_name")) or "Unnamed"
         item_lines, shown, total = _render_items(cluster.get("thought_items"), indent="  ")
@@ -424,6 +432,42 @@ def _build_compact_board_projection(
     return _build_board_projection(structured, tool_name)[0]
 
 
+def _sanitize_content_blocks(content) -> list:
+    """
+    Escape and bound every text block the adapter passes through.
+
+    THE INVARIANT HOLDS ON EVERY EXIT PATH, not just the projection. Two paths returned
+    result.content verbatim and bypassed it:
+
+      1. the structuredContent-is-None fast path, reached by edit_board's error results,
+         which interpolate the user's raw target_name into the message
+         (clarity/tools/edit_board.py:520-522, returned content-only at :906-911); and
+      2. the no-guidance/no-projection pass-through.
+
+    Either one carried unescaped, unbounded user text to the model OUTSIDE the
+    <board_data> boundary. Escaping the projection while leaving these open is not a
+    boundary — it is a boundary with two doors in it.
+
+    Non-text blocks are passed through untouched: there is no text in them to escape.
+    """
+    if not content:
+        return []
+
+    blocks = []
+    for block in content:
+        text = getattr(block, "text", None)
+        if text is None:
+            blocks.append(block)
+            continue
+        blocks.append(
+            mcp_types.TextContent(
+                type="text",
+                text=_clip(_escape_delimiters(text), MAX_GUIDANCE_CHARS),
+            )
+        )
+    return blocks
+
+
 def _clean_top_meta(meta) -> dict | None:
     """
     Clean platform-specific keys from result _meta.
@@ -494,7 +538,7 @@ def adapt_tool_result(
     # Step 1 — structuredContent is None: return new object with discriminated _meta
     if result.structuredContent is None:
         return mcp_types.CallToolResult(
-            content=list(result.content) if result.content else [],
+            content=_sanitize_content_blocks(result.content),
             structuredContent=None,
             isError=result.isError,
             _meta=_clean_top_meta(result.meta),
@@ -562,7 +606,7 @@ def adapt_tool_result(
         new_content = [mcp_types.TextContent(type="text", text=new_text)]
     else:
         # No guidance, no projection — preserve existing content as-is (may be empty)
-        new_content = list(result.content) if result.content else []
+        new_content = _sanitize_content_blocks(result.content)
 
     # Step 6 — return new object with discriminated top-level _meta
     #
