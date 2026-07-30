@@ -2669,6 +2669,77 @@ def test_malformed_cluster_fails_closed():
     assert "Good" in content  # names retained so narrow-scope stays actionable
 
 
+def test_malformed_item_containers_fail_closed():
+    """
+    A present-but-wrong-shaped container counts as unrenderable and fails the board closed.
+
+    Bug this catches: _render_items returned (0, 0) for any non-list, so a cluster whose
+    thought_items was a bare string rendered as empty-but-COMPLETE — projection_complete
+    True with the content silently gone. organize_thoughts full-replaces, so the model
+    would have destroyed it. Same class as the non-dict-cluster gap fixed the round
+    before, one container type over.
+
+    Covers all three container variants: cluster thought_items, subclusters, and
+    subcluster thought_items.
+    """
+    variants = [
+        # (label, clusters)
+        (
+            "cluster thought_items is a string",
+            [{"cluster_name": "A", "thought_items": "lost item", "sum_thought_items": 1}],
+        ),
+        (
+            "subclusters is a string",
+            [{"cluster_name": "B", "thought_items": ["ok"], "subclusters": "lost sub"}],
+        ),
+        (
+            "subcluster thought_items is a string",
+            [
+                {
+                    "cluster_name": "C",
+                    "thought_items": ["ok"],
+                    "subclusters": [{"subcluster_name": "S", "thought_items": "lost"}],
+                }
+            ],
+        ),
+        (
+            "subcluster is not a dict",
+            [{"cluster_name": "D", "thought_items": ["ok"], "subclusters": ["lost sub"]}],
+        ),
+    ]
+
+    for label, clusters in variants:
+        adapted = _adapt_read(clusters)
+        content = adapted.content[0].text
+
+        assert adapted.meta["projection_complete"] is False, f"{label}: reported complete"
+        assert adapted.meta["items_total"] > adapted.meta["items_shown"], f"{label}: no shortfall"
+        assert "<board_data>" not in content, f"{label}: emitted a partial board"
+        assert "Do NOT call organize_thoughts" in content, f"{label}: no prohibition"
+
+
+def test_absent_containers_are_empty_not_malformed():
+    """
+    An absent thought_items/subclusters key is an EMPTY cluster, not a malformed one.
+
+    Bug this catches: over-triggering fail-closed. If absent were treated as
+    unrenderable, an ordinary empty cluster would disable reclustering for the whole
+    board — breaking the feature for healthy data in the name of protecting it.
+    """
+    clusters = [
+        {"cluster_name": "Empty"},  # no thought_items, no subclusters
+        {"cluster_name": "Has items", "thought_items": ["visible"], "sum_thought_items": 1},
+    ]
+
+    adapted = _adapt_read(clusters)
+    content = adapted.content[0].text
+
+    assert adapted.meta["projection_complete"] is True
+    assert adapted.meta["items_shown"] == adapted.meta["items_total"] == 1
+    assert "<board_data>" in content
+    assert "visible" in content
+
+
 def test_healthy_board_does_not_over_trigger_fail_closed():
     """
     An all-valid board still reports complete — the fix must not over-trigger.

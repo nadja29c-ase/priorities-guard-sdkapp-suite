@@ -167,9 +167,21 @@ def _safe_item_text(item: Any) -> Optional[str]:
 
 
 def _render_items(items: Any, indent: str) -> tuple[list, int, int]:
-    """Render thought items as text lines. Returns (lines, shown_count, total_count)."""
-    if not isinstance(items, list):
+    """
+    Render thought items as text lines. Returns (lines, shown_count, total_count).
+
+    A container that is PRESENT but not a list is malformed: its contents are
+    unknowable, so it counts as one unrenderable unit and the board fails closed.
+    Returning (0, 0) here made a cluster whose thought_items was a bare string render
+    as empty-but-COMPLETE, silently dropping content on a full-replace path.
+
+    Absent (None) is different — that is an empty cluster, not a malformed one, and
+    must not fail-close an otherwise healthy board.
+    """
+    if items is None:
         return [], 0, 0
+    if not isinstance(items, list):
+        return [], 0, 1
 
     lines = []
     shown = 0
@@ -234,10 +246,14 @@ def _render_full_text_board(clusters: list) -> tuple[str, int, int]:
             lines.append(cluster_tags)
 
         subclusters = cluster.get("subclusters")
-        if isinstance(subclusters, list):
+        if subclusters is not None and not isinstance(subclusters, list):
+            # Present but not a list — same rule as a malformed item container.
+            items_total += 1
+        elif isinstance(subclusters, list):
             sub_lines = []
             for sub in subclusters:
                 if not isinstance(sub, dict):
+                    items_total += 1  # unrenderable subcluster — never silently dropped
                     continue
                 sub_name = _safe_text(sub.get("subcluster_name")) or "Unnamed"
                 sub_item_lines, sub_shown, sub_total = _render_items(
@@ -436,7 +452,7 @@ def _sanitize_content_blocks(content) -> list:
     """
     Escape and bound every text block the adapter passes through.
 
-    THE INVARIANT HOLDS ON EVERY EXIT PATH, not just the projection. Two paths returned
+    Applied on EVERY exit path, not just the projection. Two paths returned
     result.content verbatim and bypassed it:
 
       1. the structuredContent-is-None fast path, reached by edit_board's error results,
@@ -449,6 +465,14 @@ def _sanitize_content_blocks(content) -> list:
     boundary — it is a boundary with two doors in it.
 
     Non-text blocks are passed through untouched: there is no text in them to escape.
+
+    SCOPE OF THE GUARANTEE — stated precisely, because an over-stated version of it in
+    an earlier revision of this file is exactly what let reviewers keep finding holes:
+    each text block is clipped to MAX_GUIDANCE_CHARS. There is NO aggregate cap across
+    blocks, so N blocks can total N * MAX_GUIDANCE_CHARS. MindSort producers emit zero
+    or one content block, so this is not reachable today — but "bounded" here means
+    per-block, not per-result. Closing that properly is part of the normalize-at-the-
+    boundary follow-up, not another point patch.
     """
     if not content:
         return []
@@ -556,10 +580,18 @@ def adapt_tool_result(
 
     # Step 4 — sanitize and bound EVERY content source before the projection is sized.
     #
-    # THE INVARIANT: everything this adapter composes into `content` is escaped and
+    # THE INTENT: everything this adapter composes into `content` is escaped and
     # bounded — not just the board projection. On Claude, `content` is the only channel
     # to the model, so this adapter IS the trust boundary, and a boundary that covers
     # one of its inputs is not a boundary.
+    #
+    # WHAT IS ACTUALLY GUARANTEED: this holds for the shapes the clarity/ producers
+    # emit. It is NOT a guarantee over arbitrary input — the renderers below handle the
+    # known shapes and fail closed on the malformed ones they recognise, which is not
+    # the same as recognising every malformed shape. Five review rounds each found one
+    # more container type where the absolute version of this claim was false. The fix
+    # for the class is to normalise the board ONCE at this boundary and reject what does
+    # not conform (filed follow-up), not to keep patching container types.
     #
     # This is not hypothetical. read_board_before_editing builds assistant_guidance by
     # interpolating raw cluster names ("Got your board with {names}"), and guidance is
