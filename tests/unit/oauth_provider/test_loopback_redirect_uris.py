@@ -117,11 +117,12 @@ def test_empty_port_is_accepted_and_both_layers_agree():
     empty port component and urlsplit reports port=None. Accepted here, and authorize
     normalizes it too, so the layers agree.
 
-    Bug this catches: "hardening" the port rule to reject an empty port. That would
-    recreate the ::1 divergence in reverse — authorize accepts this URI, so rejecting it
-    at DCR is safe, but rejecting it at DCR while believing it invalid invites someone
-    to "fix" authorize to match, breaking a URI form that is legal. Asserted so the
-    reasoning is recorded rather than rediscovered.
+    Bug this catches: "hardening" the port rule to reject an empty port — a FALSE
+    NEGATIVE that would block a legitimate client for no security gain. (Note the
+    asymmetry: DCR being NARROWER than authorize is always safe, since nothing
+    unregistered can match at authorize. The ::1 case was dangerous because DCR was
+    WIDER. This case is the opposite direction, so the cost is usability, not a
+    register-but-cannot-authorize client.)
     """
     uri = "http://localhost:/oauth/callback"
     assert _accepts(uri) is True
