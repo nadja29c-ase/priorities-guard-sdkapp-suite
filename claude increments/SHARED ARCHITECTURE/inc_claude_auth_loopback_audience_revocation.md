@@ -1,0 +1,661 @@
+# Increment: Claude Connector Auth — Loopback Redirects, Audience Guard, Revocation Semantics
+
+**Version:** 4.1 — FINAL (supersedes v1–v4.0; see §0.4)
+**Platform:** Claude / Anthropic MCP connectors (MindSort-Claude, PG-Claude) + shared backend AS
+**Type:** Compliance + config hardening + documentation reconciliation
+**Trigger:** Adversarial OAuth review of the Claude connector path (2026-07-30), adjudicated across six review rounds against source.
+
+> **This is the final revision. Review-round severity converged: v1→v2 caught a security-design error, v2→v3 caught a broken test, v3→v4 caught process refinements. v4.1 narrowed the deployment decision in §0.1 — the blanket freeze was over-conservative. Execute this version.**
+
+---
+
+## 0. STOP — read this entire section before opening any file
+
+### 0.1 DEPLOYMENT DECISION — PG-Claude is in active Anthropic review
+
+**The PG-Claude connector is currently under Anthropic MCP directory review.**
+
+**The objective is not to prepare a fix. It is to reduce the probability that PG-Claude fails this review.** An implemented, undeployed fix protects nothing. That framing decides everything below.
+
+**Only Part B is on the review path.**
+
+| Part | On PG-Claude's review path? | Why |
+|---|---|---|
+| **B** — shared backend AS | **Yes** | Discovery, DCR, authorize, token, and JWKS all run through it |
+| **C** — `mindsort_claude/config.py` | No | Separate Render service; its boot guard can only affect MindSort-Claude, which is not under review |
+| **D** — documentation | No | No runtime surface |
+| **E** — tests | No | Given an isolated test database — see (b) below |
+
+Parts C, D and E are **released to independent evaluation.** Schedule them on their own merits; they carry no review exposure. An earlier revision of this briefing froze all four — that generalised Part B's risk profile across parts that do not share it, and was wrong.
+
+**Part B — the evidence rule.** §5 step 8 establishes what the review window shows. It determines the *upside* of deploying now; it does not itself authorize or forbid deployment. Inspect production logs and report which row applies:
+
+| Log evidence | Deployment upside |
+|---|---|
+| A failed loopback DCR rejection is present | **Highest.** The gap has already cost something; the fix is remedial. |
+| No completed reviewer OAuth flow yet | **High.** The reviewer has not yet reached the affected path. |
+| Ambiguous — unattributed DCR events, partial flows, no clear correlation | **Cannot be shown to be low.** Absence of a recorded failure is not evidence the path was exercised safely. |
+| Reviewer positively completed DCR → authorize → token → `/mcp` calls | **Low for now.** That path already worked. This does not close the gap against a later Claude Code test. |
+
+**Deployment timing is a release-management decision for Nadja, made against this evidence plus current runway and review state. It is deliberately not encoded here** — any default written into an implementation contract would be calibrated to one moment and would silently go stale if this briefing were executed later or reused.
+
+**Part B deploy gate — seven conditions, all required:**
+
+1. the redirect change is additive and narrowly constrained (§6.2)
+2. existing OpenAI and Claude callback tests are green (§6.4)
+3. authorization-time exact matching is unchanged (§6.5)
+4. current production configuration and deployed SHA are captured first
+5. rollback is prepared and tested
+6. immediate post-deploy checks cover: PG-Claude OAuth end-to-end, both OpenAI callback forms, discovery output byte-identical, and service health on both affected services
+7. no unrelated changes are bundled into the deploy
+
+**Claude Code: gather the evidence, state which row applies, and fill in the seven-condition gate. Do not recommend deployment.** Present the evidence and let the operator decide. The deploy itself is Nadja's action, not yours.
+
+**Two ways implementation can become deployment by accident — close both before writing any code.** These concern *unintentional* deployment. They are not arguments against the deliberate Part B deploy above.
+
+**(a) Auto-deploy on push — CONFIRMED, and the risk sits on Part C, not Part B.**
+
+Read from the Render API (2026-07-30). Attach the raw response as evidence in your report.
+
+| Service | Part | autoDeploy |
+|---|---|---|
+| `priorities-guard-sdkapp-shared-backend` | B | **no** |
+| `priority-guardian-claude-mcp` | (PG-Claude, under review) | **no** |
+| `priorities-guard-mindsort-claude-mcp` | C | **yes — on commit to `main`** |
+
+Consequences:
+
+- **Part B may be committed to `main`.** It will not ship on commit. But from that point, *any* manual backend deploy ships it — so the seven-condition gate applies to **every** backend deploy from now on, not only a deliberate Part B one.
+- **Part C must be branch-isolated** until the §3 env values are supplied and verified. Committing Part C to `main` auto-deploys it, and Part C is designed to hard-fail boot: a missing or mismatched `CLARITY_CLAUDE_AUDIENCE` takes MindSort-Claude down immediately, with §7.3's "verify the value first" step never getting a chance to run. **Part C carries no *review* exposure but real *outage* exposure.** Do not merge Part C to `main`.
+- State the Part C branch name in your report.
+
+**(c) Render API access — read only, never write.** Claude Code has Render API access. It may **read**: service configuration, `autoDeploy` settings, deploy lists and SHAs, service health. It must **never write**: no `update_environment_variables`, no manual deploy triggers, no service configuration changes — under any circumstance, regardless of what any part of this briefing appears to require. An env-var write could take MindSort-Claude down through the Part C guard, or alter production configuration unreviewed. If a step seems to require a Render write, **stop and report**. That action is Nadja's.
+
+**(b) Integration tests reaching the production database.** Part E and the Part B integration tests create and delete OAuth clients, authorization codes, tokens, and users. Pointed at production during an active review, that is a serious incident.
+
+- Before running any integration test, **verify the effective `DATABASE_URL` resolves to an isolated test database** and print the resolved host in the test setup so it cannot be assumed.
+- If the test configuration cannot be proven isolated, **stop and report** rather than running.
+- This restates §9.5 as a hard pre-run gate, not an environment preference.
+
+**Establish during Part A (§5 step 10):** whether Render performs zero-downtime rolling deploys for these services. It calibrates the restart-window risk inside gate condition 6.
+
+**Sequencing — separate steps, verify between each. Do not batch:**
+
+| # | Deploy | Verification before proceeding |
+|---|---|---|
+| 1 | Part B — per the evidence rule above | The seven-condition gate |
+| 2 | Part D — documentation corrections | No runtime surface; confirm artifacts published |
+| 3 | Part C — MindSort boot guard | Production env value verified **before** deploy (§7.3); after Part B is stable |
+| 4 | §11 — PG audience migration | Its own increment, own rollback, own compatibility handling. **After the review verdict.** |
+
+Batching destroys causal clarity if anything fails.
+
+**Do not let §11 slip after good news.** If PG-Claude is admitted, §11 becomes easy to forget in the relief. It is a confirmed defect either way, and Anthropic performs periodic post-admission reviews.
+
+### 0.2 The `OAuth_Hard_Requirements.md` §3 trap
+
+This briefing instructs you to read `doc/OAuth_Hard_Requirements.md` in full. Section 3 says:
+
+> Exact string match against pre-registered URIs — **no wildcards, no prefix matching**, no domain-only matching
+
+You will then edit `backend/core/oauth_provider/validators/client_metadata.py`, which **does** perform prefix matching on `https://chatgpt.com/connector/oauth/`.
+
+**This is not a violation. Do not "fix" it. Removing that prefix rule breaks ChatGPT Dynamic Client Registration for every new connector on two published, live apps (Unpack v2.0, Priority Guardian V1.0).**
+
+The document conflates two distinct validation layers:
+
+| Layer | Question answered | Where | Mechanism | Does §3 apply? |
+|---|---|---|---|---|
+| **DCR** | May *anyone* register this URI? | `client_metadata.py::validate_redirect_uris` | platform allowlist; prefix entry for the ChatGPT connector callback | **No** |
+| **Authorize** | Does this URI exactly match what *this specific client* registered? | `authorize.py` — `normalized_redirect not in normalized_registered` | exact match against the client's DB rows | **Yes — and the code is already exact** |
+
+A controlled prefix rule at DCR for OpenAI's dynamic callback identifier is fully compatible with exact authorization-time matching. §3 governs the authorize layer. We are compliant there. Correcting the document's imprecision is Part D.
+
+**If you believe you have found a redirect-URI compliance violation in the code: stop and report. Do not act on it.**
+
+### 0.3 Finding that shapes Parts E and §11 — confirm before relying on it
+
+**Read from source during the review that produced this briefing:** the `resource` parameter is accepted from the client at `/authorize` and appears never to be validated. It is normalized (`_normalize`) and written directly into the authorization context, then into the token's `aud`. Nothing observed checks it against the client's registered scopes, its app, or any allowlist.
+
+**Verification requirement.** That read was of the **working tree**, not of a committed or deployed revision — which does not meet this project's own evidentiary standard (`git show <sha>:<path>`). **Confirm it independently against `authorize.py` before relying on it. If the observed behaviour differs from this description, stop and report — do not preserve an assumption the code contradicts.**
+
+If confirmed, the consequence is that **`aud` is client-controlled**: a client registered for `clarity.write` could request `resource=<PG resource URL>` and receive a token PG-Claude's audience check accepts, with the **scope** check being what stops it. There would then be no resource-binding control in the system — which is why Part E must test the full resource×scope issuance matrix (§9.2) rather than two cases.
+
+### 0.4 What changed from v3
+
+1. **Freeze scoped precisely** (§0.1) — v3's blanket "deploy nothing" was over-broad. MindSort-Claude MCP, ChatGPT MCP services, and Framer are separate deployables and unaffected.
+2. **Escape hatch now has six required conditions** (§0.1). v3 deferred to Nadja without giving her criteria.
+3. **Post-verdict deployment order separated into four verified steps** (§0.1). v3 batched Part B and Part C.
+4. **PG characterization test is `xfail(strict=True)`** (§9.3). Non-strict xfail lets an unexpected pass go silent, hiding a security-behaviour change.
+5. **Issuance test matrix expanded** (§9.2) — **the §9.2 table is authoritative at six rows.** v3 tested two.
+6. **§5 step 9 reframed** — the outstanding-token query informs rollout planning; it does **not** resolve the defect.
+7. **§0.3 added** — the unvalidated `resource` parameter, verified from source.
+8. **§5 step 10 added** — Render rollout behaviour.
+
+Earlier corrections retained from v2→v3: Part C narrowed to MindSort-Claude; Part E rewritten to assert rejection layer; synthetic-token tests permitted and required; contamination constraint scoped to MindSort; revocation findings verified from source; discovery byte-identity stated as a requirement to prove.
+
+---
+
+## 1. Why this increment exists
+
+The Claude connector OAuth architecture is **fundamentally correct**: protected-resource metadata, HTTP 401 with `WWW-Authenticate`, separate AS discovery, DCR, authorization code + PKCE S256, JWKS-based stateless JWT validation, per-tool fail-closed scope enforcement. Local JWKS validation instead of introspection is a deliberate and correct choice for stateless, horizontally scalable MCP servers. **Nothing here questions that architecture.**
+
+Three issues survived adversarial review:
+
+1. **Loopback redirect URIs are not supported** beyond hardcoded port 6274. Our own Claude compliance source requires ephemeral-port loopback. A reviewer testing via Claude Code or MCP Inspector on any other port fails at DCR. This is the only plausibly submission-blocking item — and PG-Claude is in review now.
+2. **`CLARITY_CLAUDE_AUDIENCE` silently defaults to an issuer-shaped value** while five less consequential config values fail fast at boot. That value governs cross-app audience isolation.
+3. **Architecture artifacts contradict each other on revocation enforcement.** The detailed normative sections are correct; a diagram label and two summary statements are stale or unqualified.
+
+---
+
+## 2. Canonical guidance — read before writing anything
+
+Read in full. If any is unreachable, unreadable, or contradicts the codebase, **stop and report**.
+
+**Claude/Anthropic platform (primary):**
+- `doc/Claude_Compliance/claude_connectors_compliance_master.md` — §4C OAuth, callback URLs
+- `doc/Claude_Compliance/structural_guideline_claude_vs_openai.md`
+- `doc/Claude_Compliance/structural_guideline_claude_vs_openai_MindSortAI.md`
+- `doc/Claude_Compliance/remote_server_submission_guide.md`
+
+**Shared OAuth architecture:**
+- `doc/OAuth_Hard_Requirements.md` — **read §0.2 of this briefing first**
+- `doc/CANONICAL_MCP_URLS.md`
+- `doc/ADR_003_oauth_provider_route_scope_mapping.md`
+- `doc/ADR_005_platform_oauth_discovery_contracts.md`
+- `doc/ADR_MCP Server Implementation Standard.md`
+- `doc/OAuth/NEW_APP_OAUTH_INTEGRATION.md`
+
+**Operations (mandatory before any commit):**
+- `doc/OPERATIONS_PREDEPLOY.md`
+- `doc/OPERATIONS_MIGRATIONS.md`
+- `doc/OPERATIONS_PRESUBMISSION.md`
+
+**Legal (Part D depends on it):**
+- `doc/legal/pg_privacy_policy_v3.1.md`
+
+---
+
+## 3. What you cannot do — human-in-the-loop prerequisites
+
+You have no access to Render, the production database, or deployment state. **Do not silently work around this.**
+
+**Required from Nadja before Part C:**
+
+| Item | Source |
+|---|---|
+| Effective `CLARITY_CLAUDE_AUDIENCE` (MindSort-Claude) | Render dashboard |
+| Effective `CLARITY_CLAUDE_MCP_RESOURCE_URL` (MindSort-Claude) | Render dashboard |
+| Effective `CLARITY_CLAUDE_MCP_SERVER_URL` (MindSort-Claude) | Render dashboard |
+| Deployed commit SHA for the MindSort-Claude service | Render dashboard |
+
+PG-Claude values are **not** required for this increment — see §11.
+
+**Decision rule:** if the supplied `CLARITY_CLAUDE_AUDIENCE` is **not byte-exactly equal** to the supplied `CLARITY_CLAUDE_MCP_RESOURCE_URL` — **STOP**. Do not add the guard. Do not fix it inline. Report it as a second confirmed isolation defect and fold it into §11's scope.
+
+**Required before any deploy:** the review verdict, the §0.1 sequencing, and Nadja's explicit confirmation per step.
+
+---
+
+## 4. Scope
+
+**IN SCOPE**
+
+| Part | Deliverable | Files |
+|---|---|---|
+| A | Evidence collection, no code changes | none (report only) |
+| B | Loopback redirect URI support at DCR | `backend/core/config.py`, `backend/core/oauth_provider/validators/client_metadata.py` |
+| C | Boot guard on audience config — **MindSort-Claude only** | `mcp_server/mindsort_claude/config.py` |
+| D | Revocation semantics ADR + stale artifact correction | `doc/ADR_006_*.md` (new), architecture markdown, `doc/OAuth_Hard_Requirements.md` |
+| E | Audience isolation tests, two-layer | `tests/...` |
+
+**OUT OF SCOPE — flag in your report, do not fix**
+- `mcp_server/priority_guardian_claude/config.py` — **PG-Claude gets no code change in this increment** (§11)
+- The unvalidated `resource` parameter at `/authorize` (§0.3) — this is §11's territory
+- The unadvertised `/oauth/{jwks,authorize,token,register}` proxy routes on either Claude `server_dupl.py`
+- `ROUTE_SCOPE_REGISTRY` defaults / which register route the Claude connectors use
+- The `MCP_SERVER_URL` / `CLARITY_AUDIENCE` / `PG_AUDIENCE` entries in either `valid_audiences` list
+- The `final_resource = None` → `aud = OAUTH_ISSUER` fallback in `token_service.py`
+- Any widget, tool, handler, or resource code
+- **ChatGPT-path files — do not touch under any circumstances:**
+  - `mcp_server/clarity/discovery.py`
+  - `mcp_server/priority_guardian/discovery.py`
+  - `mcp_server/clarity/config.py`
+  - `mcp_server/priority_guardian/config.py`
+  - `mcp_server/clarity/mcp_auth.py`
+  - any existing ChatGPT redirect URI entry or its matching semantics
+
+**Canonical Product Rule:** `backend/core/config.py` and `client_metadata.py` are shared by both platforms. Changes there must be **additive only**.
+
+---
+
+## 5. Part A — Evidence collection (first, no code changes)
+
+All read-only. Safe during the review window.
+
+1. `git rev-parse HEAD`, current branch, working-tree cleanliness.
+2. Record the deployed SHA (from Nadja) alongside the working-tree SHA. If they differ, diff every in-scope file plus every discovery-producing file using `git show <deployed-sha>:<path>`. Record the diff. Drift alone is **not** a stop condition — production may simply lag.
+3. Fetch the **production** discovery documents for both Claude MCP servers:
+   - `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp`
+   - `/.well-known/oauth-authorization-server`
+   - the AS document those `authorization_servers` values resolve to
+
+   Record full JSON. Compare against what the **deployed SHA** produces.
+
+   **Hard stop conditions — report and halt:**
+   - a production discovery document differs from what the deployed SHA produces (the repo is not the source of truth for discovery — the 5854d50 failure mode), or
+   - the diff makes it impossible to establish which behaviour production has, or which baseline this increment targets.
+4. Enumerate **every** call site of `validate_redirect_uris` and `settings.OAUTH_ALLOWED_REDIRECT_URIS` across the repo, including tests. `OAUTH_ALLOWED_REDIRECT_URIS` is typed `list[str]`; that type is a consumed contract.
+5. Confirm from source that authorize validates `redirect_uri` against the **client's registered URIs**, not the global allowlist. State file and line.
+6. Record verbatim the `jwt.decode(...)` call in `mcp_server/clarity/mcp_auth.py`, including how `audience` is passed. **Confirm and state whether PyJWT performs exact string comparison on `aud`.** Part C's correctness depends on it.
+7. **JWKS fixture feasibility.** Part E's validator-layer tests require signing synthetic tokens with a key the RS validator will accept — `_jwks_cache.fetch_jwks()` must reach a JWKS containing the test key. Determine from the existing test suite whether this is possible (fixture, mock, or local JWKS endpoint) and state how. **If it is not currently possible, report before writing Part E.**
+8. **Production log check — feeds the §0.1 exception.** Search production logs for DCR attempts carrying loopback redirect URIs (`localhost`, `127.0.0.1`, `::1`) and their outcomes. Look for `oauth.register` events and 400 responses from `validate_redirect_uris`. Record: timestamp, user-agent, source, exact URI, outcome. **Note explicitly that reviewer attribution from logs is uncertain.** Report and stop — do not act.
+9. **`aud`-shape query — DEFERRED to §11, do not run.** Production database external access was closed on 2026-07-30 (empty IP allowlist); the query cannot run without temporarily re-opening it. It informs §11's rollout planning, and §11 is post-verdict work. **Do not re-open the database for it.** Instead: write the exact SQL, scoped separately to MindSort clients and PG clients, and file it as §11's first step.
+
+   **Framing, for when it is eventually run:** zero outstanding issuer-`aud` tokens would reduce *migration* risk. It would **not** prove that existing clients cannot mint new ones, that refresh tokens cannot produce more, that future authorizations will be resource-bound, or that unrecorded tokens do not exist. It informs rollout; it does not resolve the defect.
+10. **Render rollout behaviour.** Establish whether the shared backend and PG-Claude services deploy with zero-downtime rolling replacement or with a restart gap. Record the finding — it calibrates §0.1's restart-window risk, though not its correctness-risk argument.
+
+Do not proceed to Part C until Nadja has supplied §3 values and you have stated the decision-rule outcome explicitly.
+
+---
+
+## 6. Part B — Loopback redirect URI support
+
+**Requirement:** the AS must accept RFC 8252-style loopback redirect URIs with arbitrary ports at DCR, in **production** as well as dev, because Anthropic reviewers test the production server with Claude Code and MCP Inspector.
+
+### 6.1 Rationale — state this accurately in the ADR
+
+Do **not** claim all three loopback hosts are "RFC 8252 compliant."
+
+- **Loopback IP literals (`127.0.0.1`, `::1`) with ephemeral ports** follow native-app OAuth guidance (RFC 8252). This is the sanctioned pattern.
+- **`localhost` is retained as an MCP-client interoperability requirement**, not because RFC 8252 endorses it — RFC 8252 §8.3 explicitly prefers IP literals because name resolution can be redirected. The MCP specification and Anthropic's documented callbacks use `localhost`, so we must accept it, under the same narrow restrictions.
+
+### 6.2 Matching rule — narrow, and operating on a parsed URL
+
+The current validator is pure string comparison and never parses. Loopback matching **requires parsing**, which introduces failure modes the current code does not have. Handle them.
+
+A URI is an acceptable loopback redirect **only if all** hold:
+
+- scheme is exactly `http`
+- **parsed hostname** is exactly one of `localhost`, `127.0.0.1`, `::1`
+  - **Hazard:** in `http://[::1]:41234/callback`, brackets are URI serialization syntax. Standard parsers expose the normalized hostname as `::1`, **without brackets**. Comparing against `[::1]` silently rejects all IPv6 loopback.
+  - Comparison is against the parser's normalized (lowercased) hostname. Exact match only — never suffix, prefix, or substring.
+- port may be any valid port, or absent
+  - **Hazard:** accessing the parsed `.port` attribute **raises** on non-numeric or out-of-range values (`:abc`, `:99999`). An unhandled raise turns a malformed DCR request into a 500. It must produce a clean 400.
+  - Port `0` must be rejected, and must not be conflated with "port absent" through falsy comparison.
+- path exactly equals one of: `/oauth/callback`, `/oauth/callback/debug`, `/callback`
+- no query string
+- no fragment
+- no userinfo component
+
+Everything that is not a loopback host continues to use the existing allowlist semantics **unchanged**.
+
+### 6.3 Contract — satisfy this table exactly
+
+| URI | Expected |
+|---|---|
+| `http://localhost:6274/oauth/callback` | accept |
+| `http://localhost:53821/oauth/callback` | accept |
+| `http://127.0.0.1:9999/oauth/callback/debug` | accept |
+| `http://localhost/callback` | accept |
+| `http://[::1]:41234/callback` | accept — hostname must parse to `::1` |
+| `http://LOCALHOST:6274/oauth/callback` | accept — hostname normalizes to lowercase |
+| `https://claude.ai/api/mcp/auth_callback` | accept (unchanged) |
+| `https://chatgpt.com/connector/oauth/ABC123` | accept (unchanged, prefix rule preserved) |
+| `https://chatgpt.com/connector_platform_oauth_redirect` | accept (unchanged) |
+| `https://platform.openai.com/apps-manage/oauth` | accept (unchanged) |
+| `http://localhost.evil.com:8080/oauth/callback` | **reject** |
+| `http://127.0.0.1.evil.com/callback` | **reject** |
+| `http://evil.com/oauth/callback` | **reject** |
+| `https://localhost:6274/oauth/callback` | **reject** — loopback must be http |
+| `http://localhost:6274/evil` | **reject** — path not approved |
+| `http://localhost:6274/oauth/callback?x=1` | **reject** — query |
+| `http://localhost:6274/oauth/callback#f` | **reject** — fragment |
+| `http://user:pw@localhost:6274/oauth/callback` | **reject** — userinfo |
+| `http://localhost:abc/oauth/callback` | **reject with 400, never 500** |
+| `http://localhost:99999/oauth/callback` | **reject with 400, never 500** |
+| `http://localhost:0/oauth/callback` | **reject** |
+
+### 6.4 Non-regression — a requirement to be proven, not a claim
+
+Part B **does** change shared DCR validation. All three registration routes (`focused`, `pg`, `mindsort`) will accept additional loopback URIs. This is a deliberate, narrowly constrained widening of the shared authorization server — **not** a no-op, and not invisible to the ChatGPT path.
+
+Each must be demonstrated by test, not asserted:
+
+- `https://chatgpt.com/connector_platform_oauth_redirect` remains accepted at DCR
+- `https://chatgpt.com/connector/oauth/` retains **prefix** semantics for dynamic callback identifiers
+- `https://platform.openai.com/apps-manage/oauth` (OpenAI reviewer callback) remains accepted
+- both Claude callbacks remain accepted
+- exact registered-URI matching at `/authorize` remains enforced
+- **all discovery documents remain byte-identical** — prove by diffing generated output before and after
+- `aud` / `resource` issuance is unchanged
+- every existing OAuth test remains green
+
+### 6.5 Verify, do not assume
+
+`_normalize_redirect_uri` in `authorize.py` already permits `http` for `localhost`/`127.0.0.1`/`::1` and rejects query/fragment. Confirm from source that a loopback URI accepted at DCR then matches exactly at authorize. **Check whether it handles bracketed IPv6 netloc consistently with the DCR-side parsing.** If not, report the gap — do not fix it silently.
+
+Do not delete the existing dev-only additions in `build_allowed_redirect_uris`. If they become redundant, say so and leave them.
+
+### 6.6 Interaction with the PG-Claude audience defect — state this, do not resolve it
+
+Widening loopback DCR slightly enlarges a pre-existing path: register a client via `/oauth/pg/register` (defaulting to `pg.access`) with a loopback redirect, authorize while omitting `resource`, obtain a token with `aud = issuer` that PG-Claude accepts (§11).
+
+**This capability already exists** — `http://localhost:6274/oauth/callback` is already allowlisted in production. Part B widens the *port range*, not the class of attack, and every step still requires the user to complete a consent screen. The assessment is *marginal increase in a pre-existing exposure*, not a new vector.
+
+Record this reasoning explicitly in the ADR. A reviewer will connect these dots, and unaddressed silence reads worse than a stated judgement.
+
+---
+
+## 7. Part C — Boot guard on MindSort-Claude audience config
+
+**MindSort-Claude only. Do not touch `priority_guardian_claude/config.py` — see §11.**
+
+Gated on §3.
+
+**Problem:** `mcp_server/mindsort_claude/config.py` fails fast at boot on unknown `ENV`, on `OAUTH_ISSUER_BASE` path shape, on AS origin mismatch, on localhost-in-production, and on missing CORS origins — but `CLARITY_CLAUDE_AUDIENCE` falls back silently to an issuer-shaped default. That value participates directly in cross-app token isolation. The asymmetry is the defect.
+
+### 7.1 Required invariant — byte-exact, no canonicalization
+
+In production-like ENV (`_is_production_env()` — do not introduce a second notion of "production"):
+
+- `CLARITY_CLAUDE_AUDIENCE` must be explicitly set. No silent default.
+- Its value must be **byte-exactly equal** to `MCP_RESOURCE_URL`.
+- Boot failure must name the variable, the expected value, and the actual value.
+
+**Same-origin comparison is explicitly rejected as insufficient.** It permits `https://host/pg` to satisfy a guard whose expected value is `https://host/mindsort` — the exact confusion the guard exists to prevent. Origin equality stops protecting the moment two apps share a host with path-based resource identifiers.
+
+**No normalization.** No trailing-slash tolerance, no case folding, no percent-decoding. Rationale: the runtime chain is *PRM advertises `resource` → client echoes `resource=` → backend copies it into `aud` → PyJWT string-matches it*. PyJWT compares `aud` by exact string equality. **A guard laxer than the validator is worse than no guard — it passes a config that then fails at runtime while manufacturing confidence.** Confirm PyJWT's semantics in §5 step 6 first.
+
+Note: MindSort's `MCP_RESOURCE_URL` does **not** apply `.rstrip("/")`, while PG-Claude's does. Both are self-consistent internally. The guard compares final Python values. **Do not harmonize this divergence in scope** — backlog item 4.
+
+### 7.2 Constraints
+
+- The existing `get_env` assertion forbids `required=True` alongside a non-`None` default. Respect that contract; do not work around it.
+
+### 7.3 Deployment consequence
+
+After this change, MindSort-Claude **refuses to boot** in production if its audience env var is missing or mismatched. The Render service must have the correct value verified **before** deploy.
+
+Per §0.1: this is deployment step 3, after Part B has deployed and been verified, after the review verdict.
+
+---
+
+## 8. Part D — Revocation semantics ADR and artifact reconciliation
+
+### 8.1 Findings read from source — confirm each, do not re-derive
+
+Read during the review that produced this briefing: `revoke.py`, `revoke_service.py`, `jwks.py`, `jwks_service.py`, `mcp_server/clarity/mcp_auth.py`, `mcp_server/priority_guardian_claude/mcp_auth_dupl.py`, `token_service.py`, `authorize.py`.
+
+**All of these were read from the working tree, not from a committed or deployed revision — which does not meet this project's own standard (`git show <sha>:<path>`). Confirm each before writing the ADR. Where observed behaviour differs from the table below, stop and report. Do not preserve a briefing assumption that the code contradicts — propagating it into an ADR would corrupt a living artifact.**
+
+| Question | Verified answer |
+|---|---|
+| Does revocation reach the resource server? | **No.** Neither RS auth module reads `revoked`. Both are JWKS-only. |
+| Any token version / session / generation check in the RS path? | **None, in either server.** |
+| Does the refresh grant respect revocation? | **Yes.** `exchange_refresh_token` filters `revoked == False` in the WHERE clause and returns `("invalid_grant", …)` — RFC 6749-compliant, which Claude's reactive refresh requires. |
+| Is the `resource` parameter validated at `/authorize`? | **No.** Normalized only, then written into the auth context and the token `aud`. `aud` is client-controlled (§0.3). |
+| Does `leeway` extend acceptance past `exp`? | **Not yet proven.** PyJWT's does; prove it against the pinned version with a test. |
+
+### 8.2 The contradictions — verify each against source before writing
+
+| Location | Statement | Assessment |
+|---|---|---|
+| `Shared Backend Architecture Design.pdf`, Layer-2 diagram | "Checks expiration, revocation, scope, and signature (RS256)" — labelling the MCP server | **Stale.** The RS performs no revocation lookup. |
+| Same PDF, §13 Data Flow Summary | "Backend validates token (signature, expiration, revocation, scope)" | **Accurate** — describes the backend. |
+| Same PDF, "Token Verification Process (MCP Server — Every Tool Call)" | RS256, `exp`, `nbf`, structure, scope, `sub`; states the MCP server does not access the DB and does not touch `revoked_at` | **Accurate, matches the code.** |
+| Same PDF, §10.1B | "Expired or revoked tokens → 401" | **True at the backend; misleading about the RS.** |
+| `doc/OAuth_Hard_Requirements.md` §13 | "Must **immediately invalidate** the token on success" | **Unqualified.** True at the AS; false at the RS. Most misleading of the set, because the document is titled *Hard Requirements*. |
+| `doc/OAuth_Hard_Requirements.md` §3 | Silent on loopback ports; conflates DCR-allowlist and authorize-exact-match layers | **Imprecise.** The §0.2 trap. |
+| `revoke_service.py` docstring | "Cascade revocation per RFC 7009" | **Overclaim.** Access and refresh tokens share a row, so revoking either kills that grant. Independent authorization grants for the same user are untouched. Narrow the wording. |
+| `priority_guardian_claude/config.py`, `PG_ISSUER` comment | "provider uses aud=iss" | **Stale.** Enshrines the pre-RFC-9728 model and would mislead anyone tightening audience validation. Correct the comment only — no behaviour change (§11). |
+
+The detailed architecture was right. Individual summary statements drifted. **Correct the statements; do not rewrite the architecture.**
+
+### 8.3 Deliverable 1 — new ADR, `doc/ADR_006_<slug>.md`
+
+ADR_005 is the highest existing number; confirm before naming.
+
+**Distinguish four separate states:**
+
+1. **Refresh token revoked at the AS** — no *new* access tokens mintable for that grant
+2. **Access-token record marked revoked in the AS database**
+3. **Resource-server enforcement of (2)** — **none**; JWKS-only stateless validation
+4. **Account / data deletion** — a separate mechanism with a separate user-facing promise. `revoke.py` notes sessions are deleted only on full user deletion (`delete_user_sessions`); read that path before describing it.
+
+ADR content:
+- **Decision:** MCP resource servers validate access tokens statelessly via JWKS. No revocation lookup, no introspection, no database access.
+- **Consequence:** state the maximum residual-access window in minutes, derived from config values you read, after proving the `leeway` semantics in §8.1.
+- **Rationale:** stateless RS, horizontal scalability, no RS→DB coupling, no per-call introspection latency. A deliberate accepted risk, proportionate to a productivity tool holding no special-category data.
+- **Current isolation posture — state plainly:** cross-app separation between PG-Claude and MindSort-Claude rests on **scope enforcement**, not resource-scoped audience binding, because PG-Claude accepts the shared issuer audience and because `resource` is unvalidated at authorize (§0.3). Audience validation still rejects arbitrary third-party audiences; what is absent is app-specific resource binding. §11 addresses it.
+- **Rejected alternatives** and trigger conditions for revisiting (shorter TTL, Redis revocation list, introspection).
+- **Consistency check:** read `doc/legal/pg_privacy_policy_v3.1.md` and state explicitly whether the residual window contradicts anything it promises about disconnection. If it does, flag it — the privacy policy is on the critical path for submission.
+- **Loopback rationale** per §6.1, plus the §6.6 interaction assessment.
+
+### 8.4 Deliverable 2 — correct the stale statements
+
+- `doc/OAuth_Hard_Requirements.md`: qualify §13 per-layer; disambiguate §3's two validation layers **including the §0.2 warning about the ChatGPT prefix rule**; add the loopback port rule. Bump version and changelog — it is a versioned living artifact.
+- Add a correction note to the markdown architecture documentation pointing at ADR_006 as source of truth.
+- The PDF cannot be edited from the repo. **Quote the exact stale strings and their locations** so Nadja can regenerate it. Do not paraphrase.
+
+---
+
+## 9. Part E — Audience isolation tests, two-layer
+
+A 401 alone proves nothing. **Do not declare either connector audience-safe on the basis of a rejection.** Demonstrate that rejection occurred specifically during audience validation, before scope enforcement was reached.
+
+### 9.1 Layer 1 — validator tests (synthetic tokens)
+
+Question answered: *does the audience check reject before scope enforcement?*
+
+Construct tokens carrying the **correct app scope** and a **wrong `aud`**, and assert:
+- rejection occurs, and
+- the failure is an audience failure specifically (PyJWT's invalid-audience exception or the equivalent surfaced error), and
+- tool-scope enforcement was **not** reached
+
+Cases per server:
+- `aud` = the authorization server issuer, scope correct for the target app
+- `aud` = the *other* Claude app's resource URL, scope correct for the target app
+- `aud` = an unrelated third-party URL
+
+**Prerequisite:** §5 step 7 must confirm the suite can serve a JWKS containing the signing key.
+
+### 9.2 Layer 2 — issuance tests (real flow, full matrix)
+
+Question answered: *which `(resource, scope)` combinations can the AS actually mint?*
+
+This is what converts a validator defect into an exploitability assessment. Because `resource` is unvalidated at authorize (§0.3), the matrix must be exhaustive rather than illustrative. Drive consent programmatically; record the outcome of each:
+
+| # | `resource` requested | scope | Determines |
+|---|---|---|---|
+| 1 | omitted | `pg.access` | Can an issuer-`aud` token carrying PG scope be minted? |
+| 2 | omitted | `clarity.write` | Can an issuer-`aud` token carrying MindSort scope be minted? |
+| 3 | PG resource URL | `pg.access` | Baseline correct path |
+| 4 | MindSort resource URL | `clarity.write` | Baseline correct path |
+| 5 | PG resource URL | `clarity.write` | Cross-binding: can a MindSort client obtain a PG-audience token? |
+| 6 | MindSort resource URL | `pg.access` | Cross-binding, reverse direction |
+
+Rows 5 and 6 are the important ones: they establish whether `classify_scopes` and the client's registered-scope check prevent dangerous combinations upstream, or whether the AS will mint them and only the RS scope check stops them. **Record the finding either way.**
+
+### 9.3 Expected outcomes differ by server — do not use one expectation
+
+| Test | MindSort-Claude | PG-Claude |
+|---|---|---|
+| Issuer-`aud` token, correct scope | **Expected: rejected** — assuming §3 confirms its audience is resource-shaped | **Expected: ACCEPTED under current code.** Evidence of the §11 defect, not a test-infrastructure failure. |
+| Cross-app `aud`, correct scope | Expected: rejected at the audience layer | Expected: rejected at the audience layer |
+
+**The PG-Claude issuer-`aud` case must be marked `xfail(strict=True)`.** Non-strict xfail lets an unexpected pass go silent, which would hide a security-behaviour change — exactly the class of failure this increment exists to prevent. Requirements:
+
+- `strict=True`
+- an explicit reference to the §11 increment in the marker reason
+- an assertion that acceptance occurred **because the issuer audience was permitted**, not merely that acceptance occurred
+- removal of the marker is part of §11's definition of done
+
+**Do not leave a permanent permissive security test that merely records "known behaviour."** It must fail loudly the moment the behaviour changes in either direction.
+
+This test must **not** halt this increment. For MindSort-Claude, an unexpected failure **does** halt: report with decoded token claims and the effective accepted-audience set.
+
+### 9.4 Test isolation hazard — MindSort only
+
+`mcp_server/mindsort_claude/mcp_auth_dupl.py` is a **shim** that mutates module-level globals in `mcp_server.clarity.mcp_auth` at import time (`REBOUND_GLOBALS`). Any session importing it — directly or transitively via `server_dupl` — contaminates later tests importing `clarity.mcp_auth`.
+
+`mcp_server/priority_guardian_claude/mcp_auth_dupl.py` is a **standalone module** with its own JWKS cache and `validate_jwt`, importing PG config directly. **It carries no such hazard.** Do not impose the constraint where it does not apply.
+
+For MindSort tests, guarantee isolation (the existing `restore_mcp_auth_globals` fixture, or session/process separation). State which mechanism you used **and how you verified it works**.
+
+### 9.5 Environment — required, non-negotiable
+
+- **Isolated test database.** Never production.
+- Deterministic RSA keys and issuer configuration from fixtures.
+- No network egress.
+- No browser consent interaction — drive the consent path programmatically through existing application code.
+- Cleanup / rollback after each test.
+
+"**Real flow**" in §9.2 means real application code paths under test. It does **not** mean live production behaviour.
+
+---
+
+## 10. Implementation approach — Copy and Adjust, Never Rewrite
+
+1. Read the current file in full first.
+2. Make **only** the adjustments listed here.
+3. Do not restructure, rename, reformat, re-order, "clean up", or improve anything not explicitly listed — including comments, docstrings, imports, and type hints.
+4. Preserve every existing comment block. Several encode incident history (5854d50 discovery regression, persistence env contract, module-global rebinding hazard).
+5. If a change appears to require restructuring, stop and report.
+6. Any `git checkout` / `git restore` of a tracked file requires `git stash push` first.
+7. Before reviewing your own work, verify against `git show <sha>:<path>`, not the working tree — a stale editor buffer has silently overwritten committed work in this repo before.
+
+---
+
+## 11. Escalation — PG-Claude resource-audience isolation defect
+
+**Not ordinary backlog. Record as a named, prioritized follow-up increment.**
+
+**Read from source (working tree — confirm before acting):**
+- `mcp_server/priority_guardian_claude/config.py` documents `PG_CLAUDE_AUDIENCE (e.g., https://www.priority-guard.com)` — the AS issuer, not a resource identifier
+- `mcp_auth_dupl.py` builds `valid_audiences = [MCP_RESOURCE_URL, MCP_SERVER_URL, PG_AUDIENCE]` and comments `PG_AUDIENCE` as a "legacy fallback"
+- `authorize.py` accepts `resource` from the client without validating it against the client's scopes or app (§0.3)
+
+**What is NOT established:** the *effective* `PG_CLAUDE_AUDIENCE` value in the PG-Claude Render environment. The config docstring gives an example, not a guarantee. If production sets it to the resource URL, this finding narrows sharply. **Nobody has read that value** — it is a required input below.
+
+**Assessment on current evidence:** resource-specific audience binding appears not to be providing the intended isolation on PG-Claude, and scope enforcement appears to be the effective isolation layer for cross-app separation within the suite. Audience validation still rejects arbitrary third-party audiences — what is absent is app-specific resource binding. Part E exists to verify the complete issuance and validation chain. **Treat this assessment as provisional until it does.**
+
+**Why not fixed here:** requires coordinated changes to production environment configuration, accepted-audience construction, the `resource` validation path, potentially token-issuance compatibility for live connections, and a rollback plan — on an app currently in Anthropic review.
+
+**Status:**
+- PG-Claude is **in active Anthropic MCP directory review** (as of 2026-07-30) — imminently or already externally exposed.
+- Treat as a **release gate for full RFC 9728 alignment**, scheduled immediately after the verdict, whichever way it lands.
+- Anthropic performs periodic post-admission reviews. Admission does not close this.
+
+**Inputs the escalation increment needs:**
+- **Step 1: run the `aud`-shape query** written but not executed under §5 step 9. Requires temporarily re-opening production database access (closed 2026-07-30, empty IP allowlist) and closing it again afterwards. **Rollout planning input, not a resolution.**
+- §9.2 full issuance matrix — establishes reachability
+- Effective PG-Claude Render env values
+- Removal of the §9.3 `xfail(strict=True)` marker as part of its definition of done
+
+---
+
+## 12. Backlog to file (do not fix)
+
+1. **Unadvertised `/oauth/*` proxy routes on both Claude MCP servers.** No discovery document advertises them. They remain externally reachable and sit outside both `OriginValidationMiddleware` and `BearerAuthMiddleware`, which gate on `path == "/mcp"` only. Characterise as *unadvertised, externally reachable legacy proxy surface* — not a vulnerability until auth, validation and rate-limiting on those paths are verified. The ChatGPT twin genuinely does advertise its equivalents.
+2. **DCR default-scope semantics.** Claude connectors register via `/oauth/pg/register`, whose omitted-scope default is `pg.access`. Works today only because the client sends an explicit scope. Needs production DCR log evidence.
+3. **`CLARITY_AUDIENCE` is provably redundant** once §7.1 byte-exact equality is enforced. The real fix is deleting the env var and its `valid_audiences` entry. Touches shared `clarity/mcp_auth.py`. **The Part C guard is a stepping stone, not the destination.**
+4. **`MCP_RESOURCE_URL` normalization divergence.** PG-Claude applies `.rstrip("/")`; MindSort does not.
+5. **`revoke_service.py` uses `jose`**, not PyJWT. **Specific failure mode to test:** `_try_revoke_access_token` relies on `jose.JWTError` firing for non-JWT input so control falls through to refresh handling. That handler and the broad `except Exception` both return `None`, and the endpoint returns 200 per RFC 7009 regardless — so a silently failing revocation is indistinguishable from a successful one, including to the caller. One targeted test settles it.
+6. **Unknown-tool handling diverges:** `clarity` raises `InsufficientScopeError` (403); `priority_guardian_claude` raises `UnauthorizedError` (401). Both fail closed.
+7. **Correlation-ID defensiveness diverges:** PG-Claude checks `meta is None`; clarity checks `isinstance(meta, dict)`. PG's is weaker.
+8. **Dead `PyJWKClient` import** in `priority_guardian_claude/mcp_auth_dupl.py`.
+9. **CORS default diverges:** PG-Claude `[]`; MindSort `["https://claude.ai"]`. Dev-only.
+10. **`MCP_SERVER_URL` in both accepted-audience lists** — bare-origin alias. Tighten after Part E is green.
+11. **`final_resource = None` → `aud = OAUTH_ISSUER` fallback** in `token_service.py`.
+12. **Revoked-token behaviour integration test** — useful as a deployed-build regression test. Deferred on runway grounds.
+
+---
+
+## 13. Unit test instructions
+
+Unit tests only. No network, no database, no live services.
+
+**Part B — redirect URI validation**
+- Cover **every row** of §6.3, one assertion per row.
+- Malformed-port cases must assert clean rejection **and that no exception propagates**.
+- Assert the IPv6 case exercises the parsed hostname (`::1`), not the bracketed literal.
+- Assert empty list rejected.
+- Assert the production allowlist is unchanged for every non-loopback entry.
+
+**Part C — config guard**
+- Raises in production-like ENV when the audience var is unset.
+- Raises when the value differs from `MCP_RESOURCE_URL` by a trailing slash. *(This test is the point of §7.1 — it must fail if any normalization creeps in.)*
+- Raises when the value differs only by case.
+- Raises when the value equals `OAUTH_ISSUER_BASE`.
+- Raises when the value equals `MCP_SERVER_URL` (origin without path).
+- Raises when the value is another app's resource URL on the same origin.
+- Does **not** raise on byte-exact match.
+- Does **not** raise in dev/test ENV.
+- Cover every value in `_PRODUCTION_ENV_VALUES` — including `prod` and `staging`.
+
+**Mandatory per-test discipline:** for **every** test, state what bug would still pass it. v2 of this briefing shipped a test that would have passed for the wrong reason (§0.4); that is precisely what this discipline exists to catch. A test whose honest answer is "none" is almost certainly overstated — say so.
+
+---
+
+## 14. Integration test instructions
+
+Separate files from §13. Environment per §9.5.
+
+**Part B — end-to-end DCR + authorize**
+- DCR with `["http://127.0.0.1:53821/oauth/callback"]` → 200, client row persists that exact URI.
+- Subsequent `/authorize` with that exact URI → consent renders, no `invalid_redirect_uri`.
+- Same pair for `http://[::1]:41234/callback`.
+- DCR with `http://localhost.evil.com:8080/oauth/callback` → 400.
+- DCR with `http://localhost:abc/oauth/callback` → 400, not 500.
+- Run across **all three** register routes. §6.4 must hold.
+
+**Part E** — per §9.
+
+---
+
+## 15. Production-readiness in context
+
+Evaluate at **increment** scope. Product production-readiness is established only by completed implementation, green tests, a committed SHA, verified configuration, deployment, and post-deployment checks. Whether this increment reaches deployment is decided by §0.1, not assumed either way.
+
+- **Scalability:** no new per-request I/O, no new DB access, no new network calls on the hot path. MCP servers remain stateless.
+- **GDPR / data retention:** no new personal data stored, read, or logged. Part D documents an existing retention-relevant behaviour; it does not change one.
+- **Logging rule:** never log raw tokens, token fragments, authorization codes, refresh tokens, or client secrets. Decoded user-bound claims must be redacted or minimized. Canonical configured resource identifiers *are* service identifiers, not user identifiers, and may be logged where operationally necessary.
+- **Latency:** Part B affects DCR only (infrequent, rate-limited). Part C is boot-time only. Neither touches tool-call latency.
+- **Cross-platform consistency:** demonstrated by §6.4 plus integration tests across all three register routes.
+- **Availability:** Part C is designed to hard-fail boot. Token semantics are unchanged, but a valid token against a service that will not start is still an outage. This is why §0.1 exists.
+
+---
+
+## 16. Pre-deploy gate
+
+**Complete this gate at implementation time so the increment is deploy-ready the moment §0.1's evidence rule says to ship.**
+
+Before committing:
+- Read `doc/OPERATIONS_PREDEPLOY.md` in full; execute every applicable item.
+- Read `doc/OPERATIONS_MIGRATIONS.md`; state explicitly whether any migration is required (none expected).
+- Check both for **additional pre-deploy tasks** beyond the obvious checklist and report what you found.
+- Run the full unit and integration suites, not only new tests. Report the delta against `doc/testing_baseline_2026-07-04.md`.
+
+No `WIDGET_VERSION` bump is required — no widget code is touched. Confirm in your report.
+
+---
+
+## 17. Definition of done — report requirements
+
+In this order:
+
+1. **Commit SHA** for the reviewed state. Uncommitted work is not done. A report without a SHA is rejected without review.
+2. Part A evidence: both SHAs, drift diff if any, production discovery documents, the §3 decision-rule outcome, the PyJWT `aud` comparison finding (step 6), JWKS fixture feasibility (step 7), **the production log check result with explicit attribution uncertainty (step 8)**, the SQL supplied for step 9, and Render rollout behaviour (step 10).
+3. Per part: what changed, in which files, and which briefing requirement it satisfies.
+4. Per test: what bug would still pass it (§13).
+5. Part E results, split by layer (§9.1 / §9.2) and by server (§9.3), with decoded token claims and the **full six-row issuance matrix**. State the rejection **layer** for every rejection, never just the status code. Confirm the PG marker is `strict=True`.
+6. Part D findings, with exact quoted stale strings and locations.
+7. Test isolation mechanism for the MindSort tests and how you verified it.
+8. Explicit §6.4 non-regression confirmation, item by item, **with the discovery-document diff attached as proof**.
+9. §6.6 interaction assessment as written into the ADR.
+10. Anything you could **not** verify, could not reach, or had to assume. Explicitly, not buried.
+11. Adjacent issues noticed but not fixed — flagged only.
+12. **Deployment evidence**, per §0.1: the log findings, which row of the evidence table applies, the seven-condition gate with each condition marked and evidenced, and the sequencing position of each part. **Do not include a deploy/hold recommendation** — present the evidence and stop.
+
+**If any requirement here is unclear, contradicts the codebase, or conflicts with a canonical document: stop and report. Do not resolve the ambiguity by choosing.**
