@@ -28,6 +28,24 @@ async def _register(client: AsyncClient, route: str, redirect_uri: str, name: st
     )
 
 
+@pytest.mark.asyncio
+async def test_rate_limiting_is_not_silently_hiding_this_suite(client: AsyncClient, fake_redis_client):
+    """
+    Bug this catches: SILENT GREEN. Every other test in this file skips on HTTP 429, so
+    if rate limiting fired consistently the suite would report success having verified
+    nothing at all. This canary deliberately does NOT skip: if a plain valid registration
+    cannot get through, the suite fails loudly instead of passing vacuously.
+    """
+    response = await _register(
+        client, "/oauth/mindsort/register", EPHEMERAL_LOOPBACK, "PartB-RateLimitCanary"
+    )
+    assert response.status_code != 429, (
+        "registration is being rate limited — every other test in this file skips on "
+        "429, so their green result would be meaningless"
+    )
+    assert response.status_code == 200, f"{response.status_code}: {response.text[:300]}"
+
+
 # ============================================================================
 # DCR acceptance — the defect Part B fixes
 # ============================================================================
@@ -123,9 +141,14 @@ async def test_registered_loopback_uri_is_accepted_at_authorize(client: AsyncCli
     _normalize_redirect_uri could not see it: they tested normalization in isolation,
     not the endpoint's set-membership against client.redirect_uris.
 
-    The assertion is specifically the ABSENCE of invalid_redirect_uri. A 401/302 here is
-    fine — it means auth or consent, i.e. the redirect URI was accepted and the flow
-    moved on. A 400 carrying invalid_redirect_uri is the failure being guarded against.
+    ASSERTS 200 + the rendered consent page, NOT the absence of an error string.
+    An earlier version asserted `"invalid_redirect_uri" not in body` — which could never
+    fail: that string appears only in authorize.py's structured LOG (:520, :535), while
+    the HTTP bodies are "Invalid redirect_uri format" (:525) and "redirect_uri not
+    registered for this client" (:539). The test would have gone green through exactly
+    the divergence it exists to detect. 200 + consent HTML is unambiguous: the client was
+    just registered with clarity.write, the requested scope is a subset, and PKCE is
+    S256, so nothing else returns 200 here.
     """
     reg = await _register(client, "/oauth/mindsort/register", EPHEMERAL_LOOPBACK, "PartB-Authz")
     if reg.status_code == 429:
@@ -146,11 +169,12 @@ async def test_registered_loopback_uri_is_accepted_at_authorize(client: AsyncCli
         },
     )
 
-    assert response.status_code != 500, response.text
-    body = response.text
-    assert "invalid_redirect_uri" not in body, (
+    assert response.status_code == 200, (
         f"loopback URI accepted at DCR was rejected at authorize "
-        f"({response.status_code}): {body[:400]}"
+        f"({response.status_code}): {response.text[:400]}"
+    )
+    assert "Authorize MindSort AI" in response.text, (
+        "expected the rendered consent page; got a 200 without it"
     )
 
 
