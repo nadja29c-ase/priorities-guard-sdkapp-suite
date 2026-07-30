@@ -5,6 +5,92 @@ Validates client registration requests per RFC 7591.
 """
 
 from typing import List
+from urllib.parse import urlsplit
+
+# RFC 8252 loopback redirect support for native/local MCP clients.
+#
+# Loopback IP literals with ephemeral ports are the sanctioned native-app pattern
+# (RFC 8252). "localhost" is NOT endorsed by RFC 8252 §8.3 — it explicitly prefers IP
+# literals because name resolution can be redirected — but the MCP specification and
+# Anthropic's documented callbacks use it, so it is accepted under the same narrow
+# restrictions as an interoperability requirement.
+#
+# IPv6 ::1 is DELIBERATELY EXCLUDED, not overlooked.
+# authorize.py::_normalize_redirect_uri strips the port with
+# `parsed.netloc.lower().split(":")[0]`, which is IPv4-only: for "[::1]:41234" it
+# yields "[", so the ::1 entry in its localhost tuple is unreachable and the URI is
+# rejected with "Invalid redirect_uri format". Accepting ::1 here would let a client
+# REGISTER a redirect URI that can never complete an authorization — a worse failure
+# than rejecting it, because it surfaces later and looks like something else.
+# Fixing the authorize-side host parsing is the correct long-term resolution, but that
+# function is shared with the ChatGPT authorize path on two published apps, so it is
+# filed as backlog rather than changed here. Verified 2026-07-30: of every URI this
+# validator accepts, "[::1]" was the only one authorize rejects.
+#
+# Matching operates on the PARSED url, never on the raw string. The .port attribute
+# raising on a malformed port is handled explicitly below.
+_LOOPBACK_HOSTS: frozenset[str] = frozenset({"localhost", "127.0.0.1"})
+
+# Callback paths accepted on loopback. Exact match only.
+_LOOPBACK_PATHS: frozenset[str] = frozenset({
+    "/oauth/callback",
+    "/oauth/callback/debug",
+    "/callback",
+})
+
+
+def _is_loopback_redirect_uri(uri: str) -> bool:
+    """
+    True only for a narrowly-constrained RFC 8252 style loopback redirect URI.
+
+    ALL of the following must hold:
+      - scheme is exactly http (https loopback is rejected — not the native-app pattern)
+      - parsed hostname is exactly one of localhost / 127.0.0.1 (see _LOOPBACK_HOSTS
+        for why ::1 is excluded)
+      - port is any valid port, or absent; port 0 is rejected
+      - path exactly matches an approved callback path
+      - no query, no fragment, no userinfo
+
+    Returns False (never raises) for malformed input, so a bad DCR request produces a
+    clean 400 rather than a 500.
+    """
+    try:
+        parts = urlsplit(uri)
+    except ValueError:
+        return False
+
+    if parts.scheme != "http":
+        return False
+
+    # hostname is the parser's normalized form: lowercased, and for IPv6 the brackets
+    # of "http://[::1]:41234/callback" are stripped — comparing against "[::1]" would
+    # silently reject every IPv6 loopback.
+    hostname = parts.hostname
+    if hostname is None or hostname not in _LOOPBACK_HOSTS:
+        return False
+
+    # Accessing .port raises ValueError on a non-numeric or out-of-range port
+    # (":abc", ":99999"). Catch it here so it becomes a rejection, not a 500.
+    try:
+        port = parts.port
+    except ValueError:
+        return False
+
+    # Port 0 is rejected. Compared against None explicitly: `not port` would conflate
+    # port 0 with "port absent".
+    if port is not None and port == 0:
+        return False
+
+    if parts.path not in _LOOPBACK_PATHS:
+        return False
+
+    if parts.query or parts.fragment:
+        return False
+
+    if parts.username is not None or parts.password is not None:
+        return False
+
+    return True
 
 
 def validate_redirect_uris(
@@ -19,7 +105,15 @@ def validate_redirect_uris(
     - When allowlist is provided, URIs must match an allowlist entry
     - Entries ending with "/" are prefix matches (for dynamic callback IDs)
     - Other entries are exact string matches
+    - RFC 8252 loopback URIs are additionally accepted on any port, under the narrow
+      constraints in _is_loopback_redirect_uri (Claude Code / MCP Inspector bind an
+      ephemeral port, so a fixed-port allowlist entry cannot serve them)
     - When allowlist is None (legacy mode), only HTTPS check is performed
+
+    NOTE — this is the DCR layer, answering "may anyone register this URI?". It is a
+    platform allowlist and is deliberately NOT the exact-match layer. Authorization-time
+    matching against the specific client's own registered URIs stays exact
+    (authorize.py:528-532) and is untouched by this function.
 
     Args:
         redirect_uris: List of redirect URIs to validate
@@ -50,6 +144,12 @@ def validate_redirect_uris(
         # Entries ending with "/" are prefix matches (e.g., connector/oauth/)
         # All other entries are exact string matches
         def _is_allowed(uri: str) -> bool:
+            # RFC 8252 loopback: accepted on any port, independent of the allowlist.
+            # Additive — every non-loopback URI still takes the allowlist path below
+            # with its semantics unchanged.
+            if _is_loopback_redirect_uri(uri):
+                return True
+
             for allowed in allowed_uris:
                 if allowed.endswith("/"):
                     # Prefix match for entries like "https://chatgpt.com/connector/oauth/"
