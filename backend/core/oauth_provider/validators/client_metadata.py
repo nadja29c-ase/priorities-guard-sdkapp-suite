@@ -5,7 +5,7 @@ Validates client registration requests per RFC 7591.
 """
 
 from typing import List
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 # RFC 8252 loopback redirect support for native/local MCP clients.
 #
@@ -57,6 +57,32 @@ def _is_loopback_redirect_uri(uri: str) -> bool:
     try:
         parts = urlsplit(uri)
     except ValueError:
+        return False
+
+    # VALIDATE THE STRING THAT GETS STORED, NOT A CLEANED COPY OF IT.
+    # urlsplit follows WHATWG and silently strips ASCII tab/CR/LF from anywhere in the
+    # URL, plus leading/trailing whitespace. register_client.py persists the RAW
+    # redirect_uris, so without this check we would validate string A and store string
+    # B — e.g. "http://local\thost:53821/oauth/callback" validates as localhost.
+    #
+    # Not a redirect-hijack vector: stripping only REMOVES characters, so it cannot turn
+    # evil.com into localhost, and every downstream layer (urlsplit, authorize's
+    # _normalize_redirect_uri, WHATWG browsers) strips identically — so DCR and
+    # authorize still agree. It is a validate/persist integrity defect: any future
+    # consumer of client.redirect_uris that does NOT strip identically inherits the
+    # divergence.
+    #
+    # Round-trip rather than blacklisting specific characters: it closes the class.
+    # Verified against every accepted URI in the §6.3 contract, including
+    # "http://LOCALHOST:6274/oauth/callback" (urlunsplit preserves netloc case) and
+    # "http://localhost:/oauth/callback" (empty port) — zero false positives.
+    #
+    # Deliberately scoped to the loopback branch. Non-loopback entries are already immune
+    # because they are exact string matches — a tab-injected https://claude.ai/... simply
+    # fails equality. Keeping it here preserves §6.4 and §10 by construction. The
+    # allowlist PREFIX rule has the same defect and is pre-existing: backlog item 15,
+    # ChatGPT path, two published apps — not touched here.
+    if urlunsplit(parts) != uri:
         return False
 
     if parts.scheme != "http":

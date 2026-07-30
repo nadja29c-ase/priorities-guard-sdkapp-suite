@@ -139,6 +139,46 @@ def test_port_zero_is_not_conflated_with_absent_port():
     assert _is_loopback_redirect_uri("http://localhost:0/callback") is False
 
 
+@pytest.mark.parametrize("uri", [
+    " http://localhost:53821/oauth/callback",       # leading space
+    "\thttp://localhost:53821/oauth/callback",      # leading tab
+    "http://localhost:53821/oauth/callback\n",      # trailing newline
+    "http://localhost:53821/oauth/callback\r\n",    # trailing CRLF
+    "http://local\thost:53821/oauth/callback",      # tab inside the hostname
+    "http://localhost\t:53821/oauth/callback",      # tab before the port
+    "http://localhost:53821/oauth/call\tback",      # tab inside the path
+])
+def test_whitespace_and_control_characters_rejected(uri):
+    """
+    Bug this catches: VALIDATING A DIFFERENT STRING THAN THE ONE PERSISTED. urlsplit
+    follows WHATWG and silently strips ASCII tab/CR/LF from anywhere in the URL, plus
+    surrounding whitespace, while register_client.py stores the RAW redirect_uris. So
+    "http://local\\thost:53821/oauth/callback" validated as localhost and was then
+    stored with the tab intact.
+
+    Not a redirect-hijack vector — stripping only removes characters, so it cannot turn
+    evil.com into localhost, and authorize strips identically so the two layers still
+    agree. It is a validate/persist integrity defect: any future consumer of
+    client.redirect_uris that does not strip identically inherits the divergence.
+
+    Closed by round-trip (urlunsplit(urlsplit(uri)) == uri) rather than by blacklisting
+    characters, so the whole class is covered rather than the seven cases listed here.
+    """
+    assert _accepts(uri) is False
+    assert _is_loopback_redirect_uri(uri) is False
+
+
+def test_round_trip_does_not_reject_legitimate_uris():
+    """
+    Bug this catches: the round-trip guard producing FALSE POSITIVES that break
+    legitimate registrations. The two rows most at risk are uppercase host (urlunsplit
+    preserves netloc case while .hostname lowercases) and the empty port — both must
+    still round-trip identically.
+    """
+    for uri in ACCEPTED + ["http://localhost:/oauth/callback"]:
+        assert _accepts(uri), f"round-trip guard wrongly rejected {uri!r}"
+
+
 def test_ipv6_loopback_is_excluded_deliberately():
     """
     Bug this catches: re-adding ::1 to the DCR loopback rule. authorize.py's
@@ -155,6 +195,30 @@ def test_ipv6_loopback_is_excluded_deliberately():
 # ============================================================================
 # Non-regression — §6.4 and §13
 # ============================================================================
+
+def test_effective_settings_allowlist_matches_the_constant(monkeypatch):
+    """
+    Bug this catches: build_allowed_redirect_uris (config.py) no longer sourcing the
+    production allowlist from _CHATGPT_REDIRECT_URIS. Every other test in this file
+    reads the CONSTANT; if the validator field stopped being built from it, they would
+    all stay green while the effective allowlist drifted. This is the only test that
+    instantiates Settings() and asserts the EFFECTIVE field.
+
+    ENV=production matters: in dev, build_allowed_redirect_uris appends extra localhost
+    entries and the equality would fail for the wrong reason.
+    """
+    monkeypatch.setenv("ENV", "production")
+    monkeypatch.setenv("INTERNAL_API_SECRET", "test-secret-not-a-real-credential")
+    monkeypatch.setenv("OAUTH_ISSUER", "https://www.priority-guard.com")
+
+    effective = Settings().OAUTH_ALLOWED_REDIRECT_URIS
+
+    assert list(effective) == list(Settings._CHATGPT_REDIRECT_URIS), (
+        "settings.OAUTH_ALLOWED_REDIRECT_URIS no longer equals _CHATGPT_REDIRECT_URIS "
+        "in production ENV — the constant the rest of this file asserts against is no "
+        "longer the effective allowlist"
+    )
+
 
 def test_production_allowlist_is_unchanged():
     """
