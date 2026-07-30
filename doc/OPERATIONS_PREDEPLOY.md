@@ -74,12 +74,54 @@ alembic heads | wc -l | grep -q "^1$" && echo "OK: Single head" || echo "ERROR: 
 
 To verify production schema matches migrations:
 
+> **⚠️ These commands will FAIL by default.** As of 2026-07-30 the production
+> database `priority-guardian-db` has an EMPTY external allow list — there is no
+> standing external access, by design (it previously allowed `0.0.0.0/0`, i.e. the
+> whole internet). See "Database External Access" below before running either command.
+
 ```bash
 # Dump production schema
 pg_dump --schema-only "$PRODUCTION_DATABASE_URL" > /tmp/prod_schema.sql
 
 # Compare against expected (use psql introspection queries)
 psql "$PRODUCTION_DATABASE_URL" -c "\d+ pg_priorities"
+```
+
+### Database External Access (allow list)
+
+**Default state: EMPTY.** `priority-guardian-db` accepts NO external connections.
+Changed 2026-07-30 from `0.0.0.0/0`.
+
+What still works without any allow-list entry:
+- **All Render services** — backend, Celery worker, and every MCP server connect over
+  Render's internal network, which the allow list does not govern. Verified by OAuth
+  token issue/refresh (a DB read+write) and Celery Beat jobs continuing after the change.
+
+What does NOT work without an entry:
+- `pg_dump` / `psql` from a local machine (the commands above).
+- **The Render MCP `query_render_postgres` tool.** It connects via the EXTERNAL endpoint
+  (`dpg-…frankfurt-postgres.render.com`), so agent-run diagnostic queries are blocked too.
+  Do not assume otherwise: `pg_stat_activity.client_addr` shows Render's proxy address
+  (private `10.x`) for external clients, so it CANNOT be used to tell internal from
+  external. That inference was made and was wrong.
+
+To run a manual dump or query:
+1. Add your current public IP as a `/32` in the Render dashboard →
+   `https://dashboard.render.com/d/dpg-d4o3dnumcj7s738u0img-a` → Access Control.
+2. Do the work.
+3. **Remove the entry.** Do not leave it — home IPs rotate, and a stale entry points at
+   whoever inherits the address.
+
+Never restore `0.0.0.0/0`. The database holds personal data (board contents, thoughts)
+under GDPR; a standing internet-wide entry means any credential leak or future Postgres
+CVE is exploitable from anywhere rather than from nowhere.
+
+Verifying the app after any allow-list change (external SQL will be unavailable, so
+check the app instead — `/health` is `{"status":"ok"}` and does NOT touch the DB):
+```bash
+# Real DB round-trip: look for oauth.token.success with old_jti -> new_jti rotation,
+# and Celery Beat cleanup jobs. Zero connection errors = services still reach Postgres.
+# Render dashboard → service → Logs, or the Render MCP list_logs tool.
 ```
 
 ### OAuth Discovery Sanity Check
