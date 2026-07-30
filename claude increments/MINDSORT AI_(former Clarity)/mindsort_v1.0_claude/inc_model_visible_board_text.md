@@ -150,9 +150,13 @@ Deploy. Fresh Claude conversation with a saved multi-item board; ask to recluste
 - an OVER-BUDGET board does NOT present a usable partial board and the model does NOT proceed to a whole-board recluster.
 Record each observation.
 
-## KNOWN ISSUES — deferred, NOT fixed (logged 2026-07-28, round-4 Codex review)
-Both are real, both are adapter-only (in scope), both deliberately deferred behind the
-production DB `ipAllowList` exposure. Neither is fixed at `afeffa6`. Fix before deploy.
+## RESOLVED — round-4 defects, fixed in `c7ba402` (2026-07-30)
+Both were logged as deferred behind the production DB `ipAllowList` work, then fixed.
+A THIRD instance of the same class was found while fixing them (the
+no-guidance/no-projection pass-through also returned content verbatim) and fixed in the
+same commit. The adapter now holds both invariants on ALL THREE content exit paths:
+everything emitted is escaped and bounded, and any incompleteness fails closed.
+Original descriptions, kept for the record:
 1. **Early-return escape gap** — `adapt_tool_result` returns early when
    `structuredContent is None` (`response_adapter_dupl.py:~494`) and passes
    `result.content` through VERBATIM, bypassing the escape-and-bound invariant.
