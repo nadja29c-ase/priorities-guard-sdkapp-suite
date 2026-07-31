@@ -1,10 +1,11 @@
 # OAuth 2.1 — Hard Requirements
 
-**Version:** 1.2
+**Version:** 1.3
 **Date:** 2026-07-31
 **Scope:** Priority Guardian OAuth provider (Authorization Server requirements for ChatGPT and Claude inbound flows)
 
 **Changelog:**
+- v1.3 (2026-07-31): **Added §12a — Resource/Audience Binding at Issuance**, the requirement this document did not previously state. Its absence mattered: Part E measured a deviation the document had no requirement to measure it against, and §11 had nothing to point at. Recorded with the deviation itself, quantified by the six-row issuance matrix rather than asserted. Also corrected §7's TLS table, which listed only `/oauth/pg/revoke` — `revoke.py:28-30` mounts `focused`, `pg` and `mindsort`, and all three answer 422 (not 404) in production, so it was a table omission rather than a missing endpoint.
 - v1.2 (2026-07-31): **§3 split into its two validation layers** (DCR allowlist vs authorize exact-match). The previous unqualified exact-match rule read as though the ChatGPT prefix entry were non-compliant; it is not, and "fixing" it would break DCR for every new connector on two published apps. Added the RFC 8252 loopback rule (any port, narrow constraints, round-trip requirement) and recorded why IPv6 `::1` is deliberately excluded. **§13 qualified per layer** — "immediately invalidate" is true at the AS and false at the resource server, which is JWKS-only until `exp` + leeway; cross-referenced to the new `ADR_006_token_revocation_semantics.md`.
   *Note the pattern:* this is the **second** correction to this document for the same class of defect — v1.1 removed a stale "one discovery document" claim, and v1.2 removes two claims stated without naming the layer or platform they govern. A document titled *Hard Requirements* invites unqualified absolutes; both corrections were needed because a true-in-one-layer statement was written as true everywhere. Check for that shape before adding a rule here.
 - v1.1 (2026-07-02): Fixed issuer URL (api→www), clarified scope to include Claude, replaced "one discovery document" claim with ADR_005 cross-reference. See ADR_005 for platform-specific discovery shapes. Added /oauth/mindsort/* endpoints to §7 TLS table. Clarified §9 to document Claude's PRM + S256 requirements.
@@ -145,6 +146,8 @@ All endpoints must require HTTPS. No exceptions.
 | `/oauth/pg/authorize` | HTTPS |
 | `/oauth/pg/token` | HTTPS |
 | `/oauth/pg/revoke` | HTTPS |
+| `/oauth/mindsort/revoke` | HTTPS |
+| `/oauth/focused/revoke` | HTTPS (deprecated app; route still mounted) |
 | `/oauth/pg/jwks` | HTTPS |
 | `/oauth/pg/register` | HTTPS |
 | `/oauth/mindsort/authorize` | HTTPS |
@@ -230,6 +233,41 @@ Client must be validated at the token endpoint. Unknown `client_id` → `invalid
 - Every API call must validate the token's scope before execution
 - Requested scopes must be a subset of the client's registered scopes (validated at `/authorize`)
 - Over-privileged tokens are a security violation
+
+---
+
+### 12a. Resource / Audience Binding at Issuance
+
+**Requirement:** the Authorization Server must bind `aud` to a resource the client is
+entitled to request. A client must not be able to obtain a token whose audience belongs
+to an app it is not registered for.
+
+This is the issuance-side counterpart to §10 (`aud` validated at token verification) and
+§12 (scope ⊆ registered scopes). Without it, audience validation at the resource server
+is checking a value the client chose.
+
+> **⚠️ KNOWN DEVIATION — measured, not suspected (2026-07-31).**
+> `resource` is accepted from the client at `/authorize` and **never validated** against
+> the client's scopes, its app, or any allowlist — verified at committed SHA `0b05a69`
+> (`authorize.py:377` → `_normalize` at `:442` → written to the auth context at `:487`
+> and to the token at `:734`, with no check in between). `aud` is therefore
+> client-controlled.
+>
+> Measured empirically by the six-row issuance matrix in
+> `tests/integration/oauth_provider/test_audience_issuance_matrix.py`: **all six rows
+> mint, including both cross-binding directions.** A client registered only for
+> `clarity.write` obtains a token with `aud` = PG-Claude's resource URL, and symmetrically
+> in reverse. Neither `classify_scopes` nor the registered-scope check prevents this.
+>
+> **Current effect:** the cross-bound token is inert at both resource servers today — the
+> per-tool scope check rejects it at one, the audience check at the other. So there is no
+> live exploit. What is absent is *defence in depth*: scope is carrying alone a load that
+> audience was meant to share, which becomes exploitable if scopes ever overlap between
+> apps or a new app reuses one.
+>
+> Tracked as §11 of the Claude connector auth increment. See
+> `doc/ADR_006_token_revocation_semantics.md` → "Current isolation posture" for the
+> architectural statement.
 
 ---
 

@@ -46,7 +46,8 @@ Parts C, D and E are **released to independent evaluation.** Schedule them on th
 3. authorization-time exact matching is unchanged (§6.5)
 4. current production configuration and deployed SHA are captured first
 5. rollback is prepared and tested
-6. immediate post-deploy checks cover: PG-Claude OAuth end-to-end, both OpenAI callback forms, discovery output byte-identical, and service health on both affected services
+6. immediate post-deploy checks cover: PG-Claude OAuth end-to-end, both OpenAI callback forms, discovery output byte-identical, and service health on both affected services.
+   **Use the suite that already exists for this:** `pytest -m live tests/integration/oauth_discovery/ -v`. ADR_005 documents it as a mandatory pre-deploy/pre-submission gate and explains why unit tests are not a substitute — *"Unit tests catch code-shape regressions; live tests catch env-value regressions."* The byte-identity requirement in this condition is exactly what that suite proves, against the deployed environment rather than the repo.
 7. no unrelated changes are bundled into the deploy
 
 **Claude Code: gather the evidence, state which row applies, and fill in the seven-condition gate. Do not recommend deployment.** Present the evidence and let the operator decide. The deploy itself is Nadja's action, not yours.
@@ -335,6 +336,15 @@ Everything that is not a loopback host continues to use the existing allowlist s
 
 ### 6.4 Non-regression — a requirement to be proven, not a claim
 
+> **Why byte-identity, and where the instinct comes from.** ADR_005 states the Binding
+> Rule: *"Any change to a discovery module or its config requires reproducing the
+> affected platform's full live connect flow (delete-and-re-add the connector) before
+> merge."* It names 5854d50 as the incident that produced it — the repo was not the
+> source of truth for discovery, and the regression was invisible to the repo-side tests.
+> Part B touches no discovery module, so the Binding Rule does not fire here; but the
+> byte-identity requirement below is the same instinct applied to a change that *could*
+> have moved discovery output. Read ADR_005 before weakening either.
+
 Part B **does** change shared DCR validation. All three registration routes (`focused`, `pg`, `mindsort`) will accept additional loopback URIs. This is a deliberate, narrowly constrained widening of the shared authorization server — **not** a no-op, and not invisible to the ChatGPT path.
 
 Each must be demonstrated by test, not asserted:
@@ -369,6 +379,13 @@ Record this reasoning explicitly in the ADR. A reviewer will connect these dots,
 ---
 
 ## 7. Part C — Boot guard on MindSort-Claude audience config
+
+> **This is a pattern, not a one-off.** ADR_005 records the same failure class from the
+> other direction: a production env-value regression on `CLARITY_OAUTH_ISSUER_URL`, which
+> unit tests cannot catch because they exercise code shape rather than deployed values.
+> Env-value regressions are caught by two mechanisms only — boot guards like this one,
+> and the live discovery suite (`pytest -m live tests/integration/oauth_discovery/`).
+> Frame Part C as the audience-side member of that pair, not as an isolated hardening.
 
 **MindSort-Claude only. Do not touch `priority_guardian_claude/config.py` — see §11.**
 
@@ -429,7 +446,7 @@ Read during the review that produced this briefing: `revoke.py`, `revoke_service
 | `doc/OAuth_Hard_Requirements.md` §13 | "Must **immediately invalidate** the token on success" | **Unqualified.** True at the AS; false at the RS. Most misleading of the set, because the document is titled *Hard Requirements*. |
 | `doc/OAuth_Hard_Requirements.md` §3 | Silent on loopback ports; conflates DCR-allowlist and authorize-exact-match layers | **Imprecise.** The §0.2 trap. |
 | `revoke_service.py` docstring | "Cascade revocation per RFC 7009" | **Overclaim.** Access and refresh tokens share a row, so revoking either kills that grant. Independent authorization grants for the same user are untouched. Narrow the wording. |
-| `priority_guardian_claude/config.py`, `PG_ISSUER` comment | "provider uses aud=iss" | **Stale.** Enshrines the pre-RFC-9728 model and would mislead anyone tightening audience validation. Correct the comment only — no behaviour change (§11). |
+| ~~`priority_guardian_claude/config.py`, `PG_ISSUER` comment~~ | ~~"provider uses aud=iss"~~ | **MOVED TO §11 (2026-07-31).** This row conflicted with §4, which puts that file OUT OF SCOPE (*"PG-Claude gets no code change in this increment"*). A comment is not a behaviour change, but it is a file change, and §11 rewrites this exact area — correcting it now means touching the file twice for a change §11 makes anyway. Not lost: it is listed under §11's inputs below. |
 
 The detailed architecture was right. Individual summary statements drifted. **Correct the statements; do not rewrite the architecture.**
 
@@ -575,7 +592,43 @@ For MindSort tests, guarantee isolation (the existing `restore_mcp_auth_globals`
 - Treat as a **release gate for full RFC 9728 alignment**, scheduled immediately after the verdict, whichever way it lands.
 - Anthropic performs periodic post-admission reviews. Admission does not close this.
 
+**Empirical answer from Part E Layer 2 (2026-07-31) — §11 no longer needs to assume:**
+
+The six-row issuance matrix ran the real flow (DCR → authorize → consent → token) against
+the isolated test database. **All six rows mint, including both cross-binding rows:**
+
+| # | Route | Scope | `resource` | Result | resulting `aud` |
+|---|---|---|---|---|---|
+| 1 | `/oauth/pg` | `pg.access` | omitted | MINTED | issuer (Rule 5 fallback) |
+| 2 | `/oauth/mindsort` | `clarity.write` | omitted | MINTED | issuer (Rule 5 fallback) |
+| 3 | `/oauth/pg` | `pg.access` | PG resource | MINTED | PG resource |
+| 4 | `/oauth/mindsort` | `clarity.write` | MindSort resource | MINTED | MindSort resource |
+| **5** | `/oauth/mindsort` | `clarity.write` | **PG resource** | **MINTED** | **PG resource** |
+| **6** | `/oauth/pg` | `pg.access` | **MindSort resource** | **MINTED** | **MindSort resource** |
+
+Neither `classify_scopes` nor the registered-scope check prevents cross-binding upstream.
+The AS mints the token; **only the resource server's per-tool scope check** stands between
+a cross-bound token and cross-app access. Behaviour is **symmetric**, so §11's fix can be
+uniform rather than per-app.
+
+**SEVERITY — read before scheduling.** The cross-bound token is **inert at both servers
+today**: at PG-Claude the audience passes but the scope check rejects; at MindSort-Claude
+the audience itself fails. There is **no live exploit**. The finding is that audience
+contributes *nothing* to isolation, so scope carries a load alone that was meant to be
+shared — which becomes exploitable only if scopes ever overlap between apps or a future
+app reuses one. Row 1 has live reach (issuer-`aud` + `pg.access` is accepted by PG-Claude
+today), but `sub` is the requesting user's own, so it grants access to data that user
+already consented to — an open-DCR property, not the audience defect. **§11 is
+architectural hardening on a fragile single control, not incident response.**
+
+**Scope limits of the matrix:** it establishes what the AS mints *given this code*, not
+what production is configured to do. `login_hint` is passed on every row (production
+ChatGPT never sends it), so every row creates a fresh user and the **returning-user /
+existing-consent path is never exercised** — if that path handles `resource` differently,
+the matrix would not show it.
+
 **Inputs the escalation increment needs:**
+- **The `PG_ISSUER` comment correction** moved here from §8.2 — *"provider uses aud=iss"* is stale, enshrines the pre-RFC-9728 model, and would mislead anyone tightening audience validation. Correct it as part of §11's own diff, since §11 rewrites this area.
 - **Step 1: run the `aud`-shape query** written but not executed under §5 step 9. Requires temporarily re-opening production database access (closed 2026-07-30, empty IP allowlist) and closing it again afterwards. **Rollout planning input, not a resolution.**
 - §9.2 full issuance matrix — establishes reachability
 - Effective PG-Claude Render env values
@@ -604,6 +657,8 @@ For MindSort tests, guarantee isolation (the existing `restore_mcp_auth_globals`
 17. **Refresh-token revocation — two dead tests, not a coverage gap.** `test_revoked_token_cannot_be_used` and `test_refresh_rotation_marks_old_revoked` (`test_increment_13_unit.py`) fail on stale mocks before reaching the behaviour they name. **Redundant coverage exists and is green:** `test_token_service_locking.py:57` asserts the `revoked` filter appears in the emitted SQL of `exchange_refresh_token`, and `:60` asserts the original token is revoked after exchange, plus integration coverage in `test_oauth_revocation_integration.py`. This is dead-test cleanup, not an untested security behaviour. Out of §4 scope (another increment's file).
 18. **Unit tests are database-dependent via an autouse fixture.** `tests/conftest.py:148`'s autouse `cleanup_db` pulls in `setup_test_database`, so every test under `tests/unit/` requires a reachable `postgresql://localhost/priority_guardian_test`. §13 specifies "no database" for unit tests; the harness violates it repo-wide and predates this increment. Consequences: the unit suite fails entirely on a machine without Postgres running, and the unit/integration distinction in this repo is nominal. Harness-wide fix — out of §4 scope.
 19. **A write from a deleted user's still-valid token raises an unhandled FK `IntegrityError`**, most likely surfacing as a 500. The resource server performs no user-existence check and `validate_user_id_header` validates UUID shape only, so the request reaches the backend and fails on the `core_users` foreign key. Narrow window (≤ `exp` + leeway after a manual deletion), rare trigger, but an ungraceful failure on a documented path.
+22. **No localhost-in-production guard on `CLARITY_CLAUDE_MCP_SERVER_URL`.** `OAUTH_ISSUER_BASE` has one; `MCP_SERVER_URL` does not, and it defaults to `http://localhost:8003`. Part C's audience guard now catches this **transitively** — a localhost-derived `MCP_RESOURCE_URL` cannot byte-match a production audience, so boot fails — but that is a side effect of a different control, not a designed one. If the audience guard is ever relaxed or removed, the gap reopens silently. Add a direct guard alongside the existing localhost check.
+23. **`doc/OAuth_Hard_Requirements.md` §7 TLS table lists only `/oauth/pg/revoke`.** All three revoke routes are in fact mounted and functional — `revoke.py:28-30` registers `focused`, `pg` and `mindsort`, and all three return 422 (not 404) on a malformed body in production. So this is a **table omission, not a missing endpoint**. Add the other two rows.
 21. **No reachable path revokes OAuth tokens at the AS — verified 2026-07-30.** `POST /oauth/pg/revoke` is mounted and functional (returns 422 on a malformed body, not 404), but production logs show **zero `oauth.revoke.*` events across the full 30-day retention window** — filter validated, since the same mechanism returns `oauth.register.success` and `oauth.token.success`. Neither Claude nor ChatGPT calls it on connector removal. The in-app disconnect tool does not revoke AS tokens either: `priority_guardian/routers/offboarding_router.py` states *"PG OAuth session tokens are NOT revoked here. Disconnect only revokes Google Calendar access."* So `revoked`, `exchange_refresh_token`'s `revoked == False` filter, and the whole revocation service are live code with **no live caller** — token expiry is the only mechanism that ends access. Consequence to assess (legal, not engineering): the published policy §4 says *"withdraw consent at any time by disconnecting the app"*, which does not describe what disconnect does at the authorization server.
 20. **No user-initiated account-deletion code path — and the promised email route may be unfulfillable.** The published privacy policy routes Art. 17 erasure to `support@priority-guard.com`, fulfilled manually. `priority_guardian/routers/offboarding_router.py` exposes `/disconnect` only, and its docstring records the omission: *"No DELETE /delete-data yet (later increment)."* The single automated `DELETE FROM core_users` (`jobs/retention_cleanup.py`) is six-month inactivity cleanup, not erasure.
 
