@@ -7,7 +7,8 @@ JWKS fetching, and OAuth client configuration.
 Uses /oauth/pg/* endpoints (shared Priority Guardian OAuth provider).
 
 # ============================================================================
-# Required Render Environment Variables (for future deployment)
+# Required Render Environment Variables — MindSort-Claude is LIVE IN PRODUCTION
+# (framing corrected 2026-07-31: this previously read "for future deployment")
 # ============================================================================
 # CLARITY_CLAUDE_MCP_SERVER_URL   = <deployed Claude origin, NO /mcp>   e.g. https://mindsort-mcp.priority-guard.com
 # CLARITY_CLAUDE_MCP_RESOURCE_URL = <origin>/mcp                        (derives automatically; only set if overriding)
@@ -148,9 +149,25 @@ CLARITY_ISSUER = get_env(
 # env var to the resource URL, gated on confirming no outstanding issuer-audience tokens
 # would break (§5 step 9 SQL, scoped to MindSort clients). Tracked as §11, whose scope is
 # now BOTH Claude servers rather than PG-Claude alone.
-# Both Clarity and Focused MCP servers accept the same audience since they share
-# a single OAuth provider - scope-based access control (clarity.write vs focused.write)
-# determines which MCP server accepts which tokens.
+#
+# ---------------------------------------------------------------------------
+# HISTORICAL — the paragraph below is retained for deployment history and is NO
+# LONGER THE DESIGN INTENT. Corrected 2026-07-31. See
+# doc/ADR_006_token_revocation_semantics.md and §11.
+#
+#   "Both Clarity and Focused MCP servers accept the same audience since they
+#    share a single OAuth provider - scope-based access control (clarity.write
+#    vs focused.write) determines which MCP server accepts which tokens."
+#
+# WHY IT IS NO LONGER THE INTENT:
+#   1. It describes isolation resting on SCOPE rather than on resource-scoped
+#      AUDIENCE binding. ADR_006 records that as the current posture and the
+#      thing being closed, not as the target state — and the correction block
+#      immediately above confirms it is exactly what production does today.
+#   2. It is Focused-era. Focused is deprecated and its Render service suspended.
+#   3. Accepting a shared audience is the §11 defect, now confirmed live on BOTH
+#      Claude servers rather than PG-Claude alone.
+# ---------------------------------------------------------------------------
 CLARITY_AUDIENCE = get_env(
     "CLARITY_CLAUDE_AUDIENCE",
     default="https://www.priority-guard.com"
