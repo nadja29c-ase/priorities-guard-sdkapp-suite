@@ -5,6 +5,55 @@
 
 ---
 
+> ## ⚠️ AMENDMENT — 2026-07-31, after the env values were supplied
+>
+> The deployed MindSort-Claude value is
+> **`CLARITY_CLAUDE_AUDIENCE = https://www.priority-guard.com`** — the **issuer**, not
+> the resource URL. **Not byte-equal.** §3's decision rule fires:
+>
+> 1. **Part C must NOT merge.** It stays on `partc-mindsort-audience-guard`.
+> 2. This is a **confirmed live isolation defect**, not a latent one.
+> 3. **§11's scope doubles** — it covers **both** Claude resource servers, not PG-Claude
+>    alone.
+>
+> **Two statements elsewhere in this report are now wrong and are withdrawn:**
+>
+> - Any characterisation of MindSort-Claude as sound under its production config. It is
+>   not. It accepts issuer-audience tokens in production today, exactly as PG-Claude does.
+> - Part E Layer 1's fixtures were described as "production-shaped". They are
+>   **target-shaped** — they model the posture §11 will establish. The docstring's caveat
+>   ("does NOT establish what production is configured to do") was honest and remains
+>   correct; the *label* was wrong. Corrected in the test file.
+>
+> **The artifact that caused this** was a code comment in
+> `mcp_server/mindsort_claude/config.py` asserting *"PRODUCTION SHAPE (verified
+> 2026-07-04) … production env compensation is correct."* It was false, written as
+> verified fact, and believed — it framed MindSort as the safe server for this entire
+> increment. Corrected. **This is the fourth artifact in this increment found to state a
+> confident falsehood** (after `OAuth_Hard_Requirements` §3 and §13, the stale
+> `thought_items` data-shape claim, and the stale repo copy of the privacy policy), and
+> it is the one that did the most damage, because it was the most specific: a named date
+> and a claimed verification.
+>
+> **Severity is unchanged from the Layer 2 matrix: no live exploit.** The issuer is an
+> *extra* accepted audience, not the one real tokens carry; production logs show every
+> claude.ai flow carrying the resource-shaped `resource`; and the per-tool scope check
+> still separates the apps. What is confirmed is that the **audience layer is dead in
+> production on both servers**.
+>
+> **The branch isolation was load-bearing, not cautious.** MindSort-Claude auto-deploys
+> on commit to `main`, and Part C's guard hard-fails boot on exactly this mismatch.
+> Merging would have taken it down within about a minute — the §0.1(a) scenario,
+> confirmed rather than hypothetical.
+>
+> **Unblock sequence** (MindSort-Claude is not under review; this does not touch PG's
+> window): run §5 step 9's SQL scoped to MindSort clients → if zero outstanding
+> issuer-audience tokens, set the Render var to the resource URL → verify `/mcp` still
+> serves → then merge `partc`. **The step-9 query has moved from "§11 rollout planning"
+> to the gating item for Part C.**
+
+---
+
 ## 1. Commit SHAs for the reviewed state
 
 **`main` — Parts A, B, D, E and documentation. Tip: `21f615a`**

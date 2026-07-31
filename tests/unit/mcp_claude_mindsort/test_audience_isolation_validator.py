@@ -27,14 +27,27 @@ MindSort-Claude look like it has PG-Claude's §11 defect, and would make PG-Clau
 characterization test pass for the wrong reason. That is a vacuous ENVIRONMENT rather
 than a vacuous assertion, and the false finding would propagate into §11's scoping.
 
-So these tests set PRODUCTION-SHAPED audience config EXPLICITLY, by patching the module
-globals the validator actually reads. They therefore establish:
+So these tests set TARGET-SHAPED audience config EXPLICITLY, by patching the module
+globals the validator actually reads.
 
-    what each validator ACCEPTS GIVEN A CONFIG          <-- yes, this is proven
-    what production is CONFIGURED to do                 <-- NO. Nobody has read the
-                                                            deployed values (§3, §11)
+⚠️ THESE ARE TARGET-SHAPED, NOT PRODUCTION-SHAPED. An earlier revision called them
+"production-shaped", which was wrong and is now known to be wrong. The deployed value,
+read 2026-07-31:
 
-Keep those claims apart when reporting.
+    CLARITY_CLAUDE_AUDIENCE = https://www.priority-guard.com    <-- the ISSUER
+    PG_CLAUDE_AUDIENCE      = (per §11; PG's default is likewise issuer-shaped)
+
+So in PRODUCTION, MindSort-Claude accepts issuer-audience tokens — the very case the
+MindSort tests below assert is rejected. They assert the DESIRED posture under the config
+§11 will establish, not the current one.
+
+These tests therefore establish:
+
+    what each validator ACCEPTS GIVEN THIS CONFIG        <-- proven
+    what production currently does                       <-- NO. Production accepts the
+                                                             issuer on BOTH Claude servers
+
+Keep those claims apart when reporting. The gap between them is §11's entire scope.
 
 Patching, not re-importing: `mcp_auth_dupl` rebinds `clarity.mcp_auth` globals at import
 time (REBOUND_GLOBALS), so a reimport contaminates later tests. Isolation is via explicit
@@ -164,7 +177,10 @@ def restore_mcp_auth_globals():
 @pytest.fixture
 def mindsort_validator(restore_mcp_auth_globals):
     """
-    MindSort-Claude's validator with PRODUCTION-SHAPED audience config.
+    MindSort-Claude's validator with TARGET-SHAPED audience config.
+
+    NOT production-shaped: production sets CLARITY_CLAUDE_AUDIENCE to the ISSUER
+    (read 2026-07-31). This fixture models the posture §11 will establish.
 
     Depends on restore_mcp_auth_globals (§9.4) because clarity.mcp_auth's globals are
     rebindable by the shim; the fixture restores them after each test.
@@ -184,7 +200,9 @@ def mindsort_validator(restore_mcp_auth_globals):
 @pytest.fixture
 def pg_validator():
     """
-    PG-Claude's validator with PRODUCTION-SHAPED audience config.
+    PG-Claude's validator with TARGET-SHAPED audience config.
+
+    NOT production-shaped, for the same reason as the MindSort fixture.
 
     No restore fixture needed: mcp_auth_dupl is a standalone module with its own JWKS
     cache and validate_jwt. It carries no rebinding hazard (§9.4 says so explicitly —
@@ -256,8 +274,9 @@ async def test_mindsort_rejects_wrong_audience_at_the_audience_layer(
     at the audience layer, and because validate_jwt raises before returning claims, it
     also proves scope enforcement was never reached.
 
-    The issuer case is the one that matters most: it is exactly PG-Claude's §11 defect,
-    and this asserts MindSort does not share it under production-shaped config.
+    The issuer case is the one that matters most — and its status changed on 2026-07-31.
+    MindSort-Claude's DEPLOYED audience is the issuer, so in production it DOES share
+    PG-Claude's §11 defect. This test asserts the TARGET posture, not the current one.
     """
     token = _make_token(aud=wrong_aud, scope="clarity.write")
 

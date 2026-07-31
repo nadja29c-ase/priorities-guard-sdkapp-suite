@@ -119,12 +119,35 @@ CLARITY_ISSUER = get_env(
 # RATIONALE: The audience identifies the intended recipient of the token.
 # This MUST match what the OAuth provider (/oauth/pg/token) issues in the 'aud' claim.
 #
-# PRODUCTION SHAPE (verified 2026-07-04): In production, CLARITY_CLAUDE_AUDIENCE is set
-# to the resource URL (https://mindsort-mcp.priority-guard.com/mcp), NOT the issuer URL.
-# The dev default below (issuer-shaped) differs from production. This is intentional:
-# local testing uses shared backend discovery which may not match per-app resource URLs.
+# ⚠️ FALSE CLAIM CORRECTED 2026-07-31. This block previously read:
 #
-# The code default should NOT be changed — production env compensation is correct.
+#   "PRODUCTION SHAPE (verified 2026-07-04): In production, CLARITY_CLAUDE_AUDIENCE is
+#    set to the resource URL (https://mindsort-mcp.priority-guard.com/mcp), NOT the
+#    issuer URL. ... The code default should NOT be changed — production env
+#    compensation is correct."
+#
+# PRODUCTION DOES NOT COMPENSATE. The deployed Render value read 2026-07-31 is:
+#
+#   CLARITY_CLAUDE_AUDIENCE = https://www.priority-guard.com      <-- the ISSUER
+#   MCP_RESOURCE_URL        = https://mindsort-mcp.priority-guard.com/mcp
+#
+# Not byte-equal. So MindSort-Claude accepts issuer-audience tokens in production TODAY —
+# the same defect previously attributed only to PG-Claude. The comment asserted a
+# verification that was wrong, and because it was written as verified fact it was
+# believed: it shaped an entire increment, framing MindSort's exposure as a latent hazard
+# and PG-Claude's as the real one. Both Claude resource servers have it, live.
+#
+# SEVERITY, so this is not over-read: there is no live exploit. valid_audiences is
+# [MCP_RESOURCE_URL, MCP_SERVER_URL, CLARITY_AUDIENCE] — the issuer is an EXTRA accepted
+# audience, not the one real tokens carry. Production logs show every claude.ai flow
+# carrying resource=https://mindsort-mcp.priority-guard.com/mcp, matching the first
+# entry. Cross-app separation still holds because the per-tool SCOPE check separates the
+# apps. What is dead is the audience layer, on both servers.
+#
+# DO NOT "fix" this by changing the code default. The correct fix is to set the Render
+# env var to the resource URL, gated on confirming no outstanding issuer-audience tokens
+# would break (§5 step 9 SQL, scoped to MindSort clients). Tracked as §11, whose scope is
+# now BOTH Claude servers rather than PG-Claude alone.
 # Both Clarity and Focused MCP servers accept the same audience since they share
 # a single OAuth provider - scope-based access control (clarity.write vs focused.write)
 # determines which MCP server accepts which tokens.

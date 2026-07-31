@@ -572,7 +572,52 @@ For MindSort tests, guarantee isolation (the existing `restore_mcp_auth_globals`
 
 ---
 
-## 11. Escalation — PG-Claude resource-audience isolation defect
+## 11. Escalation — resource-audience isolation defect on BOTH Claude servers
+
+> **⚠️ SCOPE DOUBLED, 2026-07-31.** This section was written as "the PG-Claude
+> resource-audience defect". The deployed MindSort-Claude env value was read on
+> 2026-07-31 and is:
+>
+> ```
+> CLARITY_CLAUDE_AUDIENCE = https://www.priority-guard.com          <-- the ISSUER
+> MCP_RESOURCE_URL        = https://mindsort-mcp.priority-guard.com/mcp
+> ```
+>
+> **Not byte-equal.** §3's decision rule fires: **Part C must not merge**, and this is a
+> **confirmed live isolation defect**, not a latent one. MindSort-Claude accepts
+> issuer-audience tokens in production today, exactly as PG-Claude does.
+>
+> The framing that made this invisible was a code comment asserting
+> *"PRODUCTION SHAPE (verified 2026-07-04): ... CLARITY_CLAUDE_AUDIENCE is set to the
+> resource URL ... production env compensation is correct."* It was false, it was written
+> as verified fact, and it was believed — it shaped this entire increment into treating
+> MindSort as sound and PG-Claude as the problem. Corrected in
+> `mcp_server/mindsort_claude/config.py`.
+>
+> **Severity is unchanged from the Layer 2 matrix: no live exploit.** `valid_audiences`
+> is `[MCP_RESOURCE_URL, MCP_SERVER_URL, CLARITY_AUDIENCE]`, so the issuer is an EXTRA
+> accepted audience rather than the one real tokens carry; production logs show every
+> claude.ai flow carrying the resource-shaped `resource`, and the per-tool scope check
+> still separates the apps. What is confirmed is that **the audience layer is dead in
+> production on both servers**, not one.
+>
+> **Sequence to unblock Part C** (MindSort-Claude is not under review, so this does not
+> touch PG's window):
+> 1. Run the §5 step 9 SQL **scoped to MindSort clients** — `resource IS NULL` counts the
+>    tokens that would break. Requires briefly re-opening the DB allow list.
+> 2. If zero outstanding issuer-audience tokens → set
+>    `CLARITY_CLAUDE_AUDIENCE = https://mindsort-mcp.priority-guard.com/mcp` in Render.
+> 3. Verify MindSort-Claude still serves `/mcp` after the redeploy.
+> 4. **Then** merge `partc` — the guard now passes and permanently prevents regression.
+>
+> That step-9 query has moved from "§11 rollout planning input" to **the gating item for
+> Part C**.
+>
+> **The branch isolation was load-bearing, not cautious.** MindSort-Claude has
+> `autoDeploy: yes` on commit to `main`, and Part C's guard hard-fails boot when
+> audience ≠ resource URL. Merging `partc` would have taken MindSort-Claude down within
+> roughly a minute. That is precisely the scenario §0.1(a) exists for, now confirmed
+> rather than hypothetical.
 
 **Not ordinary backlog. Record as a named, prioritized follow-up increment.**
 
