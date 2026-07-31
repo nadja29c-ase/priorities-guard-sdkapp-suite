@@ -1,10 +1,12 @@
 # OAuth 2.1 — Hard Requirements
 
-**Version:** 1.1
-**Date:** 2026-07-02
+**Version:** 1.2
+**Date:** 2026-07-31
 **Scope:** Priority Guardian OAuth provider (Authorization Server requirements for ChatGPT and Claude inbound flows)
 
 **Changelog:**
+- v1.2 (2026-07-31): **§3 split into its two validation layers** (DCR allowlist vs authorize exact-match). The previous unqualified exact-match rule read as though the ChatGPT prefix entry were non-compliant; it is not, and "fixing" it would break DCR for every new connector on two published apps. Added the RFC 8252 loopback rule (any port, narrow constraints, round-trip requirement) and recorded why IPv6 `::1` is deliberately excluded. **§13 qualified per layer** — "immediately invalidate" is true at the AS and false at the resource server, which is JWKS-only until `exp` + leeway; cross-referenced to the new `ADR_006_token_revocation_semantics.md`.
+  *Note the pattern:* this is the **second** correction to this document for the same class of defect — v1.1 removed a stale "one discovery document" claim, and v1.2 removes two claims stated without naming the layer or platform they govern. A document titled *Hard Requirements* invites unqualified absolutes; both corrections were needed because a true-in-one-layer statement was written as true everywhere. Check for that shape before adding a rule here.
 - v1.1 (2026-07-02): Fixed issuer URL (api→www), clarified scope to include Claude, replaced "one discovery document" claim with ADR_005 cross-reference. See ADR_005 for platform-specific discovery shapes. Added /oauth/mindsort/* endpoints to §7 TLS table. Clarified §9 to document Claude's PRM + S256 requirements.
 
 ---
@@ -65,14 +67,35 @@ PKCE (RFC 7636) is required for every authorization code flow, including confide
 
 ### 3. Redirect URI Validation
 
-**Rules:**
-- Exact string match against pre-registered URIs — no wildcards, no prefix matching, no domain-only matching
+> **⚠️ TWO DISTINCT LAYERS. Read this before changing any redirect-URI code.**
+> Earlier revisions of this section stated the exact-match rule without naming the layer
+> it governs, which reads as though the DCR allowlist were non-compliant. It is not.
+>
+> | Layer | Question answered | Where | Mechanism | Does the exact-match rule apply? |
+> |---|---|---|---|---|
+> | **DCR** (registration) | May *anyone* register this URI? | `validators/client_metadata.py::validate_redirect_uris` | Platform allowlist, incl. a **prefix** entry for ChatGPT's dynamic connector callback, plus the RFC 8252 loopback rule below | **No** |
+> | **Authorize** | Does this URI exactly match what *this specific client* registered? | `authorize.py` — `normalized_redirect not in normalized_registered` | Exact match against that client's own DB rows | **Yes — and the code is already exact** |
+>
+> **Do not "fix" the ChatGPT prefix rule.** `https://chatgpt.com/connector/oauth/` is a
+> prefix entry because OpenAI mints a dynamic callback identifier per connector.
+> Removing it breaks Dynamic Client Registration for every new connector on two
+> published, live apps. A controlled prefix rule at DCR is fully compatible with exact
+> authorization-time matching — they answer different questions.
+
+**Rules — authorize layer (the exact-match layer):**
+- Exact string match against the URIs *this client* pre-registered — no wildcards, no prefix matching, no domain-only matching
 - Query strings and fragments must not be present in the registered URI
 - Scheme and host: case-insensitive (normalize to lowercase)
 - Path: case-sensitive, preserved exactly
-- HTTPS required for all non-localhost URIs
 - Redirect URIs must be validated **before** any redirect is issued (open redirect prevention)
 - If `client_id` or `redirect_uri` is invalid → return HTTP 400, do not redirect
+
+**Rules — DCR layer (the allowlist layer):**
+- HTTPS required for all non-loopback URIs
+- Platform callbacks are allowlisted centrally; the ChatGPT connector entry is a prefix match by design (see the warning above)
+- **RFC 8252 loopback URIs are accepted on ANY port.** Native MCP clients (Claude Code, MCP Inspector) bind an *ephemeral* port, so a fixed-port allowlist entry cannot serve them — a reviewer testing the production server on any other port fails at registration. Accepted only when **all** hold: scheme exactly `http`; parsed hostname exactly `localhost` or `127.0.0.1`; port any valid value or absent, with port `0` rejected; path one of `/oauth/callback`, `/oauth/callback/debug`, `/callback`; no query, no fragment, no userinfo; and the raw string must survive a parse/re-serialise round trip unchanged
+- **IPv6 `::1` is deliberately excluded at DCR.** `authorize.py::_normalize_redirect_uri` strips ports with `netloc.split(":")[0]`, which is IPv4-only and yields `"["` for `[::1]:41234`. Accepting `::1` at DCR would let a client register a redirect URI that can never complete an authorization — a worse failure than rejecting it, because it surfaces later wearing a different error
+- Matching must operate on the **parsed** URL, never on raw string comparison, and a malformed port must produce a clean 400 — never a 500
 
 ---
 
@@ -216,8 +239,24 @@ A `/revoke` endpoint must be implemented:
 
 - Accepts `access_token` or `refresh_token`
 - Always returns HTTP 200 (per RFC 7009 — do not leak token existence)
-- Must immediately invalidate the token on success
 - Rate limited
+
+**"Immediately invalidate" is TRUE AT THE AUTHORIZATION SERVER ONLY. Qualify it per layer:**
+
+| Layer | Effect of revocation | When |
+|---|---|---|
+| **Authorization Server** | The row is marked revoked. `exchange_refresh_token` filters `revoked == False` in its WHERE clause, so no *new* access token can be minted for that grant | **Immediate** |
+| **Resource Server** (every MCP server) | **None.** Validation is JWKS-only and stateless: no revocation lookup, no introspection, no database access. An already-issued access token continues to be accepted | **Until `exp` + leeway** |
+
+This is a deliberate architectural decision, not a gap — see
+`doc/ADR_006_token_revocation_semantics.md` for the rationale, the residual acceptance
+window (stated as a formula, since both inputs are env-derived), the four distinguished
+states, and the revisit triggers.
+
+**Do not describe revocation as "immediate" anywhere in this document or in
+architecture artifacts without naming the layer.** This section is titled *Hard
+Requirements*, which makes an unqualified claim here more misleading than the same
+sentence elsewhere.
 
 ---
 
