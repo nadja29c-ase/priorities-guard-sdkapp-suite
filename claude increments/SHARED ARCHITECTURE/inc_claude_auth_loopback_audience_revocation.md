@@ -614,6 +614,35 @@ For MindSort tests, guarantee isolation (the existing `restore_mcp_auth_globals`
 > 3. Verify MindSort-Claude still serves `/mcp` after the redeploy.
 > 4. **Then** merge `partc` — the guard now passes and permanently prevents regression.
 >
+> **✅ STEP 1'S GATING QUERY HAS RUN — 2026-07-31. Result: ZERO issuer-shaped tokens.**
+>
+> Across all **5,621** rows in `oauth_access_tokens`: `resource IS NULL` count = **0**,
+> live such grants = **0**, `refreshable_but_no_expiry` = **0** on every row. Verified
+> both by direct `WHERE resource IS NULL` count and by the grouped query, whose row
+> counts sum to 5,621 — so the grouping covered every row.
+>
+> | App | `resource_value` | live grants | tightening breaks? |
+> |---|---|---|---|
+> | MindSort-**Claude** | `mindsort-mcp.priority-guard.com/mcp` | 9 | **No** — this is exactly the target value |
+> | MindSort-OpenAI | `mindsort.priority-guard.com/mcp` | 3 | No — different server, own config |
+> | PG-OpenAI | `pg.priority-guard.com/mcp` | 94 | No — different server, own config |
+> | PG-**Claude** | `mcp.priority-guard.com/mcp` | 2 | **No** — this is exactly the target value |
+> | PG-Claude (pre-custom-domain) | `priority-guardian-claude-mcp.onrender.com/mcp` | 0 | No — expired naturally, none live since 2026-05-27 |
+>
+> **Both `CLARITY_CLAUDE_AUDIENCE` and `PG_CLAUDE_AUDIENCE` are safe to tighten.**
+>
+> **And the finding is stronger than "safe".** The Rule 5 fallback exists in code, and
+> Part E proved the AS will mint it — but **no client has ever triggered it**. The issuer
+> entry in `valid_audiences` has never matched a real token. It is not a compatibility
+> fallback being retired; it is **dead weight accepting an audience nothing legitimate
+> carries**. The `onrender.com` row proves it survived even a domain migration unused.
+> So §11 is not "accept a compatibility risk to gain isolation" — it is "remove a control
+> that was never doing anything."
+>
+> Read `resource_value`, not the shape label, exactly as required: the MindSort-OpenAI
+> and PG-OpenAI rows are non-NULL and *would* have been mislabelled "safe" by shape alone,
+> while belonging to servers this change does not touch.
+
 > **⚠️ STEP 2 IS NOT THE COMPLETE FIX — do not mistake it for done.** After setting the
 > env var, `valid_audiences = [MCP_RESOURCE_URL, MCP_SERVER_URL, CLARITY_AUDIENCE]`
 > becomes `[resource, origin, resource]`. **The bare origin is still accepted.** The full

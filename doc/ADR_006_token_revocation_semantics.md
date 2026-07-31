@@ -143,6 +143,22 @@ Two facts combine to produce this:
 
 Audience validation still rejects arbitrary third-party audiences. What is absent is **app-specific resource binding**. The per-tool scope check is what actually prevents cross-app access today.
 
+**Measured 2026-07-31 — the issuer entry has never matched a real token.** A query over all **5,621** rows in `oauth_access_tokens` found **zero** with `resource IS NULL` — the Rule 5 issuer fallback (`token_service.py:174-176`) exists in code, and Part E proved the AS will mint it, but **no client has ever triggered it**. Every platform sends `resource`. All five observed values are app resource URLs:
+
+| App | `resource` | rows | live grants |
+|---|---|---|---|
+| MindSort-Claude | `mindsort-mcp.priority-guard.com/mcp` | 57 | 9 |
+| MindSort-OpenAI | `mindsort.priority-guard.com/mcp` | 313 | 3 |
+| PG-OpenAI | `pg.priority-guard.com/mcp` | 5117 | 94 |
+| PG-Claude | `mcp.priority-guard.com/mcp` | 124 | 2 |
+| PG-Claude (pre-custom-domain) | `priority-guardian-claude-mcp.onrender.com/mcp` | 10 | 0 |
+
+Row counts sum to 5,621, matching the independent total — so the grouping covered every row.
+
+**This changes the characterisation.** The issuer audience is not a compatibility fallback awaiting a safe moment to retire; it is **dead weight accepting an audience nothing legitimate carries**. The last row sharpens it: PG-Claude's advertised resource *changed* at the custom-domain migration, and those grants show **0 live** — they expired naturally rather than surviving on the issuer fallback. **Even a domain migration never exercised it.**
+
+Consequence for §11: tightening the audience env vars costs nothing operationally. The decision is not "accept a compatibility risk to gain isolation" but "remove a control that was never doing anything."
+
 This is why the audience-isolation work must test the full `(resource, scope)` issuance matrix rather than two illustrative cases — the question is not whether the validator rejects a wrong audience, but which combinations the AS will mint in the first place. Addressed by the PG-Claude resource-audience increment (§11 of the increment briefing).
 
 ---
