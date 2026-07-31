@@ -100,28 +100,58 @@ class _SigningKey:
         self.key = key
 
 
+# Must match mcp_auth_dupl.REBOUND_GLOBALS exactly — same hardcoded tuple as
+# test_scaffold.py's _FIXTURE_REBOUND_GLOBALS, and for the same reason.
+#
+# WHY HARDCODED RATHER THAN IMPORTED — the obvious fix does not work, and the next
+# person will try it: importing REBOUND_GLOBALS from mcp_auth_dupl would execute the
+# shim, which rebinds clarity.mcp_auth's globals at import time. That is precisely the
+# contamination this fixture exists to undo, so the import would cause the problem it is
+# meant to guard against. A hardcoded copy is forced, not lazy.
+#
+# Drift between this tuple and the shim is guarded by
+# test_scaffold.py::test_fixture_rebound_list_matches_shim, which reads the shim in a
+# SUBPROCESS to avoid the same pollution. (That test is currently red for an unrelated
+# pre-existing reason — it ast.literal_eval's subprocess stdout that structlog pollutes.
+# Backlog 16 territory; noted so the guard's state is not assumed.)
+_FIXTURE_REBOUND_GLOBALS = (
+    "CLARITY_JWKS_URL",
+    "CLARITY_ISSUER",
+    "CLARITY_AUDIENCE",
+    "MCP_SERVER_URL",
+    "MCP_RESOURCE_URL",
+    "TOOL_SCOPES",
+    "TOKEN_EXPIRY_GRACE_SECONDS",
+    "JWKS_CACHE_TTL_SECONDS",
+    "JWKS_MAX_STALE_SECONDS",
+    "JWKS_FETCH_TIMEOUT_SECONDS",
+)
+
+
 @pytest.fixture
 def restore_mcp_auth_globals():
     """
     Restore clarity.mcp_auth globals after each test (§9.4 isolation requirement).
 
     `mcp_server/mindsort_claude/mcp_auth_dupl.py` is a SHIM that rebinds module-level
-    globals in `mcp_server.clarity.mcp_auth` at import time (REBOUND_GLOBALS). Any
-    session importing it — directly or transitively via server_dupl — contaminates later
-    tests that import clarity.mcp_auth.
+    globals in `mcp_server.clarity.mcp_auth` at import time. Any session importing it —
+    directly or transitively via server_dupl — contaminates later tests that import
+    clarity.mcp_auth.
 
-    Defined locally rather than shared: the same fixture exists in test_scaffold.py and
-    test_discovery.py, but fixtures do not cross module boundaries without a conftest,
-    and adding one would restructure files this increment is not scoped to touch (§10).
+    Saves ALL TEN globals the shim mutates, matching test_scaffold.py and
+    test_discovery.py. An earlier revision saved only the four this file patches, which
+    was harmless in isolation but wrong in principle: the fixture carries the documented
+    name, so it implies the documented coverage. Adding a patch of TOOL_SCOPES later
+    would have silently escaped it.
 
-    This file patches explicitly with patch.object, which already restores on exit; this
-    fixture is belt-and-braces against a patch target being added later without one.
+    Defined locally rather than shared: fixtures do not cross module boundaries without a
+    conftest, and adding one would restructure files outside this increment's scope (§10).
     """
     import mcp_server.clarity.mcp_auth as m
 
     saved = {
         name: getattr(m, name)
-        for name in ("MCP_RESOURCE_URL", "MCP_SERVER_URL", "CLARITY_AUDIENCE", "CLARITY_ISSUER")
+        for name in _FIXTURE_REBOUND_GLOBALS
         if hasattr(m, name)
     }
     try:
