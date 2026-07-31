@@ -22,7 +22,7 @@ Every claim in this ADR carries its basis. Claims verified only against the work
 
 | Claim | Basis |
 |---|---|
-| Resource servers perform no revocation lookup | **Source-verified**, two independent reads. `mcp_server/clarity/mcp_auth.py` and `mcp_server/priority_guardian_claude/mcp_auth_dupl.py` contain zero matches for `revoked`, `revocation`, `introspect`, `token_version` or `session_check`. Neither imports SQLAlchemy, a session, models or persistence. The only network client in either is `httpx`, used solely to construct the JWKS fetch client (`clarity:66`, `pg_claude:83`) |
+| Resource servers perform no revocation lookup | **Source-verified across all three auth modules.** `mcp_server/clarity/mcp_auth.py` (serving MindSort-OpenAI, and MindSort-Claude transitively via its rebinding shim), `mcp_server/priority_guardian_claude/mcp_auth_dupl.py`, and `mcp_server/priority_guardian/mcp_auth.py` each contain zero matches for `revoked`, `revocation`, `introspect`, `token_version` or `session_check`. None imports SQLAlchemy, a session, models or persistence. The only network client in any of them is `httpx`, used solely to construct the JWKS fetch client (`clarity:66`, `pg_claude:83`) |
 | The refresh grant honours revocation | **Source-verified + test-verified.** `services/token_service.py:332-342` filters `OAuthAccessToken.revoked == False` inside the WHERE clause and returns `("invalid_grant", "Invalid refresh token")` on no rows. Covered by `tests/unit/core/test_token_service_locking.py:57` (asserts the filter is present in the emitted SQL) and `:60` (asserts the original token is revoked after exchange) |
 | `leeway` extends acceptance past `exp` | **Empirically demonstrated** against the pinned PyJWT 2.10.1. Signed RS256 tokens expired 0s/10s/29s ago are ACCEPTED with `leeway=30`; 31s/60s/120s are rejected with `ExpiredSignatureError`. The boundary is located, not assumed |
 | PyJWT compares `aud` by exact string equality | **Empirically demonstrated** on 2.10.1. Trailing-slash, case and prefix variants are all rejected; list membership is a set intersection of exact strings |
@@ -74,7 +74,7 @@ Stated as a formula deliberately. Both inputs are environment-derived:
 
 **Neither has been verified against production.** If Render overrides either, the real window differs and this number is silently wrong. Pin them before quoting 60m30s as fact.
 
-Within that window, a token revoked at the AS — or belonging to a deleted account — is still accepted by both resource servers.
+Within that window, a token revoked at the AS — or belonging to a deleted account — is still accepted by the resource servers.
 
 ### Retention and acceptance are different properties
 
@@ -92,9 +92,11 @@ This ADR describes the **acceptance window**, which additionally includes the re
 
 The published policy's Art. 17 route is `support@priority-guard.com`, fulfilled **manually by the operator**, at which point CASCADE removes all dependent records. Manual fulfilment within 30 days is what the policy promises and what GDPR permits; recording it here is an accountability position under Art. 5(2), not an admission of a gap.
 
+**The hard part of that manual process is identification, not deletion.** `CoreUser` holds only `id` (an internal UUID), `chatgpt_user_id`, `openai_subject` and `created_at` — **no email address and no name**, by design. Both pseudonymous columns are ChatGPT-specific, so for a Claude-originated user they are NULL. An erasure request arriving by email therefore carries no field the operator can match against a row. Resolving that — an in-product deletion action, or a documented identification procedure — is the substance of backlog 20.
+
 Do not confuse this with MindSort's `delete_my_data` tool, which deletes a **board**, not an account.
 
-**Cascade coverage is complete across both apps** (source-verified):
+**Cascade coverage is complete for all FK-linked tables** (source-verified). One user-linked table is deliberately exempt — see the final row:
 
 | Table | Path to user | `ondelete` |
 |---|---|---|
@@ -104,6 +106,7 @@ Do not confuse this with MindSort's `delete_my_data` tool, which deletes a **boa
 | `pg_goals` | via `priority_id` → `pg_priorities.id` | CASCADE (transitive) |
 | `pg_deliverables` | via `priority_id` → `pg_priorities.id` | CASCADE (transitive) |
 | `oauth_access_tokens`, `oauth_authorization_codes`, `oauth_sessions`, `core_connections`, `core_consents` | direct `user_id` | CASCADE |
+| **`core_tool_audit_log`** | direct `user_id`, **intentionally NOT a foreign key** | **No cascade — survives deletion by design.** The column comment states it: *"Intentionally NOT a FK - audit logs must persist after user deletion for GDPR compliance."* Retained per the published policy's separate audit-log retention (90 days) |
 
 **The credential outlives the data.** After deletion:
 
@@ -164,9 +167,6 @@ Rejected for now: shrinking the window trades refresh traffic against residual e
 
 ### Redis-backed revocation list checked by the resource servers
 Rejected: reintroduces shared state and an availability dependency, in exchange for closing a window that no current trigger even reaches — nothing calls `/revoke` today. **Revisit if** `/revoke` is wired to platform disconnect (backlog 21) *and* the residual window is then judged too long.
-
-### Server-side reconciliation at the resource server
-Not applicable to revocation, but noted because it is the shape of the fix for a related class of problem: having the server reload authoritative state rather than trusting what the client presents.
 
 ---
 
