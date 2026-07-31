@@ -70,19 +70,40 @@ async def test_ephemeral_loopback_registers_on_every_route(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_registered_loopback_uri_is_persisted_verbatim(client: AsyncClient, fake_redis_client):
+async def test_registered_loopback_uri_is_persisted_verbatim(
+    client: AsyncClient, fake_redis_client, async_session
+):
     """
     Bug this catches: the validate/persist divergence closed in b8d4bef. The validator
     sees urlsplit's stripped view while register_client persists the RAW string, so a
-    URI could be validated as one thing and stored as another. Asserting the round trip
-    at the endpoint proves the stored value is the value that was checked.
+    URI could be validated as one thing and STORED as another.
+
+    Reads the DATABASE ROW, not the endpoint response. An earlier version asserted
+    response.json()["redirect_uris"], which is built from register_request.redirect_uris
+    (register_client.py:195) — i.e. an echo of what was just sent. That assertion was
+    near-tautological: a mutation storing [u.strip() for u in redirect_uris] in
+    create_oauth_client would have passed it while corrupting the stored value.
     """
     response = await _register(client, "/oauth/mindsort/register", EPHEMERAL_LOOPBACK, "PartB-Verbatim")
     if response.status_code == 429:
         pytest.skip("Rate limited")
 
     assert response.status_code == 200
-    assert response.json()["redirect_uris"] == [EPHEMERAL_LOOPBACK]
+    client_id = response.json()["client_id"]
+
+    from sqlalchemy import select
+    from backend.core.models import CoreConnection
+
+    row = (
+        await async_session.execute(
+            select(CoreConnection).where(CoreConnection.client_id == client_id)
+        )
+    ).scalar_one()
+
+    assert row.redirect_uris == [EPHEMERAL_LOOPBACK], (
+        f"stored redirect_uris {row.redirect_uris!r} differs from the validated string "
+        f"{[EPHEMERAL_LOOPBACK]!r}"
+    )
 
 
 # ============================================================================
