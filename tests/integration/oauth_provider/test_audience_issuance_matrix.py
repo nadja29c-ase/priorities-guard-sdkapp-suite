@@ -253,17 +253,25 @@ async def test_row5_mindsort_scope_with_pg_resource(client, fake_redis_client):
     """
     r = await _mint(client, "/oauth/mindsort", scope="clarity.write", resource=PG_RESOURCE)
 
-    if r["minted"]:
-        assert r["aud"] == PG_RESOURCE, (
-            "cross-bound token minted but with an unexpected audience — the matrix's "
-            f"assumption about resource->aud propagation is wrong: aud={r['aud']!r}"
-        )
-        assert "pg.access" not in (r["scope"] or ""), (
-            "ESCALATION: the AS granted PG scope to a client that registered for "
-            f"clarity.write. scope={r['scope']!r}"
-        )
-    else:
-        assert r["stopped_at"] in ("authorize", "consent", "token", "register"), r
+    # PINNED, not merely recorded. An earlier revision made these assertions conditional
+    # on r["minted"], so the test would still pass once §11 makes the AS refuse
+    # cross-binding — it documented the behaviour without defending it. Layer 1 uses
+    # xfail(strict=True) precisely so a behaviour change fails loudly; this is the same
+    # class of finding and gets the same treatment. §11 changes this deliberately, so
+    # updating this test is part of §11's definition of done.
+    assert r["minted"], (
+        "The AS refused to mint a cross-bound token. If §11 has landed this is EXPECTED "
+        "— update this test as part of its definition of done. If §11 has NOT landed, "
+        f"the isolation posture changed silently. stopped_at={r['stopped_at']}: {r['detail']}"
+    )
+    assert r["aud"] == PG_RESOURCE, (
+        "cross-bound token minted but with an unexpected audience — the matrix's "
+        f"assumption about resource->aud propagation is wrong: aud={r['aud']!r}"
+    )
+    assert "pg.access" not in (r["scope"] or ""), (
+        "ESCALATION: the AS granted PG scope to a client that registered for "
+        f"clarity.write. scope={r['scope']!r}"
+    )
 
 
 @pytest.mark.asyncio
@@ -277,16 +285,19 @@ async def test_row6_pg_scope_with_mindsort_resource(client, fake_redis_client):
     """
     r = await _mint(client, "/oauth/pg", scope="pg.access", resource=MINDSORT_RESOURCE)
 
-    if r["minted"]:
-        assert r["aud"] == MINDSORT_RESOURCE, (
-            f"cross-bound token minted with unexpected audience: aud={r['aud']!r}"
-        )
-        assert "clarity.write" not in (r["scope"] or ""), (
-            "ESCALATION: the AS granted MindSort scope to a client that registered for "
-            f"pg.access. scope={r['scope']!r}"
-        )
-    else:
-        assert r["stopped_at"] in ("authorize", "consent", "token", "register"), r
+    # PINNED — see the note on row 5.
+    assert r["minted"], (
+        "The AS refused to mint a cross-bound token in the reverse direction. Expected "
+        "only if §11 has landed; otherwise the posture changed silently. "
+        f"stopped_at={r['stopped_at']}: {r['detail']}"
+    )
+    assert r["aud"] == MINDSORT_RESOURCE, (
+        f"cross-bound token minted with unexpected audience: aud={r['aud']!r}"
+    )
+    assert "clarity.write" not in (r["scope"] or ""), (
+        "ESCALATION: the AS granted MindSort scope to a client that registered for "
+        f"pg.access. scope={r['scope']!r}"
+    )
 
 
 # ===========================================================================
