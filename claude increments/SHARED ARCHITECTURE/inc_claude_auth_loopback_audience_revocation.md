@@ -603,12 +603,30 @@ For MindSort tests, guarantee isolation (the existing `restore_mcp_auth_globals`
 >
 > **Sequence to unblock Part C** (MindSort-Claude is not under review, so this does not
 > touch PG's window):
-> 1. Run the §5 step 9 SQL **scoped to MindSort clients** — `resource IS NULL` counts the
->    tokens that would break. Requires briefly re-opening the DB allow list.
-> 2. If zero outstanding issuer-audience tokens → set
+> 1. Run the §5 step 9 SQL **scoped per app** — `resource IS NULL` counts the grants that
+>    would break. Requires briefly re-opening the DB allow list, which is currently EMPTY,
+>    so the query cannot run until it is. Read `resource_value`, not the shape label:
+>    "safe" means **this app's own resource URL**, not merely non-NULL. A row carrying the
+>    *other* app's resource would also break, and Part E row 5 proved the AS mints exactly
+>    that shape.
+> 2. If zero outstanding issuer-audience grants → set
 >    `CLARITY_CLAUDE_AUDIENCE = https://mindsort-mcp.priority-guard.com/mcp` in Render.
 > 3. Verify MindSort-Claude still serves `/mcp` after the redeploy.
 > 4. **Then** merge `partc` — the guard now passes and permanently prevents regression.
+>
+> **⚠️ STEP 2 IS NOT THE COMPLETE FIX — do not mistake it for done.** After setting the
+> env var, `valid_audiences = [MCP_RESOURCE_URL, MCP_SERVER_URL, CLARITY_AUDIENCE]`
+> becomes `[resource, origin, resource]`. **The bare origin is still accepted.** The full
+> fix is three steps:
+>
+> | # | Change | Backlog |
+> |---|---|---|
+> | 1 | Set the audience env var to the resource URL | this section |
+> | 2 | Delete the now-redundant `CLARITY_AUDIENCE` / `PG_AUDIENCE` entry from `valid_audiences` (provably redundant once step 1 holds and Part C's guard enforces it) | **3** |
+> | 3 | Delete the `MCP_SERVER_URL` bare-origin entry | **10** |
+>
+> Step 1 alone leaves a second unnecessary audience accepted. Part C's guard enforces
+> step 1's *invariant*, which is what makes steps 2 and 3 safe to take.
 >
 > That step-9 query has moved from "§11 rollout planning input" to **the gating item for
 > Part C**.
