@@ -172,7 +172,7 @@ Read in full. If any is unreachable, unreadable, or contradicts the codebase, **
 - `doc/OPERATIONS_PRESUBMISSION.md`
 
 **Legal (Part D depends on it):**
-- `doc/legal/pg_privacy_policy_v3.1.md`
+- **The LIVE published policy at `https://www.fulfilling-productivity.com/pg-privacy-policy` is authoritative** — fetch it. `doc/legal/pg_privacy_policy_v3.1.md` in this repo is **stale by two versions** and describes the product as ChatGPT-only; reasoning from it produced a false finding during this increment. Treat the repo copy as historical, not canonical.
 
 ---
 
@@ -180,7 +180,11 @@ Read in full. If any is unreachable, unreadable, or contradicts the codebase, **
 
 You have no access to Render, the production database, or deployment state. **Do not silently work around this.**
 
-**Required from Nadja before Part C:**
+**Required from Nadja before Part C is DEPLOYED — not before it is written:**
+
+Part C is a config-module change plus tests that set env via `monkeypatch`. **Implementation needs no production values and is not blocked.** Write it, test it, commit it on a branch (MindSort-Claude auto-deploys on commit to `main` — §0.1(a)).
+
+These are needed only before merge/deploy:
 
 | Item | Source |
 |---|---|
@@ -189,9 +193,15 @@ You have no access to Render, the production database, or deployment state. **Do
 | Effective `CLARITY_CLAUDE_MCP_SERVER_URL` (MindSort-Claude) | Render dashboard |
 | Deployed commit SHA for the MindSort-Claude service | Render dashboard |
 
+Render's MCP exposes `update_environment_variables` (write) but no read, and `get_service` does not return env vars — so Claude Code cannot obtain these, and per §0.1(c) must not write them either.
+
 PG-Claude values are **not** required for this increment — see §11.
 
-**Decision rule:** if the supplied `CLARITY_CLAUDE_AUDIENCE` is **not byte-exactly equal** to the supplied `CLARITY_CLAUDE_MCP_RESOURCE_URL` — **STOP**. Do not add the guard. Do not fix it inline. Report it as a second confirmed isolation defect and fold it into §11's scope.
+**Decision rule — applies at deploy time, not at write time.** If the supplied `CLARITY_CLAUDE_AUDIENCE` is not byte-exactly equal to the supplied `CLARITY_CLAUDE_MCP_RESOURCE_URL`:
+
+1. That is a **confirmed live cross-app isolation defect**, not a latent one — report it as such and fold it into §11's scope.
+2. **Do not deploy the guard against the wrong value.** It will hard-fail boot and take MindSort-Claude down.
+3. Correct sequence: fix the env value → verify → then deploy the guard. The guard code is right either way; the configuration is what is wrong.
 
 **Required before any deploy:** the review verdict, the §0.1 sequencing, and Nadja's explicit confirmation per step.
 
@@ -277,8 +287,9 @@ The current validator is pure string comparison and never parses. Loopback match
 A URI is an acceptable loopback redirect **only if all** hold:
 
 - scheme is exactly `http`
-- **parsed hostname** is exactly one of `localhost`, `127.0.0.1`, `::1`
-  - **Hazard:** in `http://[::1]:41234/callback`, brackets are URI serialization syntax. Standard parsers expose the normalized hostname as `::1`, **without brackets**. Comparing against `[::1]` silently rejects all IPv6 loopback.
+- **parsed hostname** is exactly one of `localhost`, `127.0.0.1` — **IPv6 `::1` is deliberately excluded**
+  - **Why excluded (verified 2026-07-30):** `authorize.py::_normalize_redirect_uri` strips ports with `parsed.netloc.lower().split(":")[0]`, which is IPv4-only. On `[::1]:41234` that yields `"["`, so the `::1` entry in its own localhost tuple is unreachable dead code and the URI is rejected with `Invalid redirect_uri format`. Accepting `::1` at DCR would register a client that can never complete an authorize — worse than rejecting it outright, because the failure surfaces later wearing a different face. Fixing `_normalize_redirect_uri` is backlog item 13: it is shared with the ChatGPT authorize path on two published apps.
+  - **If anyone re-adds `::1`:** brackets are URI serialization syntax and parsers expose the hostname as `::1` **without** them, so comparing against `[::1]` silently rejects all IPv6 loopback. Both layers must be fixed together or neither.
   - Comparison is against the parser's normalized (lowercased) hostname. Exact match only — never suffix, prefix, or substring.
 - port may be any valid port, or absent
   - **Hazard:** accessing the parsed `.port` attribute **raises** on non-numeric or out-of-range values (`:abc`, `:99999`). An unhandled raise turns a malformed DCR request into a 500. It must produce a clean 400.
@@ -287,6 +298,7 @@ A URI is an acceptable loopback redirect **only if all** hold:
 - no query string
 - no fragment
 - no userinfo component
+- **the raw string must survive parsing unchanged.** `urlsplit` silently removes ASCII tab, CR and LF from *anywhere* in the URL and strips leading/trailing whitespace (WHATWG behaviour). Without this check the validator inspects one string while `register_client.py:141` persists a **different** one — `redirect_uris=register_request.redirect_uris` stores the raw input, unnormalized. Validating a string you do not store is a defect regardless of exploitability. Reject any URI whose raw form differs from what the parser sees. **Verify the chosen mechanism against every accept row in §6.3 before adopting it** — a round-trip comparison is more general than a character blacklist but carries false-positive risk.
 
 Everything that is not a loopback host continues to use the existing allowlist semantics **unchanged**.
 
@@ -298,7 +310,7 @@ Everything that is not a loopback host continues to use the existing allowlist s
 | `http://localhost:53821/oauth/callback` | accept |
 | `http://127.0.0.1:9999/oauth/callback/debug` | accept |
 | `http://localhost/callback` | accept |
-| `http://[::1]:41234/callback` | accept — hostname must parse to `::1` |
+| `http://[::1]:41234/callback` | **reject** — IPv6 loopback deliberately excluded; authorize cannot accept it (§6.2) |
 | `http://LOCALHOST:6274/oauth/callback` | accept — hostname normalizes to lowercase |
 | `https://claude.ai/api/mcp/auth_callback` | accept (unchanged) |
 | `https://chatgpt.com/connector/oauth/ABC123` | accept (unchanged, prefix rule preserved) |
@@ -315,6 +327,11 @@ Everything that is not a loopback host continues to use the existing allowlist s
 | `http://localhost:abc/oauth/callback` | **reject with 400, never 500** |
 | `http://localhost:99999/oauth/callback` | **reject with 400, never 500** |
 | `http://localhost:0/oauth/callback` | **reject** |
+| `" http://localhost:53821/oauth/callback"` (leading space) | **reject** — raw ≠ parsed |
+| `"http://localhost:53821/oauth/callback\n"` (trailing newline) | **reject** — raw ≠ parsed |
+| `"http://local\thost:53821/oauth/callback"` (embedded tab in host) | **reject** — raw ≠ parsed |
+| `"http://localhost\t:53821/oauth/callback"` | **reject** — raw ≠ parsed |
+| `"http://localhost:53821/oauth/call\tback"` (embedded tab in path) | **reject** — raw ≠ parsed |
 
 ### 6.4 Non-regression — a requirement to be proven, not a claim
 
@@ -333,7 +350,11 @@ Each must be demonstrated by test, not asserted:
 
 ### 6.5 Verify, do not assume
 
-`_normalize_redirect_uri` in `authorize.py` already permits `http` for `localhost`/`127.0.0.1`/`::1` and rejects query/fragment. Confirm from source that a loopback URI accepted at DCR then matches exactly at authorize. **Check whether it handles bracketed IPv6 netloc consistently with the DCR-side parsing.** If not, report the gap — do not fix it silently.
+**Executed 2026-07-30 — this clause did its job.** `_normalize_redirect_uri` permits `http` for `localhost`/`127.0.0.1` and rejects query/fragment, but its `::1` entry is unreachable (§6.2). Of the ten URIs the DCR rule would have accepted, `[::1]` was the only one authorize rejected. Resolution: `::1` removed from the DCR loopback rule rather than patching shared authorize code.
+
+**Keep permanent:** the verification harness now cross-checks **every** accepted DCR row against `_normalize_redirect_uri`, so any future DCR/authorize divergence fails immediately instead of becoming a registered client that can never authorize.
+
+Note two benign asymmetries the cross-check surfaces: `https://localhost:6274/...`, `/evil`, `:abc`, `:99999`, `:0` are rejected at DCR but would normalize at authorize. That direction is safe — DCR is the narrower gate and nothing reaches authorize without being registered first. Only the reverse (accepted at DCR, rejected at authorize) is a defect.
 
 Do not delete the existing dev-only additions in `build_allowed_redirect_uris`. If they become redundant, say so and leave them.
 
@@ -351,7 +372,7 @@ Record this reasoning explicitly in the ADR. A reviewer will connect these dots,
 
 **MindSort-Claude only. Do not touch `priority_guardian_claude/config.py` — see §11.**
 
-Gated on §3.
+**Not blocked on production values.** Write and test it now, on a branch — MindSort-Claude auto-deploys on commit to `main` (§0.1(a)), so branch isolation is mandatory. The §3 values gate **deployment**, not implementation.
 
 **Problem:** `mcp_server/mindsort_claude/config.py` fails fast at boot on unknown `ENV`, on `OAUTH_ISSUER_BASE` path shape, on AS origin mismatch, on localhost-in-production, and on missing CORS origins — but `CLARITY_CLAUDE_AUDIENCE` falls back silently to an issuer-shaped default. That value participates directly in cross-app token isolation. The asymmetry is the defect.
 
@@ -416,15 +437,22 @@ The detailed architecture was right. Individual summary statements drifted. **Co
 
 ADR_005 is the highest existing number; confirm before naming.
 
-**Distinguish four separate states:**
+**Distinguish the TRIGGER from the EFFECT.** The earlier four-state list conflated them and was wrong. Four triggers, and they do different things:
 
-1. **Refresh token revoked at the AS** — no *new* access tokens mintable for that grant
-2. **Access-token record marked revoked in the AS database**
-3. **Resource-server enforcement of (2)** — **none**; JWKS-only stateless validation
-4. **Account / data deletion** — a separate mechanism with a separate user-facing promise. `revoke.py` notes sessions are deleted only on full user deletion (`delete_user_sessions`); read that path before describing it.
+| Trigger | What it actually does |
+|---|---|
+| **In-app disconnect tool** (`POST /disconnect`) | Revokes the **Google Calendar** connection only. The app's own OAuth access and refresh tokens are **untouched** — `priority_guardian/routers/offboarding_router.py` states it explicitly: *"PG OAuth session tokens are NOT revoked here... PG token revocation belongs in delete-account flows."* App data preserved. |
+| **Platform connector removal** (user removes the connector in Claude or ChatGPT) | **Unverified.** Whether the platform calls `/oauth/<app>/revoke` is unknown. **Search production logs for `oauth.revoke.request` over 30 days before the ADR asserts anything.** Zero occurrences would mean platform-level disconnect has no AS-side effect at all and the token simply expires. |
+| **Explicit `/oauth/<app>/revoke`** | Marks the row revoked. The refresh grant then fails `invalid_grant`. The outstanding access token remains accepted by both resource servers until `exp` + leeway. |
+| **Account deletion** | **Not implemented as a code path** (backlog 20). Fulfilled manually by the operator; `ondelete="CASCADE"` then removes all dependents — verified across both apps, including the transitive path `pg_goals`/`pg_deliverables` → `pg_priorities` → `core_users`. The only automated `core_users` deletion is six-month inactivity cleanup (`jobs/retention_cleanup.py`), a retention control rather than an erasure mechanism. |
+
+**Resource-server enforcement of any of the above: none.** JWKS-only stateless validation, no revocation lookup, and no user-existence check — `dependencies.py::validate_user_id_header` validates UUID shape only, with a docstring recording the trust boundary. A deleted user's token still reaches the backend; reads return no data because the rows are gone, and writes fail on the `core_users` foreign key (backlog 19).
+
+**Consequence for the privacy policy — flag it, do not fix it here.** §4 of the published policy says *"You can withdraw consent at any time by disconnecting the app."* If in-app disconnect touches only Google and platform disconnect does not call `/revoke`, then "disconnecting" may revoke nothing at the authorization server. Report the `oauth.revoke.request` finding so the wording can be assessed against what actually happens.
 
 ADR content:
 - **Decision:** MCP resource servers validate access tokens statelessly via JWKS. No revocation lookup, no introspection, no database access.
+- **Evidentiary basis per claim — state it inline.** Each factual claim in the ADR must record how it was established: source-verified, test-verified, or empirically demonstrated. Where a claim is source-verified but **not** covered by any passing test, say so and link the backlog item. Current labels: *RS performs no revocation lookup* — source-verified, two independent reads; *refresh grant respects revocation* — source-verified (`token_service.py:335`) **and** test-verified (`test_token_service_locking.py:57,60`); *leeway extends past `exp`* — empirically demonstrated, PyJWT 2.10.1, accepted at 29s / rejected at 31s; *`resource` unvalidated at `/authorize`* — source-verified, pending `git show <sha>` confirmation.
 - **Consequence:** state the maximum residual-access window in minutes, derived from config values you read, after proving the `leeway` semantics in §8.1.
 - **Rationale:** stateless RS, horizontal scalability, no RS→DB coupling, no per-call introspection latency. A deliberate accepted risk, proportionate to a productivity tool holding no special-category data.
 - **Current isolation posture — state plainly:** cross-app separation between PG-Claude and MindSort-Claude rests on **scope enforcement**, not resource-scoped audience binding, because PG-Claude accepts the shared issuer audience and because `resource` is unvalidated at authorize (§0.3). Audience validation still rejects arbitrary third-party audiences; what is absent is app-specific resource binding. §11 addresses it.
@@ -569,6 +597,27 @@ For MindSort tests, guarantee isolation (the existing `restore_mcp_auth_globals`
 10. **`MCP_SERVER_URL` in both accepted-audience lists** — bare-origin alias. Tighten after Part E is green.
 11. **`final_resource = None` → `aud = OAUTH_ISSUER` fallback** in `token_service.py`.
 12. **Revoked-token behaviour integration test** — useful as a deployed-build regression test. Deferred on runway grounds.
+13. **`authorize.py::_normalize_redirect_uri` IPv6 host parsing.** `parsed.netloc.lower().split(":")[0]` is IPv4-only; on `[::1]:41234` it yields `"["`, making the `::1` entry in its own localhost tuple unreachable dead code. Shared with the ChatGPT authorize path on two published apps — fix both layers together or not at all.
+14. **Render's `buildCommand` API field is not what Render executes** for these Python services. Three services built successfully after `requirements_fullbackend.txt` was deleted (shared-backend and pg-mcp 2026-07-07, clarity-mcp 2026-07-20) while running a command that provably exits 1 — most plausibly Render auto-detects poetry from `pyproject.toml`. Consequence: any future reasoning from that field is unreliable. Not a deploy blocker; the stale filename should still be cleaned up.
+15. **The ChatGPT prefix rule has the same raw-vs-parsed defect** (pre-existing, unchanged by Part B). `https://chatgpt.com/connector/oauth/\tABC123` passes `uri.startswith(allowed)` and is persisted raw. It still resolves correctly because `_normalize_redirect_uri` strips identically at authorize — same reasoning as §6.2 — but the validate/persist mismatch is identical in shape. **Do not fix in this increment:** it touches the ChatGPT path on two published apps. Fix alongside backlog item 13 if both are ever addressed.
+16. **`doc/testing_baseline_2026-07-04.md` is stale by ~6×** — records 5 known-red, actual is 34. Needs regeneration with a fresh per-failure triage. A stale baseline is worse than none: it made "34 matches the known-red set" read as a clean result when it was a six-fold discrepancy. **Until it is regenerated, §16's "report the delta against baseline" gate returns a meaningless number.**
+17. **Refresh-token revocation — two dead tests, not a coverage gap.** `test_revoked_token_cannot_be_used` and `test_refresh_rotation_marks_old_revoked` (`test_increment_13_unit.py`) fail on stale mocks before reaching the behaviour they name. **Redundant coverage exists and is green:** `test_token_service_locking.py:57` asserts the `revoked` filter appears in the emitted SQL of `exchange_refresh_token`, and `:60` asserts the original token is revoked after exchange, plus integration coverage in `test_oauth_revocation_integration.py`. This is dead-test cleanup, not an untested security behaviour. Out of §4 scope (another increment's file).
+18. **Unit tests are database-dependent via an autouse fixture.** `tests/conftest.py:148`'s autouse `cleanup_db` pulls in `setup_test_database`, so every test under `tests/unit/` requires a reachable `postgresql://localhost/priority_guardian_test`. §13 specifies "no database" for unit tests; the harness violates it repo-wide and predates this increment. Consequences: the unit suite fails entirely on a machine without Postgres running, and the unit/integration distinction in this repo is nominal. Harness-wide fix — out of §4 scope.
+19. **A write from a deleted user's still-valid token raises an unhandled FK `IntegrityError`**, most likely surfacing as a 500. The resource server performs no user-existence check and `validate_user_id_header` validates UUID shape only, so the request reaches the backend and fails on the `core_users` foreign key. Narrow window (≤ `exp` + leeway after a manual deletion), rare trigger, but an ungraceful failure on a documented path.
+21. **No reachable path revokes OAuth tokens at the AS — verified 2026-07-30.** `POST /oauth/pg/revoke` is mounted and functional (returns 422 on a malformed body, not 404), but production logs show **zero `oauth.revoke.*` events across the full 30-day retention window** — filter validated, since the same mechanism returns `oauth.register.success` and `oauth.token.success`. Neither Claude nor ChatGPT calls it on connector removal. The in-app disconnect tool does not revoke AS tokens either: `priority_guardian/routers/offboarding_router.py` states *"PG OAuth session tokens are NOT revoked here. Disconnect only revokes Google Calendar access."* So `revoked`, `exchange_refresh_token`'s `revoked == False` filter, and the whole revocation service are live code with **no live caller** — token expiry is the only mechanism that ends access. Consequence to assess (legal, not engineering): the published policy §4 says *"withdraw consent at any time by disconnecting the app"*, which does not describe what disconnect does at the authorization server.
+20. **No user-initiated account-deletion code path — and the promised email route may be unfulfillable.** The published privacy policy routes Art. 17 erasure to `support@priority-guard.com`, fulfilled manually. `priority_guardian/routers/offboarding_router.py` exposes `/disconnect` only, and its docstring records the omission: *"No DELETE /delete-data yet (later increment)."* The single automated `DELETE FROM core_users` (`jobs/retention_cleanup.py`) is six-month inactivity cleanup, not erasure.
+
+    **Manual fulfilment is not the problem — identification is.** `CoreUser` stores only `id` (UUID), `chatgpt_user_id`, `openai_subject`, `created_at`. No email, no name. For Claude users both pseudonymous columns are NULL (session-cookie UUID only). A request arriving by email therefore cannot be mapped to a row, and the same gap applies to §9's promised email data export.
+
+    **What actually works — verify before relying on this.** MindSort exposes `delete_my_data`, which works because the tool call carries the JWT and therefore the `user_id`. **PG-Claude's advertised tool set contains no deletion tool** — not account-wide, not per-item (`create_priority`, `get_patterns`, `get_priorities`, `get_priority_events`, `inspect_adapt`, `onboarding_calendar_setup`, `render_weekly_report`). Confirm against the MCP server source: an unadvertised tool, admin route, or backend endpoint could exist. If confirmed, email is the only **documented user-facing** route for PG erasure — and it is the route that cannot identify the requester.
+
+    **Two distinct problems, and the second is harder.** *Identification* — which row belongs to this person? *Authentication* — is the sender actually the data subject? A support identifier addresses the first and only weakly the second, since possession of a string is thin evidence. In pseudonymous systems authentication is usually the harder problem. Both belong in the runbook.
+
+    **The gap compounds for users who have already left.** The most likely person to email "delete my data" has already removed the connector, so any in-app route — including reading a support identifier out of the app — is unavailable to them by definition. Any correlation mechanism must state its fallback for that case, or admit it has none.
+
+    **Partial mitigation already in place:** `jobs/retention_cleanup.py` deletes users dormant for six months with no active connection or consent. A departed user's data is therefore erased automatically, just not "without undue delay." That is a true and disclosable fact, not a substitute for a request process.
+
+    **Decision needed — not "build an endpoint":** (a) a low-data correlation mechanism — a user-visible support identifier derived from `user_id` by keyed one-way construction rather than exposing the raw UUID, required on email requests, with authenticated in-app deletion kept as the preferred route; (b) align the policy wording to what can actually be executed. **GDPR Art. 11(2) is not a clean exit:** Arts. 15–20 reapply the moment the data subject supplies information enabling identification, and such information cannot be refused. Pseudonymised data remains personal data where attribution is possible. Write the runbook covering identity verification, deletion scope, database procedure, audit evidence, and response deadline — note the policy commits to 30 days, which is stricter than Art. 12(3)'s one month, and that commitment binds.
 
 ---
 
@@ -579,7 +628,10 @@ Unit tests only. No network, no database, no live services.
 **Part B — redirect URI validation**
 - Cover **every row** of §6.3, one assertion per row.
 - Malformed-port cases must assert clean rejection **and that no exception propagates**.
-- Assert the IPv6 case exercises the parsed hostname (`::1`), not the bracketed literal.
+- **Derive the allowlist by instantiating `Settings()` under `ENV=production` and reading `OAUTH_ALLOWED_REDIRECT_URIS`**, then assert it equals `_CHATGPT_REDIRECT_URIS`. Reading the class constant directly is **not sufficient**: that catches someone editing `_CHATGPT_REDIRECT_URIS`, but misses `build_allowed_redirect_uris` (`config.py:165`) no longer sourcing from it — which is the drift that actually matters. Env fixtures (`ENV`, `INTERNAL_API_SECRET`, `OAUTH_ISSUER`, RSA keys, `DATABASE_URL`, `ENCRYPTION_KEY`) are required; supply them rather than reaching for the constant. A hardcoded fixture copy is not acceptable either.
+- Cover every whitespace / control-character row in §6.3, asserting rejection.
+- Assert `http://[::1]:41234/callback` is **rejected**, with a comment recording that this is deliberate exclusion (§6.2), not an oversight.
+- Cross-check every accepted row against `_normalize_redirect_uri` (§6.5).
 - Assert empty list rejected.
 - Assert the production allowlist is unchanged for every non-loopback entry.
 
@@ -596,6 +648,16 @@ Unit tests only. No network, no database, no live services.
 
 **Mandatory per-test discipline:** for **every** test, state what bug would still pass it. v2 of this briefing shipped a test that would have passed for the wrong reason (§0.4); that is precisely what this discipline exists to catch. A test whose honest answer is "none" is almost certainly overstated — say so.
 
+**Stating the bug is necessary but not sufficient — it catches omission, never vacuity.** Three assertions in this increment named the correct bug in the docstring while being structurally unable to detect it:
+
+| Assertion | Why it could not fail |
+|---|---|
+| `"invalid_redirect_uri" not in body` | that string is a **log field only**; both rejection bodies say something else |
+| `response.json()["redirect_uris"] == [uri]` | `register_client.py` returns `register_request.redirect_uris` — the **request**, never the stored row |
+| AST scan for the bug-caught line | confirms the line **exists**, not that the assertion bites |
+
+**For every load-bearing assertion, demonstrate it by mutation:** break the behaviour under test in the source, confirm the test fails, restore byte-identically (§10.6–10.7). Apply this by default, not on request. It matters most in Part E — a vacuous pass on audience isolation would be considerably worse than any of the three above.
+
 ---
 
 ## 14. Integration test instructions
@@ -605,7 +667,7 @@ Separate files from §13. Environment per §9.5.
 **Part B — end-to-end DCR + authorize**
 - DCR with `["http://127.0.0.1:53821/oauth/callback"]` → 200, client row persists that exact URI.
 - Subsequent `/authorize` with that exact URI → consent renders, no `invalid_redirect_uri`.
-- Same pair for `http://[::1]:41234/callback`.
+- DCR with `http://[::1]:41234/callback` → 400 (deliberate exclusion, §6.2).
 - DCR with `http://localhost.evil.com:8080/oauth/callback` → 400.
 - DCR with `http://localhost:abc/oauth/callback` → 400, not 500.
 - Run across **all three** register routes. §6.4 must hold.
