@@ -106,7 +106,7 @@ Do not confuse this with MindSort's `delete_my_data` tool, which deletes a **boa
 | `pg_goals` | via `priority_id` → `pg_priorities.id` | CASCADE (transitive) |
 | `pg_deliverables` | via `priority_id` → `pg_priorities.id` | CASCADE (transitive) |
 | `oauth_access_tokens`, `oauth_authorization_codes`, `oauth_sessions`, `core_connections`, `core_consents` | direct `user_id` | CASCADE |
-| **`core_tool_audit_log`** | direct `user_id`, **intentionally NOT a foreign key** | **No cascade — survives deletion by design.** The column comment states it: *"Intentionally NOT a FK - audit logs must persist after user deletion for GDPR compliance."* Retained per the published policy's separate audit-log retention (90 days) |
+| **`core_tool_audit_log`** | direct `user_id`, **intentionally NOT a foreign key** | **No cascade — survives deletion by design.** The column comment states it: *"Intentionally NOT a FK - audit logs must persist after user deletion for GDPR compliance."* The 90-day retention is **code-verified**, not merely policy-asserted: `backend/jobs/retention_cleanup.py::cleanup_expired_audit_logs` batch-deletes from `core_tool_audit_log WHERE created_at < NOW() - INTERVAL '90 days'` |
 
 **The credential outlives the data.** After deletion:
 
@@ -126,7 +126,7 @@ A **write** in that window hits the `core_users` foreign key and fails on an int
 - **Stateless resource servers.** No RS→DB coupling, so the MCP servers scale horizontally and can be restarted, replaced or re-regioned without shared state.
 - **No per-call introspection latency.** Every tool call would otherwise pay a network round trip to the AS or the database.
 - **Failure isolation.** A database incident degrades writes; it does not take down token validation on every MCP server simultaneously.
-- **Proportionality.** The data at risk is productivity content — priorities, board items, calendar-derived hour totals. No special-category data under GDPR Art. 9, no payment data, no credentials. A bounded ≤60m30s window on a revoked credential is proportionate to that sensitivity.
+- **Proportionality.** The data at risk is productivity content — priorities, board items, calendar-derived hour totals. No special-category data under GDPR Art. 9 is **requested or required**, and the published policy asks users not to enter it: *"Our apps include free-text input fields where you may voluntarily enter any content, including personal information. Please do not enter sensitive personal data (such as health information, financial data, or government identifiers) into these fields."* **That is a request, not a control** — free-text fields cannot enforce it, and priority names, goal text and MindSort board items are all free-text. No payment data, no credentials. A bounded ≤60m30s window on a revoked credential is proportionate to that sensitivity, on the understanding that Art. 9 content cannot be excluded, only discouraged.
 
 This is an **accepted risk**, consciously taken, and it is the reason this ADR exists rather than the behaviour being left implicit.
 
@@ -183,7 +183,7 @@ Rejected: reintroduces shared state and an availability dependency, in exchange 
 
 Revisit if **any** of the following becomes true:
 
-1. The system begins handling special-category, payment or otherwise regulated data.
+1. Special-category data becomes a **routine or expected** part of the content — rather than something users are merely asked not to enter into free-text fields — or payment or otherwise regulated data enters the system.
 2. `/revoke` is wired to platform disconnect or in-app disconnect, making state 2 reachable in practice.
 3. A compliance commitment is made that requires access to end in less than the residual window.
 4. `OAUTH_TOKEN_EXPIRY_SECONDS` or `TOKEN_EXPIRY_GRACE_SECONDS` is changed in production — the window in this document is a formula, and its stated value assumes code defaults.
