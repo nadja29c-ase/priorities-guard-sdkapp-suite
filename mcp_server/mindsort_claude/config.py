@@ -239,6 +239,92 @@ MCP_RESOURCE_URL = get_env(
     default=f"{MCP_SERVER_URL}/mcp"
 )
 
+
+# ============================================================================
+# Boot guard — CLARITY_CLAUDE_AUDIENCE must be explicit and byte-exact
+# ============================================================================
+#
+# WHY THIS EXISTS. This module already fails fast at boot on unknown ENV, on
+# OAUTH_ISSUER_BASE path shape, on AS origin mismatch, on localhost-in-production, and
+# on missing CORS origins — but CLARITY_CLAUDE_AUDIENCE silently fell back to an
+# issuer-shaped default. That value participates directly in cross-app token isolation,
+# so it was the least guarded of the consequential settings. The asymmetry was the defect.
+#
+# THIS IS A PATTERN, NOT A ONE-OFF. ADR_005 records the same failure class from the
+# other direction: a production env-value regression on CLARITY_OAUTH_ISSUER_URL, which
+# unit tests cannot catch because they exercise code shape rather than deployed values.
+# Env-value regressions are caught by boot guards like this one and by the live
+# discovery suite (`pytest -m live tests/integration/oauth_discovery/`).
+#
+# BYTE-EXACT, NO CANONICALIZATION — deliberately. No trailing-slash tolerance, no case
+# folding, no percent-decoding. The runtime chain is:
+#     PRM advertises `resource` -> client echoes `resource=` -> backend copies it into
+#     `aud` -> PyJWT string-matches it
+# PyJWT 2.10.1 compares `aud` by exact string equality (empirically verified: trailing
+# slash, case and prefix variants are all rejected). A guard laxer than the validator is
+# worse than no guard: it passes a config that then fails at runtime, while manufacturing
+# confidence that the config was checked.
+#
+# Same-origin comparison was considered and REJECTED as insufficient: it would let
+# https://host/pg satisfy a guard whose expected value is https://host/mindsort — the
+# exact confusion this guard exists to prevent. Origin equality stops protecting the
+# moment two apps share a host with path-based resource identifiers, which is this
+# suite's topology.
+#
+# See doc/ADR_006_token_revocation_semantics.md for the audience/isolation posture.
+
+def _validate_audience_config(
+    env: str,
+    audience_explicitly_set: bool,
+    audience: Optional[str],
+    resource_url: Optional[str],
+) -> None:
+    """
+    Fail boot in production-like ENV unless the audience is explicit and byte-exact.
+
+    Pure function, so tests can exercise every branch without importlib.reload and its
+    module-global rebinding hazard (see mcp_auth_dupl's REBOUND_GLOBALS).
+
+    Args:
+        env: The resolved ENV value
+        audience_explicitly_set: Whether CLARITY_CLAUDE_AUDIENCE was actually present in
+            the environment. Read from os.getenv directly — the module-level value holds
+            a default, so it cannot distinguish "set to the default" from "not set".
+        audience: The effective audience value
+        resource_url: The effective MCP_RESOURCE_URL
+
+    Raises:
+        RuntimeError: naming the variable, the expected value and the actual value
+    """
+    if not _is_production_env(env):
+        return
+
+    if not audience_explicitly_set:
+        raise RuntimeError(
+            "CLARITY_CLAUDE_AUDIENCE is not set. It must be set explicitly in "
+            f"{env} — the code default is issuer-shaped and would silently disable "
+            "cross-app audience isolation. "
+            f"Expected it to equal CLARITY_CLAUDE_MCP_RESOURCE_URL ({resource_url!r}). "
+            "Refusing to start."
+        )
+
+    if audience != resource_url:
+        raise RuntimeError(
+            "CLARITY_CLAUDE_AUDIENCE does not match CLARITY_CLAUDE_MCP_RESOURCE_URL. "
+            "Comparison is byte-exact by design — PyJWT matches `aud` by exact string "
+            "equality, so a laxer guard would pass a config that fails at runtime. "
+            f"expected={resource_url!r} actual={audience!r} env={env!r}. "
+            "Refusing to start."
+        )
+
+
+_validate_audience_config(
+    env=ENV,
+    audience_explicitly_set=os.getenv("CLARITY_CLAUDE_AUDIENCE") is not None,
+    audience=CLARITY_AUDIENCE,
+    resource_url=MCP_RESOURCE_URL,
+)
+
 # OAuth Authorization Server URL (uses /oauth/pg/)
 # NOTE: This is the authorization server base URL for discovery, NOT the JWT 'iss' claim.
 # - OAUTH_ISSUER_URL: http://localhost:8000/oauth/pg (authorization server endpoints)
