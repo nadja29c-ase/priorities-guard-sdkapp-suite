@@ -5,6 +5,49 @@
 
 ---
 
+> ## ✅ AMENDMENT 2 — 2026-08-01: §11 step 1 COMPLETE, verified in production
+>
+> Superseding parts of Amendment 1 below. Four production changes have landed since the
+> report body was written:
+>
+> 1. **DB allow list emptied** (external access closed), re-opened briefly for the
+>    gating query, then emptied again. Current state verified: `ipAllowList: null`.
+> 2. **Database credential rotated** after the old one was exposed in a working
+>    transcript. Two consumers only — `priorities-guard-sdkapp-shared-backend` and
+>    `priorities-guard-celery`. The five MCP servers do **not** read `DATABASE_URL`:
+>    zero matches in `mcp_server/`, no MCP server imports the `backend` package, and both
+>    Claude configs import cleanly with the variable unset. An earlier list of seven
+>    services was wrong and contradicted ADR_006's own stateless-RS finding.
+> 3. **§11 step 1 done on BOTH Claude servers.** `CLARITY_CLAUDE_AUDIENCE` →
+>    `https://mindsort-mcp.priority-guard.com/mcp`, `PG_CLAUDE_AUDIENCE` →
+>    `https://mcp.priority-guard.com/mcp`. Verified by using both connectors on
+>    production.
+> 4. **All 22 commits pushed.** `origin/main` was at `9711017` — the brief only — until
+>    2026-08-01. Parts B, D and E existed solely on one laptop for the whole increment.
+>    Now at `83f44f4`, with MindSort-Claude live on it.
+>
+> **The gating query ran, and its result is stronger than "safe to proceed".** Across all
+> **5,621** rows in `oauth_access_tokens`: **zero** with `resource IS NULL`, zero live
+> such grants, `refreshable_but_no_expiry` zero on every row — verified both by a direct
+> `WHERE resource IS NULL` count and by a grouped query whose row counts sum to 5,621.
+>
+> The Rule 5 issuer fallback exists in code and Part E proved the AS will mint it, but
+> **no client has ever triggered it**. The issuer entry in `valid_audiences` has never
+> matched a real token. It was not a compatibility fallback awaiting retirement; it was
+> **dead weight accepting an audience nothing legitimate carries**. The
+> pre-custom-domain `onrender.com` rows sharpen it: PG-Claude's advertised resource
+> *changed* at that migration and those grants show **0 live** — they expired naturally
+> rather than surviving on the fallback. Even a domain migration never exercised it.
+>
+> Reading `resource_value` rather than the shape label was load-bearing: the
+> MindSort-OpenAI and PG-OpenAI rows are non-NULL and would have been mislabelled "safe"
+> by shape alone, while belonging to servers this change does not touch.
+>
+> **§11 steps 2 and 3 remain open** — the bare origin (`MCP_SERVER_URL`) is still an
+> accepted audience on both servers. Step 1 alone does not close the posture.
+>
+> ---
+>
 > ## ⚠️ AMENDMENT — 2026-07-31, after the env values were supplied
 >
 > The deployed MindSort-Claude value is
@@ -420,9 +463,21 @@ Reviewer attribution from logs is **not possible**.
 `e90aef4a-607d-4986-bfc6-1c1cccdfbc58`, route chosen to keep PG's trail clean; no client
 row created on that path).
 
-**Which row applies:** the evidence best fits **row 2 — "No completed reviewer OAuth flow
-yet → upside High"**, with **row 3 ("cannot be shown to be low") as the defensible
-conservative reading**, because attribution is impossible. PG-Claude **is** functional:
+**Which row applies — SETTLED 2026-08-01 by correspondence, not inference.** Anthropic's
+MCP Directory team wrote that the submission arrived through an earlier version of their
+form which did not capture the tool list, and asked for a resubmission: *"Once the
+resubmission is in, we'll review it promptly."* They also noted *"It's fine if we can't
+reach your server from our side."*
+
+So **no technical review has taken place**, and reviewers may never connect at all. The
+row-2-vs-row-4 question is moot: **row 2**, and the deploy-timing pressure it implied is
+gone. Part B's loopback gap is reachable only by a reviewer using Claude Code, and this
+review is form-based.
+
+Consequence: the safest deploy window is *now*, not later — there is no reviewer
+mid-test, and there will not be one until the resubmission is filed. The original
+framing below (that a reviewer might be actively testing) shaped this entire increment's
+caution and turned out not to hold. PG-Claude **is** functional:
 five authenticated `POST /mcp` calls from `Claude-User` on 2026-07-30, correlating with
 refresh-token grants one second earlier. Zero *new* PG-Claude authorizations in 30 days is
 explained by a long-lived grant refreshing, not by breakage.
