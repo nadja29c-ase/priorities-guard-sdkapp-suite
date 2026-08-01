@@ -159,7 +159,48 @@ Row counts sum to 5,621, matching the independent total — so the grouping cove
 
 Consequence for §11: tightening the audience env vars costs nothing operationally. The decision is not "accept a compatibility risk to gain isolation" but "remove a control that was never doing anything."
 
-This is why the audience-isolation work must test the full `(resource, scope)` issuance matrix rather than two illustrative cases — the question is not whether the validator rejects a wrong audience, but which combinations the AS will mint in the first place. Addressed by the PG-Claude resource-audience increment (§11 of the increment briefing).
+---
+
+## Status of the audience fix — two servers done, two deferred
+
+**Updated 2026-08-01.**
+
+| Server | Audience env var | Value | Status |
+|---|---|---|---|
+| MindSort-Claude | `CLARITY_CLAUDE_AUDIENCE` | `https://mindsort-mcp.priority-guard.com/mcp` | **DONE** — set in Render, redeployed, verified by using the connector on production |
+| PG-Claude | `PG_CLAUDE_AUDIENCE` | `https://mcp.priority-guard.com/mcp` | **DONE** — same procedure, same verification |
+| MindSort-OpenAI | `CLARITY_AUDIENCE` | *should be* `https://mindsort.priority-guard.com/mcp` | **DEFERRED** |
+| PG-OpenAI | `PG_AUDIENCE` | *should be* `https://pg.priority-guard.com/mcp` | **DEFERRED** |
+
+Both deferred values are the app's own `MCP_RESOURCE_URL`. **Read the effective `PG_MCP_SERVER_URL` / MindSort equivalent from Render before setting anything** — do not infer the value from the docstring examples in those config files. This increment established that such examples are unreliable: `mindsort_claude/config.py` carried a comment claiming *"PRODUCTION SHAPE (verified 2026-07-04)"* which was flatly false, and it misdirected a full day of analysis.
+
+### Why deferred rather than done
+
+No risk exists today. PG-OpenAI accepts only `pg.access` and MindSort-OpenAI only `clarity.write`, so the surviving scope check does the isolation work — exactly as it did on the Claude side before the fix. Nothing is exposed and no user is affected.
+
+The blast radius is also 30× larger: **94 live grants on PG-OpenAI and 3 on MindSort-OpenAI**, against 2 and 9 on the Claude side. These are published App Store apps. Neither OpenAI server has a boot guard (Part C covers MindSort-Claude only), so a wrong value **fails silently** — the service comes up green and rejects every token.
+
+### Why it should still be done
+
+1. **Uniformity.** Four MCP servers, two hardened and two not, is the asymmetry that generates false beliefs. This exact shape — an artifact asserting one server was fine when it was not — cost this increment a day.
+2. **It blocks the code-level cleanup.** §11 steps 2 and 3 remove the redundant `CLARITY_AUDIENCE` / `PG_AUDIENCE` and `MCP_SERVER_URL` entries from `valid_audiences`. That code is shared — `mcp_server/clarity/mcp_auth.py` serves the ChatGPT path *and* is the module MindSort-Claude's shim rebinds. The entries cannot be removed while the OpenAI side still depends on the issuer being accepted. **Leaving OpenAI unfixed defers the Claude-side cleanup too.**
+
+### Procedure when scheduled
+
+1. Read `PG_MCP_SERVER_URL` (PG-OpenAI) and the MindSort-OpenAI equivalent from the Render dashboard. Confirm `PG_MCP_RESOURCE_URL` is unset — leave it unset; the derived default cannot drift, a second hand-typed value can.
+2. **MindSort-OpenAI first** (3 grants) — set `CLARITY_AUDIENCE` = server URL + `/mcp`, wait for redeploy, verify by using the app.
+3. **PG-OpenAI last** (94 grants) — same, only after the smaller one has proven the procedure.
+4. Verification is *by use*. A green deploy proves the process started, not that tokens validate. There is no boot guard on either server.
+5. Then §11 steps 2–3 become unblocked: remove the redundant audience entries from `valid_audiences` across all four servers.
+
+**Bundle steps 1–5 as one increment.** Same code, same evidence, same verification method.
+
+### Evidence this is safe
+
+The 2026-07-31 query above: every live OpenAI grant already carries its app's own resource URL, and **zero tokens anywhere have `resource IS NULL`**. Tightening removes an audience nothing legitimate carries. Re-run that query before executing, since it will be months stale by then — the SQL is preserved at `audience_check.sql`.
+
+This is also why the audience-isolation work must test the full `(resource, scope)` issuance matrix rather than two illustrative cases — the question is not whether the validator rejects a wrong audience, but which combinations the AS will mint in the first place.
+
 
 ---
 
