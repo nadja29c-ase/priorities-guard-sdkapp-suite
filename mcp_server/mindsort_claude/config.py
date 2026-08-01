@@ -384,6 +384,59 @@ if _is_production_env(ENV) and "localhost" in OAUTH_ISSUER_BASE:
         "Set to production URL (e.g., https://www.priority-guard.com)."
     )
 
+# ============================================================================
+# Fail-fast: every URL setting must be a real HTTPS production URL in prod/staging
+# ============================================================================
+#
+# WHY THIS EXISTS. Ported from mcp_server/priority_guardian/config.py, which has
+# carried this invariant since inc_05. MindSort-Claude had no equivalent: only
+# OAUTH_ISSUER_BASE got a localhost check, so JWKS_URL, BACKEND_URL, MCP_SERVER_URL,
+# MCP_RESOURCE_URL, CLARITY_ISSUER and CLARITY_AUDIENCE could each hold a localhost
+# default in production and boot cleanly. Defaults in this module are localhost-based
+# for dev convenience; silently accepting them in production serves a broken stack
+# (JWKS unreachable, discovery publishes the wrong resource, persistence hits localhost).
+#
+# PREDICATE IS DELIBERATELY STRICTER THAN THE PG ORIGINAL. PG tests
+# `"localhost" in value or value.startswith("http://")`, which does NOT reject the
+# empty string ("localhost" in "" is False) nor a bare path like "/mcp". That hole is
+# real: the audience boot guard below only checks CLARITY_CLAUDE_AUDIENCE ==
+# CLARITY_CLAUDE_MCP_RESOURCE_URL, so setting BOTH to "" satisfies it and discovery
+# then advertises "" as the resource. Requiring an https:// prefix subsumes empty,
+# http://, and relative values in one rule; the localhost check stays because
+# https://localhost:8003 would otherwise pass. PG-OpenAI still carries the weaker
+# predicate — tracked separately, not changed here.
+#
+# DEPLOYMENT NOTE. Every value below is verified non-localhost in production as of
+# 2026-08-01: MCP_RESOURCE_URL from the live discovery document, OAUTH_ISSUER_BASE
+# from its authorization_servers entry, OAUTH_ISSUER_URL transitively via the
+# same-origin invariant above, CLARITY_AUDIENCE via the byte-exact boot guard,
+# CLARITY_ISSUER by its already-HTTPS default, and JWKS_URL / BACKEND_URL by the
+# service functioning end-to-end (no token would validate and no board would persist
+# under the localhost defaults).
+if _is_production_env(ENV):
+    _prod_url_invariants = {
+        "CLARITY_CLAUDE_JWKS_URL": CLARITY_JWKS_URL,
+        "CLARITY_CLAUDE_ISSUER": CLARITY_ISSUER,
+        "CLARITY_CLAUDE_AUDIENCE": CLARITY_AUDIENCE,
+        "CLARITY_CLAUDE_BACKEND_URL (BACKEND_URL)": BACKEND_URL,
+        "CLARITY_CLAUDE_MCP_SERVER_URL (MCP_SERVER_URL)": MCP_SERVER_URL,
+        "CLARITY_CLAUDE_MCP_RESOURCE_URL (MCP_RESOURCE_URL)": MCP_RESOURCE_URL,
+        "CLARITY_CLAUDE_OAUTH_ISSUER_URL (OAUTH_ISSUER_URL)": OAUTH_ISSUER_URL,
+        "CLARITY_CLAUDE_OAUTH_ISSUER_BASE (OAUTH_ISSUER_BASE)": OAUTH_ISSUER_BASE,
+    }
+    _invalid_urls = {
+        name: value
+        for name, value in _prod_url_invariants.items()
+        if not value.startswith("https://") or "localhost" in value
+    }
+    if _invalid_urls:
+        raise RuntimeError(
+            f"Production URL validation failed. These env vars must be set to "
+            f"HTTPS production URLs (not empty, not localhost, not http://, "
+            f"not a bare path): {_invalid_urls}"
+        )
+
+
 # Supported OAuth scopes for MindSort Claude MCP server
 # NOTE: This must mirror the clarity.* scopes in backend discovery
 # (backend/core/oauth_provider/discovery.py → SCOPES_SUPPORTED).

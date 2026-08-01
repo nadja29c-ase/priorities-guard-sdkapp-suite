@@ -392,6 +392,12 @@ class TestConfigGuards:
                 # config" was in fact incomplete.
                 "CLARITY_CLAUDE_MCP_SERVER_URL": "https://mindsort-mcp.priority-guard.com",
                 "CLARITY_CLAUDE_AUDIENCE": "https://mindsort-mcp.priority-guard.com/mcp",
+                # Part C review fix: the production URL invariants block requires
+                # EVERY URL setting to be HTTPS in production. These two were still
+                # inheriting their localhost defaults, so this fixture described a
+                # production environment that production would refuse to boot.
+                "CLARITY_CLAUDE_JWKS_URL": "https://www.priority-guard.com/oauth/pg/jwks",
+                "CLARITY_CLAUDE_BACKEND_URL": "https://www.priority-guard.com",
                 "PATH": "",
             },
             capture_output=True,
@@ -605,6 +611,12 @@ class TestConfigGuards:
                 # config" was in fact incomplete.
                 "CLARITY_CLAUDE_MCP_SERVER_URL": "https://mindsort-mcp.priority-guard.com",
                 "CLARITY_CLAUDE_AUDIENCE": "https://mindsort-mcp.priority-guard.com/mcp",
+                # Part C review fix: the production URL invariants block requires
+                # EVERY URL setting to be HTTPS in production. These two were still
+                # inheriting their localhost defaults, so this fixture described a
+                # production environment that production would refuse to boot.
+                "CLARITY_CLAUDE_JWKS_URL": "https://www.priority-guard.com/oauth/pg/jwks",
+                "CLARITY_CLAUDE_BACKEND_URL": "https://www.priority-guard.com",
                 "PATH": "",
             },
             capture_output=True,
