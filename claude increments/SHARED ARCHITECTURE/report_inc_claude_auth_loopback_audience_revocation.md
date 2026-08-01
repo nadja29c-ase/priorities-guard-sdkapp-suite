@@ -216,6 +216,15 @@ the validator accepts, `[::1]` was the only one authorize rejected.
 redundant but not wrong, and §6.5 says leave them.
 
 ### Part C — MindSort-Claude audience boot guard *(branch, not merged)*
+
+**Accepted change to this service's failure mode — stated, not implicit.** The guard
+turns a wrong audience value from *silent token rejection* into a *loud boot failure*.
+That is the right trade for a value whose misconfiguration cost this increment a day of
+wrong framing. But MindSort-Claude **auto-deploys from `main`**, so after this merges,
+any future push touching that file — including an unrelated comment change — redeploys
+it, and if the env var has drifted in the meantime the service will not come back up.
+That is the guard working as designed; it is nonetheless a real change to how this
+service fails, and it is accepted deliberately rather than as a side effect.
 File: `mcp_server/mindsort_claude/config.py` + tests. Satisfies §7.1, §7.2, §13.
 
 Implemented as a **pure function** called at module level, so tests exercise every branch
@@ -432,6 +441,13 @@ the assertion is *true* — it catches omission, never vacuity. **Only mutation
 distinguishes them**, and it is cheap when aimed at the one or two tests carrying real
 weight in a file. From Part E onward it was run *before* reporting green rather than after
 being asked, and it caught #3.
+
+**A fourth instance, in an operational check rather than a test.** While waiting for a
+deploy, HTTP 200 on `/health` was used as the signal that it had finished. It cannot be:
+Render serves the *old* instance until cutover, so a 200 during `update_in_progress` is
+guaranteed regardless of whether the new build is healthy. The check could not fail. The
+correct signal is the deploy's own `status` reaching `live`. Same shape as the three test
+cases — and evidence the pattern is not confined to test code.
 
 **A second class: the vacuous environment.** Twice, tests were correct but the
 configuration made them meaningless — audience defaults that would have produced a false
