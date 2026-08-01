@@ -386,6 +386,12 @@ class TestConfigGuards:
                 "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
                 "CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS": "https://claude.ai",
                 "CLARITY_CLAUDE_INTERNAL_API_SECRET": "test-secret",
+                # Part C: the audience boot guard requires these two to be set
+                # explicitly and byte-exactly equal in production-like ENV.
+                # They were previously omitted, so this "correct production
+                # config" was in fact incomplete.
+                "CLARITY_CLAUDE_MCP_SERVER_URL": "https://mindsort-mcp.priority-guard.com",
+                "CLARITY_CLAUDE_AUDIENCE": "https://mindsort-mcp.priority-guard.com/mcp",
                 "PATH": "",
             },
             capture_output=True,
@@ -593,6 +599,12 @@ class TestConfigGuards:
                 "CLARITY_CLAUDE_OAUTH_ISSUER_URL": "https://www.priority-guard.com/oauth/pg",
                 "CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS": "https://claude.ai",
                 "CLARITY_CLAUDE_INTERNAL_API_SECRET": "test-secret",
+                # Part C: the audience boot guard requires these two to be set
+                # explicitly and byte-exactly equal in production-like ENV.
+                # They were previously omitted, so this "correct production
+                # config" was in fact incomplete.
+                "CLARITY_CLAUDE_MCP_SERVER_URL": "https://mindsort-mcp.priority-guard.com",
+                "CLARITY_CLAUDE_AUDIENCE": "https://mindsort-mcp.priority-guard.com/mcp",
                 "PATH": "",
             },
             capture_output=True,
