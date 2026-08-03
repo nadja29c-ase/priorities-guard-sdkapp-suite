@@ -353,7 +353,7 @@ implementing increment should make.
 
 ---
 
-## 14. Adversarial review — three passes (added 2026-08-03)
+## 14. Adversarial review — two rounds, six passes (added 2026-08-03)
 
 Run after Parts A–F were reported complete. Split into three focused passes because the
 increment spans ten commits; one review would have skimmed everything.
@@ -397,7 +397,31 @@ Both share a shape: **a decision correctly made, correctly documented, and never
 - **`widget_accessible=False` not enforced** — discovery metadata only, in both dispatchers.
   A dispatcher change touching every tool; its own increment.
 
-### 14.3 Confirmed safe
+### 14.3 A SECOND round, re-derived rather than anchored
+
+The first three passes were re-run at `b570afc`. The first attempt at round 2 told Codex what
+round 1 had found and asked it to verify the fixes. **That was wrong and Nadja stopped it.**
+An anchored review confirms what you already suspect; it cannot find what you did not think
+to ask about. The passes were cancelled and relaunched with no prior findings, plus one
+instruction round 1 did not have: *ignore the comments' claims — treat every documented
+guarantee as a hypothesis to disprove.* That instruction mattered because the code had since
+accumulated confident documentation, including three "unreachable" claims written by me.
+
+The unanchored passes found three classes the anchored ones structurally could not:
+
+| Finding | Severity |
+|---|---|
+| **Cross-user isolation had NO test.** A service deleting EVERY user's data passed 33/33 | **critical** |
+| `asyncio.CancelledError` bypassed rollback, the error event and `PgDeletionError` — it is a `BaseException`, and both this service and `get_db` guard on `except Exception` | high |
+| Part A's "Redis: none" was wrong in scope — `oauth:auth:<id>` carries `user_id` | medium |
+| Four user-facing statements false in reachable states, two written that same day | high |
+
+The tool pass also **independently re-derived the #10 identity finding** without being told
+it existed, which is the strongest available confirmation that it is real.
+
+Commits: `bcbed49`, `8b4d166`.
+
+### 14.4 Confirmed safe
 
 Codex returned no defect on the two vectors most expected to fail: the
 `pg_goals`/`pg_deliverables` subquery does evaluate before the parent delete, and the Google
@@ -405,26 +429,26 @@ revocation bound genuinely leaves `/disconnect` unchanged.
 
 ---
 
-## 15. Two observations that outlive this increment
+## 15. Four observations that outlive this increment
 
-These are the durable output. The fourteen findings are already fixed.
+These are the durable output. The findings themselves are fixed; these are not about this
+increment.
 
 ### 15.1 The seam has no owner
 
-**Six of seven defects lived at boundaries.** Integration tests call services directly, unit
-tests mock sessions, routers are asserted alone. Every layer was verified and every boundary
+**Most defects lived at boundaries.** Integration tests call services directly, unit tests
+mock sessions, routers are asserted alone. Every layer was verified and every boundary
 between layers was assumed.
 
-This is a statement about the repo's test taxonomy, not about this increment. There is no
-category of test whose job is the contract between two components, so contracts are the one
-thing nothing checks. The 503 bug, the router-status binding, and the unasserted POST
-endpoint were all instances.
+A statement about the repo's test taxonomy, not about this increment: no category of test has
+the contract between two components as its job, so contracts are the one thing nothing checks.
+The 503 seam, the unbound router status, and the unasserted POST endpoint were all instances.
 
 ### 15.2 It was never the assertion, always the setup
 
-Five vacuous constructions. Every one was a mock that short-circuited, a fixture that could
-not express the discriminating case, or a seam nobody tested. **The assertions read
-correctly throughout** — what failed was that they never reached the code under test.
+Every vacuous construction was a mock that short-circuited, a fixture that could not express
+the discriminating case, or a seam nobody tested. **The assertions read correctly
+throughout** — what failed was that they never reached the code under test.
 
 | # | Construction | How it surfaced |
 |---|---|---|
@@ -433,13 +457,55 @@ correctly throughout** — what failed was that they never reached the code unde
 | 3 | Latency test seeded no connection, so the mock never ran | **negative** elapsed time |
 | 4 | `decrypt_token` failed on a MagicMock, so the patched revoke was never called in 8 tests | `google_revoked` was False |
 | 5 | Derived assertion against an empty `Base.metadata` | caught by an added non-empty guard |
+| 6 | **No fixture ever seeded a second user** | deleting every user's data passed 33/33 |
 
-**The generalisation, which held for all five: assertions that check a VALUE catch these;
-assertions that check an ABSENCE do not.** `google_revoked is True`, non-empty metadata,
-negative elapsed time — each failed loudly. `assert rows == 0` and "no error raised" are
-exactly the shapes that pass when nothing ran.
-
+**Assertions that check a VALUE catch these; assertions that check an ABSENCE do not.**
+`google_revoked is True`, non-empty metadata, negative elapsed time — each failed loudly.
+`assert rows == 0` and "no error raised" are exactly the shapes that pass when nothing ran.
 **Prefer assertions that fail on an unexecuted path.**
+
+**The strongest form is #6.** The setup does not merely decide whether a test can fail — it
+decides **which mutations are conceivable**. Every mutation run for two days was cross-*app*,
+because that was the only axis the fixtures made visible. The work was thorough inside a
+space the data had silently defined, and blind to everything outside it.
+
+**Corollary — every user-facing claim has a second surface.** The retryable text was fixed
+while `ASSISTANT_GUIDANCE_RETRYABLE` — the string the model reads and relays — still carried
+the same false claim. It nearly stayed hidden: a `grep` hit of 2 looked like the new comments
+quoting the old text, which was true for two phrases and false for the third. Stripping
+comments and re-checking the parsed module found it. **The fix was correct and incomplete,
+because only the channel being thought about was checked.** Nothing in this increment treated
+model-facing guidance as a surface for user-facing claims until that point.
+
+### 15.3 Every layer of verification failed the same way as the code
+
+Mock, fixture, seam — and then the mutation harness itself.
+
+A cancellation mutation reported **SURVIVED**. It had never applied: the slice matched an
+`except Exception as e:` in a *different function*. **A broken mutation and a surviving
+mutation produce identical output.** Every "mutation caught" claim in this increment rested
+on the unstated assumption that mutations applied.
+
+This is the worst of the four because it is the verification of the verification. The harness
+now asserts the target is genuinely absent and that the file shrank before trusting a verdict
+— and that guard should be permanent, not a one-off.
+
+### 15.4 The app-directory boundary is not the data boundary
+
+Twice, identically:
+
+| Missed | Where it actually lived |
+|---|---|
+| `oauth_authorization_codes` | `backend/core/oauth_provider/models.py` |
+| Redis `oauth:auth:<id>` carrying `user_id` | `backend/core/oauth_provider/services/authorization_service.py` |
+
+Both times the search stopped at `backend/apps/priority_guardian/` and both times the state
+lived in the shared OAuth layer, written on the app's behalf. Part A's inventory strategy
+assumed an app owns its data wherever it lives; shared infrastructure breaks that assumption
+silently, because nothing in the app directory references what it writes.
+
+Same shape as 15.1 — a boundary nobody owns — but between an application and the
+infrastructure it writes through, rather than between two components.
 
 ---
 
