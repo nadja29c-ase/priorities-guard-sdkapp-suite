@@ -444,6 +444,35 @@ async def delete_user_data(
         session.add(audit_log)
         await session.flush()
 
+    except asyncio.CancelledError:
+        # CANCELLATION IS NOT AN Exception. asyncio.CancelledError inherits from
+        # BaseException, so the handler below does NOT catch it — and neither does get_db,
+        # whose own guard is `except Exception`. A client disconnecting mid-deletion
+        # therefore skipped the rollback, the error event and PgDeletionError entirely,
+        # leaving the §4 reverse case completely silent. Found by adversarial review.
+        #
+        # The exception is RE-RAISED rather than converted. Cancellation must propagate or
+        # the task never actually stops; what was missing is the cleanup and the record, not
+        # the exception. The caller sees cancellation, as it should.
+        try:
+            await session.rollback()
+        except Exception as rollback_error:
+            logger.error(
+                "pg_offboarding.rollback_failed",
+                user_id=str(user_id),
+                error_type=type(rollback_error).__name__,
+                error=str(rollback_error),
+                original_error="CancelledError",
+            )
+
+        logger.error(
+            "pg_offboarding.delete_data_cancelled",
+            user_id=str(user_id),
+            google_revocation_confirmed=google_revoked,
+            partial_counts=rows_deleted,
+        )
+        raise
+
     except Exception as e:
         # Roll back before raising so no partial deletion can reach the database. get_db
         # would also roll back, but doing it here makes the guarantee local to this

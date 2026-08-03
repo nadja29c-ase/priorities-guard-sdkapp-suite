@@ -721,3 +721,162 @@ async def test_the_conjunction_filter_is_actually_exercised(async_session, user_
         select(func.count()).select_from(CoreConnection).where(CoreConnection.user_id == other.id)
     )).scalar_one()
     assert surviving == 1, "unknown-type connection was destroyed"
+
+
+# =============================================================================
+# CROSS-USER ISOLATION
+#
+# THE MOST SERIOUS GAP FOUND IN THIS INCREMENT. Until this fixture existed, every test
+# seeded exactly ONE user's data (plus MindSort rows for that SAME user). So the suite
+# proved cross-APP isolation thoroughly and cross-USER isolation not at all: a service that
+# deleted EVERY user's priorities, consents and tokens passed 33/33 unchanged.
+#
+# That is failure mode 1 from §0.2 — the catastrophic, unrecoverable one this increment is
+# architected around — with no test.
+#
+# The mechanism is worth naming: every earlier mutation was cross-app because the fixtures
+# made only that axis visible. You cannot mutate what the data cannot distinguish. Same root
+# as the conjunction filter having no test, one level more consequential.
+# =============================================================================
+
+@pytest_asyncio.fixture
+async def bystander_with_identical_pg_data(async_session: AsyncSession):
+    """
+    A SECOND user carrying the same shapes of PG data as the deletion target.
+
+    Deliberately identical in kind — same app, same scopes, same connection type — so the
+    ONLY thing distinguishing them is user_id. That is precisely the discriminator the
+    filters rely on and that nothing previously tested.
+    """
+    user = CoreUser(id=uuid4())
+    async_session.add(user)
+    await async_session.flush()
+
+    priority = PgPriority(
+        user_id=user.id,
+        name="Bystander priority",
+        type="deadline",
+        calendar_keyword="P1",
+        deadline=(datetime.now(timezone.utc) + timedelta(days=30)).date(),
+    )
+    async_session.add(priority)
+    await async_session.flush()
+
+    async_session.add_all([
+        PgGoal(priority_id=priority.id, goal_text="Bystander goal"),
+        PgDeliverable(priority_id=priority.id, name="Bystander deliverable"),
+        PgWeeklySnapshot(
+            priority_id=priority.id, user_id=user.id,
+            week_start=datetime(2026, 7, 27).date(),
+            week_end=datetime(2026, 8, 2).date(),
+            actual_hours=3,
+        ),
+        CoreConnection(
+            user_id=user.id, provider="google", connection_type="google",
+            encrypted_access_token=encrypt_token("bystander-access"),
+            encrypted_refresh_token=encrypt_token("bystander-refresh"),
+            token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+        ),
+        CoreConsent(
+            user_id=user.id, app_name="priority_guardian",
+            scope="pg.access", granted_at=datetime.now(timezone.utc),
+        ),
+        OAuthAccessToken(
+            jti=f"bystander-{uuid4()}", user_id=user.id, client_id="pg-client",
+            scope=["pg.access"],
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ),
+        OAuthAuthorizationCode(
+            code=f"bystander-code-{uuid4()}", user_id=user.id, client_id="pg-client",
+            code_challenge="z" * 43, code_challenge_method="S256",
+            redirect_uri="https://chatgpt.com/connector_platform_oauth_redirect",
+            scope=["pg.access"],
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+        ),
+    ])
+    await async_session.commit()
+    return user
+
+
+@pytest.mark.asyncio
+async def test_another_users_pg_data_is_untouched(
+    async_session, user_with_everything, bystander_with_identical_pg_data
+):
+    """
+    Bug this catches: dropping `user_id` from ANY filter — failure mode 1 from §0.2, the
+    unrecoverable one.
+
+    Mutation-verified across all seven user_id predicates: priorities, the priority_ids
+    subquery, snapshots, the connection lookup, the connection delete, consents, tokens and
+    authorization codes. Every one of those mutations passed 33/33 before this test existed,
+    because no fixture had ever created a second user.
+
+    The bystander holds the SAME shapes as the target — same app_name, same scopes, same
+    connection_type — so user_id is the only discriminator. A filter that leans on scope or
+    app_name alone deletes their data and this test fails.
+    """
+    victim = user_with_everything.id
+    bystander = bystander_with_identical_pg_data.id
+
+    with _google_ok():
+        await delete_user_data(victim, async_session, AsyncMock())
+    await async_session.commit()
+
+    # The target's data is gone.
+    assert await _count(async_session, PgPriority, victim) == 0
+
+    # Every one of the bystander's rows survives.
+    assert await _count(async_session, PgPriority, bystander) == 1, "priorities destroyed"
+    assert await _count(async_session, PgWeeklySnapshot, bystander) == 1, "snapshots destroyed"
+
+    for model, label in ((PgGoal, "goals"), (PgDeliverable, "deliverables")):
+        remaining = (await async_session.execute(
+            select(func.count()).select_from(model).where(
+                model.priority_id.in_(select(PgPriority.id).where(PgPriority.user_id == bystander)))
+        )).scalar_one()
+        assert remaining == 1, f"bystander {label} destroyed"
+
+    for model, label in (
+        (CoreConnection, "google connection"),
+        (CoreConsent, "PG consent"),
+        (OAuthAccessToken, "PG token"),
+        (OAuthAuthorizationCode, "PG authorization code"),
+    ):
+        remaining = (await async_session.execute(
+            select(func.count()).select_from(model).where(model.user_id == bystander)
+        )).scalar_one()
+        assert remaining == 1, f"bystander {label} destroyed"
+
+    # And their token must not have been revoked in passing.
+    tok = (await async_session.execute(
+        select(OAuthAccessToken).where(OAuthAccessToken.user_id == bystander)
+    )).scalar_one()
+    assert tok.revoked is False, "bystander token revoked by another user's deletion"
+
+
+@pytest.mark.asyncio
+async def test_audit_entry_is_written_for_the_right_user_only(
+    async_session, user_with_everything, bystander_with_identical_pg_data
+):
+    """
+    Bug this catches: writing the audit row against the wrong user, or against every user.
+    The audit entry is the only record that deletion happened; attributing it wrongly makes
+    the compliance trail actively misleading.
+    """
+    victim = user_with_everything.id
+    bystander = bystander_with_identical_pg_data.id
+
+    with _google_ok():
+        await delete_user_data(victim, async_session, AsyncMock())
+    await async_session.commit()
+
+    assert (await async_session.execute(
+        select(func.count()).select_from(CoreToolAuditLog).where(
+            CoreToolAuditLog.user_id == victim)
+    )).scalar_one() == 1
+
+    assert (await async_session.execute(
+        select(func.count()).select_from(CoreToolAuditLog).where(
+            CoreToolAuditLog.user_id == bystander)
+    )).scalar_one() == 0, "audit entry written against an uninvolved user"

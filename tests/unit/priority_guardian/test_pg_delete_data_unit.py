@@ -309,3 +309,48 @@ async def test_a_failing_rollback_still_raises_retryable():
     assert exc.value.retryable is True
     assert exc.value.google_revoked is True
     assert "NOT deleted" in exc.value.message
+
+
+@pytest.mark.asyncio
+async def test_cancellation_rolls_back_and_propagates():
+    """
+    Bug this catches: `except Exception` not catching cancellation. asyncio.CancelledError
+    inherits from BaseException, so a client disconnecting mid-deletion skipped the rollback,
+    the error event AND PgDeletionError — and get_db's own guard is `except Exception` too,
+    so nothing upstream compensated. The §4 reverse case went completely silent.
+
+    Asserts BOTH halves: the rollback happens (cleanup), and CancelledError still propagates
+    (the task must actually stop). Converting it to PgDeletionError would be wrong — a
+    cancelled task that reports a normal domain error keeps running from the caller's point
+    of view.
+    """
+    import asyncio as _asyncio
+
+    session = _make_session()
+    session.flush = AsyncMock(side_effect=_asyncio.CancelledError())
+
+    with _patched_revoke():
+        with pytest.raises(_asyncio.CancelledError):
+            await delete_user_data(USER_ID, session, AsyncMock())
+
+    session.rollback.assert_awaited_once()
+    session.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_survives_a_failing_rollback():
+    """
+    Bug this catches: an unguarded rollback inside the cancellation handler. If the
+    connection is already gone, rollback raises — and that exception would replace the
+    CancelledError, so the task would look like it failed for an unrelated reason instead of
+    having been cancelled.
+    """
+    import asyncio as _asyncio
+
+    session = _make_session()
+    session.flush = AsyncMock(side_effect=_asyncio.CancelledError())
+    session.rollback = AsyncMock(side_effect=RuntimeError("connection is dead"))
+
+    with _patched_revoke():
+        with pytest.raises(_asyncio.CancelledError):
+            await delete_user_data(USER_ID, session, AsyncMock())
