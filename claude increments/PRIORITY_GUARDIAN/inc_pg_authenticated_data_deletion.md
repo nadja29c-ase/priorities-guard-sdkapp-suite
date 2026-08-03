@@ -109,11 +109,62 @@ against the live schema. Verify it. Report. Stop.**
    filter** isolates PG's rows from MindSort's. For `core_consents` and `oauth_access_tokens`
    this is a scope filter — name the literal scope value. **If any shared table has no reliable
    PG-only filter, stop and report: that is a blocker, not a detail.**
-6. **Check Redis.** Focused's implementation clears Redis cache keys. Determine whether PG
-   writes any user-keyed Redis state and, if so, the key patterns.
-7. **Confirm the deployed schema matches the models.** Run `alembic heads` and check for
-   pending migrations. A model-schema mismatch means the inventory is wrong in a way reading
-   cannot detect.
+
+6. **Classify every category: delete / revoke-then-delete / retain.** Identifying which rows
+   belong to PG is not sufficient. Each must carry a documented action, and the source of truth
+   is **`Data_Retention_Strategy_Shared_Backend_Priority_Guardian_Suite_7.pdf` (project KB)**,
+   not this briefing's assumptions.
+
+   The retention strategy already specifies a deletion order — *"1. `sdk_app_name_*` tables,
+   2. `core_consents` and `core_connections` (if revoked), 3. `core_users` last"* — and
+   separately says consent records are *"retained to prove lawful processing"* with deletion
+   triggered by **user revocation**. **Determine which applies when the user requests deletion
+   rather than revocation, and report the conflict if the document does not resolve it.**
+
+   Required classification table in your report:
+
+   | Category | Action | Source |
+   |---|---|---|
+   | PG app tables (`pg_*`) | Delete | Retention strategy |
+   | Google connection (`core_connections`) | Revoke at Google, then delete | Retention strategy |
+   | `core_consents` (PG scopes) | **Determine** — delete vs retain-as-evidence | Retention strategy + report the ambiguity |
+   | `oauth_access_tokens` (`pg.access`) | Revoke, then delete — **but note the strategy defines a 30-day "token audit log" on token metadata.** Establish whether that is a separate artefact or these rows. | Retention strategy |
+   | `oauth_sessions` | **Retention strategy says these ARE deleted on account deletion.** This contradicts ADR_008 §1, which retains them. **Report the conflict; do not resolve it yourself.** | Retention strategy vs ADR_008 |
+   | `core_tool_audit_log` | Retain — write, never delete | ADR_008 §3 |
+   | `core_users` | Retain | ADR_008 §2 |
+
+   **Two known conflicts to surface, not silently pick a side on:**
+   - `oauth_sessions`: ADR_008 §1 retains them; the retention strategy deletes them on account
+     deletion. Note this is *account* deletion, which may differ from *PG-scoped* deletion.
+   - The retention strategy's verification-log entry says retain **30 days**;
+     `core_tool_audit_log`'s own model comment and `cleanup_expired_audit_logs` say **90 days**.
+
+   Getting this wrong in either direction is a compliance defect: deleting evidence the policy
+   says is retained, or retaining user-linked data the deletion response claims is gone.
+
+7. **Check non-SQL and deferred state.** Focused's implementation clears Redis cache keys.
+   Determine whether PG writes any user-keyed state outside PostgreSQL, and report the key
+   patterns or confirm there are none:
+   - Redis cache keys containing `user_id` — the retention strategy specifies the purge pattern
+     `redis.delete_pattern(f"{user_id}:*")`; verify it matches PG's actual key shapes
+   - **Queued or retrying Celery jobs carrying a `user_id`** — a job that runs after deletion
+     against a deleted user is a live failure mode
+   - Cached or pre-rendered reports
+   - Webhook subscriptions (`google_channel_id` / `google_resource_id` on `CoreConnection`)
+8. **Deployed schema parity — report honestly, do not overclaim.** `alembic heads` shows the
+   migration heads present in the *repository*. It does **not** establish which revision
+   production is running, nor that the physical schema matches the ORM. Do:
+   - `alembic heads` for repository state, and note any pending migration
+   - `alembic current` against the **local test database** for local parity
+   - **State explicitly that production schema parity is unverified**, because production
+     database access is closed (empty IP allowlist, 2026-07-31) and §0.3 keeps you read-only.
+     If parity matters before deploy, that is a human step for Nadja, not something you can
+     assert.
+9. **Backups — documentation, not deletion.** Deleting from active storage does not remove data
+   from PostgreSQL backups. **The retention strategy already states the answer: encrypted
+   backups retained 7 days, then automatically and permanently deleted.** Confirm that against
+   Render's actual configuration and carry the figure into Parts D and F. **Not** into the
+   deletion code.
 
 **Output:** a table, the diff against ADR_008 §1, the shared-table filters, and an explicit
 list of what you could not verify. **Then stop and wait for approval.** Do not begin Part B.
@@ -129,13 +180,58 @@ establishes where that lives), called from a route on the existing offboarding r
 
 **Required sequence** — Focused's order, adapted:
 
-1. Call the existing disconnect logic first (revoke Google, mark connection revoked). If already
-   disconnected, continue.
+1. Revoke the Google token **at Google** (external call, best-effort — see atomicity rules below).
 2. Delete PG-owned tables per the verified inventory.
 3. Delete PG-scoped rows from shared tables — **filtered by scope, never by `user_id` alone**.
-4. Write a `CoreToolAuditLog` entry: `app_name="priority_guardian"`, `action="delete_data"`,
-   `result_status`, and a `details` dict with per-table row counts.
-5. Return a structured result: success, tables affected, rows deleted per table, audit log id.
+4. Mark / delete the Google `CoreConnection` row per the inventory.
+5. Write a `CoreToolAuditLog` entry: `app_name="priority_guardian"`, `action="delete_data"`,
+   `result_status`, and a `details` dict with per-table row counts. **These four fields plus
+   `user_id` and `created_at` are the complete model — verified 2026-08-01 in
+   `backend/core/models.py`. Do not add fields to it.**
+6. Return a structured result: success, tables affected, rows deleted per table, audit log id.
+
+### ATOMICITY — mandatory, not a choice
+
+An earlier draft of this briefing left the transaction boundary to your judgement. **It is now
+specified.** A best-effort per-table sequence can leave priorities deleted, snapshots retained,
+tokens half-removed, and return a failure after irreversible partial deletion. That is
+unacceptable for an erasure operation the privacy policy will describe.
+
+**Required architecture:**
+
+- **All local PostgreSQL deletions plus the audit entry execute in ONE transaction.** Any local
+  failure rolls back everything.
+- **The Google revocation is an external call and sits outside that transaction.** Attempt it,
+  record the outcome, and **do not block local deletion if Google is unreachable.** A user's
+  erasure right must not depend on a third-party endpoint's availability.
+- **The result must distinguish two things:** local PG data deleted (yes/no), and external
+  Google revocation confirmed (yes / could not be confirmed). Never collapse them into one
+  success flag.
+- If Google revocation could not be confirmed, the connection row is still deleted locally and
+  the audit entry records the unconfirmed revocation.
+
+**The reverse case must also be handled: Google revoked, local transaction rolled back.**
+Distributed atomicity is impossible here, so this outcome is acceptable — but it must not be
+silent:
+
+- Return an error that is **explicitly retryable**. Never report "nothing changed" — Calendar
+  access is gone even though PG data remains.
+- Emit an audit or error event recording the failed local attempt.
+- **A retry must succeed even though Google is now disconnected.** The revocation step must
+  tolerate an already-revoked or absent connection and proceed to local deletion. Test this
+  path explicitly.
+
+### The existing `/disconnect` cannot simply be called first
+
+`backend/apps/priority_guardian/routers/offboarding_router.py::disconnect` **commits its own
+transaction** (`await session.commit()`) and **returns early** when the user is already
+disconnected. Calling it as step 1 would therefore break atomicity and skip the rest of the
+flow on an already-disconnected user.
+
+**Extract the revocation logic rather than calling the route.** Report how you did it — a
+shared helper both paths call is the obvious answer, but do not restructure `/disconnect`'s
+behaviour in the process (§2 puts it out of scope). If extraction would require changing
+`/disconnect`, stop and report.
 
 **Hard constraints:**
 
@@ -144,10 +240,6 @@ establishes where that lives), called from a route on the existing offboarding r
 - **Never delete `core_tool_audit_log` rows.**
 - **Never delete `oauth_sessions`** — suite-level browser session, not PG state (ADR_008 §1).
 - Idempotent: calling twice must succeed, with the second call reporting zero rows.
-- Partial failure must not leave a half-deleted state silently. Decide transaction boundaries
-  deliberately and **state the choice and its rationale in the report** — Focused's best-effort
-  per-table approach is one valid answer, a single transaction is another. Do not copy without
-  deciding.
 - Route requires `verify_internal_call` like every other PG route, and takes `X-User-ID`.
 
 ---
@@ -162,21 +254,37 @@ establishes where that lives), called from a route on the existing offboarding r
 - that it cannot be undone
 - when to call and when not to
 
-**Annotations:** `title`, `readOnlyHint=False`, `destructiveHint=True`, `openWorldHint=False`.
+**Annotations — mandatory, not a decision:** `title` present, `readOnlyHint=False`,
+`destructiveHint=True`, `openWorldHint=False`. **On BOTH platforms.** The tool permanently
+deletes user data; Anthropic requires destructive tools to carry `destructiveHint: true`, and
+both hosts use it to gate confirmation.
 
-**Note the existing pattern:** `mcp_server/priority_guardian_claude/tools_list_dupl.py` carries
-`_CLAUDE_DESTRUCTIVE_HINT_OVERRIDES` because ChatGPT shows confirmation UI on
-`destructiveHint=True` for public tools. Read that file and decide whether this tool needs the
-same treatment, or whether `True` on both platforms is correct here. **State the decision and
-why.**
+**Do not use `_CLAUDE_DESTRUCTIVE_HINT_OVERRIDES` for this tool.** That mechanism exists in
+`mcp_server/priority_guardian_claude/tools_list_dupl.py` because `create_priority` is `False`
+in the shared `ToolDefinition` — deliberately, to avoid ChatGPT's confirmation UI on a
+creation tool — and needs raising to `True` on Claude. **A deletion tool wants that
+confirmation on both platforms**, so set `destructive_hint=True` in the shared `ToolDefinition`
+and add no override. Read that file to confirm the override dict is keyed by tool name and that
+omitting an entry falls through to the shared value.
 
-**Confirmation:** the user must confirm before deletion executes. Determine from the existing
-tool patterns whether this is a two-call flow, a widget confirmation, or model-driven — do not
-invent a new mechanism.
+**Confirmation:** the user must confirm before deletion executes. **Use the platform's native
+confirmation** — that is what `destructiveHint=True` triggers. Do not build a custom widget
+confirmation unless you establish that the native behaviour is absent, and report the evidence
+if you do. **Verify the confirmation actually appears on both platforms end to end** before
+reporting this part complete; an annotation set correctly in code but not surfacing in the host
+is the failure this check exists to catch.
 
-**Both servers.** The tool registry is shared (`mcp_server/priority_guardian/tools/`), so one
-definition serves both. Verify that assumption against `tools_list_dupl.py` rather than assuming
-it.
+**The user-facing result must describe categories, not schema.** Never surface table names,
+audit-log IDs, or raw row counts to the user. Per-table counts belong in the audit entry and
+the logs. Shape:
+
+> **Deleted:** priorities, goals and deliverables; weekly progress snapshots; Priority Guardian
+> configuration; the Google Calendar connection; Priority Guardian authorization data.
+> **Retained:** a limited security audit record for up to 90 days; the shared suite identity
+> other Priority Guard apps need.
+
+The structured backend response may carry counts for testing and the widget; the text the user
+reads may not.
 
 ---
 
@@ -233,8 +341,16 @@ asked.
 The manual runbook for the exceptional support path.
 
 - **Operation A** (PG data, connected user): direct them to the in-app tool. That is the answer.
-- **Operation B** (suite-wide): the manual sequence — PG deletion, MindSort deletion, then the
-  `core_users` row. Include the actual steps.
+- **Operation B** (suite-wide): **not implemented by this runbook, and not to be specified
+  here.** An earlier draft gave a three-step sequence — PG deletion, MindSort deletion, then
+  the `core_users` row. **That was under-verified and has been removed.** Suite-wide erasure
+  needs its own verified inventory covering every published and deprecated app, shared consents,
+  all OAuth grants and sessions, shared connections, audit retention, Redis, scheduled jobs and
+  backups. Write instead:
+
+  > Operation B is not yet implemented. Record the request and the 30-day clock. Do **not**
+  > delete `core_users` until a verified suite-wide erasure procedure exists. Fulfil the
+  > PG-scoped portion via Operation A and tell the requester what remains outstanding.
 - **Identification:** per ADR_008 §5. Case-by-case investigation for the disconnected user.
   **Do not write a deterministic procedure based on priority names or keywords** — that was
   explicitly rejected.
@@ -263,8 +379,11 @@ The manual runbook for the exceptional support path.
 - **GDPR:** this increment exists to make the erasure right executable. It adds no new personal
   data. Never log deleted content — row counts only, never priority names or board text.
 - **Latency:** deletion touches several tables. Confirm it completes inside the MCP tool
-  timeout; PG tools use `TIMEOUT_S = 8.0` for backend calls. **If it might exceed that, report
-  rather than silently accepting a timeout risk.**
+  timeout; PG tools use `TIMEOUT_S = 8.0` for backend calls. **Test at realistic maximum
+  volume, not one row per table** — `pg_weekly_snapshots` accumulates weekly, so seed a user
+  with the largest realistic set the retention model permits and measure. If it might exceed
+  the timeout, report before implementing an async model rather than discovering it in
+  production.
 - **Cross-platform:** the tool ships to a live published ChatGPT app and a Claude connector
   awaiting resubmission. Both must work.
 
@@ -284,16 +403,20 @@ The manual runbook for the exceptional support path.
 ## 12. Definition of done — report requirements
 
 1. **Commit SHA.** No SHA, no review.
-2. **Part A inventory**, the diff against ADR_008 §1, shared-table filters, and what you could
-   not verify.
+2. **Part A inventory**, the diff against ADR_008 §1, shared-table filters, **the per-category
+   delete/revoke/retain classification (§3.6) with the two known conflicts surfaced**, and what
+   you could not verify.
 3. Per part: what changed, in which files, which requirement it satisfies.
 4. Per test: what bug would still pass it. **Mutation results for the four §7 tests.**
-5. The transaction-boundary decision and its rationale (§4).
-6. The `destructiveHint` decision for both platforms (§5).
-7. Timeout assessment (§10).
-8. Anything you could not verify or had to assume — explicitly, not buried.
-9. Adjacent issues noticed but not fixed — flagged only.
-10. Deployment status and which services would redeploy on push.
+5. **Atomicity evidence** (§4): how the single transaction is bounded, how Google revocation
+   sits outside it, and how `/disconnect`'s own commit was handled without changing that route.
+6. Confirmation verified end-to-end on **both** platforms (§5) — state how you verified it.
+7. Timeout measurement at realistic maximum volume (§10).
+8. Backup retention period, for Parts D and F (§3.8).
+9. Anything you could not verify or had to assume — explicitly, not buried. **Production schema
+   parity belongs here** (§3.7).
+10. Adjacent issues noticed but not fixed — flagged only.
+11. Deployment status and which services would redeploy on push.
 
 **If any requirement is unclear, contradicts the codebase, or conflicts with a canonical
 document: stop and report. Do not resolve the ambiguity by choosing.**
