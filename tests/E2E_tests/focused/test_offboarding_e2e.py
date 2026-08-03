@@ -37,6 +37,7 @@ async def test_user_with_data(async_session: AsyncSession):
     connection = CoreConnection(
         user_id=user.id,
         provider="google",
+        connection_type="google",
         encrypted_access_token=encrypt_token("test_access_token"),
         encrypted_refresh_token=encrypt_token("test_refresh_token"),
         token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
@@ -508,6 +509,7 @@ class TestDeleteDataEndpoint:
         connection = CoreConnection(
             user_id=user.id,
             provider="google",
+            connection_type="google",
             encrypted_access_token=encrypt_token("test_access"),
             encrypted_refresh_token=encrypt_token("test_refresh"),
             token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
@@ -585,6 +587,7 @@ class TestDeleteDataEndpoint:
         connection = CoreConnection(
             user_id=user.id,
             provider="google",
+            connection_type="google",
             encrypted_access_token=encrypt_token("test_access"),
             encrypted_refresh_token=encrypt_token("test_refresh"),
             token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
@@ -938,6 +941,7 @@ class TestRedisIntegration:
         connection = CoreConnection(
             user_id=user.id,
             provider="google",
+            connection_type="google",
             encrypted_access_token=encrypt_token("test_access"),
             encrypted_refresh_token=encrypt_token("test_refresh"),
             token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),

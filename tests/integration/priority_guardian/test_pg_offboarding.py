@@ -46,6 +46,7 @@ async def pg_user_with_connection(async_session: AsyncSession, pg_user: CoreUser
     connection = CoreConnection(
         user_id=pg_user.id,
         provider="google",
+        connection_type="google",
         encrypted_access_token=encrypt_token("test_access_token"),
         encrypted_refresh_token=encrypt_token("test_refresh_token"),
         token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
@@ -63,6 +64,7 @@ async def pg_user_with_connection_no_refresh(async_session: AsyncSession, pg_use
     connection = CoreConnection(
         user_id=pg_user.id,
         provider="google",
+        connection_type="google",
         encrypted_access_token=encrypt_token("test_access_token"),
         encrypted_refresh_token=None,  # No refresh token
         token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),

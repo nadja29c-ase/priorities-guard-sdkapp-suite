@@ -37,7 +37,7 @@ from backend.apps.priority_guardian.services.offboarding_service import (
 )
 from backend.core.encryption import encrypt_token
 from backend.core.models import CoreConnection, CoreConsent, CoreToolAuditLog, CoreUser
-from backend.core.oauth_provider.models import OAuthAccessToken
+from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizationCode
 
 SERVICE = "backend.apps.priority_guardian.services.offboarding_service"
 
@@ -98,6 +98,13 @@ async def user_with_everything(async_session: AsyncSession):
             scope=["pg.access"],
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         ),
+        OAuthAuthorizationCode(
+            code=f"pg-code-{uuid4()}", user_id=user.id, client_id="pg-client",
+            code_challenge="x" * 43, code_challenge_method="S256",
+            redirect_uri="https://chatgpt.com/connector_platform_oauth_redirect",
+            scope=["pg.access"],
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+        ),
         # MindSort rows — MUST survive
         ClarityCluster(user_id=user.id, cluster_data={"clusters": [{"cluster_name": "Work"}]}),
         CoreConsent(
@@ -108,6 +115,13 @@ async def user_with_everything(async_session: AsyncSession):
             jti=f"ms-{uuid4()}", user_id=user.id, client_id="ms-client",
             scope=["clarity.write"],
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ),
+        OAuthAuthorizationCode(
+            code=f"ms-code-{uuid4()}", user_id=user.id, client_id="ms-client",
+            code_challenge="y" * 43, code_challenge_method="S256",
+            redirect_uri="https://claude.ai/api/mcp/auth_callback",
+            scope=["clarity.write"],
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
         ),
     ])
     await async_session.commit()
@@ -198,6 +212,13 @@ async def test_mindsort_data_is_untouched(async_session, user_with_everything):
     assert len(ms_tokens) == 1, "MindSort token destroyed"
     assert ms_tokens[0].revoked is False, "MindSort token revoked by a PG-scoped deletion"
 
+    ms_codes = (await async_session.execute(
+        select(func.count()).select_from(OAuthAuthorizationCode).where(
+            OAuthAuthorizationCode.user_id == user_id,
+            OAuthAuthorizationCode.client_id == "ms-client")
+    )).scalar_one()
+    assert ms_codes == 1, "MindSort authorization code destroyed"
+
 
 @pytest.mark.asyncio
 async def test_every_pg_table_is_emptied(async_session, user_with_everything):
@@ -228,6 +249,7 @@ async def test_every_pg_table_is_emptied(async_session, user_with_everything):
     assert result["rows_deleted"]["pg_weekly_snapshots"] == 1
     assert result["rows_deleted"]["pg_goals"] == 1
     assert result["rows_deleted"]["pg_deliverables"] == 1
+    assert result["rows_deleted"]["oauth_authorization_codes"] == 1
 
     assert await _count(async_session, PgPriority, user_id) == 0
     assert await _count(async_session, PgWeeklySnapshot, user_id) == 0

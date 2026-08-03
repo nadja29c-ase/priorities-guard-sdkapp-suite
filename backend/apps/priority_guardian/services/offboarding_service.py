@@ -8,6 +8,7 @@ WHAT IS DELETED (verified inventory — Part A report, §1 and §4):
   pg_priorities, pg_goals, pg_deliverables, pg_weekly_snapshots  — PG-owned
   core_consents            — PG-scoped rows only (app_name="priority_guardian")
   oauth_access_tokens      — PG-scoped rows only ('pg.access' in scope), revoked then deleted
+  oauth_authorization_codes — PG-scoped rows only ('pg.access' in scope)
   core_connections         — the Google row, revoked at Google first
 
 WHAT IS NEVER DELETED:
@@ -55,7 +56,7 @@ from backend.apps.priority_guardian.db_models import (
 from backend.core.encryption import decrypt_token
 from backend.core.google_oauth import revoke_google_token
 from backend.core.models import CoreConnection, CoreConsent, CoreToolAuditLog
-from backend.core.oauth_provider.models import OAuthAccessToken
+from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizationCode
 
 logger = structlog.get_logger(__name__)
 
@@ -198,6 +199,7 @@ async def delete_user_data(
         "pg_deliverables": 0,
         "pg_priorities": 0,
         "oauth_access_tokens": 0,
+        "oauth_authorization_codes": 0,
         "core_consents": 0,
         "core_connections": 0,
     }
@@ -266,9 +268,14 @@ async def delete_user_data(
         # Shared table: oauth_access_tokens. SCOPE-FILTERED, never by user_id alone —
         # user_id alone would take MindSort's tokens and silently break that connector.
         #
-        # Revoke before delete, in this transaction. The revoked flag is what makes a
-        # concurrent refresh fail cleanly: token_service.py:335 filters revoked == False in
-        # the refresh-exchange WHERE clause. Deleting alone would race.
+        # Revoke before delete, in this transaction — belt and braces, matching Focused.
+        #
+        # It is NOT what makes a concurrent refresh fail cleanly: inside one transaction the
+        # UPDATE is invisible to other sessions until commit, by which point the DELETE is
+        # visible too. A concurrent refresh blocks on the row lock and then finds the row
+        # gone. The flag adds nothing the delete does not already provide, and this comment
+        # previously claimed otherwise. Kept because it costs nothing and mirrors the
+        # reference implementation, not because it closes a race.
         #
         # These rows hold a credential, not metadata about one — refresh_token_enc (Fernet)
         # and refresh_token_hash (indexed for lookup). Retaining them for the retention
@@ -290,6 +297,28 @@ async def delete_user_data(
 
         result = await session.execute(delete(OAuthAccessToken).where(*pg_token_filter))
         rows_deleted["oauth_access_tokens"] = result.rowcount
+
+        # ---------------------------------------------------------------------
+        # Shared table: oauth_authorization_codes. Same shape as the token table —
+        # user_id FK plus a scope ARRAY — so the same scope filter isolates PG's rows.
+        #
+        # Found by adversarial review of Part B, and it traces back to the gate artifact:
+        # Part A's shared-table inventory omitted this table entirely. That is failure mode
+        # 3 from §0.2 (a missed table), even though the practical exposure is near zero —
+        # codes are single-use, expire in 10 minutes, and are swept by
+        # cleanup_expired_oauth_codes. A user deleting their data is very unlikely to hold
+        # a live code. Included because "verified inventory" has to mean verified.
+        #
+        # The reference implementation deletes these too, in disconnect_user rather than
+        # delete_user_data; placed here because for PG this is deletion, not disconnect.
+        # ---------------------------------------------------------------------
+        result = await session.execute(
+            delete(OAuthAuthorizationCode).where(
+                OAuthAuthorizationCode.user_id == user_id,
+                PG_SCOPE == any_(OAuthAuthorizationCode.scope),
+            )
+        )
+        rows_deleted["oauth_authorization_codes"] = result.rowcount
 
         # ---------------------------------------------------------------------
         # Shared table: core_consents. Filtered by app_name, never by user_id alone.

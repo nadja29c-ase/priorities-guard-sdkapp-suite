@@ -73,10 +73,24 @@ it. This instance is benign; the class is not. See §6.
 
 ## 3. Shared tables — exact PG-only filters (§3.5)
 
+> **⚠️ CORRECTED 2026-08-03 — this table was incomplete when first published.**
+> `oauth_authorization_codes` was **missing** and is added below. Found by adversarial review
+> of Part B, not by Part A. That is failure mode 3 from §0.2 — a missed table — occurring in
+> the artifact whose whole purpose is to prevent it.
+>
+> Practical exposure is near zero: codes are single-use, expire in 10 minutes, and are swept
+> by `cleanup_expired_oauth_codes`, so a user deleting their data is unlikely to hold a live
+> one. The process failure matters more than the row. §3.1 told me to enumerate every table
+> with a `user_id` column or an FK chain to `core_users.id`; this table has both, and my own
+> FK enumeration in §1 surfaced it (`oauth_provider/models.py:75`). I did not carry it from
+> that list into the shared-table analysis. The reference implementation deletes it too — a
+> second signal passed over.
+
 | Table | PG-only filter | Verdict |
 |---|---|---|
 | `core_consents` | `app_name == "priority_guardian"` | **Clean** |
 | `oauth_access_tokens` | `'pg.access' = ANY(scope)` (`scope` is `ARRAY(String)`) | **Clean** |
+| `oauth_authorization_codes` | `'pg.access' = ANY(scope)` (`scope` is `ARRAY(String)`) | **Clean — added 2026-08-03** |
 | `core_connections` (Google) | `user_id` + `provider == "google"` **AND** `connection_type == "google"` | **Constrained — see 3.2** |
 | `oauth_sessions` | — | Retain (§4) |
 | `core_tool_audit_log` | — | Retain; written, never deleted |
@@ -144,6 +158,7 @@ document, ADR_008, and code — not against this briefing's assumptions.
 | `core_connections` (Google) | **Revoke at Google, then delete** | Retention §2 + §3 step 2; ADR_008 §1 | Agree — see 4.1 |
 | `core_consents` (`app_name="priority_guardian"`) | **Delete** | Retention §2 trigger = user revocation; §3 step 2; ADR_008 §1 | Agree — see 4.2 |
 | `oauth_access_tokens` (`'pg.access' = ANY(scope)`) | **Revoke, then delete** | ADR_008 §1 | **CONFLICT — see 4.3** |
+| `oauth_authorization_codes` (`'pg.access' = ANY(scope)`) | **Delete** | Reference implementation; same shape as tokens | Added 2026-08-03 — see §3 correction |
 | `oauth_sessions` | **Retain** | Retention §7.1 decision; ADR_008 §1 | Resolved |
 | `core_tool_audit_log` | **Retain — write, never delete** | ADR_008 §3; Retention §2 (90 days) | Agree |
 | `core_users` | **Retain** | ADR_008 §2 | Agree |
