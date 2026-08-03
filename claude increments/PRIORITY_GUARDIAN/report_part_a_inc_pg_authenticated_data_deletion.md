@@ -3,7 +3,8 @@
 **Increment:** `inc_pg_authenticated_data_deletion.md` (v1)
 **Part:** A — inventory verification, no code
 **Date:** 2026-08-03
-**Status:** Complete except §3.6, which is blocked on `doc/legal/data_retention_strategy.md`
+**Status:** Complete. §3.6 unblocked and completed 2026-08-03 against
+`doc/legal/data_retention_strategy.md` (§4 below).
 
 This is the gate artifact. Parts B–F depend on the inventory below being correct.
 
@@ -132,13 +133,90 @@ Not fixed here: `/disconnect` and identity code are both out of scope (§2).
 
 ---
 
-## 4. §3.6 classification — BLOCKED
+## 4. §3.6 classification — COMPLETE
 
-Not attempted. `doc/legal/data_retention_strategy.md` does not yet exist; the source PDF lives
-in project knowledge and is not reachable from the repository.
+Unblocked 2026-08-03 by `doc/legal/data_retention_strategy.md`. Classified against that
+document, ADR_008, and code — not against this briefing's assumptions.
 
-Two decisions have been taken in advance and should be recorded in that document rather than
-resolved by this report:
+| Category | Action | Source | Agreement |
+|---|---|---|---|
+| PG app tables — `pg_priorities`, `pg_goals`, `pg_deliverables`, `pg_weekly_snapshots` | **Delete** | Retention §3 step 1 (`sdk_app_name_*`); ADR_008 §1 | Agree |
+| `core_connections` (Google) | **Revoke at Google, then delete** | Retention §2 + §3 step 2; ADR_008 §1 | Agree — see 4.1 |
+| `core_consents` (`app_name="priority_guardian"`) | **Delete** | Retention §2 trigger = user revocation; §3 step 2; ADR_008 §1 | Agree — see 4.2 |
+| `oauth_access_tokens` (`'pg.access' = ANY(scope)`) | **Revoke, then delete** | ADR_008 §1 | **CONFLICT — see 4.3** |
+| `oauth_sessions` | **Retain** | Retention §7.1 decision; ADR_008 §1 | Resolved |
+| `core_tool_audit_log` | **Retain — write, never delete** | ADR_008 §3; Retention §2 (90 days) | Agree |
+| `core_users` | **Retain** | ADR_008 §2 | Agree |
+| Redis | **No action required** | Retention §3 specifies `redis.delete_pattern(f"{user_id}:*")` | See 4.4 |
+| `*_onboarding_state`, `*_scheduled_jobs` | **Not applicable** | Retention §2 lists both suite-generically | PG has neither table (§1) |
+
+### 4.1 `core_connections` — the "(if revoked)" qualifier
+
+Retention §3 step 2 reads *"`core_consents` and `core_connections` (**if revoked**)"*. Two
+readings are available: a sequencing statement (revoke, then delete) or a conditional gate
+(delete only if revocation succeeded).
+
+Briefing §4 already decides this in the atomicity rules: if Google revocation cannot be
+confirmed, **the row is still deleted locally** and the audit entry records the unconfirmed
+revocation, because a user's erasure right must not depend on a third party's availability.
+
+**Flagged rather than silently chosen.** The briefing's rule governs; a literal reading of the
+source would leave the row in place when Google is unreachable, which is the outcome §4
+explicitly rejects.
+
+### 4.2 `core_consents` — the source does resolve it
+
+The briefing asked whether *"retained to prove lawful processing, deleted on user revocation"*
+applies when the user requests deletion rather than revocation.
+
+**It does, and the answer is delete.** A request to delete PG data is a withdrawal of consent
+for PG processing. The source's stated trigger therefore fires, and §3 step 2 deletes the rows.
+ADR_008 §1 independently says delete PG-scoped rows only. Both agree.
+
+**Accountability side-effect, for Part D rather than for the code:** once the consent row is
+gone, the only surviving evidence that processing was lawful is the `core_tool_audit_log` entry,
+which itself expires at 90 days. After that, no record remains that consent was ever granted.
+That is a consequence of honouring erasure, not a defect — but the policy should not imply
+otherwise.
+
+### 4.3 `oauth_access_tokens` — a third conflict, not among the two known ones
+
+The briefing asked whether the strategy's 30-day *"token audit log"* is a separate artefact or
+these rows. **It is these rows.** Retention §2 locates it precisely:
+
+> | Token audit log | `oauth_access_tokens` **metadata** | 30 days | Traceability and security auditing |
+
+This is **distinct from** the 30-day *verification* log addressed in Retention §7.2. The source
+contains two different 30-day figures; §7.2 resolved only one of them.
+
+**The conflict:** ADR_008 §1 says revoke then delete the `pg.access` rows. The source says token
+metadata is retained 30 days for traceability and security auditing. Deleting on request
+destroys that trail early. The source's §3 sequence never mentions `oauth_access_tokens` at all —
+they would vanish by FK CASCADE from `core_users` in Operation B, so the source never
+contemplated deleting them *without* deleting the user.
+
+**Reported, not resolved.** Per §3.6 this needs a decision, and it is the same shape as §7.2:
+an Operation A question the source could not have answered.
+
+### 4.4 Deleting token rows does not revoke access
+
+Verified independently for PG, not inherited from ADR_006:
+`mcp_server/priority_guardian/mcp_auth.py` extracts `jti` from the JWT but **never queries
+`oauth_access_tokens`**. Validation is JWKS signature plus claims. There is no revocation lookup
+and no database access on the resource-server path.
+
+**Consequence:** deleting the row — or marking it revoked — does not invalidate a live token.
+A token already issued stays valid until `exp`. Residual window is
+`OAUTH_TOKEN_EXPIRY_SECONDS` (3600) + `TOKEN_EXPIRY_GRACE_SECONDS` (30) = **60m30s** at
+defaults, matching ADR_006.
+
+In practice the user's data is already gone, so a surviving token reads an empty account rather
+than stale data. But **Part D must not claim that deletion immediately terminates access**, and
+Part C's user-facing text should not either.
+
+### 4.5 Decisions carried from the retention document
+
+Recorded there rather than resolved here:
 
 | Item | Decision | Basis |
 |---|---|---|
@@ -229,8 +307,11 @@ F. Not into the deletion code.
 
 1. **Production schema parity** (§6.2) — and `pg_weekly_overview` makes it material rather than
    theoretical.
-2. **§3.6 classification** in full — pending `doc/legal/data_retention_strategy.md`.
-3. **Backup retention period** — not exposed by Render's API; doc is the source.
+2. ~~§3.6 classification~~ — **resolved 2026-08-03**; see §4. One item within it remains open
+   for decision rather than verification: the `oauth_access_tokens` token-audit-log conflict
+   (§4.3).
+3. **Backup retention period** — 7 days per the retention document (§5), **unconfirmed against
+   Render**, whose API exposes no backup field. Documentation input for Parts D and F only.
 4. **Whether `pg_weekly_overview` ever held rows in production** (§2) — needs DB access.
 5. **Whether any production `core_connections` row has `provider='google'` with
    `connection_type='unknown'`** (§9.1) — needs DB access.
@@ -284,7 +365,20 @@ The ADR_008 §1 inventory is **correct as written** for PG-owned tables. Three o
 tables have clean PG-only filters; `core_connections` is constrained rather than blocked, and
 the constraint is recorded.
 
-**Nothing blocks Part B on the inventory itself.** The two open dependencies are §3.6 (awaiting
-the retention document) and the Part E test-derivation question raised in §6.1.
+The §3.6 classification is complete (§4). Every category carries an action and a source.
+
+**Two items remain open, and both need a decision rather than more verification:**
+
+1. **`oauth_access_tokens` (§4.3)** — the source retains token metadata 30 days for
+   traceability; ADR_008 deletes it. An Operation A question the source never contemplated.
+   **This one gates Part B**, because it determines whether the deletion service deletes those
+   rows or only marks them revoked.
+2. **The 30-day verification log** (Retention §7.2) — specified, no writer anywhere in the
+   repository. Build it as a distinct record type or strike it from the source. Gates Part D,
+   not Part B: until resolved the privacy policy must not claim a 30-day verification retention.
+
+**Part B is otherwise unblocked.** Everything else it needs is settled: the table inventory, the
+shared-table filters, the delete/revoke/retain classification, and the atomicity architecture in
+briefing §4.
 
 No code was written. No schema was changed.
