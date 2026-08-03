@@ -346,3 +346,131 @@ the MCP servers.
 **Parts C, E and F are complete. Part D is blocked** on striking the 30-day verification log
 from the retention strategy — a change to a signed artefact, and not a decision an
 implementing increment should make.
+
+> **This section predates the adversarial reviews. See §14 onward, added 2026-08-03 after
+> three Codex passes produced fourteen findings — two of which would have shipped broken.**
+
+
+---
+
+## 14. Adversarial review — three passes (added 2026-08-03)
+
+Run after Parts A–F were reported complete. Split into three focused passes because the
+increment spans ten commits; one review would have skimmed everything.
+
+| Pass | Target | Real findings | Fixed now | Deferred |
+|---|---|---|---|---|
+| 1 | `offboarding_service.py` | 5 | rollback guard | 3 documented-unreachable, 1 already recorded |
+| 2 | tool + route + `http_client` + dispatchers | 5 | idempotency message, false comment | security (#10), `widget_accessible`, Claude adapter |
+| 3 | the four test files | 4 | all 4 | 2 recorded |
+
+Commits: `93987f5`, `ad30272`, `9713b94`.
+
+### 14.1 The two that would have shipped broken
+
+**The 503 seam.** `backend_post` returns the parsed body for 4xx but RAISES for 5xx. The
+route signalled its retryable case with 503, so the tool's entire error branch was
+unreachable and the user got the dispatcher's generic "Something went wrong" — in exactly the
+scenario the atomicity design exists for, with no hint their Calendar access was already
+gone. Found before the reviews; the reviews then found that **nothing tested the router's
+side of that contract either**, so changing 503→500 would have broken production with every
+test green.
+
+**The conjunction filter had no test at all.** Every fixture set both `provider` and
+`connection_type`, so `provider == "google"` alone matched every row. Dropping
+`connection_type` survived the **entire suite** — 23 passed, zero failures. That is the
+filter Part A deliberated and Nadja ruled on; a provider-only implementation would have
+shipped green, silently reversing the decision toward cross-app destruction.
+
+Both share a shape: **a decision correctly made, correctly documented, and never verified.**
+
+### 14.2 Deferred with reasons
+
+- **#10 (security, ChatGPT only)** — client-controlled `_meta["openai/subject"]` can redirect
+  the effective user through reconciliation case C1. Verified from source. Predates this
+  increment; this increment attaches an irreversible verb to it. PG-Claude never reconciles
+  and is unaffected. Recommended mitigation: skip reconciliation for `destructive_hint=True`
+  tools and use the JWT `sub`, which fails safe.
+- **Three unreachable filter defeats** — documented at the constant block in the service with
+  the *direction* of each fix, because two point opposite ways (widen the consent filter,
+  narrow the token filter, do not touch the connection conjunction).
+- **`widget_accessible=False` not enforced** — discovery metadata only, in both dispatchers.
+  A dispatcher change touching every tool; its own increment.
+
+### 14.3 Confirmed safe
+
+Codex returned no defect on the two vectors most expected to fail: the
+`pg_goals`/`pg_deliverables` subquery does evaluate before the parent delete, and the Google
+revocation bound genuinely leaves `/disconnect` unchanged.
+
+---
+
+## 15. Two observations that outlive this increment
+
+These are the durable output. The fourteen findings are already fixed.
+
+### 15.1 The seam has no owner
+
+**Six of seven defects lived at boundaries.** Integration tests call services directly, unit
+tests mock sessions, routers are asserted alone. Every layer was verified and every boundary
+between layers was assumed.
+
+This is a statement about the repo's test taxonomy, not about this increment. There is no
+category of test whose job is the contract between two components, so contracts are the one
+thing nothing checks. The 503 bug, the router-status binding, and the unasserted POST
+endpoint were all instances.
+
+### 15.2 It was never the assertion, always the setup
+
+Five vacuous constructions. Every one was a mock that short-circuited, a fixture that could
+not express the discriminating case, or a seam nobody tested. **The assertions read
+correctly throughout** — what failed was that they never reached the code under test.
+
+| # | Construction | How it surfaced |
+|---|---|---|
+| 1 | Emptiness satisfied by an FK cascade, not by the code | mutation survived |
+| 2 | Retry test exercised only the return-failure path | mutation survived |
+| 3 | Latency test seeded no connection, so the mock never ran | **negative** elapsed time |
+| 4 | `decrypt_token` failed on a MagicMock, so the patched revoke was never called in 8 tests | `google_revoked` was False |
+| 5 | Derived assertion against an empty `Base.metadata` | caught by an added non-empty guard |
+
+**The generalisation, which held for all five: assertions that check a VALUE catch these;
+assertions that check an ABSENCE do not.** `google_revoked is True`, non-empty metadata,
+negative elapsed time — each failed loudly. `assert rows == 0` and "no error raised" are
+exactly the shapes that pass when nothing ran.
+
+**Prefer assertions that fail on an unexecuted path.**
+
+---
+
+## 16. Corrected status and the remaining path
+
+**Five of six parts complete.** Part D is not started and is blocked on one line.
+
+| Part | State |
+|---|---|
+| A, B, C, E, F | Complete, reviewed, pushed |
+| D | **Blocked** — strike the 30-day verification log from `data_retention_strategy.md` |
+
+### 16.1 Decision recorded: tool descriptions are not to be touched
+
+**Nadja, 2026-08-03.** No documented policy clause requires changing them, and editing them
+alters a published live app.
+
+Residual observation, recorded once and not re-argued: three of the eight public tools
+(`create_priority`, `inspect_adapt`, `onboarding_calendar_setup`) contain
+*"your default behavior is SUSPENDED"*, and `inspect_adapt` adds `FORBIDDEN:` and *"Override
+analytical coaching impulses"*. The new deletion tool is clean of all five patterns —
+verified programmatically. Whether that phrasing matters to a reviewer is a judgement call,
+and the call has been made.
+
+### 16.2 Remaining path to resubmission
+
+1. Strike the 30-day verification log → unblocks Part D
+2. Part D drafts the privacy-policy revisions
+3. **Deploy backend + PG-Claude MCP only.** Hold PG-OpenAI until #10's mitigation ships —
+   the two are separate Render services, and the `/delete-data` route is internal-secret
+   gated, so a backend deploy alone does not expose the tool
+4. Observe the confirmation dialog on Claude — the half of §12.6 only Nadja can do
+5. Publish the policy revisions
+6. Resubmit
