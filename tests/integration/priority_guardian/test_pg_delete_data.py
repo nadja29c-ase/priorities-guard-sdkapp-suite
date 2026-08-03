@@ -40,10 +40,53 @@ from backend.apps.priority_guardian.services.offboarding_service import (
     revoke_google_access,
 )
 from backend.core.encryption import encrypt_token
-from backend.core.models import CoreConnection, CoreConsent, CoreToolAuditLog, CoreUser
+from sqlalchemy.engine import make_url
+
+from backend.core.models import (
+    Base,
+    CoreConnection,
+    CoreConsent,
+    CoreToolAuditLog,
+    CoreUser,
+)
+from tests.conftest import TEST_DATABASE_URL
 from backend.core.oauth_provider.models import OAuthAccessToken, OAuthAuthorizationCode
 
 SERVICE = "backend.apps.priority_guardian.services.offboarding_service"
+
+
+# =============================================================================
+# Gap 2 (§7) — verify the database before deleting anything in it
+#
+# This module deletes rows. The check exists so that if someone ever repoints the test
+# database, these tests REFUSE TO RUN rather than silently deleting from whatever they were
+# aimed at. Cheap insurance, and on this increment it is not theoretical.
+# =============================================================================
+
+def _assert_safe_test_database():
+    """Fail loudly unless the target is an obviously-local, obviously-test database."""
+    url = make_url(TEST_DATABASE_URL)
+    host = url.host or "<local socket>"
+    print(f"\n[test-db] host={host} database={url.database!r} driver={url.drivername}")
+
+    assert host in ("localhost", "127.0.0.1", "<local socket>"), (
+        f"refusing to run destructive tests against non-local host {host!r}"
+    )
+    assert "test" in (url.database or ""), (
+        f"refusing to run destructive tests against database {url.database!r} — "
+        f"the name must contain 'test'"
+    )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def guard_test_database():
+    """Runs before every test in this module. Autouse so it cannot be forgotten."""
+    _assert_safe_test_database()
+
+
+PG_TABLES_FROM_METADATA = {
+    name for name in Base.metadata.tables if name.startswith("pg_")
+}
 
 
 # =============================================================================
@@ -261,10 +304,21 @@ async def test_every_pg_table_is_emptied(async_session, user_with_everything):
         result = await delete_user_data(user_id, async_session, AsyncMock())
     await async_session.commit()
 
-    assert result["rows_deleted"]["pg_priorities"] == 1
-    assert result["rows_deleted"]["pg_weekly_snapshots"] == 1
-    assert result["rows_deleted"]["pg_goals"] == 1
-    assert result["rows_deleted"]["pg_deliverables"] == 1
+    # DERIVED, not hand-copied (§7). The expected set comes from the ORM metadata, so a new
+    # pg_* model added without a corresponding delete fails this immediately. A hardcoded
+    # list would silently stop covering it — the trap recorded in Part A §1.1.
+    unaccounted = PG_TABLES_FROM_METADATA - set(result["rows_deleted"])
+    assert not unaccounted, (
+        f"pg_* tables in the ORM that delete_user_data does not account for: "
+        f"{sorted(unaccounted)}"
+    )
+    assert PG_TABLES_FROM_METADATA, "metadata yielded no pg_* tables — assertion is vacuous"
+
+    for table in PG_TABLES_FROM_METADATA:
+        assert result["rows_deleted"][table] > 0, (
+            f"{table} reported zero deletions, but the fixture seeded it — either the "
+            f"fixture stopped covering it or the delete stopped naming it"
+        )
     assert result["rows_deleted"]["oauth_authorization_codes"] == 1
 
     assert await _count(async_session, PgPriority, user_id) == 0
