@@ -10,6 +10,64 @@
 
 Violations cause branch conflicts that block production deploys.
 
+---
+
+## ⚠️ STOP — Adding a new PG-owned state table? Read this first.
+
+**A new table that holds PG user state requires a one-line change in
+`backend/apps/priority_guardian/routers/reconcile_router.py`. Forgetting it silently gives
+one user another user's data. There is no error, no log, and no test that catches it.**
+
+### Why
+
+`_reconcile_user_by_subject()` decides whether a `CoreUser` is a "fresh shell" — an empty
+throwaway row safe to remap onto the canonical user (case C1) — or a real user that must not be
+touched (case C2). It decides by checking whether the row has **any state**, and today "any
+state" means exactly two things:
+
+```python
+has_google_connection  # active, non-revoked CoreConnection of type 'google'
+has_priorities         # any PgPriority row, any status
+
+if not has_google_connection and not has_priorities:
+    return (subject_user_id, "C1")   # remap — assumed empty
+else:
+    return (jwt_user_id, "C2")       # refuse — has state
+```
+
+Add `pg_reflections` (say) and don't extend the check. A user who has reflections but no
+priorities and no Google connection is now classified as a **fresh shell**. Reconciliation
+returns a different `user_id`, and every subsequent tool call in that session reads and writes
+**another user's data**. Their own rows are orphaned.
+
+C1 is the *success* path, so nothing raises and nothing warns. This is the worst failure mode
+in the suite: silent, cross-user, and invisible in logs.
+
+### What to do
+
+When a migration adds a table whose rows belong to a PG user:
+
+1. Open `backend/apps/priority_guardian/routers/reconcile_router.py`
+2. In `_reconcile_user_by_subject()`, add an `exists()` check for the new table alongside
+   `has_priorities`
+3. Include it in the `if not ... and not ...` fresh-shell condition
+4. Add a test asserting a user with **only** a row in the new table is classified **C2**, not C1
+
+### When it does NOT apply
+
+- Tables not keyed to `core_users.id`
+- Tables owned by another app (MindSort, Focused) — they have no reconciliation path
+- Pure lookup, config, or reference tables with no user rows
+- Audit tables that must survive deletion (e.g. `core_tool_audit_log`)
+
+### Background
+
+This check exists only on the **ChatGPT** path. Claude exposes no per-user identifier, so
+`priority_guardian_claude` has no reconciliation step and no fresh-shell check. See
+`doc/ADR_007_user_identity_and_lifecycle.md` §3 for the full A/B/C1/C2/X contract.
+
+---
+
 ## Creating a Migration
 
 ```bash

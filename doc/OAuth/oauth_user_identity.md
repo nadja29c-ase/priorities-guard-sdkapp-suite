@@ -1,5 +1,30 @@
 # OAuth User Identity Resolution — Analysis & Known Issues
 
+> **⚠️ PARTIALLY SUPERSEDED — read this first.**
+>
+> **Dated 2026-03-14. Increment 78 postdates it and largely resolves the central problem
+> this document describes.** The analysis below of ChatGPT identity fragmentation — new
+> `CoreUser` per browser, accumulating duplicates, no stable anchor — was accurate when
+> written and is **no longer the current state**.
+>
+> **What changed:** ChatGPT supplies `_meta["openai/subject"]` on tool calls.
+> `CoreUser.openai_subject` stores it under a partial unique index, and
+> `backend/apps/priority_guardian/routers/reconcile_router.py` reconciles the JWT-stamped
+> `user_id` onto the canonical owner on **every** tool call. A new browser still creates an
+> anonymous `CoreUser` at authorize time, but the first tool call remaps it (case C1).
+> ChatGPT identity is now effectively stable across browsers and devices.
+>
+> **Still accurate:** the three-path resolution chain in Stage 1, `login_hint` being dead in
+> production, session-cookie mechanics and its brittleness on mobile, and the Android
+> token-exchange finding.
+>
+> **Still unresolved:** the same fragmentation on **Claude**, which exposes no per-user
+> identifier and therefore has no reconciliation step.
+>
+> **Canonical source:** `doc/ADR_007_user_identity_and_lifecycle.md`. Read that before acting
+> on anything below, particularly the "Recommended next steps" section, which proposes work
+> that has since been done.
+
 **Last updated:** 2026-03-14  
 **Status:** Investigation closed — Android connector failure confirmed as ChatGPT Android client bug. See `android_oauth_token_exchange_bug.md`.  
 **Related files:** `backend/core/oauth_provider/authorize.py`, `session_service.py`, `cookies.py`
@@ -60,6 +85,12 @@ This means:
 
 ## The structural problem: no `login_hint`
 
+> **⚠️ SUPERSEDED for ChatGPT by Increment 78.** The three risks below are correctly reasoned
+> for the pre-Inc-78 system. Reconciliation via `openai/subject` now mitigates risks 1 and 3
+> on ChatGPT: the duplicate row is still created at authorize time, but the first tool call
+> remaps it to the canonical user (case C1), so data is not lost. Risk 2 is unchanged.
+> **All three still apply in full to Claude**, which has no equivalent signal. See ADR_007 §4.
+
 While not the immediate cause of the Android connector failure, the absence of `login_hint` creates a fragile system with compounding risks:
 
 ### 1. New users created on every new browser/device
@@ -90,6 +121,12 @@ Summary: the backend sends a correct `302` redirect with valid code, `state_pres
 
 ## Recommended next steps (post-submission)
 
+> **⚠️ OUTDATED — the first recommendation was implemented.** Increment 78 shipped
+> `openai/subject` as the identity anchor, which is precisely the "track `chatgpt_user_id` via
+> a different signal" option below. Do not re-plan this work. The remaining suggestion —
+> deferring `CoreUser` creation until after consent — is still open and would reduce orphan
+> rows at the source. See ADR_007 §7.
+
 ### Identity fragmentation
 The `login_hint` problem is structural and will not be fixed by OpenAI sending it — they have not done so and there is no indication they will. The session cookie mechanism is the only available identity continuity mechanism and it is brittle on mobile. Options to consider post-submission:
 
@@ -100,6 +137,11 @@ The `login_hint` problem is structural and will not be fixed by OpenAI sending i
 ---
 
 ## Summary table
+
+> **⚠️ Describes pre-Inc-78 behaviour.** On ChatGPT, every "new user per browser clear" risk
+> below is now mitigated by reconciliation — the row is created, then remapped on the first
+> tool call. The table remains accurate for **Claude**, which has no reconciliation.
+> Current-state table: ADR_007 §5.
 
 | Scenario | Identity source | Stability | Risk |
 |---|---|---|---|
