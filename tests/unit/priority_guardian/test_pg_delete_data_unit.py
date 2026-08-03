@@ -255,3 +255,29 @@ class _patched_revoke:
         for pt in self._patches:
             pt.stop()
         return False
+
+
+@pytest.mark.asyncio
+async def test_a_failing_rollback_still_raises_retryable():
+    """
+    Bug this catches: an unguarded `await session.rollback()` in the failure path. If the
+    rollback itself raises — dead connection, exhausted pool — its exception propagates and
+    the code never reaches the error event or the PgDeletionError. The route's handler never
+    fires and the user is told "something went wrong" instead of "your data was NOT deleted,
+    this is safe to retry".
+
+    Same false-report class as the 503 seam bug: a correct guarantee defeated by an
+    unhandled path. Found by adversarial review, not by the original test pass.
+    """
+    session = _make_session()
+    session.flush = AsyncMock(side_effect=RuntimeError("local failure"))
+    session.rollback = AsyncMock(side_effect=RuntimeError("connection is dead"))
+
+    with _patched_revoke():
+        with pytest.raises(PgDeletionError) as exc:
+            await delete_user_data(USER_ID, session, AsyncMock())
+
+    # The caller must still learn it is retryable, not receive the rollback's error.
+    assert exc.value.retryable is True
+    assert exc.value.google_revoked is True
+    assert "NOT deleted" in exc.value.message

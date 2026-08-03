@@ -70,6 +70,43 @@ logger = structlog.get_logger(__name__)
 PG_APP_NAME = "priority_guardian"
 PG_SCOPE = "pg.access"
 
+# ---------------------------------------------------------------------------
+# THE FILTERS BELOW ARE CORRECT ONLY BECAUSE OF INVARIANTS ENFORCED ELSEWHERE.
+#
+# Adversarial review found three row shapes that would defeat them. All three are
+# unreachable through any code path at HEAD, and none is enforced at the storage boundary —
+# so a future change to authorize.py or a new writer silently changes deletion correctness.
+# Documented rather than fixed, per Nadja, 2026-08-03.
+#
+# 1. core_consents with app_name='unknown' AND scope='pg.access' would survive the
+#    app_name filter. Unreachable: _derive_app_name_from_scopes maps any "pg." prefix to
+#    "priority_guardian", and classify_scopes rejects multi-app requests. If revisited, the
+#    safe fix is to WIDEN: app_name = PG_APP_NAME OR scope LIKE 'pg.%'. That cannot match a
+#    MindSort row (app_name='mindsort', clarity.* scopes), so it fails toward deleting more
+#    PG data — which is what the user asked for.
+#
+# 2. core_connections with provider='google' AND connection_type='unknown' is neither
+#    revoked nor deleted here, because this path uses the conjunction while /disconnect
+#    filters on provider alone. Unreachable: 7a1f4b2e3c9d backfilled every existing row and
+#    both writers set the two columns together.
+#
+#    DO NOT "fix" this by dropping the conjunction. A stricter filter fails toward MISSED
+#    DATA, which is recoverable by retrying once the row shape is understood. A looser one
+#    fails toward destroying another application's Google connection, which is not
+#    recoverable and is failure mode 1 from §0.2. /disconnect can afford the looser filter
+#    because it MARKS a row revoked; this path DESTROYS it. Asymmetric consequences justify
+#    asymmetric filters.
+#
+# 3. oauth_access_tokens / oauth_authorization_codes with a mixed scope array such as
+#    ['pg.access', 'clarity.write'] would be deleted whole, taking MindSort's grant with it.
+#    Unreachable: classify_scopes rejects multi-app authorize requests, so no such row can
+#    be minted.
+#
+#    NOTE THE DIRECTION — this one is the inverse of (1). The safe fix here is to NARROW,
+#    not widen: delete only rows whose scopes are exclusively pg.*. Widening would make the
+#    cross-app destruction worse. Do not lump it with (1) when revisiting.
+# ---------------------------------------------------------------------------
+
 # Upper bound on the Google revocation call, for the DELETION path only.
 #
 # WHY THIS EXISTS. The shared client is httpx.AsyncClient(timeout=30.0) (backend/main.py:105)
@@ -411,7 +448,30 @@ async def delete_user_data(
         # Roll back before raising so no partial deletion can reach the database. get_db
         # would also roll back, but doing it here makes the guarantee local to this
         # function rather than dependent on the caller's plumbing.
-        await session.rollback()
+        #
+        # THE ROLLBACK ITSELF CAN FAIL — a dead connection or an exhausted pool — and an
+        # unguarded `await session.rollback()` here would skip BOTH the error event and the
+        # PgDeletionError below. The rollback's own exception would propagate instead, the
+        # route's PgDeletionError handler would never fire, and the user would get the
+        # dispatcher's generic "something went wrong" rather than "your data was NOT
+        # deleted, this is safe to retry".
+        #
+        # That is the same false-report class as the 503 seam bug: a correct guarantee
+        # defeated by an unhandled path. Found by adversarial review.
+        #
+        # Nothing is lost by continuing: if the rollback failed the connection is almost
+        # certainly dead, so nothing was committed either way. What matters is that the
+        # caller still learns the operation failed and is retryable.
+        try:
+            await session.rollback()
+        except Exception as rollback_error:
+            logger.error(
+                "pg_offboarding.rollback_failed",
+                user_id=str(user_id),
+                error_type=type(rollback_error).__name__,
+                error=str(rollback_error),
+                original_error=str(e),
+            )
 
         # The audit row rolled back with everything else, so the failed attempt is recorded
         # as a log event rather than a database row. This is the only trace of the reverse
