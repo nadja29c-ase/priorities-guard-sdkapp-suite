@@ -38,6 +38,8 @@ is extracted into revoke_google_access() below, which both paths call. /disconne
 is unchanged — same lookup, same filter, same log events, same best-effort semantics.
 """
 
+import asyncio
+
 import structlog
 from datetime import datetime, timezone
 from typing import Any
@@ -68,6 +70,24 @@ logger = structlog.get_logger(__name__)
 PG_APP_NAME = "priority_guardian"
 PG_SCOPE = "pg.access"
 
+# Upper bound on the Google revocation call, for the DELETION path only.
+#
+# WHY THIS EXISTS. The shared client is httpx.AsyncClient(timeout=30.0) (backend/main.py:105)
+# and revoke_google_token passes no timeout of its own, so the call can block for 30s. The
+# MCP tool's budget is TIMEOUT_S = 8.0. Without a bound, a slow Google produces the worst
+# possible outcome on an irreversible operation: the tool times out and tells the user their
+# data was NOT deleted, while the backend request keeps running, completes the revocation,
+# deletes everything and commits. The user is told nothing happened when everything did.
+#
+# 3s leaves room for the local deletes and the MCP -> backend hop inside the 8s budget.
+# Revocation is already best-effort and a failure is already handled and reported, so
+# treating a timeout as "unconfirmed" costs nothing.
+#
+# Deliberately NOT applied to /disconnect: that route is out of scope (§2) and bounding its
+# call would change its behaviour. Hence a parameter defaulting to None rather than a bound
+# inside revoke_google_access.
+GOOGLE_REVOCATION_TIMEOUT_S = 3.0
+
 
 class PgDeletionError(Exception):
     """
@@ -93,6 +113,7 @@ async def revoke_google_access(
     connection: CoreConnection | None,
     http_client: httpx.AsyncClient | None,
     user_id: UUID,
+    timeout_s: float | None = None,
 ) -> dict[str, Any]:
     """
     Revoke the user's Google OAuth token at Google. External call, best-effort.
@@ -129,10 +150,15 @@ async def revoke_google_access(
             outcome["error"] = "no_http_client"
             return outcome
 
-        revoke_result = await revoke_google_token(
+        revoke_coro = revoke_google_token(
             refresh_token=refresh_token,
             http_client=http_client,
         )
+        # timeout_s=None preserves /disconnect's existing unbounded behaviour exactly.
+        if timeout_s is not None:
+            revoke_result = await asyncio.wait_for(revoke_coro, timeout=timeout_s)
+        else:
+            revoke_result = await revoke_coro
         outcome["google_token_revoked"] = revoke_result.get("success", False)
 
         if not revoke_result.get("success"):
@@ -142,6 +168,16 @@ async def revoke_google_access(
                 user_id=str(user_id),
                 error=revoke_result.get("error"),
             )
+
+    except asyncio.TimeoutError:
+        # Bounded deletion path only. Revocation is best-effort, so a timeout is reported as
+        # unconfirmed and deletion proceeds — never raised.
+        outcome["error"] = f"timeout after {timeout_s}s"
+        logger.warning(
+            "pg_offboarding.google_revoke_timeout",
+            user_id=str(user_id),
+            timeout_s=timeout_s,
+        )
 
     except Exception as e:
         outcome["error"] = str(e)
@@ -227,6 +263,7 @@ async def delete_user_data(
         connection=connection,
         http_client=http_client,
         user_id=user_id,
+        timeout_s=GOOGLE_REVOCATION_TIMEOUT_S,
     )
     google_revoked = revocation["google_token_revoked"]
 

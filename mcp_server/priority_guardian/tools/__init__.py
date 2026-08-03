@@ -20,6 +20,7 @@ from .render_weekly_report import RENDER_WEEKLY_REPORT
 from .get_patterns import GET_PATTERNS
 from .onboarding_calendar_setup import ONBOARDING_CALENDAR_SETUP
 from .inspect_adapt import INSPECT_ADAPT
+from .delete_my_priority_guardian_data import DELETE_MY_PRIORITY_GUARDIAN_DATA
 # Private widget-only tools (widget can call, LLM cannot see)
 from .widget_tools import (
     ADD_PRIORITY,
@@ -81,6 +82,7 @@ TOOL_REGISTRY: dict[str, ToolDefinition] = {
     GET_PATTERNS.name: GET_PATTERNS,
     ONBOARDING_CALENDAR_SETUP.name: ONBOARDING_CALENDAR_SETUP,
     INSPECT_ADAPT.name: INSPECT_ADAPT,
+    DELETE_MY_PRIORITY_GUARDIAN_DATA.name: DELETE_MY_PRIORITY_GUARDIAN_DATA,
     # Private widget-only tools (widget can call, LLM cannot see)
     CONNECT_GOOGLE_CALENDAR.name: CONNECT_GOOGLE_CALENDAR,
     DISCONNECT_GOOGLE_CALENDAR.name: DISCONNECT_GOOGLE_CALENDAR,

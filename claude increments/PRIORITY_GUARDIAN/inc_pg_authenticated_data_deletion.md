@@ -255,9 +255,24 @@ behaviour in the process (§2 puts it out of scope). If extraction would require
 - when to call and when not to
 
 **Annotations — mandatory, not a decision:** `title` present, `readOnlyHint=False`,
-`destructiveHint=True`, `openWorldHint=False`. **On BOTH platforms.** The tool permanently
+`destructiveHint=True`, `openWorldHint=True`. **On BOTH platforms.** The tool permanently
 deletes user data; Anthropic requires destructive tools to carry `destructiveHint: true`, and
 both hosts use it to gate confirmation.
+
+> **CORRECTED 2026-08-03.** This line previously mandated `openWorldHint=False`. That was
+> wrong and it was mine. `openWorldHint` describes whether the tool interacts with an
+> external, open system, and this one does — the backend revokes the user's token at Google.
+> Every other PG tool that reaches Google through the backend sets it `True`
+> (`get_priorities.py:332`, `get_priority_events`, `render_weekly_report`), so `False` would
+> have contradicted the codebase's own convention and misdescribed the tool. Anthropic policy
+> §2.B requires descriptions to precisely match actual functionality, and annotations are
+> part of that.
+>
+> My reasoning when writing `False` was about gating the confirmation prompt — but
+> `destructiveHint` does that alone; `openWorldHint` was never doing that work.
+>
+> Recorded rather than silently flipped. Claude Code implemented `False` as specified, then
+> flagged the conflict instead of overriding it, which is what RULE 0a asks for.
 
 **Do not use `_CLAUDE_DESTRUCTIVE_HINT_OVERRIDES` for this tool.** That mechanism exists in
 `mcp_server/priority_guardian_claude/tools_list_dupl.py` because `create_priority` is `False`

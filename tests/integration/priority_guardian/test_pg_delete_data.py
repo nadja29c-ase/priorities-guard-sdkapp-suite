@@ -15,6 +15,9 @@ provider and connection_type together. Deletion filters on the conjunction (Part
 fixtures must be representative or they test nothing.
 """
 
+import asyncio
+import time
+
 import pytest
 import pytest_asyncio
 from datetime import datetime, timedelta, timezone
@@ -34,6 +37,7 @@ from backend.apps.priority_guardian.db_models import (
 from backend.apps.priority_guardian.services.offboarding_service import (
     PgDeletionError,
     delete_user_data,
+    revoke_google_access,
 )
 from backend.core.encryption import encrypt_token
 from backend.core.models import CoreConnection, CoreConsent, CoreToolAuditLog, CoreUser
@@ -138,6 +142,18 @@ def _google_fails():
         f"{SERVICE}.revoke_google_token",
         AsyncMock(return_value={"success": False, "error": "invalid_grant"}),
     )
+
+
+def _google_slow(delay_s: float):
+    """
+    Google hanging. The shared client is httpx.AsyncClient(timeout=30.0) and
+    revoke_google_token passes no timeout, so without an explicit bound this call can block
+    for 30s inside a flow whose MCP budget is 8s.
+    """
+    async def _hang(*_a, **_kw):
+        await asyncio.sleep(delay_s)
+        return {"success": True, "error": None}
+    return patch(f"{SERVICE}.revoke_google_token", _hang)
 
 
 def _google_raises():
@@ -475,3 +491,133 @@ async def test_user_with_no_data_succeeds(async_session):
     assert result["success"] is True
     assert result["tables_affected"] == 0
     assert result["google_revocation_confirmed"] is False
+
+
+# =============================================================================
+# Latency and the external-call bound (§10)
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_slow_google_cannot_blow_the_mcp_budget(async_session, user_with_everything):
+    """
+    THE FINDING THIS TEST EXISTS FOR. backend/main.py:105 builds the shared client as
+    httpx.AsyncClient(timeout=30.0), and revoke_google_token passes no timeout of its own.
+    The MCP tool's budget is TIMEOUT_S = 8.0.
+
+    Unbounded, a slow Google produces the worst outcome available on an irreversible
+    operation: the tool times out and tells the user their data was NOT deleted, while the
+    backend request keeps running, completes revocation, deletes everything and commits. The
+    user is told nothing happened when everything did.
+
+    Bug this catches: removing GOOGLE_REVOCATION_TIMEOUT_S, or passing timeout_s=None from
+    the deletion path. With Google hanging for 10s, an unbounded call takes >10s; bounded it
+    returns in ~3s and deletion still completes.
+    """
+    user_id = user_with_everything.id
+
+    started = time.monotonic()
+    with _google_slow(10.0):
+        result = await delete_user_data(user_id, async_session, AsyncMock())
+    elapsed = time.monotonic() - started
+    await async_session.commit()
+
+    assert elapsed < 8.0, (
+        f"deletion took {elapsed:.1f}s — exceeds the MCP tool budget, so the user would be "
+        f"told deletion failed while it actually succeeded"
+    )
+    assert result["success"] is True
+    assert result["google_revocation_confirmed"] is False, "a timeout is not a confirmation"
+    assert "timeout" in (result["google_revocation_error"] or "")
+    assert await _count(async_session, PgPriority, user_id) == 0
+
+
+@pytest.mark.asyncio
+async def test_disconnect_path_remains_unbounded(async_session, user_with_everything):
+    """
+    Bug this catches: applying the deletion path's bound to /disconnect as well. That route
+    is out of scope (§2), so revoke_google_access must default to timeout_s=None and behave
+    exactly as before for callers that do not opt in.
+    """
+    conn = (await async_session.execute(
+        select(CoreConnection).where(CoreConnection.user_id == user_with_everything.id)
+    )).scalar_one()
+
+    started = time.monotonic()
+    with _google_slow(0.4):
+        outcome = await revoke_google_access(conn, AsyncMock(), user_with_everything.id)
+    elapsed = time.monotonic() - started
+
+    assert outcome["google_token_revoked"] is True
+    assert elapsed >= 0.4, "unbounded path must actually wait for the call"
+
+
+@pytest.mark.asyncio
+async def test_latency_at_realistic_maximum_volume(async_session):
+    """
+    §10 measurement. PG caps at 3 active priorities and snapshots are one per priority per
+    week, so even a heavy multi-year user lands in the hundreds of rows — seeding thousands
+    would be theatre. This seeds ~3 years of history plus headroom and measures the whole
+    local path with Google at a plausible 500ms.
+
+    The point is not row volume. It is that the external call dominates the budget: the
+    deletes are eight statements against indexed columns, while the Google round trip is the
+    variable. Asserted well inside TIMEOUT_S = 8.0.
+    """
+    user = CoreUser(id=uuid4())
+    async_session.add(user)
+    await async_session.flush()
+
+    # A Google connection is REQUIRED for this measurement to mean anything: without one,
+    # revoke_google_access returns early at `connection is None`, the mocked latency never
+    # runs, and the timing measures only the deletes. First version of this test did exactly
+    # that and reported a nonsensical negative local time.
+    async_session.add(CoreConnection(
+        user_id=user.id, provider="google", connection_type="google",
+        encrypted_access_token=encrypt_token("access"),
+        encrypted_refresh_token=encrypt_token("refresh"),
+        token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+    ))
+
+    WEEKS = 200  # ~4 years
+    monday = datetime(2022, 1, 3).date()
+    for k in ("P1", "P2", "P3"):
+        pr = PgPriority(
+            user_id=user.id, name=f"Priority {k}", type="flexible",
+            calendar_keyword=k, weekly_hour_target=10,
+            checkpoint_date=(datetime.now(timezone.utc) + timedelta(days=30)).date(),
+        )
+        async_session.add(pr)
+        await async_session.flush()
+        async_session.add_all(
+            [PgGoal(priority_id=pr.id, goal_text=f"goal {i}") for i in range(3)]
+            + [PgDeliverable(priority_id=pr.id, name=f"deliverable {i}") for i in range(3)]
+            + [
+                PgWeeklySnapshot(
+                    priority_id=pr.id, user_id=user.id,
+                    week_start=monday + timedelta(weeks=w),
+                    week_end=monday + timedelta(weeks=w, days=6),
+                    actual_hours=8,
+                )
+                for w in range(WEEKS)
+            ]
+        )
+    await async_session.commit()
+
+    started = time.monotonic()
+    with _google_slow(0.5):
+        result = await delete_user_data(user.id, async_session, AsyncMock())
+    elapsed = time.monotonic() - started
+    await async_session.commit()
+
+    print(
+        f"\n[latency] rows={result['rows_deleted']} "
+        f"total={elapsed:.2f}s google=0.50s local={elapsed - 0.5:.2f}s budget=8.0s"
+    )
+
+    assert result["rows_deleted"]["pg_weekly_snapshots"] == 3 * WEEKS
+    assert result["rows_deleted"]["pg_goals"] == 9
+    assert result["rows_deleted"]["core_connections"] == 1, (
+        "no connection deleted — the Google call never ran, so this measured nothing"
+    )
+    assert elapsed < 8.0, f"exceeds the MCP tool budget at realistic volume: {elapsed:.2f}s"
