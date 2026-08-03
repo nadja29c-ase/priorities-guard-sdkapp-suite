@@ -60,8 +60,13 @@ async def _call_with_timeout(coro, op_name: str, correlation_id: str):
             op_name=op_name,
             timeout=TIMEOUT_S,
         )
+        # "Your data has NOT been deleted" was FALSE in a reachable state. This timeout
+        # bounds the MCP call, not the backend request — the backend keeps running and may
+        # commit after we stop waiting. Same class as the unbounded Google call, one layer
+        # out: the tool cannot know the outcome here, so it must not assert one.
         raise ToolUsageError(
-            f"{op_name} timed out. Your data has NOT been deleted. Please try again."
+            f"{op_name} did not confirm in time, so we do not know whether it completed. "
+            f"Check whether your Priority Guardian data is still there before trying again."
         )
 
 
@@ -118,6 +123,8 @@ ASSISTANT_GUIDANCE = (
     "untouched. "
     "If asked what remains: a limited security audit record for up to 90 days, and the shared "
     "sign-in identity the other apps need. "
+    "If the result says Google revocation could not be confirmed, relay that plainly and "
+    "suggest they check their Google account's connected apps. Never claim it succeeded. "
     "Do NOT list table names, row counts, or any internal identifier — describe categories "
     "only. "
     "Do not offer to undo it; it cannot be undone. Do not suggest recreating their priorities "
@@ -132,8 +139,13 @@ ASSISTANT_GUIDANCE_NOTHING_TO_DELETE = (
 )
 
 ASSISTANT_GUIDANCE_RETRYABLE = (
-    "The deletion did NOT complete and nothing was removed. Tell the user plainly that their "
-    "data is still there and the operation can be retried. "
+    # Said "nothing was removed" until 2026-08-03. That is false whenever
+    # calendar_access_revoked is true — and the very next sentence of this same guidance
+    # tells the model to say the Calendar connection was disconnected. The user-facing text
+    # was corrected; this string is a second channel carrying the same claim to the model,
+    # and it was missed on the first pass.
+    "The deletion did NOT complete — the user's Priority Guardian data is still there. Tell "
+    "them that plainly, and that the operation can be retried. "
     "If calendar_access_revoked is true, also tell them their Google Calendar connection was "
     "already disconnected as part of the attempt, so Priority Guardian has stopped reading "
     "their calendar even though the data remains. Do not describe this as 'nothing happened'. "
@@ -233,8 +245,10 @@ async def handle(
             google_revocation_confirmed=google_revoked,
         )
 
+        # "nothing was removed" was false whenever google_revocation_confirmed is true — the
+        # sentence appended just below contradicts it within the same message.
         text = (
-            "Your Priority Guardian data was not deleted and nothing was removed. "
+            "Your Priority Guardian data was not deleted — it is still there. "
             "You can try again."
         )
         if google_revoked:
@@ -276,9 +290,11 @@ async def handle(
     nothing_deleted = data.get("tables_affected") == 0
 
     if nothing_deleted:
+        # "Nothing was changed" was false: delete_user_data writes a CoreToolAuditLog entry
+        # on every call, including one that deletes zero rows.
         text = (
             "There was no Priority Guardian data to delete — your account is already clear. "
-            "Nothing was changed. Your other Priority Guard apps are unaffected."
+            "Your other Priority Guard apps are unaffected."
         )
     else:
         text = (
@@ -289,6 +305,18 @@ async def handle(
             "Retained: a limited security audit record for up to 90 days, and the shared sign-in "
             "identity the other apps need."
         )
+
+        # The tool DESCRIPTION promises "The Google Calendar connection (access is revoked at
+        # Google)". Local deletion proceeds even when that revocation could not be confirmed
+        # — §4 requires erasure not to depend on a third party — so staying silent about an
+        # unconfirmed revocation makes the promise false in a reachable state.
+        if not google_confirmed:
+            text += (
+                " One thing to check: we could not confirm with Google that Priority "
+                "Guardian's calendar access was revoked. Your data here is gone either way, "
+                "but you may want to remove Priority Guardian from your Google account's "
+                "connected apps."
+            )
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(type="text", text=text)],

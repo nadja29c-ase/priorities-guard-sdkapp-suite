@@ -19,6 +19,7 @@ These tests patch the HTTP client, not backend_post, so backend_post's real stat
 executes. Patching backend_post would re-create the blind spot this file exists to close.
 """
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -270,3 +271,118 @@ async def test_router_returns_the_status_the_tool_listens_for():
     detail = exc.value.detail
     assert detail["retryable"] is True
     assert detail["google_revocation_confirmed"] is True
+
+
+# =============================================================================
+# TRUTHFULNESS OF USER-FACING TEXT
+#
+# Four statements were false in reachable states, two of them written the same day they
+# were found. On a destructive, irreversible operation a message that misstates what
+# happened is a defect even when the code is correct — the user acts on the message, not
+# on the code.
+# =============================================================================
+
+@pytest.mark.asyncio
+async def test_success_warns_when_google_revocation_was_not_confirmed():
+    """
+    Bug this catches: silence about an unconfirmed revocation. The tool DESCRIPTION promises
+    "The Google Calendar connection (access is revoked at Google)". Local deletion proceeds
+    even when Google could not be reached (§4 — erasure must not depend on a third party),
+    so a success message that says nothing leaves the user believing access was revoked when
+    it may not have been.
+    """
+    with _client_returning(_response(200, {
+        "success": True,
+        "google_revocation_confirmed": False,
+        "tables_affected": 4,
+    })):
+        result = await handle(USER_ID, CORRELATION_ID, {})
+
+    text = result.content[0].text.lower()
+    assert "could not confirm" in text, "claimed revocation it did not get"
+    assert "connected apps" in text, "no actionable remedy offered"
+
+
+@pytest.mark.asyncio
+async def test_success_stays_clean_when_revocation_was_confirmed():
+    """
+    Bug this catches: the inverse — warning about Google on every success, which would train
+    users to ignore a warning that matters only sometimes.
+    """
+    with _client_returning(_response(200, {
+        "success": True, "google_revocation_confirmed": True, "tables_affected": 4,
+    })):
+        result = await handle(USER_ID, CORRELATION_ID, {})
+
+    assert "could not confirm" not in result.content[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_retryable_text_does_not_contradict_itself():
+    """
+    Bug this catches: the message saying "nothing was removed" and then, in the same breath,
+    that the Google Calendar connection was disconnected. Both channels are checked — the
+    user-facing text AND assistant_guidance, which the model relays. The guidance carried the
+    false claim for a full round after the visible text was fixed.
+    """
+    with _client_returning(_response(503, {
+        "detail": {"retryable": True, "google_revocation_confirmed": True},
+    })):
+        result = await handle(USER_ID, CORRELATION_ID, {})
+
+    text = result.content[0].text.lower()
+    guidance = result.structuredContent["assistant_guidance"].lower()
+
+    assert "nothing was removed" not in text
+    assert "nothing was removed" not in guidance, (
+        "assistant_guidance still carries the contradiction to the model"
+    )
+    assert "google calendar" in text, "must still say Calendar access is gone"
+
+
+@pytest.mark.asyncio
+async def test_nothing_to_delete_does_not_claim_nothing_changed():
+    """
+    Bug this catches: "Nothing was changed" on the zero-row path. delete_user_data writes a
+    CoreToolAuditLog entry on EVERY call, including one that deletes nothing — so the claim
+    is false, and it is a claim about a compliance record.
+    """
+    with _client_returning(_response(200, {
+        "success": True, "google_revocation_confirmed": True, "tables_affected": 0,
+    })):
+        result = await handle(USER_ID, CORRELATION_ID, {})
+
+    assert "nothing was changed" not in result.content[0].text.lower()
+
+
+@pytest.mark.asyncio
+async def test_timeout_does_not_assert_an_outcome_it_cannot_know():
+    """
+    Bug this catches: THE SHARPEST OF THE FOUR. The timeout said "Your data has NOT been
+    deleted" — but it bounds the MCP call, not the backend request. The backend keeps
+    running and may commit after the tool stops waiting, so the tool told the user the
+    opposite of what happened.
+
+    Same class as the unbounded Google call fixed earlier, one layer out.
+    """
+    from mcp_server.priority_guardian.tools.base import ToolUsageError
+
+    client = AsyncMock()
+
+    async def _hang(*_a, **_kw):
+        await asyncio.sleep(30)
+
+    client.post = _hang
+
+    with patch(HTTP_CLIENT, client), patch(
+        "mcp_server.priority_guardian.tools.delete_my_priority_guardian_data.TIMEOUT_S", 0.05
+    ):
+        with pytest.raises(ToolUsageError) as exc:
+            await handle(USER_ID, CORRELATION_ID, {})
+
+    message = str(exc.value).lower()
+    assert "has not been deleted" not in message, (
+        "asserted an outcome the tool cannot know — the backend may have committed"
+    )
+    assert "do not know whether it completed" in message
+    assert "check whether" in message, "no actionable instruction before retrying"

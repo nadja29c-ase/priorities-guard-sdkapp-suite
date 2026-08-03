@@ -250,10 +250,40 @@ the verification-log question resolves, the policy text must match.
 
 | Surface | Finding |
 |---|---|
-| **Redis** | **No PG user state.** `offboarding_router.py:48` states it: *"No app-specific Redis cache to clear."* The only PG Redis use is a 10-minute TTL OAuth state token in `google_connection_router` — transient, self-expiring. PG needs no equivalent of Focused's `clear_user_redis_cache`. |
+| **Redis** | **CORRECTED — see 5.1. Not "none".** None in PG's own namespace; the shared OAuth layer holds user-keyed state on PG's behalf. |
 | **Celery** | **No task carries a PG `user_id`.** `renew_google_token(user_id)` and `renew_webhook(user_id, resource_id)` are unimplemented stubs — `pass`, marked TODO, no task decorator, absent from `beat_schedule`. All eight scheduled tasks are sweeps taking no user argument. |
 | **Webhooks** | **PG registers none.** No reference to `google_channel_id`, `register_webhook` or `stop_webhook_channel` anywhere in `backend/apps/priority_guardian/`. Only Focused registers them — on the same shared connection row. PG deletion therefore needs no channel teardown. |
 | **Cached reports** | None found outside `pg_weekly_snapshots`. |
+
+### 5.1 Redis — this entry was WRONG, corrected 2026-08-03
+
+The original read *"No PG user state"*, citing `offboarding_router.py:48` (*"No app-specific
+Redis cache to clear"*) and a grep of `backend/apps/priority_guardian/`. Both inputs were
+accurate; the conclusion drawn from them was not.
+
+**`backend/core/oauth_provider/services/authorization_service.py:94-102` writes
+`oauth:auth:<id>` containing `user_id`, `scope` and `app_name` with a 10-minute TTL.** That is
+user-keyed PG state. It lives in the shared OAuth layer rather than PG's own package — which
+is exactly why the search missed it.
+
+**The search strategy was the defect, not the search.** §3.1 said to enumerate everything
+holding PG user data; I scoped the Redis half of that question to PG's app directory. **The
+app-directory boundary is not the data boundary** — shared infrastructure writes user-keyed
+state on an app's behalf. This is the *second* instance of the same mistake in this report:
+`oauth_authorization_codes` was missed for the identical reason (see the §3 correction block).
+
+**Consequence, and why it is recorded rather than fixed.** A user can begin
+`/oauth/pg/authorize`, delete their data, then complete the consent screen — recreating a PG
+consent row and an authorization code from pre-deletion state.
+
+- The window is ≤10 minutes and self-expiring.
+- What reappears is a **new grant the user has just authorised**, not resurrected content. No
+  priority, goal, deliverable or snapshot returns.
+- Purging it would add a Redis dependency to a transaction that currently has none — a worse
+  trade than the window it closes. Decision: Nadja, 2026-08-03.
+
+**Correct statement:** none in PG's own namespace; `oauth:auth:<id>` in the shared OAuth layer
+carries `user_id` with a 10-minute TTL, allowed to expire.
 
 ---
 
