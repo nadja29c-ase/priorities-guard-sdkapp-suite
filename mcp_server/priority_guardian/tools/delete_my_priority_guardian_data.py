@@ -29,6 +29,7 @@ tests, and in the backend's audit entry.
 
 import asyncio
 
+import httpx
 import structlog
 from mcp import types as mcp_types
 
@@ -156,16 +157,51 @@ async def handle(
         user_id=user_id,
     )
 
-    result = await _call_with_timeout(
-        backend_post(
-            "/api/priority-guardian/delete-data",
-            {},
-            user_id,
+    # WHY THIS IS WRAPPED IN A TRY, AND WHY IT MATTERS MORE THAN IT LOOKS.
+    #
+    # http_client.backend_post returns the parsed body for 4xx but RAISES for 5xx:
+    #
+    #     if 400 <= resp.status_code < 500:
+    #         return resp.json()
+    #     resp.raise_for_status()
+    #
+    # The route signals the rolled-back-but-retryable case with 503, which is 5xx — so
+    # without this handler the exception escapes to the dispatcher's generic
+    # `except Exception`, the user sees "Something went wrong. Please try again.", and the
+    # whole retryable branch below is dead code. In the exact scenario the atomicity design
+    # exists for — Google revoked, local deletion rolled back — the user would be told
+    # something generic with no hint that their Calendar connection is already gone.
+    #
+    # Found by adversarial review. Nothing caught it because the integration tests call
+    # delete_user_data directly and the unit tests mock the session, so nothing crossed the
+    # MCP -> HTTP -> route seam where the 4xx/5xx split lives.
+    #
+    # Handled HERE rather than by widening backend_post's guard to < 600: that helper has 8
+    # callers and 6 of them never check `success`, so returning 5xx bodies as data would make
+    # them read a 500 error body as a successful response — on a published app with ~94 live
+    # grants. The blast radius belongs to this tool, not to every tool.
+    try:
+        result = await _call_with_timeout(
+            backend_post(
+                "/api/priority-guardian/delete-data",
+                {},
+                user_id,
+                correlation_id,
+            ),
+            "Deletion",
             correlation_id,
-        ),
-        "Deletion",
-        correlation_id,
-    )
+        )
+    except httpx.HTTPStatusError as e:
+        if e.response is None or e.response.status_code != 503:
+            raise
+        try:
+            body = e.response.json()
+        except Exception:
+            raise
+        detail = body.get("detail") or {}
+        if not isinstance(detail, dict) or not detail.get("retryable"):
+            raise
+        result = {"success": False, "detail": detail}
 
     # The backend returns 503 with retryable=true when local deletion failed and was rolled
     # back. That is NOT "nothing changed" — Google access may already be gone.
