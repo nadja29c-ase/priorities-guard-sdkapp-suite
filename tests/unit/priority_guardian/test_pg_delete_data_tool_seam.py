@@ -153,3 +153,51 @@ async def test_success_path_returns_categories_not_schema():
 
     for leak in ("pg_priorities", "pg_weekly_snapshots", "120", "aaaaaaaa"):
         assert leak not in text, f"schema leaked into user-facing text: {leak!r}"
+
+
+@pytest.mark.asyncio
+async def test_nothing_to_delete_does_not_read_as_a_fresh_deletion():
+    """
+    Bug this catches: emitting the same "has been deleted" text when the backend deleted
+    ZERO rows. The backend is idempotent by design — a second call succeeds reporting zero —
+    so a host retry, or a user who already deleted, would be told their data was just
+    removed when nothing happened. Not false, but it reads as a fresh deletion.
+
+    Found by adversarial review; the tool previously ignored tables_affected entirely.
+    """
+    with _client_returning(_response(200, {
+        "success": True,
+        "google_revocation_confirmed": False,
+        "tables_affected": 0,
+        "rows_deleted": {"pg_priorities": 0},
+        "audit_log_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    })):
+        result = await handle(USER_ID, CORRELATION_ID, {})
+
+    text = result.content[0].text
+    assert result.isError is not True
+    assert "has been deleted" not in text, (
+        "reported a deletion that did not happen"
+    )
+    assert "no priority guardian data to delete" in text.lower()
+    assert result.structuredContent["nothing_to_delete"] is True
+
+
+@pytest.mark.asyncio
+async def test_real_deletion_still_reports_a_deletion():
+    """
+    Bug this catches: the inverse — an over-eager nothing-to-delete branch that fires when
+    rows WERE removed, telling a user nothing happened while their data is gone. That is the
+    worse direction of the same mistake.
+    """
+    with _client_returning(_response(200, {
+        "success": True,
+        "google_revocation_confirmed": True,
+        "tables_affected": 4,
+        "rows_deleted": {"pg_priorities": 2},
+    })):
+        result = await handle(USER_ID, CORRELATION_ID, {})
+
+    text = result.content[0].text
+    assert "has been deleted" in text
+    assert result.structuredContent["nothing_to_delete"] is False

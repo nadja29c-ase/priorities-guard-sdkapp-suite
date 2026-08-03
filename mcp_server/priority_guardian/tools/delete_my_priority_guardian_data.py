@@ -23,8 +23,13 @@ on BOTH platforms, so destructive_hint=True is set here and no override entry is
 omitting a tool from that dict falls through to the shared value.
 
 THE USER-FACING TEXT DESCRIBES CATEGORIES, NEVER SCHEMA (§5). No table names, no audit-log
-id, no raw row counts reach the user. Those live in structuredContent for the widget and
-tests, and in the backend's audit entry.
+id, no raw row counts reach the user — and none reach structuredContent either. They live
+only in the backend's audit entry and its logs.
+
+(An earlier version of this comment claimed the counts "live in structuredContent for the
+widget and tests". They do not: the returned structuredContent carries categories and
+guidance only. Corrected after adversarial review flagged the comment as asserting something
+the code does not do.)
 """
 
 import asyncio
@@ -119,6 +124,13 @@ ASSISTANT_GUIDANCE = (
     "unless the user asks."
 )
 
+ASSISTANT_GUIDANCE_NOTHING_TO_DELETE = (
+    "There was nothing to delete — the account held no Priority Guardian data. Say so plainly "
+    "in one sentence. Do NOT congratulate the user on a deletion that did not happen, and do "
+    "not imply anything was removed. If they expected data to be there, note that it may have "
+    "been deleted already; do not speculate further."
+)
+
 ASSISTANT_GUIDANCE_RETRYABLE = (
     "The deletion did NOT complete and nothing was removed. Tell the user plainly that their "
     "data is still there and the operation can be retried. "
@@ -148,8 +160,9 @@ async def handle(
         _arguments: none
 
     Returns:
-        CallToolResult. The text the user reads describes categories only; per-table counts
-        stay in structuredContent.
+        CallToolResult. The text the user reads describes categories only. Per-table counts
+        do NOT appear here or in structuredContent — they exist only in the backend's audit
+        entry and logs.
     """
     logger.info(
         "tool.delete_my_priority_guardian_data.start",
@@ -252,20 +265,36 @@ async def handle(
         google_revocation_confirmed=google_confirmed,
     )
 
-    # Categories, never schema. The row counts and audit id stay in structuredContent.
-    text = (
-        "Your Priority Guardian data has been deleted: priorities, goals and deliverables; "
-        "weekly progress history; the Google Calendar connection; and Priority Guardian "
-        "authorization data. "
-        "Your other Priority Guard apps are unaffected — MindSort AI boards were not touched. "
-        "Retained: a limited security audit record for up to 90 days, and the shared sign-in "
-        "identity the other apps need."
-    )
+    # Categories, never schema. Row counts and the audit id stay in the backend's audit
+    # entry and logs — they reach neither this text nor structuredContent.
+    #
+    # NOTHING-TO-DELETE IS A DIFFERENT MESSAGE. The backend is idempotent: a second call
+    # succeeds and reports zero rows. Emitting the same "has been deleted" text either way
+    # is not false, but it reads to a user as a fresh deletion — so a host retry, or a user
+    # who already deleted, would be told their data was just removed when nothing happened.
+    # Found by adversarial review; the tool previously ignored tables_affected entirely.
+    nothing_deleted = data.get("tables_affected") == 0
+
+    if nothing_deleted:
+        text = (
+            "There was no Priority Guardian data to delete — your account is already clear. "
+            "Nothing was changed. Your other Priority Guard apps are unaffected."
+        )
+    else:
+        text = (
+            "Your Priority Guardian data has been deleted: priorities, goals and deliverables; "
+            "weekly progress history; the Google Calendar connection; and Priority Guardian "
+            "authorization data. "
+            "Your other Priority Guard apps are unaffected — MindSort AI boards were not touched. "
+            "Retained: a limited security audit record for up to 90 days, and the shared sign-in "
+            "identity the other apps need."
+        )
 
     return mcp_types.CallToolResult(
         content=[mcp_types.TextContent(type="text", text=text)],
         structuredContent={
             "success": True,
+            "nothing_to_delete": nothing_deleted,
             "calendar_access_revoked": google_confirmed,
             "deleted_categories": [
                 "priorities, goals and deliverables",
@@ -277,7 +306,10 @@ async def handle(
                 "security audit record (up to 90 days)",
                 "shared Priority Guard sign-in identity",
             ],
-            "assistant_guidance": ASSISTANT_GUIDANCE,
+            "assistant_guidance": (
+                ASSISTANT_GUIDANCE_NOTHING_TO_DELETE if nothing_deleted
+                else ASSISTANT_GUIDANCE
+            ),
         },
     )
 
