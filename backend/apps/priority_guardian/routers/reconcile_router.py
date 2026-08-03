@@ -11,6 +11,7 @@ IMPORTANT: This endpoint is internal-only (requires X-Internal-Secret header).
 It does NOT accept X-User-ID because its purpose is to produce one.
 """
 
+import hashlib
 from typing import Literal
 from uuid import UUID
 
@@ -26,6 +27,34 @@ from backend.core.database import get_db
 from backend.core.models import CoreUser, CoreConnection
 
 logger = structlog.get_logger(__name__)
+
+
+def _subject_fingerprint(openai_subject: str) -> str:
+    """
+    A correlatable, non-reversible stand-in for `openai/subject` in LOG OUTPUT ONLY.
+
+    WHY. The raw subject was written to logs at five call sites in this module. It is the
+    one value an attacker needs to exploit the reconciliation path: a caller supplying a
+    victim's subject in `_meta` can, when their own account is a fresh shell, have case C1
+    return the victim's canonical user_id — which now reaches a deletion tool. The subject is
+    opaque and never shown to users, so the log store was the only place it was published.
+    Removing that channel is worth doing on its own.
+
+    THIS DOES NOT FIX THE UNDERLYING ISSUE (task #10). A subject leaked any other way — a
+    database read, a support export, a future log statement — still works. This closes one
+    channel; it must not reduce the priority of binding the subject to the JWT or refusing
+    reconciliation for destructive tools.
+
+    LOGGING ONLY. `CoreUser.openai_subject` and the lookup in `_reconcile_user_by_subject`
+    keep the raw value. Hashing what is stored would break the partial unique index
+    (`ix_core_users_openai_subject`) and reconciliation itself.
+
+    12 hex chars of SHA-256 — enough to correlate two log lines about the same subject,
+    far too little to reconstruct the input.
+    """
+    digest = hashlib.sha256(openai_subject.encode("utf-8")).hexdigest()
+    return f"sha256:{digest[:12]}"
+
 
 router = APIRouter(
     tags=["priority-guardian-reconcile"],
@@ -102,7 +131,7 @@ async def _reconcile_user_by_subject(
             log.info(
                 "reconcile.first_bind",
                 jwt_user_id=str(jwt_user_id),
-                subject=openai_subject,
+                subject_fp=_subject_fingerprint(openai_subject),
             )
             return (jwt_user_id, "A")
 
@@ -110,7 +139,7 @@ async def _reconcile_user_by_subject(
         log.info(
             "reconcile.race_lost",
             jwt_user_id=str(jwt_user_id),
-            subject=openai_subject,
+            subject_fp=_subject_fingerprint(openai_subject),
         )
         result = await db.execute(stmt)
         subject_user_id = result.scalar_one_or_none()
@@ -127,7 +156,7 @@ async def _reconcile_user_by_subject(
             log.error(
                 "reconcile.race_lost_no_winner",
                 jwt_user_id=str(jwt_user_id),
-                subject=openai_subject,
+                subject_fp=_subject_fingerprint(openai_subject),
                 msg="Race lost but re-lookup found no owner. Subject remains unbound.",
             )
             return (jwt_user_id, "X")
@@ -165,7 +194,7 @@ async def _reconcile_user_by_subject(
             "reconcile.cross_device",
             jwt_user_id=str(jwt_user_id),
             canonical_user_id=str(subject_user_id),
-            subject=openai_subject,
+            subject_fp=_subject_fingerprint(openai_subject),
         )
         return (subject_user_id, "C1")
     else:
@@ -174,7 +203,7 @@ async def _reconcile_user_by_subject(
             "reconcile.ambiguous_collision",
             jwt_user_id=str(jwt_user_id),
             subject_user_id=str(subject_user_id),
-            subject=openai_subject,
+            subject_fp=_subject_fingerprint(openai_subject),
             has_google_connection=has_google_connection,
             has_priorities=has_priorities,
         )
