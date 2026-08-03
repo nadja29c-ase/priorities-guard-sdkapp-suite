@@ -120,7 +120,7 @@ class TestDisconnectRevocationBehavior:
         user_id = str(pg_user_with_connection["user"].id)
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ) as mock_revoke:
@@ -152,7 +152,7 @@ class TestDisconnectRevocationBehavior:
         user_id = str(pg_user_with_connection["user"].id)
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": False, "error": "Token already revoked"},
         ):
@@ -179,7 +179,7 @@ class TestDisconnectRevocationBehavior:
         user_id = str(pg_user_with_connection["user"].id)
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             side_effect=Exception("Network error"),
         ):
@@ -206,7 +206,7 @@ class TestDisconnectRevocationBehavior:
         user_id = str(pg_user_with_connection_no_refresh["user"].id)
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
         ) as mock_revoke:
             response = await client.post(
@@ -234,7 +234,7 @@ class TestDisconnectRevocationBehavior:
         user_id = str(pg_user.id)
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
         ) as mock_revoke:
             response = await client.post(
@@ -272,7 +272,7 @@ class TestDisconnectIntegration:
         user_id = str(user.id)
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -307,7 +307,7 @@ class TestDisconnectIntegration:
 
         # Google returns 400 when token is already revoked
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": False, "error": "invalid_token"},
         ):
@@ -341,7 +341,7 @@ class TestDisconnectIntegration:
 
         # First disconnect
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -355,7 +355,7 @@ class TestDisconnectIntegration:
 
         # Second disconnect (should NOT call revoke_google_token)
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
         ) as mock_revoke:
             response2 = await client.post(
@@ -414,7 +414,7 @@ class TestDisconnectDecryptionErrors:
         connection = pg_user_with_connection["connection"]
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.decrypt_token",
+            "backend.apps.priority_guardian.services.offboarding_service.decrypt_token",
             side_effect=Exception("Decryption failed - corrupted data"),
         ):
             response = await client.post(
@@ -472,7 +472,7 @@ class TestDisconnectDBStateVerification:
         assert row[0] is None, "revoked_at should be NULL before disconnect"
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -522,7 +522,7 @@ class TestDisconnectDBStateVerification:
         assert unrevoked_count_before == 2, "Should have 2 unrevoked PG tokens before disconnect"
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -564,7 +564,7 @@ class TestDisconnectDBStateVerification:
         token_jti = tokens[0].jti
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -638,7 +638,7 @@ class TestDisconnectDBStateVerification:
         assert result.scalar() == 1
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -711,7 +711,7 @@ class TestDisconnectDBStateVerification:
         assert result.scalar() == 1
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -744,7 +744,7 @@ class TestDisconnectDBStateVerification:
 
         # First disconnect
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True, "error": None},
         ):
@@ -769,7 +769,7 @@ class TestDisconnectDBStateVerification:
 
         # Second disconnect
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
         ) as mock_revoke:
             response2 = await client.post(

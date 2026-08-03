@@ -20,9 +20,12 @@ from backend.apps.priority_guardian.dependencies import verify_internal_call
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.apps.priority_guardian.services.offboarding_service import (
+    PgDeletionError,
+    delete_user_data,
+    revoke_google_access,
+)
 from backend.core.database import get_db
-from backend.core.encryption import decrypt_token
-from backend.core.google_oauth import revoke_google_token
 from backend.core.models import CoreConnection, CoreUser
 
 logger = structlog.get_logger(__name__)
@@ -101,41 +104,18 @@ async def disconnect(
                 "details": details,
             }
         else:
-            # Revoke Google OAuth token (best-effort, before marking revoked in DB)
-            if connection.encrypted_refresh_token:
-                try:
-                    refresh_token = decrypt_token(connection.encrypted_refresh_token)
-                    http_client = getattr(request.app.state, "http_client", None)
-                    if http_client is None:
-                        logger.warning(
-                            "pg_offboarding.no_http_client",
-                            user_id=str(user_id),
-                        )
-                        # Continue without revoking - can't call Google without client
-                    else:
-                        revoke_result = await revoke_google_token(
-                            refresh_token=refresh_token,
-                            http_client=http_client,
-                        )
-                        details["google_token_revoked"] = revoke_result.get("success", False)
-                        if not revoke_result.get("success"):
-                            logger.warning(
-                                "pg_offboarding.google_revoke_failed",
-                                user_id=str(user_id),
-                                error=revoke_result.get("error"),
-                            )
-                except Exception as e:
-                    logger.warning(
-                        "pg_offboarding.google_revoke_error",
-                        user_id=str(user_id),
-                        error=str(e),
-                    )
-                    # Continue - non-blocking
-            else:
-                logger.info(
-                    "pg_offboarding.no_refresh_token",
-                    user_id=str(user_id),
-                )
+            # Revoke Google OAuth token (best-effort, before marking revoked in DB).
+            # Extracted to services/offboarding_service.py so the delete-data path shares
+            # one implementation rather than calling this route (which commits its own
+            # transaction and returns early when already disconnected).
+            # Behaviour here is unchanged: same order, same log events, same best-effort
+            # semantics, same details key.
+            revocation = await revoke_google_access(
+                connection=connection,
+                http_client=getattr(request.app.state, "http_client", None),
+                user_id=user_id,
+            )
+            details["google_token_revoked"] = revocation["google_token_revoked"]
 
             # Mark connection as revoked
             connection.revoked_at = now
@@ -168,6 +148,75 @@ async def disconnect(
     except Exception as e:
         logger.error(
             "pg_offboarding.unexpected_error",
+            error_type=type(e).__name__,
+            error=str(e),
+        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/delete-data")
+async def delete_data(
+    request: Request,
+    x_user_id: str = Header(..., alias="X-User-ID"),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Delete the user's Priority Guardian data. Operation A (ADR_008 §4).
+
+    Deletes PG-owned tables and PG-scoped rows in shared tables. Does NOT delete the
+    core_users row, the tool audit log, or the browser session — other Priority Guard Suite
+    apps are unaffected. See services/offboarding_service.py for the verified inventory.
+
+    NO COMMIT HERE. get_db commits when this returns and rolls back if it raises, so every
+    local deletion plus the audit entry is one transaction.
+
+    Idempotent: calling twice succeeds, the second call reporting zero rows.
+
+    Returns:
+        200: structured result — local deletion and Google revocation reported separately,
+             never collapsed into a single success flag
+        400: malformed X-User-ID
+        404: user not found
+        503: local deletion failed and was rolled back — explicitly retryable. If
+             google_revocation_confirmed is true, Calendar access is already gone even
+             though PG data remains, so this is never "nothing changed".
+    """
+    try:
+        user_id = UUID(x_user_id)
+
+        user = await session.get(CoreUser, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return await delete_user_data(
+            user_id=user_id,
+            session=session,
+            http_client=getattr(request.app.state, "http_client", None),
+        )
+
+    except PgDeletionError as e:
+        # The service already rolled back. Surfaced as 503 rather than 500 because the
+        # condition is transient and the operation is safe to repeat.
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "deletion_failed",
+                "message": e.message,
+                "retryable": e.retryable,
+                "google_revocation_confirmed": e.google_revoked,
+            },
+        )
+
+    except ValueError as e:
+        logger.error("pg_offboarding.invalid_user_id", error=str(e))
+        raise HTTPException(status_code=400, detail=f"Invalid user ID: {e}")
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error(
+            "pg_offboarding.delete_data_unexpected_error",
             error_type=type(e).__name__,
             error=str(e),
         )

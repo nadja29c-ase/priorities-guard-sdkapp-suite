@@ -54,10 +54,10 @@ class TestDisconnectDoesNotRevokePGTokens:
         mock_request.app.state.http_client = MagicMock()
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.decrypt_token",
+            "backend.apps.priority_guardian.services.offboarding_service.decrypt_token",
             return_value="decrypted_token"
         ), patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True}
         ):
@@ -108,10 +108,10 @@ class TestDisconnectDoesNotRevokePGTokens:
         mock_request.app.state.http_client = MagicMock()
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.decrypt_token",
+            "backend.apps.priority_guardian.services.offboarding_service.decrypt_token",
             return_value="decrypted_token"
         ), patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True}
         ):
@@ -161,10 +161,10 @@ class TestDisconnectRevokesGoogleConnection:
         mock_request.app.state.http_client = MagicMock()
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.decrypt_token",
+            "backend.apps.priority_guardian.services.offboarding_service.decrypt_token",
             return_value="decrypted_token"
         ), patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
             return_value={"success": True}
         ):
@@ -206,7 +206,7 @@ class TestDisconnectRevokesGoogleConnection:
         mock_request = MagicMock()
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
         ) as mock_revoke:
             result = await disconnect(
@@ -255,7 +255,7 @@ class TestDisconnectIdempotent:
         mock_request = MagicMock()
 
         with patch(
-            "backend.apps.priority_guardian.routers.offboarding_router.revoke_google_token",
+            "backend.apps.priority_guardian.services.offboarding_service.revoke_google_token",
             new_callable=AsyncMock,
         ) as mock_revoke:
             result = await disconnect(
