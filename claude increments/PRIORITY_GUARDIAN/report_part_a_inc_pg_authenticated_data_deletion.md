@@ -190,6 +190,20 @@ example.
 `information_schema.tables` (filtered to `pg_%` plus the shared tables), or state plainly in the
 test docstring that the assertion is ORM-derived and cannot detect an unmodelled table.
 
+> **DECISION (Nadja, 2026-08-03): take the migration-built version.** Test 3's schema comes from
+> `alembic upgrade head` against a scratch database, and its assertion is derived from
+> `information_schema.tables` — not from ORM metadata.
+>
+> Rationale: the ORM-derived version can only prove *"the code deletes every table the ORM knows
+> about"*, which is precisely the assumption `pg_weekly_overview` demonstrates can fail. For a
+> test backing a published privacy-policy claim, an assertion that verifies the ORM against
+> itself is not worth much. This is the one test where the extra work buys something real, and
+> it exercises the migration chain end to end — which nothing currently does.
+>
+> The ORM-derived fallback remains acceptable **only** if the migration-built version proves
+> impractical, and then the docstring must state plainly that the assertion cannot detect an
+> unmodelled table. Part E must state which was taken and why.
+
 **This is repo-wide, not PG-specific. Backlog, not this increment.**
 
 ### 6.2 Production parity
