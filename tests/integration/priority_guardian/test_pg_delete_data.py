@@ -675,3 +675,49 @@ async def test_latency_at_realistic_maximum_volume(async_session):
         "no connection deleted — the Google call never ran, so this measured nothing"
     )
     assert elapsed < 8.0, f"exceeds the MCP tool budget at realistic volume: {elapsed:.2f}s"
+
+
+@pytest.mark.asyncio
+async def test_the_conjunction_filter_is_actually_exercised(async_session, user_with_everything):
+    """
+    THE CONJUNCTION HAD NO TEST AT ALL until adversarial review found it. Every fixture in
+    this suite sets BOTH provider and connection_type, so `provider == "google"` alone
+    matched every row — dropping `connection_type` from the delete survived the entire suite,
+    unit and integration.
+
+    This seeds the only row shape that distinguishes them: provider='google' with
+    connection_type='unknown'. Part A §3.2 and Nadja's 2026-08-03 decision are that such a
+    row must NOT be deleted here. A stricter filter fails toward MISSED DATA, which is
+    recoverable; a looser one fails toward destroying another application's Google
+    connection, which is not. /disconnect can afford provider-only because it MARKS a row
+    revoked; this path DESTROYS it.
+
+    Bug this catches: dropping the conjunction to provider-only — failure mode 1 from §0.2.
+    The assertion is deliberately that the row SURVIVES, because that is the decision.
+    """
+    other = CoreUser(id=uuid4())
+    async_session.add(other)
+    await async_session.flush()
+    async_session.add(CoreConnection(
+        user_id=other.id,
+        provider="google",
+        connection_type="unknown",   # the discriminating shape
+        encrypted_access_token=encrypt_token("access"),
+        encrypted_refresh_token=encrypt_token("refresh"),
+        token_expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        scopes=["https://www.googleapis.com/auth/calendar.readonly"],
+    ))
+    await async_session.commit()
+
+    with _google_ok():
+        result = await delete_user_data(other.id, async_session, AsyncMock())
+    await async_session.commit()
+
+    assert result["rows_deleted"]["core_connections"] == 0, (
+        "the conjunction was dropped — a provider-only filter now deletes rows the "
+        "documented decision says it must not touch"
+    )
+    surviving = (await async_session.execute(
+        select(func.count()).select_from(CoreConnection).where(CoreConnection.user_id == other.id)
+    )).scalar_one()
+    assert surviving == 1, "unknown-type connection was destroyed"

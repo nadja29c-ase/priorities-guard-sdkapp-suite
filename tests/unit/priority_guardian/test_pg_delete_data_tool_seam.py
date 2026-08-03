@@ -20,7 +20,7 @@ executes. Patching backend_post would re-create the blind spot this file exists 
 """
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -46,6 +46,9 @@ def _client_returning(response: httpx.Response):
     client = AsyncMock()
     client.post = AsyncMock(return_value=response)
     return patch(HTTP_CLIENT, client)
+
+
+EXPECTED_PATH = "/api/priority-guardian/delete-data"
 
 
 @pytest.mark.asyncio
@@ -201,3 +204,69 @@ async def test_real_deletion_still_reports_a_deletion():
     text = result.content[0].text
     assert "has been deleted" in text
     assert result.structuredContent["nothing_to_delete"] is False
+
+
+@pytest.mark.asyncio
+async def test_posts_to_the_delete_data_endpoint():
+    """
+    Bug this catches: the tool posting to the WRONG route. The mocked client returns its
+    canned response regardless of path, so every other test in this file would pass if the
+    endpoint were changed to anything at all — including a route that does something else
+    entirely. Found by adversarial review.
+    """
+    client = AsyncMock()
+    client.post = AsyncMock(return_value=_response(200, {
+        "success": True, "google_revocation_confirmed": True, "tables_affected": 3,
+    }))
+
+    with patch(HTTP_CLIENT, client):
+        await handle(USER_ID, CORRELATION_ID, {})
+
+    client.post.assert_awaited_once()
+    url = client.post.await_args.args[0]
+    assert url.endswith(EXPECTED_PATH), f"posted to {url!r}, expected …{EXPECTED_PATH}"
+
+
+@pytest.mark.asyncio
+async def test_router_returns_the_status_the_tool_listens_for():
+    """
+    THE TWO HALVES OF THIS CONTRACT WERE TESTED INDEPENDENTLY AND NEVER TOGETHER.
+
+    The tool recognises exactly one failure signal: HTTP 503 carrying detail.retryable. The
+    seam tests above FABRICATE that response, so changing the router's PgDeletionError
+    mapping from 503 to anything else would break the tool in production while every test
+    stayed green — the tool's handler would stop matching and the user would fall back to the
+    dispatcher's generic error. Precisely the bug this file was created for, one layer down.
+
+    This pins the router's side of the contract to the constant the tool depends on.
+
+    Bug this catches: changing the route's status code, or dropping `retryable` /
+    `google_revocation_confirmed` from its detail payload.
+    """
+    from fastapi import HTTPException
+
+    from backend.apps.priority_guardian.routers import offboarding_router as router_mod
+    from backend.apps.priority_guardian.services.offboarding_service import PgDeletionError
+
+    session = AsyncMock()
+    session.get = AsyncMock(return_value=object())          # user exists
+    request = MagicMock()
+    request.app.state.http_client = AsyncMock()
+
+    with patch.object(
+        router_mod, "delete_user_data",
+        AsyncMock(side_effect=PgDeletionError("rolled back", google_revoked=True)),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await router_mod.delete_data(
+                request=request,
+                x_user_id=USER_ID,
+                session=session,
+            )
+
+    assert exc.value.status_code == 503, (
+        "the tool only recognises 503; changing this silently breaks the retryable path"
+    )
+    detail = exc.value.detail
+    assert detail["retryable"] is True
+    assert detail["google_revocation_confirmed"] is True

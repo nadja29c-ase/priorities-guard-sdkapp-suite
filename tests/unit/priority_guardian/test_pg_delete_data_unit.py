@@ -64,6 +64,23 @@ def _sql(session) -> str:
     return "\n".join(session.statements).lower()
 
 
+def _delete_stmt(session, table: str) -> str:
+    """
+    The single DELETE statement for `table`, lowercased.
+
+    Asserting against the JOINED text of every captured statement is vacuous: "scope"
+    appears in the access-token DELETE, so a missing scope filter on the AUTHORIZATION-CODE
+    delete still matches; "connection_type" appears in the earlier SELECT, so a missing
+    connection_type on the connection DELETE still matches. Both mutations survived until
+    this helper existed. Found by adversarial review.
+    """
+    matches = [s for s in session.statements if f"delete from {table}" in s.lower()]
+    assert len(matches) == 1, (
+        f"expected exactly one DELETE against {table}, found {len(matches)}"
+    )
+    return matches[0].lower()
+
+
 @pytest.mark.asyncio
 async def test_targets_exactly_the_expected_tables():
     """
@@ -115,12 +132,23 @@ async def test_shared_tables_are_filtered_by_scope_not_user_id_alone():
     with _patched_revoke():
         await delete_user_data(USER_ID, session, AsyncMock())
 
-    sql = _sql(session)
-    assert "app_name" in sql, "core_consents not filtered by app_name"
-    assert "scope" in sql, "token/code deletes not filtered by scope"
-    assert "provider" in sql and "connection_type" in sql, (
-        "core_connections must use the conjunction (Part A §3.2)"
+    # Per-statement, not against the joined text — see _delete_stmt.
+    consents = _delete_stmt(session, "core_consents")
+    assert "app_name" in consents, "core_consents not filtered by app_name"
+
+    tokens = _delete_stmt(session, "oauth_access_tokens")
+    assert "scope" in tokens, "token delete not filtered by scope"
+
+    codes = _delete_stmt(session, "oauth_authorization_codes")
+    assert "scope" in codes, "authorization-code delete not filtered by scope"
+
+    connections = _delete_stmt(session, "core_connections")
+    assert "provider" in connections, "connection delete not filtered by provider"
+    assert "connection_type" in connections, (
+        "core_connections must use the CONJUNCTION (Part A §3.2). A provider-only filter "
+        "would fail toward destroying another app's Google connection."
     )
+
     assert PG_APP_NAME == "priority_guardian" and PG_SCOPE == "pg.access"
 
 
