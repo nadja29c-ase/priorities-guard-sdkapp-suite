@@ -5,6 +5,14 @@
 **Raw source committed:** `sources_raw/authentication.raw.md` (141 lines, HTTP 200, 17,099 bytes).
 **Feeds:** compliance master §4C. The master is NOT yet rewritten against this; see §11 header.
 
+> ⚠️ **PROVENANCE: FETCH-ONLY, NOT YET PASTE-VERIFIED.** The raw source for this page was
+> obtained by `curl` of the `.md` endpoint, **never pasted from the rendered page**. That
+> endpoint returns no `Last-Modified` and no `ETag`, so the fetch carries no publication date
+> and cannot be shown to track the page a human reads. Everything below — including the
+> findings this page is cited for — is **checkable but not currency-verified**. See
+> `sources_raw/PROVENANCE.md`. **Replace with a paste before treating as settled.**
+
+
 > **Round 2 was blocked and is now unblocked.** This artifact's entire requirement set rested on
 > a fetch only one party had seen, which made it structurally un-round-2-able — and it is the
 > artifact feeding §4C, the OAuth attestation on the submission form. Appending `.md` to these

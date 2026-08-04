@@ -5,6 +5,14 @@
 **Raw source committed:** `sources_raw/review-criteria.raw.md` (78 lines, HTTP 200, 5,421 bytes).
 **Feeds:** compliance master §4A/§4B/§5E and the submission checklist. Master **not** yet rewritten.
 
+> ⚠️ **PROVENANCE: FETCH-ONLY, NOT YET PASTE-VERIFIED.** The raw source for this page was
+> obtained by `curl` of the `.md` endpoint, **never pasted from the rendered page**. That
+> endpoint returns no `Last-Modified` and no `ETag`, so the fetch carries no publication date
+> and cannot be shown to track the page a human reads. Everything below — including the
+> findings this page is cited for — is **checkable but not currency-verified**. See
+> `sources_raw/PROVENANCE.md`. **Replace with a paste before treating as settled.**
+
+
 **Method:** read for obligations, not keywords. This page is short and almost entirely obligation —
 the opposite of `instance-supersession`.
 
