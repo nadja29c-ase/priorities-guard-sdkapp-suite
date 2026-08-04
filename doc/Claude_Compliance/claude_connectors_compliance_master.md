@@ -1,5 +1,5 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 5 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`. **Partially refreshed:** the remaining five (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
+Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 6 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`, `mcp-apps/cross-compatibility`. **Partially refreshed:** the remaining four (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
 
 **No page is "closed."** Round 1 catches omission — did the source get captured. Round 2 runs
 *after* the master rewrite and checks the reverse direction: does every claim now in the master
