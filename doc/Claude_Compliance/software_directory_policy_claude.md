@@ -144,7 +144,70 @@ account"; **the policy adds "sample data"**, which is a content obligation, not 
 | # | What a real check requires |
 |---|---|
 | **P5B** | Measure token cost per tool against task complexity, and decide whether users can exclude unnecessary response text. **No such measurement exists** |
-| **P2A/P2B/P2C/P2D** | The description-by-description pass already flagged as R5/R6 work — now with a **cross-connector** dimension (PG vs MindSort) that R6 alone did not raise |
+| **P2C** | Cross-connector conflict (PG vs MindSort) — **still not assessed** |
+
+### ⚠️ §2B / §2D–§2G — FIRST PASS DONE 2026-08-04. Two concrete defects, one of them serious.
+
+#### 1. `inspect_adapt` — a §2B violation, and the annotation is NOT the thing to change
+
+| | |
+|---|---|
+| **Served description** | *"**Record** confirmed action steps from an inspect & adapt reflection."* |
+| **Annotation** | `read_only_hint=True`, commented *"No persistence, pure conversational shaping"* |
+
+**Resolved by reading the handler, not by guessing** — the `create_priority` retraction is why.
+`mcp_server/priority_guardian/tools/inspect_adapt.py` is 332 lines and contains **zero**
+`backend_post` / `backend_get` / `backend_put` / `backend_delete` calls. Its handler docstring
+states outright: *"Single-call tool: validate provenance → return success."*
+
+**Verdict: the annotation is correct and the DESCRIPTION is the defect.** The tool advertises that
+it *records* action steps and persists nothing — §2B: *"descriptions must precisely match actual
+functionality… must not include unexpected functionality or **promise undelivered features**."*
+This is a promised undelivered feature, sitting next to a `readOnlyHint` that contradicts its own
+verb. A reviewer checking annotations against descriptions hits it immediately, and annotations are
+the largest rejection category.
+
+**Fix: rewrite the description to say what it does** — validates and confirms reflection provenance,
+shapes the conversation, persists nothing. **Do not touch the annotation.**
+
+#### 2. THREE descriptions attempt to override Claude's default behaviour — §2D–§2G / R6
+
+The enumerated rejection class includes descriptions that *"tell Claude to behave in ways unrelated
+to the tool's function, **attempt to override system instructions**"*, and the page's summary rule
+is blunt: ***"Describe what the tool does. Do not tell Claude how to behave."***
+
+| Tool | chars | Override markers present |
+|---|---|---|
+| **`create_priority`** | 2057 | `BINDING RULES`, `SUSPENDED`, `default behavior`, `NEVER`, `DO NOT` |
+| **`inspect_adapt`** | 1462 | `BINDING RULES`, `SUSPENDED`, `FORBIDDEN`, `Override`, `impulses`, `default behavior` |
+| **`onboarding_calendar_setup`** | 1902 | `BINDING RULES`, `SUSPENDED`, `default behavior`, `ALWAYS`, `NEVER` |
+
+Representative, from `inspect_adapt`:
+
+> *"INSPECT & ADAPT BINDING RULES: … **your default behavior is SUSPENDED**, no advisory mode
+> allowed. … **FORBIDDEN**: diagnosing root causes, teaching frameworks … **Override analytical
+> coaching impulses**"*
+
+*"Your default behavior is SUSPENDED"* and *"Override analytical coaching impulses"* are not
+descriptions of a tool. They are instructions to the model about how to behave, which is the
+rejection class stated verbatim.
+
+**The other five are clean.** `delete_my_priority_guardian_data`, `get_patterns`, `get_priorities`,
+`get_priority_events` and `render_weekly_report` carry only *"Do NOT call this tool: …"* — routing
+guidance **about that tool**, which is exactly what §2A asks for (*"specifies what it does and when
+it should be invoked"*). **The distinction is not the word "NOT" — it is whether the sentence
+describes invocation conditions or reassigns the model's behaviour.**
+
+⚠️ **This is the highest rejection risk found in the audit**, and it was invisible from the code
+side because the annotations are all correct. **Not fixed — the descriptions are behavioural
+product design and rewriting them is Nadja's call.** An `ASSISTANT_GUIDANCE` block was already
+removed from the deletion tool on the same grounds, so the pattern is known.
+
+#### 3. Cosmetic, but reviewer-visible
+
+`get_priorities`: *"…and their progress.**C**all this tool…"* — missing space after the period,
+from string concatenation in `DESCRIPTION`. It appears in the directory listing and the portal's
+Tools step.
 | **P1D** | Applies to `record_widget_diagnostic`'s open `data` object. Assessed as *no violation evidenced*; call-site enumeration still not done |
 | **P1C** | Third-party calendar data. The retention model covers it, but the **three-versions problem** (open task #11) means it is unclear which model governs |
 | **P3B** | Whether the published contact information meets *"verified"* |

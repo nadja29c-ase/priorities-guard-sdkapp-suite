@@ -53,7 +53,7 @@ other pages or other days.
 | **`review-criteria.raw.md`** | **fetch only** | ❌ **impossible — never pasted** |
 | `software-directory-policy.raw.md` | fetch, **paste-corroborated** | ✅ identical across all five sections. ⚠️ **Publication date 15 April 2026 — recovered from the paste only; the fetch carries none** |
 | `software-directory-terms.raw.md` | fetch | ✅ content corroborated. **Publication date 16 March 2026 — from the paste; the fetch carries none.** First capture — no repo copy existed before 2026-08-04 |
-| `submission.raw.md` | fetch | ✅ **content corroborated** against Nadja's paste — the Team/Enterprise gate, B5–B10, the eleven steps and the Skills correction all match. **No further paste needed** |
+| `submission.raw.md` | **fetch, relay-corroborated** | ✅ **8 distinct facts cross-checked** — see the third category below. **No further paste needed** |
 | *Trademark Guidelines* | ❌ **NOT CAPTURED** | `.md` returns **404**; HTML is a Next.js bundle with no clean extraction. **Referenced as binding by Terms T-10. Needs a paste** |
 
 ✅ **`authentication` is now closed.** A18 — the only failed requirement found anywhere — rests on
@@ -130,6 +130,30 @@ Pasting every page twice — once per agent — is what produced the loop. Going
 The status column is the honest part: a fetch-only page is *usable* and is *labelled as unverified
 for currency*. That is a stated limitation rather than a hidden one, which is the whole point of
 this file.
+
+## A third provenance category — relay corroboration
+
+Fetching `submission` bypassed the paste-first rule. The corroboration happened anyway, in a form
+worth naming rather than treating as a waiver:
+
+1. Nadja pasted the page into the review chat.
+2. The reviewer relayed **eight distinct, checkable facts** — the Team/Enterprise gate verbatim,
+   B5 (allowed-link ownership), B7 (the attestation wording), B8 (seven acknowledgments), B9
+   (character limits and the permanent slug), the eleven-step structure, the Skills correction,
+   and the screenshot specifications.
+3. The fetched raw was checked against all eight. **All eight match.**
+
+**That is a real cross-check, not a waiver.** It is cheaper than double-pasting and stronger than
+a bare fetch, so it gets its own label rather than being rounded to either neighbour:
+
+| Category | Meaning |
+|---|---|
+| **paste** | The bytes came from the rendered page. Carries the publication date |
+| **relay-corroborated** | Fetched, then N specific facts confirmed against a paste held elsewhere. **State N** |
+| **fetch** | Fetched only. Usable, **not currency-verified**, and **carries no publication date** |
+
+⚠️ **Relay corroboration does NOT recover the publication date** — that is a property of the bytes,
+and the relayed facts were content, not metadata. `submission.raw.md` remains undated.
 
 ## The rule going forward
 
