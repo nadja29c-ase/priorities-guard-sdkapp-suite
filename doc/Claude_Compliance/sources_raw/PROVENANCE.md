@@ -49,7 +49,7 @@ other pages or other days.
 | `transparent-theming.raw.md` | fetch | ✅ **yes**, 60 lines, byte-identical |
 | `instance-supersession.raw.md` | fetch | ❌ no — page was pasted, not compared |
 | `cross-compatibility.raw.md` | fetch | ❌ no — page was pasted, not compared |
-| `authentication.raw.md` | fetch | ✅ **YES — paste-verified 2026-08-04.** Agrees on every discriminating marker incl. the A18 sentence verbatim. Structural + distinctive-string comparison, not a byte diff |
+| `authentication.raw.md` | fetch, **paste-corroborated ×3** | ✅ **CLOSED 2026-08-04.** Three independent copies compared — this fetch and two pastes — **no divergence anywhere**, including the A18 sentence verbatim. Do not request this page again |
 | **`review-criteria.raw.md`** | **fetch only** | ❌ **impossible — never pasted** |
 
 ✅ **`authentication` is now closed.** A18 — the only failed requirement found anywhere — rests on
@@ -60,10 +60,40 @@ attestation are equally covered.
 supplies **R1–R11** plus **raw line 72** — half the evidence for resizing Blocker 1 from "seven
 sections before submission" to "a blog post by publish date." **Still needs a paste.**
 
-**The `.md` method is 2-for-2 against pastes** (`transparent-theming`, `authentication`). That is
-evidence about the method and nothing more. It is **not** a licence to skip the remaining paste —
-two agreements do not establish that a third fetch is current, and the page still to be checked is
-the one steering the critical-path estimate.
+**The `.md` method is now 3-for-3 against pastes** (`transparent-theming`, and `authentication`
+twice). Still evidence about a method and nothing more — it does not establish that any *particular*
+future fetch is current.
+
+---
+
+## ⚠️ A process failure worth more than the provenance finding
+
+**Three rounds were spent re-confirming a page that was settled on the first.** The authentication
+paste was delivered to the review chat — where the comparison had already been made — and never
+reached the agent that had asked for it. Each round the agent asked again, because from its side
+nothing had arrived; each round the reviewer re-verified, because from its side a paste had.
+
+**Neither party was wrong and the loop still cost three rounds.** The lesson is not about
+provenance at all: **when an agent asks for an artifact, the answer has to reach that agent.**
+Confirming to a third party that the artifact exists reads, at the asking end, as silence.
+
+**Rule: once a page is corroborated, record it here as CLOSED and stop asking.** This file is the
+shared state; a question already answered in this table must not be re-raised from any side.
+
+---
+
+## Adopted 2026-08-04 — "Option B", to stop the double-paste tax
+
+Pasting every page twice — once per agent — is what produced the loop. Going forward:
+
+| Page | Handling |
+|---|---|
+| `review-criteria` | **Double paste.** The only page where nothing has been read from source, and it carries R1–R11 plus raw line 72 — half the Blocker 1 resize |
+| all remaining pages | **Fetch, committed, with cross-check status recorded per file in the table above.** No paste required |
+
+The status column is the honest part: a fetch-only page is *usable* and is *labelled as unverified
+for currency*. That is a stated limitation rather than a hidden one, which is the whole point of
+this file.
 
 ## The rule going forward
 

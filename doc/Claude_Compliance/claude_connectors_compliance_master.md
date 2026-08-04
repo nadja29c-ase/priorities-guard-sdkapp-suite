@@ -1,5 +1,5 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 6 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`, `mcp-apps/cross-compatibility`. **Partially refreshed:** the remaining four (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
+Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 7 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`, `mcp-apps/cross-compatibility`, `software_directory_policy`. **Partially refreshed:** the remaining three (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
 
 **No page is "closed."** Round 1 catches omission — did the source get captured. Round 2 runs
 *after* the master rewrite and checks the reverse direction: does every claim now in the master
@@ -26,12 +26,17 @@ independently checkable and round 2 no longer depends on who fetched what.
 transfer here.
 
 ⚠️ **Round 2 surfaced a requirement round 1 missed, and PG fails it — see §4C, A18** (redirect
-URI hostname on the consent screen). **GATING STATUS NARROWED, NOT CLOSED (2026-08-04).** Proved:
-grep for `consent`/`redirect` across `review-criteria.raw.md` returns no match, so **A18 is not on
-the reviewer's pre-submission checklist.** NOT proved: that A18 is not a directory criterion —
-`software_directory_policy` is the actual policy document, it is **unfetched**, and its §5D
-("must use secure OAuth 2.0") is exactly where an inherited spec requirement would land.
-**A18 stays OPEN until that page is in.** Post-submission either way.
+URI hostname on the consent screen). **GATING STATUS RESOLVED (2026-08-04). A18 IS NOT A DIRECTORY
+CRITERION.** Both authorities are now checked and both are silent. `review-criteria` (the
+reviewer's checklist) never mentions consent screens or redirect URIs. `software_directory_policy`
+(the binding legal text) contains exactly one authentication clause — §5D: *"Remote MCP servers
+that connect to a remote service and require authentication must use secure OAuth 2.0 with
+certificates from recognized authorities"* — which is **TLS certificates plus OAuth 2.0, not
+consent-screen UI**, and does not incorporate the MCP spec's display requirement.
+
+**Final label: unmet spec-inherited MUST, NOT a directory criterion, post-submission.** Still a
+real security control worth fixing — the consent screen is the only place a user sees where their
+authorization is going — but it blocks nothing.
 
 ⚠️ **The bias ran in reverse here.** An earlier draft of this line closed A18 on one page's
 silence. Every other instance today inflated a recommendation into a MUST; this one softened a
