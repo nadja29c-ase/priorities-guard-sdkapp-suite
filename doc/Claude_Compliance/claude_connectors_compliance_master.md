@@ -722,10 +722,9 @@ Allowed link URIs declared (if connector uses ui/open-link)
 
 9. PG-Specific Compliance Blockers (Claude Submission)
 This section tracks Priority Guardian-specific gaps. Items already satisfied for OpenAI are not re-listed here — see compliance_master_1.3.26.md.
-🔴 Blocker 0 — title Annotation Missing (Code Change Required)
-All 17 tools lack title in ToolAnnotations. ToolDefinition dataclass has no title field. The Claude MCP server (tools_list_dupl.py) already derives title from snake_case names — but the shared ToolDefinition and ChatGPT list_tools() also need this for the ChatGPT submission.
+🟢 Blocker 0 — title Annotation — RESOLVED (verified in code 2026-08-04)
+`ToolDefinition` declares `title: str` as a REQUIRED field (mcp_server/priority_guardian/tools/base.py), and every tool in TOOL_REGISTRY supplies one. Verified live in the served `tools/list` payload on BOTH platforms — every tool carries a title in its ToolAnnotations. This entry described code work that was already done and told a reader to redeploy for it. A false 🔴 is worse than a missing one: it spends a submission cycle on nothing.
 
-Fix: Add title to ToolDefinition, pass it to ToolAnnotations in list_tools(). Affects all tools, requires redeploy.
 🔴 Blocker 1 — Documentation Page (Must Be Created Before Submission)
 No Claude-specific documentation page exists. Must be published at a stable HTTPS URL (e.g. priority-guard.com/docs/mcp-claude) before submission, containing all required sections including minimum 3 usage examples.
 🟢 Blocker 2 — MCP App Screenshots (Submission Prep) — RESOLVED

@@ -399,32 +399,30 @@ Prompt text provided separately for each screenshot
 
 
 MCP Apps Design Guidelines (Interactive Connectors)
-If submitting an interactive connector (MCP App), your widget UI must comply with Anthropic's published design guidelines at: claude.com/docs/connectors/building/mcp-apps/design-guidelines
+If submitting an interactive connector (MCP App), your widget UI must comply with Anthropic's published design guidelines.
 
-These are Anthropic-authored constraints for the Claude host. They are not part of the MCP ext-apps spec (which is silent on layout) and are not enumerated as gating rejection criteria in the review checklist — but reviewers test widgets and violations will be flagged.
+**DO NOT DUPLICATE THEM HERE.** See `doc/Claude_Compliance/design guidelines_mcpapps_claude.md`
+— refreshed by direct fetch 2026-08-04, with the 12 MUST requirements extracted at the top.
 
-Inline card constraints:
-- Max height: 500px (auto-fit content height, no nested scrolling)
-- Max actions: 2, placed at the bottom of the card
-- No menus or popovers — use visible controls instead
-- No nested scrolling
-- Keep content concise — inline cards are not full UIs
+The block that used to sit here was appended in May 2026 and had gone stale in two material
+ways. It stated:
 
-Fullscreen constraints:
-- Full interaction allowed — create, edit, delete, complex forms
-- No floating panels — use collapsible sections, tabs, or pagination instead
-- A close button must appear in the native header
-- The host composer stays visible at the bottom
+- "Max height: 500px" — the live page states no pixel limit at all. Inline height "auto-fits
+  to content". This false constraint shaped at least two increments before it was caught.
+- "Fullscreen mode not yet available on mobile" — mobile fullscreen IS supported. The live page
+  documents it, including the safe-area handling it requires.
 
-Mobile constraints:
-- Fullscreen mode not yet available on mobile
-- Widgets render in WKWebView (iOS) / Android WebView rather than a sandboxed iframe on mobile
+It also predated the *Scrolling and gestures* section, the current `prefersBorder` default
+semantics, and the "safe areas are not mobile-specific" guidance.
 
-Architecture implication for CRUD widgets:
-All write operations (create, edit, delete) and complex interactions (dropdowns, multi-step forms, confirmation dialogs) must be surfaced in fullscreen mode only. The inline card should show read-only summary data plus an expand button. This is consistent with how all current directory-listed interactive connectors (Asana, monday.com, Canva, Figma, Slack) are designed — none expose delete affordances in the inline card.
+Duplicating a living upstream page into a second file is what produced that. One copy, one
+fetch date, one place to check.
 
-Updated: May 2026 — Source: Anthropic design guidelines page (verified from live docs)
-
+**The architecture implication is retained because it is ours, not Anthropic's:** all write
+operations and complex interactions belong in fullscreen; the inline card should show
+read-only summary plus an expand affordance. That follows from the inline constraints
+(max 2 actions, no menus or popovers, no nested scrolling) rather than from any height limit,
+and it matches how the directory-listed interactive connectors are built.
 
 Widget App Domain (`_meta.ui.domain`)
 

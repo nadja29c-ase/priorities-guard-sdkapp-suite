@@ -233,7 +233,7 @@ These constraints are authored by Anthropic and apply to the Claude host. The MC
 ### Inline card
 | Constraint | Rule |
 |---|---|
-| Max height | 500px — auto-fit content height, no nested scrolling |
+| Max height | Auto-fits to content, no nested scrolling. **No published pixel limit** — the host caps and clips overflow (design guidelines, *Scrolling and gestures*). Corrected 2026-08-04; this row previously read "500px". |
 | Max actions | 2, placed at bottom of card |
 | Menus/popovers | Not allowed — use visible controls only |
 | Nested scrolling | Not allowed |
