@@ -1,5 +1,5 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: June 2026 — Sources re-verified against live Anthropic documentation (June 23, 2026)
+Last updated: 2026-08-04 — design-guidelines and authentication pages re-fetched from live Anthropic documentation. **Partially refreshed:** the remaining source pages (review-criteria, submission, software_directory_policy, troubleshooting, external-links, instance-supersession, transparent-theming, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
 Anthropic Software Directory Policy last updated: April 15, 2026
 Submission guide: https://claude.com/docs/connectors/building/submission
 Pre-submission checklist: https://claude.com/docs/connectors/building/review-criteria
@@ -102,7 +102,9 @@ readOnlyHint: true
 Internal optimization OK
 
 
-⚠️ PG codebase gap: PG's ToolDefinition dataclass has no title field. All 17 tools lack title in their ToolAnnotations. This is a required code fix before submission.
+✅ RESOLVED — verified in code 2026-08-04. `ToolDefinition` declares `title: str` as a REQUIRED field (`mcp_server/priority_guardian/tools/base.py:39`), every tool in TOOL_REGISTRY supplies one, and every tool carries a title in the served `tools/list` payload on BOTH platforms. See §9 Blocker 0.
+
+  *This note previously read "PG's ToolDefinition dataclass has no title field. All 17 tools lack title… required code fix before submission." That was false, and it survived here after §9 was corrected — the same claim lived in two sections and only one was fixed. `structural_guideline_claude_vs_openai.md` had already recorded "title present on all 17 tools", so the repo contradicted itself in three places.*
 4B. Tool Design — Read/Write Split Required
 NEW explicit rejection criterion:
 
@@ -758,6 +760,26 @@ Error handling — implemented with structured error messages
 
 
 11. What Changed From Previous Version
+
+### 2026-08-04 Update (partial refresh — design guidelines + authentication)
+
+**Sources re-fetched:** `mcp-apps/design-guidelines`, `building/authentication`.
+Eight source pages remain on the 2026-06-23 verification and are flagged in the header.
+
+- **The 500px inline height limit does not exist and never did as a published requirement.**
+  Removed from `design guidelines_mcpapps_claude.md` (3 assertions),
+  `remote_server_submission_guide.md` (1) and `structural_guideline_claude_vs_openai.md` (1).
+  The live page states "Height: auto-fits to content"; the *Scrolling and gestures* section
+  (new, not in any previous repo copy) explains the mechanism — the host caps and clips, with
+  no published pixel value. This false constraint shaped at least two increments.
+- **Mobile fullscreen IS supported.** Two repo docs said otherwise.
+- **§9 Blocker 0 (title annotation) → RESOLVED**, and the duplicate false claim in §4A
+  corrected. Verified in code and in the served `tools/list` on both platforms.
+- **New in the source, now captured:** *Scrolling and gestures*; safe areas apply on web and
+  desktop, not only mobile; `prefersBorder` defaults changed (unspecified = borderless on web,
+  bordered on mobile) with a stated safe-area consequence; `baseUriDomains` in the CSP example.
+- **Design guidelines duplication removed** from the submission guide — it is now a pointer.
+  Duplicating a living upstream page into a second file is what produced the drift.
 
 ### June 2026 Update (final — verified against official docs)
 | Item | Previous | Correct (per official docs) |

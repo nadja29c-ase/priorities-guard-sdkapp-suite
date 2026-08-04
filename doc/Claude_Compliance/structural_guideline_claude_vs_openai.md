@@ -1,11 +1,11 @@
 # Structural Guideline: Priority Guardian for Claude vs. ChatGPT
 
 **Created:** March 2026
-**Updated:** May 2026
+**Updated:** 2026-08-04 (was May 2026)
 **Status:** Implemented — Increments Claude-01 through Claude-06 complete
 **Context:** Priority Guardian v1.0 is accepted into the OpenAI GPT store. This document captures the architecture decisions for extending PG to the Anthropic MCP Directory as a second distribution channel.
 
-**Current State:** Claude MCP server deployed, OAuth callbacks configured, response adapter built, display-only widget implemented (Claude-06). Full CRUD widget targeting Increment Claude-08. Widget rendering blocked by platform-side issue (anthropics/claude-ai-mcp #61). All tool annotations fixed (Shared-Annotations-01): `title` present on all 17 tools, `destructive_hint=True` on all 9 write tools.
+**Current State:** Claude MCP server deployed, OAuth callbacks configured, response adapter built, display-only widget implemented (Claude-06). Full CRUD widget targeting Increment Claude-08. Widget rendering **works** — issue #61 resolved June 2026 (master §9 Blocker 2; the MindSort sibling document already recorded it as RESOLVED). All tool annotations fixed (Shared-Annotations-01): `title` present on all 17 tools, `destructive_hint=True` on all 9 write tools.
 
 ---
 
@@ -360,7 +360,7 @@ Full widget rewrite completed using `@modelcontextprotocol/ext-apps` SDK. Implem
 
 Widget currently display-only (Increment Claude-06 scope). Full CRUD targeting Increment Claude-08 — technically unblocked as of May 2026 (`app.callServerTool` confirmed working in ext-apps v1.7.1).
 
-Widget implementation is correct per spec. Currently blocked by platform-side issue — claude.ai does not call `resources/read` for third-party custom connectors (anthropics/claude-ai-mcp #61, open since February 2026).
+Widget implementation is correct per spec. The platform-side issue that blocked this — claude.ai not calling `resources/read` for third-party custom connectors (anthropics/claude-ai-mcp #61) — was **resolved June 2026**. Corrected 2026-08-04; this paragraph still described it as open.
 
 ### ✅ Resolved — Response Adapter (Increment Claude-04)
 
