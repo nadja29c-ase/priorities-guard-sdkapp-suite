@@ -85,6 +85,11 @@ its own commit, and **a page is not done until step 5.** Steps 1–4 were the ro
 step 5 kept being remembered rather than executed, and the currency metadata lagged the work two
 rounds running. It is a step now.
 
+0. **Commit the raw source verbatim** to `Claude_Compliance/sources_raw/<page>.raw.md`.
+   **Append `.md` to the doc URL** — `…/building/authentication.md` returns 17 KB of raw
+   markdown, HTTP 200. No rendering, no summarisation, no transcription step. This is step 0
+   because without it every later step rests on a fetch only one party saw, and a reviewer who
+   cannot read the source cannot check the artifact against it — which is the whole of round 2.
 1. **Fetch live** and write a dated source dump into `Claude_Compliance/`.
 2. **Extract the obligations** into a numbered table, distinguishing MUST from recommendation.
 3. **Verify PG against each**, citing file and line — or say "not verified" and why.
@@ -112,6 +117,21 @@ believed because they were specific.
 
 **"Closed" means both rounds.** Saying it after round 1 is the same overstatement the writing rule
 below prohibits, one level up.
+
+**Round 2 is artifact-level and synthesis-level, and they are not the same pass.** Checking the
+source dumps is not checking the master. §4C/§4K/§4N are unrewritten, so no round 2 has touched
+the synthesis — do not let a tally of green artifacts imply otherwise.
+
+**Two things round 2 catches that are not fabrications**, both found on 2026-08-04:
+
+- **Miscounts in summary sentences.** *"11 of the 17 are verified"* counted table rows, not
+  requirements — one row held two. The writing rule catches this only if someone re-counts.
+- **Citations that cannot be checked.** A provenance note cited line numbers in a file that had
+  been deleted; a "verbatim" reproduction silently dropped a declaration; an evidence column
+  carried the word *"likely."* None changed a verdict. All three erode the citations that do.
+
+**Cite the declaration, not the line number, unless you can re-read it.** Hand-counted line
+numbers are wrong often enough to poison the citations around them.
 
 ---
 

@@ -4,17 +4,34 @@
 **Fetched:** 2026-08-04 — direct fetch, not transcribed.
 
 **Why this replaced the previous copy.** It was stale on two material facts and missing two
-sections. The previous copy stated a **500px inline height limit** in three places (lines 36,
-62, 138) and that **"Fullscreen is not yet available on mobile"** (lines 120, 128). The live
-page states neither: inline height "auto-fits to content" with no pixel value published
-anywhere, and mobile fullscreen is supported. It also lacked the entire *Scrolling and
-gestures* section and the current safe-area / borderless guidance.
+sections. The previous copy stated a **500px inline height limit** in three places and that
+**"Fullscreen is not yet available on mobile"** in two. The live page states neither: inline
+height "auto-fits to content" with no pixel value published anywhere, and mobile fullscreen is
+supported. It also lacked the entire *Scrolling and gestures* section and the current
+safe-area / borderless guidance.
 
-**Provenance note.** Two independent retrievals on 2026-08-04 — this one and a separate read —
-agreed on every discriminating marker (no 500px, mobile fullscreen supported, *Scrolling and
-gestures* present, `prefersBorder` default semantics changed, `baseUriDomains` in the CSP
-example, ring/ghost/disabled tokens present). Both diverge from the previous copy in the same
+> ⚠️ This paragraph previously cited line numbers (36/62/138 and 120/128) in the replaced file.
+> That file no longer exists in the tree, so those citations were **permanently unfalsifiable**.
+> Removed 2026-08-04. A citation nobody can check is worse than no citation: it reads as
+> evidence and cannot function as any. If the replaced content matters, recover it from git
+> history and cite the blob — not a path that no longer resolves.
+
+**Provenance note — corrected 2026-08-04.** Two retrievals on 2026-08-04 agreed on every
+discriminating marker (no 500px, mobile fullscreen supported, *Scrolling and gestures* present,
+`prefersBorder` default semantics changed, `baseUriDomains` in the CSP example,
+ring/ghost/disabled tokens present), and both diverge from the previous copy in the same
 direction.
+
+**They were not independent.** This note previously called them "two independent retrievals."
+One was a direct fetch; the other was a read of the same page pasted into the same session,
+same hour, same upstream. That corroborates **transcription fidelity** — the text was not
+garbled or invented in transit — and says nothing about **upstream state**, which is what
+"independent" would imply. In a paragraph whose entire job is provenance, the word was doing
+work it had not earned.
+
+**The durable fix is not wording.** The raw page is now committed verbatim under
+`sources_raw/`, so agreement between renderings is no longer something a reader has to take on
+trust — the bytes are in the tree and re-fetchable at the same URL with a `.md` suffix.
 
 > **Verbatim reproduction.** Body text, constraint lists, callouts, code samples and token
 > tables are as published. Only inline `<img>` tags are reduced to captions — CDN hashes rot

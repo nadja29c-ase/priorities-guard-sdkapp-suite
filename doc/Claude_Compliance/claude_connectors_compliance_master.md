@@ -7,7 +7,19 @@ trace to a line in a source dump, and does every PG status claim trace to a file
 Round 1 cannot catch invention, and invention is the failure mode this document actually has —
 three fabrications survived round 1 on 2026-08-04 alone (the 500px provenance, a "new"
 proactive-refresh item the master already documented, and *"nothing in §4C was stale"*).
-**Round 2 status: not started on any page.**
+
+**Round 2 status (2026-08-04): run on all three round-1 artifacts, source side clean — no
+fabricated requirement in any of them.** Defects found were citation-quality and one miscount,
+all fixed. The raw upstream markdown for all three pages is now committed verbatim under
+`Claude_Compliance/sources_raw/` (append `.md` to any of these doc URLs), so every quotation is
+independently checkable and round 2 no longer depends on who fetched what.
+
+⚠️ **Round 2 has NOT been run on this master.** The artifacts are checked; the synthesis in
+§4C/§4K/§4N is not, because it has not been rewritten yet. A green artifact tally does not
+transfer here.
+
+⚠️ **Round 2 surfaced a requirement round 1 missed, and PG fails it — see §4C, A18** (redirect
+URI hostname on the consent screen).
 Anthropic Software Directory Policy last updated: April 15, 2026
 Submission guide: https://claude.com/docs/connectors/building/submission
 Pre-submission checklist: https://claude.com/docs/connectors/building/review-criteria
@@ -159,6 +171,30 @@ Flagged inline rather than left for the §4C rewrite, on the Blocker 0 precedent
 claim in this file survived two rounds and three locations because each fix was scoped to
 where someone was pointed. Cost of the inline flag is one paragraph. See
 `authentication_claude_connectors.md` Part 3. Not PG-affecting — PG uses `oauth_dcr`.
+Confirmed again in round 2 against the committed raw source, which states outright that the
+credential *"is shared by the organization rather than pasted per user."*
+
+⚠️ **A18 — REDIRECT URI HOSTNAME ON THE CONSENT SCREEN. PG DOES NOT SATISFY THIS.**
+(Found in round 2, 2026-08-04; missed by round 1. Raw source line 106. Code fix NOT applied.)
+
+The MCP authorization spec **requires** the authorization server to display the redirect URI
+hostname clearly on the consent screen, and **recommends** an additional warning when the only
+registered redirect URIs are loopback addresses. The reason is stated on the page: a Client ID
+Metadata Document *"can't prevent loopback impersonation on its own — any local process can bind
+a port and claim to be the legitimate client."*
+
+This binds PG because PG accepts loopback redirects for Claude Code (see §9 / A9).
+
+PG's position: none of the eight `backend/templates/oauth_consent_*.html` templates render the
+redirect URI, its hostname, or its host — grep returns nothing. The value is not missing from the
+backend: `oauth_provider/consent_ui.py` computes `urlparse(redirect_uri).netloc` and writes it to
+a **log line** (`:270`) while never passing it to the template context. **The gap is display, not
+plumbing.**
+
+Bounded, not dismissed: exploiting it requires a hostile local process on the user's machine
+during an active Claude Code authorization, and it does not apply to the hosted surfaces, where
+the redirect is always `claude.ai`. It is still an unmet MUST on a security control, in the
+section that backs the OAuth attestation on the submission form.
 
 For high-traffic directory servers: Prefer CIMD or oauth_anthropic_creds over DCR. DCR causes Claude to register a new client on every fresh connection, potentially creating very large numbers of registered clients. CIMD and Anthropic-held credentials avoid the registration call entirely.
 

@@ -69,10 +69,10 @@ The page's own fallback example is
 
 | # | Requirement | PG-Claude | Evidence |
 |---|---|---|---|
-| T1 | Transparent html/body | ✅ | `widget-react/src/main.css:9-15` — `html, body { width:100%; margin:0; padding:0; background: transparent }`; `body` again at :28 |
+| T1 | Transparent html/body | ✅ | `widget-react/src/main.css:8-15` — the `html,` / `body {` rule, verbatim: `width:100%; margin:0; padding:0; -webkit-overflow-scrolling:touch; background:transparent`. A second `body { background: transparent }` follows in the `#root`-adjacent block |
 | T2 | `color-scheme` meta tag | ✅ | `widget-react/pg-dashboard-claude.html:6`. **Durable** — that file is the Vite build *input* (`vite.config.ts:18`), so the tag survives rebuilds. Also present in the built, actually-served `widgets/pg-dashboard-claude.html:6` |
-| T3 | `assets.claude.ai` in `resourceDomains` | ✅ **but hollow** | `handlers/resources_dupl.py:94` and `:118`, commented "Host font loading". The allowance is granted and the fonts inject — **nothing consumes them.** See below |
-| T4 | Listener registered before connect | ⚠️ **unverified** | `onhostcontextchanged` is assigned at `App.tsx:144`, inside the `onAppCreated` callback (`:85`). Whether `onAppCreated` fires before `connect()` is SDK internals and was not read. PG also uses `useHostStyles`, which the page says re-applies on the event — so the React path likely covers it regardless |
+| T3 | `assets.claude.ai` in `resourceDomains` | ✅ **but hollow** | `handlers/resources_dupl.py:94`, `:118` **and `:152`** — **all three** `_meta.ui` blocks (`list_resources`, `list_resource_templates`, `handle_read_resource`), not the "both" this row previously claimed. The allowance is granted and the fonts inject — **nothing consumes them.** See below |
+| T4 | Listener registered before connect | ⚠️ **unverified** | `onhostcontextchanged` is assigned at `App.tsx:144`, inside the `onAppCreated` callback (`:85`). Whether `onAppCreated` fires before `connect()` is SDK internals and was not read. **Nothing further is claimed** — this row previously added that `useHostStyles` re-applies on the event "so the React path likely covers it regardless", which is an argument, not evidence, and does not belong in an evidence column |
 | — | `prefersBorder` | set `false` | `resources_dupl.py:91, 115, 149` — all three `_meta.ui` blocks. **See the trade-off below.** |
 
 ### T3 is satisfied and hollow — PG pays for host fonts and never uses them
