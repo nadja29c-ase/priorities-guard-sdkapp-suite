@@ -1,5 +1,5 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 4 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`. **Partially refreshed:** the remaining six (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
+Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 5 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`. **Partially refreshed:** the remaining five (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
 
 **No page is "closed."** Round 1 catches omission — did the source get captured. Round 2 runs
 *after* the master rewrite and checks the reverse direction: does every claim now in the master
@@ -26,8 +26,19 @@ independently checkable and round 2 no longer depends on who fetched what.
 transfer here.
 
 ⚠️ **Round 2 surfaced a requirement round 1 missed, and PG fails it — see §4C, A18** (redirect
-URI hostname on the consent screen). Labelled precisely: **unmet spec-inherited MUST,
-directory-gating status unknown until `review-criteria` is fetched.**
+URI hostname on the consent screen). **GATING STATUS NOW RESOLVED (2026-08-04): A18 is NOT an
+enumerated directory criterion.** `review-criteria` never mentions consent screens or redirect
+URIs — grep for `consent`/`redirect` across its raw source returns nothing. A18 stands as an
+**unmet spec-inherited MUST that does not block submission**. Still worth fixing; correctly sized
+as post-submission.
+
+⚠️ **BLOCKER 1 MAY BE MIS-SIZED.** `review-criteria` states the documentation bar as: *"Public
+documentation is required by your publish date — a blog post or help-center article is
+sufficient. You can share docs privately with Anthropic during review."* **By publish date, not
+by submission**, and **no section or example count**. The "seven required sections, three usage
+examples" figure is **not on this page** and must come from `submission` or
+`software_directory_policy`, both unfetched. **Do not size Blocker 1 from that figure until its
+source page is confirmed.**
 
 ⚠️ **Round 1 on `authentication` is REOPENED.** Round 2 returned six omissions, not one. The
 cause was the extraction *method* — round 1 swept for obligation keywords ("must", "required",
