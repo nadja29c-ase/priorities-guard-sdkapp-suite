@@ -86,7 +86,34 @@ MCP Apps — MCP servers that surface interactive UI elements. Additional requir
 
 Submission forms:
 
-Remote MCPs (including MCP Apps): http://clau.de/mcp-directory-submission
+Remote MCPs (including MCP Apps): SUBMISSION PORTAL —
+  https://claude.ai/admin-settings/directory/submissions/new
+
+⚠️⚠️ BLOCKER — ACCESS GATE. ADDED 2026-08-04. READ BEFORE PLANNING ANY SUBMISSION WORK.
+
+The old URL http://clau.de/mcp-directory-submission IS DEAD for remote MCPs. Submission is no
+longer a form; it is an ELEVEN-STEP PORTAL INSIDE CLAUDE.AI ADMIN SETTINGS. Verbatim from
+sources_raw/submission.raw.md:21-24:
+
+  "Remote MCP server submissions happen inside Claude.ai, in the submission portal. The portal is
+   part of your organization's admin settings, so you need:
+   * A TEAM OR ENTERPRISE ORGANIZATION. Admin settings aren't available on individual plans.
+   * Directory management access. By default, only organization Owners and Primary owners can
+     submit and manage directory listings."
+
+CONSEQUENCE FOR PG: a solo operator on an INDIVIDUAL PLAN CANNOT SUBMIT AT ALL. This requires a
+Team organisation, a paid seat, billing setup, and Owner status. Enterprise can delegate via a
+custom role with the "Directory management" or "Libraries" permission; TEAM PLANS HAVE NO CUSTOM
+ROLES, so on Team it stays with Owners — which is fine for a solo owner.
+
+THIS IS ALMOST CERTAINLY WHAT "USE THE NEWER SUBMISSION FORM" MEANT. The form became a portal and
+the portal moved behind an org plan.
+
+IT OUTRANKS EVERYTHING IN THIS FILE. It is ahead of the documentation page, ahead of screenshots,
+ahead of every finding in the 2026-08-04 audit. It is also NOT AN ENGINEERING TASK — it is a
+purchase decision. ⚠️ CHECK CURRENT TEAM PRICING AND ANY MINIMUM-SEAT REQUIREMENT FIRST; if a
+seat minimum exists, that number is the real cost of submitting. NOT VERIFIED HERE — pricing was
+not checked and must not be assumed.
 Desktop extensions (MCPB): http://clau.de/desktop-extention-submission
 
 Review times vary with queue volume. Anthropic reviews submissions manually and cannot promise to accept or respond to every submission individually. Do not assume a fixed timeline. A self-serve status dashboard is rolling out in Claude.ai — until then you may not receive proactive notification on every status change. Email mcp-review@anthropic.com for escalations.
@@ -708,7 +735,21 @@ PG widget pre-submission checklist (MCP Apps specific):
 [x] <meta name="color-scheme" content="light dark" /> in document head — pg-dashboard-claude.html
 [x] prefersBorder: false set in _meta.ui — resources_dupl.py
 [x] openLink() only called from user gesture handlers — ConnectionStatus.tsx onClick
-[ ] Allowed link URIs declared in submission form — pending (external submission form)
+[ ] Allowed link URIs declared in submission portal — SATISFIABLE (see §4L; PG owns the origin)
+
+⚠️ B7 IS AN ATTESTATION, NOT A PROCESS STEP. ADDED 2026-08-04.
+The portal states: "You also confirm you've run every tool yourself, either via MCP Inspector or
+as a custom connector in Claude." That is a CHECKBOX YOU TICK, and Software Directory Terms T-3
+warrants that "any information you give us will be accurate and up-to-date."
+
+CURRENT STATE: only delete_my_priority_guardian_data has been exercised end to end (production,
+2026-08-04). The other SEVEN public tools have not.
+
+TICKING B7 TODAY WOULD BE A WARRANTY DEFECT, not a process shortcut. This reclassifies R11 from
+"unmet process step" to a PRE-SUBMISSION BLOCKER: all 8 public tools through MCP Inspector or as a
+custom connector, BEFORE the portal. The 8 are create_priority, delete_my_priority_guardian_data,
+get_patterns, get_priorities, get_priority_events, inspect_adapt, onboarding_calendar_setup,
+render_weekly_report.
 [ ] Widget handles multiple instances gracefully — NOT IMPLEMENTED (non-blocking, enhancement)
 [x] Loading states use appropriate indicators — inline uses shimmer, fullscreen uses spinners
 [x] Icons have text alternatives (aria-label) — verified across all components
@@ -996,6 +1037,25 @@ Launch readiness — GA date, confirmation of which surfaces tested (Claude.ai, 
 Branding — server logo (URL or SVG upload), favicon verification
 For MCP Apps — screenshots mandatory for directory listing. Requirements: 3–5 PNG screenshots, at least 1000px wide, cropped to the app response area only — do NOT include the prompt in the image. Provide the prompt text separately for each screenshot.
 Allowed link URIs — if connector uses ui/open-link, declare allowed HTTPS origins and custom URI schemes (declared destinations open without confirmation prompt; anything else still prompts user)
+
+⚠️ CORRECTED 2026-08-04 — this section said non-conforming entries are "rejected". That matches
+NEITHER source and understates a silent-failure risk. There are TWO DISTINCT MECHANISMS:
+  submission page  — entries whose origin you DO NOT OWN are "REMOVED DURING REVIEW" (B5)
+  external-links   — MALFORMED entries are "IGNORED"
+Neither is a rejection. Both fail QUIETLY: the listing ships, the entry is gone, and users get the
+confirmation modal on every link — with nothing in the submission result to say so.
+
+⚠️ B5 — EVERY listed origin and scheme MUST BE OWNED BY THE SUBMITTING ORGANISATION.
+PG STATUS ✅ SATISFIABLE, verified 2026-08-04. ConnectionStatus.tsx calls openLink({url: connectUrl})
+where connect_url is built in google_connection_router.py:138 as
+  f"{settings.BACKEND_PUBLIC_URL}/auth/google/start?token={token}"
+and BACKEND_PUBLIC_URL defaults to https://www.priority-guard.com (config.py:74) — A DOMAIN PG
+OWNS. It does NOT point at accounts.google.com; PG's own backend performs the Google redirect. So
+the entry is allowlistable and there is no confirmation-modal degradation on calendar connect.
+  - Allowlist https://www.priority-guard.com. SUBDOMAINS ARE NOT IMPLIED — if BACKEND_PUBLIC_URL
+    is overridden by env var in production to another subdomain, allowlist THAT exact origin.
+  - Note: google_connection_router.py:115's docstring shows https://api.priority-guard.com/... as
+    an EXAMPLE. It is not the configured value. Confirm the live env var before filling the form.
 Policy & requirements checklists — confirming compliance with directory policy, technical requirements (OAuth, HTTPS, Origin-header validation, annotations), documentation, and testing standards
 Optional: Skills & Plugins — if submitting a related Agent Skill alongside the server
 
