@@ -19,7 +19,15 @@ independently checkable and round 2 no longer depends on who fetched what.
 transfer here.
 
 ⚠️ **Round 2 surfaced a requirement round 1 missed, and PG fails it — see §4C, A18** (redirect
-URI hostname on the consent screen).
+URI hostname on the consent screen). Labelled precisely: **unmet spec-inherited MUST,
+directory-gating status unknown until `review-criteria` is fetched.**
+
+⚠️ **Round 1 on `authentication` is REOPENED.** Round 2 returned six omissions, not one. The
+cause was the extraction *method* — round 1 swept for obligation keywords ("must", "required",
+"prohibits") and missed every requirement carried by a `<Note>`, a conditional, a cross-reference,
+or prose attached to a number. **The remaining seven pages are read for obligations, not
+keywords.** Round-1 ✅ on design-guidelines and transparent-theming was awarded under the same
+defective method and is worth no more than the method that produced it.
 Anthropic Software Directory Policy last updated: April 15, 2026
 Submission guide: https://claude.com/docs/connectors/building/submission
 Pre-submission checklist: https://claude.com/docs/connectors/building/review-criteria
@@ -175,26 +183,40 @@ Confirmed again in round 2 against the committed raw source, which states outrig
 credential *"is shared by the organization rather than pasted per user."*
 
 ⚠️ **A18 — REDIRECT URI HOSTNAME ON THE CONSENT SCREEN. PG DOES NOT SATISFY THIS.**
+**Unmet spec-inherited MUST — directory-gating status UNKNOWN.**
 (Found in round 2, 2026-08-04; missed by round 1. Raw source line 106. Code fix NOT applied.)
 
-The MCP authorization spec **requires** the authorization server to display the redirect URI
-hostname clearly on the consent screen, and **recommends** an additional warning when the only
-registered redirect URIs are loopback addresses. The reason is stated on the page: a Client ID
-Metadata Document *"can't prevent loopback impersonation on its own — any local process can bind
-a port and claim to be the legitimate client."*
+The **MCP authorization spec** requires the authorization server to display the redirect URI
+hostname clearly on the consent screen, and separately **recommends** an additional warning when
+the only registered redirect URIs are loopback addresses. Upstream rationale: a Client ID Metadata
+Document *"can't prevent loopback impersonation on its own — any local process can bind a port and
+claim to be the legitimate client."*
 
-This binds PG because PG accepts loopback redirects for Claude Code (see §9 / A9).
+**Provenance matters here.** This is the MCP spec surfaced on Anthropic's page — **not** an
+Anthropic-enumerated directory criterion. Whether reviewers gate on it is unknown until
+`review-criteria` is fetched. Do not push it against Blocker 1 as though that were settled.
 
-PG's position: none of the eight `backend/templates/oauth_consent_*.html` templates render the
-redirect URI, its hostname, or its host — grep returns nothing. The value is not missing from the
-backend: `oauth_provider/consent_ui.py` computes `urlparse(redirect_uri).netloc` and writes it to
-a **log line** (`:270`) while never passing it to the template context. **The gap is display, not
-plumbing.**
+**Scope: the display obligation is unconditional.** Only the extra *warning* is conditioned on
+loopback-only registration. An earlier draft of this block said A18 binds PG "because PG accepts
+loopback redirects for Claude Code" — that read the paragraph's context as the obligation's scope.
+It applies to the hosted `claude.ai` consent screens too, which makes the gap wider and the fix
+cheaper: one change covers every flow rather than a Claude-Code-only branch.
 
-Bounded, not dismissed: exploiting it requires a hostile local process on the user's machine
-during an active Claude Code authorization, and it does not apply to the hosted surfaces, where
-the redirect is always `claude.ai`. It is still an unmet MUST on a security control, in the
-section that backs the OAuth attestation on the submission form.
+**PG's position.** None of the eight `backend/templates/oauth_consent_*.html` templates render the
+redirect URI, hostname or host — grep returns nothing in any of them. The render site is
+`oauth_provider/authorize.py` (`TemplateResponse`, `:788`), whose context passes only `request`,
+`auth_context_id`, `client_name`, `scopes`, `scope_descriptions`.
+
+⚠️ An earlier draft said the value sat *"one line away"* and called this *"display, not plumbing."*
+**Both oversold it.** The existing `urlparse(redirect_uri).netloc` lives in `consent_ui.py` on the
+**post-consent redirect path**, feeding a log line — a different module and a different request
+phase, with nothing reusable. `redirect_uri` *is* in scope at the render site (`authorize.py:770`),
+but nothing computes its `netloc` and nothing passes it. The fix is **an add, not a move**: one
+computation plus one context entry in `authorize.py`, plus markup in all eight templates.
+
+Bounded, not dismissed: the *impersonation* scenario needs a hostile local process during an active
+Claude Code authorization. The *display* gap applies to every flow, including hosted surfaces,
+where it is a transparency failure rather than an exploitable one.
 
 For high-traffic directory servers: Prefer CIMD or oauth_anthropic_creds over DCR. DCR causes Claude to register a new client on every fresh connection, potentially creating very large numbers of registered clients. CIMD and Anthropic-held credentials avoid the registration call entirely.
 

@@ -11,10 +11,15 @@
 > doc URLs returns the raw markdown, so the source is now **in the tree**. Every quotation below
 > is checkable against it by anyone, permanently, without a paste.
 >
-> **Round 2 result (2026-08-04): no fabrications on the source side.** All 17 extracted
-> requirements, the auth-type table, the egress range, the scope/refresh/DCR-at-scale facts and
-> every verbatim quotation trace to the raw file. Two defects were found and are fixed below:
-> **one arithmetic overclaim** and **one omitted MUST that PG does not satisfy**.
+> **Round 2 result (2026-08-04): source side clean — no fabrications.** All 17 originally
+> extracted requirements, the auth-type table, the egress range, the CIMD dual condition and its
+> rationale, the DCR-at-scale wording, the 10 s/30 s budgets and the parser split all trace
+> verbatim to the raw file. The risk in this artifact was **omission, not invention.**
+>
+> ⚠️ **Round 1 on this page is therefore REOPENED, not complete.** Round 2 returned **six**
+> omissions — one of them a failing MUST (**A18**) — plus one arithmetic overclaim. All are folded
+> in below; the page is **not** re-looped. The extraction *method* that caused them is corrected
+> for the remaining seven pages (see "Why round 1 missed these").
 
 This page is the densest requirements source in the set. The page itself opens with
 *"Authentication is the most common source of partner questions. Claude's auth support differs
@@ -44,12 +49,25 @@ familiar with MCP auth."*
 | A15 | Machine-to-machine `client_credentials` grant is **NOT supported**. Every connection requires user consent | "not supported" |
 | A16 | Tokens/API keys in the connector **URL** are **not recommended**; the MCP spec **prohibits** access tokens in the URI query string | "prohibits" |
 | A17 | CIMD is selected **only when AS metadata advertises BOTH** `"client_id_metadata_document_supported": true` **AND** `"none"` in `token_endpoint_auth_methods_supported`. If either is missing, Claude falls back to DCR | "only when… both" |
-| **A18** | **AS must display the redirect URI hostname clearly on the consent screen**, and *should* add an extra warning when the only registered redirect URIs are loopback addresses — because a CIMD "can't prevent loopback impersonation on its own; any local process can bind a port and claim to be the legitimate client" | spec **"requires"** + "recommends" |
+| **A18** | **AS must display the redirect URI hostname clearly on the consent screen — unconditionally.** *Separately,* it **should** add an extra warning when the only registered redirect URIs are loopback addresses. Rationale given upstream: a CIMD "can't prevent loopback impersonation on its own — any local process can bind a port and claim to be the legitimate client" | spec **"requires"** (display) + "recommends" (warning) |
 
-> **A18 was missed by round 1** (raw source line 106). It is a genuine MUST on the authorization
-> server, it is a **security** requirement rather than a plumbing one, and it applies to PG
-> directly because PG accepts loopback redirects for Claude Code (A9). Extracting 17 requirements
-> and calling the set complete is exactly the shape the writing rule in `doc/README.md` prohibits.
+> **A18 was missed by round 1** (raw source line 106), and its scope was then understated when
+> first recorded. Two corrections:
+>
+> **1. The obligation is not scoped to loopback.** It was first written here as binding "because
+> PG accepts loopback redirects for Claude Code." Re-read the sentence: *"requires authorization
+> servers to display the redirect URI hostname clearly on the consent screen **and** recommends an
+> extra warning when the only registered redirect URIs are loopback addresses."* Only the
+> **warning** carries the loopback condition. The **display** requirement is unconditional — the
+> surrounding paragraph is about loopback, the obligation isn't. So it applies to the hosted
+> `claude.ai` consent screens too. **This widens the gap and cheapens the fix**: one change covers
+> every flow instead of a Claude-Code-only branch.
+>
+> **2. Provenance, labelled.** This is the **MCP authorization spec** requiring it, surfaced on
+> Anthropic's page — **not** an Anthropic-enumerated directory criterion. Whether reviewers gate
+> on it is **unknown until `review-criteria` is fetched.** The honest label is *"unmet
+> spec-inherited MUST, directory-gating status unknown"*, not a bare "unmet MUST" — the difference
+> decides how hard this is pushed against Blocker 1.
 
 ### Supported authentication types (complete list)
 
@@ -108,24 +126,46 @@ A17**, of which **12 verified ✅, 4 not verified ⚠️, 1 newly failed ❌ (A1
 | A15 | No `client_credentials` | ✅ | Not implemented; PG is consent-gated throughout |
 | A16 | No tokens in the URI query string | ✅ | PG is bearer-header only. No `?token=`/`?apiKey=`/`?userToken=` parameter is read anywhere on the MCP path; `mcp_auth_dupl.py` reads the `Authorization` header exclusively |
 | A17 | CIMD vs DCR selection | ➖ n/a — see below | `token_endpoint_auth_methods_supported: ["none"]` present, `client_id_metadata_document_supported` **absent** → Claude falls back to DCR, which PG supports (`registration_endpoint` present) |
-| **A18** | Redirect URI hostname on the consent screen | ❌ **NOT SATISFIED** | `backend/templates/oauth_consent_pg_en.html` contains no `redirect`, no hostname, no host — grep returns nothing. `consent_ui.py` *has* the value: it parses `urlparse(redirect_uri).netloc` and **logs** it (`:270`), then uses `redirect_uri` only to build the redirect. It is never passed to the template. Same for the other seven consent templates |
+| **A18** | Redirect URI hostname on the consent screen | ❌ **NOT SATISFIED** | **All 8** `backend/templates/oauth_consent_*.html` — grep for `redirect`/`hostname`/`redirect_host` returns nothing in any of them. The render site is `oauth_provider/authorize.py` (`TemplateResponse`, `:788`); its context passes `request`, `auth_context_id`, `client_name`, `scopes`, `scope_descriptions` — no redirect data |
 
 ### A18 — the one new failing requirement, stated plainly
 
-PG accepts loopback redirects for Claude Code (A9, implemented in the Claude auth increment).
-The spec's reasoning for A18 is that a Client ID Metadata Document **cannot** prevent loopback
-impersonation: any local process can bind a port and claim to be the legitimate client. The
-consent screen is the only place the user can see where their authorization is actually going.
+The consent screen is the only place a user can see where their authorization is actually going.
+PG shows them nothing, on **every** flow — the display obligation is unconditional (see the
+scope correction above), so this is not a Claude-Code-only gap.
 
-PG shows them nothing. The data is present and already parsed one line away from the template
-context — `netloc` is computed for a log line — so the gap is display, not plumbing.
+**Correction to how the fix size was first stated.** This artifact previously said the value sat
+*"one line away from the template context"* and called the gap *"display, not plumbing."* Both
+oversold it:
 
-**Severity is real but bounded:** it requires a hostile local process on the user's machine
-during an active Claude Code authorization. **Not applicable to the hosted surfaces**, where the
-redirect is always `claude.ai`. **Filed, not fixed** — a consent-screen change across eight
-templates is an increment, and the fix decision is Nadja's.
+- The existing `urlparse(redirect_uri).netloc` is in **`consent_ui.py`**, on the **post-consent
+  redirect path**, where it feeds the `oauth.consent.redirect_prepared` log. That is a different
+  module and a different request phase from the render. Nothing there is reusable.
+- The render path is `authorize.py`. `redirect_uri` **is** in scope there — the same function
+  uses it at `:770` — but nothing computes its `netloc` and nothing passes it into the context.
 
-### Also omitted by round 1 — captured now, none PG-failing
+So the fix is **an add, not a move**: one computation and one context entry in `authorize.py`,
+plus display markup in **all eight** templates (four languages × three apps, plus the legacy
+`focused` pair). Still small. Not one line, and not in the file that already has the value.
+
+**Severity, bounded but wider than first written.** The loopback impersonation scenario needs a
+hostile local process during an active Claude Code authorization. The *display* gap, however,
+applies to hosted `claude.ai` consent screens as well, where it is a transparency failure rather
+than an exploitable one. **Filed, not fixed** — the decision is Nadja's.
+
+### Why round 1 missed these — the extraction method, not six unlucky misses
+
+A18 was not a one-off. Round 1 swept this page for **obligation-shaped words** — "must",
+"required", "prohibits" — and therefore missed every requirement carried by a `<Note>`, a
+conditional clause, a cross-reference to another page, or an operational sentence attached to a
+number. Six items came back on the re-read below, one of them a failing MUST.
+
+**The method fix, for the seven remaining pages:** read the raw source top to bottom for
+*obligations*, not for *keywords*. Specifically sweep the four shapes that defeated the keyword
+pass — `<Note>`/`<Tip>` blocks, conditionals ("if you… then you must"), links to adjacent
+requirement surfaces, and the prose *around* a stated number.
+
+### Also omitted by round 1 — captured now
 
 | Raw line | What it says | PG impact |
 |---|---|---|
@@ -133,7 +173,10 @@ templates is an increment, and the fix decision is Nadja's.
 | 127–129 | **Custom connectors:** the OAuth Client Secret field is *optional*; an admin may supply their own pre-registered client credentials, scoping the OAuth client to that org | PG is directory-bound, so not applicable today |
 | 41 | `oauth_anthropic_creds` are **bound to the issuing AS** — email `mcp-review@anthropic.com` with new credentials *before* cutting over to a new authorization server. CIMD has no such constraint (its `client_id` is a self-hosted URL) | Only if PG ever adopts Anthropic-held credentials |
 | 39 | Claude Code does **not** use Anthropic-held credentials — it runs its own flow with its own CIMD. Claude Managed Agents uses a separate credential set | Clarifies why A9 loopback support is independent of the hosted-surface path |
-| 81 | Microsoft Entra ID requires the MCP server URL registered as an Application ID URI or the token request fails `AADSTS9010010` | None — PG runs its own AS |
+| 81 | Microsoft Entra ID requires the MCP server URL registered as an Application ID URI or the token request fails `AADSTS9010010` | None — PG runs its own AS. Listed because it is a **literal "must"** in a `<Note>`, and this artifact claims to extract MUSTs |
+| 137 | **A14's operational half.** The 10 s / 30 s budgets were captured as bare numbers; the source also says to *return the response headers and body without buffering behind upstream work*, and to check that no reverse proxy, API gateway or WAF is holding the response | Actionable if A14 is ever measured (still unverified) |
+| 24 | **`static_headers` sharing model.** The credential is entered **once by an org administrator** and is *"shared by the organization rather than pasted per user"* | Sharpens the `static_bearer` drift finding in Part 3: the type was not merely renamed and promoted from unsupported to beta — **the credential model changed**, from per-user paste to org-shared admin entry |
+| 104 | **A9's RFC split.** Port-agnostic matching is **mandatory** under RFC 8252 §7.3 for the IP-literal form (`127.0.0.1`); for `localhost` it is pragmatic, applied *"so Claude Code works, even though RFC 8252 section 8.3 discourages `localhost`"* | Matters if anyone ever tightens `_LOOPBACK_HOSTS` — the two hosts rest on different footings, and only one is RFC-mandated |
 
 ### Not verified — stated rather than assumed
 
