@@ -508,10 +508,29 @@ ui.domain is optional, DROPPING IT GIVES PER-CONVERSATION SCOPING FOR FREE AND D
 false "mandatory" framing removed that option from consideration without anyone deciding against
 it. The other four inflations produced wasted effort; this one silently foreclosed a design choice.
 
-NOT a recommendation to drop it. It is set and working, and a fixed domain is also what makes the
-origin STABLE ACROSS CONVERSATIONS — which anything relying on localStorage or a shared origin
-would need. The point is that keeping it should be a DECISION WITH A RECORDED RATIONALE, not an
-inherited constraint.
+THE DECISION, WITH ITS REASON — recorded 2026-08-04 so it stops being an inherited constraint:
+
+  KEEP ui.domain, because PG's widget RUNS ITS OWN OAUTH FLOW and therefore needs a stable
+  sandbox origin. Verified: ConnectionStatus.tsx calls connect_google_calendar (:52), extracts
+  connect_url (:59), and calls app.openLink({url: connectUrl}) (:63) — a widget-initiated Google
+  Calendar OAuth round trip.
+
+  Per the troubleshooting page: "Setting _meta.ui.domain opts your app into a stable sandbox
+  origin, which you need if your app runs its own OAuth flow."
+  ⚠️ That page is NOT yet in sources_raw/ — the quotation comes from Nadja's read, not from a
+  committed source. Confirm it when troubleshooting is pasted.
+
+  ACCEPTED COST: cross-conversation BroadcastChannel scope. CONSEQUENCE: S5 (a server-minted
+  per-conversation scope key) is a PRECONDITION if supersession is ever built. See §4M.
+
+⚠️ AN EARLIER VERSION OF THIS BLOCK GAVE A WEAKER REASON — that a fixed domain keeps the origin
+stable "for anything relying on localStorage". That argument FAILS TWICE for PG: the supersession
+page's localStorage caching is keyed on hostContext.toolInfo.id and exists to survive REMOUNT
+WITHIN a conversation, for which per-conversation origin stability is already sufficient; and PG
+implements neither supersession nor localStorage caching, so it does not reach PG at all. The
+correct reason had already been surfaced in the same session and was passed over. Substituting a
+weaker justification for a stronger one already in hand is its own failure mode — the answer was
+in the conversation, not only in the tree.
 For Claude, compute the value by hashing your full MCP resource URL (including /mcp path):
 
   node -e 'const url = "https://your-server.com/mcp"; console.log(require("crypto").createHash("sha256").update(url).digest("hex").slice(0,32) + ".claudemcpcontent.com")'
@@ -535,6 +554,17 @@ answers.
 
 RULE: record the COMPUTATION, or record a hash TOGETHER WITH THE URL IT DERIVES FROM. Never a bare
 hash — a frozen hash is a claim with its premise deleted.
+
+⚠️ AND THE URL MUST BE EXACT. Recomputed 2026-08-04 — three trivially-confusable spellings of PG's
+own URL produce three values sharing NOTHING:
+
+  a7b31ccb44096357600a7460eb0a78e9   https://mcp.priority-guard.com/mcp    <- CANONICAL
+  4c08ba210ef30c57e400ae94d8b49e97   https://mcp.priority-guard.com/mcp/   <- trailing slash
+  6a52566e8cef0070d2481bfab80f0c82   https://mcp.priority-guard.com        <- bare origin
+
+There is NO WAY TO SPOT THIS BY EYE — a wrong domain looks exactly as plausible as a right one.
+The troubleshooting page's trailing-slash warning is not theoretical. Always recompute from the
+configured MCP_RESOURCE_URL rather than transcribing.
 
 Cross-platform note (source: https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility):
 MCP Apps can run in both Claude and ChatGPT from a single codebase. The SDK auto-detects the host

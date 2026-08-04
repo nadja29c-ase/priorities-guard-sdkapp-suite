@@ -67,10 +67,32 @@ entirely.** The false "mandatory" framing removed that option from consideration
 deciding against it.** That is the difference between this instance and the previous four: the
 others produced wasted effort; this one silently foreclosed a design choice.
 
-⚠️ **Not a recommendation to drop it.** It is set, working, and may have been added for a reason
-not recorded here — `ui.domain` is also what makes the origin **stable across conversations**,
-which anything relying on `localStorage` or a shared origin would need. **The point is that it
-should be a decision with a recorded rationale, not an inherited constraint.**
+**The decision, with its reason — recorded so it stops being an inherited constraint:**
+
+> **Keep `ui.domain`, because PG's widget runs its own OAuth flow** and therefore needs a **stable
+> sandbox origin**. **Accepted cost:** cross-conversation `BroadcastChannel` scope. **Consequence:**
+> S5 is a pre-condition if supersession is ever built.
+
+**Verified in code:** `ConnectionStatus.tsx` calls `connect_google_calendar` (`:52`), extracts
+`connect_url` (`:59`), then `await app.openLink({ url: connectUrl })` (`:63`) — a widget-initiated
+Google Calendar OAuth round trip.
+
+**Source for the rule:** the troubleshooting page — *"Setting `_meta.ui.domain` opts your app into
+a stable sandbox origin, which you need if your app runs its own OAuth flow."*
+⚠️ **Not yet in `sources_raw/`.** That quotation comes from Nadja's read, not a committed source.
+Confirm when `troubleshooting` is pasted.
+
+⚠️ **An earlier version of this section gave a weaker reason** — that a fixed domain keeps the
+origin stable "for anything relying on `localStorage`". **That fails twice for PG.** The
+supersession page's `localStorage` caching is keyed on `hostContext.toolInfo.id` and exists to
+survive **remount within a conversation**, for which per-conversation origin stability is already
+sufficient — cross-conversation stability buys nothing. And PG implements **neither** supersession
+nor `localStorage` caching, so the argument does not reach PG even if it were sound.
+
+**The correct reason had already been surfaced in the same session and was passed over.**
+Substituting a weaker justification for a stronger one already in hand is its own failure mode,
+distinct from the ones catalogued in `doc/README.md`: the answer was **in the conversation**, not
+only in the tree.
 
 ### 2. ⚠️ Two different PG domain hashes live in the repo — both arithmetically right, one stale
 
@@ -96,6 +118,19 @@ asserts two different answers.
 
 **Rule going forward: record the computation, or record a hash together with the URL it derives
 from. Never a bare hash.** A frozen hash is a claim with its premise deleted.
+
+**And the URL must be exact.** Three trivially-confusable spellings of PG's own URL, recomputed:
+
+| Hash | URL |
+|---|---|
+| `a7b31ccb44096357600a7460eb0a78e9` | `https://mcp.priority-guard.com/mcp` — **canonical** |
+| `4c08ba210ef30c57e400ae94d8b49e97` | `https://mcp.priority-guard.com/mcp/` — trailing slash |
+| `6a52566e8cef0070d2481bfab80f0c82` | `https://mcp.priority-guard.com` — bare origin |
+
+They share **nothing**. There is **no way to spot the mistake by eye** — a wrong domain looks
+exactly as plausible as a right one, which is why the troubleshooting page warns about the
+trailing slash specifically. **Always recompute from the configured `MCP_RESOURCE_URL`; never
+transcribe.**
 
 ### 3. ⚠️ Dead code carrying a rule that contradicts this page
 
