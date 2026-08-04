@@ -13,11 +13,15 @@
 > `sources_raw/PROVENANCE.md`. **Replace with a paste before treating as settled.**
 
 
-> **Round 2 was blocked and is now unblocked.** This artifact's entire requirement set rested on
-> a fetch only one party had seen, which made it structurally un-round-2-able — and it is the
-> artifact feeding §4C, the OAuth attestation on the submission form. Appending `.md` to these
-> doc URLs returns the raw markdown, so the source is now **in the tree**. Every quotation below
-> is checkable against it by anyone, permanently, without a paste.
+> **Round 2 was PARTIALLY unblocked — and this paragraph originally overstated it.** This
+> artifact's requirement set rested on a fetch only one party had seen, which made it
+> un-round-2-able, and it is the artifact feeding §4C, the OAuth attestation on the submission
+> form. Committing the raw `.md` makes every quotation below **checkable against a fixed source**,
+> which is what round 2 needs. ⚠️ It does **not** make that source **current**.
+>
+> This paragraph previously ended *"checkable by anyone, permanently, **without a paste**."* That
+> was the conflation: the paste was never about durability, it was about **freshness**. Corrected
+> 2026-08-04 — see `sources_raw/PROVENANCE.md`. **A paste of this page is still required.**
 >
 > **Round 2 result (2026-08-04): source side clean — no fabrications.** All 17 originally
 > extracted requirements, the auth-type table, the egress range, the CIMD dual condition and its
@@ -73,9 +77,11 @@ familiar with MCP auth."*
 >
 > **2. Provenance, labelled.** This is the **MCP authorization spec** requiring it, surfaced on
 > Anthropic's page — **not** an Anthropic-enumerated directory criterion. Whether reviewers gate
-> on it is **unknown until `review-criteria` is fetched.** The honest label is *"unmet
-> spec-inherited MUST, directory-gating status unknown"*, not a bare "unmet MUST" — the difference
-> decides how hard this is pushed against Blocker 1.
+> on it is **not settled.** `review-criteria` (fetch-only) does not mention it, which shows only
+> that it is absent from the reviewer's checklist; `software_directory_policy` — the actual policy
+> document, §5D "must use secure OAuth 2.0" — is **still unfetched**. The honest label is *"unmet
+> spec-inherited MUST, directory-gating status unresolved"*, not a bare "unmet MUST" — the
+> difference decides how hard this is pushed against Blocker 1.
 
 ### Supported authentication types (complete list)
 
