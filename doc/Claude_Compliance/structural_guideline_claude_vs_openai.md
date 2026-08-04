@@ -5,7 +5,7 @@
 **Status:** Implemented — Increments Claude-01 through Claude-06 complete
 **Context:** Priority Guardian v1.0 is accepted into the OpenAI GPT store. This document captures the architecture decisions for extending PG to the Anthropic MCP Directory as a second distribution channel.
 
-**Current State:** Claude MCP server deployed, OAuth callbacks configured, response adapter built, display-only widget implemented (Claude-06). Full CRUD widget targeting Increment Claude-08. Widget rendering **works** — issue #61 resolved June 2026 (master §9 Blocker 2; the MindSort sibling document already recorded it as RESOLVED). All tool annotations fixed (Shared-Annotations-01): `title` present on all 17 tools, `destructive_hint=True` on all 9 write tools.
+**Current State:** Claude MCP server deployed, OAuth callbacks configured, response adapter built, display-only widget implemented (Claude-06). Full CRUD widget targeting Increment Claude-08. Widget rendering **works** — issue #61 resolved June 2026 (master §9 Blocker 2; the MindSort sibling document already recorded it as RESOLVED). All tool annotations fixed (Shared-Annotations-01): `title` present on all 20 registry tools, `destructive_hint=True` on all write tools (count corrected 2026-08-04 — this read "all 17 tools"; the registry now holds 20 ToolDefinitions, 8 of them public and therefore on Claude's served surface). Note `create_priority` carries `destructive_hint=False` in the SHARED registry to preserve ChatGPT UX, and is overridden to `True` for Claude in `tools_list_dupl.py` per Anthropic policy §5E — audit the Claude serving path, not the shared registry.
 
 ---
 

@@ -10,15 +10,26 @@ the opposite of `instance-supersession`.
 
 ---
 
-## The headline: this page **resolves A18's gating status**
+## The headline: this page narrows A18 — it does **not** close it
 
-**A18 is NOT an enumerated directory criterion.** Grep for `consent` and `redirect` across the raw
-source returns **nothing**. The page never mentions consent screens, redirect URIs, or authorization
-server UI.
+**What was proved:** grep for `consent` and `redirect` across `review-criteria.raw.md` returns
+**no match**. The page never mentions consent screens, redirect URIs, or authorization-server UI.
 
-So the label stands as written in §4C: **unmet spec-inherited MUST, not a directory gate.** It does
-not have to ship before submission. It should still be fixed — it is a real security control — but
-it is now correctly sized as post-submission work rather than a blocker.
+**What that licenses:** *A18 is not on the reviewer's pre-submission checklist.*
+
+⚠️ **What it does NOT license — and what an earlier draft of this line claimed:** *"A18 is not a
+directory criterion."* **`software_directory_policy` is the actual policy document and it is
+unfetched**, and its **§5D** (*"must use secure OAuth 2.0"*) is precisely where an inherited spec
+requirement would land. One page's silence is not the directory's position.
+
+> **This is the hardening bias running in reverse, and that is worth recording separately.** Every
+> other instance today inflated a recommendation into a MUST. This one **softened a requirement out
+> of existence on one page's silence.** A check that only watches for inflation will not catch it —
+> the failure is *unsupported confidence about obligation level*, in whichever direction the
+> evidence happens to point.
+
+**Practical effect is unchanged:** A18 is post-submission either way. **But it stays open until
+`software_directory_policy` is in.**
 
 ## Second headline: Blocker 1 is smaller than we have been sizing it
 
@@ -67,15 +78,21 @@ need to take any action.**
 
 ## Part 2 — PG-Claude conformance
 
-**PG exposes 20 tools in the registry, of which 8 are `public`** (LLM-visible); the other 12 are
-`private` (widget-only, filtered at `tools_list_dupl.py:37`).
+⚠️ **Which surface is being audited.** The shared registry holds **20** `ToolDefinition`s. The
+**Claude reviewer's surface is 8** — `list_tools_for_claude()` filters to `visibility == "public"`
+(`tools_list_dupl.py:37`). Every conformance number below states which set it covers, because
+"20/20" is a fact about the registry and the reviewer never sees 12 of them.
+
+**The 8 public tools:** `create_priority`, `delete_my_priority_guardian_data`, `get_patterns`,
+`get_priorities`, `get_priority_events`, `inspect_adapt`, `onboarding_calendar_setup`,
+`render_weekly_report`.
 
 ### R3 / R4 — verified by extracting every `ToolDefinition`
 
-| Check | Result |
-|---|---|
-| Every tool has a `title` | ✅ **20/20** |
-| Tool name ≤ 64 chars | ✅ **20/20** — longest is `delete_my_priority_guardian_data` at **32** |
+| Check | Registry (20) | **Claude surface (8)** |
+|---|---|---|
+| Every tool has a `title` | ✅ 20/20 | ✅ **8/8** |
+| Tool name ≤ 64 chars | ✅ 20/20 | ✅ **8/8** — longest served is `delete_my_priority_guardian_data` at **32** |
 
 `title` is **structurally guaranteed**: it is a **required positional field** on the
 `ToolDefinition` dataclass (`tools/base.py`, `title: str` with no default), so a tool cannot be
@@ -89,22 +106,41 @@ constructed without one. The docstring already cites *"required by Anthropic §5
 > application of the negative-claim scope rule in one session** — and the first where the rule
 > prevented re-publishing a known-false claim rather than catching one after the fact.
 
-### R3 — two tools carry neither hint ⚠️
+### R3 hints — ❌ **RETRACTED. The finding was void; PG-Claude is compliant.**
 
-| Tool | Visibility | `readOnlyHint` | `destructiveHint` |
-|---|---|---|---|
-| `create_priority` | **public** | False | False |
-| `record_widget_diagnostic` | private | False | False |
+An earlier version of this section flagged `create_priority` (public) and
+`record_widget_diagnostic` as carrying **neither** hint, and called it a reviewer judgement call.
+**Both halves were wrong for the Claude submission.**
 
-**Defensible, not clearly compliant.** R3 requires *"the applicable hint"* — `readOnlyHint` for
-read-only, `destructiveHint` for tools that **"modify or delete data."** A pure create does
-neither, so arguably neither hint applies and the requirement is satisfied vacuously.
+**`create_priority` — Claude's reviewer sees `destructiveHint: true`.**
+`tools/create_priority.py:696` does set `destructive_hint=False`, and **the comment on that very
+line says where to look next**: *"Reverted: ChatGPT acts on destructiveHint for public tools —
+keep False for published app. **Claude override handled in tools_list_dupl.py.**"* Following it:
 
-**Risk if a reviewer reads it the other way:** `create_priority` is public and writes data. The
-consequence of the current setting is only that it **prompts** (no hint ⇒ no auto-permission), so
-there is **no security exposure** — the exposure is a reviewer judgement call.
-`record_widget_diagnostic` is private and filtered from the public list, so it is unlikely to be
-seen at all. **Flagged for Nadja's decision; no code change made.**
+```python
+# Claude-specific destructiveHint overrides.
+# create_priority has destructive_hint=False in shared ToolDefinition to preserve
+# ChatGPT UX — ChatGPT shows confirmation UI for destructiveHint=True on public tools.
+# Anthropic policy §5E requires True for any tool that writes data.
+_CLAUDE_DESTRUCTIVE_HINT_OVERRIDES: dict[str, bool] = {"create_priority": True}
+```
+
+applied in the `ToolAnnotations` construction. **Someone had already reasoned this through and
+documented it against §5E.** No gap, no judgement call.
+
+**`record_widget_diagnostic` — never in Claude's tool list.** `visibility="private"`, and
+`list_tools_for_claude()` skips every non-public tool (`tools_list_dupl.py:37`). It cannot be an
+annotation defect for this submission because it is never served.
+
+> ⚠️ **The error, named precisely: I audited the wrong surface.** The extraction proved something
+> over `mcp_server/priority_guardian/tools/` and stated it about **PG-Claude**. `tools/` is the
+> **shared registry and the ChatGPT source of truth**; `priority_guardian_claude/` is the **Claude
+> serving path**, and it diverges in **three** ways — public-only filtering, the `destructiveHint`
+> override, and `_meta` handling.
+>
+> This is the **negative-claim scope rule one layer up**: not "which files did the grep cover"
+> but **"which surface does this claim describe."** A search can be repo-complete and still
+> answer a different question than the one asked.
 
 ### R1, R2, R8, R9 — assessed
 
@@ -127,6 +163,31 @@ pass, and per the writing rule the summary must not quantify over what the check
 | R7 | No functional pass run | R11 requires exercising **every** tool through the MCP Inspector **and** as a custom connector. Only the deletion tool has been exercised end-to-end in production |
 
 **R11 is therefore also unmet as a process step**, independent of whether the tools pass.
+
+---
+
+### R7 / policy §1D — `record_widget_diagnostic`, raised and partly answered
+
+R7 forbids collecting *"conversation data beyond what the tool needs"*; policy §1D is stricter
+still — *"must not collect extraneous conversation data, even for logging purposes."* Private and
+unlisted does not exempt a tool, because it still runs.
+
+**What it accepts** (`widget_tools/record_widget_diagnostic.py`, `INPUT_SCHEMA`): `event`
+(≤100 chars), `data` (**object, `additionalProperties: True`**, ≤2048 bytes serialized), `ts`
+(int), `ua` (≤500 chars). Only `event` is required.
+
+**What is actually sent** — and this corrects the framing: **no PG-Claude code calls it.** The
+only caller repo-wide is `mcp_server/priority_guardian/widget-react/src/widgetErrorReporter.ts`
+(the **ChatGPT** widget), via `window.openai.callTool`, sending `event`, `data ?? {}`, `ts`, and
+`navigator.userAgent`. Diagnostic event names (`mount`, `displayMode.change`, `set_globals`), not
+conversation content.
+
+**Assessment: no §1D violation evidenced, and the schema is not the guarantee.**
+`additionalProperties: True` means the tool accepts arbitrary structure — compliance rests on
+**call sites**, not on the tool. Today those call sites are ChatGPT-side and benign. ⚠️ **What was
+NOT done:** enumerating every `reportWidgetDiagnostic(...)` call to confirm nothing user-authored
+is passed in `data`. Worth doing before the ChatGPT submission; **not on the Claude critical
+path**, since the Claude surface never calls it.
 
 ---
 

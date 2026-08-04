@@ -26,11 +26,17 @@ independently checkable and round 2 no longer depends on who fetched what.
 transfer here.
 
 ⚠️ **Round 2 surfaced a requirement round 1 missed, and PG fails it — see §4C, A18** (redirect
-URI hostname on the consent screen). **GATING STATUS NOW RESOLVED (2026-08-04): A18 is NOT an
-enumerated directory criterion.** `review-criteria` never mentions consent screens or redirect
-URIs — grep for `consent`/`redirect` across its raw source returns nothing. A18 stands as an
-**unmet spec-inherited MUST that does not block submission**. Still worth fixing; correctly sized
-as post-submission.
+URI hostname on the consent screen). **GATING STATUS NARROWED, NOT CLOSED (2026-08-04).** Proved:
+grep for `consent`/`redirect` across `review-criteria.raw.md` returns no match, so **A18 is not on
+the reviewer's pre-submission checklist.** NOT proved: that A18 is not a directory criterion —
+`software_directory_policy` is the actual policy document, it is **unfetched**, and its §5D
+("must use secure OAuth 2.0") is exactly where an inherited spec requirement would land.
+**A18 stays OPEN until that page is in.** Post-submission either way.
+
+⚠️ **The bias ran in reverse here.** An earlier draft of this line closed A18 on one page's
+silence. Every other instance today inflated a recommendation into a MUST; this one softened a
+requirement out of existence. A check watching only for inflation will miss it — the failure is
+**unsupported confidence about obligation level, in either direction.**
 
 ⚠️ **BLOCKER 1 MAY BE MIS-SIZED.** `review-criteria` states the documentation bar as: *"Public
 documentation is required by your publish date — a blog post or help-center article is
@@ -315,7 +321,19 @@ IP allowlisting alone is not recommended as a security measure — use OAuth 2.1
 4F. Documentation
 Comprehensive documentation required — published at a stable HTTPS URL before your publish date (a blog post or help-center article is sufficient; can share privately with Anthropic during review).
 
-Required sections:
+RECOMMENDED sections (corrected 2026-08-04 — this list read "Required sections"):
+
+⚠️ FOURTH INSTANCE OF THE HARDENING BIAS TODAY, AND THE MOST COSTLY. The source
+(remote_server_submission_guide.md:256) says "RECOMMENDED sections". This file said "Required
+sections". The source is careful: the SECTIONS are recommended, and the THREE EXAMPLES are marked
+required inline. Policy §3E backs the examples: "Developers must provide at least three working
+examples of prompts or use cases."
+
+THIS IS WHAT INFLATED BLOCKER 1. The actual obligation set is: a public page by PUBLISH DATE
+(review-criteria raw 72), documenting how it works, its purpose and troubleshooting (policy §3C),
+with >=3 working examples (§3E), plus a privacy-policy link (§3A) and a support channel (§3B).
+A blog post is explicitly sufficient. That is a fraction of "seven sections, three worked
+examples, before submission."
 
 Server Description — what your server does
 Features — key capabilities and use cases
@@ -1027,7 +1045,12 @@ Backend API endpoints — unchanged
 Google OAuth integration — unchanged
 Inbound OAuth provider (DCR, PKCE S256, JWT issuance, JWKS) — unchanged; PKCE S256 already implemented and tested
 Token verification logic (mcp_auth.py) — unchanged
-Safety annotations (readOnlyHint, destructiveHint, openWorldHint) — 100% coverage across all 17 tools
+Safety annotations (readOnlyHint, destructiveHint, openWorldHint) — 100% coverage across all 20 registry tools (8 of which are public and therefore on Claude's served surface)
+
+  ⚠️ COUNT CORRECTED 2026-08-04: this read "all 17 tools". The registry now holds 20 ToolDefinitions.
+  17 was stale. A reviewer can check this against the served tools/list, so the number matters.
+  Other locations on the old count: structural_guideline_claude_vs_openai.md:8. The instances in
+  doc/README.md and §9 are HISTORICAL QUOTES of a corrected claim and must NOT be renumbered.
 Privacy policy — already discloses Google Calendar data handling per Google and GDPR requirements
 Test account — review@priority-guard.com with seed data already exists
 Transport — FastMCP Streamable HTTP already in use; SSE deprecated path not used

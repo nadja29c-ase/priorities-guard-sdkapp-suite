@@ -90,6 +90,46 @@ Three findings this session were "checked where I was looking": the `title` clai
 locations), the `resourceDomains` third block, and this one. The first two are the corollary. The
 third is this rule.
 
+**Third corollary — state which SURFACE the claim describes, not just which files were read.**
+A search can be repo-complete and still answer a different question. An audit of
+`mcp_server/priority_guardian/tools/` was reported as a finding about **PG-Claude**; that
+directory is the **shared registry and the ChatGPT source of truth**, while
+`mcp_server/priority_guardian_claude/` is the **Claude serving path**. It diverges in three ways:
+public-only filtering, the `destructiveHint` override, and `_meta` handling.
+
+The finding — *"two tools carry neither hint"* — was **void**: `create_priority` is overridden to
+`destructiveHint: true` for Claude, and `record_widget_diagnostic` is `private` and never served.
+**The code even said so**, in a comment on the line the audit read: *"Claude override handled in
+`tools_list_dupl.py`."*
+
+So: **when the registry is shared across platforms, no claim about one platform can be read off
+it.** Trace to the serving path. And when a line carries a comment pointing elsewhere, follow it
+before drawing a conclusion from that line.
+
+---
+
+## The obligation-level bias, and its mirror
+
+Five times in one session an obligation level was stated with more confidence than the source
+supported. Four ran the same way — **a recommendation was recorded as a requirement**:
+
+| Claim | Source actually says |
+|---|---|
+| 500px inline height "hard limit" | no pixel value published anywhere |
+| "recommended" qualifier on the 4–5 data-point constraint | no such qualifier |
+| §4M: App class "**required** for production" | "**recommended** for production" |
+| §4F: "**Required** sections" (7 of them) | "**Recommended** sections" — only the 3 examples are required |
+
+The fourth was the expensive one: it is what inflated Blocker 1 from *"a blog post by publish
+date"* into *"seven sections and three worked examples before submission."*
+
+**The fifth ran backwards** — A18 was declared "not a directory criterion" because one page did
+not mention it, when the actual policy document was unfetched. **A check that only watches for
+hardening will not catch softening.** The rule is not "beware inflation"; it is:
+
+> **State the obligation level the source states, and cite where it says so. Silence is not
+> evidence of absence, and emphasis is not evidence of obligation.**
+
 ---
 
 ## The compliance-page refresh routine
