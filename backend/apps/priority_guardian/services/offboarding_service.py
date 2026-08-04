@@ -1,7 +1,7 @@
 """
 Offboarding service for Priority Guardian — authenticated data deletion.
 
-Implements Operation A from doc/ADR_008_data_ownership_and_deletion_model.md: delete the
+Implements Operation A from doc/ADR/ADR_008_data_ownership_and_deletion_model.md: delete the
 user's Priority Guardian data, leaving every other Priority Guard Suite app untouched.
 
 WHAT IS DELETED (verified inventory — Part A report, §1 and §4):

@@ -187,7 +187,7 @@ The live discovery chain tests verify that all four MCP servers return the corre
 pytest -m live tests/integration/oauth_discovery/ -v
 ```
 
-See `doc/ADR_005_platform_oauth_discovery_contracts.md` for the three intentional shapes and why they differ.
+See `doc/ADR/ADR_005_platform_oauth_discovery_contracts.md` for the three intentional shapes and why they differ.
 
 ## Latency Testing
 

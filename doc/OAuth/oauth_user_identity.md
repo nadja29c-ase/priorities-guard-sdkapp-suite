@@ -21,7 +21,7 @@
 > **Still unresolved:** the same fragmentation on **Claude**, which exposes no per-user
 > identifier and therefore has no reconciliation step.
 >
-> **Canonical source:** `doc/ADR_007_user_identity_and_lifecycle.md`. Read that before acting
+> **Canonical source:** `doc/ADR/ADR_007_user_identity_and_lifecycle.md`. Read that before acting
 > on anything below, particularly the "Recommended next steps" section, which proposes work
 > that has since been done.
 

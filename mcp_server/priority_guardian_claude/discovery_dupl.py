@@ -24,7 +24,7 @@ but would be FATAL for ChatGPT — never port this shape to the OpenAI twin
 shape required by ChatGPT's same-origin discovery→token chain).
 
 See:
-- doc/ADR_005_platform_oauth_discovery_contracts.md
+- doc/ADR/ADR_005_platform_oauth_discovery_contracts.md
 - claude increments/SHARED ARCHITECTURE/hotfix_pg_openai_discovery_restore.md
 """
 

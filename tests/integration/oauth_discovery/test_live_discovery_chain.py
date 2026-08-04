@@ -14,7 +14,7 @@ Usage:
     Pre-submission: Run before submitting to OpenAI or Anthropic directory
     Pre-deploy: Run after deploying discovery changes before they go live
 
-See doc/ADR_005_platform_oauth_discovery_contracts.md for the invariants.
+See doc/ADR/ADR_005_platform_oauth_discovery_contracts.md for the invariants.
 See doc/OPERATIONS_PRESUBMISSION.md for the full pre-submission checklist.
 
 TEST COVERAGE:

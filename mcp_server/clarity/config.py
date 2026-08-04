@@ -12,7 +12,7 @@ shared backend discovery. Changing the dev default to /oauth/mindsort
 requires verifying the local backend mounts that path in dev mode —
 flagged as follow-up, not changed in this increment.
 
-See doc/ADR_005_platform_oauth_discovery_contracts.md for the three
+See doc/ADR/ADR_005_platform_oauth_discovery_contracts.md for the three
 intentional discovery shapes and why MindSort-OpenAI uses /oauth/mindsort.
 """
 
@@ -125,7 +125,7 @@ if _is_production_env(ENV) and CLARITY_JWKS_URL != _CLARITY_EXPECTED_JWKS_URL:
         f"Got: {CLARITY_JWKS_URL!r}. "
         f"Known drift vectors: localhost defaults (http://localhost:8000/oauth/pg/jwks), "
         f"wrong path (/oauth/pg/jwks instead of /oauth/mindsort/jwks). "
-        f"See doc/ADR_005_platform_oauth_discovery_contracts.md Shape #2. "
+        f"See doc/ADR/ADR_005_platform_oauth_discovery_contracts.md Shape #2. "
         f"ENV={ENV!r}."
     )
 
@@ -273,7 +273,7 @@ if _is_production_env(ENV) and OAUTH_ISSUER_URL != _CLARITY_EXPECTED_OAUTH_ISSUE
         f"Got: {OAUTH_ISSUER_URL!r}. "
         f"Known drift vectors: localhost defaults, http://localhost:8000/oauth/pg, "
         f"bare https://www.priority-guard.com, https://www.priority-guard.com/oauth/pg. "
-        f"See doc/ADR_005_platform_oauth_discovery_contracts.md Shape #2."
+        f"See doc/ADR/ADR_005_platform_oauth_discovery_contracts.md Shape #2."
     )
 
 # Supported OAuth scopes for Clarity MCP server

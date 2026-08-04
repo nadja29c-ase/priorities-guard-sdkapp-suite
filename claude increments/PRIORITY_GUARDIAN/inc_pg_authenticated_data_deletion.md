@@ -13,14 +13,14 @@ increment)."* This is that increment.
 
 ### 0.1 The decisions are already made — do not re-open them
 
-`doc/ADR_008_data_ownership_and_deletion_model.md` records the deletion model, the data
+`doc/ADR/ADR_008_data_ownership_and_deletion_model.md` records the deletion model, the data
 ownership table, the identification model, and five rejected alternatives. It was written after
 working through those alternatives; re-proposing any of them wastes the round.
 
 **Read ADR_008 in full before anything else.** The five rules in its "What Claude Code Must
 Know" section are binding.
 
-`doc/ADR_007_user_identity_and_lifecycle.md` explains why identification is a non-problem on
+`doc/ADR/ADR_007_user_identity_and_lifecycle.md` explains why identification is a non-problem on
 this path: the JWT carries `sub`, which resolves to `CoreUser.id`. **There is no identification
 step in this increment.**
 
@@ -52,12 +52,12 @@ Render access is **read-only** for you: no env writes, no manual deploy triggers
 
 ## 1. Canonical guidance — read before writing anything
 
-- `doc/ADR_008_data_ownership_and_deletion_model.md` — **the decisions**
-- `doc/ADR_007_user_identity_and_lifecycle.md` — why identification is already solved
-- `doc/ADR_006_token_revocation_semantics.md` — disconnect vs deletion; the four-trigger table
+- `doc/ADR/ADR_008_data_ownership_and_deletion_model.md` — **the decisions**
+- `doc/ADR/ADR_007_user_identity_and_lifecycle.md` — why identification is already solved
+- `doc/ADR/ADR_006_token_revocation_semantics.md` — disconnect vs deletion; the four-trigger table
 - `doc/OPERATIONS_PREDEPLOY.md`, `doc/OPERATIONS_MIGRATIONS.md`, `doc/OPERATIONS_PRESUBMISSION.md`
 - `doc/Claude_Compliance/claude_connectors_compliance_master.md` — tool annotations
-- `doc/compliance_master_1.3.26.md` + `doc/openai_uiux_1.3.26.md` — ChatGPT-side tool rules
+- `doc/OpenAI_compliance/compliance_master_1.3.26.md` + `doc/OpenAI_compliance/openai_uiux_1.3.26.md` — ChatGPT-side tool rules
 - **Live** privacy policy at `https://www.fulfilling-productivity.com/pg-privacy-policy` —
   **fetch it.** The repo copy `doc/legal/pg_privacy_policy_v3.1.md` is two versions stale and
   produced a false finding in a previous increment.

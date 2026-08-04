@@ -64,7 +64,7 @@ When a migration adds a table whose rows belong to a PG user:
 
 This check exists only on the **ChatGPT** path. Claude exposes no per-user identifier, so
 `priority_guardian_claude` has no reconciliation step and no fresh-shell check. See
-`doc/ADR_007_user_identity_and_lifecycle.md` §3 for the full A/B/C1/C2/X contract.
+`doc/ADR/ADR_007_user_identity_and_lifecycle.md` §3 for the full A/B/C1/C2/X contract.
 
 ---
 

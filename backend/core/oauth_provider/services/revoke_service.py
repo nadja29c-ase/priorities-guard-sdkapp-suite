@@ -9,7 +9,7 @@ Handles:
   user's other authorization grants — those are independent rows and are untouched.
 - NOTE: revocation is immediate at the Authorization Server and has NO effect at the
   resource servers, which validate statelessly via JWKS until exp + leeway.
-  See doc/ADR_006_token_revocation_semantics.md.
+  See doc/ADR/ADR_006_token_revocation_semantics.md.
 - Always returns success (no token existence leaking)
 """
 

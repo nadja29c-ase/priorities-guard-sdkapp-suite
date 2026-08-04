@@ -1,7 +1,7 @@
 """
 delete_my_priority_guardian_data tool for Priority Guardian MCP.
 
-Operation A from doc/ADR_008_data_ownership_and_deletion_model.md: delete the user's
+Operation A from doc/ADR/ADR_008_data_ownership_and_deletion_model.md: delete the user's
 Priority Guardian data, leaving every other Priority Guard Suite app untouched.
 
 NAMING IS LOAD-BEARING (ADR_008 §4). This tool is "delete my Priority Guardian data",

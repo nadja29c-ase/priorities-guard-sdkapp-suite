@@ -21,11 +21,11 @@ of the decision tree below the increment sits on.
   invariant — superseding it requires a new ADR plus a token/consent migration plan,
   not an increment. Never a second AS within the current architecture.
 - Discovery shape is PLATFORM-COUPLED BY DESIGN. Never consolidate shapes across the
-  platform boundary. → `doc/ADR_005_platform_oauth_discovery_contracts.md`
+  platform boundary. → `doc/ADR/ADR_005_platform_oauth_discovery_contracts.md`
 - Any change to a discovery module or its config requires reproducing the affected
   platform's full live connect flow (delete-and-re-add) before merge. → ADR_005
 - AS-side protocol requirements (grants, PKCE, tokens, TLS, rate limits)
-  → `doc/OAuth_Hard_Requirements.md`
+  → `doc/OAuth/OAuth_Hard_Requirements.md`
 
 ## Step 1 — Which platform?
 
@@ -66,7 +66,7 @@ of the decision tree below the increment sits on.
      known-ENV fail-fast, and its production tuples omit the `prod` alias. Do NOT copy
      it as a guard template; parity back-port is on the post-submission backlog.
 2. **DCR route + scope registry entry** (`/oauth/<app>/register`, closed `resource`/`aud`
-   allowlist) → `doc/ADR_003_oauth_provider_route_scope_mapping.md`
+   allowlist) → `doc/ADR/ADR_003_oauth_provider_route_scope_mapping.md`
 3. **Scopes** — every tool has a non-empty scope entry in the app's enforcement source
    (registry field OR `TOOL_SCOPES` dict — they differ per app; check which one the
    app's auth actually reads). Extend

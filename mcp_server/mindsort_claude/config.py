@@ -153,7 +153,7 @@ CLARITY_ISSUER = get_env(
 # ---------------------------------------------------------------------------
 # HISTORICAL — the paragraph below is retained for deployment history and is NO
 # LONGER THE DESIGN INTENT. Corrected 2026-07-31. See
-# doc/ADR_006_token_revocation_semantics.md and §11.
+# doc/ADR/ADR_006_token_revocation_semantics.md and §11.
 #
 #   "Both Clarity and Focused MCP servers accept the same audience since they
 #    share a single OAuth provider - scope-based access control (clarity.write
@@ -271,7 +271,7 @@ MCP_RESOURCE_URL = get_env(
 # moment two apps share a host with path-based resource identifiers, which is this
 # suite's topology.
 #
-# See doc/ADR_006_token_revocation_semantics.md for the audience/isolation posture.
+# See doc/ADR/ADR_006_token_revocation_semantics.md for the audience/isolation posture.
 
 def _validate_audience_config(
     env: str,

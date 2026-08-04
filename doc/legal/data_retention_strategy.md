@@ -216,9 +216,11 @@ sentence is outdated, which is Part D's actual work.)*
 
 ## 8. Cross-references
 
-- `doc/ADR_008_data_ownership_and_deletion_model.md` — ownership table, Operation A / B split
-- `doc/ADR_007_user_identity_and_lifecycle.md` — identity model, pseudonymisation
-- `doc/ADR_006_token_revocation_semantics.md` — disconnect vs deletion; residual access window
-- `doc/legal/pg_privacy_policy_v3.1.md` — **stale**; the live policy at
-  `https://www.fulfilling-productivity.com/pg-privacy-policy` is authoritative
+- `doc/ADR/ADR_008_data_ownership_and_deletion_model.md` — ownership table, Operation A / B split
+- `doc/ADR/ADR_007_user_identity_and_lifecycle.md` — identity model, pseudonymisation
+- `doc/ADR/ADR_006_token_revocation_semantics.md` — disconnect vs deletion; residual access window
+- Privacy policy — **not in this repository.** The live policy at
+  `https://www.fulfilling-productivity.com/pg-privacy-policy` is authoritative; **fetch it.**
+  The stale `pg_privacy_policy_v3.1.md` copy was deleted 2026-08-04 precisely because it had
+  been read as current and produced a false finding. Do not reintroduce a repo copy.
 - `backend/jobs/retention_cleanup.py` — implemented cleanup jobs

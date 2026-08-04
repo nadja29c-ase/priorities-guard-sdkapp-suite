@@ -25,7 +25,7 @@ OAuth 2.1 is not a new protocol. It consolidates OAuth 2.0 + a decade of securit
 - **One issuer:** `https://www.priority-guard.com` (configured via `OAUTH_ISSUER`)
 - **Active authorization server:** `/oauth/pg/*` routes (Priority Guardian), `/oauth/mindsort/*` routes (MindSort)
 - **Deprecated:** `/oauth/focused/*` (kept for backward compatibility only)
-- **Multiple discovery documents by design:** One AS/issuer, multiple platform-specific discovery facades. See `doc/ADR_005_platform_oauth_discovery_contracts.md` for the three intentional shapes and why they exist.
+- **Multiple discovery documents by design:** One AS/issuer, multiple platform-specific discovery facades. See `doc/ADR/ADR_005_platform_oauth_discovery_contracts.md` for the three intentional shapes and why they exist.
 
 ---
 
@@ -181,7 +181,7 @@ Priority Guardian accepts `state` and echoes it in error redirects and authoriza
 - **OpenAI (ChatGPT)**: Apps SDK OAuth integration requires `/.well-known/openid-configuration` or `/.well-known/oauth-authorization-server`.
 - **Claude (Anthropic)**: MCP OAuth spec requires `/.well-known/oauth-protected-resource` (RFC 9728) advertising `authorization_servers`, plus `/.well-known/oauth-authorization-server` at that AS with `code_challenge_methods_supported: ["S256"]`. Claude refuses to connect if S256 is not advertised.
 
-Priority Guardian exposes all three discovery documents. See `doc/ADR_005_platform_oauth_discovery_contracts.md` for the platform-specific shapes.
+Priority Guardian exposes all three discovery documents. See `doc/ADR/ADR_005_platform_oauth_discovery_contracts.md` for the platform-specific shapes.
 
 Minimum required fields:
 
@@ -266,7 +266,7 @@ is checking a value the client chose.
 > apps or a new app reuses one.
 >
 > Tracked as §11 of the Claude connector auth increment. See
-> `doc/ADR_006_token_revocation_semantics.md` → "Current isolation posture" for the
+> `doc/ADR/ADR_006_token_revocation_semantics.md` → "Current isolation posture" for the
 > architectural statement.
 
 ---
@@ -287,7 +287,7 @@ A `/revoke` endpoint must be implemented:
 | **Resource Server** (every MCP server) | **None.** Validation is JWKS-only and stateless: no revocation lookup, no introspection, no database access. An already-issued access token continues to be accepted | **Until `exp` + leeway** |
 
 This is a deliberate architectural decision, not a gap — see
-`doc/ADR_006_token_revocation_semantics.md` for the rationale, the residual acceptance
+`doc/ADR/ADR_006_token_revocation_semantics.md` for the rationale, the residual acceptance
 window (stated as a formula, since both inputs are env-derived), the four distinguished
 states, and the revisit triggers.
 

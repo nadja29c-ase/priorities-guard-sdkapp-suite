@@ -158,7 +158,7 @@ An earlier draft of this ADR left this open. It has since been decided:
 
 **Authenticated in-app deletion is the primary channel. Email is exceptional and best-effort.**
 
-See `doc/ADR_008_data_ownership_and_deletion_model.md` §5 for the decision, the rejected
+See `doc/ADR/ADR_008_data_ownership_and_deletion_model.md` §5 for the decision, the rejected
 alternatives, and the agreed policy wording. The conclusion that made the alternatives
 unnecessary: every proposed identity mechanism existed to make the *email* channel
 deterministic. Once email is not the primary channel, none is needed.
@@ -219,8 +219,8 @@ after reconnecting, or if persistent priorities must survive full disconnection.
 
 ## 10. Cross-references
 
-- `doc/ADR_008_data_ownership_and_deletion_model.md` — deletion model, email decision
-- `doc/ADR_006_token_revocation_semantics.md` — disconnect/deletion trigger table
+- `doc/ADR/ADR_008_data_ownership_and_deletion_model.md` — deletion model, email decision
+- `doc/ADR/ADR_006_token_revocation_semantics.md` — disconnect/deletion trigger table
 - `doc/OAuth/oauth_user_identity.md` — pre-Inc-78 analysis; superseded in part, see §7.4
 - `doc/OPERATIONS_MIGRATIONS.md` — the fresh-shell warning
 - `backend/apps/priority_guardian/routers/reconcile_router.py` — the reconciliation contract

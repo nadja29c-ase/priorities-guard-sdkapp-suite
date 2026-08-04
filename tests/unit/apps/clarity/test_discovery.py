@@ -66,7 +66,7 @@ class TestClarityDiscovery:
         assert result["resource"] == f"{MCP_SERVER_URL}/mcp"
 
         # authorization_servers must be path-qualified for Shape #2 (MindSort-OpenAI)
-        # See doc/ADR_005_platform_oauth_discovery_contracts.md
+        # See doc/ADR/ADR_005_platform_oauth_discovery_contracts.md
         assert result["authorization_servers"] == [OAUTH_ISSUER_URL]
         assert result["scopes_supported"] == SCOPES_SUPPORTED
 

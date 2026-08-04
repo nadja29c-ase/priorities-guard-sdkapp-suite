@@ -231,7 +231,7 @@ Rejected: reintroduces shared state and an availability dependency, in exchange 
 
 - **ADR 005** — Platform OAuth Discovery Contracts. One AS, one issuer; discovery shape is platform-coupled.
 - **ADR 003** — OAuth provider route/scope mapping.
-- **`doc/OAuth_Hard_Requirements.md`** §13 — must be read per-layer: revocation is immediate at the AS and has no effect at the resource server until `exp`.
+- **`doc/OAuth/OAuth_Hard_Requirements.md`** §13 — must be read per-layer: revocation is immediate at the AS and has no effect at the resource server until `exp`.
 - **Increment briefing** `inc_claude_auth_loopback_audience_revocation.md` — §11 (PG audience migration), backlog 13, 19, 20, 21.
 
 ---

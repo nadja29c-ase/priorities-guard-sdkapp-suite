@@ -6,4 +6,4 @@
 # To run live tests:
 #   pytest -m live tests/integration/oauth_discovery/ -v
 #
-# See doc/ADR_005_platform_oauth_discovery_contracts.md for context.
+# See doc/ADR/ADR_005_platform_oauth_discovery_contracts.md for context.

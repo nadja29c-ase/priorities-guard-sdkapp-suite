@@ -41,6 +41,6 @@ These URLs are used in:
 
 ## Cross-References
 
-- `doc/ADR_005_platform_oauth_discovery_contracts.md` — Discovery shape contracts
+- `doc/ADR/ADR_005_platform_oauth_discovery_contracts.md` — Discovery shape contracts
 - `doc/OPERATIONS_PRESUBMISSION.md` — Pre-submission checklist
 - `tests/integration/oauth_discovery/test_live_discovery_chain.py` — Live tests using these URLs

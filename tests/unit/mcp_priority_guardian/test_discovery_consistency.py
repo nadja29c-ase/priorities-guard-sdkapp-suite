@@ -8,7 +8,7 @@ consolidated into a single cross-service module covering all four MCP servers.
 See:
 - tests/unit/oauth_discovery/test_oauth_discovery_contracts.py (unit tests)
 - tests/integration/oauth_discovery/test_live_discovery_chain.py (live tests)
-- doc/ADR_005_platform_oauth_discovery_contracts.md (rationale)
+- doc/ADR/ADR_005_platform_oauth_discovery_contracts.md (rationale)
 
 DO NOT add new tests here — add them to test_oauth_discovery_contracts.py.
 """

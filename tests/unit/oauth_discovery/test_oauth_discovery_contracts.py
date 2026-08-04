@@ -52,7 +52,7 @@ The live tests are excluded from default pytest runs (marker: live). They must b
 run manually pre-deploy/pre-submission:
     pytest -m live tests/integration/oauth_discovery/ -v
 
-See doc/ADR_005_platform_oauth_discovery_contracts.md for the full rationale.
+See doc/ADR/ADR_005_platform_oauth_discovery_contracts.md for the full rationale.
 """
 
 import pytest
