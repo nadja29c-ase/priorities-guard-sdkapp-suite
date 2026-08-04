@@ -1025,6 +1025,43 @@ Debugging in Claude Desktop:
 
 
 5. Submission Form Requirements
+
+⚠️⚠️ THIS ENTIRE SECTION IS SUPERSEDED. ADDED 2026-08-04.
+
+§5's field list was built from the OLD SUBMISSION FORM, which no longer exists for remote MCPs
+(see the §2 blocker). Submission is now an ELEVEN-STEP PORTAL. Content §5 does not have:
+
+  CHARACTER LIMITS (B9)   name <=100 · tagline <=55 · description <=2000 · 1-5 categories
+  PERMANENT SLUG          the URL slug CANNOT BE CHANGED once published — choose deliberately
+  READ/WRITE QUESTION     "does it read data, write data, or both"
+  DATA-HANDLING QUESTIONS own API / proxied with permission / third party you do not control;
+                          personal health data; sponsored content
+  SEVEN COMPLIANCE ACKNOWLEDGMENTS (B8) — ALL REQUIRED. This is the attestation set, and under
+  Software Directory Terms T-3 every one of them is a WARRANTY:
+
+    1. directory guidelines            -> Policy §3H, design guidelines
+    2. first-party API usage           -> Policy §3F, review-criteria R8
+    3. financial transactions          -> Policy §4A
+    4. AI media generation             -> Policy §4B
+    5. prompt injection                -> Policy §2D-§2G, review-criteria R6
+    6. conversation data collection    -> Policy §1D and §1F
+    7. public documentation            -> Policy §3A/§3B/§3C/§3E
+
+  B7 ATTESTATION — "you confirm you've run every tool yourself, either via MCP Inspector or as a
+  custom connector in Claude." SEE THE §8 CHECKLIST: PG cannot tick this truthfully today.
+
+  SCREENSHOTS (B6) — 3-5 PNG, >=1000px, cropped to the app response, PROMPT NOT IN THE IMAGE,
+  prompts supplied separately. ASPECT RATIO IS UNCONSTRAINED. VIDEO AND GIF ARE REJECTED. ONE
+  BATCH COVERS ALL SURFACES — no separate mobile assets. A carousel template exists in the Figma
+  community file. (§5 previously carried only the count and the width.)
+
+  B2 server URL must be https:// — confirmed at the Connection step.
+  B10 LOCAL connectors only: README Privacy Policy section, privacy_policies array in manifest
+      (v0.2+), HTTPS URLs. "Missing or incomplete privacy policies result in immediate rejection"
+      is scoped to that local-connector section — but Policy §3A and Terms T-4 bind PG regardless.
+
+DO NOT FILL THE PORTAL FROM §5. Use sources_raw/submission.raw.md.
+
 Have the following ready when filling out the submission form:
 
 Server basics — server name, URL, tagline, description, use cases
@@ -1057,7 +1094,9 @@ the entry is allowlistable and there is no confirmation-modal degradation on cal
   - Note: google_connection_router.py:115's docstring shows https://api.priority-guard.com/... as
     an EXAMPLE. It is not the configured value. Confirm the live env var before filling the form.
 Policy & requirements checklists — confirming compliance with directory policy, technical requirements (OAuth, HTTPS, Origin-header validation, annotations), documentation, and testing standards
-Optional: Skills & Plugins — if submitting a related Agent Skill alongside the server
+❌ REMOVED 2026-08-04 — "Optional: Skills & Plugins — if submitting a related Agent Skill
+alongside the server" WAS WRONG. The submission page states: "Skills are not a standalone
+submission type — bundle them in a plugin." There is no Skill-alongside-server option.
 
 
 6. Anthropic Software Directory Policy (Full Text)

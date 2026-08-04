@@ -51,8 +51,9 @@ other pages or other days.
 | `cross-compatibility.raw.md` | fetch | ❌ no — page was pasted, not compared |
 | `authentication.raw.md` | fetch, **paste-corroborated ×3** | ✅ **CLOSED 2026-08-04.** Three independent copies compared — this fetch and two pastes — **no divergence anywhere**, including the A18 sentence verbatim. Do not request this page again |
 | **`review-criteria.raw.md`** | **fetch only** | ❌ **impossible — never pasted** |
-| `software-directory-policy.raw.md` | fetch, **paste-corroborated** | ✅ identical across all five sections. ⚠️ **The paste carries a date the fetch does NOT — see below** |
-| `software-directory-terms.raw.md` | fetch | ⚠️ first capture — **no repo copy existed before 2026-08-04**. Corroborated against a paste on content |
+| `software-directory-policy.raw.md` | fetch, **paste-corroborated** | ✅ identical across all five sections. ⚠️ **Publication date 15 April 2026 — recovered from the paste only; the fetch carries none** |
+| `software-directory-terms.raw.md` | fetch | ✅ content corroborated. **Publication date 16 March 2026 — from the paste; the fetch carries none.** First capture — no repo copy existed before 2026-08-04 |
+| `submission.raw.md` | fetch | ✅ **content corroborated** against Nadja's paste — the Team/Enterprise gate, B5–B10, the eleven steps and the Skills correction all match. **No further paste needed** |
 | *Trademark Guidelines* | ❌ **NOT CAPTURED** | `.md` returns **404**; HTML is a Next.js bundle with no clean extraction. **Referenced as binding by Terms T-10. Needs a paste** |
 
 ✅ **`authentication` is now closed.** A18 — the only failed requirement found anywhere — rests on
@@ -76,6 +77,24 @@ exactly the field that would let anyone detect staleness.**
 Consequence: a fetched raw file can never be dated from its own contents. Where a date matters,
 **the paste is the only source that carries it.** Record the publication date from the rendered
 page alongside the fetch date.
+
+**Dates recovered from pastes, existing nowhere in the fetched files:**
+
+| Document | Published | Present in fetch? |
+|---|---|---|
+| Software Directory Policy | **15 April 2026** | ❌ no date anywhere |
+| Software Directory Terms | **16 March 2026** | ❌ no date anywhere |
+
+**This is the first case where the paste is demonstrably BETTER, not merely more trustworthy.**
+Every earlier round argued the paste was *safer*; here it carries information the fetch provably
+does not. That is a stronger claim and it is now evidenced.
+
+**Related: relative timestamps are worse than none.** Two repo files carried *"Updated this week"*,
+captured when the support article displayed a relative stamp. A relative timestamp in a committed
+file **silently re-anchors to whenever the reader looks** — it reads as current forever. Both are
+now fixed or flagged: `software_directory_policy.md` carries the absolute date;
+`remote_server_submission_guide.md` is marked undated, because its real publication date was never
+captured and inventing one would be worse.
 
 **The `.md` method is now 3-for-3 against pastes** (`transparent-theming`, and `authentication`
 twice). Still evidence about a method and nothing more — it does not establish that any *particular*

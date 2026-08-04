@@ -1,5 +1,6 @@
 Remote MCP Server Submission Guide
-Updated this week
+⚠️ Undated — this read "Updated this week", a relative timestamp that re-anchors every time it is
+read. The real publication date was not captured. See `sources_raw/PROVENANCE.md`.
 This is a complete guide for submitting your remote MCP server to Anthropic's MCP Directory for broader distribution and discoverability.
 
  

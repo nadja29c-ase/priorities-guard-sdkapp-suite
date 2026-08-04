@@ -1,6 +1,12 @@
 Anthropic Software Directory Policy
 
-Updated this week
+Published **15 April 2026** (absolute date, from Nadja's paste of the rendered page, 2026-08-04).
+
+⚠️ This line read **"Updated this week"** — a relative timestamp captured when the support article
+displayed one. It has since been replaced upstream by an absolute date. A relative timestamp in a
+committed file is worse than none: it silently re-anchors to whenever the reader happens to look.
+Raw source: `sources_raw/software-directory-policy.raw.md` — note that the `.md` fetch carries
+**no date at all**, so this date exists only because it was pasted.
 Anthropic allows users to discover high-quality Model Context Protocol servers, Skill folders, plugins, apps, and other software, containers, or data (“Software”) that work seamlessly within Claude through directories, repositories, surfaces, or similar offerings (collectively, “Directories”). We review submissions to our Directories to ensure they meet our standards for safety, security, and compatibility with Anthropic Services and other Software. We conduct both initial and ongoing reviews of Software, and may require developers to address compliance issues to continue being included in our Directories. All Software must maintain compliance with these requirements, including any future changes, to remain in our Directories.
 
  
