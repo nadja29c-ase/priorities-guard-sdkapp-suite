@@ -113,14 +113,34 @@ post-submission"* is right, and this page creates no obligation to be blocked by
 
 **But the stated risk is not PG's actual risk.**
 
-**Verified across the whole of `App.tsx` (933 lines):**
+**Verified across the whole of `App.tsx` (933 lines), re-run 2026-08-04 by two methods —
+`grep -c` (matching lines) and `grep -o | wc -l` (occurrences) — which agree exactly:**
 
-| Symbol | Occurrences |
-|---|---|
-| `updateModelContext` | **0** |
-| `sendMessage` | **0** |
-| `callServerTool` | 28 |
-| `isBridgeStale` | 28 |
+| Symbol | Occurrences | Lines |
+|---|---|---|
+| `updateModelContext` | **0** | **0** |
+| `sendMessage` | **0** | **0** |
+| `callServerTool` | 28 | 28 |
+| `isBridgeStale` | 28 | 28 |
+
+> **The identical 28/28 is real, not a copy-paste artifact** — it was challenged on exactly that
+> suspicion, and the suspicion was reasonable. The cause is structural: **`isBridgeStale` guards
+> `callServerTool`**, so **12 lines contain both symbols** —
+> `if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')`
+> at `:266, :287, :309, :333, :353, :373, :393, :415, :435, :455, :475, :497`. Add 12 dependency-array
+> entries, the `useState` at `:48`, and `:519`, `:521`, `:554` → 28. All 28 sit between `:48` and
+> `:554`; the observation that it appears nowhere in the last 240 lines is correct and consistent.
+>
+> **This matters because the zeros are the load-bearing values** — the whole "S4 is inapplicable
+> to PG" conclusion rests on them — and they were sitting next to a number under suspicion. Both
+> methods now confirm them independently.
+
+**Sharpening this artifact's own PG-risk finding:** `isBridgeStale` is not merely "a different
+mechanism" — it **already gates every `callServerTool` site**, which is precisely the
+data-mutation surface flagged below as PG's real exposure. What it does **not** do is instance
+election: it answers *"is this bridge dead?"*, not *"is this the newest instance?"*, so it does
+nothing to stop **several simultaneously-live** dashboards from each mutating. The gap is
+narrower than "no protection" and real.
 
 **PG never calls either API this page's guards protect.** S4 — the heart of the pattern — is
 inapplicable to PG as written. The page's whole concern is *context pollution*: several live

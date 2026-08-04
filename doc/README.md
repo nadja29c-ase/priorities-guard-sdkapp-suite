@@ -76,6 +76,20 @@ a compliance document, because it is the one people quote instead of re-deriving
 for it before closing. The `title` claim lived in three places; fixing the one being pointed at
 left two, and it took two review rounds to clear.
 
+**Second corollary — a negative claim must state the scope it was proved over.** *"No
+fullscreen-scoped override exists anywhere in the widget's CSS"* was **literally true and
+substantively wrong**: the override was a JSX inline style object, and the search covered `.css`
+files. A negative finding is only as wide as its search, so the search has to be in the sentence.
+
+Write *"no `max-width` in `src/**/*.css`"*, not *"no `max-width` anywhere"*. The second is a
+claim about the widget; the first is a claim about the grep, and only the first was tested. This
+is not the corollary above — nothing needed fixing in three places. **The search scope silently
+excluded the answer**, which no amount of grepping for the same wrong pattern would have caught.
+
+Three findings this session were "checked where I was looking": the `title` claim (three
+locations), the `resourceDomains` third block, and this one. The first two are the corollary. The
+third is this rule.
+
 ---
 
 ## The compliance-page refresh routine

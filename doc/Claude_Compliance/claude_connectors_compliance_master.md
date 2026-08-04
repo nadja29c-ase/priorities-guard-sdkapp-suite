@@ -371,15 +371,42 @@ Inline card constraints:
     320px" are both satisfied. Below the cap, `margin: 0 auto` computes to zero. Nothing binds.
   - **Fullscreen: NOT compliant.** Above 600px the cap binds and `margin: 0 auto` produces
     exactly the artifact M10 names — side margins, on a surface *"meant to use the full
-    viewport."* This is not hypothetical: PG declares fullscreen itself
-    (`App.tsx:83`, `availableDisplayModes: ['inline','fullscreen']`), and **grep confirms no
-    fullscreen-scoped override of the cap exists anywhere in the widget's CSS.**
+    viewport."* PG declares fullscreen itself (`App.tsx:83`,
+    `availableDisplayModes: ['inline','fullscreen']`).
 
-  **Corrected verdict:** the cap is a legitimate product choice *in inline* and a live M10
-  violation *in fullscreen*. The remedy is to scope it, not delete it — the readable-measure
-  argument for capping line length is sound where the widget sits in a chat column, and
-  irrelevant when the user has explicitly asked for the full viewport.
+  ⚠️ **CORRECTION 2026-08-04 — the earlier claim here was true and misleading, and the remedy
+  it implied does not work.** This block previously read: *"grep confirms no fullscreen-scoped
+  override of the cap exists anywhere in the widget's CSS."* Literally true. Substantively wrong:
+  **there is a fullscreen-scoped override — it is a JSX inline style object, and the grep scope
+  was `.css` files.** Same shape as the `resourceDomains` third block and the §4A `title` claim:
+  checked where I was looking.
+
+  **PG has FOUR width caps across two files, and the outermost is the smallest:**
+
+  | Where | Cap | Binds? |
+  |---|---|---|
+  | `main.css` `#root` | **600px** + `margin: 0 auto` | **YES** — outermost, unconditional |
+  | `App.tsx:625` inline `<main>` | 560px desktop / 100% mobile, auto margins | yes (560 < 600) |
+  | `App.tsx:727` fullscreen `<main>` | **672px** + auto margins + 16px h-padding | **NO — DEAD** |
+  | `App.tsx:585` pie-chart section | **672px** + auto margins, fullscreen only | **NO — DEAD** |
+
+  React mounts into `#root`, so it is the ancestor of every one of them. **A 672px cap inside a
+  600px-capped parent never binds.** Someone wrote 672 for fullscreen and gets 600. That is an
+  **unintentional state, not a design choice** — and "document the cap as a product decision"
+  would have papered over it.
+
+  **The remedy is NOT "scope `#root`'s cap to inline."** Scoping it leaves `App.tsx:727`'s own
+  672px cap **plus explicit `marginLeft/marginRight: 'auto'`** — M10's "side margins", generated
+  independently of `#root`. The fix must **reconcile all four declarations**, not scope one.
+
+  **Corrected verdict:** the cap is a legitimate product choice *in inline*, a live M10 violation
+  *in fullscreen*, and the fullscreen intent is currently **dead code**.
   **Code fix NOT applied** — the fix decision is Nadja's.
+
+  **Related, same block:** `App.tsx:724-725` hardcodes `paddingLeft/paddingRight: '16px'` in the
+  fullscreen branch while `paddingTop`/`paddingBottom` *do* consume safe-area values. So
+  `safeAreaInsets.left`/`.right` are unused in **the one mode where mobile fullscreen makes them
+  matter most** — confirming the §4N `safeAreaInsets` finding from the opposite direction.
 - **Max actions:** 2, placed at the bottom of the card
 - **Max data points:** 4–5 (stated constraint — no "recommended" qualifier in official docs)
 - No drill-ins, breadcrumbs, or multiple views
@@ -580,9 +607,21 @@ DATA-MUTATION concern this page does not address anywhere. Filing it as an insta
 supersession mis-files it. It is a PG-specific risk sitting OUTSIDE this page and needs tracking
 on its own terms.
 
-Also: PG already has isBridgeStale 3-second staleness detection (28 occurrences). That is a
-DIFFERENT MECHANISM answering a different question — bridge liveness, not instance election.
-This section should not be read as though PG has nothing in this area.
+Also: PG already has isBridgeStale 3-second staleness detection, and it ALREADY GATES EVERY
+callServerTool SITE — 12 guards of the form
+  if (isBridgeStale || !appRef.current?.callServerTool) throw new Error('Tool calls not available')
+at :266, :287, :309, :333, :353, :373, :393, :415, :435, :455, :475, :497.
+
+That is the same data-mutation surface named above, so PG is not unprotected there. What
+isBridgeStale does NOT do is instance election: it answers "is this bridge dead?", not "is this
+the newest instance?", so it does nothing to stop SEVERAL SIMULTANEOUSLY-LIVE dashboards from
+each mutating. The gap is narrower than "no protection" and it is real.
+
+Counts re-verified 2026-08-04 by two methods (grep -c and grep -o | wc -l), which agree:
+updateModelContext 0, sendMessage 0, callServerTool 28, isBridgeStale 28. The identical 28/28 was
+challenged as a copy-paste artifact — reasonable suspicion, but it is structural: 12 lines contain
+BOTH symbols because the guard names both. All 28 isBridgeStale occurrences fall between :48 and
+:554.
 
 ⚠️ PG HAS A FIXED ui.domain, AND THE SCOPE RULE BELOW APPLIES TO PG DIRECTLY.
 resources_dupl.py:75 defines WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com" and sets it on
