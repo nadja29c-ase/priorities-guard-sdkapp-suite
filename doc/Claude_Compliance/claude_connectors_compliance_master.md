@@ -323,10 +323,71 @@ Not required for: Claude Code (connects directly from user's machine)
 IP allowlisting alone is not recommended as a security measure — use OAuth 2.1
 
 > ⚠️ NEW — Origin-header validation: Your MCP server must also validate the `Origin` header on incoming requests. This is listed as a technical requirement in the submission form policy checklist alongside OAuth, HTTPS, and annotations. Servers that accept requests without validating the `Origin` header fail the security review.
+
+4F-bis. SOFTWARE DIRECTORY TERMS — THE BINDING CONTRACT (added 2026-08-04)
+Source: https://support.claude.com/en/articles/13145338-anthropic-software-directory-terms
+Dated 16 March 2026. Raw: sources_raw/software-directory-terms.raw.md
+Full extraction: software_directory_terms_claude.md
+
+⚠️ THIS DOCUMENT HAD NO REPO COPY OF ANY KIND UNTIL 2026-08-04. §6 reproduces the POLICY in full
+and never mentioned the TERMS — while Policy §3H makes agreeing to them MANDATORY. The Policy says
+what the Software must do; the TERMS are what you WARRANT when you submit.
+
+T-3  ACCURACY WARRANTY: "any information you give us will be accurate and up-to-date."
+     This covers EVERY FIELD ON THE SUBMISSION FORM. A wrong URL, a stale domain hash or an
+     inflated capability claim is a WARRANTY DEFECT, not a typo. It is what makes this entire
+     documentation audit contractually load-bearing rather than merely tidy.
+
+T-4  PRIVACY WARRANTY INCLUDING THIRD PARTIES: provide and adhere to a privacy policy, "provide
+     all applicable THIRD-PARTY privacy policies", and ensure all such policies "clearly and
+     accurately describe to users what user information you AND THIRD PARTIES collect and how you
+     and third parties use and share such information."
+     PG connects to Google Calendar, so Google's policy must be PROVIDED and its collection/use/
+     sharing accurately described. Disclosure existing is NOT the same as providing the link.
+
+T-9  SECURITY VULNERABILITY REPORTING: "implement and maintain a mechanism for receiving reports
+     of security vulnerabilities from Anthropic AND FROM THIRD PARTIES and to investigate such
+     reports with a reasonable standard of care."
+     DISTINCT FROM §3B, which is a user support channel. T-9 names Anthropic and third parties and
+     adds a DUTY OF CARE. Nothing in this audit shows such a mechanism exists. APPEARS UNIMPLEMENTED.
+
+T-10 NO PARTNERSHIP/SPONSORSHIP/ENDORSEMENT statements without prior written approval; comply at
+     all times with Anthropic's Trademark Guidelines. Constrains fulfilling-productivity.com launch
+     copy. ⚠️ The Trademark Guidelines are a SECOND referenced binding document and are NOT in the
+     repo — .md returns 404 and the HTML is a Next.js bundle. NEEDS A PASTE. Recorded as an
+     obligation whose CONTENT IS UNKNOWN.
+
+T-8  Ongoing duty to maintain quality and security standards consistent with the Policy AS UPDATED.
+     This is why the doc pass must be repeatable, not one-off.
+T-1/2/5/6/7  Rights warranty; legal compliance; indemnification; licences over descriptions, docs,
+     name and logos; authorisation to test and to collect AND SHARE functional metadata. Recorded
+     as accepted, not actionable.
+
+Also: Anthropic has NO obligation to include the Software and may remove it at any time for any
+reason without liability. Terms may be modified WITHOUT PRIOR NOTICE; continued maintenance
+constitutes acceptance.
+
+⚠️ THE ART. 28 ERROR IS NOW A WARRANTY DEFECT, NOT LEGAL HYGIENE. Privacy policy v3.2
+characterises Anthropic as an Art. 28 data processor, which is incorrect. Under T-3 it is
+inaccurate information given to Anthropic; under T-4 it is a policy that does not "clearly and
+accurately describe" the third-party relationship. It moves from "should fix" to FIX BEFORE THE
+FORM GOES IN. It is cheap, and it is the one document Anthropic is guaranteed to read closely.
+
 4F. Documentation
 Comprehensive documentation required — published at a stable HTTPS URL before your publish date (a blog post or help-center article is sufficient; can share privately with Anthropic during review).
 
 RECOMMENDED sections (corrected 2026-08-04 — this list read "Required sections"):
+
+THE ACTUAL BINDING OBLIGATION SET, from Software Directory Policy §3 — this is what must be true,
+and the seven-item list below is a helpful structure, not a requirement:
+  §3A  privacy policy link — clear, accessible, covering collection, usage AND RETENTION
+  §3B  VERIFIED contact information and support channels (product AND security concerns)
+  §3C  document how the Software works, its intended purpose, and how users troubleshoot issues
+  §3E  AT LEAST THREE working examples of prompts or use cases demonstrating core functionality
+  §3D  a standard testing account WITH SAMPLE DATA
+Plus review-criteria: a public page BY PUBLISH DATE; a blog post or help-centre article suffices;
+may be shared privately with Anthropic during review.
+There is NO seven-section requirement in the binding policy. Confirmed against the policy text.
 
 ⚠️ FOURTH INSTANCE OF THE HARDENING BIAS TODAY, AND THE MOST COSTLY. The source
 (remote_server_submission_guide.md:256) says "RECOMMENDED sections". This file said "Required

@@ -51,6 +51,9 @@ other pages or other days.
 | `cross-compatibility.raw.md` | fetch | ❌ no — page was pasted, not compared |
 | `authentication.raw.md` | fetch, **paste-corroborated ×3** | ✅ **CLOSED 2026-08-04.** Three independent copies compared — this fetch and two pastes — **no divergence anywhere**, including the A18 sentence verbatim. Do not request this page again |
 | **`review-criteria.raw.md`** | **fetch only** | ❌ **impossible — never pasted** |
+| `software-directory-policy.raw.md` | fetch, **paste-corroborated** | ✅ identical across all five sections. ⚠️ **The paste carries a date the fetch does NOT — see below** |
+| `software-directory-terms.raw.md` | fetch | ⚠️ first capture — **no repo copy existed before 2026-08-04**. Corroborated against a paste on content |
+| *Trademark Guidelines* | ❌ **NOT CAPTURED** | `.md` returns **404**; HTML is a Next.js bundle with no clean extraction. **Referenced as binding by Terms T-10. Needs a paste** |
 
 ✅ **`authentication` is now closed.** A18 — the only failed requirement found anywhere — rests on
 Nadja's copy rather than on a fetch. The `static_bearer` drift and the 17 MUSTs behind the OAuth
@@ -59,6 +62,20 @@ attestation are equally covered.
 ⚠️ **`review-criteria` is now the ONLY page in the audit resting on an unverified fetch**, and it
 supplies **R1–R11** plus **raw line 72** — half the evidence for resizing Blocker 1 from "seven
 sections before submission" to "a blog post by publish date." **Still needs a paste.**
+
+## ⚠️ A concrete defect in the `.md` method, found 2026-08-04
+
+**The `.md` endpoint strips the publication date.** `software-directory-policy.raw.md` contains no
+date stamp anywhere — grep for `updated`/`2026`/`april` returns nothing. The rendered page carries
+**"April 15, 2026"**, and the paste carries it too.
+
+**This is the currency metadata the entire provenance argument turns on**, and the fetch silently
+drops it. It is no longer a general worry about staleness: **the method is measurably lossy on
+exactly the field that would let anyone detect staleness.**
+
+Consequence: a fetched raw file can never be dated from its own contents. Where a date matters,
+**the paste is the only source that carries it.** Record the publication date from the rendered
+page alongside the fetch date.
 
 **The `.md` method is now 3-for-3 against pastes** (`transparent-theming`, and `authentication`
 twice). Still evidence about a method and nothing more — it does not establish that any *particular*
