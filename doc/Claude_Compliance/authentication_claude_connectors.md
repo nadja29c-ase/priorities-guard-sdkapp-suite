@@ -66,6 +66,8 @@ familiar with MCP auth."*
 Live measurements against `https://mcp.priority-guard.com` and
 `https://www.priority-guard.com`, plus source inspection. **Not inferred.**
 
+**11 of the 17 are verified obligations on PG.** A17 is excluded from that count: it describes *Claude's* selection logic, not a duty on the server. Marking it ✅ inflated the score.
+
 | # | Requirement | PG-Claude | Evidence |
 |---|---|---|---|
 | A1/A2 | S256 advertised | ✅ | AS metadata: `code_challenge_methods_supported: ["S256"]` |
@@ -78,7 +80,8 @@ Live measurements against `https://mcp.priority-guard.com` and
 | A10 | `invalid_grant` | ✅ | `token_endpoint.py:116`; OAuth 2.1 status mapping noted at :220 and :270 |
 | A11 | Refresh rotation | ✅ | `token_service.py` marks the old token `revoked=True` in the same exchange that issues the new one |
 | A15 | No `client_credentials` | ✅ | Not implemented; PG is consent-gated throughout |
-| A17 | CIMD vs DCR selection | ✅ correct-by-config | `token_endpoint_auth_methods_supported: ["none"]` present, `client_id_metadata_document_supported` **absent** → Claude falls back to DCR, which PG supports (`registration_endpoint` present) |
+| A16 | No tokens in the URI query string | ✅ | PG is bearer-header only. No `?token=`/`?apiKey=`/`?userToken=` parameter is read anywhere on the MCP path; `mcp_auth_dupl.py` reads the `Authorization` header exclusively |
+| A17 | CIMD vs DCR selection | ➖ n/a — see below | `token_endpoint_auth_methods_supported: ["none"]` present, `client_id_metadata_document_supported` **absent** → Claude falls back to DCR, which PG supports (`registration_endpoint` present) |
 
 ### Not verified — stated rather than assumed
 
@@ -97,14 +100,21 @@ Live measurements against `https://mcp.priority-guard.com` and
 |---|---|
 | master §4C: *"OAuth 2.0 authorization code flow with PKCE S256 support, as required by Claude's auth implementation and the MCP authorization spec"* | **Correct.** Confirmed by A1/A2 |
 | master §4C callback note: *"`claude.com/api/mcp/auth_callback` appears in some older documentation. The current official auth reference lists only the `.ai` URL… Register both"* | **Correct and still current.** The live page lists only `claude.ai`; PG registers both |
-| master §4C: six supported auth types | **Correct**, and `static_headers` is confirmed **Beta** |
+| master §4C:141 — *"`static_bearer` (user-pasted tokens) is not yet supported"* | ❌ **STALE — this is drift.** The live page lists **no `static_bearer`**. It lists `static_headers` — *"fixed credential (API key or bearer token) entered by an organization administrator as a request header"* — marked **Beta**. Either the type was renamed, its actor changed (user-pasted → org-admin-entered) and it was promoted from unsupported to beta, or `static_bearer` was removed outright. Both readings are drift. **Not PG-affecting** — PG uses `oauth_dcr` — but the master states a capability fact that is no longer true. |
 | master §9: *"ensure Claude Code loopback URIs support port-agnostic matching"* | **Correct**, and now satisfied |
 
-**Nothing in the repo's §4C material was found to be stale.** That is a real result rather than
-an absence of work: design guidelines was stale on two material facts after ~2 months, so the
-prior on any unrefreshed page was "expect drift". §4C did not drift.
+**§4C DID drift, in one place.** An earlier version of this document concluded "nothing in the
+repo's §4C material was found to be stale" and used that to argue drift is not uniform. **That
+conclusion was wrong and the inference built on it was unsound** — it rested on a row
+(`static_bearer`) that had been marked "Correct" without being checked against the live type
+table.
 
-### New since the June verification — not yet in the master
+Corrected result: **one stale claim in §4C** (the `static_bearer` row above), plus six items
+new since June. The requirement set itself — PKCE, the 401 handshake, resource matching,
+callbacks, refresh semantics — did not move. So the honest statement is narrower: §4C's
+*obligations* held; its *capability inventory* did not.
+
+### New since the June verification — not yet in the master (6, not 7)
 
 1. **A17's dual condition for CIMD selection.** The master does not state that `"none"` in
    `token_endpoint_auth_methods_supported` is *required* alongside the CIMD flag.
@@ -116,11 +126,27 @@ prior on any unrefreshed page was "expect drift". §4C did not drift.
    because frameworks default to JSON-only.
 5. **`static_headers` as a named beta auth type.**
 6. **The `offline_access` auto-append rule.**
-7. **Proactive refresh up to 5 minutes before expiry** (previously documented as reactive-only).
+*(A seventh item was listed here — "proactive refresh up to 5 minutes before expiry, previously documented as reactive-only". **That was fabricated.** Master §4C line 176 already states "Proactive refresh up to 5 minutes before stored expiry", line 824 repeats it, and the May 2026 changelog records it. Not new, and the parenthetical misstated what the master says. Removed 2026-08-04.)*
 
 ---
 
-## One item worth acting on
+## Two items worth acting on
+
+### PG is one metadata flag away from CIMD
+
+The page tells directory-bound connectors to *"prefer CIMD or `oauth_anthropic_creds` over
+DCR"*, because DCR registers a new client on **every fresh connection**. PG is directory-bound
+and uses DCR.
+
+CIMD selection requires **both** conditions (A17). PG already satisfies one:
+`token_endpoint_auth_methods_supported: ["none"]` is advertised. The only missing piece is
+`"client_id_metadata_document_supported": true` in the AS metadata, plus hosting the metadata
+document.
+
+That is a cheap strategic option rather than a finding — DCR works and is supported out of the
+box. But "one flag away" is worth knowing before the directory drives registration volume.
+
+### The one unverified requirement with a known failure mode
 
 **A12 is the only unverified item with a known failure mode.** The page singles it out:
 a framework defaulting to JSON-only body parsing returns `415` and breaks token exchange.

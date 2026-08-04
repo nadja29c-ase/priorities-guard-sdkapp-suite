@@ -739,7 +739,13 @@ Confirm whether Claude's browser client hits the MCP server directly. If yes, ht
 🟡 Item — /.well-known/oauth-protected-resource URL Match (Operational Verify)
 Verify before submission:
 
-curl https://<CLAUDE_MCP_SERVER_URL>/.well-known/oauth-protected-resource
+# Use the URL your 401 actually advertises — Claude probes the PATH-SUFFIXED document
+# FIRST and falls back to the bare one. Checking only the bare path tests a document
+# Claude may not use, so the check can pass while the real one is wrong.
+curl https://<CLAUDE_MCP_SERVER_URL>/.well-known/oauth-protected-resource/mcp
+curl https://<CLAUDE_MCP_SERVER_URL>/.well-known/oauth-protected-resource   # fallback
+# For PG-Claude both currently serve an identical document (verified 2026-08-04) — that is
+# what makes the bare-path-only check misleading rather than obviously broken.
 
 # → "resource" field must equal <CLAUDE_MCP_SERVER_URL>
 🟢 Item — MCP App Widget Rendering — RESOLVED (June 2026)
