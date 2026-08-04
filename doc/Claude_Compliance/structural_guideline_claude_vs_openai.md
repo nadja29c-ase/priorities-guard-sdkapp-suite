@@ -387,6 +387,9 @@ Where `MCP_RESOURCE_URL` is the **full MCP endpoint URL including `/mcp` path** 
 ```bash
 node -e 'console.log(require("crypto").createHash("sha256").update("https://priority-guardian-claude-mcp.onrender.com/mcp").digest("hex").slice(0,32) + ".claudemcpcontent.com")'
 # → e524d9efa639471cac7431657ac08f2c.claudemcpcontent.com
+# ⚠️ STALE 2026-08-04: that URL is the legacy Render host. Canonical is
+#    https://mcp.priority-guard.com/mcp → a7b31ccb44096357600a7460eb0a78e9.claudemcpcontent.com
+#    Recompute from the configured MCP_RESOURCE_URL; never cite a bare hash.
 ```
 
 Implementation in `resources_dupl.py`:

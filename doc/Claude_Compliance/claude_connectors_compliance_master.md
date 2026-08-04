@@ -487,9 +487,31 @@ By default, all external origins are blocked. connectDomains = API endpoints the
 Display modes:
 Declare supported modes via appCapabilities.availableDisplayModes in ui/initialize. Modes: inline, fullscreen, pip. Host responds with supported modes. Request a switch with ui/request-display-mode.
 
-Widget App Domain (_meta.ui.domain) — mandatory for MCP Apps:
+Widget App Domain (_meta.ui.domain) — OPTIONAL. Corrected 2026-08-04.
 Source: https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility
-The _meta.ui.domain field is required on every ui:// resource. Without it the widget will not render.
+(raw source committed at sources_raw/cross-compatibility.raw.md)
+
+⚠️ THIS BLOCK PREVIOUSLY READ "mandatory for MCP Apps" AND "required on every ui:// resource.
+Without it the widget will not render." BOTH CLAIMS ARE FALSE. The page never says the field is
+required; it says the format and validation rules "are determined by each host platform" and then
+gives Claude's formula. That is a conditional: IF you set it, here is the value.
+
+The "will not render" claim is contradicted by a source already in this tree —
+sources_raw/instance-supersession.raw.md:179: "Without ui.domain (the default), Claude derives the
+iframe origin from the conversation and connector, so the broadcast is scoped to a single
+conversation." Widgets render fine without it. That is the DOCUMENTED DEFAULT, not a failure mode.
+
+⚠️ FIFTH HARDENING INSTANCE IN ONE SESSION, AND THE FIRST WITH A DESIGN CONSEQUENCE. PG's FIXED
+ui.domain is exactly what widens BroadcastChannel scope ACROSS CONVERSATIONS, which is why §4M
+records S5 (a server-minted per-conversation scope key) as a PRE-CONDITION for supersession. If
+ui.domain is optional, DROPPING IT GIVES PER-CONVERSATION SCOPING FOR FREE AND DELETES S5. The
+false "mandatory" framing removed that option from consideration without anyone deciding against
+it. The other four inflations produced wasted effort; this one silently foreclosed a design choice.
+
+NOT a recommendation to drop it. It is set and working, and a fixed domain is also what makes the
+origin STABLE ACROSS CONVERSATIONS — which anything relying on localStorage or a shared origin
+would need. The point is that keeping it should be a DECISION WITH A RECORDED RATIONALE, not an
+inherited constraint.
 For Claude, compute the value by hashing your full MCP resource URL (including /mcp path):
 
   node -e 'const url = "https://your-server.com/mcp"; console.log(require("crypto").createHash("sha256").update(url).digest("hex").slice(0,32) + ".claudemcpcontent.com")'
@@ -499,7 +521,20 @@ The URL is the FULL MCP endpoint including /mcp path — NOT just the origin.
 Example: sha256("https://example.com/mcp")[:32] = c3d80a4ed901ee05b21755a88273b4a4
 Result: c3d80a4ed901ee05b21755a88273b4a4.claudemcpcontent.com
 
-PG status: domain computed from https://mcp.priority-guard.com/mcp → a7b31ccb44096357600a7460eb0a78e9.claudemcpcontent.com. Confirmed working ✅
+PG status: domain computed from https://mcp.priority-guard.com/mcp → a7b31ccb44096357600a7460eb0a78e9.claudemcpcontent.com. Confirmed working ✅ (hash recomputed locally 2026-08-04 — CORRECT for the canonical URL.)
+
+⚠️ A SECOND, DIFFERENT PG HASH EXISTS IN THIS REPO: e524d9efa639471cac7431657ac08f2c, at
+remote_server_submission_guide.md:445 and structural_guideline_claude_vs_openai.md:388-389. It is
+arithmetically correct for the LEGACY URL https://priority-guardian-claude-mcp.onrender.com/mcp and
+is therefore STALE. Neither doc did bad arithmetic; one names a superseded URL.
+
+Operationally PG is safe — resources_dupl.py:74 computes the hash AT IMPORT TIME from
+MCP_RESOURCE_URL, so the served value always matches the configured URL. The risk is documentary:
+at submission the domain must correspond to the URL THE REVIEWER ENTERS, and the repo asserts two
+answers.
+
+RULE: record the COMPUTATION, or record a hash TOGETHER WITH THE URL IT DERIVES FROM. Never a bare
+hash — a frozen hash is a claim with its premise deleted.
 
 Cross-platform note (source: https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility):
 MCP Apps can run in both Claude and ChatGPT from a single codebase. The SDK auto-detects the host

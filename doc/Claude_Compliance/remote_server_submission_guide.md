@@ -442,7 +442,7 @@ node -e 'const yourServerUrl = "https://example.com/mcp"; console.log(require("c
 
 **Example:**
 - Server URL: `https://priority-guardian-claude-mcp.onrender.com/mcp`
-- Computed domain: `e524d9efa639471cac7431657ac08f2c.claudemcpcontent.com`
+- Computed domain: **STALE — do not use.** `e524d9efa639471cac7431657ac08f2c` derives from the LEGACY URL `https://priority-guardian-claude-mcp.onrender.com/mcp`. The canonical URL is `https://mcp.priority-guard.com/mcp`, whose domain is `a7b31ccb44096357600a7460eb0a78e9.claudemcpcontent.com` (master §4K). Recompute from the configured `MCP_RESOURCE_URL`; never cite a bare hash.
 
 **Python implementation:**
 ```python
@@ -452,7 +452,7 @@ _hash = hashlib.sha256(MCP_RESOURCE_URL.encode()).hexdigest()[:32]
 WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com"
 ```
 
-Reference: [Claude MCP Apps Cross-Compatibility Guide](https://docs.anthropic.com/en/docs/claude-ai-connectors/building/mcp-apps/cross-compatibility)
+Reference: [Claude MCP Apps Cross-Compatibility Guide](https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility)
 
 
 
