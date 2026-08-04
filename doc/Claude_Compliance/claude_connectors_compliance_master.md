@@ -238,6 +238,36 @@ where someone was pointed. Cost of the inline flag is one paragraph. See
 Confirmed again in round 2 against the committed raw source, which states outright that the
 credential *"is shared by the organization rather than pasted per user."*
 
+LAZY-AUTHENTICATION — read 2026-08-04, raw at sources_raw/lazy-authentication.raw.md.
+Referenced four times from the authentication page and never read until now.
+
+CANONICAL 401 SHAPE (raw 26-27):
+  WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…/.well-known/
+                    oauth-protected-resource/mcp", scope="orders:read"
+
+PG LIVE, measured 2026-08-04 against https://mcp.priority-guard.com/mcp:
+  HTTP/2 401
+  www-authenticate: Bearer resource_metadata="https://mcp.priority-guard.com/.well-known/
+                    oauth-protected-resource/mcp", scope="pg.access"
+
+DELTA: PG omits error="invalid_token". NOT A VIOLATION — A3 requires only the 401 plus a
+resource_metadata pointer, RFC 6750 §3 makes the error parameter optional, and PG's flow works in
+production. Recorded as a DELTA FROM THE CANONICAL EXAMPLE, deliberately NOT inflated into a MUST.
+
+THREE FACTS §4C DID NOT HAVE:
+- A 200 WITH isError: true IS NOT AN AUTH SIGNAL. "Claude passes the error text to the model as the
+  tool result and moves on — there is no auth prompt. Only a transport-level 401 causes Claude to
+  pause the call, run the OAuth flow, and retry." If users see "please sign in" TEXT instead of a
+  Connect BUTTON, the server is returning the wrong one.
+- 403 TRIGGERS RE-AUTHENTICATION ONLY with WWW-Authenticate: Bearer error="insufficient_scope".
+  ANY OTHER 403 IS SURFACED AS A TERMINAL ERROR. That is the scope step-up path.
+- OMITTING scope IN THE 401 is not neutral: Claude then requests everything in PRM
+  scopes_supported plus offline_access, "which can produce an OVER-BROAD CONSENT PROMPT."
+  PG already sends scope="pg.access" ✅ — the good case, now with a stated reason.
+
+Under Enterprise Managed Auth the 401 triggers a SILENT TOKEN EXCHANGE instead of the Connect card:
+the tool call is retried automatically and the user sees no prompt.
+
 ⚠️ **A18 — REDIRECT URI HOSTNAME ON THE CONSENT SCREEN. PG DOES NOT SATISFY THIS.**
 **Unmet spec-inherited MUST — directory-gating status UNKNOWN.**
 (Found in round 2, 2026-08-04; missed by round 1. Raw source line 106. Code fix NOT applied.)
@@ -736,6 +766,32 @@ PG widget pre-submission checklist (MCP Apps specific):
 [x] prefersBorder: false set in _meta.ui — resources_dupl.py
 [x] openLink() only called from user gesture handlers — ConnectionStatus.tsx onClick
 [ ] Allowed link URIs declared in submission portal — SATISFIABLE (see §4L; PG owns the origin)
+
+✅ B7 IS NOT GATED BY THE TEAM PLAN. FOUND 2026-08-04 on building/testing, raw line 13:
+  "ANY CLAUDE ACCOUNT (Free, Pro, Max, Team, or Enterprise) CAN ADD A CUSTOM CONNECTOR... CUSTOM
+   CONNECTORS USE THE EXACT SAME RUNTIME AS DIRECTORY CONNECTORS, so what works here will work
+   after publication."
+
+THE TEAM/ENTERPRISE ORG IS REQUIRED FOR THE SUBMISSION PORTAL ONLY — NOT FOR TESTING. The
+eight-tool exercise that B7 attests to CAN BE DONE TODAY, FREE, ON THE EXISTING INDIVIDUAL PLAN,
+in parallel with the pricing decision. It is no longer blocked behind item 1.
+
+There is NO STAGING ENVIRONMENT — "you test in production using a custom connector". Local servers
+are tested by exposing them through a tunnel (Cloudflare Tunnel, ngrok) and adding the tunnel URL
+as a custom connector; keep auth enabled while tunnelling and shut the tunnel down afterwards.
+
+⚠️ TEST CREDENTIALS — AN OBLIGATION NOBODY HAD RECORDED. Beyond "fully populated account, not an
+empty shell" so reviewers can "list real records, search real data, exercise write tools on real
+resources", the page requires: "INCLUDE STEP-BY-STEP SETUP INSTRUCTIONS FOR SOMEONE UNFAMILIAR
+WITH YOUR SERVICE." A written deliverable, not just an account.
+
+✅ clientInfo — PG IS CLEAN, verified 2026-08-04. Claude's clientInfo name varies ("claude-ai",
+"Anthropic" sometimes with a service suffix, "claude-code"); behaviour must NOT be gated on an
+exact name or version; and it is UNAUTHENTICATED — "any client can claim any name, so IT MUST
+NEVER FEED AN AUTHORIZATION DECISION." grep across mcp_server/ and backend/ finds no use of
+clientInfo; the only match is a URL in a comment. NOTE: this is the SAME CLASS as open task #10
+(client-controlled _meta["openai/subject"]) — unauthenticated client-supplied data reaching an
+authorization decision. PG is clean here and NOT clean there.
 
 ⚠️ B7 IS AN ATTESTATION, NOT A PROCESS STEP. ADDED 2026-08-04.
 The portal states: "You also confirm you've run every tool yourself, either via MCP Inspector or

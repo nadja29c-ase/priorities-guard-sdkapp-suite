@@ -53,6 +53,8 @@ other pages or other days.
 | **`review-criteria.raw.md`** | **fetch only** | ❌ **impossible — never pasted** |
 | `software-directory-policy.raw.md` | fetch, **paste-corroborated** | ✅ identical across all five sections. ⚠️ **Publication date 15 April 2026 — recovered from the paste only; the fetch carries none** |
 | `software-directory-terms.raw.md` | fetch | ✅ content corroborated. **Publication date 16 March 2026 — from the paste; the fetch carries none.** First capture — no repo copy existed before 2026-08-04 |
+| `testing.raw.md` | fetch | ⚠️ not cross-checked |
+| `lazy-authentication.raw.md` | fetch | ⚠️ not cross-checked |
 | `submission.raw.md` | **fetch, relay-corroborated** | ✅ **8 distinct facts cross-checked** — see the third category below. **No further paste needed** |
 | *Trademark Guidelines* | ❌ **NOT CAPTURED** | `.md` returns **404**; HTML is a Next.js bundle with no clean extraction. **Referenced as binding by Terms T-10. Needs a paste** |
 
@@ -154,6 +156,44 @@ a bare fetch, so it gets its own label rather than being rounded to either neigh
 
 ⚠️ **Relay corroboration does NOT recover the publication date** — that is a property of the bytes,
 and the relayed facts were content, not metadata. `submission.raw.md` remains undated.
+
+## ⚠️ The source inventory was never enumerated — corrected 2026-08-04
+
+For six rounds this pass reported "the remaining four pages" / "remaining five" **without ever
+having read the documentation index.** `https://claude.com/docs/llms.txt` existed throughout and
+lists the complete set. The running tally was assembled ad hoc from cross-references encountered
+while reading other pages — so it could only ever contain pages something else happened to link.
+
+**This is the writing rule applied to the work plan rather than to a sentence:** *no summary may
+quantify over items the table beneath it does not enumerate.* "Four pages remain" is exactly that
+shape, and it was wrong for six rounds.
+
+**Four relevant pages the ad-hoc tally missed:**
+
+| Page | Why it matters |
+|---|---|
+| **`building/testing`** | **The documented procedure for the B7/R11 attestation** — a critical-path item nobody knew had published guidance |
+| **`building/lazy-authentication`** | Referenced **four times** from `authentication`; carries the canonical 401 shape §4C leans on |
+| `building/directory-vs-custom` | PG runs as a custom connector today and becomes a directory connector after review. External-link behaviour already differs; other differences unknown |
+| `building/after-publishing` | The renamed `managing-your-listing` — where reviewer feedback and post-publication health land |
+
+## ⚠️ `llms.txt` indexes `claude.com/docs` ONLY — five binding documents live outside it
+
+A clean read of the index **must not be reported as full coverage.** These are binding and none is
+in that index:
+
+| Document | Made binding by | Captured? |
+|---|---|---|
+| Software Directory **Policy** | referenced throughout | ✅ (support.claude.com) |
+| Software Directory **Terms** | Policy §3H | ✅ (support.claude.com) |
+| **Trademark Guidelines** | Terms T-10 | ❌ **no** |
+| **Usage Policy** | Policy §1A | ❌ **no** |
+| **Universal Usage Standards** | Policy §1A | ❌ **no** |
+| **High-Risk Use Case requirements** | Policy §1A | ❌ **no** |
+| **Supported-countries policy** | Policy §1A | ❌ **no** |
+
+**Policy §1A alone makes four uncaptured documents binding.** Revised count: **13 pages captured,
+2 relevant pages outstanding, 5 binding documents outside the index.**
 
 ## The rule going forward
 
