@@ -5,12 +5,14 @@
 **Raw source committed:** `sources_raw/authentication.raw.md` (141 lines, HTTP 200, 17,099 bytes).
 **Feeds:** compliance master §4C. The master is NOT yet rewritten against this; see §11 header.
 
-> ⚠️ **PROVENANCE: FETCH-ONLY, NOT YET PASTE-VERIFIED.** The raw source for this page was
-> obtained by `curl` of the `.md` endpoint, **never pasted from the rendered page**. That
-> endpoint returns no `Last-Modified` and no `ETag`, so the fetch carries no publication date
-> and cannot be shown to track the page a human reads. Everything below — including the
-> findings this page is cited for — is **checkable but not currency-verified**. See
-> `sources_raw/PROVENANCE.md`. **Replace with a paste before treating as settled.**
+> ✅ **PROVENANCE: PASTE-VERIFIED 2026-08-04.** The committed raw was compared against Nadja's
+> paste of the rendered page and agrees on every discriminating marker — the six-row auth-type
+> table with `static_headers` at Beta, the Supabase/Cloudflare/Lambda list, the `localhost:3118`
+> example, the RFC 8252 §7.3/§8.3 split, the Entra `AADSTS9010010` note, the 10 s/30 s budgets and
+> `160.79.104.0/21` — **including the A18 sentence verbatim.** A18 now rests on Nadja's copy, not
+> on a fetch. *(Comparison was structural + every distinctive string, not a byte-level diff.)*
+> The `.md` method is now 2-for-2 against pastes (transparent-theming, authentication) — evidence
+> about the method, **not** a licence to skip the paste on `review-criteria`.
 
 
 > **Round 2 was PARTIALLY unblocked — and this paragraph originally overstated it.** This
@@ -190,14 +192,55 @@ requirement surfaces, and the prose *around* a stated number.
 | 81 | Microsoft Entra ID requires the MCP server URL registered as an Application ID URI or the token request fails `AADSTS9010010` | None — PG runs its own AS. Listed because it is a **literal "must"** in a `<Note>`, and this artifact claims to extract MUSTs |
 | 137 | **A14's operational half.** The 10 s / 30 s budgets were captured as bare numbers; the source also says to *return the response headers and body without buffering behind upstream work*, and to check that no reverse proxy, API gateway or WAF is holding the response | Actionable if A14 is ever measured (still unverified) |
 | 24 | **`static_headers` sharing model.** The credential is entered **once by an org administrator** and is *"shared by the organization rather than pasted per user"* | Sharpens the `static_bearer` drift finding in Part 3: the type was not merely renamed and promoted from unsupported to beta — **the credential model changed**, from per-user paste to org-shared admin entry |
+| 39 | **Claude Managed Agents uses a SEPARATE credential set**, and Claude Code does not use Anthropic-held credentials at all | **An eighth surface.** Master §1 enumerates six platforms and has never mentioned Managed Agents. Not PG-affecting today; it is a platform-inventory gap |
+| 104 | **Claude Code's Client ID Metadata Document is a PUBLISHED, FETCHABLE ARTIFACT** at `https://claude.ai/oauth/claude-code-client-metadata` | **Testable, and now tested** — see the A9 verification above. Nothing in the repo pointed at it, so A9 had been argued from prose when a live artifact was available |
+| 70 | **`resource_metadata` need NOT be on the MCP server's origin** — *"it can be any HTTPS location that serves the JSON document"* | A **permission**, not an obligation. PG does not need it, but it is the documented escape hatch if `/.well-known/*` routing ever becomes a problem on the platform |
 | 104 | **A9's RFC split.** Port-agnostic matching is **mandatory** under RFC 8252 §7.3 for the IP-literal form (`127.0.0.1`); for `localhost` it is pragmatic, applied *"so Claude Code works, even though RFC 8252 section 8.3 discourages `localhost`"* | Matters if anyone ever tightens `_LOOPBACK_HOSTS` — the two hosts rest on different footings, and only one is RFC-mandated |
+
+### ✅ A12 — VERIFIED 2026-08-04 by live probe (was the last unverified item with a named failure mode)
+
+`POST https://www.priority-guard.com/oauth/pg/token` with deliberately invalid credentials:
+
+| `Content-Type` | Response |
+|---|---|
+| `application/x-www-form-urlencoded` | **HTTP 400** — `{"error":"invalid_grant","error_description":"Invalid authorization code"}` |
+| `application/json` | HTTP 422 — `grant_type: Field required` |
+
+The form body was **parsed**: `grant_type` was read, the code looked up, and the grant rejected on
+its merits. **Not `415`** — the failure mode the page singles out. The JSON contrast confirms the
+endpoint is form-only, which is the A12/A13 parser split working as specified.
+
+**This also re-confirms A10 on a live request** — the error code returned is `invalid_grant`,
+RFC 6749-compliant, exactly as A10 requires.
+
+### ✅ A9 — VERIFIED against Claude Code's PUBLISHED metadata, not against prose
+
+`https://claude.ai/oauth/claude-code-client-metadata` (HTTP 200) declares:
+
+```json
+{"redirect_uris":["http://localhost/callback","http://127.0.0.1/callback"],
+ "token_endpoint_auth_method":"none","grant_types":["authorization_code","refresh_token"]}
+```
+
+PG's `_is_loopback_redirect_uri()` run against those literal strings:
+
+| URI | Accepted |
+|---|---|
+| `http://localhost/callback` | ✅ |
+| `http://127.0.0.1/callback` | ✅ |
+| `http://localhost:3118/callback` (the page's own port example) | ✅ |
+| `http://127.0.0.1:53821/callback` | ✅ |
+| `https://localhost/callback` · `http://evil.com/callback` · `http://localhost:0/callback` · `http://localhost/cb` | ❌ all rejected |
+
+Both declared paths clear `_LOOPBACK_PATHS`, which already contains `/callback` alongside
+`/oauth/callback`. Port-agnostic in both directions, with negative controls holding.
 
 ### Not verified — stated rather than assumed
 
 | # | Item | Why not verified |
 |---|---|---|
 | A7 | AS reachable from `160.79.104.0/21` | Cannot originate traffic from Anthropic's range. Circumstantially satisfied — the connector works in production — but not directly measured |
-| A12 | `/token` accepts form-urlencoded | No `Form(` or explicit content-type handler found by grep in `token_endpoint.py`; the parser may be implicit in the framework. **Needs a direct POST test.** The page calls this out specifically as a common failure (`415 Unsupported Media Type`) |
+
 | A13 | `/register` uses JSON | Not separately tested |
 | A14 | 10 s / 30 s latency budgets | Not measured under load |
 

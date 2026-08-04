@@ -1048,7 +1048,24 @@ Error handling — actionable messages, not generic errors
 Streamable HTTP transport supported
 Operational requirements
 Server is production-ready (GA status, not beta)
-Three-way URL match verified: submission URL = /.well-known/oauth-protected-resource resource field
+THREE-WAY URL MATCH — corrected 2026-08-04. This item named only TWO consumers; there are THREE,
+and the third is the one that fails silently. The EXACT string is:
+
+    https://mcp.priority-guard.com/mcp        (no trailing slash, /mcp present)
+
+  1. PRM `resource` field at /.well-known/oauth-protected-resource
+       must match the URL AS THE USER ENTERS IT IN CLAUDE, including path (A4)
+  2. SUBMISSION FORM URL — what the reviewer pastes into Settings > Connectors
+  3. _meta.ui.domain = sha256(<that exact string>)[:32] + ".claudemcpcontent.com"
+       = a7b31ccb44096357600a7460eb0a78e9.claudemcpcontent.com
+
+⚠️ WHY THE THIRD MATTERS AND WHY IT IS DANGEROUS: a trailing slash anywhere in the chain yields
+4c08ba210ef30c57e400ae94d8b49e97 — sharing NOTHING with the canonical value. The result is a
+ui.domain mismatch and THE WIDGET DOES NOT RENDER, while OAuth CONTINUES TO WORK — so the failure
+presents as a widget bug with no apparent connection to the URL. PG is internally consistent
+(resources_dupl.py:74 derives the hash from MCP_RESOURCE_URL at import), so the entire risk sits
+at the BOUNDARY: what gets typed into the submission form. FILL THE FORM FROM THIS LINE, NOT FROM
+MEMORY.
 Tested from Claude.ai
 Tested from Claude Desktop
 OAuth flow completes successfully end-to-end

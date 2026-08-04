@@ -49,17 +49,21 @@ other pages or other days.
 | `transparent-theming.raw.md` | fetch | ✅ **yes**, 60 lines, byte-identical |
 | `instance-supersession.raw.md` | fetch | ❌ no — page was pasted, not compared |
 | `cross-compatibility.raw.md` | fetch | ❌ no — page was pasted, not compared |
-| **`authentication.raw.md`** | **fetch only** | ❌ **impossible — never pasted** |
+| `authentication.raw.md` | fetch | ✅ **YES — paste-verified 2026-08-04.** Agrees on every discriminating marker incl. the A18 sentence verbatim. Structural + distinctive-string comparison, not a byte diff |
 | **`review-criteria.raw.md`** | **fetch only** | ❌ **impossible — never pasted** |
 
-⚠️ **The two fetch-only files carry the heaviest findings in the audit:**
+✅ **`authentication` is now closed.** A18 — the only failed requirement found anywhere — rests on
+Nadja's copy rather than on a fetch. The `static_bearer` drift and the 17 MUSTs behind the OAuth
+attestation are equally covered.
 
-- **`authentication`** — A18 (the only failed requirement found anywhere), the `static_bearer`
-  drift, and the 17 MUSTs behind the **OAuth attestation on the submission form**.
-- **`review-criteria`** — R1–R11, and **raw line 72**, which is half the evidence for resizing
-  Blocker 1 from "seven sections before submission" to "a blog post by publish date."
+⚠️ **`review-criteria` is now the ONLY page in the audit resting on an unverified fetch**, and it
+supplies **R1–R11** plus **raw line 72** — half the evidence for resizing Blocker 1 from "seven
+sections before submission" to "a blog post by publish date." **Still needs a paste.**
 
-**Both need replacing with a paste before anything downstream is treated as settled.**
+**The `.md` method is 2-for-2 against pastes** (`transparent-theming`, `authentication`). That is
+evidence about the method and nothing more. It is **not** a licence to skip the remaining paste —
+two agreements do not establish that a third fetch is current, and the page still to be checked is
+the one steering the critical-path estimate.
 
 ## The rule going forward
 
