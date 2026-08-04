@@ -70,10 +70,35 @@ The page's own fallback example is
 | # | Requirement | PG-Claude | Evidence |
 |---|---|---|---|
 | T1 | Transparent html/body | ✅ | `widget-react/src/main.css:9-15` — `html, body { width:100%; margin:0; padding:0; background: transparent }`; `body` again at :28 |
-| T2 | `color-scheme` meta tag | ✅ | `widget-react/pg-dashboard-claude.html:6`. **Durable** — that file is the Vite build *input* (`vite.config.ts:18`), so the tag survives rebuilds |
-| T3 | `assets.claude.ai` in `resourceDomains` | ✅ | `handlers/resources_dupl.py:94` and `:118`, commented "Host font loading" |
+| T2 | `color-scheme` meta tag | ✅ | `widget-react/pg-dashboard-claude.html:6`. **Durable** — that file is the Vite build *input* (`vite.config.ts:18`), so the tag survives rebuilds. Also present in the built, actually-served `widgets/pg-dashboard-claude.html:6` |
+| T3 | `assets.claude.ai` in `resourceDomains` | ✅ **but hollow** | `handlers/resources_dupl.py:94` and `:118`, commented "Host font loading". The allowance is granted and the fonts inject — **nothing consumes them.** See below |
 | T4 | Listener registered before connect | ⚠️ **unverified** | `onhostcontextchanged` is assigned at `App.tsx:144`, inside the `onAppCreated` callback (`:85`). Whether `onAppCreated` fires before `connect()` is SDK internals and was not read. PG also uses `useHostStyles`, which the page says re-applies on the event — so the React path likely covers it regardless |
 | — | `prefersBorder` | set `false` | `resources_dupl.py:91, 115, 149` — all three `_meta.ui` blocks. **See the trade-off below.** |
+
+### T3 is satisfied and hollow — PG pays for host fonts and never uses them
+
+`resourceDomains: ["https://assets.claude.ai"]` exists specifically so `applyHostFonts` can load
+Anthropic Sans, and `useHostStyles` does inject the `@font-face` rules. They are never referenced:
+
+| Line | Declaration |
+|---|---|
+| `main.css:25` | `font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;` — hardcoded |
+| `main.css:40` | `font-family: inherit;` — inherits the hardcoded stack |
+
+**Verified total, not partial.** `grep -rn "font-sans\|--font-"` across the whole of
+`widget-react/src/` returns nothing, and those two lines are the widget's *only* `font-family`
+declarations. No component overrides it.
+
+**What this costs.** The page's own security caveat is that `resourceDomains` also adds the origin
+to `script-src` and `style-src`. PG has widened its CSP for a capability it does not exercise, and
+renders in `system-ui` in every host regardless.
+
+**Two valid closures, one wrong answer.** Either adopt the page's canonical form —
+`font-family: var(--font-sans, system-ui, sans-serif)` — or drop `assets.claude.ai` from
+`resourceDomains` and narrow the CSP back. The second is cheaper to ship. Keeping both the
+allowance and the hardcoded stack is the only combination with cost and no benefit.
+
+**Code fix not applied** — widget change, needs a rebuild and deploy; the decision is Nadja's.
 
 ### CSS fallbacks — single-value, not `light-dark()`
 

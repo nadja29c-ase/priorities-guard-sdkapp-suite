@@ -78,6 +78,43 @@ left two, and it took two review rounds to clear.
 
 ---
 
+## The compliance-page refresh routine
+
+Ten Anthropic source pages feed `claude_connectors_compliance_master.md`. Each is refreshed on
+its own commit, and **a page is not done until step 5.** Steps 1–4 were the routine as practised;
+step 5 kept being remembered rather than executed, and the currency metadata lagged the work two
+rounds running. It is a step now.
+
+1. **Fetch live** and write a dated source dump into `Claude_Compliance/`.
+2. **Extract the obligations** into a numbered table, distinguishing MUST from recommendation.
+3. **Verify PG against each**, citing file and line — or say "not verified" and why.
+4. **Diff against every repo doc that touches it**, applying the corollary below: grep for each
+   false claim before closing, because it will not be in one place.
+5. **Update the currency metadata in the same commit** — the master's header line *and* the §11
+   changelog heading. Both must name exactly which pages are refreshed and which are not.
+
+Understating currency is the same class of error as overstating it. The header exists so a reader
+can trust its scope without re-deriving it; a header that is merely *stale in the safe direction*
+still can't be trusted, which is the only property that matters.
+
+### Round 1 catches omission; round 2 catches invention
+
+**Round 1** is steps 1–5 above: did the source get captured. **Round 2** runs *after* the master
+is rewritten and checks the reverse direction:
+
+- Does every claim now in the master trace to a line in a source dump?
+- Does every PG status claim trace to a file and a line?
+
+Round 1 structurally cannot catch a fabrication, because a fabrication has no source to be missing
+from. On 2026-08-04 three passed round 1 untouched — the 500px provenance, a "new" proactive-refresh
+item the master already documented, and *"nothing in §4C was stale."* All three were specific, and
+believed because they were specific.
+
+**"Closed" means both rounds.** Saying it after round 1 is the same overstatement the writing rule
+below prohibits, one level up.
+
+---
+
 ## Why the taxonomy is written down at all
 
 Documents drifted into the wrong folders twice in one session, and once a normative spec was

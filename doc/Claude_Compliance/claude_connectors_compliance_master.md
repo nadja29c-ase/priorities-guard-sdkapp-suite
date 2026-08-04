@@ -1,5 +1,13 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: 2026-08-04 — design-guidelines and authentication pages re-fetched from live Anthropic documentation. **Partially refreshed:** the remaining source pages (review-criteria, submission, software_directory_policy, troubleshooting, external-links, instance-supersession, transparent-theming, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
+Last updated: 2026-08-04 — **round 1 (re-fetch + extract) complete on 3 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`. **Partially refreshed:** the remaining seven (review-criteria, submission, software_directory_policy, troubleshooting, external-links, instance-supersession, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
+
+**No page is "closed."** Round 1 catches omission — did the source get captured. Round 2 runs
+*after* the master rewrite and checks the reverse direction: does every claim now in the master
+trace to a line in a source dump, and does every PG status claim trace to a file and line?
+Round 1 cannot catch invention, and invention is the failure mode this document actually has —
+three fabrications survived round 1 on 2026-08-04 alone (the 500px provenance, a "new"
+proactive-refresh item the master already documented, and *"nothing in §4C was stale"*).
+**Round 2 status: not started on any page.**
 Anthropic Software Directory Policy last updated: April 15, 2026
 Submission guide: https://claude.com/docs/connectors/building/submission
 Pre-submission checklist: https://claude.com/docs/connectors/building/review-criteria
@@ -284,10 +292,29 @@ Inline card constraints:
   fill the container width—there are no fixed breakpoints. Design responsively from 320px up to
   fullscreen."* Also: *"Full-width layouts — don't add side margins that waste screen real estate"*
   and *"avoid fixed-width layouts; content must reflow gracefully."*
-  ⚠️ A `max-width` cap on the widget root (e.g. `#root { max-width: 600px }`) is **not** a compliance
-  requirement and is arguably counter to the fixed-width/side-margin guidance — especially in
-  fullscreen, which is meant to use the full viewport. Any such cap is a product/design choice and
-  should be documented as one, not as compliance.
+  ⚠️ **The `max-width: 600px` cap — re-argued 2026-08-04 against M10, not inherited.**
+  This section previously called the cap *"a product/design choice, not compliance."* That hedge
+  was written **before** M10 was extracted from the live design-guidelines page as a Constraint:
+  *"No fixed-width layouts; responsive from 320px; no side margins."* It has to be re-argued
+  against the requirement, and the answer changes with display mode.
+
+  PG's rule is unconditional (`widget-react/src/main.css:32-35`):
+      #root { width: 100%; max-width: 600px; margin: 0 auto; }
+
+  - **Inline: compliant.** `max-width` is not a *fixed* width — with `width: 100%` the layout
+    reflows freely from 320px up to 600px, so "no fixed-width layouts" and "responsive from
+    320px" are both satisfied. Below the cap, `margin: 0 auto` computes to zero. Nothing binds.
+  - **Fullscreen: NOT compliant.** Above 600px the cap binds and `margin: 0 auto` produces
+    exactly the artifact M10 names — side margins, on a surface *"meant to use the full
+    viewport."* This is not hypothetical: PG declares fullscreen itself
+    (`App.tsx:83`, `availableDisplayModes: ['inline','fullscreen']`), and **grep confirms no
+    fullscreen-scoped override of the cap exists anywhere in the widget's CSS.**
+
+  **Corrected verdict:** the cap is a legitimate product choice *in inline* and a live M10
+  violation *in fullscreen*. The remedy is to scope it, not delete it — the readable-measure
+  argument for capping line length is sound where the widget sits in a chat column, and
+  irrelevant when the user has explicitly asked for the full viewport.
+  **Code fix NOT applied** — the fix decision is Nadja's.
 - **Max actions:** 2, placed at the bottom of the card
 - **Max data points:** 4–5 (stated constraint — no "recommended" qualifier in official docs)
 - No drill-ins, breadcrumbs, or multiple views
@@ -554,10 +581,35 @@ CSS fallback pattern (preferred — uses light-dark() for dual-mode fallbacks):
   This is better than single-value fallbacks — handles both light and dark correctly
   even when host tokens are not yet loaded.
 
+⚠️ HOST FONTS ARE PAID FOR AND NEVER USED (found 2026-08-04, code fix NOT applied)
+
+  resourceDomains: ["https://assets.claude.ai"] is set (resources_dupl.py:94, :118) so that
+  applyHostFonts can inject Anthropic Sans, and useHostStyles does inject it. The @font-face
+  rules load. Nothing consumes them:
+
+    main.css:25  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                              Roboto, sans-serif;      <- hardcoded, no var(--font-sans, …)
+    main.css:40  font-family: inherit;                 <- inherits the hardcoded stack
+
+  VERIFIED TOTAL, not partial: grep for "--font-" across the whole of widget-react/src/
+  returns nothing. Those two lines are the only font-family declarations in the widget.
+
+  So T3 ✅ is TRUE AND HOLLOW. The CSP allowance is granted and the security surface widened
+  (resourceDomains also feeds script-src and style-src — the page's own caveat), and the widget
+  renders in system-ui regardless. PG pays the cost and takes none of the benefit.
+
+  The page's canonical form closes it in one edit:
+    font-family: var(--font-sans, system-ui, sans-serif);
+  NOT APPLIED — this is a widget code change requiring a rebuild and deploy; the fix decision
+  is Nadja's. The alternative (drop assets.claude.ai from resourceDomains and narrow the CSP)
+  is equally valid and cheaper to ship. Either closes it; doing neither is the only wrong answer.
+
 PG status:
   useHostStyles(app, app?.getHostContext()) hook: ✅ correct (App.tsx:166 — two args)
-  color-scheme meta tag: verified in pg-dashboard-claude.html ✅
+  color-scheme meta tag: verified in pg-dashboard-claude.html ✅ (both the Vite input and the
+    built widgets/pg-dashboard-claude.html:6 that is actually served)
   prefersBorder: false: set in resources_dupl.py ✅
+  host fonts consumed: ❌ injected, never referenced — see above
   html/body background: transparent in main.css ✅
   CSS fallbacks: single-value, not light-dark() — verified at main.css:29
     `color: var(--color-text-primary, #141413)`.
@@ -805,10 +857,11 @@ Error handling — implemented with structured error messages
 
 11. What Changed From Previous Version
 
-### 2026-08-04 Update (partial refresh — design guidelines + authentication)
+### 2026-08-04 Update (round 1 on 3 of 10 pages — design guidelines, authentication, transparent theming)
 
-**Sources re-fetched:** `mcp-apps/design-guidelines`, `building/authentication`.
-Eight source pages remain on the 2026-06-23 verification and are flagged in the header.
+**Sources re-fetched:** `mcp-apps/design-guidelines`, `building/authentication`,
+`mcp-apps/transparent-theming`. Seven source pages remain on the 2026-06-23 verification and are
+flagged in the header. Round 2 (reverse trace) has not started on any page.
 
 - **The 500px inline height limit does not exist and never did as a published requirement.**
   Removed from `design guidelines_mcpapps_claude.md` (3 assertions),
