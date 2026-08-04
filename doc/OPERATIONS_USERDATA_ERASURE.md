@@ -5,7 +5,7 @@
 **Related:** `ADR_008_data_ownership_and_deletion_model.md` (the decisions),
 `ADR_007_user_identity_and_lifecycle.md` (why identification works or doesn't),
 `ADR_006_token_revocation_semantics.md` (disconnect vs deletion),
-`legal/data_retention_strategy.md` (retention periods).
+`legal/pg_data_retention_and_permission_surface.md` (retention periods).
 
 ---
 
@@ -55,7 +55,7 @@ Priorities, goals, deliverables, weekly progress snapshots, the Google Calendar 
 |---|---|---|
 | A security audit record of the deletion | Proof the erasure happened. Deliberately not linked by foreign key so it survives (ADR_008 §3) | 90 days, swept by `cleanup_expired_audit_logs` |
 | The shared sign-in identity (`core_users`) | Other suite apps hang off it. Deleting it would destroy a MindSort user's board (ADR_008 §2) | Until the 6-month inactivity cleanup, or Operation B |
-| The browser session (`oauth_sessions`) | Suite-level, not PG state. PG-scoped deletion is not account deletion (`data_retention_strategy.md` §7.1) | 30-day sliding expiry |
+| The browser session (`oauth_sessions`) | Suite-level, not PG state. PG-scoped deletion is not account deletion (`pg_data_retention_and_permission_surface.md` §10.1) | 30-day sliding expiry |
 | Encrypted database backups | Deletion removes data from active storage, not from backups | 7 days, then automatically and permanently deleted |
 
 ### Two things to be accurate about if asked

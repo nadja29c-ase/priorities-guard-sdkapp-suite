@@ -40,9 +40,10 @@ mandates reading it before any new-app OAuth work.
 
 ### `legal/` is what we published, not what we intend
 
-`data_retention_strategy.md` is a transcription of a signed PDF. The live privacy policy and
-ToS are **not** in this repo — they are published at `fulfilling-productivity.com` and that
-published version is authoritative.
+`pg_data_retention_and_permission_surface.md` is the in-repo retention record for Priority
+Guardian. The shared-backend strategy it descends from exists only as a signed PDF outside
+this repo. The live privacy policy and ToS are **not** in this repo either — they are
+published at `fulfilling-productivity.com`, and that published version is authoritative.
 
 Stale in-repo copies were deleted deliberately (2026-08-04). The reason is specific: a stale
 copy of `pg_privacy_policy_v3.1.md` produced a false finding in an earlier increment, because

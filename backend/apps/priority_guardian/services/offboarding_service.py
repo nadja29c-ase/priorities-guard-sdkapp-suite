@@ -16,7 +16,7 @@ WHAT IS NEVER DELETED:
   core_tool_audit_log — the record that deletion happened; expires on its own 90-day
                         schedule via cleanup_expired_audit_logs (ADR_008 §3)
   oauth_sessions      — suite-level browser session, not PG state. PG-scoped deletion is not
-                        account deletion (data_retention_strategy.md §7.1)
+                        account deletion (pg_data_retention_and_permission_surface.md §10.1)
 
 DELIBERATE DIVERGENCE FROM THE REFERENCE IMPLEMENTATION.
 backend/apps/focused/logic/offboarding.py::delete_user_data is the pattern this follows, but
@@ -354,7 +354,8 @@ async def delete_user_data(
         # These rows hold a credential, not metadata about one — refresh_token_enc (Fernet)
         # and refresh_token_hash (indexed for lookup). Retaining them for the retention
         # strategy's 30-day "token audit log" would mean keeping a usable credential after
-        # the user asked for deletion. Decided 2026-08-03; see data_retention_strategy.md.
+        # the user asked for deletion. Decided 2026-08-03; see
+        # doc/legal/pg_data_retention_and_permission_surface.md.
         # ---------------------------------------------------------------------
         pg_token_filter = (
             OAuthAccessToken.user_id == user_id,

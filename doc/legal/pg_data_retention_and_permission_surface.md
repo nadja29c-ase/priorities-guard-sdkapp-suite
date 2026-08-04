@@ -2,7 +2,9 @@
 
 **Version:** 2.0 — merged and updated
 **Status:** Verified against codebase 2026-08-04
-**Parent document:** Shared Backend Data Retention Strategy v1.0 (PDF) / `doc/legal/data_retention_strategy.md`
+**Parent document:** Shared Backend Data Retention Strategy v1.0 — **PDF only, not in this
+repository.** The markdown transcription was removed 2026-08-04; this document is the
+in-repo record for Priority Guardian.
 **Related:** `doc/ADR/ADR_006_token_revocation_semantics.md`, `doc/ADR/ADR_007_user_identity_and_lifecycle.md`, `doc/ADR/ADR_008_data_ownership_and_deletion_model.md`
 
 > **Supersedes two documents**, merged 2026-08-04 because they duplicated the shared-tables
