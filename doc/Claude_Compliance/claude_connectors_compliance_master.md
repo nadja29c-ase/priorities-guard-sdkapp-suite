@@ -519,9 +519,19 @@ Host font loading (optional but expected):
 
 hostContext theming fields (passed by Claude on connect and on hostcontextchanged):
   theme:               "light" or "dark"
-  styles.variables:    CSS custom properties (--color-background-*, --color-text-*, etc.)
+  styles.variables:    --color-background-*, --color-text-*, --color-border-*,
+                       --color-ring-*, --font-*, --border-radius-*, --border-width-*
+                       (complete list, verified 2026-08-04 — this line previously ended
+                       "etc.", which hid four of the seven categories)
   styles.css.fonts:    @font-face rules for Anthropic Sans, served from https://assets.claude.ai
   Updates carry only the changed fields — guard with existence checks before applying.
+
+Listener ordering (T4 — ADDED 2026-08-04, absent from this section before):
+  "Register the listener before you connect so you don't miss an early update."
+  PG assigns onhostcontextchanged at App.tsx:144, inside the onAppCreated callback (:85).
+  Whether onAppCreated fires before connect() is SDK internals and is NOT verified. PG
+  also uses useHostStyles, which re-applies on the event, so the React path likely covers
+  it regardless. ⚠️ unverified, low risk.
 
 SDK helpers (import from @modelcontextprotocol/ext-apps):
   applyDocumentTheme(theme)          — sets <html data-theme> and root color-scheme
@@ -531,7 +541,11 @@ SDK helpers (import from @modelcontextprotocol/ext-apps):
 React pattern (preferred):
   useHostStyles(app, app?.getHostContext()) — applies all three helpers and re-applies
   automatically on hostcontextchanged. This is the correct React hook for theming.
-  PG status: uses useHostStyles(app) — correct. ✅
+  PG status: ✅ correct — App.tsx:166 is `useHostStyles(app, app?.getHostContext())`,
+  TWO args, with the comment "must pass hostContext for dark mode".
+  ⚠️ This line previously read "uses useHostStyles(app)" — the ONE-ARG form this very
+  section warns against. The verdict was right and the evidence was false; an audit line
+  whose supporting evidence is wrong is worse than no line. Corrected 2026-08-04.
 
 CSS fallback pattern (preferred — uses light-dark() for dual-mode fallbacks):
   Once applyDocumentTheme sets color-scheme, light-dark() resolves correctly:
@@ -541,11 +555,17 @@ CSS fallback pattern (preferred — uses light-dark() for dual-mode fallbacks):
   even when host tokens are not yet loaded.
 
 PG status:
-  useHostStyles(app) hook: ✅ correct
+  useHostStyles(app, app?.getHostContext()) hook: ✅ correct (App.tsx:166 — two args)
   color-scheme meta tag: verified in pg-dashboard-claude.html ✅
   prefersBorder: false: set in resources_dupl.py ✅
   html/body background: transparent in main.css ✅
-  CSS fallbacks: currently single-value (not light-dark()) — acceptable but suboptimal
+  CSS fallbacks: single-value, not light-dark() — verified at main.css:29
+    `color: var(--color-text-primary, #141413)`.
+    SCOPE: a fallback applies only when the custom property is ABSENT, i.e. when the
+    widget renders OUTSIDE a Claude host. Inside Claude, applyHostStyleVariables sets the
+    variables and the fallback is never used — so in-host light/dark correctness is
+    UNAFFECTED. The gap is that out-of-host rendering shows the light value in dark mode.
+    "Suboptimal" is the right severity; scoped 2026-08-04 so it is not read as an M1 risk.
 
 4J. Token Efficiency Response size should be reasonable for the task (~150k character ceiling is a hard limit, but reviewers will reject responses far below this if they're unnecessarily verbose)
 Claude Code: Max 25,000 tokens per tool result (configurable)

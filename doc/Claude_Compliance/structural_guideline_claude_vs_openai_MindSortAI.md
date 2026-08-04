@@ -357,7 +357,10 @@ Summary of what applies here:
 
 **[RECOMMENDED]** per §4N — "strongly recommended" but not submission-gating:
 - **Transparency/theming:** `html,body{background:transparent;margin:0}`,
-  `<meta name="color-scheme" content="light dark">`, `useHostStyles(app)` hook,
+  `<meta name="color-scheme" content="light dark">`,
+  `useHostStyles(app, app?.getHostContext())` hook — **two args; the one-arg form does not
+  apply dark mode** (corrected 2026-08-04; MindSort's App.tsx:373 and PG's App.tsx:166 both
+  already use the two-arg form),
   `_meta.ui.prefersBorder:false`.
 - **Note:** While formally "strongly recommended," skipping this makes the widget
   render with an opaque box that breaks the conversational blend. Reviewers will see
