@@ -74,8 +74,31 @@ sequentially from:
 3. `core_users` **last**
 
 Plus: Redis purge in the same workflow (`redis.delete_pattern(f"{user_id}:*")`), FK CASCADE at
-the database level, and a verification log line written to `core_tool_audit_log`
-(`user_id`, `timestamp`, `tables_affected_count`) **retained 30 days** to prove deletion.
+the database level, and ~~a verification log line written to `core_tool_audit_log`
+(`user_id`, `timestamp`, `tables_affected_count`) **retained 30 days** to prove deletion~~.
+
+> **⚠️ STRUCK 2026-08-04 — UNBUILT SPECIFICATION. Do not rely on this clause.**
+>
+> **No writer for a 30-day verification record exists anywhere in the codebase.** Verified by
+> search across `backend/` and both MCP servers: there is no such table, no such writer, and
+> no cleanup job for one.
+>
+> What exists is `core_tool_audit_log`, retained **90 days** and enforced by
+> `backend/jobs/retention_cleanup.py::cleanup_expired_audit_logs`. The PG deletion service
+> writes to it on every call (`app_name="priority_guardian"`, `action="delete_data"`, with
+> per-table counts in `details`). It is strictly better evidence than the record described
+> above: same content, longer retention, actually implemented, and already swept.
+>
+> Struck rather than deleted because this file is a transcription and the PDF remains the
+> signed artefact (see the header). The clause stays visible so the divergence between the
+> source and reality is legible; it must not be treated as a description of the system.
+>
+> **Compliance consequence:** no published policy may claim a 30-day deletion-verification
+> retention. The accurate statement is the 90-day audit record, which the live privacy policy
+> §10 already describes correctly — so **no policy change is required by this strike.**
+>
+> Decision: Nadja, 2026-08-04. Resolves the second of the two conflicts in §7.2 and unblocks
+> Part D of `inc_pg_authenticated_data_deletion`.
 
 > **This describes a suite-wide operation** (`core_users` last). ADR_008 §4 splits deletion into
 > Operation A (app-scoped) and Operation B (suite-wide). The sequence above corresponds to
@@ -158,11 +181,36 @@ record.
 2026-08-01). It is specified and unbuilt.
 
 **DECISION: `core_tool_audit_log` retention is 90 days** — that is what the code does and what
-the model documents. Do **not** merge the two. The 30-day verification log is either (a) defined
-as a distinct record type and built, or (b) struck from the source as an unbuilt specification.
-**Until resolved, the privacy policy must not claim a 30-day deletion-verification retention.**
+the model documents. Do **not** merge the two.
 
-*Open — requires a decision from Nadja, not from an implementing increment.*
+**RESOLVED 2026-08-04 — option (b): the 30-day verification log is STRUCK as an unbuilt
+specification.** Marked in §3 rather than deleted, because this file is a transcription and
+the PDF remains the signed artefact.
+
+Reasoning: the 90-day `core_tool_audit_log` record is strictly better evidence — same
+content, longer retention, implemented, and already swept by
+`cleanup_expired_audit_logs`. A second record type retained for a *shorter* period would add
+a compliance obligation while providing less proof. The 30-day line reads as an early draft
+superseded when `core_tool_audit_log` landed at 90.
+
+**No policy change follows from this.** Verified by fetching the LIVE policy at
+`https://www.fulfilling-productivity.com/pg-privacy-policy` on 2026-08-04 — not the stale repo
+copy. It says:
+
+> *"Audit logs — Retention period: 90 days (rolling delete)"*
+>
+> *"deletion audit log entries (created when you use the in-app deletion tools) are retained
+> separately for up to 90 days as required for compliance purposes"*
+
+and contains **no mention of any verification record**. The defect was a strategy document
+describing a record that does not exist — not a policy promising one. Nothing published has
+to change because of this strike.
+
+*(Separately, and NOT caused by this strike: the live policy still routes Priority Guardian
+full deletion to `support@priority-guard.com`. Once the in-app deletion tool ships that
+sentence is outdated, which is Part D's actual work.)*
+
+*Closed. Both conflicts in §7 are now decided (§7.1 `oauth_sessions` retained, §7.2 struck).*
 
 ---
 
