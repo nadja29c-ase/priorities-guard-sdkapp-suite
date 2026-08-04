@@ -153,7 +153,17 @@ async def test_success_path_returns_categories_not_schema():
     text = result.content[0].text
     assert result.isError is not True
     assert "priorities" in text.lower()
-    assert "mindsort" in text.lower(), "must state other apps are unaffected"
+    # ADR_008 §4 requires stating that OTHER PRIORITY GUARD APPS are unaffected — generically.
+    # It does NOT require naming one, and naming one is worse: a user who has never heard of
+    # MindSort reads "your MindSort AI boards are untouched" and asks what MindSort is and why
+    # it is in their deletion confirmation. Spelling out what is not deleted only helps where
+    # there is genuine ambiguity, and app-scoped deletion being app-scoped is not ambiguous.
+    assert "other priority guard apps" in text.lower(), (
+        "must state that other Priority Guard apps are unaffected (ADR_008 §4)"
+    )
+    assert "mindsort" not in text.lower(), (
+        "must NOT name another product — see the reasoning above"
+    )
 
     for leak in ("pg_priorities", "pg_weekly_snapshots", "120", "aaaaaaaa"):
         assert leak not in text, f"schema leaked into user-facing text: {leak!r}"
