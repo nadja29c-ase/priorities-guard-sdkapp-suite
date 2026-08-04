@@ -167,8 +167,11 @@ This is a promised undelivered feature, sitting next to a `readOnlyHint` that co
 verb. A reviewer checking annotations against descriptions hits it immediately, and annotations are
 the largest rejection category.
 
-**Fix: rewrite the description to say what it does** — validates and confirms reflection provenance,
-shapes the conversation, persists nothing. **Do not touch the annotation.**
+⚠️ **RECORDED STATUS ONLY — NO CHANGE RECOMMENDED OR PROPOSED.** An earlier version of this
+section proposed rewriting the description. **That was out of scope and is withdrawn.** This
+document records what the source requires and what PG currently does; whether to change a tool
+description is a product decision, not a documentation finding. The discrepancy is recorded so
+it is *known*, not so it becomes work.
 
 #### 2. THREE descriptions attempt to override Claude's default behaviour — §2D–§2G / R6
 
@@ -198,10 +201,16 @@ guidance **about that tool**, which is exactly what §2A asks for (*"specifies w
 it should be invoked"*). **The distinction is not the word "NOT" — it is whether the sentence
 describes invocation conditions or reassigns the model's behaviour.**
 
-⚠️ **This is the highest rejection risk found in the audit**, and it was invisible from the code
-side because the annotations are all correct. **Not fixed — the descriptions are behavioural
-product design and rewriting them is Nadja's call.** An `ASSISTANT_GUIDANCE` block was already
-removed from the deletion tool on the same grounds, so the pattern is known.
+⚠️ **RECORDED STATUS ONLY. NO CHANGE PROPOSED.** This is the state of PG's descriptions measured
+against the policy text — nothing more. Tool descriptions are behavioural product design and are
+explicitly out of scope for a documentation-currency pass.
+
+**Relevant to how much this matters:** `after-publishing` states that tools can be added, changed
+or removed by deploying to the server, with **no resubmission and no scheduled re-review**. So a
+description is not locked in at submission time. The only irreversible choice at the portal is the
+**slug**. *(Caveat, from the Policy and Terms T-8: Anthropic conducts "both initial and ongoing
+reviews", so "no scheduled re-review" is not "never reviewed again." Latitude for iteration, not a
+gap to ship through.)*
 
 #### 3. Cosmetic, but reviewer-visible
 

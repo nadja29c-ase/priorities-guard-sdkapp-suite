@@ -21,9 +21,45 @@ all fixed. The raw upstream markdown for all three pages is now committed verbat
 `Claude_Compliance/sources_raw/` (append `.md` to any of these doc URLs), so every quotation is
 independently checkable and round 2 no longer depends on who fetched what.
 
-⚠️ **Round 2 has NOT been run on this master.** The artifacts are checked; the synthesis in
-§4C/§4K/§4N is not, because it has not been rewritten yet. A green artifact tally does not
-transfer here.
+**STATUS OF THIS FILE, 2026-08-04 — the six known-false claims are now CORRECTED, not merely
+flagged:**
+
+| Was | Now |
+|---|---|
+| §2 dead submission URL, no org prerequisite | ✅ portal URL + the Team/Enterprise access gate |
+| §4C `static_bearer` line (flagged, uncorrected) | ✅ **corrected** to `static_headers`, beta, org-admin-entered |
+| §4F "Required sections" | ✅ Recommended, with the binding §3A/B/C/E/D set stated |
+| §4K `ui.domain` "mandatory" / "will not render" | ✅ optional; the decision recorded with its reason |
+| §5 old submission form | ✅ superseded; portal content added; "do not fill the portal from §5" |
+| Hardening bias recorded but never swept | ✅ **swept** — see below |
+
+**THE HARDENING SWEEP HAS NOW BEEN RUN. Nine instances total**, six previously recorded plus three
+found by the sweep itself, all in §4K:
+
+1. 500px inline height "hard limit" — no pixel value is published anywhere
+2. a fabricated "recommended" qualifier on the 4–5 data-point constraint
+3. §4M — App class "required for production" (source: *recommended*)
+4. §4F — "Required sections" (source: *Recommended sections*)
+5. §4K — `ui.domain` "mandatory… will not render" (source: optional; host derives an origin)
+6. A18 — softened *out* of existence on one page's silence **(the bias running in reverse)**
+7. §4K — "Fullscreen constraints (mandatory)" — the source has **three** `must` statements in the
+   entire page and none concerns fullscreen
+8. §4K — "Styling requirements (mandatory)" — **mixed**: light/dark and never-hardcode-colors ARE
+   musts (M1); the rest is guidance, and one item is a *permission* labelled a requirement
+9. §4K — "CSP declaration (mandatory for MCP Apps)" — **conditional**: required only for servers
+   that load external origins
+
+**#8 is the instructive one.** A blanket "(mandatory)" over a mixed list is not simply wrong — it
+makes the real MUST indistinguishable from the advice around it. That is the same defect as
+inflating a single line, and it is harder to see.
+
+⚠️ **Round 2 has NOT been run on this master.** The artifacts are checked; the synthesis is not.
+A green artifact tally does not transfer here. **What HAS been done is corrective**: every claim
+known to be false has been fixed at the point where it is stated.
+
+⚠️ **SCOPE OF THIS FILE.** It records **what the sources require** and **what PG currently does**.
+PG status is *recorded status*, not a work list. Where a discrepancy is noted, it is noted so it is
+**known** — deciding whether to act on it is a separate, product decision made elsewhere.
 
 ⚠️ **Round 2 surfaced a requirement round 1 missed, and PG fails it — see §4C, A18** (redirect
 URI hostname on the consent screen). **GATING STATUS RESOLVED (2026-08-04). A18 IS NOT A DIRECTORY
@@ -222,7 +258,12 @@ none
 No authentication (authless server)
 
 
-~~static_bearer (user-pasted tokens) is not yet supported.~~
+static_headers (BETA) — a fixed credential (API key or bearer token) entered ONCE BY AN
+ORGANIZATION ADMINISTRATOR as a request header when adding the connector. The credential is
+SHARED BY THE ORGANIZATION rather than pasted per user. Claude sends it on every request.
+[CORRECTED 2026-08-04 — this line previously read "static_bearer (user-pasted tokens) is not yet
+supported", which was false on all three counts: the type is named static_headers, the actor is an
+org admin rather than the end user, and it is supported in beta rather than unsupported.]
 
 ⚠️ **KNOWN FALSE — verified 2026-08-04. Do not cite this line.** The live authentication
 page lists **no** `static_bearer`. It lists **`static_headers`** — *"fixed credential
@@ -568,7 +609,11 @@ Inline card constraints:
 
 **Source verified (June 2026):** Official design-guidelines page at https://claude.com/docs/connectors/building/mcp-apps/design-guidelines
 
-Fullscreen constraints (mandatory):
+Fullscreen constraints (DESIGN GUIDANCE — not mandatory. Corrected 2026-08-04):
+⚠️ 7th hardening instance. Labelled "(mandatory)" with no basis. The design-guidelines source
+contains exactly THREE "must" statements in the whole page — mobile WebView constraints (raw 128),
+light/dark theming (raw 204) and WCAG AA accessibility (raw 278). NONE concerns fullscreen. These
+are design recommendations.
 - No floating panels — use collapsible sidebars, tabs, or pagination
 - App provides its own fullscreen button; close button appears in native header
 - Composer always visible — design UX to work with it
@@ -583,7 +628,14 @@ Mobile constraints:
 - Full-width layouts — do not add side margins that waste mobile screen real estate
 - Avoid fixed-width layouts; content must reflow gracefully
 
-Styling requirements (mandatory):
+Styling requirements (MIXED — two are MUSTs, the rest are guidance. Corrected 2026-08-04):
+⚠️ 8th hardening instance, and the most instructive kind: the heading is NOT simply wrong. Source
+raw 204 IS a must — "All views MUST support both light and dark themes… NEVER hardcode colors."
+So the theming items below are genuine obligations (M1). The others — token use for all structural
+elements, brand-accent permission — are guidance, and one of them ("brand accent colors are
+permitted") is a PERMISSION labelled as a requirement. A blanket "(mandatory)" over a mixed list
+makes the real MUST indistinguishable from the advice around it, which is the same defect as
+inflating a single line.
 - Use host CSS variable tokens for ALL structural elements: backgrounds, text, borders, icons
 - NEVER hardcode colors for structural UI — use var(--color-*) tokens
 - Brand accent colors are permitted for identity, but core UI must use host palette
@@ -593,7 +645,12 @@ Styling requirements (mandatory):
 - Typography: follow three-level size scale (heading, body, caption) and two weights (regular=400, emphasized=600). Avoid arbitrary font sizes outside the token scale.
 - Loading states: prefer skeleton screens over spinners for inline content — skeletons match the layout structure of the final content for seamless transition
 
-CSP declaration (mandatory for MCP Apps):
+CSP declaration (CONDITIONAL — required only if you load external origins. Corrected 2026-08-04):
+⚠️ 9th hardening instance. The source says "Declare external origins per ui:// resource via
+_meta.ui.csp" — an instruction for servers that HAVE external origins, not a blanket obligation on
+every MCP App. transparent-theming's only literal "must" on resourceDomains is likewise
+conditional: it applies if you want applyHostFonts to load Anthropic Sans. A widget loading nothing
+external declares nothing.
 Declare external origins per ui:// resource via _meta.ui.csp:
 {
   "_meta": {
