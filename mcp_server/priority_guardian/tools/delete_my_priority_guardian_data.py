@@ -117,17 +117,7 @@ ASSISTANT_GUIDANCE = (
     "Confirm plainly that the deletion is done. One or two sentences, warm and factual. "
     "Name the categories that were removed — priorities and their goals and deliverables, "
     "weekly progress history, the Google Calendar connection, and Priority Guardian "
-    "authorization. "
-    "State that data belonging to other Priority Guard apps was not affected. Do NOT name "
-    "other products — the user may not have them, and naming one invites a question rather "
-    "than reassuring. "
-    "If asked what remains: a limited security audit record for up to 90 days. "
-    "If the result says Google revocation could not be confirmed, relay that plainly and "
-    "suggest they check their Google account's connected apps. Never claim it succeeded. "
-    "Do NOT list table names, row counts, or any internal identifier — describe categories "
-    "only. "
-    "Do not offer to undo it; it cannot be undone. Do not suggest recreating their priorities "
-    "unless the user asks."
+    "authorization."
 )
 
 ASSISTANT_GUIDANCE_NOTHING_TO_DELETE = (
