@@ -51,6 +51,33 @@ it was read as current. **Fetch the live policy; do not read a repo copy.**
 
 ---
 
+## One writing rule for compliance documents
+
+**No summary sentence may quantify over items the table beneath it does not enumerate.**
+
+- *"Nothing was stale"* requires every row marked checked.
+- *"Verified against live docs"* requires naming which docs, and when.
+- *"All 17 tools lack X"* requires having looked at all 17.
+
+This is a writing rule, not a judgement call, and it is here because the same failure occurred
+three times in one session — each time in a summary, never in the check underneath it:
+
+| Claim | What was actually checked |
+|---|---|
+| *"500px — verified from live docs"* | a stale fetch, never re-verified |
+| *"All 17 tools lack `title` — required code fix"* | nothing; `title` was a required field already |
+| *"Nothing in §4C was found to be stale"* | 16 of 17 rows; the 17th (`static_bearer`) had drifted |
+
+Each was believed **because** it was specific. The underlying checks were sound every time;
+the sentence generalising over them was not. A confident summary is the most dangerous line in
+a compliance document, because it is the one people quote instead of re-deriving.
+
+**Corollary — fix the claim, not the instance.** When a false statement is found, grep the repo
+for it before closing. The `title` claim lived in three places; fixing the one being pointed at
+left two, and it took two review rounds to clear.
+
+---
+
 ## Why the taxonomy is written down at all
 
 Documents drifted into the wrong folders twice in one session, and once a normative spec was

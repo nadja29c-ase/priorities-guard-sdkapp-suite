@@ -138,7 +138,19 @@ none
 No authentication (authless server)
 
 
-static_bearer (user-pasted tokens) is not yet supported.
+~~static_bearer (user-pasted tokens) is not yet supported.~~
+
+⚠️ **KNOWN FALSE — verified 2026-08-04. Do not cite this line.** The live authentication
+page lists **no** `static_bearer`. It lists **`static_headers`** — *"fixed credential
+(API key or bearer token) entered by an **organization administrator** as a request
+header"* — marked **Beta**. So the capability was renamed, its actor changed from
+user-pasted to admin-entered, and it moved from unsupported to beta; or `static_bearer`
+was removed outright. Either way this sentence is wrong.
+
+Flagged inline rather than left for the §4C rewrite, on the Blocker 0 precedent: a false
+claim in this file survived two rounds and three locations because each fix was scoped to
+where someone was pointed. Cost of the inline flag is one paragraph. See
+`authentication_claude_connectors.md` Part 3. Not PG-affecting — PG uses `oauth_dcr`.
 
 For high-traffic directory servers: Prefer CIMD or oauth_anthropic_creds over DCR. DCR causes Claude to register a new client on every fresh connection, potentially creating very large numbers of registered clients. CIMD and Anthropic-held credentials avoid the registration call entirely.
 
@@ -747,7 +759,13 @@ curl https://<CLAUDE_MCP_SERVER_URL>/.well-known/oauth-protected-resource   # fa
 # For PG-Claude both currently serve an identical document (verified 2026-08-04) — that is
 # what makes the bare-path-only check misleading rather than obviously broken.
 
-# → "resource" field must equal <CLAUDE_MCP_SERVER_URL>
+# → the "resource" field must match your MCP server URL EXACTLY AS THE USER ENTERS IT IN
+#   CLAUDE, INCLUDING ANY PATH COMPONENT (authentication page, A4). For PG-Claude that is
+#   https://mcp.priority-guard.com/mcp — WITH /mcp. Do NOT compare against the bare origin.
+#   This line previously read 'must equal <CLAUDE_MCP_SERVER_URL>', which is ambiguous and
+#   FALSE if read as the origin: resources_dupl.py deliberately distinguishes MCP_SERVER_URL
+#   (passed to _extract_origin for the widget domain) from MCP_RESOURCE_URL (the /mcp
+#   endpoint). A correct server would have failed this check. Corrected 2026-08-04.
 🟢 Item — MCP App Widget Rendering — RESOLVED (June 2026)
 **Previous status:** Widget rendering for third-party custom connectors was silently failing (anthropics/claude-ai-mcp GitHub issue #61, filed February 17, 2026).
 **Current status (June 2026):** Issue #61 resolved. Widgets now render correctly for third-party custom connectors. resources/read is called as expected. No longer a blocker.
@@ -786,6 +804,25 @@ Eight source pages remain on the 2026-06-23 verification and are flagged in the 
   bordered on mobile) with a stated safe-area consequence; `baseUriDomains` in the CSP example.
 - **Design guidelines duplication removed** from the submission guide — it is now a pointer.
   Duplicating a living upstream page into a second file is what produced the drift.
+
+**Authentication page (§4C) — findings:**
+
+- **§4C:141 is KNOWN FALSE and flagged inline.** *"static_bearer (user-pasted tokens) is
+  not yet supported"* — the live page has no `static_bearer`; it has `static_headers`,
+  org-admin-entered, **Beta**. Renamed + actor changed + promoted, or removed. Not
+  PG-affecting (PG uses `oauth_dcr`), but it is a live false claim in this file.
+- **§4C's obligations did NOT drift.** PKCE, the 401 handshake, resource matching,
+  callbacks and refresh semantics all still match. The drift was in the capability
+  inventory, not the requirement set — a distinction worth keeping, because an earlier
+  draft of the artifact concluded "nothing in §4C was stale" and that was false.
+- **§9's operational PRM check was fixed twice**: it fetched the pathless document (Claude
+  probes the path-suffixed one first), and its trailing assertion compared `resource`
+  against the bare origin rather than the full URL including path.
+- **New artifact:** `authentication_claude_connectors.md` — 17 MUST requirements, 11
+  verified against PG live and from source, 4 explicitly not verified.
+- **Six items queued for the §4C rewrite**, including that CIMD selection needs `"none"`
+  in `token_endpoint_auth_methods_supported` alongside the CIMD flag, and the DCR-at-scale
+  warning. **PG is one metadata flag from CIMD** — it already advertises `"none"`.
 
 ### June 2026 Update (final — verified against official docs)
 | Item | Previous | Correct (per official docs) |
