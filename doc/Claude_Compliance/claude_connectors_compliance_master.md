@@ -1,5 +1,5 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: 2026-08-04 — **round 1 (re-fetch + extract) complete on 3 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`. **Partially refreshed:** the remaining seven (review-criteria, submission, software_directory_policy, troubleshooting, external-links, instance-supersession, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
+Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 4 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`. **Partially refreshed:** the remaining six (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
 
 **No page is "closed."** Round 1 catches omission — did the source get captured. Round 2 runs
 *after* the master rewrite and checks the reverse direction: does every claim now in the master
@@ -7,6 +7,13 @@ trace to a line in a source dump, and does every PG status claim trace to a file
 Round 1 cannot catch invention, and invention is the failure mode this document actually has —
 three fabrications survived round 1 on 2026-08-04 alone (the 500px provenance, a "new"
 proactive-refresh item the master already documented, and *"nothing in §4C was stale"*).
+
+⚠️ **A FOURTH failure of the same family, and it has a direction.** Three times in one day a
+**recommendation was recorded as a requirement**: the 500px "hard limit", a fabricated
+"recommended" qualifier on the 4–5 data-point constraint, and §4M's *"the App class … is
+**required** for production"* (the source says *recommended*). Soft language gets hardened; hard
+language is never softened. This bias produces over-constrained increments and wasted work, and
+it is the single most useful thing to check for when reading any section of this file.
 
 **Round 2 status (2026-08-04): run on all three round-1 artifacts, source side clean — no
 fabricated requirement in any of them.** Defects found were citation-quality and one miscount,
@@ -551,13 +558,66 @@ All widget iframes from a single connector are served from the same sandbox orig
 
 Pattern: server stamps each tool result with an election key (createdAt + seq) in structuredContent. Widget reads key via toolresult event, broadcasts on BroadcastChannel. Older instances compare keys and mark themselves superseded.
 
+⚠️ THIS ENTIRE SECTION DESCRIBES A PATTERN, NOT AN OBLIGATION. Verified 2026-08-04 against the
+committed raw source: the page contains NO directory-compliance requirement. Its language is
+uniformly optional — "should remain interactive", "You can use BroadcastChannel", "should also
+handle", "recommended for production". Everything below is binding only IF the pattern is
+implemented. Do not brief an increment from this section as though it were gating.
+
 PG status: get_priorities, render_weekly_report, create_priority can all be called multiple times. PG does not currently implement instance supersession. Multiple live dashboard instances will coexist. This is not a submission blocker but is a known UX degradation. Track as post-submission improvement.
+
+⚠️ THE VERDICT ABOVE IS RIGHT AND ITS SCOPE IS WRONG. Corrected 2026-08-04.
+
+Verified across the whole of App.tsx (933 lines): updateModelContext = 0 occurrences,
+sendMessage = 0, callServerTool = 28, isBridgeStale = 28. PG NEVER CALLS EITHER API THIS PAGE'S
+GUARDS PROTECT, so the pattern's core requirement — gate updateModelContext and sendMessage on
+!superseded — is inapplicable to PG as written.
+
+The page's concern is CONTEXT POLLUTION: several live instances each pushing model-context
+updates and injected messages into Claude's next turn. PG's exposure is different IN KIND:
+several live dashboards can each callServerTool to CREATE AND DELETE priorities, which is a
+DATA-MUTATION concern this page does not address anywhere. Filing it as an instance of
+supersession mis-files it. It is a PG-specific risk sitting OUTSIDE this page and needs tracking
+on its own terms.
+
+Also: PG already has isBridgeStale 3-second staleness detection (28 occurrences). That is a
+DIFFERENT MECHANISM answering a different question — bridge liveness, not instance election.
+This section should not be read as though PG has nothing in this area.
+
+⚠️ PG HAS A FIXED ui.domain, AND THE SCOPE RULE BELOW APPLIES TO PG DIRECTLY.
+resources_dupl.py:75 defines WIDGET_APP_DOMAIN = f"{_hash}.claudemcpcontent.com" and sets it on
+ALL THREE _meta.ui blocks (:90, :114, :148). Per the source: with a fixed ui.domain "the origin
+is shared across every conversation and tab for your connector. A fixed channel name would let a
+widget in one conversation supersede a widget in another." Neither hostContext nor the tool-call
+arguments carry a Claude-provided conversation ID.
+
+CONSEQUENCE: if supersession is ever implemented from this section as written, CROSS-CONVERSATION
+SUPERSESSION IS THE DEFAULT OUTCOME. The server-minted scope key is a PRE-CONDITION for PG, not a
+footnote. See also cross-compatibility#domain-handling for how ui.domain is computed on Claude —
+an adjacent requirements surface this section does not cross-reference.
 
 Implementation details (from official docs):
 - Election key MUST use server wall-clock time (createdAt) — NOT client-side Date.now(). Client mount time does not reflect tool-call order; stored conversations remount widgets as they scroll into view.
 - seq should be monotonic counter or derived from durable state (database row ID, version number)
 - Channel scope: without fixed ui.domain, BroadcastChannel is scoped per-conversation automatically. With fixed ui.domain, scope widens — include a server-minted conversation scope key to prevent cross-conversation interference.
 - Election key is read from the SDK toolresult event (params.structuredContent), NOT from initial widget props.
+
+  ADDED 2026-08-04 — five items this list omitted (raw source cited):
+- Comparison is a THREE-LEVEL chain: createdAt, tie-broken by seq, tie-broken by
+  String(instanceId). This section previously said only "compare keys". The third level exists
+  FOR DETERMINISM, which is precisely the part that fails silently. (raw 101, 107-112)
+- Ignore inbound messages until your own key is finalized (keyFinalized), or you reply with an
+  undefined key. (raw 122)
+- Announce is a TWO-MESSAGE HANDSHAKE, not a broadcast: send "hello", and reply "born" to any
+  "hello" you hear. Without the reply, late-mounting siblings never learn about existing peers.
+  (raw 119-133)
+- Guard sendMessage TOO, not only updateModelContext. This section named only model-context
+  updates. "The election only matters if superseded instances actually stop talking to Claude."
+  (raw 136-138)
+- POST-TIMEOUT ADOPTION PATH: if the server key arrives after the fallback timeout, adopt it,
+  recompute superseded against the peers already heard from, and RE-ANNOUNCE so siblings update
+  their view. "The recomputed result may flip the instance back to live." The fallback notes
+  below previously stopped at the keySource caveat. (raw 213)
 
 localStorage caching across remounts:
 - On Claude.ai web: hostContext.toolInfo.id is the stable tool-use ID. Persist the resolved server key to localStorage keyed by toolInfo.id to reuse on remount without waiting for toolresult event again.
@@ -569,12 +629,23 @@ Fallback if server key is delayed:
 - If timeout fires first: fall back to client-side Date.now() as orderKey
 - CRITICAL: if mixing server and client timestamps, tag with keySource ('server' | 'client') and refuse to compare a client value against a server value — a server createdAt from hours ago will always be smaller than a fresh client timestamp, wrongly handing 'live' to the wrong instance
 
-SDK App class requirement:
+SDK App class — RECOMMENDED, not required:
 - Use the SDK App class (new App() / useApp() in React), not a hand-rolled postMessage bridge
 - Hand-rolled bridges silently drop ping (liveness check) and ui/resource-teardown (host asking widget to clean up before unmount)
 - Claude.ai web does not currently send ping or resource-teardown to widgets; Claude iOS sends resource-teardown only when user navigates away from the conversation
-- The App class handles the full request surface and is required for production
+- The App class handles the full request surface and is RECOMMENDED for production
 - PG status: uses useApp() React hook — correct. ✅
+
+  ⚠️ CORRECTED 2026-08-04. This line read "required for production" and the heading read
+  "SDK App class requirement". The source says "recommended for production" (raw line 240).
+  Harmless in effect — PG uses useApp() — but the line would mislead anyone reading §4M for
+  what is mandatory.
+
+  ⚠️ THIRD INSTANCE OF THE SAME FAILURE IN ONE DAY, after the 500px "hard limit" and the
+  fabricated "recommended" qualifier on the 4-5 data-point constraint. Two inflated a
+  recommendation into a MUST; this one does too. THE BIAS HAS A DIRECTION: soft language gets
+  hardened, hard language never gets softened. Recorded as a bias, not three corrections,
+  because the direction is what produces over-constrained increments and wasted work.
 
 4N. Transparency and Theming (MCP Apps)
 Source: https://claude.com/docs/connectors/building/mcp-apps/transparent-theming
