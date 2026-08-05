@@ -1492,7 +1492,7 @@ because the Policy and the Terms are the two binding documents and belong togeth
 the Software must do, §6b is what you WARRANT when you submit.]*
 Source: https://support.claude.com/en/articles/13145338-anthropic-software-directory-terms
 Dated 16 March 2026. Raw: sources_raw/software-directory-terms.raw.md
-Full extraction: software_directory_terms_claude.md
+Full extraction: CLAUDE_COMPLIANCE_REQUIREMENTS_CANONICAL.md §6 (T1-T10).
 
 ⚠️ THIS DOCUMENT HAD NO REPO COPY OF ANY KIND UNTIL 2026-08-04. §6 reproduces the POLICY in full
 and never mentioned the TERMS — while Policy §3H makes agreeing to them MANDATORY. The Policy says
@@ -1740,41 +1740,57 @@ channels"; this is the specific address.)
 
 11. What Changed From Previous Version
 
-### 2026-08-05 (d) — Follow-on recorded: the folder has tripled, and the middle layer is now redundant
+### 2026-08-05 (d) — Consolidation DONE: 15 files -> 5
 
-**Measured, not estimated:** `doc/Claude_Compliance/` is **15 files at 368 KB**, up from **6 files
-at 149 KB** when this pass began. The master alone went **47 KB → 125 KB**.
+**Measured before:** `doc/Claude_Compliance/` held **15 files at 368 KB**, up from **6 files at
+149 KB** when this pass began. Consolidation was the goal and the count had gone the wrong way.
+**Now 5 files** plus `sources_raw/`.
 
-**Consolidation was the goal, and the count went the wrong way.** The canonical requirements file
-answers *"what must I satisfy"* correctly, but it does not address the sprawl — it added to it.
+**Coverage was verified BEFORE anything was removed** — the check I had said must happen first:
+`CLAUDE_COMPLIANCE_REQUIREMENTS_CANONICAL.md` carries **121 requirement rows** covering every ID in
+every removed artifact. The apparent gap (`R3`-`R10` absent as R-IDs) is **deduplication, not loss**:
+per the increment briefing, where two pages state one obligation there is one row citing both
+sources — R3->P5E, R4->P5C, R5->P2B, R6->P2D-P2G + R6a, R7->P5A + R7a, R8->P3F, R9->P4A/P4B,
+R10->P3D/DOC1/S10/S11. Each cites `review-criteria` alongside the policy.
 
-**The middle layer has no remaining job.** Three layers now exist where two would do:
+**REMOVED — nine files. Recoverable from git at `261a621`, the commit before this one.**
 
-| Layer | Holds | Status |
-|---|---|---|
-| `sources_raw/` | the bytes | ✅ keep — this is the evidence |
-| **per-page artifacts** | extraction + diff + PG conformance, one file per source | ⚠️ **redundant** — requirements moved to the canonical file, provenance to `PROVENANCE.md`, synthesis to the master |
-| master + canonical | synthesis/audit record, and requirements | ✅ keep |
+| Removed | Its content now lives in |
+|---|---|
+| `authentication_claude_connectors.md` | canonical §7 (A1-A24) · §4C of this file |
+| `review_criteria_claude.md` | canonical §1-§5 (R rows deduplicated into P rows) |
+| `design guidelines_mcpapps_claude.md` | canonical §8 (M1-M15) · §4K of this file |
+| `transparent_theming_mcpapps_claude.md` | canonical §9 (X4-X8) · §4N of this file |
+| `cross_compatibility_mcpapps_claude.md` | canonical §9 (X1-X3) · §4K of this file |
+| `instance_supersession_mcpapps_claude.md` | §4M of this file (the page creates **no** obligation, so it has no canonical rows) |
+| `software_directory_policy_claude.md` | canonical §1-§5 (P rows) |
+| `software_directory_terms_claude.md` | canonical §6 (T1-T10) · §6b of this file |
+| `software_directory_policy.md` | **stale duplicate** — the copy that carried *"Updated this week"*. `sources_raw/software-directory-policy.raw.md` is the bytes; §6 of this file is the reproduction |
 
-Redundant per-page artifacts: `authentication_claude_connectors.md` ·
-`review_criteria_claude.md` · `cross_compatibility_mcpapps_claude.md` ·
-`instance_supersession_mcpapps_claude.md` · `transparent_theming_mcpapps_claude.md` ·
-`software_directory_policy_claude.md` · `software_directory_terms_claude.md`.
+**THREE COPIES OF THE POLICY ARE NOW ONE.** That was the exact condition `doc/README.md` warns
+about — *"two documents describing the same thing will diverge"* — and they already had.
 
-⚠️ **THREE COPIES OF THE POLICY EXIST**, which is the exact condition `doc/README.md` warns about
-(*"two documents describing the same thing will diverge"*):
-- `sources_raw/software-directory-policy.raw.md` — the bytes
-- `software_directory_policy.md` (7.3 KB) — the older repo copy, the one that said *"Updated this week"*
-- `software_directory_policy_claude.md` (14.2 KB) — this pass's extraction artifact
+**MOVED:** `inc_claude_Requirements.md` -> `doc/`. An increment briefing does not belong in a
+compliance folder; briefings live alongside `inc_compliancedoc_hygiene.md`.
 
-**Follow-on increment, not started:** archive or delete the per-page artifacts, resolve the three
-policy copies down to one, and shrink the master to synthesis and audit record only — which is what
-its new title already claims it is. Also present and unfiled: `inc_claude_Requirements.md`, an
-increment briefing sitting in a compliance folder.
+**KEPT, each with a distinct job:**
 
-**Not done here** because deleting documentation is not a documentation-currency task, and because
-the artifacts are the only place several diffs and their reasoning are recorded — that content has
-to be checked for anything not carried into the canonical file *before* they are removed.
+| File | Job |
+|---|---|
+| `CLAUDE_COMPLIANCE_REQUIREMENTS_CANONICAL.md` | **What must be true.** Read this to ship or submit |
+| `claude_connectors_compliance_master.md` | Source synthesis and audit record — changelog, provenance, standing checks, sweep, mechanism |
+| `sources_raw/` | The bytes. Every claim in both files traces here |
+| `structural_guideline_claude_vs_openai.md` | Claude-vs-OpenAI structural differences (PG) — not a compliance extraction |
+| `structural_guideline_claude_vs_openai_MindSortAI.md` | The same for MindSort |
+| `remote_server_submission_guide.md` | Retained **only** because §4F cites its *"Recommended sections"* wording — the evidence that the "Required sections" claim was an inflation. ⚠️ Otherwise superseded, and it still carries the stale `e524d9ef` domain hash, flagged in place |
+
+⚠️ **The middle layer is gone deliberately.** Raw sources hold the bytes, the canonical file holds
+requirements, `PROVENANCE.md` holds provenance, this file holds synthesis. A per-page extraction
+artifact had no remaining job, and seven of them were a divergence risk, not a safeguard.
+
+⚠️ **This file is still 127 KB.** Shrinking it to synthesis-and-audit-record only — removing what is
+now duplicated in the canonical file — is **not done**, and is the remaining half of the
+consolidation.
 
 ### 2026-08-05 (c) — Header restructured: current state only
 

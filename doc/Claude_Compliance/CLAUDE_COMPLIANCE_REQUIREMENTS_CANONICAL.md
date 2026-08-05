@@ -6,6 +6,11 @@ read.** The master (`claude_connectors_compliance_master.md`) remains the source
 record — changelog, provenance, standing checks, sweep results, implementation mechanism. It is not
 a substitute for this file, and this file is not a substitute for it.
 
+**Folder layout after the 2026-08-05 consolidation** — three layers, no middle:
+`sources_raw/` holds the bytes · **this file** holds the requirements · the master holds synthesis
+and the audit record. The per-page extraction artifacts were removed; every requirement they
+carried is a row here. See the master's changelog for the removal manifest and the recovery commit.
+
 **Not here by design:** mechanism. No CSS token tables, no `BroadcastChannel` election protocol, no
 SDK helper lists, no code. This file states **what must be true**. To learn *how*, follow the source.
 
