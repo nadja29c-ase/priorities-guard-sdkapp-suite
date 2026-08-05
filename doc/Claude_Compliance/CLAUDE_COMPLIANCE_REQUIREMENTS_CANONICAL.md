@@ -48,8 +48,8 @@ every claim here trace to the line it cites? Mechanically verified across all ro
 
 | | |
 |---|---|
-| Rows | **133** |
-| Citing a **resolvable** raw line (file exists, line within it) | **125** |
+| Rows | **129** | *(pattern: a row in a numbered section with 4 data cells. An earlier count of 133 used a looser pattern that swept in the 7 defect-table rows in this header — standing check #7, broken inside the block that exists to state counts.)* |
+| Citing a **resolvable** raw line (file exists, line within it) | **121** |
 | `[relay-only]` — no artifact to cite | **8** — L5–L8, S6, PUB1, PUB3, PUB4 |
 | **Unresolvable citations** | **0** |
 
@@ -132,7 +132,23 @@ enough.** Ten of 91 rows cited a line that exists and says something else, and e
 both the citation check and the "does the row say what the source says" reading — because the
 source consulted was the row's *own* prose, not the line it names.
 
-⚠️ **Not yet content-verified: none. All 133 rows have now been checked** — `DOC-CONSTRAINT`, `PORTAL`, `SPEC`,
+### What remains unverified — stated precisely
+
+**All 129 rows are content-verified against the captured bytes.** That is a narrower claim than
+"nothing unverified", and the difference matters on two counts:
+
+1. **This was a SINGLE pass, run by the party that wrote the rows.** Every single-pass verification
+   in this project has been wrong at least once — including two by the reviewer. A row I misread
+   when writing it, I can misread again when checking it.
+2. **The `[fetch-only]` sources are undated and uncorroborated.** `review-criteria`, `testing` and
+   `lazy-authentication` were never pasted, and the `.md` endpoint strips publication dates, so a
+   row verified against them is verified against **bytes nobody has confirmed are current**.
+   `review-criteria` alone carries **R1, R2, R6a, R7a, R11, DOC1, S10, S11**.
+
+**Accurate statement: nothing is unverified against the captured bytes; three sources' currency is
+unverified; and the verification is single-pass.**
+
+⚠️ **Not yet content-verified: none of the 129 rows** — `DOC-CONSTRAINT`, `PORTAL`, `SPEC`,
 `REVIEW-ONLY`, `RECOMMENDED` and `CONDITIONAL`. They are citation-verified only. Given a 4-in-42
 broader rate in the most carefully written section, **expect defects there too.**
 

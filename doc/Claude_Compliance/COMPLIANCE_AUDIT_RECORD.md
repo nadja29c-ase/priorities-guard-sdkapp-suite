@@ -28,6 +28,26 @@ task for someone reading it, not for a regex.
 
 ---
 
+## Citation sweep of THIS file — run 2026-08-05
+
+After the canonical file's X4–X8 rows were found citing **T-numbers from a deleted per-page
+artifact** (standing check #15), this file was swept for the same hazard: it was built from those
+same artifacts and carries raw line numbers throughout.
+
+**14 distinct citations. 12 point at real content. 2 flagged, both false positives:**
+- `design-guidelines` raw 186 — cites the *"Scrolling and gestures"* **section** by name. Citing a
+  heading *as a heading* is correct.
+- `(raw 41)` in the §4C `oauth_anthropic_creds` block — correct (`authentication`:41). **The
+  sweep's own "nearest preceding filename" heuristic mis-attributed it**, which is a limitation of
+  bare `(raw N)` citations: they depend on surrounding prose to resolve.
+
+⚠️ **The hazard did not propagate here, and the reason is worth knowing:** this file's citations
+were written **while reading the raw sources** during the correction work. The canonical file's
+X-rows were **transcribed from an artifact's internal numbering**. Same source material, different
+provenance, different failure rate — 0/14 here against 10/91 there.
+
+---
+
 # 1. STANDING CHECKS — first, because burying them once cost us the block
 
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS — SOURCE SYNTHESIS AND AUDIT RECORD
@@ -203,6 +223,12 @@ are APPENDED, never inserted, so references from briefings and increments stay v
     collects-data-or-connects-remotely condition), P3F (the plugin exemption). **All nine hardening
     instances are the same failure at section level.** ⚠️ **Qualifiers live in the last clause of a
     sentence, which is what gets trimmed when a requirement is condensed into a row.**
+
+16. **Any COUNT that changes is stated with what changed it, in the same commit.** *(New
+    2026-08-05.)* Standing check #11 covers files; counts move independently of file sizes. A row
+    total went 129 → "133" with no explanation, and the cause was **the counter, not the file** —
+    a looser ID pattern swept in 7 defect-table rows and reported documentation as requirements.
+    **State the pattern with the number (check #7) AND state what moved it (this one).**
 
 15. **A resolving citation proves only that the file is long enough.** *(New 2026-08-05.)* Ten of
     91 rows cited a line that exists and says something else. **X4–X8 cited `transparent-theming`
