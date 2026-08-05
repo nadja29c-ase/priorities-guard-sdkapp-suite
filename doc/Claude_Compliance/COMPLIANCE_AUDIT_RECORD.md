@@ -224,6 +224,18 @@ are APPENDED, never inserted, so references from briefings and increments stay v
     instances are the same failure at section level.** ⚠️ **Qualifiers live in the last clause of a
     sentence, which is what gets trimmed when a requirement is condensed into a row.**
 
+18. **A row whose subject is CONDUCT cannot be answered from a codebase read.** *(New 2026-08-05.)*
+    Testing performed · accounts prepared · pages published · addresses monitored · agreements
+    accepted — **none of it is visible in a repository.** The only correct verdict from a code
+    session is **`❔ don't know`**, and the row must name **what evidence would settle it and who
+    holds it**. ⚠️ **`❌` on a conduct row MANUFACTURES A BLOCKER.** Six of ten `❌` verdicts in the
+    2026-08-05 PG assessment were manufactured exactly this way — R11, S12, T9, P3C, P3E, DOC1 —
+    and every one competed for attention against about four weeks of runway. **This is standing
+    check #2 (state the scope a negative was proved over) applied to a whole class of rows**: the
+    claim proved was about the repository; the claim written was about the product.
+    **Every audit row now carries a VERDICT SOURCE — `code` / `conduct — Nadja` / `conduct —
+    published artefact`. A row not marked `code` is not the code session's to resolve.**
+
 17. **An obligation-level taxonomy answers "who requires this", never "what breaks if you don't."**
     *(New 2026-08-05.)* Those diverge, and the divergence is where readers mis-prioritise. M3 is
     correctly `RECOMMENDED` — the source says *"should"* — while the same paragraph says *"the user

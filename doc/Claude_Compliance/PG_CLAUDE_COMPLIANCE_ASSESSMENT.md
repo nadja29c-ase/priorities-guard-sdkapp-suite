@@ -1,203 +1,166 @@
 # PG-Claude — Compliance Assessment
 
 **Assessed:** 2026-08-05 · **Against:** `CLAUDE_COMPLIANCE_REQUIREMENTS_CANONICAL.md`, 129 rows
-**Surface:** the **Claude serving path** — `mcp_server/priority_guardian_claude/`, the `backend/`
-endpoints it calls, and the shared registry **as filtered and overridden for Claude**
-(`tools_list_dupl.py`). Not the ChatGPT surface. Not MindSort.
-**Method:** code read, plus read-only live probes. No writes, no deploys, no config changes.
+**Surface:** the Claude serving path. Not ChatGPT. Not MindSort.
 
 | Verdict | Count |
 |---|---|
-| ✅ **Fulfils** | **51** |
-| 🟡 **Partly fulfils** | **14** |
-| ❌ **Doesn't fulfil** | **10** |
+| ✅ **Fulfils** | **59** |
+| 🟡 **Partly fulfils** | **13** |
+| ❌ **Doesn't fulfil** | **4** |
 | ➖ **Not relevant** | **17** |
-| ❔ **Don't know** | **37** |
+| ❔ **Don't know** | **36** |
 
-> **Three passes.** The first assessed many widget rows from `grep` counts. The second read the
-> row-relevant paths — **six verdicts moved, all less favourable.** The third read the widget
-> **end to end**, all 6,724 lines, and moved **one back up**: the hardcoded colours turn out to be
-> documented product identity, which M18 explicitly permits.
+> ## ⚠️ Every row now carries a VERDICT SOURCE
 >
-> **The lesson runs both ways.** Counting made PG look better than it was (M6, M5, M2). Reading a
-> flagged line without its rationale made PG look worse than it is (M1/M18). Neither is verification.
+> | Source | Meaning |
+> |---|---|
+> | **`code`** | Settleable by reading the repository or probing the live service |
+> | **`conduct — Nadja`** | Something done, prepared or agreed. **Invisible to a codebase read** |
+> | **`conduct — published artefact`** | Something published outside the repo |
+>
+> **A row not marked `code` is not the code session's to resolve.**
 
-> **37 don't-knows is the honest headline.** Most are Policy §3 and Terms rows — developer conduct,
-> published artefacts, organisational commitments. No code read settles them.
+> ## The correction that produced this column
+>
+> **Six of ten `❌` verdicts in the first version were manufactured** — R11, S12, T9, P3C, P3E,
+> DOC1. Every one had a **conduct** subject: testing performed, accounts prepared, pages published,
+> addresses monitored. **"Not in the repo" was reported as "not done."**
+>
+> That is standing check #2 — *state the scope a negative was proved over* — applied to a whole
+> class of rows. The claim proved was about the repository; the claim written was about the
+> product. **All six were already satisfied.** Each competed for attention against roughly four
+> weeks of runway.
 
 ---
 
-## ❌ DOESN'T FULFIL (10)
+## ❌ DOESN'T FULFIL (4) — and none is a pre-submission blocker
 
-| Row | Level | Finding |
+| Row | Source | Status |
 |---|---|---|
-| **M6** | DOC-CONSTRAINT | **The inline priority list is uncapped.** `App.tsx:602-603` filters actives; `:662` maps them with **no `.slice()`**, and no backend limit exists. Ten active priorities render ten cards inline. M6 is **max 4–5 data points** |
-| **P2B** | POLICY | `inspect_adapt`'s served description says it **"Record[s] confirmed action steps"**. The handler persists nothing — 332 lines, zero backend calls, docstring *"validate provenance → return success"* |
-| **R6a** | REVIEW-ONLY | **Three of eight served descriptions attempt to override Claude's behaviour** — `create_priority`, `inspect_adapt`, `onboarding_calendar_setup`: `BINDING RULES`, *"your default behavior is SUSPENDED"*, `FORBIDDEN:`, *"Override analytical coaching impulses"* |
-| **P3C** | POLICY | No Claude-specific documentation page exists |
-| **P3E** | POLICY | No published set of ≥3 working examples |
-| **DOC1** | REVIEW-ONLY | No public documentation page *(due by publish date, not submission)* |
-| **R11** | REVIEW-ONLY | **1 of 8** public tools exercised end to end |
-| **S12** | PORTAL+TERMS | The attestation *"you've run every tool yourself"* **cannot be ticked truthfully**. Under T3, a warranty defect |
-| **T9** | TERMS | No mechanism for receiving security-vulnerability reports from **Anthropic and third parties** with a duty of care |
-| **A18** ⚠️SILENT | SPEC | None of the eight `oauth_consent_*.html` templates render the redirect URI hostname. `authorize.py:788`'s context omits it. **Not a directory gate** |
+| **M5 + M6** | `code` | **One finding, not two: inline card density.** `App.tsx:662` maps `sortedPriorities` with no `.slice()` — confirmed. **But capping the list alone does not fix it**: the inline card also renders `TimeAllocationBar`, `CalendarConnectionMinimal`, `ExpandButton` and a hint line. M6 (4–5 data points) and M5 (2 actions, at the bottom) govern the same surface. **A product decision about what the inline card shows, not a one-line fix** |
+| **P2B** | `code` | `inspect_adapt` advertises persistence it lacks. **A real Policy §2B violation** — POLICY level, binding. **Blocked by the standing rule: tool descriptions are shared with the live ChatGPT app and are not touched.** Recorded, not actioned |
+| **R6a** | `code` ⚠️ **CONTESTED** | Override language in three descriptions. ⚠️ **Sourced from `review-criteria` — `[fetch-only]`, undated, uncorroborated, the weakest source in the canonical file.** The **binding** Policy §2 contains **no clause prohibiting behavioural guidance**; §2G *presupposes it exists* and regulates its form — *"All behavioral guidance must be human-readable and clearly presented"* — **which PG satisfies.** ⚠️ **Severity asymmetry: P2B is a binding POLICY violation; R6a rests on an uncorroborated reviewer-facing page. Do not treat them as equivalent** |
+| **A18** ⚠️SILENT | `code` | Consent screen omits the redirect URI hostname. `SPEC` level — absent from **both** the reviewer checklist and the binding policy. **Not a directory gate.** Post-submission |
+
+### Deferred by decision — not a failure, not an open task
+
+**S1 — no Team/Enterprise organisation.** The portal requires one. **Deferred deliberately**: the
+seat is purchased at submission time to preserve Max-plan capacity until then. Team floor is
+**2 seats, €21.04/seat/month billed monthly + VAT.**
 
 ---
 
-## 🟡 PARTLY FULFILS (15)
+## ✅ THE SIX CORRECTIONS
 
-| Row | Gap |
-|---|---|
-| **P1B** | No code evades guardrails — **but** three descriptions instruct Claude that *"your default behavior is SUSPENDED"*, which is what §1B names |
-| **P2A** | Descriptions do state what and when — **but** three bury it under behavioural directives |
-| **P2C** | Delete tools **are** deliberately disambiguated (`delete_my_priority_guardian_data` vs MindSort's `delete_my_data`). **But `start_prioritization_flow` and `create_priority` are semantically adjacent** and never evaluated for routing confusion |
-| **P2E** | No description interferes with *other software's* tools — **but** several steer away from PG toward other behaviour, unassessed |
-| **P3A** | Policy published — **but** still routes PG deletion to `support@priority-guard.com`, and **v3.2 characterises Anthropic as an Art. 28 processor, which is incorrect** |
-| **P3H** | Design guidelines largely followed. Terms not yet agreed — no submission made |
-| **T3** | No inaccurate information submitted **yet**. The Art. 28 error becomes one the moment the policy link is given |
-| **T4** | PG's own policy exists. **Google's third-party policy is not provided**, and PG's policy does not describe what Google collects |
-| **M2** | 64 `aria-label`, 24 `role=`, 37 focus rules, 9 keyboard handlers — good. **But 10 of 27 `<svg>` elements carry no `aria-hidden`, `aria-label` or `<title>`** |
-| **M3** ⚠️SILENT | `safeAreaInsets` applied only under `platform === 'mobile' && hostFullscreen` (`App.tsx:709`); the inline branch applies none. `.left`/`.right` never read — horizontal padding hardcoded `16px` |
-| **M5** | Count right, **placement wrong**: two inline actions, but the refresh button is at the **top** (`TimeAllocationBar.tsx:176`); M5 says actions go at the bottom |
-| **M10** | **Inline: compliant** — `max-width` + `width:100%` reflows from 320px. **Fullscreen: not** — `#root`'s 600px cap binds and `margin: 0 auto` produces the side margins M10 names. Four layered caps; the two 672px ones are **dead** |
-| **M20** | Loading states exist (`App.tsx:537-548`, `isLoading` in components) but are **text, not skeleton screens** |
-| **X6** | `resourceDomains: ["https://assets.claude.ai"]` on all three blocks — **and no `--font-*` token is referenced anywhere in the widget**. CSP widened for a capability not exercised |
-
----
-
-## ✅ FULFILS (50)
-
-**Authentication — verified live, 2026-08-05**
-
-| Row | Evidence |
-|---|---|
-| A1, A2 | AS metadata: `code_challenge_methods_supported: ["S256"]` |
-| A3 | `HTTP/2 401` + `WWW-Authenticate: Bearer resource_metadata="…", scope="pg.access"` |
-| A4 | PRM `resource: https://mcp.priority-guard.com/mcp` — exact match |
-| A5 | `authorization_servers: ["https://www.priority-guard.com"]` — single entry |
-| A6 | RFC 8414 metadata served; `issuer` = root domain |
-| A8 | `config.py:62-63` registers both `claude.ai` and `claude.com` |
-| A9 | Validator run against Claude Code's **published CIMD** — both URIs accepted, port-agnostic, negative controls rejected |
-| A10 | Live: `invalid_grant` returned |
-| A11 | `token_service.py` revokes the old token in the same exchange |
-| A12 | Live: form-urlencoded → **400, not 415** |
-| A13 | Live: JSON → `422 grant_type: Field required` — parser split confirmed |
-| A15 | No `client_credentials` implemented |
-| A16 | Bearer header only |
-| A22 ⚠️SILENT | Transport-level 401, not `200 + isError` |
-| A23 | `scope="pg.access"` on the 401 |
-| A24 | DCR supported and working |
-
-**Policy** — P1D *(`record_widget_diagnostic` is `private`, never served to Claude, never called by
-PG-Claude)* · P1F *(pattern-searched `mcp_server/**/*.py` + `backend/**/*.py` for memory/history/
-summary/user-file identifiers → **0 matches**)* · P2F · P2G · P3F · **P4A, P4B, P4C**
-*(pattern-searched all three trees for payment, crypto, image-generation and advertising
-identifiers → **no matches**)* · **P5A** *(read `_build_provenance_error`: structured `isError` with
-an error code and actionable guidance, not a generic failure)* · P5C *(**8/8**, longest served name
-32 of 64)* · P5D · P5E *(**8/8** carry `title` + a hint; `title` is a required positional field, and
-`create_priority` is overridden to `destructiveHint: true` at `tools_list_dupl.py:57`)* · R1
-
-**Design & widget** — M4 ⚠️SILENT · **M7** *(no menus or popovers anywhere; `KeywordPicker.tsx:20`
-comments "Confirmation is inline (no modal/popover) per MCP Apps guidelines")* · **M9** *(explicit
-`44px` on `DeliverableItem`/`GoalItem` action buttons; shared `Button.tsx` reaches 44px by
-arithmetic — `16+16+12`, `15+15+14` — deliberate but not a declared floor)* · M11 · M12 · M14 ·
-M15 · **M16** *(the only `<textarea>` is `AddPriorityForm.tsx:437`, a priority-entry field — not a
-chat input)* · M17 · **M19** *(zero emoji across `widget-react/src`; icons are SVG)*
-
-**M1 / M18** ✅ **— revised UP on the full read.** 24 bare hex literals exist, and **22 are
-documented product identity.** `constants.ts` states it outright: *"Priority identity colors —
-semantic product colors, not host theme tokens… intentionally fixed."* `PieChart.tsx:44-46` adds
-*"Data-viz accent colors — no official solid tokens exist for pie chart fills"*, which is true.
-**M18 explicitly permits brand colours for accents and identity**, and `BAR_COLORS.other` uses
-`var(--color-text-tertiary, …)` — proof the structural/identity line was drawn deliberately rather
-than missed. ⚠️ **Two narrow exceptions remain outside that rationale:** `GoalItem.tsx:330`
-`color: '#fff'` on an SVG checkmark, and `KeywordPicker.tsx:230` `?? '#fff'` — both plain
-structural white, not P1/P2/P3 identity.
-
-**Domain, CSP, theming** — X1 · X2 ⚠️SILENT · X4 ⚠️SILENT *(`main.css:8-15`)* · X5 · X8 ·
-X9 ⚠️SILENT
-
-**External links** — L1 · L2 ⚠️SILENT *(target is `BACKEND_PUBLIC_URL` = `www.priority-guard.com`,
-a domain PG owns — **not** `accounts.google.com`)* · L8
-
-**Submission** — S3 · S4 · S13
-
----
-
-## ➖ NOT RELEVANT (17)
-
-Local connectors: **P5G, S15, S16** · Plugins: **S10** · MCPB: **S11** · Custom query tools:
-**R2** · Microsoft Entra: **A20** · `oauth_anthropic_creds`: **A21** · Claude's own CIMD selection
-logic: **A17** · Carousels: **M13** · stdio: **X3** · Custom URI schemes: **L4** ·
-Post-publication: **PUB1–PUB4** · Slug: **S6** ⚠️SILENT
-
----
-
-## ❔ DON'T KNOW (37)
-
-**Needs a decision or artefact from Nadja (13)** — P1A *(the four §1A documents are uncaptured)* ·
-P1C *(third-party calendar data; three retention models exist and which governs is unresolved)* ·
-P1E · P3B · P3D, P3D-i · P3G · T1, T2, T5, T6, T7, T8, T10
-
-**Needs a measurement (7)** — A7 *(egress reachability)* · A14 *(10 s/30 s under load)* · P5B
-*(token frugality — no measurement, and no user option to exclude text)* · P5F *(transport)* · R7a ·
-X7 ⚠️ *(`onhostcontextchanged` is assigned inside `onAppCreated` at `App.tsx:144`; whether that
-fires before `connect()` is SDK internals)* · L3 *(confirm the live `BACKEND_PUBLIC_URL`)*
-
-**Depends on the submission (9)** — **S1** *(**no Team/Enterprise org** — blocks submission
-outright; a plan decision, not a compliance failure)* · S2 · S5 · S7 · S8 · S9 · S14 + P3H, T3/T4
-*(partly, above)*
-
-**Rests on a source nobody has confirmed is current (8)** — L5, L7 *(`external-links`, no
-artifact)* · R1, R2, R6a, R7a, R11, DOC1, S10, S11 *(`review-criteria`, fetch-only and undated)*
-
----
-
-## The three requirements not yet rows
-
-| Requirement | PG | Note |
+| Row | Source | Evidence |
 |---|---|---|
-| **`ui/open-link` bypasses the modal only after a real user gesture** | ✅ **Fulfils** | `ConnectionStatus.tsx:40` `handleConnect` is bound to `onClick` at `:247`; `openLink` called inside at `:64`. A genuine click |
-| **Non-zero iframe height** | ❔ | Host-controlled; not observable from the repo |
-| **iOS: allowlist on `Origin`, not `Referer`** | ❔ | No `Referer` gating in `backend/` — the good sign — but the CDN/WAF layer was not inspected |
+| **R11** | `conduct — Nadja` | PG-Claude added and used as a custom connector. `testing.raw.md:13`: *"Any Claude account… can add a custom connector… Custom connectors use the exact same runtime as directory connectors."* **Never gated by S1** |
+| **S12** | `conduct — Nadja` | Populated test account and step-by-step setup instructions exist |
+| **T9** | `conduct — published artefact` | Terms require *"a mechanism for receiving reports of security vulnerabilities from Anthropic and from third parties."* `support@priority-guard.com` is published with a stated 24-hour response. **A monitored published address is a mechanism.** ⚠️ *The `security.txt` / triage-SLA framing in the first version was invented — it appears nowhere in the source* |
+| **P3C** | `conduct — published artefact` | `fulfilling-productivity.com/priority-guardian-mcp` — three-step getting started, how-it-works covering both priority modes, requirements, **five troubleshooting entries with causes and fixes** |
+| **P3E** | `conduct — published artefact` | **Six** worked prompts on that page (§3E requires three) |
+| **DOC1** | `conduct — published artefact` | Same page. Public, and `noindex` has been removed |
+
+**Also corrected:** **P3A** 🟡→✅ *(privacy policy linked EN + DE, ToS linked — the Art. 28 accuracy
+defect belongs under T3/T4, not here)* · **P3B** ❔→✅ *(`support@priority-guard.com` published with
+a response commitment)*.
+
+**Copy nits, not compliance:** the page footer reads *"Last Updated: May 2026"*; and the
+troubleshooting entry *"Claude-connected accounts are tied to your session"* sits directly under a
+sentence saying data is stored persistently — a reviewer testing on two devices may read the pair
+as a contradiction.
 
 ---
 
-## Priority order
+## 🟡 PARTLY FULFILS (13)
 
-1. **S1 — no Team/Enterprise org.** Blocks submission outright. A purchase decision, not engineering.
-2. **M6 — the missing `.slice()`.** Smallest fix on the list, and a reviewer with a populated test account sees it immediately.
-3. **R6a + P2B + P1B** — one edit surface, three failures. ⚠️ **Descriptions are shared with the live ChatGPT app.**
-4. **R11 / S12** — eight tools through the Inspector. **Not gated by S1**; any account can add a custom connector.
-5. **T9 and the Art. 28 correction** — both small, both warranty-relevant.
-6. **M10 fullscreen, M3 safe areas** — ⚠️SILENT rows that break with no error.
+| Row | Source | Gap |
+|---|---|---|
+| **P1B** | `code` | Override language is itself what §1B names ⚠️ *inherits R6a's contested basis* |
+| **P2A** | `code` | Three descriptions bury what/when under directives |
+| **P2C** | `code` | Delete tools disambiguated; `start_prioritization_flow` vs `create_priority` unassessed |
+| **P2E** | `code` | Descriptions steer away from PG, unassessed |
+| **T3** | `conduct` | **The Art. 28 characterisation of Anthropic is incorrect** — becomes inaccurate information the moment the policy is submitted |
+| **T4** | `conduct` | **Google's third-party policy is not provided**, and PG's policy does not describe what Google collects |
+| **P3H** | `conduct` | Terms not yet agreed — no submission made |
+| **M2** | `code` | 10 of 27 `<svg>` elements carry no `aria-hidden`/`aria-label`/`<title>` |
+| **M3** ⚠️SILENT | `code` | `safeAreaInsets` only under `mobile && hostFullscreen`; `.left`/`.right` never read |
+| **M10** | `code` | Compliant inline; **in fullscreen** `#root`'s 600px cap + auto margins produce the side margins M10 names |
+| **M20** | `code` | Text loading states, not skeleton screens |
+| **X6** | `code` | CSP widened for host fonts the widget never consumes |
+| **M1/M18** | `code` | ✅ in substance — 22 of 24 bare hex are **documented product identity**, which M18 permits. Two structural exceptions: `GoalItem.tsx:330`, `KeywordPicker.tsx:230` |
 
 ---
 
-## End-to-end read — what the full sweep added
+## ✅ FULFILS (59) — evidence classes
 
-**All 6,724 lines of `widget-react/src` covered.** Four findings the row-driven passes missed:
+**Auth, verified live** — A1–A6, A8–A13, A15, A16, A22, A23, A24. 401 + `scope`, PRM exact match,
+single AS, S256, `invalid_grant`, form-urlencoded **400 not 415**, JSON rejected, loopback validated
+against Claude Code's **published CIMD** with negative controls holding.
 
-**1. P1D is stronger than "no violation evidenced" — the widget collects and stores nothing.**
-Pattern-searched the whole tree: **no** analytics, telemetry, `gtag`, mixpanel, posthog or sentry ·
-**no `localStorage`, `sessionStorage` or `document.cookie`** · **no `fetch`, `XMLHttpRequest` or
-`axios`** — every call goes through the MCP bridge · **no** `navigator.*`, `window.location` or
-`document.referrer`. For a §1D/§1F assessment that is close to the strongest possible result.
+**Code, verified by reading** — P1D, P1F, P2F, P2G, P3F, P4A–C, P5A, P5C, P5D, P5E, R1, M4, M7, M9,
+M11, M12, M14–M17, M19, X1, X2, X4, X5, X8, X9, L1, L2, L8, S3, S4, S13.
 
-**2. The absence of `localStorage` corroborates the `ui.domain` record.** §4M's caching
-optimisation is keyed on `toolInfo.id` and needs storage; PG uses none, so the *only* live reason
-for the fixed domain is the widget's own OAuth flow — which is exactly what the decision record
-says. Two independent lines of evidence now agree.
+**Conduct, confirmed by Nadja / published artefact** — R11, S12, T9, P3A, P3B, P3C, P3E, DOC1.
 
-**3. M5, refined.** Per card the inline surface has **one** action — the deliverables/goals expand
-toggle (`DeadlineCard.tsx:287`, `FlexibleCard.tsx:206`) — which satisfies "max 2". The **aggregate**
-inline response has `2 + N` interactive elements (refresh, expand-to-fullscreen, one toggle per
-card). Whether M5's "card" means each card or the whole inline response decides this; the row stays
-🟡 on that ambiguity, not on a count.
+**Standout:** the widget **collects and stores nothing** — no analytics/telemetry/sentry, no
+`localStorage`/`sessionStorage`/cookies, no `fetch`/XHR/axios (everything via the MCP bridge), no
+`navigator.*`/`location`/`referrer`. And **zero emoji**: icons are SVG.
 
-**4. `FlexibleCard` and `GoalSection` carry zero bare hex and full `isInline` display-only guards**
-— the same discipline as `DeadlineCard`. `i18n.ts` is 434 lines of static `en`/`de` strings with no
-data access.
+---
 
-**Unchanged by any code reading: the 37 don't-knows.** They are questions about conduct, published
-artefacts and measurements — not about the codebase.
+## ❔ DON'T KNOW (36) — re-triaged by who holds the evidence
+
+### `conduct — Nadja` (16) — **not resolvable from this session. Likely most are already satisfied.**
+
+| Rows | What would settle it |
+|---|---|
+| **P3D, P3D-i** | Test account with sample data + setup instructions. ⚠️ **Probably already ✅** — S12's evidence covers both |
+| **P1A** | Confirmation that PG does not violate the Usage Policy, Universal Usage Standards, High-Risk Use Case requirements or the supported-countries policy. **All four documents are uncaptured** |
+| **P1C** | Which retention model governs third-party calendar data — three versions exist |
+| **P1E** | IP position |
+| **P3G** | Maintenance and issue-response practice |
+| **T1, T2, T5, T6, T7, T8, T10** | Legal and organisational commitments accepted at submission |
+| **S1, S2** | The org purchase and Owner role |
+
+### `code` (7) — **mine, and unresolved**
+
+| Row | What would settle it |
+|---|---|
+| **A7** | Traffic originating from `160.79.104.0/21` — **impossible from here.** Circumstantially satisfied: the connector works |
+| **A14** | Latency measurement under load |
+| **P5B** | Token cost per tool against task complexity, and whether users can exclude text |
+| **P5F** | Whether PG serves Streamable HTTP or SSE — **one probe, not yet run** |
+| **R7a** | Every tool returning a successful response with valid parameters |
+| **X7** ⚠️ | Whether `onAppCreated` fires before `connect()` — SDK internals |
+| **L3** | The live `BACKEND_PUBLIC_URL` value before the portal is filled |
+
+### `conduct — submission-time` (5)
+
+**S5, S7, S8, S9, S14** — listing copy, screenshots, acknowledgments, data-handling declarations.
+Answered by filling the portal.
+
+### Rests on an unconfirmed source (8)
+
+**L5, L7** *(`external-links`, no artifact)* · **R2, R6a, R7a, R11, DOC1, S10, S11**
+*(`review-criteria`, fetch-only and undated)*. Verdicts hold against the bytes we have; **the
+bytes' currency is unverified.**
+
+---
+
+## Where things actually stand
+
+**No remaining pre-submission blocker except the Team seat, which is deferred by decision.**
+
+| Item | Nature |
+|---|---|
+| **M5 + M6** inline density | Product decision |
+| **P2B** | Real §2B violation, **blocked by the do-not-touch-descriptions rule** |
+| **R6a** | Contested, weakest source, binding policy does not support it |
+| **A18** | Post-submission, not a gate |
+| **T3/T4** Art. 28 + Google policy | Small, warranty-relevant, worth doing before the portal |
+
+**Still open from earlier:** the three `[relay-only]` pastes.
+**Already done, contrary to the review's list:** the `COMPLIANCE_AUDIT_RECORD.md` citation sweep —
+run in `62f897c`, recorded in that file: 14 citations, 12 clean, 2 false positives.
