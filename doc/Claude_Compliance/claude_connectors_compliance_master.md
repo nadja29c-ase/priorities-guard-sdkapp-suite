@@ -1634,6 +1634,86 @@ Allowed link URIs declared (if connector uses ui/open-link)
 
 
 9. PG-Specific Compliance Blockers (Claude Submission)
+
+PG STATUS AGAINST THE CANONICAL REQUIREMENTS — moved here 2026-08-05.
+
+⚠️ This table lived in CLAUDE_COMPLIANCE_REQUIREMENTS_CANONICAL.md as a "PG status" column and was
+removed. That file is an EVALUATION INSTRUMENT — the questions, not the answers. A requirements
+document carrying its own verdicts stops working as an instrument: the reader sees a verdict instead
+of a criterion, and the verdict goes stale while the criterion does not. Per-app status belongs
+here, in the audit record.
+
+RECORDED STATUS, NOT A WORK LIST. Nothing below is assigned; deciding whether to act is separate.
+
+Coverage of the 121 rows: 35 verified · 17 findings · 45 not assessed ·
+the remainder n/a or recorded-as-accepted. NOT ASSESSED IS THE DEFAULT AND THE CORRECT ANSWER where
+the audit established nothing.
+
+VERIFIED (35)
+
+| Req | Evidence |
+|---|---|
+| **P1F** | ✅ verified — **pattern and scope stated:** `grep -rniE "conversation_(history\|summary)\|chat_history\|claude_memory\|user_files\|conversation_summar"` over `mcp_server/**/*.py` and `backend/**/*.py`, excluding tests → **0 matches**. ⚠️ *Bounded by the pattern: this proves no identifier-level match, not that no such access exists under a name the pattern misses* |
+| **P3F** | ✅ verified — first-party backend; `mcp.priority-guard.com` matches the service |
+| **P4A** | ✅ verified — PG does none of this |
+| **P4B** | ✅ verified — PG generates no media |
+| **P4C** | ✅ verified — PG carries none. **Absent from `review-criteria`; binding only via the policy** |
+| **P5C** | ✅ verified — 8/8 public tools; longest served is `delete_my_priority_guardian_data` at **32** |
+| **P5D** | ✅ verified — OAuth 2.0 + PKCE S256, TLS on both hosts |
+| **P5E** | ✅ verified on the **Claude serving surface** — all 8 public tools carry a title and at least one hint. `title` is structurally guaranteed (required positional field on `ToolDefinition`). ⚠️ `create_priority` is `destructive_hint=False` in the **shared registry** and overridden to `True` for Claude in `tools_list_dupl.py` — **audit the serving path, not the registry** |
+| **R1** | ✅ verified — purpose-built tools, no catch-all with a `method` parameter; writes already split by action type |
+| **A1** | ✅ verified |
+| **A2** | ✅ verified — live AS metadata |
+| **A3** | ✅ verified live — `HTTP/2 401`, `resource_metadata=…`, `scope="pg.access"` |
+| **A4** | ✅ verified — `https://mcp.priority-guard.com/mcp` |
+| **A5** | ✅ verified — single entry |
+| **A6** | ✅ verified |
+| **A8** | ✅ verified — both `.ai` and `.com` variants registered |
+| **A9** | ✅ verified against Claude Code's **published CIMD** — both accepted, port-agnostic, negative controls rejected |
+| **A10** | ✅ verified live — token endpoint returned `invalid_grant` |
+| **A11** | ✅ verified |
+| **A12** | ✅ verified live — form body parsed, 400 `invalid_grant`, **not 415** |
+| **A13** | ✅ verified indirectly — JSON to `/token` returns 422, confirming the split |
+| **A15** | ✅ verified — not implemented |
+| **A16** | ✅ verified — bearer header only |
+| **A22** | ✅ verified — PG returns a transport-level 401 |
+| **A23** | ✅ verified — PG sends `scope="pg.access"` |
+| **M11** | ✅ verified — declared on all three `_meta.ui` blocks |
+| **M12** | ✅ verified — `['inline','fullscreen']` |
+| **X1** | ✅ Set deliberately — PG's widget runs its own OAuth flow (`openLink` to a Google connect URL). **Accepted cost:** origin shared across conversations |
+| **X2** | ✅ verified — computed at import from `MCP_RESOURCE_URL`; `https://mcp.priority-guard.com/mcp` → `a7b31ccb…` |
+| **X4** | ✅ verified — `main.css:8-15` |
+| **X5** | ✅ verified — in the Vite build input **and** the served artifact |
+| **L1** | ✅ PG calls `openLink` |
+| **L2** | ✅ verified — the target is `BACKEND_PUBLIC_URL` (`https://www.priority-guard.com`), a domain PG owns; **not** `accounts.google.com` |
+| **S3** | ✅ verified |
+| **S4** | ✅ verified — 8/8 public tools; nothing lands in the un-annotated group |
+
+FINDINGS (17)
+
+| Req | Finding |
+|---|---|
+| **P1D** | ⚠️ `record_widget_diagnostic` accepts an open `data` object (`additionalProperties: true`). No violation evidenced — its only caller is the ChatGPT widget sending event names and user-agent — but the schema is not the guarantee; call sites are. **Not called from the Claude path** |
+| **P2B** | ⚠️ `inspect_adapt`'s description says it **records** confirmed action steps; the handler persists nothing (332 lines, zero backend calls, docstring *"validate provenance → return success"*). **Recorded finding. Descriptions are shared with the live ChatGPT app and are not touched.** |
+| **R6a** | ⚠️ Three of eight public descriptions carry override language (`BINDING RULES`, `SUSPENDED`, `default behavior`): `create_priority`, `inspect_adapt`, `onboarding_calendar_setup`. Five are clean. **Recorded. Not changed.** |
+| **P3A** | ⚠️ Published, but still routes PG full deletion to `support@priority-guard.com`, which is wrong now the deletion tool ships. Separately: v3.2 characterises Anthropic as an **Art. 28 processor**, which is incorrect — see T3/T4 |
+| **P3C** | ⚠️ No Claude-specific documentation page exists |
+| **DOC1** | ⚠️ Not created. **There is no seven-section requirement in any binding document** |
+| **R11** | ⚠️ Only `delete_my_priority_guardian_data` has been exercised end to end. See S12 — this is attested to in the portal |
+| **T3** | ⚠️ The privacy policy's **Art. 28 characterisation of Anthropic is incorrect** — inaccurate information given to Anthropic |
+| **T4** | ⚠️ PG connects to Google Calendar, so **Google's policy must be provided**, not merely disclosed around. Not verified. Compounded by the Art. 28 error |
+| **T9** | ⚠️ **Appears unimplemented.** Distinct from P3B, which is a *user support* channel — T9 names Anthropic and third parties and adds a **duty of care** |
+| **A18** | ⚠️ **Not satisfied.** None of the eight `oauth_consent_*.html` templates render it. **NOT A DIRECTORY GATE** — absent from `review-criteria` and from the binding policy. Open security item, post-submission |
+| **M3** | ⚠️ Applied only under `platform === 'mobile' && hostFullscreen`; horizontal padding hardcoded 16px, so `.left`/`.right` are unused |
+| **M10** | ⚠️ **Four layered width caps**, outermost smallest: `#root` 600px (binds), inline `<main>` 560px (binds), fullscreen `<main>` 672px (**dead**), pie section 672px (**dead**). Compliant inline; **in fullscreen the cap binds and auto margins produce the artifact M10 names** |
+| **M14** | ⚠️ Set `false` on all three blocks → borderless on mobile too, while `safeAreaInsets.left`/`.right` go unapplied. **One decision with two consequences** |
+| **X6** | ⚠️ Granted on all three blocks but **hollow** — no `--font-*` variable is referenced anywhere in the widget, so the CSP is widened for a capability not exercised |
+| **S1** | ⚠️ **BLOCKS SUBMISSION.** Not an engineering task |
+| **S12** | ⚠️ **Cannot be ticked truthfully today** — 1 of 8 public tools exercised end to end. Ticking it is a **warranty defect**, not a process shortcut |
+
+NOT ASSESSED (45): P1A, P1B, P1C, P1E, P2A, P2C, P2D, P2E, P2F, P2G, P3B, P3D, P3E, P3G, P3H, P5A, P5B, P5F, R7a, T1, T2, T8, T10, A7, A14, A19, M1, M2, M4, M5, M6, M7, M8, M9, M15, X7, L3, L7, S2, S5, S6, S7, S8, S9, PUB3
+
+
 This section tracks Priority Guardian-specific gaps. Items already satisfied for OpenAI are not re-listed here — see compliance_master_1.3.26.md.
 🟢 Blocker 0 — title Annotation — RESOLVED (verified in code 2026-08-04)
 `ToolDefinition` declares `title: str` as a REQUIRED field (mcp_server/priority_guardian/tools/base.py), and every tool in TOOL_REGISTRY supplies one. Verified live in the served `tools/list` payload on BOTH platforms — every tool carries a title in its ToolAnnotations. This entry described code work that was already done and told a reader to redeploy for it. A false 🔴 is worse than a missing one: it spends a submission cycle on nothing.
