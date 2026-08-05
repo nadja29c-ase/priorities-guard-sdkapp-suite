@@ -124,6 +124,40 @@ clean read of it is **not** full coverage:
 - Usage Policy · Universal Usage Standards · High-Risk Use Case requirements ·
   supported-countries policy (all four made binding by **Policy §1A alone**)
 
+**STANDING CHECKS — apply these when writing any claim in this file. IDs are stable; new checks
+are APPENDED, never inserted, so references from briefings and increments stay valid.**
+
+1. **State the obligation level the source states, and cite where it says so.** Silence is not
+   evidence of absence; emphasis is not evidence of obligation. *(9 instances found in one pass —
+   8 hardening, 1 the mirror.)*
+2. **A negative claim must state the scope it was proved over.** *"No match for X in file Y"*, not
+   *"nowhere"*. A search can be repo-complete and still answer a different question.
+3. **Name the surface a claim describes.** The shared registry is not the Claude serving path; an
+   audit of `tools/` answers a ChatGPT question.
+4. **Never a bare hash.** Record the computation, or the hash together with the URL it derives
+   from. A frozen hash is a claim with its premise deleted.
+5. **Relative timestamps are worse than none.** In a committed file *"Updated this week"* silently
+   re-anchors to whenever the reader looks.
+6. **Do not put a single obligation label over a mixed list.** A blanket "(mandatory)" over items
+   of differing force does not overstate any one of them — it destroys the reader's ability to tell
+   which one binds. Label each item, or label none. Distinct from #1: inflation makes one claim
+   wrong; this makes a whole list unreadable as to obligation level.
+7. **A number needs its pattern and its predicate.** *"3 lines matching `\bmust\b`"* and *"2
+   developer obligations"* are different facts about the same page; only the second bears on
+   compliance. State which is meant.
+8. **Supersession is a MOVE, not an annotation.** Relocate superseded content — do not leave it in
+   place under a warning. **Position reads as currency**, and a reader who trusts the top of a file
+   will not read to the caveat. Three instances in one session: a stale "Last updated" line at the
+   top of this header, the old submission-form field list left under a notice in §5, and *"Updated
+   this week"* in a committed file.
+
+> ⚠️ *Restored 2026-08-05. This entire block was DELETED by the header rewrite in `4d2a413` — a
+> replacement span ran from the coverage heading to "SCOPE OF THIS FILE" and the checks sat between
+> them. It went unnoticed across two commits. Recorded rather than silently restored, because a
+> destructive edit that nobody catches is exactly what these checks exist to make visible.
+> `fd71a68` had also INSERTED supersession as #7, renumbering pattern-and-predicate to #8 and
+> invalidating outside references; it is now appended as #8 instead.*
+
 ⚠️ **SCOPE OF THIS FILE.** It records **what the sources require** and **what PG currently does**.
 PG status is *recorded status*, not a work list. Where a discrepancy is noted, it is noted so it is
 **known** — deciding whether to act on it is a separate, product decision made elsewhere.
