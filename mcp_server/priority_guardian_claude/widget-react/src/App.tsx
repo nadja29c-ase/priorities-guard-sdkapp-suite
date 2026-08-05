@@ -549,6 +549,8 @@ function App() {
     })
     return (
       <main
+        role="main"
+        aria-label="Priority Guardian Dashboard"
         aria-busy="true"
         style={{
           width: '100%',
