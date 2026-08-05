@@ -534,19 +534,88 @@ function App() {
     }
   }, [])
 
-  // Loading state
+  // Loading state — skeleton mirroring the inline branch layout (M20).
+  // TimeAllocationBar is omitted: it is gated on dashboardData?.google_connected,
+  // and dashboardData is derived below from `data`, which is null until the same
+  // handler that calls setIsInitialized(true). Connection state is unknowable here.
+  // No `platform` dependency — platform is assigned in onAppCreated, which may not
+  // have fired at this point.
   if (!isInitialized) {
+    const skeletonBar = (width: string, height: string, radius = '4px') => ({
+      width,
+      height,
+      borderRadius: radius,
+      background: 'var(--color-border-tertiary, rgba(31,30,29,0.15))',
+    })
     return (
-      <div style={{
-        padding: '24px',
-        textAlign: 'center',
-        fontSize: '14px',
-        color: 'var(--color-text-secondary, #3D3D3A)',
-        background: 'var(--color-background-secondary, #F5F4ED)',
-        borderRadius: '12px',
-      }}>
-        {t('loading')}
-      </div>
+      <main
+        aria-busy="true"
+        style={{
+          width: '100%',
+          background: 'var(--color-background-secondary, #F5F4ED)',
+          borderRadius: '16px',
+          padding: '12px',
+          touchAction: 'pan-y',
+          overscrollBehavior: 'contain',
+        }}
+      >
+        <span className="sr-only">{t('loading')}</span>
+
+        {/* Priority card placeholders — mirrors DeadlineCard/FlexibleCard inline shape */}
+        <div aria-hidden="true" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {[0, 1].map((i) => (
+            <div
+              key={i}
+              style={{
+                borderRadius: '12px',
+                overflow: 'hidden',
+                background: 'var(--color-background-primary, #fff)',
+                border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
+                borderLeft: '3px solid var(--color-border-tertiary, rgba(31,30,29,0.15))',
+              }}
+            >
+              {/* banner */}
+              <div
+                style={{
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'var(--color-background-secondary, #F5F4ED)',
+                }}
+              >
+                <div className="pg-skeleton-bar" style={skeletonBar('88px', '11px')} />
+                <div className="pg-skeleton-bar" style={skeletonBar('56px', '11px')} />
+              </div>
+              {/* body */}
+              <div style={{ padding: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <div className="pg-skeleton-bar" style={skeletonBar('24px', '24px', '50%')} />
+                  <div className="pg-skeleton-bar" style={skeletonBar('60%', '12px')} />
+                </div>
+                <div className="pg-skeleton-bar" style={skeletonBar('42%', '12px')} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* CalendarConnectionMinimal placeholder */}
+        <div
+          aria-hidden="true"
+          style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '4px', paddingRight: '4px' }}
+        >
+          <div className="pg-skeleton-bar" style={skeletonBar('6px', '6px', '9999px')} />
+          <div className="pg-skeleton-bar" style={skeletonBar('120px', '11px')} />
+        </div>
+
+        {/* ExpandButton placeholder */}
+        <div
+          aria-hidden="true"
+          style={{ width: '100%', marginTop: '8px', padding: '10px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <div className="pg-skeleton-bar" style={skeletonBar('140px', '12px')} />
+        </div>
+      </main>
     )
   }
 

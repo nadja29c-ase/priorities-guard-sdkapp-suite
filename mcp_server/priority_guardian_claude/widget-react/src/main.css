@@ -77,3 +77,20 @@ h1, h2, h3, h4, h5, h6 {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Loading skeleton — pulse applied to placeholder bars, never to the container.
+   A pulsing shell reads as a rendering fault rather than a loading affordance. */
+@keyframes pg-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.pg-skeleton-bar {
+  animation: pg-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-skeleton-bar {
+    animation: none;
+  }
+}
