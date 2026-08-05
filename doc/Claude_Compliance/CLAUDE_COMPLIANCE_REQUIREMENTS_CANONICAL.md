@@ -370,8 +370,21 @@ optional, and it hides that the tree already contains the evidence.
 
 ## 13. Uncaptured obligations — known to bind, never read
 
-**Nine gaps.** These are not rows above because nothing has been read. They are listed so the gaps
-are visible **in the canonical document**, not only in the master's header.
+**Eleven items — 8 silent, 3 weakly sourced.** They are listed here so the gaps are visible **in the
+canonical document itself**, not only in the audit record.
+
+*[Corrected 2026-08-05: this heading read **"Nine gaps"** while the section listed eleven, the file
+header said "Eleven items in total", and this section's own reconciliation paragraph said
+**8 + 3 = 11**. Three statements of one count, one of them wrong. It is also **standing check #8**
+— when the count was corrected, the fix was **appended as a reconciliation paragraph at the bottom**
+instead of applied to the heading at the top. Supersession is a move, not an annotation, and a
+reader takes the heading.]*
+
+| Predicate | Count |
+|---|---|
+| **Silent** — nothing has been read at all | **8** (5 binding documents + 3 referenced requirement surfaces) |
+| **Weakly sourced** — content known, no artifact in the tree | **3** (`external-links`, `troubleshooting`, `after-publishing`) |
+| **Total** | **11** |
 
 **Binding, never read (5):**
 
