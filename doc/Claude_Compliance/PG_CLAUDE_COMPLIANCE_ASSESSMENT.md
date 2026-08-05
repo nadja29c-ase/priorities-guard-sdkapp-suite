@@ -5,16 +5,21 @@
 endpoints it calls, and the shared tool registry **as filtered and overridden for Claude**
 (`tools_list_dupl.py`). Not the ChatGPT surface. Not MindSort.
 
-**Method:** code read fresh, plus read-only live probes against `mcp.priority-guard.com` and
-`www.priority-guard.com`. No writes, no deploys, no config changes.
+**Method:** code read fresh, plus read-only live probes. No writes, no deploys, no config changes.
+
+⚠️ **REVISED 2026-08-05 after a second, deeper pass.** The first pass verified the authentication
+rows properly (live probes, real responses) but assessed **many widget and design rows from `grep`
+counts rather than by reading the code**. That is the same defect this whole audit has been about:
+**a count is not a verification.** Six verdicts changed on re-read, all in the direction of being
+less favourable. The corrections are marked **[REVISED]** below and the counts here reflect them.
 
 | Verdict | Count |
 |---|---|
-| ✅ **Fulfils** | **54** |
-| 🟡 **Partly fulfils** | **11** |
-| ❌ **Doesn't fulfil** | **9** |
+| ✅ **Fulfils** | **50** |
+| 🟡 **Partly fulfils** | **15** |
+| ❌ **Doesn't fulfil** | **10** |
 | ➖ **Not relevant** | **17** |
-| ❔ **Don't know** | **38** |
+| ❔ **Don't know** | **37** |
 
 ⚠️ **38 "don't know" is the honest headline.** Most are Policy §3 and Terms rows — developer
 conduct, published artefacts and organisational commitments that no amount of code reading settles.
@@ -38,7 +43,32 @@ They are not hidden failures; they are questions only Nadja can answer.
 
 ---
 
-## 🟡 PARTLY FULFILS (11)
+## [REVISED] What the deeper read changed
+
+| Row | Was | Now | What reading found that counting didn't |
+|---|---|---|---|
+| **M6** | ✅ | ❌ | **The inline priority list is uncapped.** `App.tsx:602-603` filters actives and `:662` maps them with **no `.slice()`**, and no backend limit exists. A user with 10 active priorities gets 10 cards inline. M6 says **max 4–5 data points** |
+| **M1 / M18** | ✅ | 🟡 | **24 bare hex literals**, not all brand accents. `constants.ts` P1/P2/P3 and `PieChart.tsx` series colours are defensible as accent/identity and categorical data. **`GoalItem.tsx:330` sets `color: '#fff'` on an SVG icon** — structural, and M18 names icons explicitly. `KeywordPicker.tsx:229-230` falls back to bare hex for badge bg/text |
+| **M5** | ✅ | 🟡 | **Count is right, placement isn't.** Two inline actions — the refresh button (`TimeAllocationBar.tsx:176`) and `ExpandButton`. But M5 says *"placed at the bottom of the card"*, and the refresh sits at the **top**. Cards are correctly display-only inline (`DeadlineCard.tsx:16`) |
+| **M2** | ✅ | 🟡 | 64 `aria-label`, 24 `role=`, 37 focus/outline rules, 9 keyboard handlers — genuinely good. **But 10 of 27 `<svg>` elements carry no `aria-hidden`, `aria-label` or `<title>`**, so they are announced as unlabelled graphics |
+| **P2C** | ❔ | 🟡 | Now partly assessable. **Delete tools are deliberately disambiguated** — `delete_my_priority_guardian_data` vs MindSort's `delete_my_data`. **But `start_prioritization_flow` (MindSort) and `create_priority` (PG) are semantically adjacent** and have never been evaluated for routing confusion |
+| **M9** | ✅ | ✅ *(confirmed, with a caveat)* | Explicit `minHeight/minWidth: 44px` on `DeliverableItem` and `GoalItem` action buttons. The shared `Button.tsx` reaches 44px **by arithmetic** — `sm: 16+16 padding + 12px font`, `md: 15+15 + 14` — not by a declared floor. Deliberate, but fragile to a font-size change |
+
+**Confirmed by actually reading, having previously been asserted:**
+**M7** ✅ — no menus or popovers anywhere, and `KeywordPicker.tsx:20` comments *"Confirmation is
+inline (no modal/popover) per MCP Apps guidelines"* · **P5A** ✅ — read `_build_provenance_error`:
+structured `isError=True` with an error code and actionable guidance, not a generic failure ·
+**P4A/P4B/P4C** ✅ — pattern-searched for payment/crypto/image-generation/advertising identifiers
+across all three trees: **no matches** · **M16** ✅ — the only `<textarea>` is a priority-entry
+field · **M19** ✅ — zero emoji, icons are SVG.
+
+**A false positive I caught in this pass:** `create_priority`'s description contains *"clarity"* —
+which looked like a cross-connector reference to the sibling app, and is the English word
+(*"normalized for clarity"*).
+
+---
+
+## 🟡 PARTLY FULFILS (15)
 
 | Row | Level | Gap |
 |---|---|---|
