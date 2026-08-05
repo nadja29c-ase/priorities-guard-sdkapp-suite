@@ -204,6 +204,15 @@ are APPENDED, never inserted, so references from briefings and increments stay v
     instances are the same failure at section level.** ⚠️ **Qualifiers live in the last clause of a
     sentence, which is what gets trimmed when a requirement is condensed into a row.**
 
+15. **A resolving citation proves only that the file is long enough.** *(New 2026-08-05.)* Ten of
+    91 rows cited a line that exists and says something else. **X4–X8 cited `transparent-theming`
+    lines 16–19 and 52-54 — those were T-numbers from a DELETED per-page artifact**, carried across
+    as if they were raw line numbers, pointing at blank lines, a heading and a code fence. They
+    passed the citation check (the lines exist) and passed a reading of the row against "the
+    source" — **because the source consulted was the row's own prose, not the line it names.**
+    ⚠️ **Open the cited line. Every time.** When a row is built from an intermediate artifact, its
+    numbering is the artifact's, not the source's, and nothing downstream can tell the difference.
+
 14. **A reviewer reading files cannot tell which commit they correspond to.** *(New 2026-08-05,
     recorded at the reviewer's own request.)* A filesystem read returns bytes with no commit and no
     mtime, so every "verified" from a reading party is a claim about a byte state at an unknown

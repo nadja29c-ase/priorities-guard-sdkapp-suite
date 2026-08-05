@@ -48,8 +48,8 @@ every claim here trace to the line it cites? Mechanically verified across all ro
 
 | | |
 |---|---|
-| Rows | **129** |
-| Citing a **resolvable** raw line (file exists, line within it) | **121** |
+| Rows | **133** |
+| Citing a **resolvable** raw line (file exists, line within it) | **125** |
 | `[relay-only]` — no artifact to cite | **8** — L5–L8, S6, PUB1, PUB3, PUB4 |
 | **Unresolvable citations** | **0** |
 
@@ -101,7 +101,38 @@ an exception dropped, widening the obligation.*
 one cites a real line that genuinely supports most of the row. The defect is in the last clause of
 each — which is where qualifiers live.
 
-⚠️ **Not yet content-verified: the remaining 87 rows** — `DOC-CONSTRAINT`, `PORTAL`, `SPEC`,
+### Content verification — the remaining 91 rows, run 2026-08-05
+
+**Same method.** 91 rows across `DOC-CONSTRAINT`, `PORTAL`, `SPEC`, `REVIEW-ONLY`, `RECOMMENDED`
+and `CONDITIONAL`. **Three BROADER, ten WRONG-CITATION.**
+
+**BROADER — the row claimed more than its line:**
+
+| Row | What it overstated |
+|---|---|
+| **A11** | Mandated **rotation** alone. Source: *"rotate **or sender-constrain**"* — **either satisfies it.** The row removed a compliant implementation choice |
+| **A16** | Read *"Do not put tokens in the connector URL"*. Source: connector-URL tokens are **"not recommended"**; only *access tokens in the URI query string* are **prohibited**, and by the MCP spec. **Two obligation levels in one sentence, flattened to the stronger one** |
+| **M3** | Stated safe-area rendering as an imperative. Source says **"should"**. Re-levelled `DOC-CONSTRAINT` → `RECOMMENDED`, with the functional consequence (*"the user won't be able to interact with anything rendered outside"*) kept, since that is what makes it effectively binding |
+
+**WRONG CITATION — the line resolves but does not support the row.** ⚠️ **This is the failure the
+citation check cannot see, and it was systematic in one place:**
+
+**X4–X8 cited `transparent-theming` lines 16, 17, 18, 19 and 52-54.** Those are **T-numbers from a
+deleted per-page artifact**, carried across as if they were raw line numbers. They resolve — the
+file has those lines — but they point at **blank lines, a heading, and a code fence**. Real lines:
+19, 31/34, 57/73, 79, 63.
+
+Also corrected: **M10** (cited 284/286, the colour-token table — real: 142, 172, 173) · **M12**
+(cited two section headings — real: 146) · **M13** (cited a heading and an `<img>` tag — real: 90,
+93) · **S3** (cited the *Company* step — the https requirement is at 21/119) · **S7** (cited a
+heading and the Figma link — real: 92, 93, 97, 101) · **X2** (cited a code fence — real: 32).
+
+**The lesson is narrow and useful: a citation that resolves proves only that the file is long
+enough.** Ten of 91 rows cited a line that exists and says something else, and every one passed
+both the citation check and the "does the row say what the source says" reading — because the
+source consulted was the row's *own* prose, not the line it names.
+
+⚠️ **Not yet content-verified: none. All 133 rows have now been checked** — `DOC-CONSTRAINT`, `PORTAL`, `SPEC`,
 `REVIEW-ONLY`, `RECOMMENDED` and `CONDITIONAL`. They are citation-verified only. Given a 4-in-42
 broader rate in the most carefully written section, **expect defects there too.**
 
@@ -261,12 +292,12 @@ continued maintenance constitutes acceptance (raw 11).
 | A8 | Register the redirect URI `https://claude.ai/api/mcp/auth_callback` for hosted surfaces | `DOC-CONSTRAINT` | authentication (raw 92-96) |
 | A9 | For Claude Code, accept **both** `http://localhost/callback` **and** `http://127.0.0.1/callback` **with the port component ignored** | `DOC-CONSTRAINT` | authentication (raw 104) |
 | A10 | Return RFC 6749-compliant error codes — **`invalid_grant`**, not `invalid_request` or a custom code — when a refresh token is no longer valid | `DOC-CONSTRAINT` | authentication (raw 112) |
-| A11 | **Rotate refresh tokens for public clients.** If rotating, return the new refresh token in the same response that invalidates the old | `SPEC` | authentication (raw 113) |
+| A11 | **Rotate OR SENDER-CONSTRAIN refresh tokens for public-client connections** — the MCP spec adopts OAuth 2.1's *rotate-or-sender-constrain* requirement, and **either satisfies it**. If rotating, return the new refresh token in the same response that invalidates the old. *(This row previously mandated rotation alone, dropping the alternative — corrected 2026-08-05)* | `SPEC` | authentication (raw 113) |
 | A12 | `/token` must accept `Content-Type: application/x-www-form-urlencoded` (RFC 6749 §4.1.3) | `DOC-CONSTRAINT` | authentication (raw 115) |
 | A13 | `/register` uses `application/json` (RFC 7591 §3.1) — **do not assume one parser serves both** | `DOC-CONSTRAINT` | authentication (raw 115) |
 | A14 | Respond within **10 s** for discovery, registration and token endpoints and **30 s** for refresh; **return headers and body without buffering behind upstream work**, and ensure no proxy, gateway or WAF holds the response | `DOC-CONSTRAINT` | authentication (raw 135, 137) |
 | A15 | Machine-to-machine `client_credentials` is **not supported**; every connection requires user consent | `DOC-CONSTRAINT` | authentication (raw 30) |
-| A16 | **Do not put tokens or API keys in the connector URL.** The MCP spec **prohibits** access tokens in the URI query string | `SPEC` | authentication (raw 26) |
+| A16 | Tokens or API keys in the connector URL (`?token=`, `?apiKey=`, `?userToken=`) are **NOT RECOMMENDED** — Anthropic's word. Separately and more strongly, the **MCP spec PROHIBITS access tokens in the URI query string**. *(This row read "Do not put…", stating Anthropic's* not recommended *as an imperative — corrected 2026-08-05. Two different obligation levels in one sentence, and the row flattened them.)* | `SPEC` | authentication (raw 26) |
 | A17 | **CONDITIONAL — CIMD selection.** Claude selects CIMD **only when** AS metadata advertises **both** `"client_id_metadata_document_supported": true` **and** `"none"` in `token_endpoint_auth_methods_supported`. If either is missing it falls back to DCR | `CONDITIONAL` | authentication (raw 50) |
 | A18 | AS must **display the redirect URI hostname clearly on the consent screen** (unconditional), and **should** add an extra warning when the only registered redirect URIs are loopback addresses | `SPEC` | authentication (raw 106) |
 | A19 | **`clientInfo` is unauthenticated and must never feed an authorization decision.** Any client can claim any name; do not gate behaviour on an exact `name` or `version` — both vary across surfaces and releases | `DOC-CONSTRAINT` | testing (raw 35) `[fetch-only]` |
@@ -286,17 +317,17 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 |---|---|---|---|
 | M1 | All views must support **both light and dark themes**; use host style tokens; **never hardcode colors**; test both modes | `DOC-CONSTRAINT` | design-guidelines (raw 204) — **one of only two developer "must" statements on the page** |
 | M2 | **WCAG AA** contrast minimum, keyboard navigation, text alternatives, tested with assistive technologies — *"your app must be usable by everyone"* | `DOC-CONSTRAINT` | design-guidelines (raw 278) — the other developer "must" |
-| M3 | Render interactive UI **inside `safeAreaInsets`**. **Not mobile-specific** — on web and desktop the composer can overlay the bottom of an inline app | `DOC-CONSTRAINT` | design-guidelines (raw 134) |
+| M3 | The interactive portion of the app **SHOULD** be rendered inside `safeAreaInsets` — the source says *should*, not *must*. It carries a **functional consequence** that makes it effectively binding: *"The user won't be able to interact with anything rendered outside the safe area."* **Not mobile-specific** — on web and desktop the composer can overlay the bottom of an inline app | `RECOMMENDED` | design-guidelines (raw 134) |
 | M4 | Inline: **auto-fit content height, no nested vertical scroll.** The host caps and clips. **No pixel value is published** | `DOC-CONSTRAINT` | design-guidelines (raw 39, 62, 186) |
 | M5 | Inline: maximum **2 actions**, at the bottom of the card | `DOC-CONSTRAINT` | design-guidelines (raw 63) |
 | M6 | Inline: maximum **4–5 data points** | `DOC-CONSTRAINT` | design-guidelines (raw 64) |
 | M7 | No drill-ins, breadcrumbs or multiple views; no menus or popovers — use visible controls (they get clipped by container boundaries or conflict with host z-index) | `DOC-CONSTRAINT` | design-guidelines (raw 65-66, 38, 40) |
 | M8 | Fullscreen: **avoid** floating panels — use collapsible sidebars, tabs or pagination; the app provides its own fullscreen button; a close button appears in the native header; the composer remains available | `RECOMMENDED` | design-guidelines (raw 99) |
 | M9 | Touch targets **≥ 44pt** on mobile; content adapts to narrow viewports **without horizontal scrolling** | `DOC-CONSTRAINT` | design-guidelines (raw 68) |
-| M10 | **No fixed-width layouts**; responsive from **320px**; **no side margins** that waste screen real estate — apps always fill the container width, with no fixed breakpoints | `DOC-CONSTRAINT` | design-guidelines (raw 284-286) |
+| M10 | **No fixed-width layouts**; responsive from **320px**; **no side margins** that waste screen real estate — apps always fill the container width, with no fixed breakpoints | `DOC-CONSTRAINT` | design-guidelines (raw 142, 172, 173) |
 | M11 | Declare `_meta.ui.csp` — **CONDITIONAL:** required only if the widget loads external origins. All external origins are blocked by default | `CONDITIONAL` | design-guidelines (raw 150-159) |
-| M12 | Declare `appCapabilities.availableDisplayModes` in `ui/initialize` | `DOC-CONSTRAINT` | design-guidelines §Display modes (raw 43, 144) |
-| M13 | **CONDITIONAL — carousels.** Maintain consistent card dimensions; on mobile design for thumb reach with primary actions in the lower portion, and **peek the next card** to signal scrollability | `CONDITIONAL` | design-guidelines (raw 72-95) |
+| M12 | Declare `appCapabilities.availableDisplayModes` in `ui/initialize` | `DOC-CONSTRAINT` | design-guidelines (raw 146) |
+| M13 | **CONDITIONAL — carousels.** Maintain consistent card dimensions; on mobile design for thumb reach with primary actions in the lower portion, and **peek the next card** to signal scrollability | `CONDITIONAL` | design-guidelines (raw 90, 93) |
 | M14 | **`prefersBorder` — set true or false explicitly.** If unspecified: **borderless on web, bordered on mobile.** Borderless runs edge-to-edge with **no host padding**, so honouring `safeAreaInsets` becomes essential | `RECOMMENDED` | design-guidelines (raw 138) · transparent-theming (raw 21) |
 | M15 | Mobile fullscreen **is supported.** Mobile renders in a native WebView, not a sandboxed iframe: no camera/mic/location, and connectors must be added via web or desktop before appearing on mobile | `DOC-CONSTRAINT` | design-guidelines (raw 120, 128) |
 | M16 | **No chat inputs or conversational UI** — *"don't replicate Claude's features"* | `DOC-CONSTRAINT` | design-guidelines (raw 41) |
@@ -312,13 +343,13 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 | ID | Requirement | Level | Source |
 |---|---|---|---|
 | X1 | **CONDITIONAL — `_meta.ui.domain` is OPTIONAL.** Its format and validation are **host-determined**. **Without it, Claude derives the iframe origin per conversation and connector.** Setting it opts into a **stable sandbox origin — needed if the app runs its own OAuth flow** | `CONDITIONAL` | cross-compatibility (raw 27) · instance-supersession (raw 179) |
-| X2 | **CONDITIONAL — if `ui.domain` is set for Claude:** `sha256(<full connector URL>)[:32] + ".claudemcpcontent.com"`. **Hash the exact string entered in Settings > Connectors, including path and any trailing slash** | `CONDITIONAL` | cross-compatibility (raw 29-33) |
+| X2 | **CONDITIONAL — if `ui.domain` is set for Claude:** `sha256(<full connector URL>)[:32] + ".claudemcpcontent.com"`. **Hash the exact string entered in Settings > Connectors, including path and any trailing slash** | `CONDITIONAL` | cross-compatibility (raw 29, 32) |
 | X3 | **Local stdio connectors have no URL** — omit `_meta.ui.domain` rather than inventing a value | `CONDITIONAL` | cross-compatibility (raw 27) |
-| X4 | `html, body { margin: 0; background: transparent; }` — any opaque background on either hides the chat surface | `DOC-CONSTRAINT` | transparent-theming (raw 16) |
-| X5 | `<meta name="color-scheme" content="light dark" />` in the document head, **kept** even though `applyDocumentTheme` sets it at runtime — the tag covers first paint | `DOC-CONSTRAINT` | transparent-theming (raw 17) |
-| X6 | **CONDITIONAL — host fonts only.** CSP `resourceDomains` must include `https://assets.claude.ai` for `applyHostFonts` to load the `@font-face` files | `CONDITIONAL` | transparent-theming (raw 18) |
-| X7 | **Register the `hostcontextchanged` listener before you connect**, so an early update is not missed | `DOC-CONSTRAINT` | transparent-theming (raw 19) |
-| X8 | `resourceDomains` **also adds the listed origins to `script-src` and `style-src`** — keep it to origins trusted to serve executable code; prefer bundling third-party fonts over allowlisting public CDNs | `DOC-CONSTRAINT` | transparent-theming (raw 52-54) |
+| X4 | `html, body { margin: 0; background: transparent; }` — any opaque background on either hides the chat surface | `DOC-CONSTRAINT` | transparent-theming (raw 19) |
+| X5 | `<meta name="color-scheme" content="light dark" />` in the document head, **kept** even though `applyDocumentTheme` sets it at runtime — the tag covers first paint | `DOC-CONSTRAINT` | transparent-theming (raw 31, 34) |
+| X6 | **CONDITIONAL — host fonts only.** CSP `resourceDomains` must include `https://assets.claude.ai` for `applyHostFonts` to load the `@font-face` files | `CONDITIONAL` | transparent-theming (raw 57, 73) |
+| X7 | **Register the `hostcontextchanged` listener before you connect**, so an early update is not missed | `DOC-CONSTRAINT` | transparent-theming (raw 79) |
+| X8 | `resourceDomains` **also adds the listed origins to `script-src` and `style-src`** — keep it to origins trusted to serve executable code; prefer bundling third-party fonts over allowlisting public CDNs | `DOC-CONSTRAINT` | transparent-theming (raw 63) |
 | X9 | **The app must connect before it can receive anything.** Call `App.connect()` (or `useApp()`, which creates and connects for you in React) **without an explicit transport parameter** — the SDK detects Claude vs ChatGPT and selects the transport. ⚠️ **Tool-input and tool-result events do not fire until the app is connected**, which is the most common cause of an app that renders nothing | `DOC-CONSTRAINT` | cross-compatibility (raw 19) · transparent-theming (raw 86, 112) · ⚠️ the *"events don't fire until connected"* warning is from `troubleshooting` `[relay-only]` |
 
 ---
@@ -356,11 +387,11 @@ optional, and it hides that the tree already contains the evidence.
 |---|---|---|---|
 | S1 | **A Team or Enterprise organization is required.** Admin settings — and therefore the portal — are unavailable on individual plans | `PORTAL` | submission (raw 21-23) |
 | S2 | The submitter must be an **Owner or Primary Owner**. Enterprise may delegate via a custom role with **Directory management** or **Libraries**; **Team plans have no custom roles** | `PORTAL` | submission (raw 24) |
-| S3 | Server URL must be **`https://`** | `PORTAL` | submission §Connection (raw 152) |
+| S3 | Server URL must be **`https://`** | `PORTAL` | submission (raw 21, 119) — ⚠️ *the https:// requirement is confirmed at the Connection step of the portal; the raw page states the portal accepts remote MCP servers only. Cited previously at raw 152, which is the Company step — wrong line, corrected 2026-08-05* |
 | S4 | Every tool must carry a **`title`** and the applicable **`readOnlyHint`/`destructiveHint`**; the portal flags violations to fix **on the server before submitting** | `PORTAL` | submission (raw 46) |
 | S5 | Listing limits: **name ≤ 100**, **tagline ≤ 55**, **description ≤ 2,000** characters; **1–5 categories**; plus documentation URL, privacy policy URL, support contact and icon | `PORTAL` | submission (raw 144) |
 | S6 | **The URL slug is PERMANENT once published** — `https://claude.ai/directory/connectors/SLUG`. Display names can change; the slug cannot | `PORTAL` | submission · after-publishing `[relay-only]` |
-| S7 | **MCP Apps: screenshots required.** 3–5 **PNG**, **≥ 1000px** wide, cropped to the app response area, **the prompt must not appear in the image** (supply prompt text separately). **Aspect ratio unconstrained. Video and GIF rejected. One batch covers all surfaces.** Figma carousel template available | `PORTAL` | submission (raw 88-101) · submission (raw 17) |
+| S7 | **MCP Apps: screenshots required.** 3–5 **PNG**, **≥ 1000px** wide, cropped to the app response area, **the prompt must not appear in the image** (supply prompt text separately). **Aspect ratio unconstrained. Video and GIF rejected. One batch covers all surfaces.** Figma carousel template available | `PORTAL` | submission (raw 92, 93, 97, 101) · submission (raw 17) |
 | S8 | **Seven compliance acknowledgments, all required** — directory guidelines, first-party API usage, financial transactions, AI media generation, prompt injection, conversation data collection, public documentation. Under **T3** each is a **warranty**, not a checkbox — see the mapping below | `PORTAL` | submission (raw 168) |
 | S9 | Data-handling declarations: whether the underlying API is **your own, proxied from a partner with permission, or a third party's you don't control**; whether the connector handles **personal health data** or **sponsored content** | `PORTAL` | submission (raw 160) |
 | S10 | **CONDITIONAL — plugins only.** Plugins must link a **public GitHub repo**; closed-source is not accepted | `CONDITIONAL` | review-criteria (raw 73) `[fetch-only]` |
