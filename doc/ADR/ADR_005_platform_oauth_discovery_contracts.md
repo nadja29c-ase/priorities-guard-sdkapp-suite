@@ -100,7 +100,7 @@ The single-issuer invariant is enforced at the signer (`jwt/utils.py`). Claude n
 |----------|--------------|
 | `doc/ADR/ADR_003_oauth_provider_route_scope_mapping.md` | Adjacent: route→scope registry. Non-overlapping. |
 | `doc/OAuth/OAuth_Hard_Requirements.md` | AS-side requirements (amended to remove stale "one discovery document" claim) |
-| `doc/Claude_Compliance/structural_guideline_claude_vs_openai.md` | Platform boundary documentation (amended to note discovery shape divergence) |
+| `doc/structural_guideline_claude_vs_openai.md` | Platform boundary documentation (amended to note discovery shape divergence) |
 | `claude increments/SHARED ARCHITECTURE/hotfix_pg_openai_discovery_restore.md` | Incident record — the "why" for this ADR |
 | `backend/core/oauth_provider/jwt/utils.py` | Single-issuer enforcement point |
 | `backend/core/oauth_provider/discovery.py` | Root AS metadata (Claude servers point here) |

@@ -50,7 +50,7 @@ of the decision tree below the increment sits on.
   (callbacks, PKCE S256 advertisement, PRM, 401 + `WWW-Authenticate` with
   `resource_metadata`, DCR/CIMD scaling)
 - Structural split OpenAI↔Claude (`_dupl` convention, what is shared vs platform-specific):
-  `doc/Claude_Compliance/structural_guideline_claude_vs_openai.md`
+  `doc/structural_guideline_claude_vs_openai.md`
 
 ## Step 2 — Integration checklist (each line is a pointer, not a requirement)
 

@@ -9,7 +9,7 @@ The organising distinction is **who wrote the rule**, not what the document is a
 |---|---|---|
 | `ADR/` | Architecture decision records, numbered | A decision we made, with its reasoning and alternatives |
 | `OAuth/` | Everything about our OAuth provider | Our authorization server — spec, integration, investigations |
-| `Claude_Compliance/` | **Anthropic's** rules for us | Written by Anthropic. We comply; we do not amend |
+| `Claude_Compliance/` | **Anthropic's** rules for us — **exactly three things, no overlap** | Written by Anthropic. We comply; we do not amend |
 | `OpenAI_compliance/` | **OpenAI's** rules for us | Written by OpenAI. Same |
 | `legal/` | Published or signed artefacts | Binds us externally |
 | `sql/` | Standalone queries | Runnable, not prose |
@@ -37,6 +37,22 @@ even if it were external.
 It lives in `doc/OAuth/` because that is the OAuth folder. Note that folder is not
 "investigations only": `NEW_APP_OAUTH_INTEGRATION.md` is normative too, and CLAUDE.md rule 3
 mandates reading it before any new-app OAuth work.
+
+### `Claude_Compliance/` holds three things and nothing else
+
+Settled 2026-08-05 after four rounds of consolidation, 15 files → 3:
+
+| | Answers |
+|---|---|
+| `CLAUDE_COMPLIANCE_REQUIREMENTS_CANONICAL.md` | **What must be true.** 121 rows, each with an obligation level and a source line. Read before shipping or submitting. **Contains no per-app status** — deliberately: a requirements document carrying its own verdicts stops working as an instrument, and the verdict goes stale while the criterion does not |
+| `COMPLIANCE_AUDIT_RECORD.md` | **How we know, and what was wrong before.** Standing checks, provenance, the hardening sweep, unsourced claims, PG status, changelog |
+| `sources_raw/` | **The bytes.** Every claim in the other two cites a line here |
+
+**The two `structural_guideline_claude_vs_openai*.md` files moved OUT to `doc/` on 2026-08-05.**
+They are Claude-vs-ChatGPT **architecture** documents — nothing in them states an Anthropic
+obligation, so they fail this folder's membership test. The one compliance-relevant rule they
+carried, *"audit the Claude serving path, not the shared registry"*, is standing check #3 in the
+audit record.
 
 ### `legal/` is what we published, not what we intend
 
