@@ -8,16 +8,19 @@ endpoints it calls, and the shared registry **as filtered and overridden for Cla
 
 | Verdict | Count |
 |---|---|
-| ✅ **Fulfils** | **50** |
-| 🟡 **Partly fulfils** | **15** |
+| ✅ **Fulfils** | **51** |
+| 🟡 **Partly fulfils** | **14** |
 | ❌ **Doesn't fulfil** | **10** |
 | ➖ **Not relevant** | **17** |
 | ❔ **Don't know** | **37** |
 
-> **Two passes.** The first assessed many widget rows from `grep` counts; the second read the code.
-> **Six verdicts moved, every one less favourable.** Counting is not verifying — M1 was called ✅
-> because `var(--color` appeared 275 times, which says nothing about whether hex is *also*
-> hardcoded. It is, 24 times.
+> **Three passes.** The first assessed many widget rows from `grep` counts. The second read the
+> row-relevant paths — **six verdicts moved, all less favourable.** The third read the widget
+> **end to end**, all 6,724 lines, and moved **one back up**: the hardcoded colours turn out to be
+> documented product identity, which M18 explicitly permits.
+>
+> **The lesson runs both ways.** Counting made PG look better than it was (M6, M5, M2). Reading a
+> flagged line without its rationale made PG look worse than it is (M1/M18). Neither is verification.
 
 > **37 don't-knows is the honest headline.** Most are Policy §3 and Terms rows — developer conduct,
 > published artefacts, organisational commitments. No code read settles them.
@@ -53,7 +56,6 @@ endpoints it calls, and the shared registry **as filtered and overridden for Cla
 | **P3H** | Design guidelines largely followed. Terms not yet agreed — no submission made |
 | **T3** | No inaccurate information submitted **yet**. The Art. 28 error becomes one the moment the policy link is given |
 | **T4** | PG's own policy exists. **Google's third-party policy is not provided**, and PG's policy does not describe what Google collects |
-| **M1 / M18** | **24 bare hex literals.** `constants.ts` P1/P2/P3 and `PieChart` series colours are defensible as accent/categorical. **`GoalItem.tsx:330` sets `color: '#fff'` on an SVG icon** — structural, and M18 names icons explicitly. `KeywordPicker.tsx:229-230` falls back to bare hex |
 | **M2** | 64 `aria-label`, 24 `role=`, 37 focus rules, 9 keyboard handlers — good. **But 10 of 27 `<svg>` elements carry no `aria-hidden`, `aria-label` or `<title>`** |
 | **M3** ⚠️SILENT | `safeAreaInsets` applied only under `platform === 'mobile' && hostFullscreen` (`App.tsx:709`); the inline branch applies none. `.left`/`.right` never read — horizontal padding hardcoded `16px` |
 | **M5** | Count right, **placement wrong**: two inline actions, but the refresh button is at the **top** (`TimeAllocationBar.tsx:176`); M5 says actions go at the bottom |
@@ -101,6 +103,16 @@ comments "Confirmation is inline (no modal/popover) per MCP Apps guidelines")* �
 arithmetic — `16+16+12`, `15+15+14` — deliberate but not a declared floor)* · M11 · M12 · M14 ·
 M15 · **M16** *(the only `<textarea>` is `AddPriorityForm.tsx:437`, a priority-entry field — not a
 chat input)* · M17 · **M19** *(zero emoji across `widget-react/src`; icons are SVG)*
+
+**M1 / M18** ✅ **— revised UP on the full read.** 24 bare hex literals exist, and **22 are
+documented product identity.** `constants.ts` states it outright: *"Priority identity colors —
+semantic product colors, not host theme tokens… intentionally fixed."* `PieChart.tsx:44-46` adds
+*"Data-viz accent colors — no official solid tokens exist for pie chart fills"*, which is true.
+**M18 explicitly permits brand colours for accents and identity**, and `BAR_COLORS.other` uses
+`var(--color-text-tertiary, …)` — proof the structural/identity line was drawn deliberately rather
+than missed. ⚠️ **Two narrow exceptions remain outside that rationale:** `GoalItem.tsx:330`
+`color: '#fff'` on an SVG checkmark, and `KeywordPicker.tsx:230` `?? '#fff'` — both plain
+structural white, not P1/P2/P3 identity.
 
 **Domain, CSP, theming** — X1 · X2 ⚠️SILENT · X4 ⚠️SILENT *(`main.css:8-15`)* · X5 · X8 ·
 X9 ⚠️SILENT
@@ -162,8 +174,30 @@ artifact)* · R1, R2, R6a, R7a, R11, DOC1, S10, S11 *(`review-criteria`, fetch-o
 
 ---
 
-## What was NOT read
+## End-to-end read — what the full sweep added
 
-`DeadlineCard`, `FlexibleCard`, `GoalSection`, `PieChart` and `i18n` were read only along the paths
-relevant to specific rows, not in full. The 37 don't-knows are unchanged by any amount of code
-reading — they are questions about conduct, artefacts and measurements.
+**All 6,724 lines of `widget-react/src` covered.** Four findings the row-driven passes missed:
+
+**1. P1D is stronger than "no violation evidenced" — the widget collects and stores nothing.**
+Pattern-searched the whole tree: **no** analytics, telemetry, `gtag`, mixpanel, posthog or sentry ·
+**no `localStorage`, `sessionStorage` or `document.cookie`** · **no `fetch`, `XMLHttpRequest` or
+`axios`** — every call goes through the MCP bridge · **no** `navigator.*`, `window.location` or
+`document.referrer`. For a §1D/§1F assessment that is close to the strongest possible result.
+
+**2. The absence of `localStorage` corroborates the `ui.domain` record.** §4M's caching
+optimisation is keyed on `toolInfo.id` and needs storage; PG uses none, so the *only* live reason
+for the fixed domain is the widget's own OAuth flow — which is exactly what the decision record
+says. Two independent lines of evidence now agree.
+
+**3. M5, refined.** Per card the inline surface has **one** action — the deliverables/goals expand
+toggle (`DeadlineCard.tsx:287`, `FlexibleCard.tsx:206`) — which satisfies "max 2". The **aggregate**
+inline response has `2 + N` interactive elements (refresh, expand-to-fullscreen, one toggle per
+card). Whether M5's "card" means each card or the whole inline response decides this; the row stays
+🟡 on that ambiguity, not on a count.
+
+**4. `FlexibleCard` and `GoalSection` carry zero bare hex and full `isInline` display-only guards**
+— the same discipline as `DeadlineCard`. `i18n.ts` is 434 lines of static `en`/`de` strings with no
+data access.
+
+**Unchanged by any code reading: the 37 don't-knows.** They are questions about conduct, published
+artefacts and measurements — not about the codebase.
