@@ -8,7 +8,7 @@
 
 ## TL;DR — Obligatory vs Recommended
 
-Classification based on fresh read of `claude_connectors_compliance_master.md`. The master explicitly labels items "(mandatory)" or uses softer verbs like "strongly recommended."
+Classification based on fresh read of `COMPLIANCE_AUDIT_RECORD.md`. The master explicitly labels items "(mandatory)" or uses softer verbs like "strongly recommended."
 
 **CONSTRAINTS (per official design-guidelines):** Inline-card limits (auto-fit height with host clipping, ≤2 actions, ≤4-5 data points, no nested scroll), host CSS tokens, light+dark themes, WCAG AA, CSP, `ui.domain`, `availableDisplayModes`, SDK `App`/`useApp()` class, `app.connect()`, non-zero height, fullscreen constraints (if used).
 
@@ -176,7 +176,7 @@ Known failure (current rule): hashing origin-only (no `/mcp`) → "ui.domain mis
 
 ## 6. ~~Hash Parity Test~~ — STRUCK (phantom requirement)
 
-**Status:** REMOVED. This requirement was originally stated as a "named gating requirement" but has **no basis in the Claude compliance master**. The compliance master (`claude_connectors_compliance_master.md`) contains no hash-parity requirement. The widget doesn't even compute a content hash — verified by reading `clarity/widget-react/src/utils.ts`. This was an invented requirement based on inference, not documentation.
+**Status:** REMOVED. This requirement was originally stated as a "named gating requirement" but has **no basis in the Claude compliance master**. The compliance master (`COMPLIANCE_AUDIT_RECORD.md`) contains no hash-parity requirement. The widget doesn't even compute a content hash — verified by reading `clarity/widget-react/src/utils.ts`. This was an invented requirement based on inference, not documentation.
 
 **Why struck:** Per the living-artifacts rule, requirements must be grounded in canonical compliance sources. This one wasn't.
 
@@ -186,7 +186,7 @@ Known failure (current rule): hashing origin-only (no `/mcp`) → "ui.domain mis
 
 ## 7. Hard Constraints — Obligatory vs Recommended Classification
 
-**Source:** Classification derived from fresh read of `claude_connectors_compliance_master.md` (June 2026). §4K explicitly labels inline-card constraints "(mandatory)". Items below are marked **[OBLIGATORY]** or **[RECOMMENDED]** based on whether the compliance master labels them mandatory/required vs. "strongly recommended" or softer verbs.
+**Source:** Classification derived from fresh read of `COMPLIANCE_AUDIT_RECORD.md` (June 2026). §4K explicitly labels inline-card constraints "(mandatory)". Items below are marked **[OBLIGATORY]** or **[RECOMMENDED]** based on whether the compliance master labels them mandatory/required vs. "strongly recommended" or softer verbs.
 
 ### Process constraints (project-specific)
 
@@ -243,7 +243,7 @@ Known failure (current rule): hashing origin-only (no `/mcp`) → "ui.domain mis
 
 ## 8. Compliance Gap Closure (Claude Directory)
 
-Architecture-level compliance review against `claude_connectors_compliance_master.md`
+Architecture-level compliance review against `COMPLIANCE_AUDIT_RECORD.md`
 surfaced gaps the earlier sections did not address. Each is solved in PG's Claude
 module (`mcp_server/priority_guardian_claude/`) — MindSort mirrors those solutions.
 None of these touch `clarity/` (all live in the new `mindsort_claude/` module), so

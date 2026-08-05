@@ -46,7 +46,7 @@ of the decision tree below the increment sits on.
 - Discovery shape: **root-issuer** (`authorization_servers = [root www]`, no path).
   Reference implementation: `mcp_server/mindsort_claude/discovery_dupl.py`.
   → ADR_005, Shape #3
-- Platform compliance: `doc/Claude_Compliance/claude_connectors_compliance_master.md`
+- Platform compliance: `doc/Claude_Compliance/COMPLIANCE_AUDIT_RECORD.md`
   (callbacks, PKCE S256 advertisement, PRM, 401 + `WWW-Authenticate` with
   `resource_metadata`, DCR/CIMD scaling)
 - Structural split OpenAI↔Claude (`_dupl` convention, what is shared vs platform-specific):

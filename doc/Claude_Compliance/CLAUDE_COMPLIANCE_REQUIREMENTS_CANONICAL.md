@@ -12,7 +12,7 @@ re-verified every time the code changes.
 findings it held were not discarded — they are in the master's §9, which is where recorded status
 belongs.]*
 
-The master (`claude_connectors_compliance_master.md`) is the source synthesis and audit record —
+The master (`COMPLIANCE_AUDIT_RECORD.md`) is the source synthesis and audit record —
 changelog, provenance, standing checks, sweep results, per-app status and implementation mechanism.
 Neither file substitutes for the other.
 

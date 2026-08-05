@@ -134,7 +134,7 @@ hardening will not catch softening.** The rule is not "beware inflation"; it is:
 
 ## The compliance-page refresh routine
 
-Ten Anthropic source pages feed `claude_connectors_compliance_master.md`. Each is refreshed on
+Ten Anthropic source pages feed `COMPLIANCE_AUDIT_RECORD.md`. Each is refreshed on
 its own commit, and **a page is not done until step 5.** Steps 1–4 were the routine as practised;
 step 5 kept being remembered rather than executed, and the currency metadata lagged the work two
 rounds running. It is a step now.
