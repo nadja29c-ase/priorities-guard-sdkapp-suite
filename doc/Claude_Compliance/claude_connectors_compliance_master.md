@@ -1,8 +1,19 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: **2026-08-05** — Compliance-Docs-01 COMPLETE except §4L/§4O: §4C/§4K/§4N bodies, §5 replaced, §6 dated, §6b Terms, §9 PG status, new §12
-Post-publication. §4L and §4O **deliberately not rewritten** — their sources have no artifact in
-the tree (see the coverage note below). Prior entry:
-Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 7 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`, `mcp-apps/cross-compatibility`, `software_directory_policy`. **Partially refreshed:** the remaining three (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
+**Last updated: 2026-08-05.** Compliance-Docs-01 — §4C/§4K/§4N bodies rewritten, §5 replaced,
+§6 dated, §6b Terms added, §9 PG status recorded, §12 Post-publication added. **§4L and §4O are
+deliberately not rewritten** — their sources have no artifact in the tree.
+
+> **THIS HEADER STATES CURRENT STATE ONLY.** Superseded entries live in §11 under their dates.
+> *Restructured 2026-08-05: a prior "Last updated" line had been preserved inline here, and it
+> contradicted the lines around it — it claimed "7 of 10 pages", listed "the remaining three"
+> followed by six items, and named `review-criteria`, `software_directory_policy` and
+> `cross-compatibility` as BOTH captured and not-yet-checked. So the first screen told a reader
+> that pages were two months stale which the same screen elsewhere said were current.*
+>
+> **The cause was structural, not careless: POSITION READS AS CURRENCY.** Leaving a superseded
+> entry above the fold is the same defect as "Updated this week" — a marker that silently
+> re-anchors to whenever the reader looks — and the same defect as the §5 field list left under a
+> warning. **Supersession is a move, not an annotation.** See standing check #8.
 
 **No page is "closed."** Round 1 catches omission — did the source get captured. Round 2 runs
 *after* the master rewrite and checks the reverse direction: does every claim now in the master
@@ -11,18 +22,21 @@ Round 1 cannot catch invention, and invention is the failure mode this document 
 three fabrications survived round 1 on 2026-08-04 alone (the 500px provenance, a "new"
 proactive-refresh item the master already documented, and *"nothing in §4C was stale"*).
 
-⚠️ **A FOURTH failure of the same family, and it has a direction.** Three times in one day a
-**recommendation was recorded as a requirement**: the 500px "hard limit", a fabricated
-"recommended" qualifier on the 4–5 data-point constraint, and §4M's *"the App class … is
-**required** for production"* (the source says *recommended*). Soft language gets hardened; hard
-language is never softened. This bias produces over-constrained increments and wasted work, and
-it is the single most useful thing to check for when reading any section of this file.
+⚠️ **THE OBLIGATION-LEVEL BIAS, AND IT HAS A DIRECTION. NINE instances found — see the sweep
+below.** Soft language gets hardened; hard language is almost never softened. This bias produces
+over-constrained increments and wasted work, and **it is the single most useful thing to check for
+when reading any section of this file.** One instance ran the other way (A18, softened out of
+existence on one page's silence), which is why standing check #1 is stated directionally neutral.
 
-**Round 2 status (2026-08-04): run on all three round-1 artifacts, source side clean — no
-fabricated requirement in any of them.** Defects found were citation-quality and one miscount,
-all fixed. The raw upstream markdown for all three pages is now committed verbatim under
-`Claude_Compliance/sources_raw/` (append `.md` to any of these doc URLs), so every quotation is
-independently checkable and round 2 no longer depends on who fetched what.
+**Round 2 status: run on FOUR artifacts (design-guidelines, transparent-theming, authentication,
+review-criteria). Source side clean — no fabricated requirement in any of them.** Defects found
+were citation-quality plus one miscount, all fixed. **Round 2 has NOT been run on this master.**
+
+**ELEVEN raw sources are committed** under `Claude_Compliance/sources_raw/` — append `.md` to a
+`claude.com/docs` URL, and it works on `support.claude.com` articles too. Every quotation in this
+file is therefore checkable against bytes in the tree. ⚠️ **But the `.md` endpoint strips the
+publication date**, so a fetched raw cannot be dated from its own contents; see the provenance
+table below for which sources carry a date and which do not.
 
 **STATUS OF THIS FILE, 2026-08-04 — the six known-false claims are now CORRECTED, not merely
 flagged:**
@@ -1677,6 +1691,32 @@ DELISTING: email mcp-review@anthropic.com. (§7 says removal is requestable "thr
 channels"; this is the specific address.)
 
 11. What Changed From Previous Version
+
+### 2026-08-05 (c) — Header restructured: current state only
+
+The header had accumulated superseded entries **in place**, and they contradicted the current
+material above and below them. Moved here, verbatim, so the record survives without misleading
+anyone reading the first screen:
+
+> *Superseded, from the 2026-08-04 header:* **"round 1 (re-fetch + extract) run on 7 of 10 source
+> pages: design-guidelines, authentication, transparent-theming, instance-supersession,
+> review-criteria, cross-compatibility, software_directory_policy. Partially refreshed: the
+> remaining three (review-criteria, submission, software_directory_policy, troubleshooting,
+> external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked."**
+
+**Three errors in that one sentence**, all live at the top of the file until today: *"the remaining
+three"* is followed by **six** items; `review-criteria`, `software_directory_policy` and
+`cross-compatibility` appear in **both** the captured list and the not-yet-checked list; and
+*"7 of 10"* had stopped describing anything, the inventory being 11 committed + 2 relay-only +
+2 outstanding.
+
+Two further stale counts fixed in place: *"Round 2 … run on all three round-1 artifacts"* (**four**)
+and *"The raw upstream markdown for all three pages is now committed"* (**eleven**).
+
+**The cause was structural.** Prior entries were preserved by *leaving them where they were*.
+**Position reads as currency** — the identical failure diagnosed two rounds earlier in *"Updated
+this week"*, and the one §5 had just been rewritten to fix. Now **standing check #7: supersession
+is a move, not an annotation.**
 
 ### 2026-08-05 (b) — Compliance-Docs-01 completion pass
 
