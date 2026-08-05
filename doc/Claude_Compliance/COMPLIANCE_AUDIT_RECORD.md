@@ -193,6 +193,16 @@ are APPENDED, never inserted, so references from briefings and increments stay v
    invalidates every outside reference — briefings, increments and commit messages all cite these
    by number. `fd71a68` inserted at #7 and broke a reference in an increment briefing written the
    same day.
+11. **Every structural edit reports before/after BYTE AND LINE COUNTS FOR EVERY FILE IN THE WORKING
+    TREE — not just the file being edited.** *(New 2026-08-05.)* Three structural edits produced
+    three losses: the standing-checks block (deleted, survived two commits), the `clientInfo`
+    verification (caught only because a marker check happened to be wider than the editing
+    pattern), and `structural_guideline_claude_vs_openai.md` (deleted by a `git add -A` staging a
+    working-tree removal nobody made — **mechanism still unknown**). **All three would have been
+    one line of output.** A regex-driven edit on a large file loses content by default and only
+    catches it when the checking pattern is wider than the editing pattern — which is luck, not
+    method. This check does not depend on guessing the right pattern, and it catches the case where
+    **the wrong file changes.**
 10. **After any structural edit to this file, confirm the standing-checks block is still present
     and still numbered as referenced.** A block nobody reads until something points at it is a
     block that can vanish silently — and one did, surviving two commits.
@@ -253,9 +263,25 @@ Building overview: https://claude.com/docs/connectors/building
 # 2. UNSOURCED CLAIMS — real, load-bearing, and traceable to nothing
 
 ⚠️ **Found by the pre-shrink cross-check, 2026-08-05**, which is the reason that check was worth
-running before deleting anything. These sections carry requirement-class claims that are **in no
-canonical row and in no captured source** — result-size ceilings, timeouts, GA status, and
-rejection-frequency figures among them.
+running before deleting anything.
+
+**COUNT CORRECTED — three genuinely unsourced, not six.** An earlier version of this note listed
+six items. Two of them are **`[relay-only]`, not unsourced**: the **~150,000-character result
+ceiling** and the **25,000-token `MAX_MCP_OUTPUT_TOKENS` limit** are stated verbatim on the
+**`troubleshooting`** page — pasted but never committed. The **MCP Apps sandbox-spillover finding**
+most likely belongs with them. **One paste converts all three from unsourced to captured**, which
+is the clearest argument yet for getting those pastes committed.
+
+**Genuinely unsourced — three:**
+
+| Claim | Why it worries |
+|---|---|
+| **300-second timeout** (Claude.ai/Desktop) | A hard number with no source |
+| **GA status required** — not beta, alpha or development | Stated as a gate; appears in no captured source |
+| **"~30% of rejections are missing tool annotations"** | ⚠️ **The most quotable and least verifiable of the three** — a precise statistic with no provenance is the exact profile that produced the 500px myth, and a frequency figure invites planning decisions |
+
+*(Attribution: the `troubleshooting` identification comes from the review chat's read of that page,
+which is not in this tree. Confirm when it is pasted.)*
 
 They almost certainly came from the June 2026 verification against pages never re-captured, or from
 `remote_server_submission_guide.md` (deleted 2026-08-05, recoverable at `e9d0777`).
