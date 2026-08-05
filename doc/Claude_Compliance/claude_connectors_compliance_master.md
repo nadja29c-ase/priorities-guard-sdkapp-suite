@@ -1,4 +1,7 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
+Last updated: **2026-08-05** — Compliance-Docs-01: body rewrite of §4C, §4K, §4N; new §12
+Post-publication. §4L and §4O **deliberately not rewritten** — their sources have no artifact in
+the tree (see the coverage note below). Prior entry:
 Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 7 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`, `mcp-apps/cross-compatibility`, `software_directory_policy`. **Partially refreshed:** the remaining three (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
 
 **No page is "closed."** Round 1 catches omission — did the source get captured. Round 2 runs
@@ -291,42 +294,108 @@ YES — Required if your server requires authentication.
 
 ⚠️ UPDATE May 2026: The policy text says "OAuth 2.0." However, Claude's implementation and the MCP authorization spec require PKCE S256, which aligns with OAuth 2.1 behavior. Correct framing: "OAuth 2.0 authorization code flow with PKCE S256 support, as required by Claude's auth implementation and the MCP authorization spec." Advertising "code_challenge_methods_supported": ["S256"] in your authorization server metadata is mandatory — if absent, Claude will refuse to proceed.
 
-Supported authentication types:
+Supported authentication types — complete list, verified against
+sources_raw/authentication.raw.md:15-22 (2026-08-04):
 
-Type
-Description
-oauth_dcr
-OAuth 2.0 with Dynamic Client Registration (RFC 7591)
-oauth_cimd
-OAuth 2.0 with Client ID Metadata Document
-oauth_anthropic_creds
-OAuth 2.0 with Anthropic-held client credentials — email mcp-review@anthropic.com
-custom_connection
-Custom URL or credentials — email mcp-review@anthropic.com
-none
-No authentication (authless server)
+| Type | Description | Availability |
+|---|---|---|
+| `oauth_dcr` | OAuth 2.0 + Dynamic Client Registration (RFC 7591) | Supported out of the box |
+| `oauth_cimd` | OAuth 2.0 + Client ID Metadata Document | Supported out of the box |
+| `oauth_anthropic_creds` | OAuth 2.0 with Anthropic-held client credentials | Contact `mcp-review@anthropic.com` |
+| `custom_connection` | Custom URL or credentials supplied at connection time | Contact `mcp-review@anthropic.com` |
+| `static_headers` | Fixed credential (API key or bearer token) entered by an **organization administrator** as a request header when adding the connector. **Shared by the organization rather than pasted per user** (raw 24) | **Beta** |
+| `none` | No authentication (authless server) | Supported. Optional partial-auth mode is experimental |
 
+*[Changelog 2026-08-04: this table previously carried a line reading "static_bearer (user-pasted
+tokens) is not yet supported." That was false on all three counts — wrong name, wrong actor, wrong
+availability — and is replaced by the `static_headers` row above. The interim "KNOWN FALSE" flag
+that stood here has been removed with the claim it flagged; keeping a warning about a deleted
+sentence is its own kind of stale.]*
 
-static_headers (BETA) — a fixed credential (API key or bearer token) entered ONCE BY AN
-ORGANIZATION ADMINISTRATOR as a request header when adding the connector. The credential is
-SHARED BY THE ORGANIZATION rather than pasted per user. Claude sends it on every request.
-[CORRECTED 2026-08-04 — this line previously read "static_bearer (user-pasted tokens) is not yet
-supported", which was false on all three counts: the type is named static_headers, the actor is an
-org admin rather than the end user, and it is supported in beta rather than unsupported.]
+**No machine-to-machine grant.** A pure `client_credentials` grant — a server-to-server token with
+no user in the loop — is **not supported**. Every connection requires user consent (raw 30).
+`oauth_anthropic_creds` is the consent-gated alternative: you create the client credentials on your
+own AS and send them to Anthropic, which stores them and completes the token exchange on behalf of
+consenting users after a standard OAuth consent screen (raw 32-37).
 
-⚠️ **KNOWN FALSE — verified 2026-08-04. Do not cite this line.** The live authentication
-page lists **no** `static_bearer`. It lists **`static_headers`** — *"fixed credential
-(API key or bearer token) entered by an **organization administrator** as a request
-header"* — marked **Beta**. So the capability was renamed, its actor changed from
-user-pasted to admin-entered, and it moved from unsupported to beta; or `static_bearer`
-was removed outright. Either way this sentence is wrong.
+⚠️ **`oauth_anthropic_creds` credentials are bound to the authorization server that issued them**
+(raw 41). Migrating to a new AS requires emailing `mcp-review@anthropic.com` with the new
+`client_id` and `client_secret` **before cutting over**. CIMD has no such constraint — a CIMD
+`client_id` is a self-hosted URL that works against any AS that fetches it.
 
-Flagged inline rather than left for the §4C rewrite, on the Blocker 0 precedent: a false
-claim in this file survived two rounds and three locations because each fix was scoped to
-where someone was pointed. Cost of the inline flag is one paragraph. See
-`authentication_claude_connectors.md` Part 3. Not PG-affecting — PG uses `oauth_dcr`.
-Confirmed again in round 2 against the committed raw source, which states outright that the
-credential *"is shared by the organization rather than pasted per user."*
+**CIMD selection requires BOTH conditions** (raw 50). Claude selects CIMD only when the AS metadata
+advertises **`"client_id_metadata_document_supported": true`** *and* **`"none"` in
+`token_endpoint_auth_methods_supported`** — the second because Claude's CIMD client authenticates
+as a **public client** at the token endpoint. **If either is missing, Claude falls back to DCR.**
+
+**DCR at scale** (raw 53): *"For servers expecting high traffic from the directory, prefer CIMD or
+`oauth_anthropic_creds` over DCR."* DCR causes Claude to register a **new client on every fresh
+connection**, which can produce very large numbers of registered clients. CIMD and Anthropic-held
+credentials avoid the registration call entirely.
+
+**Endpoint latency** (raw 135, 137). Claude waits up to **10 seconds** for discovery, registration
+and token endpoints, and **30 seconds** for refresh. Past that the flow is treated as failed **even
+if the server later completes**. The operational half, which is easy to miss: *return the response
+headers and body without buffering behind upstream work*, and check that no reverse proxy, API
+gateway or WAF in front of the endpoint is holding the response.
+
+**Parser split** (raw 115). `/token` **must accept** `Content-Type: application/x-www-form-urlencoded`
+per RFC 6749 §4.1.3 — Claude sends both the initial exchange and refresh with that content type,
+and a framework defaulting to JSON-only body parsing returns `415`. `/register` uses
+`application/json` per RFC 7591 §3.1. **Do not assume one parser serves both.**
+
+**Scope control and `offline_access`** (raw 57). Include a `scope` parameter in the
+`WWW-Authenticate` header on the 401 to control which scopes Claude requests. Without it, Claude
+requests everything the PRM advertises in `scopes_supported`. Claude **appends `offline_access`
+automatically** when the AS metadata lists it in `scopes_supported`, to obtain a refresh token.
+
+**Enterprise Managed Auth** (raw 120) — ⚠️ **SOURCE UNCAPTURED.** SSO organizations can connect
+their users **without an interactive OAuth consent step**, using an identity assertion signed by
+their identity provider. The linked page (`building/enterprise-managed-auth`) describes what the
+authorization server must support and **has not been captured**. Recorded as a known gap, not
+omitted.
+
+**Microsoft Entra ID — a conditional MUST** (raw 81). If the authorization server is Entra ID, the
+MCP server URL **must** also be registered as an **Application ID URI** on the Entra app
+registration, or the token request fails with `AADSTS9010010`. Not PG-affecting — PG runs its own
+AS — but it is a literal "must" carried in a `<Note>`, which a keyword sweep misses.
+
+**Claude Managed Agents uses a separate credential set** (raw 39), and **Claude Code does not use
+Anthropic-held credentials at all** — it runs its own OAuth flow with its own CIMD. ⚠️ **§1 of this
+file lists six platforms and does not mention Managed Agents.** Recorded as an inventory gap.
+
+**Claude Code's CIMD is published and fetchable** at `https://claude.ai/oauth/claude-code-client-metadata`
+(raw 104). It declares `redirect_uris: ["http://localhost/callback", "http://127.0.0.1/callback"]`
+and `token_endpoint_auth_method: "none"`. Loopback support can therefore be tested against the
+artifact rather than argued from prose.
+
+**`resource_metadata` need not be on the MCP server's origin** (raw 70) — *"it can be any HTTPS
+location that serves the JSON document."* A permission, not an obligation. It is the documented
+escape hatch for platforms that cannot serve `/.well-known/*` at the root (Supabase Edge Functions,
+Cloudflare Workers without a `/.well-known/*` route, Lambda function URLs routing only a prefix).
+
+**Fallback discovery** (raw 72). If the 401 carries no `resource_metadata`, Claude probes
+`/.well-known/oauth-protected-resource/<path>` then `/.well-known/oauth-protected-resource`. Treat
+as fallback: it adds round-trips and only works if the platform serves `/.well-known/*`.
+
+**A18 — consent-screen display. Spec-inherited; NOT a directory gate.** (raw 106.) The MCP
+authorization spec **requires** authorization servers to display the **redirect URI hostname**
+clearly on the consent screen, and **recommends** an extra warning when the only registered
+redirect URIs are loopback addresses. Rationale given upstream: a CIMD *"can't prevent loopback
+impersonation on its own — any local process can bind a port and claim to be the legitimate
+client."*
+
+⚠️ **Obligation level, stated precisely.** The **display** requirement is unconditional; only the
+**warning** carries the loopback condition. But it is the **MCP spec** requiring it, surfaced on
+Anthropic's page — **not** an Anthropic-enumerated directory criterion. Checked against both
+authorities: `review-criteria` never mentions consent screens or redirect URIs, and
+`software-directory-policy` contains exactly one authentication clause (§5D, *"secure OAuth 2.0
+with certificates from recognized authorities"*), which does not incorporate the spec's display
+requirement. **Open security item, post-submission. Not a submission gate.**
+
+**Do NOT re-add "proactive refresh 5 minutes before expiry" as a new finding.** It is already
+documented in this section and in the May 2026 changelog. It was listed as new once, in error.
+
 
 LAZY-AUTHENTICATION — read 2026-08-04, raw at sources_raw/lazy-authentication.raw.md.
 Referenced four times from the authentication page and never read until now.
@@ -587,14 +656,14 @@ Required per policy §3H: developers must follow design guidelines Anthropic pub
 
 Inline card constraints:
 - **Height:** Auto-fits to content, no nested scrolling. Host caps and clips overflow. No published px limit. If a scroll viewport is needed, escalate to fullscreen via `ui/request-display-mode`
-  ⚠️ **On the "500px" figure used in our widgets — read this before citing it as a requirement.**
-  The host constrains inline widget height, but Anthropic publishes **no px value**. Our widgets
-  (PG-Claude, MindSort-Claude) target **~500px (480px threshold)** as a *conservative engineering
-  budget* to avoid host clipping while remaining compatible with current Claude host behaviour.
-  This is an **implementation target, not a documented platform specification.**
-  Consequences: exceeding 500px is **not** automatically a compliance violation — the real
-  requirements are (a) auto-fit to content and (b) never nested-scroll. Do not brief increments as
-  though 500px were a published Anthropic limit (this has caused incorrect constraints twice).
+  *[Changelog 2026-08-04: a hedging paragraph stood here explaining that "500px" was an
+  implementation budget rather than a platform limit. It is removed — the constraint is stated
+  correctly on the line above, and repeating a retracted figure in order to disown it keeps the
+  figure in circulation. The source constraint is: auto-fits to content, NO NESTED VERTICAL
+  SCROLL (design-guidelines.raw.md:39, :62); the host caps and clips overflow; NO PIXEL VALUE IS
+  PUBLISHED ANYWHERE. The mechanism is described in the source's "Scrolling and gestures" section
+  (raw 186). PG-Claude and MindSort-Claude target ~500px as an internal engineering budget; that
+  is a local implementation choice with no standing in this document.]*
 - **Width:** **No documented width limit and no fixed breakpoints.** Official guidance: *"Apps always
   fill the container width—there are no fixed breakpoints. Design responsively from 320px up to
   fullscreen."* Also: *"Full-width layouts — don't add side margins that waste screen real estate"*
@@ -672,7 +741,33 @@ Mobile constraints:
 - Renders in WKWebView (iOS) / WebView (Android), not sandboxed iframe
 - No camera/mic/location access on mobile
 - Connectors must be added via web or desktop before appearing on mobile
-- Honor safeAreaInsets for notches and home indicator
+- **Safe areas — NOT mobile-specific.** Corrected 2026-08-05; this line read "Honor safeAreaInsets
+  for notches and home indicator", which implied a mobile-only concern. Source
+  design-guidelines.raw.md:134, verbatim: *"Safe areas are not mobile-specific: on web and desktop
+  the composer can overlay the bottom of an inline app, so avoid placing interactive controls
+  flush against any edge."*
+  Read `hostContext.safeAreaInsets.{top, right, bottom, left}` (pixels) and apply as padding on the
+  root container, **or as `scroll-padding` on scroll-snap containers** so items come to rest inside
+  the visible region. *"The user won't be able to interact with anything rendered outside the safe
+  area"* — e.g. buttons obscured by a mobile navigation bar.
+
+- **`prefersBorder` — set it explicitly, and know what the default costs** (raw 138). Set
+  `_meta.ui.prefersBorder` to **true or false explicitly**. **If no value is specified: borderless
+  on web, BORDERED ON MOBILE.** In borderless mode content runs **edge-to-edge with no host
+  padding**, so *"honoring `safeAreaInsets` becomes essential; the bordered card's built-in padding
+  otherwise absorbs most of them."*
+  ⚠️ **This is one decision with two consequences, not two independent recommendations.**
+  transparent-theming recommends `false` for portability and is silent on the mobile consequence;
+  design-guidelines states the consequence. The pages are consistent — one is incomplete alone.
+  Choosing `false` buys portability and **costs the mobile card padding**, after which honouring
+  `safeAreaInsets` is no longer optional.
+  For carousels: apply `safeAreaInsets.left`/`.right` as **`scroll-padding-inline`** on the scroll
+  container, so items at rest sit clear of the device edges but can scroll underneath them.
+
+- **Inline carousel** (raw 72-95) — added 2026-08-05, absent from this section before.
+  Maintain **consistent card dimensions** within a carousel. On mobile, cards are optimised for
+  **horizontal swipe**: design for thumb reach, keep primary actions in the **lower portion** of
+  cards, and **peek the next card** to signal scrollability.
 - Design responsively from 320px minimum width up to fullscreen — no fixed breakpoints
 - Full-width layouts — do not add side margins that waste mobile screen real estate
 - Avoid fixed-width layouts; content must reflow gracefully
@@ -706,12 +801,20 @@ Declare external origins per ui:// resource via _meta.ui.csp:
     "ui": {
       "csp": {
         "connectDomains": ["https://api.example.com"],
-        "resourceDomains": ["https://cdn.example.com"]
+        "resourceDomains": ["https://cdn.example.com"],
+        "baseUriDomains": []
       }
     }
   }
 }
-By default, all external origins are blocked. connectDomains = API endpoints the widget calls. resourceDomains = CDN/asset origins. frameDomains (third-party iframes) is currently restricted pending security review.
+By default, all external origins are blocked. connectDomains = API endpoints the widget calls.
+resourceDomains = CDN/asset origins. baseUriDomains = origins permitted in a <base href> (added
+2026-08-04 — present in the source example at design-guidelines.raw.md:159 and previously absent
+here). frameDomains (third-party iframes) is currently restricted pending security review.
+
+⚠️ resourceDomains ALSO ADDS THE LISTED ORIGINS TO script-src AND style-src, so keep it to origins
+trusted to serve executable code; prefer bundling third-party fonts into the widget over
+allowlisting public CDNs (transparent-theming.raw.md:52-54).
 
 Display modes:
 Declare supported modes via appCapabilities.availableDisplayModes in ui/initialize. Modes: inline, fullscreen, pip. Host responds with supported modes. Request a switch with ui/request-display-mode.
@@ -800,7 +903,22 @@ MCP Apps can run in both Claude and ChatGPT from a single codebase. The SDK auto
 environment via App.connect() (no explicit transport parameter needed). registerAppTool() and
 registerAppResource() automatically generate platform-specific metadata.
 
-Complete host CSS token reference (source: https://claude.com/docs/connectors/building/mcp-apps/design-guidelines)
+Host CSS token reference — PARTIAL. Corrected 2026-08-05; this heading previously read
+"Complete host CSS token reference" and the list below omits four whole groups.
+
+⚠️ MISSING FROM THE LIST BELOW, present in design-guidelines.raw.md:
+  ghost variants     — color-background-ghost (raw 293), color-text-ghost (304),
+                       color-border-ghost (315)
+  disabled variants  — color-background-disabled (298), color-text-disabled (309),
+                       color-border-disabled (320)
+  color-border-inverse (raw 314)
+  the FULL RING GROUP — color-ring-primary, -secondary, -inverse, -info, -danger (raw 322-326)
+  the heading size scale with line-heights
+
+Per standing check #1 the honest options were to enumerate them or drop the word "Complete".
+Both are done: the word is dropped AND the gaps are named, so a reader knows what to go and look
+up rather than assuming the list below is exhaustive. The values that ARE listed were verified
+against the source and are correct.
 IMPORTANT: Hardcoded fallback hex values MUST match official values below. Mismatches cause incorrect rendering when host tokens fail to load.
 
 Background tokens (Light / Dark):
@@ -1050,6 +1168,13 @@ SDK App class — RECOMMENDED, not required:
   because the direction is what produces over-constrained increments and wasted work.
 
 4N. Transparency and Theming (MCP Apps)
+
+⚠️ THIS SECTION IS NOT OPTIONAL POLISH. It is the MECHANISM FOR DISCHARGING M1 — "All views must
+support both light and dark themes. Use the host's style tokens — they automatically adapt. NEVER
+HARDCODE COLORS." (design-guidelines.raw.md:204.) That is one of only TWO developer obligations
+stated with "must" on the entire design-guidelines page, and it is recorded in §4K. The techniques
+below — applyDocumentTheme, applyHostStyleVariables, the useHostStyles hook, token-based CSS with
+light-dark() fallbacks — are how M1 is satisfied. Read this section as compliance, not styling.
 Source: https://claude.com/docs/connectors/building/mcp-apps/transparent-theming
 
 For widgets to blend with Claude's conversation UI (strongly recommended for directory apps):
@@ -1466,7 +1591,77 @@ Transport — FastMCP Streamable HTTP already in use; SSE deprecated path not us
 Error handling — implemented with structured error messages
 
 
+12. POST-PUBLICATION (new section, 2026-08-05)
+Source: building/after-publishing. ⚠️ RELAY-ONLY, NO ARTIFACT — this page has no raw file in
+sources_raw/. Recorded because it materially changes how reversible submission decisions are, but
+it is the weakest provenance category in this document. See sources_raw/PROVENANCE.md.
+
+TOOL CHANGES DO NOT REQUIRE RESUBMISSION. To add, change or remove tools, deploy the change to the
+server. There is no resubmission to Anthropic and NO SCHEDULED RE-REVIEW; Claude picks up the new
+tool surface on the next connection.
+
+⚠️ CAVEAT, AND IT IS NOT SMALL. Software Directory Policy states Anthropic conducts "both initial
+and ONGOING reviews", and Terms T-8 obliges continued maintenance of standards consistent with the
+policy AS UPDATED. "No scheduled re-review" is NOT "never reviewed again". This is latitude for
+iteration, not a gap to ship through.
+
+WHAT IS IRREVERSIBLE: the URL SLUG. Once published it cannot be changed, and it is a permanent
+public URL — https://claude.ai/directory/connectors/SLUG — that will appear on marketing pages and
+in any "Connect to Claude" button. Display names can change; the slug cannot. Choose it at the
+portal deliberately.
+
+LISTING EDITS go through the submissions dashboard. The page building/managing-your-listing covers
+which changes can be made directly and which require review. ⚠️ UNCAPTURED — not fetched, not
+pasted. It is a separate page, not a rename of after-publishing.
+
+DELISTING: email mcp-review@anthropic.com. (§7 says removal is requestable "through support
+channels"; this is the specific address.)
+
 11. What Changed From Previous Version
+
+### 2026-08-05 — Compliance-Docs-01: body rewrite of §4C, §4K, §4N; new §12
+
+**Documentation only.** No code, no tool descriptions, no PG remediation. PG findings appear as
+recorded status, not work items.
+
+**§4C** rewritten against `authentication.raw.md` and `lazy-authentication.raw.md`. The
+`static_headers` row replaces the false `static_bearer` line **and the interim "KNOWN FALSE" flag
+was removed with it** — a warning about a deleted sentence is its own kind of stale. Added: the
+CIMD dual condition and why the second half exists; DCR-at-scale; the latency budgets **with their
+operational half** (no buffering behind upstream work; check proxy/gateway/WAF); the
+`/token` vs `/register` parser split; `offline_access` auto-append; the `oauth_anthropic_creds`
+AS-binding migration constraint; the Entra `AADSTS9010010` conditional MUST; Claude Managed Agents
+as an eighth surface; Claude Code's published CIMD URL; `resource_metadata` not needing the MCP
+origin; fallback discovery. **A18** recorded with its obligation level stated precisely —
+spec-inherited, display requirement unconditional, **not a directory gate** on either authority.
+**Enterprise Managed Auth** recorded as a known gap, source uncaptured.
+
+**§4K** — the 500px hedging paragraph is **deleted**, not rewritten: repeating a retracted figure
+to disown it keeps it in circulation. `baseUriDomains` added to the CSP example with the
+`script-src`/`style-src` caveat. *"Complete host CSS token reference"* → **"PARTIAL"**, with the
+four missing groups named (ghost, disabled, `border-inverse`, the full ring group, the heading
+scale) so a reader knows what to look up. Safe areas corrected — **not mobile-specific**; the
+composer overlays inline apps on web and desktop too. `prefersBorder` recorded as **one decision
+with two consequences**. Inline carousel constraints added.
+
+**§4N** now states at the top that it is **the mechanism for discharging M1** — one of only two
+developer obligations stated with "must" on the whole design-guidelines page — rather than reading
+as optional polish.
+
+**§12 Post-publication** (new). Tool changes need no resubmission and there is no scheduled
+re-review, **but** the policy's "ongoing reviews" and Terms T-8 mean that is latitude, not a gap.
+The **slug is irreversible**. Delisting is `mcp-review@anthropic.com`.
+
+**Not done, and why:** **§4L and §4O were not rewritten.** `external-links` and `troubleshooting`
+have **no raw file in the tree and never have** — their current content rests on relayed facts with
+no bytes behind it. Rewriting those bodies would have converted unverifiable claims into
+authoritative-looking prose. They keep their **relay-only, no artifact** marking until the pastes
+are committed.
+
+**Source count corrected 13 → 11.** Provenance gained a fifth category (**relay-only, no
+artifact**). The **hardening sweep was run** for the first time — nine instances, three of them new
+and all in §4K. Standing checks **#6** (do not put one obligation label over a mixed list) and
+**#7** (a number needs its pattern and its predicate) added.
 
 ### 2026-08-04 Update (round 1 on 3 of 10 pages — design guidelines, authentication, transparent theming)
 
