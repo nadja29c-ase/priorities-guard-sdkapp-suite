@@ -25,7 +25,7 @@ logger = structlog.get_logger(__name__)
 
 NAME = "inspect_adapt"
 
-DESCRIPTION = """Record confirmed action steps from an inspect & adapt reflection.
+DESCRIPTION = """Guide the user through an inspect & adapt reflection and confirm their action steps.
 Call this tool ONCE after facilitating the full reflection conversation.
 
 CALL PRECONDITIONS — DO NOT CALL unless ALL are true:
