@@ -1,4 +1,10 @@
-Anthropic/Claude: COMPLIANCE FOR CONNECTORS
+Anthropic/Claude: COMPLIANCE FOR CONNECTORS — SOURCE SYNTHESIS AND AUDIT RECORD
+
+➡️ **SHIPPING OR SUBMITTING? READ `CLAUDE_COMPLIANCE_REQUIREMENTS_CANONICAL.md` INSTEAD.**
+That file carries every requirement, one row each, with its obligation level, its source line and
+PG's recorded status — and nothing else. **This file is the audit record**: provenance, changelog,
+standing checks, the hardening sweep, round-1/round-2 status and implementation mechanism.
+Requirements are roughly 15% of it, which is why it is the wrong thing to read before an increment.
 **Last updated: 2026-08-05.** Compliance-Docs-01 — §4C/§4K/§4N bodies rewritten, §5 replaced,
 §6 dated, §6b Terms added, §9 PG status recorded, §12 Post-publication added. **§4L and §4O are
 deliberately not rewritten** — their sources have no artifact in the tree.
@@ -150,6 +156,14 @@ are APPENDED, never inserted, so references from briefings and increments stay v
    will not read to the caveat. Three instances in one session: a stale "Last updated" line at the
    top of this header, the old submission-form field list left under a notice in §5, and *"Updated
    this week"* in a committed file.
+
+9. **Standing checks are APPEND-ONLY.** Inserting one renumbers every check below it and silently
+   invalidates every outside reference — briefings, increments and commit messages all cite these
+   by number. `fd71a68` inserted at #7 and broke a reference in an increment briefing written the
+   same day.
+10. **After any structural edit to this file, confirm the standing-checks block is still present
+    and still numbered as referenced.** A block nobody reads until something points at it is a
+    block that can vanish silently — and one did, surviving two commits.
 
 > ⚠️ *Restored 2026-08-05. This entire block was DELETED by the header rewrite in `4d2a413` — a
 > replacement span ran from the coverage heading to "SCOPE OF THIS FILE" and the checks sat between
