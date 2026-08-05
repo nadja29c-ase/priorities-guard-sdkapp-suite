@@ -1,5 +1,5 @@
 Anthropic/Claude: COMPLIANCE FOR CONNECTORS
-Last updated: **2026-08-05** — Compliance-Docs-01: body rewrite of §4C, §4K, §4N; new §12
+Last updated: **2026-08-05** — Compliance-Docs-01 COMPLETE except §4L/§4O: §4C/§4K/§4N bodies, §5 replaced, §6 dated, §6b Terms, §9 PG status, new §12
 Post-publication. §4L and §4O **deliberately not rewritten** — their sources have no artifact in
 the tree (see the coverage note below). Prior entry:
 Last updated: 2026-08-04 — **round 1 (re-fetch + extract) run on 7 of 10 source pages:** `mcp-apps/design-guidelines`, `building/authentication`, `mcp-apps/transparent-theming`, `mcp-apps/instance-supersession`, `review-criteria`, `mcp-apps/cross-compatibility`, `software_directory_policy`. **Partially refreshed:** the remaining three (review-criteria, submission, software_directory_policy, troubleshooting, external-links, cross-compatibility) were last verified 2026-06-23 and are NOT yet re-checked. Treat sections sourced from them as two months old.
@@ -70,44 +70,45 @@ claim in the list unreadable as to obligation level.** It has its own standing c
 A green artifact tally does not transfer here. **What HAS been done is corrective**: every claim
 known to be false has been fixed at the point where it is stated.
 
-⚠️ **SOURCE COVERAGE — 11 raw files, and this file is SILENT ON 9 THINGS.** Corrected 2026-08-05;
-an earlier version of this header said 13.
+⚠️ **SOURCE COVERAGE — THIS FILE IS CURRENT AGAINST 11 SOURCES AND SILENT ON 9.**
+Corrected 2026-08-05; an earlier version of this header said 13 captured.
 
-**Committed (11):** `authentication` · `cross-compatibility` · `design-guidelines` ·
-`instance-supersession` · `lazy-authentication` · `review-criteria` · `software-directory-policy` ·
-`software-directory-terms` · `submission` · `testing` · `transparent-theming`.
-**8 corroborated in some form; 3 FETCH-ONLY and undated** — `review-criteria`, `testing`,
-`lazy-authentication`.
+**Provenance of every captured source — the category determines how far a claim can be trusted:**
 
-⚠️ **§4L and §4O REST ON NOTHING IN THIS TREE.** `external-links` and `troubleshooting` have **no
-raw file and never have.** Their content was pasted elsewhere, relayed, and applied here.
-**That is weaker than fetch-only**: a fetch at least leaves bytes to check against; these leave
-none. Treat both sections as **relay-only, no artifact** until the pastes are committed.
+| # | Source | Provenance | Publication date |
+|---|---|---|---|
+| 1 | `design-guidelines` | fetch, paste-corroborated | — |
+| 2 | `authentication` | **fetch, paste-corroborated ×3** — three copies, no divergence | — |
+| 3 | `transparent-theming` | fetch, paste-corroborated (60 lines, byte-identical) | — |
+| 4 | `instance-supersession` | fetch | — |
+| 5 | `cross-compatibility` | fetch | — |
+| 6 | `submission` | fetch, **relay-corroborated (8 facts)** | ❌ none |
+| 7 | `software-directory-policy` | fetch, paste-corroborated | **15 April 2026** (from the paste only) |
+| 8 | `software-directory-terms` | fetch, content-corroborated | **16 March 2026** (from the paste only) |
+| 9 | `review-criteria` | ⚠️ **FETCH ONLY** | ❌ none |
+| 10 | `testing` | ⚠️ **FETCH ONLY** | ❌ none |
+| 11 | `lazy-authentication` | ⚠️ **FETCH ONLY** | ❌ none |
 
-**Uncaptured but relevant (2):** `directory-vs-custom` · `managing-your-listing`.
-**Binding documents outside `llms.txt` (5):** Trademark Guidelines (Terms T-10) · Usage Policy ·
-Universal Usage Standards · High-Risk Use Case requirements · supported-countries policy — the
-last four made binding by **Policy §1A alone**. A clean `llms.txt` read is **not** full coverage.
+**The `.md` fetch endpoint strips the publication date.** Both dates above exist only because the
+page was pasted. A fetched raw file **cannot be dated from its own contents** — so the three
+fetch-only rows are undated *and* uncorroborated. §4B and §7 draw on `review-criteria` and inherit
+that limitation.
 
-**STANDING CHECKS — record these when writing any claim in this file:**
+⚠️ **THE 9 THINGS THIS FILE IS SILENT ON:**
 
-1. **State the obligation level the source states, and cite where it says so.** Silence is not
-   evidence of absence; emphasis is not evidence of obligation. *(9 instances found in one pass —
-   8 hardening, 1 the mirror.)*
-2. **A negative claim must state the scope it was proved over.** *"No match for X in file Y"*, not
-   *"nowhere"*.
-3. **Name the surface a claim describes.** The shared registry is not the Claude serving path.
-4. **Never a bare hash.** Record the computation, or the hash with the URL it derives from.
-5. **Relative timestamps are worse than none** — in a committed file they silently re-anchor to
-   whenever the reader looks.
-6. **Do not put a single obligation label over a mixed list.** *(New 2026-08-05, from sweep item
-   #8.)* A blanket "(mandatory)" over items of differing force does not overstate any one of them —
-   it destroys the reader's ability to tell which one binds. **Label each item, or label none.**
-   This is distinct from #1: inflation makes one claim wrong; this makes a whole list unreadable
-   as to obligation level.
-7. **A number needs its pattern and its predicate.** *(New 2026-08-05, from sweep item #7.)*
-   *"3 lines matching `\bmust\b`"* and *"2 developer obligations"* are different facts about the
-   same page; only the second bears on compliance. State which one is meant.
+**Relay-only, no artifact (2)** — §4L and §4O rest on relayed facts with **no bytes in this tree**.
+Weaker than fetch-only: a fetch at least leaves something to check against.
+- `external-links` → §4L · `troubleshooting` → §4O
+
+**Uncaptured but relevant (2)**
+- `directory-vs-custom` — PG is a custom connector today and a directory connector after review
+- `managing-your-listing` — holds the edit-vs-review boundary for published listings
+
+**Binding documents outside `llms.txt` (5)** — `llms.txt` indexes `claude.com/docs` only, so a
+clean read of it is **not** full coverage:
+- Trademark Guidelines (made binding by **Terms T-10**)
+- Usage Policy · Universal Usage Standards · High-Risk Use Case requirements ·
+  supported-countries policy (all four made binding by **Policy §1A alone**)
 
 ⚠️ **SCOPE OF THIS FILE.** It records **what the sources require** and **what PG currently does**.
 PG status is *recorded status*, not a work list. Where a discrepancy is noted, it is noted so it is
@@ -540,55 +541,6 @@ IP allowlisting alone is not recommended as a security measure — use OAuth 2.1
 
 > ⚠️ NEW — Origin-header validation: Your MCP server must also validate the `Origin` header on incoming requests. This is listed as a technical requirement in the submission form policy checklist alongside OAuth, HTTPS, and annotations. Servers that accept requests without validating the `Origin` header fail the security review.
 
-4F-bis. SOFTWARE DIRECTORY TERMS — THE BINDING CONTRACT (added 2026-08-04)
-Source: https://support.claude.com/en/articles/13145338-anthropic-software-directory-terms
-Dated 16 March 2026. Raw: sources_raw/software-directory-terms.raw.md
-Full extraction: software_directory_terms_claude.md
-
-⚠️ THIS DOCUMENT HAD NO REPO COPY OF ANY KIND UNTIL 2026-08-04. §6 reproduces the POLICY in full
-and never mentioned the TERMS — while Policy §3H makes agreeing to them MANDATORY. The Policy says
-what the Software must do; the TERMS are what you WARRANT when you submit.
-
-T-3  ACCURACY WARRANTY: "any information you give us will be accurate and up-to-date."
-     This covers EVERY FIELD ON THE SUBMISSION FORM. A wrong URL, a stale domain hash or an
-     inflated capability claim is a WARRANTY DEFECT, not a typo. It is what makes this entire
-     documentation audit contractually load-bearing rather than merely tidy.
-
-T-4  PRIVACY WARRANTY INCLUDING THIRD PARTIES: provide and adhere to a privacy policy, "provide
-     all applicable THIRD-PARTY privacy policies", and ensure all such policies "clearly and
-     accurately describe to users what user information you AND THIRD PARTIES collect and how you
-     and third parties use and share such information."
-     PG connects to Google Calendar, so Google's policy must be PROVIDED and its collection/use/
-     sharing accurately described. Disclosure existing is NOT the same as providing the link.
-
-T-9  SECURITY VULNERABILITY REPORTING: "implement and maintain a mechanism for receiving reports
-     of security vulnerabilities from Anthropic AND FROM THIRD PARTIES and to investigate such
-     reports with a reasonable standard of care."
-     DISTINCT FROM §3B, which is a user support channel. T-9 names Anthropic and third parties and
-     adds a DUTY OF CARE. Nothing in this audit shows such a mechanism exists. APPEARS UNIMPLEMENTED.
-
-T-10 NO PARTNERSHIP/SPONSORSHIP/ENDORSEMENT statements without prior written approval; comply at
-     all times with Anthropic's Trademark Guidelines. Constrains fulfilling-productivity.com launch
-     copy. ⚠️ The Trademark Guidelines are a SECOND referenced binding document and are NOT in the
-     repo — .md returns 404 and the HTML is a Next.js bundle. NEEDS A PASTE. Recorded as an
-     obligation whose CONTENT IS UNKNOWN.
-
-T-8  Ongoing duty to maintain quality and security standards consistent with the Policy AS UPDATED.
-     This is why the doc pass must be repeatable, not one-off.
-T-1/2/5/6/7  Rights warranty; legal compliance; indemnification; licences over descriptions, docs,
-     name and logos; authorisation to test and to collect AND SHARE functional metadata. Recorded
-     as accepted, not actionable.
-
-Also: Anthropic has NO obligation to include the Software and may remove it at any time for any
-reason without liability. Terms may be modified WITHOUT PRIOR NOTICE; continued maintenance
-constitutes acceptance.
-
-⚠️ THE ART. 28 ERROR IS NOW A WARRANTY DEFECT, NOT LEGAL HYGIENE. Privacy policy v3.2
-characterises Anthropic as an Art. 28 data processor, which is incorrect. Under T-3 it is
-inaccurate information given to Anthropic; under T-4 it is a policy that does not "clearly and
-accurately describe" the third-party relationship. It moves from "should fix" to FIX BEFORE THE
-FORM GOES IN. It is cheap, and it is the one document Anthropic is guaranteed to read closely.
-
 4F. Documentation
 Comprehensive documentation required — published at a stable HTTPS URL before your publish date (a blog post or help-center article is sufficient; can share privately with Anthropic during review).
 
@@ -894,6 +846,10 @@ own URL produce three values sharing NOTHING:
   4c08ba210ef30c57e400ae94d8b49e97   https://mcp.priority-guard.com/mcp/   <- trailing slash
   6a52566e8cef0070d2481bfab80f0c82   https://mcp.priority-guard.com        <- bare origin
 
+⚠️ LOCAL stdio CONNECTORS HAVE NO URL, so there is nothing to hash — OMIT the _meta.ui.domain
+field entirely rather than inventing a value. Added 2026-08-05. (PG is remote and unaffected;
+recorded because the formula reads as universal.)
+
 There is NO WAY TO SPOT THIS BY EYE — a wrong domain looks exactly as plausible as a right one.
 The troubleshooting page's trailing-slash warning is not theoretical. Always recompute from the
 configured MCP_RESOURCE_URL rather than transcribing.
@@ -990,6 +946,13 @@ PG widget pre-submission checklist (MCP Apps specific):
 [x] prefersBorder: false set in _meta.ui — resources_dupl.py
 [x] openLink() only called from user gesture handlers — ConnectionStatus.tsx onClick
 [ ] Allowed link URIs declared in submission portal — SATISFIABLE (see §4L; PG owns the origin)
+
+⚠️ THE PROCEDURE FOR THE TOOL-EXERCISE ATTESTATION IS DOCUMENTED. building/testing is CAPTURED at
+sources_raw/testing.raw.md (fetch-only, undated). It states that ANY Claude account — Free, Pro,
+Max, Team or Enterprise — can add a custom connector, and that custom connectors use THE EXACT SAME
+RUNTIME as directory connectors. So the attestation work is NOT gated behind the Team/Enterprise
+requirement in §2; only the portal itself is. There is no staging environment: testing happens in
+production as a custom connector, or through a tunnel for a local server.
 
 ✅ B7 IS NOT GATED BY THE TEAM PLAN. FOUND 2026-08-04 on building/testing, raw line 13:
   "ANY CLAUDE ACCOUNT (Free, Pro, Max, Team, or Enterprise) CAN ADD A CUSTOM CONNECTOR... CUSTOM
@@ -1311,82 +1274,80 @@ Debugging in Claude Desktop:
   After editing claude_desktop_config.json: Developer > Reload MCP Configuration
 
 
-5. Submission Form Requirements
+5. SUBMISSION PORTAL — eleven steps
+Source: sources_raw/submission.raw.md (fetch, relay-corroborated on 8 facts; UNDATED).
 
-⚠️⚠️ THIS ENTIRE SECTION IS SUPERSEDED. ADDED 2026-08-04.
+*[Changelog 2026-08-05: this section previously listed the fields of the OLD SUBMISSION FORM, with
+a supersession notice bolted on top. The form does not exist for remote MCPs. The old field list is
+REPLACED, not annotated — a superseded list under a warning is still a list people fill in.]*
 
-§5's field list was built from the OLD SUBMISSION FORM, which no longer exists for remote MCPs
-(see the §2 blocker). Submission is now an ELEVEN-STEP PORTAL. Content §5 does not have:
+ACCESS GATE FIRST — see §2. The portal lives in Claude.ai admin settings and requires a TEAM OR
+ENTERPRISE ORGANISATION; admin settings are unavailable on individual plans.
 
-  CHARACTER LIMITS (B9)   name <=100 · tagline <=55 · description <=2000 · 1-5 categories
-  PERMANENT SLUG          the URL slug CANNOT BE CHANGED once published — choose deliberately
-  READ/WRITE QUESTION     "does it read data, write data, or both"
-  DATA-HANDLING QUESTIONS own API / proxied with permission / third party you do not control;
-                          personal health data; sponsored content
-  SEVEN COMPLIANCE ACKNOWLEDGMENTS (B8) — ALL REQUIRED. This is the attestation set, and under
-  Software Directory Terms T-3 every one of them is a WARRANTY:
+THE ELEVEN STEPS:
+  1. Introduction     2. Connection     3. Tools         4. Listing
+  5. Use cases        6. Company        7. Authentication  8. Data handling
+  9. Test & launch   10. Compliance    11. Review
 
-    1. directory guidelines            -> Policy §3H, design guidelines
-    2. first-party API usage           -> Policy §3F, review-criteria R8
-    3. financial transactions          -> Policy §4A
-    4. AI media generation             -> Policy §4B
-    5. prompt injection                -> Policy §2D-§2G, review-criteria R6
-    6. conversation data collection    -> Policy §1D and §1F
-    7. public documentation            -> Policy §3A/§3B/§3C/§3E
+Progress SAVES IN-BROWSER between steps within a session.
 
-  B7 ATTESTATION — "you confirm you've run every tool yourself, either via MCP Inspector or as a
-  custom connector in Claude." SEE THE §8 CHECKLIST: PG cannot tick this truthfully today.
+STEP 2 — CONNECTION. Server URL must be https://. ⚠️ The exact string entered here is one of the
+three that must agree; see the three-way URL match in §8.
 
-  SCREENSHOTS (B6) — 3-5 PNG, >=1000px, cropped to the app response, PROMPT NOT IN THE IMAGE,
-  prompts supplied separately. ASPECT RATIO IS UNCONSTRAINED. VIDEO AND GIF ARE REJECTED. ONE
-  BATCH COVERS ALL SURFACES — no separate mobile assets. A carousel template exists in the Figma
-  community file. (§5 previously carried only the count and the width.)
+STEP 3 — TOOLS. The portal SYNCS ANNOTATIONS AUTOMATICALLY from the served tool list and GROUPS
+UN-ANNOTATED TOOLS SEPARATELY. Violations are flagged with an instruction to "fix them on your
+server before submitting" — every tool needs a title plus the applicable readOnlyHint or
+destructiveHint (Policy §5E).
 
-  B2 server URL must be https:// — confirmed at the Connection step.
-  B10 LOCAL connectors only: README Privacy Policy section, privacy_policies array in manifest
-      (v0.2+), HTTPS URLs. "Missing or incomplete privacy policies result in immediate rejection"
-      is scoped to that local-connector section — but Policy §3A and Terms T-4 bind PG regardless.
+STEP 4 — LISTING. Hard limits:
+  name          <= 100 characters
+  tagline       <=  55 characters
+  description   <= 2000 characters
+  categories    1-5
+  URL SLUG      ⚠️ PERMANENT ONCE PUBLISHED. See §12 — it becomes
+                https://claude.ai/directory/connectors/SLUG, a public URL used in marketing and in
+                any "Connect to Claude" button. Display names can change; the slug cannot.
 
-DO NOT FILL THE PORTAL FROM §5. Use sources_raw/submission.raw.md.
+STEP 8 — DATA HANDLING. Asks whether the server reads data, writes data, or both; whether it calls
+your own API, an API you proxy with permission, or a third party you do not control; whether it
+handles personal health data; and whether it carries sponsored content.
 
-Have the following ready when filling out the submission form:
+STEP 9 — TEST & LAUNCH. Test credentials are required and must be a FULLY POPULATED ACCOUNT with
+SAMPLE DATA (Policy §3D), plus STEP-BY-STEP SETUP INSTRUCTIONS FOR SOMEONE UNFAMILIAR WITH THE
+SERVICE (testing.raw.md:39).
 
-Server basics — server name, URL, tagline, description, use cases
-Connection details — auth type, transport protocol, read/write capabilities, connection requirements
-Data & compliance — data handling practices, third-party connections, health data access, category
-Tools, resources & prompts — list of all tools with human-readable names, resources, and prompts; confirmation of all tool annotations
-Documentation & support — links to docs, privacy policy, support channel
-Test account — credentials with step-by-step setup instructions (fully populated, no MFA required)
-Launch readiness — GA date, confirmation of which surfaces tested (Claude.ai, Desktop, etc.)
-Branding — server logo (URL or SVG upload), favicon verification
-For MCP Apps — screenshots mandatory for directory listing. Requirements: 3–5 PNG screenshots, at least 1000px wide, cropped to the app response area only — do NOT include the prompt in the image. Provide the prompt text separately for each screenshot.
-Allowed link URIs — if connector uses ui/open-link, declare allowed HTTPS origins and custom URI schemes (declared destinations open without confirmation prompt; anything else still prompts user)
+  ⚠️ THIS STEP CARRIES AN ATTESTATION, NOT A SUGGESTION: "You also confirm you've run every tool
+  yourself, either via MCP Inspector or as a custom connector in Claude." Terms T-3 warrants that
+  all information given to Anthropic is accurate, so ticking it without having exercised every
+  public tool is a WARRANTY DEFECT. See §8.
 
-⚠️ CORRECTED 2026-08-04 — this section said non-conforming entries are "rejected". That matches
-NEITHER source and understates a silent-failure risk. There are TWO DISTINCT MECHANISMS:
-  submission page  — entries whose origin you DO NOT OWN are "REMOVED DURING REVIEW" (B5)
-  external-links   — MALFORMED entries are "IGNORED"
-Neither is a rejection. Both fail QUIETLY: the listing ships, the entry is gone, and users get the
-confirmation modal on every link — with nothing in the submission result to say so.
+STEP 10 — COMPLIANCE. SEVEN ACKNOWLEDGMENTS, ALL REQUIRED. Under Terms T-3 each is a WARRANTY, not
+a checkbox, so each is mapped to the obligation it acknowledges:
 
-⚠️ B5 — EVERY listed origin and scheme MUST BE OWNED BY THE SUBMITTING ORGANISATION.
-PG STATUS ✅ SATISFIABLE, verified 2026-08-04. ConnectionStatus.tsx calls openLink({url: connectUrl})
-where connect_url is built in google_connection_router.py:138 as
-  f"{settings.BACKEND_PUBLIC_URL}/auth/google/start?token={token}"
-and BACKEND_PUBLIC_URL defaults to https://www.priority-guard.com (config.py:74) — A DOMAIN PG
-OWNS. It does NOT point at accounts.google.com; PG's own backend performs the Google redirect. So
-the entry is allowlistable and there is no confirmation-modal degradation on calendar connect.
-  - Allowlist https://www.priority-guard.com. SUBDOMAINS ARE NOT IMPLIED — if BACKEND_PUBLIC_URL
-    is overridden by env var in production to another subdomain, allowlist THAT exact origin.
-  - Note: google_connection_router.py:115's docstring shows https://api.priority-guard.com/... as
-    an EXAMPLE. It is not the configured value. Confirm the live env var before filling the form.
-Policy & requirements checklists — confirming compliance with directory policy, technical requirements (OAuth, HTTPS, Origin-header validation, annotations), documentation, and testing standards
-❌ REMOVED 2026-08-04 — "Optional: Skills & Plugins — if submitting a related Agent Skill
-alongside the server" WAS WRONG. The submission page states: "Skills are not a standalone
-submission type — bundle them in a plugin." There is no Skill-alongside-server option.
+  1. directory guidelines          -> Policy §3H (and the published design guidelines)
+  2. first-party API usage         -> Policy §3F
+  3. financial transactions        -> Policy §4A
+  4. AI media generation           -> Policy §4B
+  5. prompt injection              -> Policy §2D-§2G
+  6. conversation data collection  -> Policy §1D and §1F
+  7. public documentation          -> Policy §3A / §3B / §3C / §3E
 
+SCREENSHOTS (MCP Apps): PNG only, 3-5 images, at least 1000px wide, cropped to the app response
+area, THE PROMPT MUST NOT APPEAR IN THE IMAGE (supply prompt text separately for each). ASPECT
+RATIO IS UNCONSTRAINED. VIDEO AND GIF ARE REJECTED. ONE BATCH COVERS ALL SURFACES — no separate
+mobile assets. A carousel template is available in the Figma community file.
+
+SKILLS ARE NOT A STANDALONE SUBMISSION TYPE — bundle them in a plugin. *[Changelog 2026-08-04: an
+"Optional: Skills & Plugins" entry stood here and was wrong.]*
+
+BEFORE SUBMITTING: exercise every tool through the MCP Inspector AND as a custom connector in
+Claude (`claude plugin validate` for plugins). See §8 and building/testing.
 
 6. Anthropic Software Directory Policy (Full Text)
+Published 15 APRIL 2026. Captured 2026-08-04 to sources_raw/software-directory-policy.raw.md.
+Text below verified identical to the captured source across all five sections.
+⚠️ The publication date comes from Nadja's PASTE of the rendered page. The .md fetch carries NO
+date, so this date cannot be recovered from the raw file — see the provenance table in the header.
 1. Safety and Security
 A. Software must not violate or facilitate violation of Anthropic's Usage Policy. Must comply with Universal Usage Standards, High-Risk Use Case requirements, and supported countries policy.
 
@@ -1459,6 +1420,61 @@ E. Must provide all applicable annotations for tools, in particular readOnlyHint
 F. Should support Streamable HTTP transport. SSE may be supported for now but will be deprecated.
 
 G. Local MCP servers must be built with reasonably current versions of all dependencies, including node_modules.
+
+
+6b. ANTHROPIC SOFTWARE DIRECTORY TERMS — THE BINDING CONTRACT
+Published 16 MARCH 2026. Captured 2026-08-04 to sources_raw/software-directory-terms.raw.md.
+⚠️ Date from Nadja's PASTE; the .md fetch carries none.
+*[Moved 2026-08-05 from "4F-bis", where it had been appended for convenience. It sits after §6
+because the Policy and the Terms are the two binding documents and belong together — §6 is what
+the Software must do, §6b is what you WARRANT when you submit.]*
+Source: https://support.claude.com/en/articles/13145338-anthropic-software-directory-terms
+Dated 16 March 2026. Raw: sources_raw/software-directory-terms.raw.md
+Full extraction: software_directory_terms_claude.md
+
+⚠️ THIS DOCUMENT HAD NO REPO COPY OF ANY KIND UNTIL 2026-08-04. §6 reproduces the POLICY in full
+and never mentioned the TERMS — while Policy §3H makes agreeing to them MANDATORY. The Policy says
+what the Software must do; the TERMS are what you WARRANT when you submit.
+
+T-3  ACCURACY WARRANTY: "any information you give us will be accurate and up-to-date."
+     This covers EVERY FIELD ON THE SUBMISSION FORM. A wrong URL, a stale domain hash or an
+     inflated capability claim is a WARRANTY DEFECT, not a typo. It is what makes this entire
+     documentation audit contractually load-bearing rather than merely tidy.
+
+T-4  PRIVACY WARRANTY INCLUDING THIRD PARTIES: provide and adhere to a privacy policy, "provide
+     all applicable THIRD-PARTY privacy policies", and ensure all such policies "clearly and
+     accurately describe to users what user information you AND THIRD PARTIES collect and how you
+     and third parties use and share such information."
+     PG connects to Google Calendar, so Google's policy must be PROVIDED and its collection/use/
+     sharing accurately described. Disclosure existing is NOT the same as providing the link.
+
+T-9  SECURITY VULNERABILITY REPORTING: "implement and maintain a mechanism for receiving reports
+     of security vulnerabilities from Anthropic AND FROM THIRD PARTIES and to investigate such
+     reports with a reasonable standard of care."
+     DISTINCT FROM §3B, which is a user support channel. T-9 names Anthropic and third parties and
+     adds a DUTY OF CARE. Nothing in this audit shows such a mechanism exists. APPEARS UNIMPLEMENTED.
+
+T-10 NO PARTNERSHIP/SPONSORSHIP/ENDORSEMENT statements without prior written approval; comply at
+     all times with Anthropic's Trademark Guidelines. Constrains fulfilling-productivity.com launch
+     copy. ⚠️ The Trademark Guidelines are a SECOND referenced binding document and are NOT in the
+     repo — .md returns 404 and the HTML is a Next.js bundle. NEEDS A PASTE. Recorded as an
+     obligation whose CONTENT IS UNKNOWN.
+
+T-8  Ongoing duty to maintain quality and security standards consistent with the Policy AS UPDATED.
+     This is why the doc pass must be repeatable, not one-off.
+T-1/2/5/6/7  Rights warranty; legal compliance; indemnification; licences over descriptions, docs,
+     name and logos; authorisation to test and to collect AND SHARE functional metadata. Recorded
+     as accepted, not actionable.
+
+Also: Anthropic has NO obligation to include the Software and may remove it at any time for any
+reason without liability. Terms may be modified WITHOUT PRIOR NOTICE; continued maintenance
+constitutes acceptance.
+
+⚠️ THE ART. 28 ERROR IS NOW A WARRANTY DEFECT, NOT LEGAL HYGIENE. Privacy policy v3.2
+characterises Anthropic as an Art. 28 data processor, which is incorrect. Under T-3 it is
+inaccurate information given to Anthropic; under T-4 it is a policy that does not "clearly and
+accurately describe" the third-party relationship. It moves from "should fix" to FIX BEFORE THE
+FORM GOES IN. It is cheap, and it is the one document Anthropic is guaranteed to read closely.
 
 
 7. Common Rejection Reasons (ranked by frequency)
@@ -1542,8 +1558,51 @@ This section tracks Priority Guardian-specific gaps. Items already satisfied for
 🟢 Blocker 0 — title Annotation — RESOLVED (verified in code 2026-08-04)
 `ToolDefinition` declares `title: str` as a REQUIRED field (mcp_server/priority_guardian/tools/base.py), and every tool in TOOL_REGISTRY supplies one. Verified live in the served `tools/list` payload on BOTH platforms — every tool carries a title in its ToolAnnotations. This entry described code work that was already done and told a reader to redeploy for it. A false 🔴 is worse than a missing one: it spends a submission cycle on nothing.
 
-🔴 Blocker 1 — Documentation Page (Must Be Created Before Submission)
-No Claude-specific documentation page exists. Must be published at a stable HTTPS URL (e.g. priority-guard.com/docs/mcp-claude) before submission, containing all required sections including minimum 3 usage examples.
+🔴 Blocker 1 — Documentation Page
+No Claude-specific documentation page exists.
+
+⚠️ CORRECTED 2026-08-05 — this entry read "before submission, containing ALL REQUIRED SECTIONS
+including minimum 3 usage examples." Both halves were wrong, and the first is the "Required
+sections" inflation that §4F now corrects. THE SAME FALSE CLAIM WAS LIVE IN TWO SECTIONS AND ONLY
+ONE WAS FIXED — the exact failure the corollary in doc/README.md exists to prevent, and a reader
+planning this page reads §9, not §4F.
+
+THE ACTUAL OBLIGATION:
+  - Due BY PUBLISH DATE, not by submission (review-criteria raw 72)
+  - A BLOG POST OR HELP-CENTRE ARTICLE IS SUFFICIENT. No section count, no structure prescribed.
+    Docs may be shared PRIVATELY with Anthropic during review
+  - Content required by Policy §3C: how it works, its intended purpose, how users troubleshoot
+  - Policy §3E: AT LEAST THREE WORKING EXAMPLES of prompts or use cases — this half WAS right
+  - Policy §3A: privacy policy link · §3B: verified contact and support channels
+There is NO seven-section requirement anywhere in the binding policy. The "Recommended sections"
+list in remote_server_submission_guide.md is a helpful structure, not an obligation.
+RECORDED STATUS — 2026-08-05. Findings from the documentation pass. These are STATUS, NOT WORK
+ITEMS; deciding whether to act on any of them is a separate product decision.
+
+A18 — consent screen does not display the redirect URI hostname. None of the eight
+backend/templates/oauth_consent_*.html render it; authorize.py's TemplateResponse context passes
+request, auth_context_id, client_name, scopes, scope_descriptions. OPEN, SPEC-INHERITED, NOT A
+DIRECTORY GATE — absent from both review-criteria and the binding policy. Post-submission.
+
+TOOL COUNTS — 20 IN THE REGISTRY, 8 PUBLIC ON CLAUDE'S SERVED SURFACE. list_tools_for_claude()
+filters to visibility == "public" (tools_list_dupl.py:37). All 8 carry a title and at least one
+hint. ⚠️ create_priority carries destructive_hint=False in the SHARED registry to preserve ChatGPT
+UX and is overridden to True for Claude in tools_list_dupl.py per Policy §5E. AUDIT THE CLAUDE
+SERVING PATH, NOT THE SHARED REGISTRY — a check against tools/ answers a ChatGPT question.
+
+_meta.ui.domain — KEPT, and the reason is now recorded rather than inherited. PG's widget runs its
+own OAuth flow (ConnectionStatus.tsx calls connect_google_calendar, extracts connect_url, then
+app.openLink), which needs a STABLE SANDBOX ORIGIN. ACCEPTED COST: the origin is shared across
+conversations, so BroadcastChannel scope spans them — making a server-minted per-conversation scope
+key a PRECONDITION if instance supersession is ever built (§4M). The field is optional (§4K); this
+is a decision, not a constraint.
+
+inspect_adapt — DESCRIPTION/HANDLER MISMATCH. The served description says it RECORDS confirmed
+action steps; the handler persists nothing (332 lines, zero backend calls, docstring "validate
+provenance -> return success") and read_only_hint=True is correct. Policy §2B requires descriptions
+to precisely match actual functionality. RECORDED AS A FINDING. NOT FIXED. TOOL DESCRIPTIONS ARE
+SHARED WITH THE LIVE CHATGPT APP AND ARE NOT TOUCHED.
+
 🟢 Blocker 2 — MCP App Screenshots (Submission Prep) — RESOLVED
 Screenshots of the widget rendering in Claude.ai are mandatory for MCP App directory listing.
 **Status (June 2026):** Widget rendering for third-party connectors is now working. Issue #61 resolved. Screenshots can be collected once widget increment ships.
@@ -1618,6 +1677,34 @@ DELISTING: email mcp-review@anthropic.com. (§7 says removal is requestable "thr
 channels"; this is the specific address.)
 
 11. What Changed From Previous Version
+
+### 2026-08-05 (b) — Compliance-Docs-01 completion pass
+
+The first pass covered roughly two-thirds of the briefing. An audit against it found seven gaps,
+all now closed:
+
+- **Header** now carries **per-file provenance** (paste-corroborated / relay-corroborated /
+  fetch-only) with publication dates, and states plainly that the file is **current against 11
+  sources and silent on 9** — the 9 enumerated by name, not counted.
+- **§5 REPLACED, not annotated.** The old form's field list is gone. A superseded list under a
+  warning is still a list people fill in. The eleven steps are named, with the listing character
+  limits, the permanent slug, the data-handling questions, the Test & launch attestation, and the
+  seven compliance acknowledgments **each mapped to the obligation it warrants**.
+- **§6** dated 15 April 2026 with its capture date, and flagged that the date exists only because
+  the page was pasted.
+- **§6b** — the Terms **moved** from the interim "4F-bis" to sit after §6, where the two binding
+  documents belong together: §6 is what the Software must do, §6b is what you warrant.
+- **§4K** — local stdio connectors have no URL, so `_meta.ui.domain` is **omitted**, not invented.
+- **§8** — the tool-exercise attestation now records that `building/testing` **is captured**, and
+  that the work is **not** gated behind the §2 org requirement: any account can add a custom
+  connector, and custom connectors use the same runtime as directory connectors.
+- **§9** — the four PG status items recorded, and **Blocker 1 corrected.** It still read
+  *"containing all required sections"* — the same inflation §4F had already fixed. **The identical
+  false claim was live in two sections and only one was corrected**, which is precisely the failure
+  the fix-the-claim-not-the-instance corollary exists to prevent. Someone planning the
+  documentation page reads §9, not §4F.
+
+**§4L and §4O remain unrewritten** — `external-links` and `troubleshooting` still have no artifact.
 
 ### 2026-08-05 — Compliance-Docs-01: body rewrite of §4C, §4K, §4N; new §12
 
