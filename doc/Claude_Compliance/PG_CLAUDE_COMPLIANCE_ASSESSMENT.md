@@ -38,7 +38,7 @@
 
 | Row | Source | Status |
 |---|---|---|
-| **M5 + M6** | `code` | **One finding, not two: inline card density.** `App.tsx:662` maps `sortedPriorities` with no `.slice()` — confirmed. **But capping the list alone does not fix it**: the inline card also renders `TimeAllocationBar`, `CalendarConnectionMinimal`, `ExpandButton` and a hint line. M6 (4–5 data points) and M5 (2 actions, at the bottom) govern the same surface. **A product decision about what the inline card shows, not a one-line fix** |
+| **M5 + M6** | `code` | ✅ **CLOSED 2026-08-05 — the ❌ was a false positive.** Priorities are bounded at **three** by the domain model, enforced at three levels: a `CHECK` constraint limiting `calendar_keyword` to `P1/P2/P3`; a **partial unique index — "one active keyword per user"** (`m3h4i5j6k7l8…py:168`); and API rejection (`priorities_router.py:344`, *"Keyword {x} is already in use"*). **The inline list cannot exceed three cards regardless of `.slice()`.** I searched for a code-level cap and missed the domain-level one — standing check #2: I proved *"no `.slice()`"* and wrote *"uncapped"*. ⚠️ **Re-check only if keywords become non-exclusive or a fourth is added** |
 | **P2B** | `code` | `inspect_adapt` advertises persistence it lacks. **A real Policy §2B violation** — POLICY level, binding. **Blocked by the standing rule: tool descriptions are shared with the live ChatGPT app and are not touched.** Recorded, not actioned |
 | **R6a** | `code` ⚠️ **CONTESTED** | Override language in three descriptions. ⚠️ **Sourced from `review-criteria` — `[fetch-only]`, undated, uncorroborated, the weakest source in the canonical file.** The **binding** Policy §2 contains **no clause prohibiting behavioural guidance**; §2G *presupposes it exists* and regulates its form — *"All behavioral guidance must be human-readable and clearly presented"* — **which PG satisfies.** ⚠️ **Severity asymmetry: P2B is a binding POLICY violation; R6a rests on an uncorroborated reviewer-facing page. Do not treat them as equivalent** |
 | **A18** ⚠️SILENT | `code` | Consent screen omits the redirect URI hostname. `SPEC` level — absent from **both** the reviewer checklist and the binding policy. **Not a directory gate.** Post-submission |
@@ -155,7 +155,7 @@ bytes' currency is unverified.**
 
 | Item | Nature |
 |---|---|
-| **M5 + M6** inline density | Product decision |
+| **M5 + M6** | `code` | ✅ **CLOSED 2026-08-05 — the ❌ was a false positive.** Priorities are bounded at **three** by the domain model, enforced at three levels: a `CHECK` constraint limiting `calendar_keyword` to `P1/P2/P3`; a **partial unique index — "one active keyword per user"** (`m3h4i5j6k7l8…py:168`); and API rejection (`priorities_router.py:344`, *"Keyword {x} is already in use"*). **The inline list cannot exceed three cards regardless of `.slice()`.** I searched for a code-level cap and missed the domain-level one — standing check #2: I proved *"no `.slice()`"* and wrote *"uncapped"*. ⚠️ **Re-check only if keywords become non-exclusive or a fourth is added** |
 | **P2B** | Real §2B violation, **blocked by the do-not-touch-descriptions rule** |
 | **R6a** | Contested, weakest source, binding policy does not support it |
 | **A18** | Post-submission, not a gate |

@@ -72,7 +72,23 @@ Source (raw 134): *"not mobile-specific: on web and desktop the composer can ove
 an inline app."* PG applies insets only under `platform === 'mobile' && hostFullscreen`
 (`App.tsx:709`). `.left`/`.right` never read; horizontal padding hardcoded `16px`.
 
-### M5 + M6 — inline density (**one finding**)
+### ~~M5 + M6 — inline density~~ ✅ CLOSED — false positive
+
+**Bounded at three by the domain model**, enforced in Postgres: `CHECK … IN ('P1','P2','P3')`, a
+**partial unique index "one active keyword per user"**, and API rejection. The inline list cannot
+exceed three cards.
+
+**M6** — 3 cards (5 if `TimeAllocationBar` and `CalendarConnectionMinimal` count as data points).
+Within 4–5 on either reading. ✅
+
+**M5** — ⚠️ **closes on a reading, not a measurement.** Five interactive elements exist inline:
+refresh, up to three expand toggles, `ExpandButton`. That is ≤2 *actions* only if expand/collapse
+is not an action — which the source supports, listing *"Expanding and collapsing content sections"*
+under **Handle within your app** as an interaction pattern distinct from card CTAs — and if
+`ExpandButton` is excluded as **mandated** (*"Apps provide their own fullscreen button"*). Net:
+1 action + 1 required affordance. **A reviewer counting tappables would count five.**
+
+### (superseded) original finding
 
 `App.tsx:662` maps `sortedPriorities` with **no `.slice()`**; no backend cap. The inline card also
 renders `TimeAllocationBar`, `CalendarConnectionMinimal`, `ExpandButton` and a hint line — so
@@ -121,7 +137,7 @@ skeletons either.
 | **M8** | Decide once: modal or inline confirmation. `KeywordPicker` already shows the compliant pattern |
 | **M2** | Add `aria-hidden="true"` to the 10 decorative SVGs; measure contrast on the P1/P2/P3 badges |
 | **M3** | Apply `safeAreaInsets` in the inline branch too, and read `.left`/`.right` |
-| **M5 + M6** | A product decision about what the inline card shows |
+| **M5 + M6** | `code` | ✅ **CLOSED 2026-08-05 — the ❌ was a false positive.** Priorities are bounded at **three** by the domain model, enforced at three levels: a `CHECK` constraint limiting `calendar_keyword` to `P1/P2/P3`; a **partial unique index — "one active keyword per user"** (`m3h4i5j6k7l8…py:168`); and API rejection (`priorities_router.py:344`, *"Keyword {x} is already in use"*). **The inline list cannot exceed three cards regardless of `.slice()`.** I searched for a code-level cap and missed the domain-level one — standing check #2: I proved *"no `.slice()`"* and wrote *"uncapped"*. ⚠️ **Re-check only if keywords become non-exclusive or a fourth is added** |
 | **M10** | Reconcile the four width caps; scope `#root`'s to inline |
 | **M20** | Skeletons matching final layout |
 | **Typography** | Collapse 7 sizes → 3, 4 weights → 2 |
