@@ -31,6 +31,35 @@ predicate; an earlier version of this line said "silent on 9", which reconciled 
 
 **Eleven items in total.** See §13. **Four of the eight are binding via Policy §1A alone.**
 
+### Round 2 — citation integrity, run 2026-08-05
+
+**Round 1 catches omission. Round 2 catches invention**, by checking the reverse direction: does
+every claim here trace to the line it cites? Mechanically verified across all rows:
+
+| | |
+|---|---|
+| Rows | **121** |
+| Citing a **resolvable** raw line (file exists, line within it) | **113** |
+| `[relay-only]` — no artifact to cite | **8** — L5–L8, S6, PUB1, PUB3, PUB4 |
+| **Unresolvable citations** | **0** |
+
+**Three defects found and fixed by this pass:**
+
+1. **14 rows cited a file with no line number** — M5–M9, M12, S3–S5, S7–S9, S12, S14. Briefing §9
+   required a line. All 14 now carry one, and several gained detail the source had that the row
+   had dropped (M7's z-index rationale, M9's no-horizontal-scrolling clause, S9's three API
+   categories, S12's *"every link, credential and step"*).
+2. **L1–L4 were marked `[relay-only]` when a CAPTURED source carries them** —
+   `submission.raw.md:73-86`. **Under-attribution is as much a defect as over-attribution**: it
+   makes a real obligation look weakly evidenced and hides that the tree already holds the proof.
+   §10 is now half captured, half relay-only, instead of wholly relay-only.
+3. **S7 cited "(raw 17)" with no file named** — unresolvable without guessing. Now explicit.
+
+⚠️ **What round 2 did NOT do.** This verified that every citation **resolves**. It did **not**
+verify that each cited line **says what the row claims** — that is semantic, row by row, and has
+been done only for the high-stakes rows (A18, A19, P5E, M10, X1, S1, S12). **The remaining ~105
+rows are citation-verified, not content-verified.**
+
 **Date: 2026-08-05. This file states current state only.** Superseded entries go to the master's
 changelog, **never inline here**.
 
@@ -207,14 +236,14 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 | M2 | **WCAG AA** contrast minimum, keyboard navigation, text alternatives, tested with assistive technologies — *"your app must be usable by everyone"* | `DOC-CONSTRAINT` | design-guidelines (raw 278) — the other developer "must" | — not assessed |
 | M3 | Render interactive UI **inside `safeAreaInsets`**. **Not mobile-specific** — on web and desktop the composer can overlay the bottom of an inline app | `DOC-CONSTRAINT` | design-guidelines (raw 134) | ⚠️ Applied only under `platform === 'mobile' && hostFullscreen`; horizontal padding hardcoded 16px, so `.left`/`.right` are unused |
 | M4 | Inline: **auto-fit content height, no nested vertical scroll.** The host caps and clips. **No pixel value is published** | `DOC-CONSTRAINT` | design-guidelines (raw 39, 62, 186) | — not assessed |
-| M5 | Inline: maximum **2 actions**, at the bottom of the card | `DOC-CONSTRAINT` | design-guidelines | — not assessed |
-| M6 | Inline: maximum **4–5 data points** | `DOC-CONSTRAINT` | design-guidelines | — not assessed |
-| M7 | No drill-ins, breadcrumbs or multiple views; no menus or popovers — use visible controls | `DOC-CONSTRAINT` | design-guidelines | — not assessed |
-| M8 | Fullscreen: no floating panels; the app provides its own fullscreen button; the composer is always visible | `RECOMMENDED` | design-guidelines | — not assessed. ⚠️ Previously labelled "(mandatory)" here with no basis |
-| M9 | Touch targets **≥ 44×44pt** on mobile | `DOC-CONSTRAINT` | design-guidelines | — not assessed |
+| M5 | Inline: maximum **2 actions**, at the bottom of the card | `DOC-CONSTRAINT` | design-guidelines (raw 63) | — not assessed |
+| M6 | Inline: maximum **4–5 data points** | `DOC-CONSTRAINT` | design-guidelines (raw 64) | — not assessed |
+| M7 | No drill-ins, breadcrumbs or multiple views; no menus or popovers — use visible controls (they get clipped by container boundaries or conflict with host z-index) | `DOC-CONSTRAINT` | design-guidelines (raw 65-66, 38, 40) | — not assessed |
+| M8 | Fullscreen: **avoid** floating panels — use collapsible sidebars, tabs or pagination; the app provides its own fullscreen button; a close button appears in the native header; the composer remains available | `RECOMMENDED` | design-guidelines (raw 99) | — not assessed. ⚠️ Previously labelled "(mandatory)" here with no basis |
+| M9 | Touch targets **≥ 44pt** on mobile; content adapts to narrow viewports **without horizontal scrolling** | `DOC-CONSTRAINT` | design-guidelines (raw 68) | — not assessed |
 | M10 | **No fixed-width layouts**; responsive from **320px**; **no side margins** that waste screen real estate — apps always fill the container width, with no fixed breakpoints | `DOC-CONSTRAINT` | design-guidelines (raw 284-286) | ⚠️ **Four layered width caps**, outermost smallest: `#root` 600px (binds), inline `<main>` 560px (binds), fullscreen `<main>` 672px (**dead**), pie section 672px (**dead**). Compliant inline; **in fullscreen the cap binds and auto margins produce the artifact M10 names** |
 | M11 | Declare `_meta.ui.csp` — **CONDITIONAL:** required only if the widget loads external origins. All external origins are blocked by default | `CONDITIONAL` | design-guidelines (raw 150-159) | ✅ verified — declared on all three `_meta.ui` blocks |
-| M12 | Declare `appCapabilities.availableDisplayModes` in `ui/initialize` | `DOC-CONSTRAINT` | design-guidelines | ✅ verified — `['inline','fullscreen']` |
+| M12 | Declare `appCapabilities.availableDisplayModes` in `ui/initialize` | `DOC-CONSTRAINT` | design-guidelines §Display modes (raw 43, 144) | ✅ verified — `['inline','fullscreen']` |
 | M13 | **CONDITIONAL — carousels.** Maintain consistent card dimensions; on mobile design for thumb reach with primary actions in the lower portion, and **peek the next card** to signal scrollability | `CONDITIONAL` | design-guidelines (raw 72-95) | n/a — PG ships no carousel |
 | M14 | **`prefersBorder` — set true or false explicitly.** If unspecified: **borderless on web, bordered on mobile.** Borderless runs edge-to-edge with **no host padding**, so honouring `safeAreaInsets` becomes essential | `RECOMMENDED` | design-guidelines (raw 138) · transparent-theming (raw 21) | ⚠️ Set `false` on all three blocks → borderless on mobile too, while `safeAreaInsets.left`/`.right` go unapplied. **One decision with two consequences** |
 | M15 | Mobile fullscreen **is supported.** Mobile renders in a native WebView, not a sandboxed iframe: no camera/mic/location, and connectors must be added via web or desktop before appearing on mobile | `DOC-CONSTRAINT` | design-guidelines (raw 120, 128) | — not assessed |
@@ -238,15 +267,24 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 
 ## 10. External links
 
-⚠️ **Every row in this section is `[relay-only]`** — `external-links` has **no artifact in the tree**.
-The requirements are real; their provenance is the weakest in this document. See §13.
+⚠️ **Provenance corrected by round 2, 2026-08-05.** This section previously marked **all eight**
+rows `[relay-only]`. **Four of them (L1–L4) are carried by a CAPTURED source** —
+`submission.raw.md:73-86` states the ownership rule, the HTTPS-origin matching, subdomains-not-
+implied, custom schemes, and that the field is optional. They are now cited there and the markers
+are off. **L5–L8 remain `[relay-only]`** — those four come from `external-links`, which has no
+artifact in the tree.
+
+**This is the reverse-direction check working:** round 1 attributed four requirements to the
+weakest provenance category in the document when a stronger source already carried them.
+**Under-attribution is as much a defect as over-attribution** — it makes a real obligation look
+optional, and it hides that the tree already contains the evidence.
 
 | ID | Requirement | Level | Source | PG status |
 |---|---|---|---|---|
-| L1 | **CONDITIONAL — the Allowed link URIs field is optional.** It applies only if the connector calls `ui/open-link` | `CONDITIONAL` | external-links § Allowlisting link destinations `[relay-only]` | ✅ PG calls `openLink` |
-| L2 | **Every listed origin and scheme must be owned by the submitting organization.** Unowned entries are **removed during review** | `PORTAL` | submission § Allowed link URIs · external-links `[relay-only]` | ✅ verified — the target is `BACKEND_PUBLIC_URL` (`https://www.priority-guard.com`), a domain PG owns; **not** `accounts.google.com` |
-| L3 | An HTTPS origin entry matches **scheme and hostname only** — paths, ports and query strings are ignored. **Subdomains are not implied**; list each one | `PORTAL` | external-links `[relay-only]` | — not assessed — confirm the live `BACKEND_PUBLIC_URL` before filling the portal |
-| L4 | A custom-scheme entry matches **the scheme only** | `PORTAL` | external-links `[relay-only]` | n/a |
+| L1 | **CONDITIONAL — the field is optional.** It applies only if the connector uses `ui/open-link`. If omitted the connector functions normally, but **users are shown a confirmation prompt each time it opens a link** | `CONDITIONAL` | **submission §Allowed link URIs (raw 75, 85-86)** | ✅ PG calls `openLink` |
+| L2 | **Every origin and scheme listed must be owned by you (the submitting organization).** You may not list third-party domains or schemes registered to apps you don't publish. **Entries you don't own will be removed during review** | `PORTAL` | **submission (raw 82)** | ✅ verified — the target is `BACKEND_PUBLIC_URL` (`https://www.priority-guard.com`), a domain PG owns; **not** `accounts.google.com` |
+| L3 | An HTTPS origin entry matches **scheme and hostname only** — paths, ports and query strings are ignored. **Subdomains are not implied — list each one** (`https://app.example.com`, `https://docs.example.com`) | `PORTAL` | **submission (raw 79)** | — not assessed — confirm the live `BACKEND_PUBLIC_URL` before filling the portal |
+| L4 | A **custom URI scheme** entry (`myapp:`) is for deep links into a native app **you own**; only the scheme is matched | `PORTAL` | **submission (raw 80)** | n/a |
 | L5 | **Malformed entries are IGNORED** — not rejected. Both this and L2 fail **silently**: the listing ships, the entry is gone, and users get the confirmation modal on every link | `PORTAL` | external-links `[relay-only]` | — recorded |
 | L6 | The reserved-scheme list is **open-ended** (*"This includes…"*), not closed | `PORTAL` | external-links `[relay-only]` | — recorded |
 | L7 | A bypassed `ui/open-link` **resolves once the open is attempted** — that is **not** confirmation the user reached the destination | `DOC-CONSTRAINT` | external-links `[relay-only]` | — not assessed |
@@ -260,18 +298,18 @@ The requirements are real; their provenance is the weakest in this document. See
 |---|---|---|---|---|
 | S1 | **A Team or Enterprise organization is required.** Admin settings — and therefore the portal — are unavailable on individual plans | `PORTAL` | submission (raw 21-23) | ⚠️ **BLOCKS SUBMISSION.** Not an engineering task |
 | S2 | The submitter must be an **Owner or Primary Owner**. Enterprise may delegate via a custom role with **Directory management** or **Libraries**; **Team plans have no custom roles** | `PORTAL` | submission (raw 24) | — not assessed |
-| S3 | Server URL must be **`https://`** | `PORTAL` | submission | ✅ verified |
-| S4 | Every tool must carry a **`title`** and the applicable **`readOnlyHint`/`destructiveHint`**; the portal flags violations to fix **on the server before submitting** | `PORTAL` | submission | ✅ verified — 8/8 public tools; nothing lands in the un-annotated group |
-| S5 | Listing limits: **name ≤ 100**, **tagline ≤ 55**, **description ≤ 2000** characters; **1–5 categories** | `PORTAL` | submission | — not assessed |
+| S3 | Server URL must be **`https://`** | `PORTAL` | submission §Connection (raw 152) | ✅ verified |
+| S4 | Every tool must carry a **`title`** and the applicable **`readOnlyHint`/`destructiveHint`**; the portal flags violations to fix **on the server before submitting** | `PORTAL` | submission (raw 46) | ✅ verified — 8/8 public tools; nothing lands in the un-annotated group |
+| S5 | Listing limits: **name ≤ 100**, **tagline ≤ 55**, **description ≤ 2,000** characters; **1–5 categories**; plus documentation URL, privacy policy URL, support contact and icon | `PORTAL` | submission (raw 144) | — not assessed |
 | S6 | **The URL slug is PERMANENT once published** — `https://claude.ai/directory/connectors/SLUG`. Display names can change; the slug cannot | `PORTAL` | submission · after-publishing `[relay-only]` | — not assessed. **The only irreversible choice in the portal** |
-| S7 | **MCP Apps: screenshots required.** 3–5 **PNG**, **≥ 1000px** wide, cropped to the app response area, **the prompt must not appear in the image** (supply prompt text separately). **Aspect ratio unconstrained. Video and GIF rejected. One batch covers all surfaces** | `PORTAL` | submission | — not assessed |
-| S8 | **Seven compliance acknowledgments, all required.** Under **T3** each is a **warranty**, not a checkbox — see the mapping below | `PORTAL` | submission | — not assessed |
-| S9 | Data-handling declarations: read/write/both; own API vs proxied-with-permission vs third party you do not control; personal health data; sponsored content | `PORTAL` | submission | — not assessed |
+| S7 | **MCP Apps: screenshots required.** 3–5 **PNG**, **≥ 1000px** wide, cropped to the app response area, **the prompt must not appear in the image** (supply prompt text separately). **Aspect ratio unconstrained. Video and GIF rejected. One batch covers all surfaces.** Figma carousel template available | `PORTAL` | submission (raw 88-101) · submission (raw 17) | — not assessed |
+| S8 | **Seven compliance acknowledgments, all required** — directory guidelines, first-party API usage, financial transactions, AI media generation, prompt injection, conversation data collection, public documentation. Under **T3** each is a **warranty**, not a checkbox — see the mapping below | `PORTAL` | submission (raw 168) | — not assessed |
+| S9 | Data-handling declarations: whether the underlying API is **your own, proxied from a partner with permission, or a third party's you don't control**; whether the connector handles **personal health data** or **sponsored content** | `PORTAL` | submission (raw 160) | — not assessed |
 | S10 | **CONDITIONAL — plugins only.** Plugins must link a **public GitHub repo**; closed-source is not accepted | `CONDITIONAL` | review-criteria (raw 73) `[fetch-only]` | n/a |
 | S11 | **CONDITIONAL — MCPB only.** The open-source and "spec will evolve" clauses of the Directory Terms are **required and not waivable** | `CONDITIONAL` | review-criteria (raw 74) `[fetch-only]` | n/a |
-| S12 | **Attestation:** *"You also confirm you've run every tool yourself, either via MCP Inspector or as a custom connector in Claude."* | `PORTAL` + `TERMS` | submission · **T3** | ⚠️ **Cannot be ticked truthfully today** — 1 of 8 public tools exercised end to end. Ticking it is a **warranty defect**, not a process shortcut |
+| S12 | **Attestation:** *"You also confirm you've run every tool yourself, either via MCP Inspector or as a custom connector in Claude."* Test-account setup and access instructions must be **detailed enough for a reviewer to access the server end to end: every link, credential and step** | `PORTAL` + `TERMS` | submission (raw 164) · **T3** | ⚠️ **Cannot be ticked truthfully today** — 1 of 8 public tools exercised end to end. Ticking it is a **warranty defect**, not a process shortcut |
 | S13 | Testing happens **in production as a custom connector — there is no staging environment.** **Any Claude account (Free, Pro, Max, Team, Enterprise) can add a custom connector**, and custom connectors use **the exact same runtime** as directory connectors | `DOC-CONSTRAINT` | testing (raw 9, 13) `[fetch-only]` | — recorded. **S12's work is NOT gated behind S1** — only the portal is |
-| S14 | **Skills are not a standalone submission type** — bundle them in a plugin | `PORTAL` | submission | n/a |
+| S14 | **Skills are not a standalone submission type** — bundle them in a plugin | `PORTAL` | submission (raw 122) | n/a |
 
 **S8 — the seven acknowledgments, each mapped to what it warrants:**
 

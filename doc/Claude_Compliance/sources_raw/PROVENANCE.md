@@ -95,8 +95,11 @@ does not. That is a stronger claim and it is now evidenced.
 captured when the support article displayed a relative stamp. A relative timestamp in a committed
 file **silently re-anchors to whenever the reader looks** — it reads as current forever. Both are
 now fixed or flagged: `software_directory_policy.md` carries the absolute date;
-`remote_server_submission_guide.md` is marked undated, because its real publication date was never
-captured and inventing one would be worse.
+`remote_server_submission_guide.md` was marked undated, because its real publication date was never
+captured and inventing one would be worse. **That file was DELETED 2026-08-05** — 19 KB of
+partially-stale, undated prose retained for a single citation is a preserved staleness hazard of
+exactly the class that produced the 500px myth. The citation is now embedded verbatim in master
+§4F with its provenance; the file is recoverable from git at `e9d0777`.
 
 **The `.md` method is now 3-for-3 against pastes** (`transparent-theming`, and `authentication`
 twice). Still evidence about a method and nothing more — it does not establish that any *particular*

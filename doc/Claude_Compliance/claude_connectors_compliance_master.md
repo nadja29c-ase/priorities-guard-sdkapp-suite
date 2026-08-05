@@ -619,9 +619,27 @@ Plus review-criteria: a public page BY PUBLISH DATE; a blog post or help-centre 
 may be shared privately with Anthropic during review.
 There is NO seven-section requirement in the binding policy. Confirmed against the policy text.
 
-⚠️ FOURTH INSTANCE OF THE HARDENING BIAS TODAY, AND THE MOST COSTLY. The source
-(remote_server_submission_guide.md:256) says "RECOMMENDED sections". This file said "Required
-sections". The source is careful: the SECTIONS are recommended, and the THREE EXAMPLES are marked
+⚠️ FOURTH INSTANCE OF THE HARDENING BIAS TODAY, AND THE MOST COSTLY. This file said "Required
+sections". The source said "RECOMMENDED sections", and carried its own proof inline.
+
+EVIDENCE PRESERVED VERBATIM (extracted 2026-08-05 from remote_server_submission_guide.md before
+that file was deleted — it is now recoverable only from git at e9d0777):
+
+    Recommended sections:
+    Server Description - Clear explanation of what your server does
+    Features - Key capabilities and use cases
+    Setup Instructions - How users connect and configure
+    Authentication - OAuth setup and requirements (if applicable)
+    Usage Examples - Minimum 3 working examples with prompts (required)
+    Privacy Policy - Link to full privacy policy
+    Support - How users can get help or report issues
+
+NOTE THE SHAPE OF IT: the HEADING says "Recommended", and exactly ONE line carries "(required)"
+inline — the three working examples. The source was precise; this file flattened seven recommended
+sections and one required item into "Required sections", and that flattening is what inflated
+Blocker 1. Policy §3E independently confirms the examples: "Developers must provide at least three
+working examples of prompts or use cases." This is standing check #6 (no single obligation label
+over a mixed list) with a real cost attached. The source is careful: the SECTIONS are recommended, and the THREE EXAMPLES are marked
 required inline. Policy §3E backs the examples: "Developers must provide at least three working
 examples of prompts or use cases."
 
