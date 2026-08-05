@@ -193,6 +193,13 @@ are APPENDED, never inserted, so references from briefings and increments stay v
    invalidates every outside reference — briefings, increments and commit messages all cite these
    by number. `fd71a68` inserted at #7 and broke a reference in an increment briefing written the
    same day.
+12. **A verification result is scoped to the version it ran against.** *(New 2026-08-05.)* Re-run
+    the check, or restate its scope, **in the same commit as any content change.** A block reading
+    *"121 rows, 0 unresolvable"* sitting above a file of 129 rows is not slightly stale — it is a
+    **clean bill of health for eight rows that were never checked**, and it reads as current
+    because it is specific. Fourth instance of a verification claim and its content moving in
+    different commits: the master header, the §11 changelog, the currency metadata, and the
+    canonical file's round-2 block.
 11. **Every structural edit reports before/after BYTE AND LINE COUNTS FOR EVERY FILE IN THE WORKING
     TREE — not just the file being edited.** *(New 2026-08-05.)* Three structural edits produced
     three losses: the standing-checks block (deleted, survived two commits), the `clientInfo`

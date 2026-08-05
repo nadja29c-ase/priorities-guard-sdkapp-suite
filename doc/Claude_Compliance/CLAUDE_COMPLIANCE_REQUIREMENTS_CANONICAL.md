@@ -48,10 +48,20 @@ every claim here trace to the line it cites? Mechanically verified across all ro
 
 | | |
 |---|---|
-| Rows | **121** |
-| Citing a **resolvable** raw line (file exists, line within it) | **113** |
+| Rows | **129** |
+| Citing a **resolvable** raw line (file exists, line within it) | **121** |
 | `[relay-only]` — no artifact to cite | **8** — L5–L8, S6, PUB1, PUB3, PUB4 |
 | **Unresolvable citations** | **0** |
+
+*Re-run 2026-08-05 after the coverage pass added M16–M20, S15, S16 and X9. **All eight new rows
+resolve.** The block previously read 121/113 — the result of a run against the file as it stood
+before those additions.*
+
+⚠️ **A verification result is scoped to the version it ran against.** This block described 121 rows
+while the file held 129, which is the fourth instance of a verification claim and its content
+moving in different commits (the master header, the §11 changelog, the currency metadata, this).
+**Re-run the check or restate its scope in the same commit as any content change** — see standing
+check #12 in the audit record.
 
 **Three defects found and fixed by this pass:**
 
