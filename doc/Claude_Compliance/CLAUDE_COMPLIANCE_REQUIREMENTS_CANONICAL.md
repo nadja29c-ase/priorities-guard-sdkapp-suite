@@ -259,6 +259,11 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 | M13 | **CONDITIONAL — carousels.** Maintain consistent card dimensions; on mobile design for thumb reach with primary actions in the lower portion, and **peek the next card** to signal scrollability | `CONDITIONAL` | design-guidelines (raw 72-95) |
 | M14 | **`prefersBorder` — set true or false explicitly.** If unspecified: **borderless on web, bordered on mobile.** Borderless runs edge-to-edge with **no host padding**, so honouring `safeAreaInsets` becomes essential | `RECOMMENDED` | design-guidelines (raw 138) · transparent-theming (raw 21) |
 | M15 | Mobile fullscreen **is supported.** Mobile renders in a native WebView, not a sandboxed iframe: no camera/mic/location, and connectors must be added via web or desktop before appearing on mobile | `DOC-CONSTRAINT` | design-guidelines (raw 120, 128) |
+| M16 | **No chat inputs or conversational UI** — *"don't replicate Claude's features"* | `DOC-CONSTRAINT` | design-guidelines (raw 41) |
+| M17 | **CONDITIONAL — if the app genuinely needs its own vertically scrollable viewport**, request fullscreen via `ui/request-display-mode` instead of rendering inline. *(This is M4's remedy; M4 states the constraint without it)* | `CONDITIONAL` | design-guidelines (raw 192) |
+| M18 | **Use host tokens for ALL structural elements** — backgrounds, text, borders **and icons**. Brand colours are for **accents and identity only**; the core UI uses the provided palette. *(Broader than M1's "never hardcode colors")* | `DOC-CONSTRAINT` | design-guidelines (raw 220, 216) |
+| M19 | **Icons: monochromatic and outlined, matching the host's icon colour tokens.** Icons should support understanding, **not be essential to it** | `DOC-CONSTRAINT` | design-guidelines (raw 236) |
+| M20 | **Loading states: skeleton screens, not spinners** for inline content. Match the layout structure of the final content so the transition feels seamless | `DOC-CONSTRAINT` | design-guidelines (raw 210) |
 
 ---
 
@@ -274,6 +279,7 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 | X6 | **CONDITIONAL — host fonts only.** CSP `resourceDomains` must include `https://assets.claude.ai` for `applyHostFonts` to load the `@font-face` files | `CONDITIONAL` | transparent-theming (raw 18) |
 | X7 | **Register the `hostcontextchanged` listener before you connect**, so an early update is not missed | `DOC-CONSTRAINT` | transparent-theming (raw 19) |
 | X8 | `resourceDomains` **also adds the listed origins to `script-src` and `style-src`** — keep it to origins trusted to serve executable code; prefer bundling third-party fonts over allowlisting public CDNs | `DOC-CONSTRAINT` | transparent-theming (raw 52-54) |
+| X9 | **The app must connect before it can receive anything.** Call `App.connect()` (or `useApp()`, which creates and connects for you in React) **without an explicit transport parameter** — the SDK detects Claude vs ChatGPT and selects the transport. ⚠️ **Tool-input and tool-result events do not fire until the app is connected**, which is the most common cause of an app that renders nothing | `DOC-CONSTRAINT` | cross-compatibility (raw 19) · transparent-theming (raw 86, 112) · ⚠️ the *"events don't fire until connected"* warning is from `troubleshooting` `[relay-only]` |
 
 ---
 
@@ -322,6 +328,8 @@ optional, and it hides that the tree already contains the evidence.
 | S12 | **Attestation:** *"You also confirm you've run every tool yourself, either via MCP Inspector or as a custom connector in Claude."* Test-account setup and access instructions must be **detailed enough for a reviewer to access the server end to end: every link, credential and step** | `PORTAL` + `TERMS` | submission (raw 164) · **T3** |
 | S13 | Testing happens **in production as a custom connector — there is no staging environment.** **Any Claude account (Free, Pro, Max, Team, Enterprise) can add a custom connector**, and custom connectors use **the exact same runtime** as directory connectors | `DOC-CONSTRAINT` | testing (raw 9, 13) `[fetch-only]` |
 | S14 | **Skills are not a standalone submission type** — bundle them in a plugin | `PORTAL` | submission (raw 122) |
+| S15 | **CONDITIONAL — LOCAL connectors only.** Must include a **"Privacy Policy" section in `README.md`**, a **`privacy_policies` array in `manifest.json`** (manifest_version 0.2+), and **HTTPS URLs** to those policies | `CONDITIONAL` | submission (raw 55-59) |
+| S16 | **CONDITIONAL — LOCAL connectors only.** The privacy policy must cover **all five**: data collection practices · usage and storage · third-party sharing · data retention · contact information. ⚠️ **"Missing or incomplete privacy policies result in immediate rejection"** — the only *immediate rejection* warning on the submission page | `CONDITIONAL` | submission (raw 61-70) |
 
 **S8 — the seven acknowledgments, each mapped to what it warrants:**
 
@@ -379,6 +387,30 @@ so a clean read of the documentation index is **not** full coverage.
 **Post-publication, never read (1):**
 
 - **`building/managing-your-listing`** — holds the edit-vs-review boundary (**PUB3**).
+
+### ⚠️ THE MISSING PASTES ARE NOW COSTING REQUIREMENTS, NOT JUST PROVENANCE
+
+**Verified 2026-08-05 by checking this file against the pages as pasted in the review chat.** The
+result: **four gaps, ~11 missing requirements.** Eight were traceable to captured sources and have
+been added (M16–M20, S15–S16, X9). **Three are not, because their only source has never been
+committed:**
+
+| Missing requirement | Only source |
+|---|---|
+| **`ui/open-link` bypasses the modal ONLY after a real user gesture** — a click. Sent programmatically, on a timer, or after the activation window expires, **the modal is shown regardless of the allowlist.** This is the condition that decides whether §10 does anything at all, and an implementation fails it silently | `external-links` |
+| **The iframe must have a non-zero height** — a zero height renders nothing | `troubleshooting` |
+| **iOS: WebKit omits `Referer` on cross-origin subresource requests.** A server or WAF gating on `Referer` rejects iOS traffic while working everywhere else. Allowlist on **`Origin`** (`{hash}.claudemcpcontent.com`) and return a matching `Access-Control-Allow-Origin` | `troubleshooting` |
+
+**The third is a live functional requirement for the mobile surface.** All three should be rows.
+
+§13 predicted this — *"one paste each and the markers come off"* — but it understated the cost.
+**These pages were reviewed in this chat and never handed to the committing session, so their
+content was carried by memory and partially dropped.** That is not a provenance downgrade; it is
+**absent requirements in the document designated as the sole statement of what must be true.**
+
+**One paste each fixes it, and simultaneously converts three "unsourced" claims** (the
+~150,000-character ceiling, the 25,000-token `MAX_MCP_OUTPUT_TOKENS` limit, and the sandbox-
+spillover finding) **from unsourced to captured.**
 
 **One page away from full traceability (3):**
 
