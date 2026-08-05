@@ -75,6 +75,36 @@ check #12 in the audit record.
    §10 is now half captured, half relay-only, instead of wholly relay-only.
 3. **S7 cited "(raw 17)" with no file named** — unresolvable without guessing. Now explicit.
 
+### Content verification — POLICY and TERMS, run 2026-08-05
+
+**A citation resolving proves the line exists. Content verification proves the line says what the
+row claims.** But there is a third failure neither catches: **the row saying MORE than the line
+does.** A row sharpened for readability — a "should" tightened, a qualifier dropped, a scope
+widened — passes both mechanical checks and is still wrong. That is where all nine hardening
+instances came from.
+
+**Method:** for each row, quote the cited line and mark the row **narrower**, **equal** or
+**broader** than it. **Only `broader` is a defect.**
+
+**42 rows checked** (all `POLICY` and `TERMS`, the ones that can block or unwind a listing).
+**38 equal or narrower. FOUR BROADER — all now corrected**, and all the same shape: *a qualifier or
+an exception dropped, widening the obligation.*
+
+| Row | What the row dropped | Effect |
+|---|---|---|
+| **P2D** | the word **"intentionally"** — source: *"must not **intentionally** call or coerce"* | Turned a prohibition on deliberate coercion into a prohibition on any causation |
+| **P2E** | **"unless requested and intended by a user"** | Removed the user-consent exception entirely |
+| **P3A** | **"Developers *of Software that collects user data or connects to a remote service*"** | Stated a conditional obligation as universal. **Re-levelled `POLICY` → `CONDITIONAL`.** PG meets both triggers, so it still binds — but the row was wrong about *why* |
+| **P3F** | **"Plugins are an exception, and may connect to any Connector approved in the Software Directory"** | Removed an exemption from an ownership-verification requirement |
+
+**None of these was a fabrication and none would have been caught by any check run so far.** Every
+one cites a real line that genuinely supports most of the row. The defect is in the last clause of
+each — which is where qualifiers live.
+
+⚠️ **Not yet content-verified: the remaining 87 rows** — `DOC-CONSTRAINT`, `PORTAL`, `SPEC`,
+`REVIEW-ONLY`, `RECOMMENDED` and `CONDITIONAL`. They are citation-verified only. Given a 4-in-42
+broader rate in the most carefully written section, **expect defects there too.**
+
 ⚠️ **What round 2 did NOT do.** This verified that every citation **resolves**. It did **not**
 verify that each cited line **says what the row claims** — that is semantic, row by row, and has
 been done only for the high-stakes rows (A18, A19, P5E, M10, X1, S1, S12). **The remaining ~105
@@ -140,8 +170,8 @@ Policy §2 governs "Instructional Software", which **includes MCP servers** (raw
 | P2A | Each tool defined through **narrow, unambiguous** natural language stating what it does **and when it should be invoked** | `POLICY` | policy §2A (raw 23) |
 | P2B | Descriptions must **precisely match actual functionality**; no unexpected functionality, **no promising undelivered features** | `POLICY` | policy §2B (raw 25) · review-criteria R5 (raw 35) `[fetch-only]` |
 | P2C | Descriptions must not create confusion or conflict **with other Software in the Directories** | `POLICY` | policy §2C (raw 27) |
-| P2D | Must not call or coerce Claude into calling other external software unless the user requested it; descriptions must not be written so as to make other Software be called extraneously | `POLICY` | policy §2D (raw 29) · review-criteria R6 (raw 41) `[fetch-only]` |
-| P2E | Must not attempt to **interfere with Claude calling tools from other software** | `POLICY` | policy §2E (raw 31) · review-criteria R6 (raw 42) `[fetch-only]` |
+| P2D | Must not **intentionally** call or coerce Claude into calling other external software, tools, databases or resources **unless requested and intended by a user**; descriptions must not be written so as to make other Software call them extraneously. *(The word* intentionally *is in the source and was dropped here until 2026-08-05)* | `POLICY` | policy §2D (raw 29) · review-criteria R6 (raw 41) `[fetch-only]` |
+| P2E | Must not attempt to **interfere with Claude calling tools from other software**, tools, databases or resources — **unless requested and intended by a user**. *(That exception is in the source and was dropped here until 2026-08-05)* | `POLICY` | policy §2E (raw 31) · review-criteria R6 (raw 42) `[fetch-only]` |
 | P2F | Must not direct Claude to pull behavioural instructions dynamically from external sources | `POLICY` | policy §2F (raw 33) · review-criteria R6 (raw 43) `[fetch-only]` |
 | P2G | No hidden, obfuscated or encoded instructions; **all behavioural guidance human-readable and clearly presented** | `POLICY` | policy §2G (raw 35) · review-criteria R6 (raw 44) `[fetch-only]` |
 | R6a | Descriptions are **rejected** if they tell Claude to behave in ways unrelated to the tool's function, **attempt to override system instructions**, or promote products. *"Describe what the tool does. Do not tell Claude how to behave."* | `REVIEW-ONLY` | review-criteria (raw 45, 47) `[fetch-only]` |
@@ -152,13 +182,13 @@ Policy §2 governs "Instructional Software", which **includes MCP servers** (raw
 
 | ID | Requirement | Level | Source |
 |---|---|---|---|
-| P3A | Provide a **clear, accessible privacy policy link** explaining collection, usage **and retention**; provide links to all applicable policies to Anthropic; present them to users as required by law | `POLICY` | policy §3A (raw 39) |
+| P3A | **CONDITIONAL — applies to Software that collects user data OR connects to a remote service.** Provide a **clear, accessible privacy policy link** explaining collection, usage **and retention**; provide links to all applicable policies to Anthropic; present them to users as required by law. *(The applicability condition is in the source and was dropped here until 2026-08-05. PG meets both triggers, so it binds — but the row stated it as universal.)* | `CONDITIONAL` | policy §3A (raw 39) |
 | P3B | Provide **verified** contact information **and** support channels for users with **product or security** concerns | `POLICY` | policy §3B (raw 41) |
 | P3C | Document **how the Software works, its intended purpose, and how users troubleshoot issues** | `POLICY` | policy §3C (raw 43) |
 | P3D | Provide a **standard testing account with sample data** for Anthropic to verify full functionality | `POLICY` | policy §3D (raw 45) · submission B (raw 70) · testing (raw 39) `[fetch-only]` |
 | P3D-i | Test credentials must be a **fully populated account, not an empty shell** — reviewers list real records, search real data and exercise write tools on real resources — **and must include step-by-step setup instructions for someone unfamiliar with the service** | `PORTAL` | testing (raw 39) `[fetch-only]` |
 | P3E | Provide **at least three working examples** of prompts or use cases demonstrating core functionality | `POLICY` | policy §3E (raw 47) |
-| P3F | Must **verify ownership or control** of any API endpoint, domain or UI the Software connects to, **and any external resources it retrieves or renders** | `POLICY` | policy §3F (raw 49) · review-criteria R8 (raw 59) `[fetch-only]` |
+| P3F | Must **verify ownership or control** of any API endpoint, domain or UI the Software connects to, **and any external resources it retrieves or renders**. ⚠️ **Plugins are an exception** and may connect to any Connector approved in the Software Directory. *(That exception is in the source and was dropped here until 2026-08-05)* | `POLICY` | policy §3F (raw 49) · review-criteria R8 (raw 59) `[fetch-only]` |
 | P3G | Maintain the Software and address issues within reasonable timeframes | `POLICY` | policy §3G (raw 51) |
 | P3H | Agree to the Software Directory Terms **and follow the design guidelines Anthropic publishes** | `POLICY` | policy §3H (raw 53) |
 | DOC1 | Public documentation is required **by your publish date** — **a blog post or help-centre article is sufficient**; may be shared privately with Anthropic during review | `REVIEW-ONLY` | review-criteria (raw 72) `[fetch-only]` |

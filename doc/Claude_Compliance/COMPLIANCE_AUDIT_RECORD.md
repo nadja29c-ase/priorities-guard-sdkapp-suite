@@ -193,6 +193,25 @@ are APPENDED, never inserted, so references from briefings and increments stay v
    invalidates every outside reference — briefings, increments and commit messages all cite these
    by number. `fd71a68` inserted at #7 and broke a reference in an increment briefing written the
    same day.
+13. **When verifying a row against its source, mark it narrower / equal / BROADER — and only
+    BROADER is a defect.** *(New 2026-08-05.)* A citation resolving proves the line exists; content
+    verification proves the line says what the row claims; **neither catches the row saying MORE
+    than the line does.** A row sharpened for readability — a "should" tightened, a qualifier
+    dropped, a scope widened — passes both mechanical checks and is still wrong. Run on the 42
+    `POLICY`/`TERMS` rows it found **four**, each dropping a qualifier or an exception: P2D
+    ("intentionally"), P2E ("unless requested and intended by a user"), P3A (the
+    collects-data-or-connects-remotely condition), P3F (the plugin exemption). **All nine hardening
+    instances are the same failure at section level.** ⚠️ **Qualifiers live in the last clause of a
+    sentence, which is what gets trimmed when a requirement is condensed into a row.**
+
+14. **A reviewer reading files cannot tell which commit they correspond to.** *(New 2026-08-05,
+    recorded at the reviewer's own request.)* A filesystem read returns bytes with no commit and no
+    mtime, so every "verified" from a reading party is a claim about a byte state at an unknown
+    point in the commit sequence. **Where the two disagree about a file's current contents,
+    `git show <hash>:<path>` wins by construction.** This is not a rule so much as an honest
+    statement of what each side's verification is worth — and it already produced one false defect
+    report (the round-2 block reported stale after it had been fixed).
+
 12. **A verification result is scoped to the version it ran against.** *(New 2026-08-05.)* Re-run
     the check, or restate its scope, **in the same commit as any content change.** A block reading
     *"121 rows, 0 unresolvable"* sitting above a file of 129 rows is not slightly stale — it is a
