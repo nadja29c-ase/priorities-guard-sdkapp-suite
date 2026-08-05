@@ -1,10 +1,31 @@
-# Increment Claude-M20 — Inline loading skeleton (rev 3)
+# Increment Claude-M20 — Inline loading skeleton (rev 4)
 
 **Row:** M20 · `DOC-CONSTRAINT`, binding via Policy §3H
+**Status:** implemented across `69a8534`, `4f244fc`, `87967bd`, `2a1514c`, `8048dfe`. Not deployed.
 
-Supersedes rev 2. Changes: scope list now matches the required edits · latency claim separated into
-backend vs client-side · storage baseline reworded to avoid implying §1D mandates zero storage ·
-loading-message test scoped to the branch · bundle threshold must be stated, not assumed.
+Supersedes rev 3. **Rev 4 folds in two amendments that were authorised conversationally and never
+written down**, plus one defect found in review.
+
+⚠️ **Why this reissue exists.** An adversarial review of the implementation against rev 3 reported
+a scope breach and an unsatisfiable test gate. **Both had been authorised** — but the authorisation
+lived in a chat transcript while the document still said otherwise, so a reviewer reading rev 3
+found real-looking defects that were nothing of the kind. **An amendment that isn't in the document
+isn't an amendment.** Reissue rather than amend in conversation.
+
+**Amendment 1 — §1 scope now includes collapsing `WIDGET_URI` to a single declaration.** It was
+declared twice (`handlers/resources_dupl.py:40`, `response_adapter_dupl.py:11`), which
+`OPERATIONS_PREDEPLOY.md:236` calls a bug and predicts drifts on exactly this operation. A URI bump
+through two literals is unsafe, so this was in the path of the change, not adjacent to it.
+
+**Amendment 2 — §9's unit and integration gates are met by MANUAL verification recorded in the
+report.** The widget has **no test infrastructure at all**: `package.json` defines only `dev`,
+`build`, `preview`, so `npm test` fails with "Missing script". Standing up vitest + jsdom +
+testing-library inside a skeleton increment is a larger change than the increment. **Filed
+separately as its own increment** — the Claude widget has shipped seven increments on visual
+inspection alone, and every widget claim in the compliance audit rests on reading rather than
+execution.
+
+**Defect found in review — §4 card geometry.** See the amended §4.
 
 ---
 
@@ -12,11 +33,27 @@ loading-message test scoped to the branch · bundle threshold must be stated, no
 
 - `widget-react/src/App.tsx` — loading branch only
 - `widget-react/src/main.css`
-- The canonical `WIDGET_VERSION` declaration
+- The canonical `WIDGET_VERSION` and `WIDGET_URI` declarations
+- **Collapsing `WIDGET_URI` to a single source of truth** *(amendment 1)*
 - The generated Claude widget bundle
 - Only those resource metadata references that require updating because of the version change
+- **This briefing file itself**, and **`doc/Claude_Compliance/COMPLIANCE_AUDIT_RECORD.md`** where the
+  increment corrects a standing check *(see below)*
 
 Nothing else. Adjacent issues found during implementation are reported, not fixed.
+
+⚠️ **The scope list has now been wrong three times** — it omitted `WIDGET_VERSION`, then the URI
+references, then documentation-of-record. Two record-keeping files are legitimately touched by an
+increment and rev 3 had no slot for either:
+
+- **This file.** It was **untracked** before `69a8534` and was added there (`git diff --name-status`
+  shows `A`, not `M`) — the briefing entering the repo alongside the work it briefs, matching the
+  convention of the other files in that tree. Defensible, but it was not authorised by rev 3's list.
+- **`COMPLIANCE_AUDIT_RECORD.md`.** This increment **found a hole in standing check 11**:
+  `resources_dupl.py` changed while its byte count stayed identical (5927 → 5927), because
+  `"2"→"3"` and `v2→v3` are same-length substitutions. The check reported four changed files when
+  five had changed. Corrected in `4f244fc` to derive the changed set from `git status --porcelain`.
+  **A process defect found by an increment is corrected by that increment**, or it is lost.
 
 ---
 
@@ -67,6 +104,29 @@ connected ones. Inspect what state is actually available at the loading branch a
 **Do not invent or assume connection state.** State the reasoning in the report.
 
 **Hint line:** omit. Text-only and conditional.
+
+### Card geometry — the two variants differ, so mirror the COMMON SUBSET *(amendment, rev 4)*
+
+⚠️ **Found by adversarial review of rev 3's implementation.** The two inline card variants do not
+share a shape:
+
+| | Shape |
+|---|---|
+| `DeadlineCard:189` | `overflow: hidden`, **no padding on the article**, then a `background-secondary` banner strip (`8px 12px`), then a separately padded body (`12px`) |
+| `FlexibleCard:208` | **No banner.** `padding: 12px` sits **directly on the article**, then straight into the badge+name header |
+
+The first implementation rendered **DeadlineCard's shape for every placeholder**. For a flexible
+priority the banner strip **vanished on load and content collapsed upward** — the exact seam M20
+exists to remove, introduced by the fix for it.
+
+**The mix is unknown at `!isInitialized`, so this cannot be solved exactly. But the error is not
+symmetric:** asserting a region that disappears collapses content **upward**; omitting one that
+appears pushes it **down**. Down is forgiving.
+
+**Render the common subset** — matches `FlexibleCard` exactly, under-specifies `DeadlineCard`:
+padded shell (`borderRadius 12px`, `padding 12px` on the element, `background-primary`, `1px`
+border, `3px` left border), badge circle + name row (`gap 8px`, `marginBottom 8px`, 24px circle),
+one content bar. **No banner.**
 
 ### Placeholder count
 
@@ -140,6 +200,11 @@ canonical file.
 ---
 
 ## 9. Tests
+
+⚠️ **Amendment 2: there is no test runner.** `package.json` defines only `dev`, `build`, `preview`.
+The assertions below are met by **manual verification recorded in the report**, not by executing a
+suite. Standing up a harness is filed as a separate increment. **Do not report these as "tests
+passing" — report them as checks performed.**
 
 ### Unit
 - The loading branch renders the expected placeholder set: two card placeholders plus one each for the
