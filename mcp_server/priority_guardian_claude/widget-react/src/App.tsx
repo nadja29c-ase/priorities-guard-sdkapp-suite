@@ -569,40 +569,31 @@ function App() {
       >
         <span className="sr-only">{t('loading')}</span>
 
-        {/* Priority card placeholders — mirrors DeadlineCard/FlexibleCard inline shape */}
+        {/* Priority card placeholders — the COMMON SUBSET of the two inline card variants.
+            DeadlineCard (:189) uses overflow:hidden with a background-secondary banner strip and a
+            separately padded body. FlexibleCard (:208) has no banner: padding sits directly on the
+            article, followed by the badge+name header. Mirroring DeadlineCard would show a banner
+            that VANISHES for flexible priorities, collapsing content upward — the seam M20 exists
+            to remove. The mix is unknown at load, so this renders only what both share: padded
+            shell, badge circle + name row, one content bar. A deadline card then GAINS a banner on
+            load and pushes content down, which is the forgiving direction. */}
         <div aria-hidden="true" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {[0, 1].map((i) => (
             <div
               key={i}
               style={{
                 borderRadius: '12px',
-                overflow: 'hidden',
+                padding: '12px',
                 background: 'var(--color-background-primary, #fff)',
                 border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
                 borderLeft: '3px solid var(--color-border-tertiary, rgba(31,30,29,0.15))',
               }}
             >
-              {/* banner */}
-              <div
-                style={{
-                  padding: '8px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: 'var(--color-background-secondary, #F5F4ED)',
-                }}
-              >
-                <div className="pg-skeleton-bar" style={skeletonBar('88px', '11px')} />
-                <div className="pg-skeleton-bar" style={skeletonBar('56px', '11px')} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <div className="pg-skeleton-bar" style={skeletonBar('24px', '24px', '50%')} />
+                <div className="pg-skeleton-bar" style={skeletonBar('60%', '12px')} />
               </div>
-              {/* body */}
-              <div style={{ padding: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                  <div className="pg-skeleton-bar" style={skeletonBar('24px', '24px', '50%')} />
-                  <div className="pg-skeleton-bar" style={skeletonBar('60%', '12px')} />
-                </div>
-                <div className="pg-skeleton-bar" style={skeletonBar('42%', '12px')} />
-              </div>
+              <div className="pg-skeleton-bar" style={skeletonBar('42%', '12px')} />
             </div>
           ))}
         </div>
