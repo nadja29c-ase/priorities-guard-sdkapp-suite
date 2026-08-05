@@ -275,8 +275,14 @@ are APPENDED, never inserted, so references from briefings and increments stay v
     because it is specific. Fourth instance of a verification claim and its content moving in
     different commits: the master header, the §11 changelog, the currency metadata, and the
     canonical file's round-2 block.
-11. **Every structural edit reports before/after BYTE AND LINE COUNTS FOR EVERY FILE IN THE WORKING
-    TREE — not just the file being edited.** *(New 2026-08-05.)* Three structural edits produced
+11. **Every structural edit reports the CHANGED-FILE SET for the whole working tree — not just the
+    file being edited.** ⚠️ **CORRECTED 2026-08-05: use `git status --porcelain`, NOT byte and line
+    counts.** The original formulation said byte/line counts, and increment Claude-M20 proved it
+    holed: `resources_dupl.py` changed (`WIDGET_VERSION "2"→"3"`, `dashboard-v2→dashboard-v3`) and
+    its byte count was **identical, 5927 → 5927**, because both are same-length substitutions. The
+    check reported four changed files; five had changed. **A byte count cannot see a same-length
+    edit, and version/URI bumps are exactly that shape.** Report byte deltas as supplementary
+    detail; determine the changed SET from git. *(New 2026-08-05.)* Three structural edits produced
     three losses: the standing-checks block (deleted, survived two commits), the `clientInfo`
     verification (caught only because a marker check happened to be wider than the editing
     pattern), and `structural_guideline_claude_vs_openai.md` (deleted by a `git add -A` staging a
