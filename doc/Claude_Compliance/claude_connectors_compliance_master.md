@@ -42,20 +42,69 @@ found by the sweep itself, all in §4K:
 4. §4F — "Required sections" (source: *Recommended sections*)
 5. §4K — `ui.domain` "mandatory… will not render" (source: optional; host derives an origin)
 6. A18 — softened *out* of existence on one page's silence **(the bias running in reverse)**
-7. §4K — "Fullscreen constraints (mandatory)" — the source has **three** `must` statements in the
-   entire page and none concerns fullscreen
+7. §4K — "Fullscreen constraints (mandatory)" — **settled by grep, pattern stated:**
+   `grep -inw "must" design-guidelines.raw.md` returns **3 lines** (128, 204, 278); `grep -inw
+   "required"` returns **0**. But only **2 are developer obligations** — raw 204 (light/dark
+   themes) and raw 278 (usable by everyone). Raw 128 (*"connectors must be added via web or
+   desktop before they appear on mobile"*) states **platform behaviour**, not a duty on the
+   developer. **None concerns fullscreen**, so the conclusion holds on either count.
+   ⚠️ *An earlier version of this line said "three must statements" without the predicate. Three
+   is the token count; two is the obligation count. A number in a compliance document needs its
+   PATTERN and its PREDICATE — "3 lines matching `\bmust\b`" and "2 developer obligations" are
+   different facts, and only the second bears on compliance.*
 8. §4K — "Styling requirements (mandatory)" — **mixed**: light/dark and never-hardcode-colors ARE
    musts (M1); the rest is guidance, and one item is a *permission* labelled a requirement
 9. §4K — "CSP declaration (mandatory for MCP Apps)" — **conditional**: required only for servers
    that load external origins
 
-**#8 is the instructive one.** A blanket "(mandatory)" over a mixed list is not simply wrong — it
-makes the real MUST indistinguishable from the advice around it. That is the same defect as
-inflating a single line, and it is harder to see.
+**#8 is the instructive one, and it is a distinct failure mode — not a variant of hardening.**
+A blanket "(mandatory)" over a mixed list does not overstate any single item. *"Brand accent
+colors are permitted"* sits under the same header as a genuine MUST, and the header destroys the
+reader's ability to tell which one binds. Inflation makes one claim wrong; **this makes every
+claim in the list unreadable as to obligation level.** It has its own standing check below.
 
 ⚠️ **Round 2 has NOT been run on this master.** The artifacts are checked; the synthesis is not.
 A green artifact tally does not transfer here. **What HAS been done is corrective**: every claim
 known to be false has been fixed at the point where it is stated.
+
+⚠️ **SOURCE COVERAGE — 11 raw files, and this file is SILENT ON 9 THINGS.** Corrected 2026-08-05;
+an earlier version of this header said 13.
+
+**Committed (11):** `authentication` · `cross-compatibility` · `design-guidelines` ·
+`instance-supersession` · `lazy-authentication` · `review-criteria` · `software-directory-policy` ·
+`software-directory-terms` · `submission` · `testing` · `transparent-theming`.
+**8 corroborated in some form; 3 FETCH-ONLY and undated** — `review-criteria`, `testing`,
+`lazy-authentication`.
+
+⚠️ **§4L and §4O REST ON NOTHING IN THIS TREE.** `external-links` and `troubleshooting` have **no
+raw file and never have.** Their content was pasted elsewhere, relayed, and applied here.
+**That is weaker than fetch-only**: a fetch at least leaves bytes to check against; these leave
+none. Treat both sections as **relay-only, no artifact** until the pastes are committed.
+
+**Uncaptured but relevant (2):** `directory-vs-custom` · `managing-your-listing`.
+**Binding documents outside `llms.txt` (5):** Trademark Guidelines (Terms T-10) · Usage Policy ·
+Universal Usage Standards · High-Risk Use Case requirements · supported-countries policy — the
+last four made binding by **Policy §1A alone**. A clean `llms.txt` read is **not** full coverage.
+
+**STANDING CHECKS — record these when writing any claim in this file:**
+
+1. **State the obligation level the source states, and cite where it says so.** Silence is not
+   evidence of absence; emphasis is not evidence of obligation. *(9 instances found in one pass —
+   8 hardening, 1 the mirror.)*
+2. **A negative claim must state the scope it was proved over.** *"No match for X in file Y"*, not
+   *"nowhere"*.
+3. **Name the surface a claim describes.** The shared registry is not the Claude serving path.
+4. **Never a bare hash.** Record the computation, or the hash with the URL it derives from.
+5. **Relative timestamps are worse than none** — in a committed file they silently re-anchor to
+   whenever the reader looks.
+6. **Do not put a single obligation label over a mixed list.** *(New 2026-08-05, from sweep item
+   #8.)* A blanket "(mandatory)" over items of differing force does not overstate any one of them —
+   it destroys the reader's ability to tell which one binds. **Label each item, or label none.**
+   This is distinct from #1: inflation makes one claim wrong; this makes a whole list unreadable
+   as to obligation level.
+7. **A number needs its pattern and its predicate.** *(New 2026-08-05, from sweep item #7.)*
+   *"3 lines matching `\bmust\b`"* and *"2 developer obligations"* are different facts about the
+   same page; only the second bears on compliance. State which one is meant.
 
 ⚠️ **SCOPE OF THIS FILE.** It records **what the sources require** and **what PG currently does**.
 PG status is *recorded status*, not a work list. Where a discrepancy is noted, it is noted so it is

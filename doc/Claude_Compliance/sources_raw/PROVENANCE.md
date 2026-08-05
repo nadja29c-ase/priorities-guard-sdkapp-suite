@@ -192,8 +192,57 @@ in that index:
 | **High-Risk Use Case requirements** | Policy §1A | ❌ **no** |
 | **Supported-countries policy** | Policy §1A | ❌ **no** |
 
-**Policy §1A alone makes four uncaptured documents binding.** Revised count: **13 pages captured,
-2 relevant pages outstanding, 5 binding documents outside the index.**
+**Policy §1A alone makes four uncaptured documents binding.**
+
+## ⚠️ CORRECTED SOURCE COUNT — 2026-08-05
+
+An earlier line here said **"13 pages captured."** **There are 11 raw files.** `ls` settles it:
+authentication · cross-compatibility · design-guidelines · instance-supersession ·
+lazy-authentication · review-criteria · software-directory-policy · software-directory-terms ·
+submission · testing · transparent-theming.
+
+**A header that overstates coverage by two is the same defect class the header exists to prevent.**
+
+### A fifth category, weaker than fetch-only: RELAY-ONLY, NO ARTIFACT
+
+**`external-links` and `troubleshooting` have no raw file. They never have.** Nadja pasted both;
+the review chat read both; findings were relayed and applied to the master. **Nothing was ever
+committed.**
+
+So §4L's two-mechanism correction (malformed → *ignored*, unowned → *removed during review*), and
+§4O's dev-mode path, iOS `Referer`/`Origin` finding and proxy-vs-device distinction, all rest on
+**relayed facts with no bytes behind them — not even a fetch.**
+
+**This is weaker than relay-corroborated**, where a fetch exists and N facts were checked against
+it. Here there is nothing to check against at all:
+
+| Category | Bytes in tree? | Cross-checked? |
+|---|---|---|
+| paste | ✅ carries publication date | n/a — it *is* the source |
+| fetch, paste-corroborated | ✅ | ✅ byte/marker level |
+| fetch, relay-corroborated | ✅ | ✅ N facts, N stated |
+| **fetch only** | ✅ | ❌ **undated, uncorroborated** |
+| **relay-only, no artifact** | ❌ **nothing** | ❌ **nothing to check** |
+
+⚠️ **The pastes must reach the agent doing the work.** They went to the review chat. This is the
+same failure that cost three rounds on `authentication`: *confirming to a third party that an
+artifact exists reads as silence at the asking end.*
+
+### The fetch-only category grew from one file to three
+
+`testing.raw.md` and `lazy-authentication.raw.md` were fetched **before** the increment briefing
+was issued, but the provenance consequence was not stated at the time and is stated now: **both
+are fetch-only, undated and uncorroborated.** Three rounds were spent narrowing that category to a
+single file (`review-criteria`); it is now three.
+
+### Corrected accounting
+
+| | |
+|---|---|
+| **11** raw files committed | 8 corroborated in some form, **3 fetch-only** (`review-criteria`, `testing`, `lazy-authentication`) |
+| **2** relay-only, no artifact | `external-links`, `troubleshooting` |
+| **2** relevant outstanding | `directory-vs-custom`, `managing-your-listing` |
+| **5** binding documents outside `llms.txt` | Trademark Guidelines + the four via Policy §1A |
 
 ## The rule going forward
 
