@@ -554,6 +554,12 @@ function App() {
         aria-busy="true"
         style={{
           width: '100%',
+          // Matches the inline branch's desktop cap without reading `platform`:
+          // on a mobile viewport the cap never binds and auto margins compute to 0,
+          // so the ternary the inline branch uses does no work the cascade wouldn't.
+          maxWidth: '560px',
+          marginLeft: 'auto',
+          marginRight: 'auto',
           background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '16px',
           padding: '12px',
