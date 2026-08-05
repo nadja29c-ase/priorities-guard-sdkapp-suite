@@ -691,7 +691,7 @@ function App() {
         {sortedPriorities.length > 0 && (
           <p style={{
             fontSize: '11px',
-            color: 'var(--color-text-tertiary, #73726C)',
+            color: 'var(--color-text-secondary, #3D3D3A)',
             textAlign: 'center',
             marginTop: '8px',
             marginBottom: '0',
