@@ -1740,6 +1740,42 @@ channels"; this is the specific address.)
 
 11. What Changed From Previous Version
 
+### 2026-08-05 (d) — Follow-on recorded: the folder has tripled, and the middle layer is now redundant
+
+**Measured, not estimated:** `doc/Claude_Compliance/` is **15 files at 368 KB**, up from **6 files
+at 149 KB** when this pass began. The master alone went **47 KB → 125 KB**.
+
+**Consolidation was the goal, and the count went the wrong way.** The canonical requirements file
+answers *"what must I satisfy"* correctly, but it does not address the sprawl — it added to it.
+
+**The middle layer has no remaining job.** Three layers now exist where two would do:
+
+| Layer | Holds | Status |
+|---|---|---|
+| `sources_raw/` | the bytes | ✅ keep — this is the evidence |
+| **per-page artifacts** | extraction + diff + PG conformance, one file per source | ⚠️ **redundant** — requirements moved to the canonical file, provenance to `PROVENANCE.md`, synthesis to the master |
+| master + canonical | synthesis/audit record, and requirements | ✅ keep |
+
+Redundant per-page artifacts: `authentication_claude_connectors.md` ·
+`review_criteria_claude.md` · `cross_compatibility_mcpapps_claude.md` ·
+`instance_supersession_mcpapps_claude.md` · `transparent_theming_mcpapps_claude.md` ·
+`software_directory_policy_claude.md` · `software_directory_terms_claude.md`.
+
+⚠️ **THREE COPIES OF THE POLICY EXIST**, which is the exact condition `doc/README.md` warns about
+(*"two documents describing the same thing will diverge"*):
+- `sources_raw/software-directory-policy.raw.md` — the bytes
+- `software_directory_policy.md` (7.3 KB) — the older repo copy, the one that said *"Updated this week"*
+- `software_directory_policy_claude.md` (14.2 KB) — this pass's extraction artifact
+
+**Follow-on increment, not started:** archive or delete the per-page artifacts, resolve the three
+policy copies down to one, and shrink the master to synthesis and audit record only — which is what
+its new title already claims it is. Also present and unfiled: `inc_claude_Requirements.md`, an
+increment briefing sitting in a compliance folder.
+
+**Not done here** because deleting documentation is not a documentation-currency task, and because
+the artifacts are the only place several diffs and their reasoning are recorded — that content has
+to be checked for anything not carried into the canonical file *before* they are removed.
+
 ### 2026-08-05 (c) — Header restructured: current state only
 
 The header had accumulated superseded entries **in place**, and they contradicted the current

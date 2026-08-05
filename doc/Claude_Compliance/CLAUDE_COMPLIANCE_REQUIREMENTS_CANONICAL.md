@@ -14,7 +14,17 @@ SDK helper lists, no code. This file states **what must be true**. To learn *how
 `cross-compatibility` · `instance-supersession` · `submission` · `review-criteria` · `testing` ·
 `lazy-authentication`.
 
-**Silent on 9** — see §13. Four documents are *binding and never read*.
+**Coverage, counted with its predicate** (standing check #7 — a number needs its pattern *and* its
+predicate; an earlier version of this line said "silent on 9", which reconciled to nothing):
+
+- **Silent on 8** — *predicate: nothing has been read at all.* Five binding documents (Trademark
+  Guidelines + four via Policy §1A) and three referenced requirement surfaces (Enterprise Managed
+  Auth, `directory-vs-custom`, `managing-your-listing`).
+- **Weakly sourced on 3** — *predicate: content is known but no artifact exists in the tree.*
+  `external-links`, `troubleshooting`, `after-publishing` — all marked `[relay-only]` in the rows
+  that depend on them.
+
+**Eleven items in total.** See §13. **Four of the eight are binding via Policy §1A alone.**
 
 **Date: 2026-08-05. This file states current state only.** Superseded entries go to the master's
 changelog, **never inline here**.
@@ -25,7 +35,7 @@ changelog, **never inline here**.
 |---|---|
 | *(unmarked)* | Paste or paste-corroborated — bytes checked against Nadja's copy |
 | `[fetch-only]` | `review-criteria`, `testing`, `lazy-authentication` — **undated and uncorroborated** |
-| `[relay-only]` | `external-links`, `troubleshooting` — **no artifact in the tree**; source cited by page and section, since there is no file to give a line in |
+| `[relay-only]` | `external-links`, `troubleshooting`, **`after-publishing`** — **no artifact in the tree**; source cited by page and section, since there is no file to give a line in |
 
 ⚠️ `cross-compatibility` and `instance-supersession` sit between the first two: both were pasted to
 the review chat but **never byte-compared** against the fetch. Left unmarked per the increment
@@ -58,10 +68,10 @@ status, not a work list.**
 |---|---|---|---|---|
 | P1A | Must not violate or facilitate violation of the Usage Policy; must comply with Universal Usage Standards, High-Risk Use Case requirements and the supported-countries policy | `POLICY` | policy §1A (raw 7) | — not assessed — **the four referenced documents are uncaptured (§13)** |
 | P1B | Must not evade, or let users circumvent, Claude's safety guardrails, system instructions or sandbox | `POLICY` | policy §1B (raw 9) | — not assessed |
-| P1C | Must prioritise user **and third-party** privacy; handle personal and sensitive data responsibly; comply with applicable law | `POLICY` | policy §1C (raw 11) | ⚠️ PG ingests calendar events carrying **other people's** names and meeting titles. Covered by the retention model, but **three versions of that model exist** and which governs is unresolved |
+| P1C | Must prioritise user **and third-party** privacy; handle personal and sensitive data responsibly; comply with applicable law | `POLICY` | policy §1C (raw 11) | **— not assessed.** *Context, not a finding:* PG ingests calendar events carrying other people's names and meeting titles, so this clause applies. **This audit did not assess PG against it.** A pre-existing tracked item (backlog #11, "three versions of the retention model exist") predates this audit and is not one of its findings — cited as a pointer, not as evidence |
 | P1D | Must collect only data from the user's context necessary to function. **Must not collect extraneous conversation data, even for logging purposes** | `POLICY` | policy §1D (raw 13) | ⚠️ `record_widget_diagnostic` accepts an open `data` object (`additionalProperties: true`). No violation evidenced — its only caller is the ChatGPT widget sending event names and user-agent — but the schema is not the guarantee; call sites are. **Not called from the Claude path** |
 | P1E | Must not infringe intellectual property rights | `POLICY` | policy §1E (raw 15) | — not assessed |
-| P1F | **Must not query or extract Claude's memory, chat history, conversation summaries, or user-generated/uploaded files** | `POLICY` | policy §1F (raw 17) · review-criteria (raw 55) `[fetch-only]` | ✅ verified — no such access anywhere in `mcp_server/` or `backend/` |
+| P1F | **Must not query or extract Claude's memory, chat history, conversation summaries, or user-generated/uploaded files** | `POLICY` | policy §1F (raw 17) · review-criteria (raw 55) `[fetch-only]` | ✅ verified — **pattern and scope stated:** `grep -rniE "conversation_(history\|summary)\|chat_history\|claude_memory\|user_files\|conversation_summar"` over `mcp_server/**/*.py` and `backend/**/*.py`, excluding tests → **0 matches**. ⚠️ *Bounded by the pattern: this proves no identifier-level match, not that no such access exists under a name the pattern misses* |
 
 ---
 
@@ -315,10 +325,22 @@ so a clean read of the documentation index is **not** full coverage.
 
 - **`building/managing-your-listing`** — holds the edit-vs-review boundary (**PUB3**).
 
-**One page away from full traceability (2):**
+**One page away from full traceability (3):**
 
-- **`external-links`** → all of §10 · **`troubleshooting`** → §4O of the master
+| Page | Feeds | Marker comes off when |
+|---|---|---|
+| `external-links` | **all of §10** | pasted to the committing session |
+| `troubleshooting` | §4O of the master | pasted to the committing session |
+| **`after-publishing`** | **all of §12**, and **S6** (the permanent slug) | pasted to the committing session |
 
-⚠️ **These two are `[relay-only]`, not unobtainable.** Both pages **were pasted into the review
-chat**; they simply have not been handed to the session that commits files. **One paste each and the
-markers come off** — §10 becomes paste-provenance, the strongest category in this document.
+⚠️ **These three are `[relay-only]`, NOT unobtainable.** All were pasted into the review chat; they
+simply have not been handed to the session that commits files. **One paste each and the markers come
+off** — §10 and §12 become paste-provenance, the strongest category in this document.
+
+*[Corrected 2026-08-05: `after-publishing` was cited and marked `[relay-only]` in §12 while being
+absent from both the header's marker definition and this list — the apparatus did not know about a
+source the rows already depended on. Two of three, listed as all of them.]*
+
+**Header count reconciliation:** 5 binding + 3 referenced surfaces = **8 silent**; 3 relay-only =
+**weakly sourced**; **11 items**. Stated because *"silent on 9"* previously appeared in the header
+and reconciled to nothing in this section.
