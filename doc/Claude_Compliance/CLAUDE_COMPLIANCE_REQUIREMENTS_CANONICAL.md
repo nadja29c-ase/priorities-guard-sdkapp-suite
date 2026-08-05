@@ -187,6 +187,39 @@ briefing; noted here so the header does not overstate.
 
 **Never round upward.** A row whose level cannot be determined from the source is `RECOMMENDED`.
 
+### ⚠️SILENT — a second signal, orthogonal to Level
+
+**Every level above answers "who requires this". None answers "what breaks if you don't."** Those
+are different questions, and for one class of row the answers diverge sharply: **soft language,
+hard consequence.**
+
+**M3 is the case that exposed it.** The source says the interactive portion *"should"* be rendered
+inside `safeAreaInsets` — correctly levelled `RECOMMENDED`. The same paragraph says *"The user
+won't be able to interact with anything rendered outside the safe area."* A reader scanning the
+Level column sees `RECOMMENDED` and deprioritises a rule whose violation **makes buttons
+untappable**.
+
+**`⚠️SILENT` marks a row whose violation produces no error, no rejection and no log line — the
+software simply does the wrong thing.** It is independent of obligation level: a `RECOMMENDED`
+row can be `⚠️SILENT` and a `POLICY` row need not be.
+
+| Marked | Why it fails silently |
+|---|---|
+| **M3** | design-guidelines raw 134 — *"The user won't be able to interact with anything rendered outside the safe area"* |
+| **M4** | the host **caps and clips** overflow; nothing reports it |
+| **X4** | an opaque background **hides the chat surface** — the app still renders |
+| **X9** | tool-input and tool-result events never fire; **the app renders nothing** and reports no error |
+| **X2** | a wrong hash (e.g. a trailing slash) means **the widget never renders while OAuth keeps working** — the failure looks unrelated to the URL |
+| **L2** | unowned entries are **removed during review**; the listing ships without them |
+| **L5** | malformed entries are **ignored**; the listing ships, the entry is gone |
+| **L7** | the promise **resolves on attempt, not arrival** — success is not confirmation |
+| **A22** | a `200` + `isError` produces **no auth prompt**; users see "please sign in" text instead of a Connect button |
+
+**Reading rule: `POLICY`/`TERMS`/`PORTAL` tells you what a reviewer can reject you for.
+`⚠️SILENT` tells you what will be broken in production whether or not anyone rejects you.**
+The two lists overlap less than you would expect — most `⚠️SILENT` rows are `RECOMMENDED`,
+`CONDITIONAL` or `DOC-CONSTRAINT`.
+
 **How to use this as an instrument.** For each row, ask: *does the app satisfy this, and what is the
 evidence?* Record the answer **elsewhere** — per-app status belongs in the audit record, not here.
 Levels tell you what a failure costs: `POLICY`, `TERMS`, `PORTAL` and `DOC-CONSTRAINT` rows can
@@ -319,7 +352,7 @@ continued maintenance constitutes acceptance (raw 11).
 | A19 | **`clientInfo` is unauthenticated and must never feed an authorization decision.** Any client can claim any name; do not gate behaviour on an exact `name` or `version` — both vary across surfaces and releases | `DOC-CONSTRAINT` | testing (raw 35) `[fetch-only]` |
 | A20 | **CONDITIONAL — Microsoft Entra ID only.** Register the MCP server URL as an **Application ID URI** on the Entra app registration, or the token request fails `AADSTS9010010` | `CONDITIONAL` | authentication (raw 81) |
 | A21 | **CONDITIONAL — `oauth_anthropic_creds` only.** Credentials are bound to the issuing AS; email `mcp-review@anthropic.com` with new credentials **before** migrating to a new authorization server | `CONDITIONAL` | authentication (raw 41) |
-| A22 | Return **401**, not a tool error. A **200 with `isError: true` is an application-level failure** — Claude passes the text to the model and moves on, with **no auth prompt**. A **403** triggers re-authentication **only** with `error="insufficient_scope"`; any other 403 is terminal | `DOC-CONSTRAINT` | lazy-authentication (raw 43, 123) `[fetch-only]` |
+| A22 | Return **401**, not a tool error. A **200 with `isError: true` is an application-level failure** — Claude passes the text to the model and moves on, with **no auth prompt**. A **403** triggers re-authentication **only** with `error="insufficient_scope"`; any other 403 is terminal | `DOC-CONSTRAINT` ⚠️SILENT | lazy-authentication (raw 43, 123) `[fetch-only]` |
 | A23 | Include a `scope` parameter in the 401's `WWW-Authenticate`. Omitting it makes Claude request everything in PRM `scopes_supported` plus `offline_access`, **which can produce an over-broad consent prompt** | `RECOMMENDED` | authentication (raw 57) · lazy-authentication (raw 32) `[fetch-only]` |
 | A24 | **RECOMMENDED — DCR at scale.** For servers expecting high traffic from the directory, **prefer CIMD or `oauth_anthropic_creds` over DCR**; DCR registers a new client on every fresh connection | `RECOMMENDED` | authentication (raw 53) |
 
@@ -333,8 +366,8 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 |---|---|---|---|
 | M1 | All views must support **both light and dark themes**; use host style tokens; **never hardcode colors**; test both modes | `DOC-CONSTRAINT` | design-guidelines (raw 204) — **one of only two developer "must" statements on the page** |
 | M2 | **WCAG AA** contrast minimum, keyboard navigation, text alternatives, tested with assistive technologies — *"your app must be usable by everyone"* | `DOC-CONSTRAINT` | design-guidelines (raw 278) — the other developer "must" |
-| M3 | The interactive portion of the app **SHOULD** be rendered inside `safeAreaInsets` — the source says *should*, not *must*. It carries a **functional consequence** that makes it effectively binding: *"The user won't be able to interact with anything rendered outside the safe area."* **Not mobile-specific** — on web and desktop the composer can overlay the bottom of an inline app | `RECOMMENDED` | design-guidelines (raw 134) |
-| M4 | Inline: **auto-fit content height, no nested vertical scroll.** The host caps and clips. **No pixel value is published** | `DOC-CONSTRAINT` | design-guidelines (raw 39, 62, 186) |
+| M3 | The interactive portion of the app **SHOULD** be rendered inside `safeAreaInsets` — the source says *should*, not *must*. It carries a **functional consequence** that makes it effectively binding: *"The user won't be able to interact with anything rendered outside the safe area."* **Not mobile-specific** — on web and desktop the composer can overlay the bottom of an inline app | `RECOMMENDED` ⚠️SILENT | design-guidelines (raw 134) |
+| M4 | Inline: **auto-fit content height, no nested vertical scroll.** The host caps and clips. **No pixel value is published** | `DOC-CONSTRAINT` ⚠️SILENT | design-guidelines (raw 39, 62, 186) |
 | M5 | Inline: maximum **2 actions**, at the bottom of the card | `DOC-CONSTRAINT` | design-guidelines (raw 63) |
 | M6 | Inline: maximum **4–5 data points** | `DOC-CONSTRAINT` | design-guidelines (raw 64) |
 | M7 | No drill-ins, breadcrumbs or multiple views; no menus or popovers — use visible controls (they get clipped by container boundaries or conflict with host z-index) | `DOC-CONSTRAINT` | design-guidelines (raw 65-66, 38, 40) |
@@ -359,14 +392,14 @@ Binding via **Policy §3H** (*"follow design guidelines Anthropic publishes"*).
 | ID | Requirement | Level | Source |
 |---|---|---|---|
 | X1 | **CONDITIONAL — `_meta.ui.domain` is OPTIONAL.** Its format and validation are **host-determined**. **Without it, Claude derives the iframe origin per conversation and connector.** Setting it opts into a **stable sandbox origin — needed if the app runs its own OAuth flow** | `CONDITIONAL` | cross-compatibility (raw 27) · instance-supersession (raw 179) |
-| X2 | **CONDITIONAL — if `ui.domain` is set for Claude:** `sha256(<full connector URL>)[:32] + ".claudemcpcontent.com"`. **Hash the exact string entered in Settings > Connectors, including path and any trailing slash** | `CONDITIONAL` | cross-compatibility (raw 29, 32) |
+| X2 | **CONDITIONAL — if `ui.domain` is set for Claude:** `sha256(<full connector URL>)[:32] + ".claudemcpcontent.com"`. **Hash the exact string entered in Settings > Connectors, including path and any trailing slash** | `CONDITIONAL` ⚠️SILENT | cross-compatibility (raw 29, 32) |
 | X3 | **Local stdio connectors have no URL** — omit `_meta.ui.domain` rather than inventing a value | `CONDITIONAL` | cross-compatibility (raw 27) |
-| X4 | `html, body { margin: 0; background: transparent; }` — any opaque background on either hides the chat surface | `DOC-CONSTRAINT` | transparent-theming (raw 19) |
+| X4 | `html, body { margin: 0; background: transparent; }` — any opaque background on either hides the chat surface | `DOC-CONSTRAINT` ⚠️SILENT | transparent-theming (raw 19) |
 | X5 | `<meta name="color-scheme" content="light dark" />` in the document head, **kept** even though `applyDocumentTheme` sets it at runtime — the tag covers first paint | `DOC-CONSTRAINT` | transparent-theming (raw 31, 34) |
 | X6 | **CONDITIONAL — host fonts only.** CSP `resourceDomains` must include `https://assets.claude.ai` for `applyHostFonts` to load the `@font-face` files | `CONDITIONAL` | transparent-theming (raw 57, 73) |
 | X7 | **Register the `hostcontextchanged` listener before you connect**, so an early update is not missed | `DOC-CONSTRAINT` | transparent-theming (raw 79) |
 | X8 | `resourceDomains` **also adds the listed origins to `script-src` and `style-src`** — keep it to origins trusted to serve executable code; prefer bundling third-party fonts over allowlisting public CDNs | `DOC-CONSTRAINT` | transparent-theming (raw 63) |
-| X9 | **The app must connect before it can receive anything.** Call `App.connect()` (or `useApp()`, which creates and connects for you in React) **without an explicit transport parameter** — the SDK detects Claude vs ChatGPT and selects the transport. ⚠️ **Tool-input and tool-result events do not fire until the app is connected**, which is the most common cause of an app that renders nothing | `DOC-CONSTRAINT` | cross-compatibility (raw 19) · transparent-theming (raw 86, 112) · ⚠️ the *"events don't fire until connected"* warning is from `troubleshooting` `[relay-only]` |
+| X9 | **The app must connect before it can receive anything.** Call `App.connect()` (or `useApp()`, which creates and connects for you in React) **without an explicit transport parameter** — the SDK detects Claude vs ChatGPT and selects the transport. ⚠️ **Tool-input and tool-result events do not fire until the app is connected**, which is the most common cause of an app that renders nothing | `DOC-CONSTRAINT` ⚠️SILENT | cross-compatibility (raw 19) · transparent-theming (raw 86, 112) · ⚠️ the *"events don't fire until connected"* warning is from `troubleshooting` `[relay-only]` |
 
 ---
 
@@ -387,12 +420,12 @@ optional, and it hides that the tree already contains the evidence.
 | ID | Requirement | Level | Source |
 |---|---|---|---|
 | L1 | **CONDITIONAL — the field is optional.** It applies only if the connector uses `ui/open-link`. If omitted the connector functions normally, but **users are shown a confirmation prompt each time it opens a link** | `CONDITIONAL` | **submission §Allowed link URIs (raw 75, 85-86)** |
-| L2 | **Every origin and scheme listed must be owned by you (the submitting organization).** You may not list third-party domains or schemes registered to apps you don't publish. **Entries you don't own will be removed during review** | `PORTAL` | **submission (raw 82)** |
+| L2 | **Every origin and scheme listed must be owned by you (the submitting organization).** You may not list third-party domains or schemes registered to apps you don't publish. **Entries you don't own will be removed during review** | `PORTAL` ⚠️SILENT | **submission (raw 82)** |
 | L3 | An HTTPS origin entry matches **scheme and hostname only** — paths, ports and query strings are ignored. **Subdomains are not implied — list each one** (`https://app.example.com`, `https://docs.example.com`) | `PORTAL` | **submission (raw 79)** |
 | L4 | A **custom URI scheme** entry (`myapp:`) is for deep links into a native app **you own**; only the scheme is matched | `PORTAL` | **submission (raw 80)** |
-| L5 | **Malformed entries are IGNORED** — not rejected. Both this and L2 fail **silently**: the listing ships, the entry is gone, and users get the confirmation modal on every link | `PORTAL` | external-links `[relay-only]` |
+| L5 | **Malformed entries are IGNORED** — not rejected. Both this and L2 fail **silently**: the listing ships, the entry is gone, and users get the confirmation modal on every link | `PORTAL` ⚠️SILENT | external-links `[relay-only]` |
 | L6 | The reserved-scheme list is **open-ended** (*"This includes…"*), not closed | `PORTAL` | external-links `[relay-only]` |
-| L7 | A bypassed `ui/open-link` **resolves once the open is attempted** — that is **not** confirmation the user reached the destination | `DOC-CONSTRAINT` | external-links `[relay-only]` |
+| L7 | A bypassed `ui/open-link` **resolves once the open is attempted** — that is **not** confirmation the user reached the destination | `DOC-CONSTRAINT` ⚠️SILENT | external-links `[relay-only]` |
 | L8 | **Custom and local connectors always show the confirmation modal**, regardless of the allowlist | `DOC-CONSTRAINT` | external-links `[relay-only]` |
 
 ---

@@ -224,6 +224,15 @@ are APPENDED, never inserted, so references from briefings and increments stay v
     instances are the same failure at section level.** ⚠️ **Qualifiers live in the last clause of a
     sentence, which is what gets trimmed when a requirement is condensed into a row.**
 
+17. **An obligation-level taxonomy answers "who requires this", never "what breaks if you don't."**
+    *(New 2026-08-05.)* Those diverge, and the divergence is where readers mis-prioritise. M3 is
+    correctly `RECOMMENDED` — the source says *"should"* — while the same paragraph says *"the user
+    won't be able to interact with anything rendered outside the safe area."* **Soft language, hard
+    consequence.** Nine rows carry `⚠️SILENT` in the canonical file: their violation produces **no
+    error, no rejection and no log line** — the software simply does the wrong thing. Seven of the
+    nine are NOT `POLICY` or `TERMS`. **A compliance document that grades only by who requires a
+    rule will systematically under-rank the rules that fail quietly.**
+
 16. **Any COUNT that changes is stated with what changed it, in the same commit.** *(New
     2026-08-05.)* Standing check #11 covers files; counts move independently of file sizes. A row
     total went 129 → "133" with no explanation, and the cause was **the counter, not the file** —
