@@ -326,7 +326,21 @@ After setting the env var on a Render service:
 
 ### Deferred Services
 
-The **PG Claude MCP server** (`mcp_server/priority_guardian_claude/`) is currently deprecated. When PG is submitted to the Claude MCP Directory and this service is reactivated:
+⚠️ **CORRECTED 2026-08-06 — this line read "is currently deprecated". It is not.** The PG Claude MCP
+server is **live**: Render reports `srv-d6vbrt9r0fns73c6n080` as `not_suspended`, it answers
+`/.well-known/oauth-protected-resource` on `https://mcp.priority-guard.com`, and it is **the app being
+submitted** to the Claude MCP Directory — not a service awaiting reactivation afterwards. The same
+false deprecation was carried by `doc/testing_baseline_2026-07-04.md`, where it was used to justify
+leaving a red test file unexamined across three increments. One wrong belief, two authoritative
+documents; correcting only one is the failure this correction exists to prevent.
+
+**Note also: this service does NOT auto-deploy.** `autoDeploy: "no"`, `autoDeployTrigger: "off"` — a
+push ships nothing until Manual Deploy is triggered. `priorities-guard-mindsort-claude-mcp`
+(`srv-d90din3sq97s7399nbl0`) is the opposite: `autoDeploy: "yes"` on commit. Two Claude MCP services in
+one repo with opposite settings is how a smoke test ends up run against stale bytes.
+
+The four steps below remain **outstanding** — the server still ships no logs to Better Stack, which is
+its own audit, not this increment's:
 
 1. Add `BETTER_STACK_SOURCE_TOKEN` to its Render env vars
 2. Add `SERVICE_NAME=priority-guardian-claude-mcp` to its Render env vars

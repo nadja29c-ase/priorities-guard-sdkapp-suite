@@ -1,8 +1,40 @@
 # Test Baseline — 2026-07-04
 
-**Total tests:** ~2292
+**Total tests:** ~2292 — ⚠️ **unverified, and probably wrong. See the amendment below.**
 **Status:** ~154 known-red in included suite, 5 excluded behind `mcp_focused` collection ignore
 **Tag:** Re-baseline post-submission (MindSort Claude submission is the priority)
+
+---
+
+## ⚠️ AMENDMENT 2026-08-06 — every count in this document is suspect
+
+Found while upgrading the PG-Claude widget SDK (increment Claude-A). Recorded here because a
+known-false claim in an authoritative record is worse than a missing one, and CLAUDE.md rule 4
+points readers at this file.
+
+**`addopts` in `pytest.ini:26` contains `--maxfail=5`, and has since 2025-11-24** — seven months
+before this baseline was taken. It applies to every invocation that does not override it, including
+the documented command at "How to run full baseline" below, which does **not** override it.
+
+Consequences:
+
+1. **A run using the documented command stops at the 5th failure.** It cannot produce "~154
+   known-red", so the headline figures were not produced by the procedure this document describes.
+   Where they came from is unknown.
+2. **At least one per-area count was a stopping condition recorded as a measurement.**
+   `tests/unit/mcp_pg_claude/` was listed as 5; measured with the cap lifted it is **10**. That row
+   is corrected below. The other rows have **not** been re-measured and are not to be trusted.
+3. **The aggregate is stale independently of the cap.** This repo's own commit `eb3373c7`
+   (2026-08-03) records a full-suite run of **321 failed / 14 errors / 3206 → 3216 passed** — against
+   a baseline claiming ~2292 total and ~154 red.
+
+**No corrected aggregate is stated here, because none was measured.** Re-baselining requires a full
+run with the cap lifted (`--maxfail=1000` or similar) and is its own piece of work, tracked as the
+test-infrastructure increment. Until then, treat every unamended number below as unverified.
+
+**Method note.** An instrument's bound is not the thing it measures. A truncated run reports the
+truncation; a scan window reports the window. Numbers copied out of either are artifacts unless the
+bound was lifted first.
 
 ---
 
@@ -19,7 +51,7 @@
 | Area | Count | Nature | Isolation-verified |
 |------|-------|--------|-------------------|
 | `tests/unit/mcp_priority_guardian/` | ~130 | Stale mocks against old service signatures, missing fixtures, removed dependencies. PG-OpenAI is stable in production; tests lag refactors. | Yes — failures are test staleness, not product bugs. |
-| `tests/unit/mcp_pg_claude/` | 5 | Stale mocks (same pattern as PG-OpenAI). PG-Claude is deprecated pending Claude MCP Directory submission. | Yes — test staleness. |
+| `tests/unit/mcp_pg_claude/` | **10** ⚠️ corrected 2026-08-06 — was recorded as 5 | **The "5" was `--maxfail=5`, not a count.** Measured with the cap lifted: 10 failed / 21 passed in `test_scaffold.py`. Causes are NOT "stale mocks": 4 hardcoded `ui://pg-claude/dashboard-v1.html` literals against a v4 runtime (2 reachable, fixed 2026-08-06 to compare against imported `WIDGET_URI`; 2 sit in tests blocked earlier); 3 `ImportError` on `adapt_get_priorities_meta`, renamed to `adapt_widget_tool_meta`; plus `test_health_returns_ok`, `test_list_tools_annotations_match_registry`, two adapter list-stripping tests, `test_non_widget_tools_have_no_meta`. **PG-Claude is NOT deprecated** — it is the app being submitted to the Claude MCP Directory. The same false deprecation appears at `OPERATIONS_PREDEPLOY.md:301`. | Partly — 8 remain, unverified individually. |
 | `tests/unit/celery/` | 2 | Celery beat schedule tests expect old task names or timing. Tasks work in production. | Yes — test staleness. |
 | `tests/unit/core/` + `tests/unit/oauth_provider/` | 5 | All triaged — stale test expectations (see table below). | Yes — test staleness. |
 
