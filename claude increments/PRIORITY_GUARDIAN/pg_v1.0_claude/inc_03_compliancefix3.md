@@ -533,6 +533,18 @@ imported-constant fix working: the first bump since, and the URI tests did not g
 | Live URI | `ui://pg-claude/dashboard-v4.html` |
 | Live bundle | 593,943 B / `6f97b93c…` — restorable from git as bytes, ancestor of HEAD |
 
+⚠️ **ROLLBACK TARGET IS NOT THE PREVIOUS DEPLOY — go back two, to v4.**
+
+v5 (`c6c932e`, live 14:51:05–…) shipped with **two known defects**, both found by the second
+adversarial review and both consequences of v5's own fixes: the terminal error branch was a dead end
+with no retry, and a malformed chart payload still rendered "No priorities yet". They were live to users
+for the interval between v5 and v6.
+
+So the most recent deploy is the **worse** fallback. **If v6 fails badly, roll back to
+`38c0076` / v4** (`dep-d9q8jq3bc2fs7395u1cg`, bundle 593,943 B / `6f97b93c…`), not to v5. v4's defects
+are the ones B set out to fix — known, characterised, and survived for months; v5's are known, newer,
+and user-visible on a first-load failure. "Previous deploy" is a heuristic, not a rollback target.
+
 ⚠️ **NEAR MISS, recorded because it is the argument for the re-verify rule.** The record carried
 forward from Claude-A named `785dd1d`. By the time B needed it the live commit had moved **twice**, to
 `38c0076`. It happened to be harmless — the intervening commits were documentation, so the live bundle
