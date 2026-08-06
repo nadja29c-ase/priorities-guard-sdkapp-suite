@@ -542,6 +542,7 @@ async def test_adapt_get_priorities_meta_sets_widget_uri(set_dev_env):
     """adapt_get_priorities_meta sets _meta.ui.resourceUri for widget linking."""
     from mcp import types as mcp_types
     from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_get_priorities_meta
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import WIDGET_URI
 
     result = mcp_types.CallToolResult(
         content=[mcp_types.TextContent(type="text", text="3 priorities")],
@@ -549,8 +550,10 @@ async def test_adapt_get_priorities_meta_sets_widget_uri(set_dev_env):
     )
     adapted = adapt_get_priorities_meta(result)
     assert adapted.meta is not None
-    # Correct nested structure per MCP Apps spec
-    assert adapted.meta.get("ui", {}).get("resourceUri") == "ui://pg-claude/dashboard-v1.html"
+    # Correct nested structure per MCP Apps spec.
+    # Compare against the imported constant, never a literal — a literal goes stale
+    # on every WIDGET_URI bump and silently red-lines this file (v1 survived v2, v3, v4).
+    assert adapted.meta.get("ui", {}).get("resourceUri") == WIDGET_URI
     # Content and structuredContent unchanged
     assert adapted.content == result.content
     assert adapted.structuredContent == result.structuredContent
@@ -561,6 +564,7 @@ async def test_adapt_get_priorities_meta_preserves_existing_meta(set_dev_env):
     """adapt_get_priorities_meta preserves existing _meta fields."""
     from mcp import types as mcp_types
     from mcp_server.priority_guardian_claude.response_adapter_dupl import adapt_get_priorities_meta
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import WIDGET_URI
 
     result = mcp_types.CallToolResult(
         content=[mcp_types.TextContent(type="text", text="3 priorities")],
@@ -569,7 +573,7 @@ async def test_adapt_get_priorities_meta_preserves_existing_meta(set_dev_env):
     )
     adapted = adapt_get_priorities_meta(result)
     # resourceUri added to ui dict
-    assert adapted.meta["ui"]["resourceUri"] == "ui://pg-claude/dashboard-v1.html"
+    assert adapted.meta["ui"]["resourceUri"] == WIDGET_URI
     # Non-ui keys preserved
     assert adapted.meta["existing_key"] == "existing_value"
 
@@ -601,11 +605,12 @@ async def test_adapt_get_priorities_meta_skips_error_results(set_dev_env):
 async def test_get_priorities_has_widget_meta(set_dev_env):
     """get_priorities tool has _meta.ui.resourceUri for host-side prefetch."""
     from mcp_server.priority_guardian_claude.tools_list_dupl import list_tools_for_claude
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import WIDGET_URI
 
     tools = await list_tools_for_claude()
     tool = next(t for t in tools if t.name == "get_priorities")
     assert tool.meta is not None
-    assert tool.meta.get("ui", {}).get("resourceUri") == "ui://pg-claude/dashboard-v1.html"
+    assert tool.meta.get("ui", {}).get("resourceUri") == WIDGET_URI
 
 
 @pytest.mark.asyncio
@@ -629,9 +634,9 @@ def test_widget_uri_consistency(set_dev_env):
 @pytest.mark.asyncio
 async def test_list_resources_returns_widget(set_dev_env):
     """list_resources returns the widget resource."""
-    from mcp_server.priority_guardian_claude.handlers.resources_dupl import list_resources
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import list_resources, WIDGET_URI
 
     resources = await list_resources()
     assert len(resources) == 1
-    assert str(resources[0].uri) == "ui://pg-claude/dashboard-v1.html"
+    assert str(resources[0].uri) == WIDGET_URI
     assert resources[0].mimeType == "text/html+mcp"
