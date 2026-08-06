@@ -28,6 +28,12 @@ Consequences:
    (2026-08-03) records a full-suite run of **321 failed / 14 errors / 3206 → 3216 passed** — against
    a baseline claiming ~2292 total and ~154 red.
 
+4. **A second unverified "5" sits in `tests/conftest.py:29`**, asserting "5 known stale failures exist
+   behind this exclusion (2026-07-04)" — same number, same date. Those tests are `collect_ignore`d, so
+   they are never collected and cannot have contributed to any failure count. Either someone ran the
+   excluded path separately and it genuinely stopped at five, or the figure propagated from the same
+   stopping condition. Unverified, asserted as fact in a config file. Not investigated.
+
 **No corrected aggregate is stated here, because none was measured.** Re-baselining requires a full
 run with the cap lifted (`--maxfail=1000` or similar) and is its own piece of work, tracked as the
 test-infrastructure increment. Until then, treat every unamended number below as unverified.
