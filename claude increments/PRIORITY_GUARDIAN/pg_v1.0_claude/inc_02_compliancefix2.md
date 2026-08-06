@@ -276,3 +276,135 @@ rollback record.
 - **A4's call-path matrix**, complete
 - A5's console observations, and confirmation the console was open
 - An explicit list of what was **not** verified
+
+---
+
+## 12. REPORT — increment complete, 2026-08-06
+
+**All six acceptance items pass. Two hard requirements closed by observation on production: M1 and M20.**
+
+### Commits
+
+`fd9d6cb` SDK 1.2.2 → 1.7.5 pinned exact, bundle v4 · `64b0572` WIDGET_URI asserted by import ·
+`3a0874f` false count and false deprecation corrected in two records · `e36b64d` this briefing tracked ·
+`c50259c` second unverified "5" recorded · `8d71d00` read-path test, mutation-verified · `785dd1d`
+four-service identification table · `5aeb56c` M1 verified, autoDeploy row self-corrected.
+
+**Deployed:** `dep-d9q7seeq1p3s73f34g5g` (commit `785dd1d`), live 12:31. The A-pass ran against it.
+The widget bundle is **byte-identical across `fd9d6cb`, `785dd1d` and `5aeb56c`**
+(`6f97b93c…`) — later commits touched documentation only — so the observations hold at HEAD.
+
+### §4 findings — the increment's primary output
+
+Protocol version **unchanged** (`2026-01-26`). `ui/` method surface 16 → 17, one added, none removed.
+`McpUiHostContext` **deep-identical** — all twelve fields, including B's targets. 38 shared schema
+definitions: 29 byte-identical, 9 changed, every change additive, zero removals. Double registration
+cannot throw. `_assertInitialized` is a warning — but says *"will throw in a future release"*, so PG's
+14 `callServerTool` sites are on a **deprecation clock**, recorded as a known future break.
+`hostcontextchanged` is **not** in `ONE_SHOT_EVENTS`, so B may register after connect.
+
+**The M1 fix landed in 1.4.0, not 1.7.5.** So 1.4.0 is the minimum version clearing M1, and the
+better rollback target than 1.2.2 — reverting to 1.2.2 would leave a hard MUST broken.
+
+**Changelog/dist discrepancy**, on the range's only Breaking-marked entry: v1.3.0 documents
+`ui/notifications/request-close`; the shipped method is `ui/notifications/request-teardown`. Caught
+only by checking claims against `dist`.
+
+### Acceptance
+
+| | Result |
+|---|---|
+| **A1** render, first observation of the M20 skeleton, no perceived regression | ✅ |
+| **A2** runtime theme switching, mid-conversation | ✅ **M1 closes** |
+| **A3** listener coexistence | ✅ runtime + static; font listener not exercised |
+| **A4** widget call-path matrix, full CRUD across the bridge | ✅ |
+| **A5** console, open throughout | ✅ one warning, host-side |
+| **A6** supply chain, provenance, rollback | ✅ |
+
+**A2 has both halves.** The same toggle was run on live **v2** first and the widget stayed light — the
+defect reproducing on 1.2.2. A controlled comparison, not a single reading.
+
+**A1 was recorded as a first observation, not a regression check** — M20's v3 was never deployed, so no
+baseline existed. Amended before the pass, not after.
+
+### A5 — console, open throughout
+
+- **`handler replaced` — 6×, all `oncalltool`, all host-side.** Not PG's. The distinction is textual:
+  `setEventHandler` emits *"…Use addEventListener(…)"*; `warnIfRequestHandlerReplaced` emits *"…Previous
+  handler will no longer be called."* The A5 signal was about the **first**, on event handlers, which is
+  what would show PG's `onhostcontextchanged` being clobbered — **zero of those.** The prediction held.
+  `oncalltool` is declared on the host-side `AppBridge`; PG never sets it and registers no tools.
+- **`callServerTool`** — clean.
+- **`size-changed`** — present as pre-registered. The SDK discards its `ResizeObserver` disconnect
+  function while 1.7.0's `useApp` cleanup calls `close()`. Upstream, dev-only, harmless in production.
+- **`Ignoring message from unknown source`** — v2: 31 errors / 141 messages. v4: 48 / 1,042 after far
+  heavier interaction. **Rate fell.** Ambient transport filtering; not attributable to the upgrade.
+
+### The pre-upgrade CSP check — a question now permanently unanswerable
+
+On live v2, console open, reloaded: **`eval` → 0, `Function` → 0.** Only CSP entries were Chrome's
+*"Unrecognized directive 'webrtc'"* ×18, from the host's own policy. **Zod's JIT path was never blocked
+by Claude's CSP.** So 1.7.5's `z.config({jitless:true})` is **hardening, not a fix**, and is withdrawn
+as a justification. The upgrade stands on M1 alone, which suffices. Obtainable only before deploying.
+
+### Build provenance
+
+Node v24.8.0 · npm 11.6.0 · `npm ci` then clean build. The **pre-upgrade** bundle reproduced
+byte-for-byte (375,573 / `42cfea79…`), proving bundle and lockfile had not diverged; **two** clean
+builds of the new bundle both produce 593,943 / `6f97b93c…`. Reproducible in both directions.
+
+**Bundle +218,370 B (+58.1%)**, gzip 100.42 → 147.70 kB. Attributed by experiment, not assumption:
+forcing zod back to 4.3.6 gives 580,490, so **+205KB is ext-apps itself, +13KB is zod**. Threshold used:
+flag at >2×, not reached; no documented project ceiling exists.
+
+**Supply chain:** exact pin, lockfile committed, `npm ci` documented. 24 packages moved — verified
+**forced** by the upgrade, since `npm install` with no manifest change moves zero. One added
+(`@standard-schema/spec`), zero removed. `npm audit --omit=dev` → **0**; the 4 findings are dev-only
+picomatch via Vite, deliberately unfixed.
+
+**No call-site edit was forced.** `App.tsx` untouched, `tsc --noEmit` clean.
+
+### §8 rollback — recorded before deployment, against the correct service
+
+**`srv-d6vbrt9r0fns73c6n080`** — PG-Claude, `mcp.priority-guard.com/mcp`. Confirmed by two independent
+means: identical `oauth-protected-resource` from custom and onrender domains, and
+`sha256("https://mcp.priority-guard.com/mcp")[:32]` = `a7b31ccb44096357600a7460eb0a78e9`, matching the
+widget's own iframe origin. Prior live deploy `dep-d9oem1lbedkc73avfvsg` at `eb3373c7`, serving
+`dashboard-v2.html`, bundle 373,879 / `2554dfd9…`, restorable as bytes and an ancestor of HEAD.
+
+**A service-identification error cost several exchanges.** `srv-d90din3sq97s7399nbl0` is
+**MindSort-Claude**, and it auto-deployed every commit while PG-Claude did not — so watching a commit
+go live was evidence about the wrong service. Both services, their apps and the identification recipe
+are now in `OPERATIONS_PREDEPLOY.md`. PG-Claude's `autoDeploy` was switched **on** at 12:31; the doc
+row written 30 minutes earlier was corrected the same day.
+
+### Tests
+
+`8 failed / 21 passed` → **`8 failed / 25 passed`**. Two URI tests fixed; two read-path tests added,
+**mutation-verified in both directions** — a handler pinned to a stale `dashboard-v3.html` is caught by
+the new test *only*, while the three older tests pass, demonstrating the tautology rather than arguing it.
+
+**The documented known-red count was an artifact.** `tests/unit/mcp_pg_claude/` was recorded as 5; the
+real number is 10. The "5" is `pytest.ini:26 --maxfail=5` — a stopping condition recorded as a
+measurement. `--maxfail=5` predates the baseline by seven months, so the headline "~154 known-red"
+cannot have come from the documented command either. **No corrected aggregate was stated, because none
+was measured.** And there is no gate: no `.github/workflows`, no `preDeployCommand` — nothing ever ran
+these tests.
+
+### NOT verified
+
+The **font listener** (a theme toggle produces no observable font change — accepted, not open) ·
+**PG's own `onhostcontextchanged` handler firing and updating state** — A2 proves the *SDK's* listener
+survives, **not PG's**; this is B1's acceptance and must not be inferred from A2 · `platform`,
+`safeAreaInsets`, `displayMode` — all still dead, B's work · the 8 remaining test failures, individually ·
+every unamended count in `testing_baseline_2026-07-04.md` · `add_priority`'s **success** path, blocked by
+the three-priority cap on a populated account; its 409 crossed the bridge and returned, which is what A4
+tests · byte-for-byte reproducibility on any machine other than this one.
+
+### Flagged, not fixed
+
+`test_list_tools_annotations_match_registry` is red, and several compliance rows rest on annotation
+claims — the title-annotation blocker was itself once resolved by reading code rather than running it ·
+`adapt_get_priorities_meta` renamed to `adapt_widget_tool_meta`, leaving 3 tests importing a function
+that no longer exists · the four deferred Better Stack steps remain unexecuted, so **the Claude server
+still ships no logs** · the `size-changed` observer defect, upstream.
