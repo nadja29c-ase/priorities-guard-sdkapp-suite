@@ -596,8 +596,18 @@ sufficient**, and fixing `platform` alone would have changed nothing observable.
 
 **B2 — predicate tested object existence.** The object is assigned before connect is attempted. →
 `isConnected`/`error` (both returned by `useApp`, never destructured) drive
-`'timeout' | 'error' | null`; `isBridgeStale` derived. Timer cleared on all three exits; duration
-**preserved at 3000 ms**, now named `BRIDGE_TIMEOUT_MS`. **Static: PASS.**
+`'slow' | 'stale' | 'error' | null`; `isBridgeStale` derived. Timers cleared on all three exits.
+**Two thresholds: `BRIDGE_SLOW_MS` 3000 and `BRIDGE_STALE_MS` 15000.** The 3s budget is preserved from
+pre-B; what changed is what the widget will *claim* on three seconds of silence. **Static: PASS.**
+
+⚠️ **This paragraph was WRONG until the second review caught it, and the way it went wrong matters
+more than the error.** It described `'timeout' | 'error' | null` and a `BRIDGE_TIMEOUT_MS` constant —
+accurate when written, and false within the hour, because the mechanism changed underneath it after the
+first adversarial review and this section was never re-read. **A report drafted in parallel with
+implementation describes the code at the moment of drafting, not at the moment of reading.** Same class
+as `--maxfail=5` and the "deprecated service" line, both corrected earlier today, both authored by
+someone describing a true thing that later stopped being true. **Carry this forward: any §-report
+written before the code settles must be re-read against the code before it is called done.**
 
 **B3 — three results fell through.** → Four exits, all terminating. MCP-error surfaces the server's own
 message, **verified safe at the source**: `handlers/tools_dupl.py` returns `str(e)` for an intentional

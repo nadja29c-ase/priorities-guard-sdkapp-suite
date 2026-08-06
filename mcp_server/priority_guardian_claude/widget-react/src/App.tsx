@@ -855,6 +855,14 @@ function App() {
   // Handled as its own terminal branch rather than by suppressing EmptyState inside the
   // dashboard branch. Conditional suppression would leave the whole dashboard shell
   // rendering around an error and push the same reachability question one level down.
+  // The retry control is NOT optional decoration. Without it this branch is a dead end:
+  // a transient first-load failure (a lapsed token, a rate limit) leaves the widget with
+  // no control of any kind, and loadError is only cleared by a successful result that
+  // this branch renders no way to request. Found by the second adversarial review — the
+  // fix for a false claim had introduced a state with no way forward.
+  //
+  // refreshData is reachable here: it is guarded only by appRef.current?.callServerTool,
+  // NOT by isBridgeStale, so the bridge is live even though the first result failed.
   if (loadError && !data) {
     return (
       <div style={{
@@ -866,7 +874,25 @@ function App() {
         background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: '12px',
       }}>
-        <p style={{ margin: 0 }}>{loadError}</p>
+        <p style={{ margin: '0 0 12px' }}>{loadError}</p>
+        <button
+          type="button"
+          onClick={refreshData}
+          disabled={isRefreshing}
+          style={{
+            padding: '8px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: isRefreshing ? 'default' : 'pointer',
+            color: 'var(--color-text-primary, #141413)',
+            background: 'var(--color-background-primary, #fff)',
+            border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
+            borderRadius: '8px',
+            opacity: isRefreshing ? 0.6 : 1,
+          }}
+        >
+          {isRefreshing ? t('loading') : t('retry')}
+        </button>
       </div>
     )
   }
@@ -882,11 +908,34 @@ function App() {
   // t('noTimeData') when none remain (PieChart.tsx:61-79). That state has been
   // unreachable since v1 — not missing, just never routed to.
   //
-  // Array.isArray IS load-bearing, not defensive noise: isPieChartData only tests
-  // `'slices' in data`, and PieChart calls slices.filter() during RENDER — outside the
-  // result handler's try/catch, so a malformed `slices` would throw past it. The type
+  // The Array.isArray check is load-bearing, not defensive noise: isPieChartData only
+  // tests `'slices' in data`, and PieChart calls slices.filter() during RENDER — outside
+  // the result handler's try/catch, so a malformed `slices` would throw past it. The type
   // guard proves the key exists; it does not prove the component can use the value.
-  if (isPieChartData(data) && Array.isArray(data.slices)) {
+  //
+  // It is INSIDE this branch rather than in its condition, and that placement is the
+  // point. As a condition (`isPieChartData(data) && Array.isArray(...)`) a malformed
+  // payload fell through to the dashboard branch, where it became `priorities = []` and
+  // rendered "No priorities yet" — the same false claim the terminal branch above was
+  // just added to eliminate. Guarding in the condition closed one ROUTE to that lie and
+  // left another open. Here, anything chart-shaped either renders a chart or renders an
+  // error, and cannot reach the dashboard branch at all. Found by the second review.
+  if (isPieChartData(data)) {
+    if (!Array.isArray(data.slices)) {
+      return (
+        <div style={{
+          padding: '24px',
+          textAlign: 'center',
+          color: 'var(--color-text-secondary, #3D3D3A)',
+          fontSize: '13px',
+          lineHeight: '1.5',
+          background: 'var(--color-background-secondary, #F5F4ED)',
+          borderRadius: '12px',
+        }}>
+          <p style={{ margin: 0 }}>{t('noData')}</p>
+        </div>
+      )
+    }
     return (
       <main
         role="main"

@@ -76,6 +76,9 @@ const messages = {
     // existing `noData` key rather than adding a synonym. A second key for one meaning
     // drifts across two locales.
     failedToRefresh: 'Failed to refresh. Please try again.',
+    // Button label, not a message. Checked first: couldntSave and failedToRefresh are
+    // sentences, refreshCalendar is calendar-specific — none works as a generic control.
+    retry: 'Try again',
 
     // Validation errors
     nameRequired: 'Name is required',
@@ -262,6 +265,7 @@ const messages = {
     widgetConnectionFailed: 'Verbindung zu Priority Guardian fehlgeschlagen.',
     widgetConnectionFailedHint: 'Prüfe deine Verbindung und lade neu, oder starte ein neues Gespräch.',
     failedToRefresh: 'Aktualisierung fehlgeschlagen. Bitte versuche es erneut.',
+    retry: 'Erneut versuchen',
 
     // Validation errors
     nameRequired: 'Name ist erforderlich',
