@@ -118,6 +118,30 @@ restored v4 custom connector renders and tool calls work.
 
 Five defects, all pre-existing, none introduced by A or M20. They share a cause: **each fails silently.**
 
+### ⚠️ The structural cause, added rev 6 during implementation — read before B3
+
+**In this widget, state is set far from where it is read, behind a long chain of early returns in
+render.** `applyHostContext` → `hostFullscreen` → `isMobileHostFullscreen` → padding is four hops.
+`connectionFailure` → `isBridgeStale` → a branch that sat **70 lines below** the one returning first.
+
+That is a characteristic of the file, not a coincidence, and it predicts where the next defect will be.
+**Fixing the state is about half the work; the other half is proving the consumer can be reached.**
+
+It has already bitten three times in this increment, and the static acceptance passed every time:
+
+| State corrected | What made the correction unobservable |
+|---|---|
+| `platform` (B1) | `hostFullscreen` could never be `true` — `setHostFullscreen(true)` existed nowhere |
+| `hostFullscreen` (B1) | — fixed; it in turn unlocked a `FullscreenHeader` branch that had never rendered |
+| `connectionFailure` (B2) | the loading branch returned **before** the terminal branch, so it was unreachable in exactly the case it exists for |
+
+**B4 is the highest-risk remaining case, because B4's defect *is* a branch-order defect** — §4 states
+it plainly: *"the chart branch returns before the branches that render the error banner."* Adding error
+and stale-marker state without first establishing where the chart branch sits in the return chain would
+repeat the pattern in the one place where the pattern is the thing being fixed. **B3 and B5 carry the
+same exposure, milder:** B3's error state must survive to a branch that renders it, and B5's empty-chart
+path must be reached before the fall-through it currently loses to.
+
 ### B1 — Host context is read before it exists, and never re-read
 
 **Historical cause (pre-A):** two failures compounded. `useApp` invokes `onAppCreated` *before*
@@ -291,6 +315,17 @@ An empty chart result reaches the chart's own empty state.
 
 **No automated widget-runtime harness exists.** Assertions are manual and recorded. **Each block passes
 or fails on its own.**
+
+### ⚠️ REACHABILITY — added rev 6, applies to every *Static* assertion below
+
+**Not just "the path exists" but "the path is reachable given the branch order above it."**
+
+"`setPlatform` has a live call site" is a claim about the call site, not about whether anything
+downstream reads it in a branch that can be reached. Three defects in this increment satisfied the
+first and failed the second, and the static acceptance passed each time — see §4's structural note.
+
+So for every *Static* item: state the branch order, and name what would have to be false above it for
+the path to execute. A static assertion that does not do this **has not been met**, however true it is.
 
 ### Test-state provenance — applies to every on-host item below
 

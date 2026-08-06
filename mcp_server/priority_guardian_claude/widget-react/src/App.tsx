@@ -18,6 +18,14 @@ import { CalendarConnectionMinimal } from './components/CalendarConnectionMinima
 type DisplayMode = 'inline' | 'fullscreen'
 
 /**
+ * How long to wait for the MCP Apps bridge to connect before treating the widget as
+ * unreachable. Preserved from the pre-Claude-B implementation, where it was an unnamed
+ * literal inside the timer. Claude-B changed the predicate, not the budget — moving both
+ * at once would make any on-host regression impossible to attribute.
+ */
+const BRIDGE_TIMEOUT_MS = 3000
+
+/**
  * Priority Guardian Dashboard - Claude Widget (CRUD-enabled)
  *
  * Uses MCP Apps SDK for tool calls and display mode management.
@@ -44,12 +52,25 @@ function App() {
   // Display mode state
   const [displayMode, setDisplayMode] = useState<DisplayMode>('inline')
 
-  // Stale bridge detection — if onAppCreated never fires, widget is from old session
-  const [isBridgeStale, setIsBridgeStale] = useState(false)
+  // Connection failure (Claude-B / B2). Two distinguishable terminal states:
+  //   'timeout' — no connection within BRIDGE_TIMEOUT_MS. Almost always a widget
+  //               rendered from a previous conversation, whose bridge no longer exists.
+  //   'error'   — the SDK reported an explicit connection/initialisation failure.
+  // Previously this was a single boolean set by a timer that tested whether the app
+  // OBJECT existed. The object is assigned in onAppCreated, which runs BEFORE connect()
+  // is attempted — so a connection that hung or failed left the object present, the
+  // timer concluded the bridge was fine, and the widget rendered its loading skeleton
+  // forever. `isBridgeStale` is now derived from a real connection outcome.
+  const [connectionFailure, setConnectionFailure] = useState<'timeout' | 'error' | null>(null)
+  const isBridgeStale = connectionFailure !== null
 
-  // Safe area insets for mobile fullscreen (notch/home indicator, native header)
+  // Safe area insets for mobile fullscreen (notch/home indicator, native header).
+  // All four are tracked: .left/.right matter in landscape, where the notch intrudes
+  // horizontally. Before Claude-B none of these were ever set — see the lifecycle effect.
   const [safeAreaTop, setSafeAreaTop] = useState(0)
   const [safeAreaBottom, setSafeAreaBottom] = useState(0)
+  const [safeAreaLeft, setSafeAreaLeft] = useState(0)
+  const [safeAreaRight, setSafeAreaRight] = useState(0)
 
   // Platform detection for mobile-specific padding
   const [platform, setPlatform] = useState<string | undefined>(undefined)
@@ -76,8 +97,10 @@ function App() {
     }
   }, [isInline, isInitialized, data, timeAllocation])
 
-  // MCP Apps bridge: useApp hook to receive tool results
-  const { app } = useApp({
+  // MCP Apps bridge: useApp hook to receive tool results.
+  // isConnected and error were available all along and never destructured — which is why
+  // a failed connection had no observable consequence (B2).
+  const { app, isConnected, error: connectionError } = useApp({
     appInfo: { name: 'Priority Guardian', version: '1.0.0' },
     capabilities: {
       availableDisplayModes: ['inline', 'fullscreen'],
@@ -85,34 +108,62 @@ function App() {
     onAppCreated: useCallback((appInstance: McpApp) => {
       appRef.current = appInstance
 
-      // Set initial display mode from app
-      const hostContext = appInstance.getHostContext()
-      if (hostContext?.displayMode === 'fullscreen') {
-        setDisplayMode('fullscreen')
-      }
-
-      // Read initial safe area insets for mobile fullscreen
-      const safeInsets = hostContext?.safeAreaInsets
-      if (safeInsets?.top) {
-        setSafeAreaTop(safeInsets.top)
-      }
-      if (safeInsets?.bottom) {
-        setSafeAreaBottom(safeInsets.bottom)
-      }
-
-      // Read platform for mobile-specific padding
-      if (hostContext?.platform) {
-        setPlatform(hostContext.platform)
-      }
+      // WHAT THIS BLOCK NOW DOES: it registers handlers, and nothing else.
+      //
+      // It previously also read host context here — `getHostContext()` for displayMode,
+      // safeAreaInsets and platform. That was dead code. The SDK calls onAppCreated
+      // BEFORE `await connect()`, and `_hostContext` is only assigned inside connect():
+      // "Returns undefined if called before connection is established." Every read here
+      // returned undefined, so platform, displayMode and the insets were never set.
+      // The read now lives in the host-context lifecycle effect below, which runs only
+      // once `app` is set — i.e. after connect() has resolved.
+      //
+      // Handler registration MUST stay here. `toolresult` is a one-shot event: the SDK
+      // warns (and throws under strict) if it is first registered after connect(), because
+      // the host may already have sent the notification. `hostcontextchanged` is NOT
+      // one-shot, which is why the lifecycle effect may subscribe to it later.
 
       // Register handler for incoming tool results
       appInstance.ontoolresult = (result: McpUiToolResultNotification['params']) => {
         // Guard against stale get_priorities echoes after CRUD.
         // Note: McpUiToolResultNotification carries no tool name (CallToolResult only),
         // so we cannot filter by tool name — timestamp window is the correct approach.
+        //
+        // ⚠️ REPORTED, NOT CHANGED (Claude-B / B3). This guard sits ABOVE the try block,
+        // so within 1500ms of a CRUD operation EVERY tool result is dropped — including,
+        // now, an isError result that CASE 1 below would otherwise surface. That was
+        // harmless before B3, because errors were not handled at all. It does not affect
+        // B3's requirement, which concerns the FIRST result, and a first result cannot
+        // fall inside a CRUD window. But it is a new interaction created by B3 and is
+        // recorded rather than left to be discovered: an error arriving within 1.5s of a
+        // CRUD call is still swallowed silently.
         if (Date.now() - lastCrudAtRef.current < 1500) return
 
         try {
+          // ---- B3: every exit below either initialises or sets a load error ----
+          //
+          // Previously this handler initialised ONLY inside the `structuredContent.data`
+          // guard. Three distinct results fell straight through, setting neither an error
+          // nor isInitialized — so the widget sat on its loading skeleton forever:
+          // an MCP error result, empty structuredContent, and structuredContent without
+          // the expected payload. All three now terminate.
+
+          // CASE 1 — a valid MCP/tool error. Surface the message the SERVER chose.
+          // Verified safe at the source (handlers/tools_dupl.py): an intentional
+          // ToolUsageError returns str(e) — a user-facing rejection such as "You already
+          // have 3 active priorities" — while an unexpected exception returns the fixed
+          // string "Something went wrong. Please try again." Exception text and payload
+          // internals never reach content[0].text, so §5.4's "no internal details" holds
+          // because the server enforces it, not because we hope so.
+          if (result?.isError) {
+            const first = result.content?.[0]
+            const serverMessage =
+              first && 'text' in first && typeof first.text === 'string' ? first.text.trim() : ''
+            setLoadError(serverMessage || t('noData'))
+            setIsInitialized(true)
+            return
+          }
+
           const structuredContent = result?.structuredContent
           if (structuredContent?.data) {
             const resultData = structuredContent.data as DashboardData | PieChartData
@@ -131,39 +182,116 @@ function App() {
 
             setLoadError(null)
             setIsInitialized(true)
+            return
           }
+
+          // CASES 2 and 3 — a non-error result whose structuredContent is missing,
+          // empty, or present without the expected `data` payload. Both are "the call
+          // succeeded but gave us nothing usable", which is not the user's problem to
+          // interpret, so both get the same generic localized message. §5.4 forbids
+          // exposing what was actually wrong with the payload.
+          setLoadError(t('noData'))
+          setIsInitialized(true)
         } catch (err) {
+          // Thrown while interpreting an otherwise-successful result — same class as
+          // cases 2/3 from the user's point of view. The exception itself goes to the
+          // console only; it never reaches the UI.
           console.error('PG Claude widget: Error processing tool result:', err)
-          setLoadError('Failed to load dashboard data.')
+          setLoadError(t('noData'))
           setIsInitialized(true)
         }
       }
 
-      // Listen for display mode changes from host via context changes
-      // ctx is a partial update — only changed fields are present
-      appInstance.onhostcontextchanged = (ctx) => {
-        if (ctx.displayMode !== undefined) {
-          setDisplayMode(ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline')
-          // Reset hostFullscreen when host closes fullscreen
-          if (ctx.displayMode === 'inline') {
-            setHostFullscreen(false)
-          }
-        }
-        if (ctx.safeAreaInsets?.top !== undefined) {
-          setSafeAreaTop(ctx.safeAreaInsets.top)
-        }
-        if (ctx.safeAreaInsets?.bottom !== undefined) {
-          setSafeAreaBottom(ctx.safeAreaInsets.bottom)
-        }
-        if (ctx.platform !== undefined) {
-          setPlatform(ctx.platform)
-        }
-      }
+      // NOTE: the host-context subscription is NOT registered here. It lives in the
+      // lifecycle effect below, using the additive addEventListener API rather than the
+      // single-slot `on*` setter. On ext-apps 1.2.2 the setter was how PG's handler got
+      // destroyed — useHostStyles assigned the same slot twice after this ran.
     }, []),
   })
 
   // Inject host theme CSS variables (must pass hostContext for dark mode)
   useHostStyles(app, app?.getHostContext())
+
+  // ---------------------------------------------------------------------------
+  // Host context lifecycle (Claude-B / B1)
+  //
+  // Keyed on `app`, which useApp only sets AFTER `await connect()` resolves — so by the
+  // time this runs the ui/initialize handshake is complete and getHostContext() has real
+  // data. This is the whole fix: the previous read ran in onAppCreated, before connect,
+  // and always saw undefined.
+  //
+  // ORDER MATTERS: subscribe first, then read. A notification arriving between the two
+  // would otherwise be missed by our state (the SDK still merges it into _hostContext,
+  // so reading after subscribing captures it either way). Re-applying is idempotent.
+  //
+  // Updates are PARTIAL. Every field is guarded individually so an update carrying only
+  // `theme` cannot blank out `platform`, and a safeAreaInsets object carrying only `top`
+  // cannot zero `.bottom`. That is the merge requirement — never replace.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!app) return
+
+    // Derived from the SDK's own signature rather than an imported name —
+    // McpUiHostContext is not re-exported from the /react entry point, and deriving it
+    // means the type cannot drift from the method it describes.
+    type HostContextUpdate = Partial<NonNullable<ReturnType<McpApp['getHostContext']>>>
+
+    const applyHostContext = (ctx: HostContextUpdate) => {
+      if (ctx.displayMode !== undefined) {
+        const hostSaysFullscreen = ctx.displayMode === 'fullscreen'
+        setDisplayMode(hostSaysFullscreen ? 'fullscreen' : 'inline')
+        // Set in BOTH directions. This update came FROM the host, so a fullscreen report
+        // is by definition host-controlled fullscreen.
+        //
+        // Previously only the false side was written, and `setHostFullscreen(true)`
+        // existed nowhere in this file — so `hostFullscreen` was initialised false and
+        // could never become true. It gates `isMobileHostFullscreen`, which gates every
+        // safe-area inset. Fixing `platform` alone would therefore have changed nothing:
+        // the insets would still never apply. A field written in only one direction by a
+        // function that receives both is the tell.
+        setHostFullscreen(hostSaysFullscreen)
+
+        // ⚠️ REPORTED, NOT GUARDED — B1 can make a previously inert asymmetry visible.
+        // handleExpandToFullscreen sets displayMode locally and never calls
+        // requestDisplayMode, so the host is never told the widget went fullscreen.
+        // Before B1 nothing could contradict that local state. Now this handler can:
+        // if the host later sends any update carrying displayMode (an orientation change
+        // or resize plausibly does), it will read 'inline' and yank the user out of
+        // fullscreen mid-edit. Theme-only updates are safe — the guard above requires
+        // ctx.displayMode !== undefined.
+        //
+        // NOT guarded here, because the fix belongs at the asymmetry (expand should tell
+        // the host, as minimize does) and that is outside B1-B5. It may also be purely
+        // theoretical if the host never includes displayMode in partial updates.
+        // ON-HOST: expand locally, then rotate or resize, and see whether fullscreen
+        // survives. Decide from the observation, not from this comment.
+      }
+      if (ctx.platform !== undefined) {
+        setPlatform(ctx.platform)
+      }
+      // Per-inset guards: a partial safeAreaInsets must not reset the omitted sides.
+      const insets = ctx.safeAreaInsets
+      if (insets?.top !== undefined) setSafeAreaTop(insets.top)
+      if (insets?.bottom !== undefined) setSafeAreaBottom(insets.bottom)
+      if (insets?.left !== undefined) setSafeAreaLeft(insets.left)
+      if (insets?.right !== undefined) setSafeAreaRight(insets.right)
+    }
+
+    // 1. Subscribe (additive — does not displace the SDK's own style listeners)
+    const onHostContextChanged = (ctx: HostContextUpdate) => applyHostContext(ctx)
+    app.addEventListener('hostcontextchanged', onHostContextChanged)
+
+    // 2. Read the initial context, now that it exists
+    const initial = app.getHostContext()
+    if (initial) {
+      applyHostContext(initial)
+    }
+
+    // 3. Remove on cleanup
+    return () => {
+      app.removeEventListener('hostcontextchanged', onHostContextChanged)
+    }
+  }, [app])
 
   // Store app reference
   useEffect(() => {
@@ -172,15 +300,30 @@ function App() {
     }
   }, [app])
 
-  // Stale bridge detection — if onAppCreated hasn't fired within 3s, session is stale
+  // Connection outcome (Claude-B / B2).
+  //
+  // Duration PRESERVED at the pre-B 3000ms — this increment changes the predicate, not
+  // the budget, and changing both at once would make an on-host regression ambiguous.
+  //
+  // The predicate no longer asks "does the app object exist" (it always does, from
+  // onAppCreated, before connect is even attempted). It asks whether the connection
+  // actually succeeded, failed, or neither within the budget.
+  //
+  // Timer cleared on all three exits: success and explicit-error return early, and React
+  // runs this effect's cleanup before re-running it, so the pending timer is cleared in
+  // both cases; unmount runs the same cleanup.
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (!appRef.current) {
-        setIsBridgeStale(true)
-      }
-    }, 3000)
+    if (isConnected) {
+      setConnectionFailure(null)
+      return
+    }
+    if (connectionError) {
+      setConnectionFailure('error')
+      return
+    }
+    const timeout = setTimeout(() => setConnectionFailure('timeout'), BRIDGE_TIMEOUT_MS)
     return () => clearTimeout(timeout)
-  }, [])
+  }, [isConnected, connectionError])
 
   // Sync locale on data changes
   useEffect(() => {
@@ -247,7 +390,11 @@ function App() {
       }
     } catch (err) {
       console.error('Failed to refresh data:', err)
-      setLoadError('Failed to refresh. Please try again.')
+      // Localized as a scope amendment: this writes the SAME state variable that B3 just
+      // made localized, rendered by the SAME banner. Leaving it hardcoded would give a
+      // German user a German dashboard with an English refresh error in it — the
+      // half-fixed state §6 exists to prevent.
+      setLoadError(t('failedToRefresh'))
     } finally {
       setIsRefreshing(false)
     }
@@ -534,12 +681,48 @@ function App() {
     }
   }, [])
 
+  // Connection failure OUTRANKS loading (Claude-B / B2).
+  //
+  // This branch must be evaluated BEFORE `!isInitialized`. `setIsInitialized(true)` is
+  // only ever called from the ontoolresult handler, so a connection that never completes
+  // means no result, means isInitialized stays false forever. With the loading branch
+  // first, this terminal state was UNREACHABLE in exactly the case it exists for: B2
+  // would have fixed the predicate and the state, and the user would still have watched
+  // a skeleton spin indefinitely.
+  //
+  // Ordering, not messaging, is what makes B2 observable. A failed connection is not a
+  // slow one — it is the reason loading will never finish, so it is the more specific
+  // answer and belongs first.
+  if (isBridgeStale) {
+    return (
+      <div style={{
+        padding: '24px',
+        textAlign: 'center',
+        color: 'var(--color-text-secondary, #3D3D3A)',
+        fontSize: '12px',
+        lineHeight: '1.5',
+        background: 'var(--color-background-secondary, #F5F4ED)',
+        borderRadius: '12px',
+      }}>
+        {/* §5.3: a timeout and an explicit SDK error are different facts and must not
+            share one message. A stale widget from a previous conversation is normal and
+            the user simply needs a new one; a reported connection failure is not. */}
+        <p style={{ marginBottom: '8px', fontWeight: 600 }}>
+          {connectionFailure === 'error' ? t('widgetConnectionFailed') : t('widgetSessionExpired')}
+        </p>
+        <p style={{ margin: 0 }}>
+          {connectionFailure === 'error' ? t('widgetConnectionFailedHint') : t('widgetSessionExpiredHint')}
+        </p>
+      </div>
+    )
+  }
+
   // Loading state — skeleton mirroring the inline branch layout (M20).
   // TimeAllocationBar is omitted: it is gated on dashboardData?.google_connected,
   // and dashboardData is derived below from `data`, which is null until the same
-  // handler that calls setIsInitialized(true). Connection state is unknowable here.
-  // No `platform` dependency — platform is assigned in onAppCreated, which may not
-  // have fired at this point.
+  // handler that calls setIsInitialized(true).
+  // No `platform` dependency — the skeleton stays platform-agnostic (Claude-B §6),
+  // and platform is only populated after connect resolves.
   if (!isInitialized) {
     const skeletonBar = (width: string, height: string, radius = '4px') => ({
       width,
@@ -618,28 +801,25 @@ function App() {
     )
   }
 
-  // Stale session overlay — bridge never connected, widget is from previous session
-  if (isBridgeStale) {
-    return (
-      <div style={{
-        padding: '24px',
-        textAlign: 'center',
-        color: 'var(--color-text-secondary, #3D3D3A)',
-        fontSize: '12px',
-        lineHeight: '1.5',
-        background: 'var(--color-background-secondary, #F5F4ED)',
-        borderRadius: '12px',
-      }}>
-        <p style={{ marginBottom: '8px', fontWeight: 600 }}>
-          {t('widgetSessionExpired')}
-        </p>
-        <p style={{ margin: 0 }}>{t('widgetSessionExpiredHint')}</p>
-      </div>
-    )
-  }
-
   // ============ Pie Chart View ============
-  if (isPieChartData(data) && data.slices.length > 0) {
+  //
+  // B4: this branch returns BEFORE both `{loadError && …}` sites (the inline and
+  // fullscreen dashboards), so an error occurring while a chart was displayed set
+  // loadError correctly and then rendered nothing — the user kept looking at a chart with
+  // no indication anything had failed. The fix is NOT to reorder: §5.5 requires the chart
+  // to be RETAINED and the error shown alongside it. So the banner is rendered here.
+  // B5: the `&& data.slices.length > 0` that used to be here WAS the defect. An empty
+  // chart result is still chart data — isPieChartData tests `'slices' in data`, key
+  // presence, independent of length — but the extra clause sent it past this branch into
+  // the dashboard branch below, where it was cast to DashboardData, yielded no
+  // priorities, and rendered "no priorities yet". The user asked for a weekly report and
+  // was told they had no priorities.
+  //
+  // PieChart already owns the correct state: it filters zero-hour slices and renders
+  // t('noTimeData') when none remain (PieChart.tsx:61-79). That state has been
+  // unreachable since v1 — not missing, just never routed to. Removing the clause is the
+  // whole fix; nothing new is rendered.
+  if (isPieChartData(data)) {
     return (
       <main
         role="main"
@@ -653,6 +833,23 @@ function App() {
           ...(isInline ? {} : { maxWidth: '672px', marginLeft: 'auto', marginRight: 'auto' }),
         }}
       >
+        {loadError && (
+          <div
+            role="status"
+            style={{
+              marginBottom: '12px',
+              padding: '12px',
+              fontSize: '14px',
+              lineHeight: '1.4',
+              color: 'var(--color-text-primary, #141413)',
+              background: 'var(--color-background-primary, #fff)',
+              border: '1px solid var(--color-border-primary, rgba(31,30,29,0.4))',
+              borderRadius: '12px',
+            }}
+          >
+            {loadError}
+          </div>
+        )}
         <PieChart
           slices={data.slices}
           totalHours={data.totalHours}
@@ -775,13 +972,37 @@ function App() {
   // Fullscreen mode: full CRUD
   // On mobile in host fullscreen: use safeAreaInsets for precise padding (native header + home indicator)
   // On desktop: fixed 16px padding
+  // Safe-area padding (Claude-B / §5.2). Existing padding is a FLOOR, never reduced:
+  // an inset smaller than the base padding must not shrink the layout, so each side takes
+  // the larger of the two.
+  //
+  // Before B, this gate was dead TWICE OVER and either cause alone was sufficient:
+  // `platform` was permanently undefined (its only writers ran before connect), AND
+  // `hostFullscreen` could never become true (`setHostFullscreen(true)` existed nowhere).
+  // So no inset was ever applied, and fixing only one of the two would have changed
+  // nothing observable — which is precisely how the second cause stayed hidden.
   const isMobileHostFullscreen = platform === 'mobile' && hostFullscreen
+  const BASE_PADDING = 16
+  const BASE_PADDING_BOTTOM = 32
   const paddingTop = isMobileHostFullscreen
-    ? (safeAreaTop > 0 ? safeAreaTop : 16)
-    : 16
+    ? Math.max(safeAreaTop, BASE_PADDING)
+    : BASE_PADDING
+  // NOTE: bottom uses a DIFFERENT formula from the other three — inset + base, floored at
+  // 32, rather than max(inset, 16). This is deliberate: it preserves the pre-B behaviour
+  // (`safeAreaBottom + 16 : 32`) because the composer sits below the widget and needs
+  // clearance beyond the home indicator itself. Stated explicitly so the four sides are
+  // not mistaken for one uniform rule.
   const paddingBottom = isMobileHostFullscreen
-    ? (safeAreaBottom > 0 ? safeAreaBottom + 16 : 32)
-    : 16
+    ? Math.max(safeAreaBottom + BASE_PADDING, BASE_PADDING_BOTTOM)
+    : BASE_PADDING
+  // .left/.right were read nowhere before B. They matter in landscape, where the notch
+  // intrudes horizontally and would otherwise clip controls.
+  const paddingLeft = isMobileHostFullscreen
+    ? Math.max(safeAreaLeft, BASE_PADDING)
+    : BASE_PADDING
+  const paddingRight = isMobileHostFullscreen
+    ? Math.max(safeAreaRight, BASE_PADDING)
+    : BASE_PADDING
   return (
     <main
       role="main"
@@ -789,8 +1010,8 @@ function App() {
       style={{
         borderRadius: '16px',
         paddingTop: `${paddingTop}px`,
-        paddingLeft: '16px',
-        paddingRight: '16px',
+        paddingLeft: `${paddingLeft}px`,
+        paddingRight: `${paddingRight}px`,
         paddingBottom: `${paddingBottom}px`,
         maxWidth: '672px',
         marginLeft: 'auto',

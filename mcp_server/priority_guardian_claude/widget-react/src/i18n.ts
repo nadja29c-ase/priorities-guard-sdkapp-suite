@@ -69,6 +69,13 @@ const messages = {
     sessionExpiredRetry: 'Session expired. Open a fresh Priority Guardian conversation to reconnect.',
     widgetSessionExpired: 'This dashboard is from a previous session.',
     widgetSessionExpiredHint: 'Start a new conversation with Priority Guardian to interact with your dashboard.',
+    // Distinct from the two above: a reported connection failure, not an aged widget.
+    widgetConnectionFailed: 'Could not connect to Priority Guardian.',
+    widgetConnectionFailedHint: 'Check your connection and reload, or start a new conversation.',
+    // NOTE: the generic "payload empty or unusable" case (§5.4) deliberately reuses the
+    // existing `noData` key rather than adding a synonym. A second key for one meaning
+    // drifts across two locales.
+    failedToRefresh: 'Failed to refresh. Please try again.',
 
     // Validation errors
     nameRequired: 'Name is required',
@@ -252,6 +259,9 @@ const messages = {
     sessionExpiredRetry: 'Sitzung abgelaufen. Starte ein neues Priority Guardian Gespräch, um dich erneut zu verbinden.',
     widgetSessionExpired: 'Dieses Dashboard stammt aus einer früheren Sitzung.',
     widgetSessionExpiredHint: 'Starte ein neues Gespräch mit Priority Guardian, um mit deinem Dashboard zu interagieren.',
+    widgetConnectionFailed: 'Verbindung zu Priority Guardian fehlgeschlagen.',
+    widgetConnectionFailedHint: 'Prüfe deine Verbindung und lade neu, oder starte ein neues Gespräch.',
+    failedToRefresh: 'Aktualisierung fehlgeschlagen. Bitte versuche es erneut.',
 
     // Validation errors
     nameRequired: 'Name ist erforderlich',
