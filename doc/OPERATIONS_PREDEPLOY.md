@@ -1,5 +1,53 @@
 # Operations Notes
 
+## ⚠️ Which Render service is which — READ BEFORE ANY DEPLOY
+
+Four MCP services run from this one repo. **The names do not disambiguate them, the domains actively
+mislead, and they do not share deploy settings.** Getting this wrong has already produced a session
+spent reasoning about the wrong service's deploy state, and a widget "verified" against bytes that
+were never deployed.
+
+| Service ID | Render name | App it actually runs | Verified `resource` | autoDeploy |
+|---|---|---|---|---|
+| `srv-d6vbrt9r0fns73c6n080` | `priority-guardian-claude-mcp` | **PG · Claude** — `priority_guardian_claude.server_dupl` | `https://mcp.priority-guard.com/mcp` · `pg.access` | **NO** |
+| `srv-d90din3sq97s7399nbl0` | `priorities-guard-mindsort-claude-mcp` | **MindSort · Claude** — `mindsort_claude.server_dupl` | `https://mindsort-mcp.priority-guard.com/mcp` · `clarity.write` | **YES**, on commit |
+| `srv-d64ea0khg0os73d588t0` | `priority-guard-pg-mcp` | **PG · OpenAI** — `priority_guardian.server` | `https://pg.priority-guard.com/mcp` · `pg.access` | NO |
+| `srv-d4vg1c24d50c73814mi0` | `prioritiy-guard-mindsort-mcp` | **MindSort · OpenAI** — `clarity.server` | `https://mindsort.priority-guard.com/mcp` · `clarity.write` | NO |
+
+**The two traps, in order of how much they cost:**
+
+1. **`pg.priority-guard.com` is PG-OpenAI, NOT PG-Claude.** PG-Claude is `mcp.priority-guard.com`.
+   The subdomain that reads like "PG" belongs to the other platform.
+2. **PG-Claude does not auto-deploy; MindSort-Claude does.** Pushing to `main` deploys MindSort-Claude
+   within a minute and does *nothing* to PG-Claude. Watching a commit go live is therefore not
+   evidence that PG-Claude deployed — it is evidence that MindSort did. PG-Claude requires
+   **Manual Deploy → Deploy latest commit**.
+
+### How to identify a service without trusting its name
+
+Two checks, both authoritative, neither requiring the dashboard:
+
+```bash
+# 1. Ask the running service what it is. Public, no auth.
+curl -s https://<host>/.well-known/oauth-protected-resource
+#    resource + scopes_supported identify the app unambiguously.
+
+# 2. Identify the service from a widget iframe already open in Claude.
+#    The claudemcpcontent.com subdomain IS sha256(MCP_RESOURCE_URL)[:32] —
+#    see WIDGET_APP_DOMAIN in handlers/resources_dupl.py.
+python3 -c "import hashlib; print(hashlib.sha256(b'https://mcp.priority-guard.com/mcp').hexdigest()[:32])"
+#    -> a7b31ccb44096357600a7460eb0a78e9   (PG-Claude)
+```
+
+Known widget-frame hashes: **PG-Claude `a7b31ccb44096357600a7460eb0a78e9`**. If the iframe origin in
+DevTools does not start with that, you are not looking at PG-Claude.
+
+### After deploying PG-Claude
+
+**Delete the connector and re-add it, then start a NEW conversation.** Disconnect/reconnect does not
+fetch new bundle bytes — Claude keeps the cached bundle, and every on-host observation will be made
+against the old widget while appearing to succeed. See "Client cache-bust" below.
+
 ## PostgreSQL Version
 
 | Environment | Version | Notes |
