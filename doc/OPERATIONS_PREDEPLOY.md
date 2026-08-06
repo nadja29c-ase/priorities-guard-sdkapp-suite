@@ -202,6 +202,34 @@ Render installs production dependencies via `poetry install --no-root --only mai
 
 The PG widget bundle is built by Vite (`mcp_server/priority_guardian/widget-react/`) and committed as a single inlined HTML file at `mcp_server/priority_guardian/widgets/pg-dashboard.html`. The PG MCP server loads this file ONCE at module import (`handlers/resources.py` → `_load_widget_html()`) — meaning every Render deploy restarts the server and reloads the file fresh, but the file must be correct on disk before commit.
 
+### Dependency pinning and build provenance (applies to ALL widget trees)
+
+Every widget bundle in this repo is a **committed build artifact**. Production serves the committed
+bytes, not a build produced at deploy time. That makes the dependency versions which produced those
+bytes part of the shipped artifact, so they must be exact and reviewed — not resolved at install time.
+
+Rules:
+
+1. **Exact versions, no ranges**, for any dependency that lands in a bundle. A caret means the bytes
+   that ship can change without any source edit. `widget-react/package.json` for PG-Claude pins
+   `@modelcontextprotocol/ext-apps` exactly for this reason.
+2. **Commit the lockfile in the same commit** as the bundle it produced.
+3. **Build with `npm ci`, never `npm install`.** `npm ci` installs exactly the lockfile. `npm install`
+   re-resolves — and it re-resolves *transitively*: upgrading one SDK moved 24 packages in the
+   PG-Claude tree, including `@modelcontextprotocol/sdk` 1.27.1 → 1.30.0, because npm re-resolves the
+   whole subtree rooted at the changed package, not just that package.
+4. **A dependency change is reviewed like a code change.** Diff the lockfile before/after and state
+   which packages moved and why.
+
+**Reproducibility is verifiable and was verified.** `npm ci` from the committed lockfile followed by
+`npm run build` reproduced the committed PG-Claude bundle byte-for-byte (identical SHA-256), both for
+the pre-upgrade bundle and for two independent clean builds of the post-upgrade bundle. If a rebuild
+does *not* reproduce the committed hash, the committed bundle and its lockfile have diverged — treat
+that as a defect, not as Vite nondeterminism, until proven otherwise.
+
+**Note the type-check gap:** `npm run build` is `vite build` only — it does **not** type-check. Run
+`npx tsc --noEmit` explicitly; a type error will otherwise ship.
+
 ### Pre-commit checks (any change to `widget-react/src/` or a `WIDGET_URI` bump)
 
 ```bash

@@ -1212,7 +1212,7 @@ VERIFIED (35)
 | **S3** | ✅ verified |
 | **S4** | ✅ verified — 8/8 public tools; nothing lands in the un-annotated group |
 
-FINDINGS (17)
+FINDINGS (18)
 
 | Req | Finding |
 |---|---|
@@ -1233,8 +1233,9 @@ FINDINGS (17)
 | **X6** | ⚠️ Granted on all three blocks but **hollow** — no `--font-*` variable is referenced anywhere in the widget, so the CSP is widened for a capability not exercised |
 | **S1** | ⚠️ **BLOCKS SUBMISSION.** Not an engineering task |
 | **S12** | ⚠️ **Cannot be ticked truthfully today** — 1 of 8 public tools exercised end to end. Ticking it is a **warranty defect**, not a process shortcut |
+| **M1** | ⚠️ **OPEN — cause removed at SDK level, not yet verified on host.** Moved here from NOT ASSESSED 2026-08-06. Initial theme applied correctly; **runtime theme switching was dead.** `useHostStyles` is two hooks (`useHostStyleVariables`, then `useHostFonts`), and on ext-apps **1.2.2** each assigned `onhostcontextchanged` — a setter calling `setNotificationHandler`, which *replaces*. Chain: PG's handler (`App.tsx:144`) → overwritten by the variables hook → overwritten by the fonts hook. **Only font updates survived**, so a mid-conversation light/dark change never reached the appliers. This is an **SDK defect, not PG misuse** — the SDK's own font hook destroyed its own theme hook. Fixed upstream in **1.4.0** ("addEventListener/removeEventListener with DOM-model `on*` semantics"; both hooks now register additively and clean up on unmount, and the `on*` setter writes a separate slot). Increment Claude-A upgrades 1.2.2 → **1.7.5**. **Do NOT record M1 as satisfied until a mid-conversation light/dark toggle is observed in Claude.ai** (increment Claude-A, acceptance A2) — the fix is verified in SDK source, not yet in the running host |
 
-NOT ASSESSED (45): P1A, P1B, P1C, P1E, P2A, P2C, P2D, P2E, P2F, P2G, P3B, P3D, P3E, P3G, P3H, P5A, P5B, P5F, R7a, T1, T2, T8, T10, A7, A14, A19, M1, M2, M4, M5, M6, M7, M8, M9, M15, X7, L3, L7, S2, S5, S6, S7, S8, S9, PUB3
+NOT ASSESSED (44): P1A, P1B, P1C, P1E, P2A, P2C, P2D, P2E, P2F, P2G, P3B, P3D, P3E, P3G, P3H, P5A, P5B, P5F, R7a, T1, T2, T8, T10, A7, A14, A19, M2, M4, M5, M6, M7, M8, M9, M15, X7, L3, L7, S2, S5, S6, S7, S8, S9, PUB3
 
 
 This section tracks Priority Guardian-specific gaps. Items already satisfied for OpenAI are not re-listed here — see compliance_master_1.3.26.md.
