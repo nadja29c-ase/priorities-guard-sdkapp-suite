@@ -465,7 +465,27 @@ and reconnect does not fetch new bundle bytes.
 time deliberately, so the on-host pass fills in a document rather than reconstructs a memory. Every
 *On host* item in §8 remains open.
 
-**Commit `9c3fc6c`. Not pushed, not deployed.**
+⚠️ **PROVENANCE — CORRECTED 2026-08-06 after the third adversarial review. This section originally
+read "Commit `9c3fc6c`. Not pushed, not deployed", which was true when written and false within the
+hour.** Second time this report has described a state the code had already left; see the B2 paragraph
+below for the first. **The section is now dated rather than absolute.**
+
+**Increment B shipped THREE widget versions in one day, and the first two were deployed without any
+on-host verification:**
+
+| Version | Commit | Deploy | Status |
+|---|---|---|---|
+| v4 | `38c0076` | `dep-d9q8jq3bc2fs7395u1cg` | superseded — **the rollback target**, see below |
+| v5 | `c6c932e` | `dep-d9q9u93l550s7387osd0`, live 14:51:05 | superseded, **shipped with two known defects** |
+| **v6** | **`7f5a2b3`** | **`dep-d9qaaigae00c73aa3dbg`, live 15:17:19** | **currently deployed** |
+
+Bundles: v4 593,943 B / `6f97b93c…` · v5 595,512 B / `81ce0a87…` · **v6 596,205 B / `fac6b66e…`**.
+
+**Nobody has yet looked at any of them on host.** Everything in §8's *On host* column is open across all
+three. That is the state this report describes, and it is the reason no further code fix was made after
+the third review: three static passes have each produced a fix that generated the next finding, and
+shipping unobserved code on top of unobserved code makes attribution impossible. **The on-host pass on
+v6 comes before v7.**
 
 ### Changed set (`git status --porcelain`; byte/line deltas supplementary)
 
@@ -495,9 +515,14 @@ time the version moves; byte counts cannot see it, and only the porcelain set ca
 
 ### Version identity
 
-`WIDGET_VERSION` 4 → **5**; `ui://pg-claude/dashboard-v4.html` → **`ui://pg-claude/dashboard-v5.html`**.
+**Currently `WIDGET_VERSION` 4 → 5 → 6; `ui://pg-claude/dashboard-v6.html` is what is served.**
 Single declaration at `resources_dupl.py:40`; `response_adapter_dupl.py` and `tools_list_dupl.py` import
-it; **0** stale v4 literals.
+it; **0** stale v4 or v5 literals.
+
+**Three versions in one day is not a good sign, and it is recorded rather than smoothed over.** v5 moved
+to v6 because v5's bytes had already been deployed and reusing a version across different bytes is
+prohibited — not because a version bump was wanted. Each bump was forced by a defect found *after* the
+previous one shipped.
 
 ⚠️ **Scope correction (adversarial review).** This previously read "**3** `_meta.ui` blocks as expected",
 unscoped. That is true only **within `resources_dupl.py`** — `tools_list_dupl.py` and
@@ -704,6 +729,40 @@ No automated widget-runtime harness · A3's font listener not runtime-verified �
 logging absent — `configure_logging()` is not called in `server_dupl.py`, so the Claude server ships no
 logs, and B's failure-path testing runs without them.** **PG-Claude's overall production readiness is
 not established by this increment.**
+
+### Carried to v7 — deliberately NOT fixed before the on-host pass
+
+Three findings from the third adversarial review. **All deferred on purpose.** Three static passes have
+each produced a fix that generated the next finding: the terminal branch produced the dead-end, the
+dead-end fix produced the retry defects, the `Array.isArray` fix produced the fallthrough. Fixing faster
+than verifying ships unobserved code on top of unobserved code and destroys attribution. **v6 is
+deployed and unobserved; the pass comes first.**
+
+**V7-1 and V7-2 are ONE finding, not two.** `refreshData` was written for a working widget refreshing
+good data. The retry button wired a **failure** path into it without anyone re-reading it, so it ignores
+`result.isError` entirely and accepts any truthy `content.data`. Consequences: a retry that fails
+silently leaves the *original* error on screen with no sign the retry also failed; and a malformed
+success clears `loadError`, escapes the terminal branch, and renders the dashboard. **One fix: make
+`refreshData` handle results the way `ontoolresult` now does.**
+
+**V7-3 — the durable fix is at `EmptyState`, not at each route.** V7-2 is the **fifth** route to
+"No priorities yet": two closed in this increment, three found by review. That is no longer a series of
+bugs, it is a structural property — `dashboardData?.priorities ?? []` defaults a missing array to empty,
+and `EmptyState` renders whenever the list is empty **regardless of why**. Every path producing a
+truthy-but-wrong `data` object lands there. **Render "No priorities yet" only when the payload is
+structurally valid and the array is genuinely empty; otherwise the generic load error.** That closes the
+class instead of the sixth instance.
+
+Worth stating plainly: this is the fix-the-claim-not-the-instance corollary applied to an *output* — a
+formulation named in this very increment, and then patched route-by-route anyway for two more rounds.
+
+**V7-4 — the SDK shallow-merges nested host context, and PG cannot reach it.**
+`this._hostContext = {...this._hostContext, ...params}` in the SDK is a **shallow** merge, so a partial
+`{ safeAreaInsets: { top: 59 } }` arriving in the window *before* PG subscribes replaces the whole insets
+object inside the SDK's own cache, destroying `bottom`/`left`/`right`. PG's per-field guards are correct
+and simply cannot reach that far. **Least urgent of the three, and the only one affecting a NORMAL load
+— so it is the one to watch on host: mobile fullscreen showing top padding but no bottom clearance is
+this finding's signature.**
 
 ### Reported, not fixed
 
