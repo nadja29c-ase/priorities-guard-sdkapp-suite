@@ -9,7 +9,7 @@ were never deployed.
 
 | Service ID | Render name | App it actually runs | Verified `resource` | autoDeploy |
 |---|---|---|---|---|
-| `srv-d6vbrt9r0fns73c6n080` | `priority-guardian-claude-mcp` | **PG · Claude** — `priority_guardian_claude.server_dupl` | `https://mcp.priority-guard.com/mcp` · `pg.access` | **NO** |
+| `srv-d6vbrt9r0fns73c6n080` | `priority-guardian-claude-mcp` | **PG · Claude** — `priority_guardian_claude.server_dupl` | `https://mcp.priority-guard.com/mcp` · `pg.access` | **YES** *(changed 2026-08-06 12:31; was NO)* |
 | `srv-d90din3sq97s7399nbl0` | `priorities-guard-mindsort-claude-mcp` | **MindSort · Claude** — `mindsort_claude.server_dupl` | `https://mindsort-mcp.priority-guard.com/mcp` · `clarity.write` | **YES**, on commit |
 | `srv-d64ea0khg0os73d588t0` | `priority-guard-pg-mcp` | **PG · OpenAI** — `priority_guardian.server` | `https://pg.priority-guard.com/mcp` · `pg.access` | NO |
 | `srv-d4vg1c24d50c73814mi0` | `prioritiy-guard-mindsort-mcp` | **MindSort · OpenAI** — `clarity.server` | `https://mindsort.priority-guard.com/mcp` · `clarity.write` | NO |
@@ -18,10 +18,13 @@ were never deployed.
 
 1. **`pg.priority-guard.com` is PG-OpenAI, NOT PG-Claude.** PG-Claude is `mcp.priority-guard.com`.
    The subdomain that reads like "PG" belongs to the other platform.
-2. **PG-Claude does not auto-deploy; MindSort-Claude does.** Pushing to `main` deploys MindSort-Claude
-   within a minute and does *nothing* to PG-Claude. Watching a commit go live is therefore not
-   evidence that PG-Claude deployed — it is evidence that MindSort did. PG-Claude requires
-   **Manual Deploy → Deploy latest commit**.
+2. **Deploy settings differ per service AND change over time — read them, never remember them.**
+   PG-Claude was `autoDeploy: "no"` until 2026-08-06 12:31 and is now `"yes"`. During the window when
+   it was off and MindSort-Claude's was on, pushing to `main` deployed MindSort within a minute and
+   did *nothing* to PG-Claude — so watching a commit go live was evidence that **MindSort** deployed,
+   not PG. That cost several rounds of reasoning about the wrong service's state. **The table above is
+   a snapshot; the deploy log is the truth.** Check `autoDeploy` at the moment you care, and confirm
+   the deploy landed by reading the service's own deploy list — never infer it from a push.
 
 ### How to identify a service without trusting its name
 

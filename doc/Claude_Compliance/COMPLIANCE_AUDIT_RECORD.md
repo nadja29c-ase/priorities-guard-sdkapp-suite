@@ -1172,12 +1172,13 @@ Coverage of the 121 rows: 35 verified · 17 findings · 45 not assessed ·
 the remainder n/a or recorded-as-accepted. NOT ASSESSED IS THE DEFAULT AND THE CORRECT ANSWER where
 the audit established nothing.
 
-VERIFIED (35)
+VERIFIED (36)
 
 | Req | Evidence |
 |---|---|
 | **P1F** | ✅ verified — **pattern and scope stated:** `grep -rniE "conversation_(history\|summary)\|chat_history\|claude_memory\|user_files\|conversation_summar"` over `mcp_server/**/*.py` and `backend/**/*.py`, excluding tests → **0 matches**. ⚠️ *Bounded by the pattern: this proves no identifier-level match, not that no such access exists under a name the pattern misses* |
 | **P3F** | ✅ verified — first-party backend; `mcp.priority-guard.com` matches the service |
+| **M1** | ✅ **verified on host 2026-08-06** — light/dark toggled **mid-conversation in Claude.ai** against the deployed v4 bundle; colours, backgrounds, borders and text followed. Moved here from FINDINGS. **This is the only evidence that closes M1** — the fix was verifiable in SDK source but not provable without the host. Runtime theme switching had been dead: on ext-apps 1.2.2 `useHostStyles` is two hooks, each assigning `onhostcontextchanged`, a setter that *replaced* rather than added, so PG's handler (`App.tsx:144`) was overwritten by the variables hook and that by the fonts hook — **only font updates survived.** An SDK defect, fixed upstream in **1.4.0** (both hooks now use `addEventListener`/`removeEventListener`; the `on*` setter writes a separate slot). Increment Claude-A shipped **1.7.5**, deployed as `dep-d9q7seeq1p3s73f34g5g` (commit `785dd1d`, live 12:31). **Before/after both observed:** the same toggle was run on the live **v2** bundle first and the widget stayed light — the defect reproducing on the old SDK, so this is a genuine comparison rather than a single reading. Corroborated by A5: **zero** `setEventHandler` "handler replaced. Use addEventListener…" warnings, which is the exact console signal that would indicate PG's handler being clobbered |
 | **P4A** | ✅ verified — PG does none of this |
 | **P4B** | ✅ verified — PG generates no media |
 | **P4C** | ✅ verified — PG carries none. **Absent from `review-criteria`; binding only via the policy** |
@@ -1212,7 +1213,7 @@ VERIFIED (35)
 | **S3** | ✅ verified |
 | **S4** | ✅ verified — 8/8 public tools; nothing lands in the un-annotated group |
 
-FINDINGS (18)
+FINDINGS (17)
 
 | Req | Finding |
 |---|---|
@@ -1233,7 +1234,6 @@ FINDINGS (18)
 | **X6** | ⚠️ Granted on all three blocks but **hollow** — no `--font-*` variable is referenced anywhere in the widget, so the CSP is widened for a capability not exercised |
 | **S1** | ⚠️ **BLOCKS SUBMISSION.** Not an engineering task |
 | **S12** | ⚠️ **Cannot be ticked truthfully today** — 1 of 8 public tools exercised end to end. Ticking it is a **warranty defect**, not a process shortcut |
-| **M1** | ⚠️ **OPEN — cause removed at SDK level, not yet verified on host.** Moved here from NOT ASSESSED 2026-08-06. Initial theme applied correctly; **runtime theme switching was dead.** `useHostStyles` is two hooks (`useHostStyleVariables`, then `useHostFonts`), and on ext-apps **1.2.2** each assigned `onhostcontextchanged` — a setter calling `setNotificationHandler`, which *replaces*. Chain: PG's handler (`App.tsx:144`) → overwritten by the variables hook → overwritten by the fonts hook. **Only font updates survived**, so a mid-conversation light/dark change never reached the appliers. This is an **SDK defect, not PG misuse** — the SDK's own font hook destroyed its own theme hook. Fixed upstream in **1.4.0** ("addEventListener/removeEventListener with DOM-model `on*` semantics"; both hooks now register additively and clean up on unmount, and the `on*` setter writes a separate slot). Increment Claude-A upgrades 1.2.2 → **1.7.5**. **Do NOT record M1 as satisfied until a mid-conversation light/dark toggle is observed in Claude.ai** (increment Claude-A, acceptance A2) — the fix is verified in SDK source, not yet in the running host |
 
 NOT ASSESSED (44): P1A, P1B, P1C, P1E, P2A, P2C, P2D, P2E, P2F, P2G, P3B, P3D, P3E, P3G, P3H, P5A, P5B, P5F, R7a, T1, T2, T8, T10, A7, A14, A19, M2, M4, M5, M6, M7, M8, M9, M15, X7, L3, L7, S2, S5, S6, S7, S8, S9, PUB3
 
