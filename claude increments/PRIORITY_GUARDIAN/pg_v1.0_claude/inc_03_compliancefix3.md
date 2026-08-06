@@ -456,3 +456,210 @@ and reconnect does not fetch new bundle bytes.
   not runtime-verified · **server-side production logging absent — overall PG-Claude production
   readiness is not established by this increment**
 - An explicit list of what was **not** verified
+
+---
+
+## 11. REPORT — static half, 2026-08-06
+
+⚠️ **THE SMOKE TEST HAS NOT BEEN RUN.** Nothing here rests on observation. Written at implementation
+time deliberately, so the on-host pass fills in a document rather than reconstructs a memory. Every
+*On host* item in §8 remains open.
+
+**Commit `9c3fc6c`. Not pushed, not deployed.**
+
+### Changed set (`git status --porcelain`; byte/line deltas supplementary)
+
+| File | Bytes | Lines |
+|---|---|---|
+| `App.tsx` | 35,419 → 49,644 (+14,225) | 1,001 → 1,222 (+221) |
+| `i18n.ts` | 16,445 → 17,240 (+795) | 434 → 444 (+10) |
+| `pg-dashboard-claude.html` | 593,943 → 595,114 (+1,171) | 155 → 155 |
+| `resources_dupl.py` | 5,927 → 5,927 (**+0**) | 171 → 171 (**+0**) |
+| this briefing | 23,321 → 25,730 (+2,409) | 422 → 457 (+35) |
+
+`resources_dupl.py` shows **zero byte and zero line delta for the third consecutive increment** —
+`"4"→"5"` and `v4→v5` are same-length substitutions. This is standing check 11's case reproducing every
+time the version moves; byte counts cannot see it, and only the porcelain set can.
+
+### Scoped files, and what each was for
+
+- **`App.tsx`** — B1–B5, all five.
+- **`i18n.ts`** — two new key pairs in **both locales**: `widgetConnectionFailed`/`Hint` (§5.3's
+  timeout-vs-error distinction) and `failedToRefresh` (the `:384` amendment). **`noData` was REUSED**
+  for §5.4's generic payload case rather than adding a synonym — it existed, was unused outside
+  `i18n.ts`, and a second key for one meaning drifts across two locales.
+- **`types.ts` — NOT TOUCHED.** §2 permits it "only if genuinely required"; it was not. See B4.
+- **`main.css` — NOT TOUCHED.** The only new visual element is the chart-branch error banner, built
+  from existing host tokens with inline styles matching the two banners already in the file.
+- **No operational document changed.** `OPERATIONS_PREDEPLOY.md` was read, not edited, as §2 requires.
+
+### Version identity
+
+`WIDGET_VERSION` 4 → **5**; `ui://pg-claude/dashboard-v4.html` → **`ui://pg-claude/dashboard-v5.html`**.
+Single declaration at `resources_dupl.py:40`; `response_adapter_dupl.py` and `tools_list_dupl.py` import
+it; **0** stale v4 literals; **3** `_meta.ui` blocks as expected.
+
+### Build provenance (§7)
+
+Node v24.8.0 · npm 11.6.0 · `rm -rf dist node_modules/.vite && npm run build`, run twice from clean.
+**Both builds `2e208ae80b119d37fa649fb8d9e999eb7a057ac58fbc61f8c0fd8d4fc8bb5184` — reproducible.**
+Bundle **+1,171 B (+0.197%)** against B's ±2%. No new dependency; `package.json` untouched. No
+`window.openai`; 0 external `<script src=>`. **Bundle diff contains no test-only or state-forcing
+code** — checked, not asserted: the source diff carries no `TODO`/`FIXME`/`window.__`/`localStorage`/
+`forceState`/`mockData`/`debugger`.
+
+Python suite **8 failed / 25 passed — unchanged across the version bump.** That is `64b0572`'s
+imported-constant fix working: the first bump since, and the URI tests did not go red.
+
+### §8 rollback prerequisites — recorded BEFORE any push
+
+| | |
+|---|---|
+| Service | `srv-d6vbrt9r0fns73c6n080`, **`autoDeploy: yes` / commit → a push IS a deploy** |
+| Live deploy | `dep-d9q8jq3bc2fs7395u1cg`, live 2026-08-06T13:20:43Z |
+| Live commit | **`38c0076`** |
+| Live URI | `ui://pg-claude/dashboard-v4.html` |
+| Live bundle | 593,943 B / `6f97b93c…` — restorable from git as bytes, ancestor of HEAD |
+
+⚠️ **NEAR MISS, recorded because it is the argument for the re-verify rule.** The record carried
+forward from Claude-A named `785dd1d`. By the time B needed it the live commit had moved **twice**, to
+`38c0076`. It happened to be harmless — the intervening commits were documentation, so the live bundle
+is still the identical `6f97b93c…` artifact A built, and a rollback to `785dd1d` would have restored
+the same bytes. **But that could not be known without checking**, and had any of those commits touched
+the widget, the record would have pointed at the wrong artifact. Second time this session a Render
+value went stale between being recorded and being used.
+
+### B1–B5: mechanism found → mechanism after → static result
+
+**B1 — host context read before it existed.** `onAppCreated` runs before `await connect()`;
+`_hostContext` is assigned inside `connect()`. Every read returned `undefined`. → Read moved to an
+effect keyed on `app`, which `useApp` sets only after connect resolves. Subscribe-then-read so nothing
+arriving between the two is lost. **Static: PASS** — `platform`, `displayMode` and all four insets have
+exactly one live call site, in `applyHostContext`, reached only post-connection.
+
+**B1 also found a second dead flag.** `setHostFullscreen(true)` existed **nowhere in the file**;
+`hostFullscreen` was initialised `false` and could only ever be set `false`. It gates
+`isMobileHostFullscreen`, which gates every inset — so the gate was dead **twice over, either cause
+sufficient**, and fixing `platform` alone would have changed nothing observable.
+
+**B2 — predicate tested object existence.** The object is assigned before connect is attempted. →
+`isConnected`/`error` (both returned by `useApp`, never destructured) drive
+`'timeout' | 'error' | null`; `isBridgeStale` derived. Timer cleared on all three exits; duration
+**preserved at 3000 ms**, now named `BRIDGE_TIMEOUT_MS`. **Static: PASS.**
+
+**B3 — three results fell through.** → Four exits, all terminating. MCP-error surfaces the server's own
+message, **verified safe at the source**: `handlers/tools_dupl.py` returns `str(e)` for an intentional
+`ToolUsageError` and a fixed `"Something went wrong. Please try again."` otherwise, so exception text
+and payload internals never reach `content[0].text`. **Static: PASS.**
+
+**B4 — PARTIAL.** §5.5(b) implemented: the chart branch returned before both `loadError` sites, so the
+banner now renders inside it, chart retained. **Deliberately NOT by reordering** — see below.
+**§5.5(a) and (c) not implemented: no reachable trigger.** **Static: PASS for (b), FINDING for (a)/(c).**
+
+**B5 — one clause.** `&& data.slices.length > 0` sent an empty chart result into the dashboard branch,
+where it was cast to `DashboardData` and rendered "no priorities yet". `isPieChartData` tests key
+presence, not length. → Clause removed. `PieChart.tsx:61-79` has owned the correct empty state since
+v1 — never missing, just never routed to. **Static: PASS.**
+
+### What `onAppCreated` now does
+
+**Registers handlers, and nothing else.** The host-context reads are gone. Handler registration must
+stay there: `toolresult` is a one-shot event and the SDK warns (throws under `strict`) if it is first
+registered after `connect()`. `hostcontextchanged` is **not** one-shot, which is what makes the later
+subscription legal.
+
+### Subscription mechanism
+
+`app.addEventListener('hostcontextchanged', …)` with `removeEventListener` on cleanup — the **additive**
+API. **Zero `onhostcontextchanged =` assignments remain.** That single slot is what `useHostStyles`
+destroyed on 1.2.2.
+
+### Timeout
+
+**3000 ms, preserved.** B changes the predicate, not the budget; moving both would make an on-host
+regression unattributable.
+
+### How a chart-refresh failure is distinguished from an unrelated one — IT IS NOT, and why
+
+**Three independent lines of evidence, each separately sufficient:** none of the 14 `callServerTool`
+sites returns chart data; the chart branch has no refresh control; `PieChart` has no controls at all.
+Chart data arrives **only** via chat-initiated `render_weekly_report`, and `ontoolresult` carries no
+tool identity.
+
+**`chartStale` was deliberately NOT built.** A state variable with no possible setter is the mirror of
+the four defects this increment found, and would let this report claim a capability nothing can
+exercise. This is §5.5's own contingency: report it, default to not marking.
+
+**The cause is a PG DESIGN gap, not a protocol one.** `TimeAllocationBar` has a refresh control through
+`callServerTool`; the chart does not. Had it shipped with the same affordance, origin would be known at
+the call site and `ontoolresult`'s anonymity would never bind. **Prerequisite for (a)/(c): a
+widget-initiated chart refresh control** — a feature, outside B. The protocol framing would wrongly
+suggest waiting for the spec to change.
+
+### The two branch-order fixes are a contrasting pair — keep them together
+
+**B2 was fixed BY reordering:** the terminal connection state had to precede the loading branch, because
+`setIsInitialized(true)` is only called from `ontoolresult`, so a failed connection meant the loading
+branch returned forever and the terminal branch was unreachable in exactly the case it exists for.
+
+**B4 must NOT be:** §5.5 requires the chart **retained**, so hoisting the error above it would remove
+the thing the requirement protects. The banner is rendered *inside* the chart branch instead.
+
+Same defect shape, opposite remedies. **The discriminator is whether the branch below carries something
+the user still needs.**
+
+### Partial-update merging — evidence split
+
+- **Static:** `applyHostContext` guards **every field individually**, so an update carrying only `theme`
+  cannot blank `platform`, and a `safeAreaInsets` carrying only `top` cannot zero `.bottom`. Verified by
+  reading; each of the six fields has its own `!== undefined` guard.
+- **On host:** *pending.*
+- **Explicitly unverified:** any combination the host does not naturally produce. To be named
+  individually after the pass, not summarised as one line.
+
+### Console
+
+*Pending.* §8 requires every warning recorded, with host-origin classification permitted **only** where
+Claude-A's evidence establishes that specific message's origin. **Known in advance:** `App.tsx:75-79`
+logs a `[PG Diagnostic]` line on every inline render, asserting a 500px limit that does not exist. It
+will appear in the record. Out of B's scope; it has now survived M20, A and B.
+
+### Carried forward, unresolved
+
+No automated widget-runtime harness · A3's font listener not runtime-verified · **server-side production
+logging absent — `configure_logging()` is not called in `server_dupl.py`, so the Claude server ships no
+logs, and B's failure-path testing runs without them.** **PG-Claude's overall production readiness is
+not established by this increment.**
+
+### Reported, not fixed
+
+- **`PieChart.tsx:74`** — `var(--color-text-secondary, #73726C)`. `#73726C` is *tertiary*'s value;
+  secondary is `#3D3D3A`. Zero production consequence (inside a Claude host the token always wins), but
+  it is the **second** instance found by accident — the first during M2's contrast work at
+  `App.tsx:694`. **The finding is the class, not the instance: nobody has swept `var(--color-*, #hex)`
+  pairs against the published token table.** A mechanical follow-up increment; the token values are
+  already committed in `sources_raw/`. Fixing this one instance would leave the rest, which is the
+  standing-checks lesson.
+- **The CRUD suppression window now swallows errors.** `if (Date.now() - lastCrudAtRef.current < 1500)
+  return` sits **above** the `try`, so within 1.5 s of a CRUD operation every result is dropped —
+  including, now, an `isError` result that B3's CASE 1 would surface. Harmless before B3 because errors
+  were not handled at all. Does not affect B3's requirement (a *first* result cannot fall inside a CRUD
+  window), but it is a new interaction B3 created.
+- **`handleExpandToFullscreen` never tells the host.** It sets `displayMode` locally and never calls
+  `requestDisplayMode`, unlike `handleMinimizeToInline`. Before B1 nothing could contradict the local
+  state; now `applyHostContext` can. **On-host reproduction required:** expand locally, then rotate or
+  resize, and see whether fullscreen survives. Not guarded, because the fix belongs at the asymmetry and
+  that is outside B1–B5 — and it may be theoretical if the host never sends `displayMode` in partials.
+- **`FullscreenHeader` now disappears under host-initiated fullscreen** for the first time ever, because
+  `hostFullscreen` can finally be `true`. Correct per the guidelines, but nobody has seen the resulting
+  state. **On host: confirm there is a visible way back.**
+
+### NOT VERIFIED
+
+**The entire on-host half of §8**, every item. Plus, specifically: **the mobile width, gap and margin
+branches have never executed in production** — `platform` was permanently `undefined` before B, so every
+`platform === 'mobile'` ternary has always taken the desktop leg. They are not what B was fixing, which
+makes them the most likely and least expected place for a regression. **Check them harder than the
+fixes.** Also unverified: PG's own `onhostcontextchanged` handler actually firing (B1's on-host half,
+which §1 forbids inheriting from A2) · all four insets applied on a real device · the 8 remaining Python
+test failures, individually · reproducibility on any machine other than this one.
