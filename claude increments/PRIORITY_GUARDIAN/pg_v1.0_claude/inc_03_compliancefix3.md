@@ -497,7 +497,19 @@ time the version moves; byte counts cannot see it, and only the porcelain set ca
 
 `WIDGET_VERSION` 4 → **5**; `ui://pg-claude/dashboard-v4.html` → **`ui://pg-claude/dashboard-v5.html`**.
 Single declaration at `resources_dupl.py:40`; `response_adapter_dupl.py` and `tools_list_dupl.py` import
-it; **0** stale v4 literals; **3** `_meta.ui` blocks as expected.
+it; **0** stale v4 literals.
+
+⚠️ **Scope correction (adversarial review).** This previously read "**3** `_meta.ui` blocks as expected",
+unscoped. That is true only **within `resources_dupl.py`** — `tools_list_dupl.py` and
+`response_adapter_dupl.py` also construct `_meta.ui` for tool results. The count was never wrong; the
+sentence omitted the scope it was counted over, which is the negative-scope rule (standing check 2)
+applied to a positive count. **Corrected: 3 `_meta.ui` blocks in `resources_dupl.py`; two further
+construction sites exist in the tool-result path, both deriving from the same imported `WIDGET_URI`.**
+
+**Standing check 11 earned its place a third time.** `resources_dupl.py` shows a **zero byte delta**
+while `git` reports **2 insertions / 2 deletions**. A byte-count-derived changed set would have missed
+this file entirely; the porcelain-derived set caught it. That is precisely the hole the check was
+corrected to close, reproducing on every version bump.
 
 ### Build provenance (§7)
 
@@ -528,6 +540,46 @@ is still the identical `6f97b93c…` artifact A built, and a rollback to `785dd1
 the same bytes. **But that could not be known without checking**, and had any of those commits touched
 the widget, the record would have pointed at the wrong artifact. Second time this session a Render
 value went stale between being recorded and being used.
+
+### Adversarial review before deploy — three fixes, two dispositions
+
+Run against the unpushed commits, deliberately before pushing, since with `autoDeploy: yes` a push is a
+deploy. Verdict was **hold**. Three changes made, three findings left as reported.
+
+**FIXED — an error with no data rendered a FALSE claim.** The worst finding, and a regression *this
+increment introduced*. B3 correctly made failed results set `loadError` and `isInitialized` but left
+`data` null, so the render fell through to the dashboard branch, `dashboardData?.priorities ?? []`
+yielded an empty list, and `EmptyState` rendered. An auth failure displayed *"Authentication required"*
+directly above *"No priorities yet. Ask the assistant to help you set up your top priorities."* — telling
+a user whose session lapsed that their data does not exist and inviting them to recreate it. Before B3
+this path showed a skeleton: uninformative but honest. **Informative and wrong is worse.** Now a terminal
+branch at `App.tsx:858`, ahead of both the chart and dashboard branches. Deliberately *not* implemented
+by suppressing `EmptyState` inside the dashboard branch — that would leave the whole shell rendering
+around an error and push the same reachability question one level down.
+
+This is the **fifth** instance of the increment's pattern and the first where the consumer does not
+merely hide the state but contradicts it.
+
+**FIXED — `Array.isArray` on the chart payload.** `isPieChartData` tests only `'slices' in data`, and
+`PieChart` calls `slices.filter()` **during render**, outside the result handler's `try/catch`, so a
+malformed `slices` would throw past it into the error boundary. The type guard proves the key exists; it
+does not prove the component can use the value. One clause, in the branch B5 had just made reachable.
+
+**CHANGED — the timeout's message, not its budget.** The review rated the 3s timer High, reasoning that
+cold starts could exceed it. That reasoning is wrong: `connect()` is a **postMessage handshake with the
+parent frame**, not a network call, so Render latency never enters into it. But the underlying complaint
+was right for a different reason — at 3s the widget asserted *"This dashboard is from a previous
+session. Start a new conversation"*, which is confident, directive, and unwarranted by the evidence,
+and while set it silently refuses 12 tool-call sites plus expand.
+
+**Two thresholds now.** `BRIDGE_SLOW_MS` 3000 → `'slow'` → the existing non-directive `connecting`
+string, no advice given. `BRIDGE_STALE_MS` 15000 → `'stale'` → the session-expired wording, which now
+requires five times the evidence before it is spoken. The budget is unchanged; what changed is what the
+widget is willing to claim on three seconds of silence.
+
+**LEFT AS REPORTED:** local-expand-then-collapse and the `FullscreenHeader` disappearance (both already
+carry on-host reproductions, and the second needs observation before anyone decides), and the CRUD
+suppression window (recorded at the guard).
 
 ### B1–B5: mechanism found → mechanism after → static result
 

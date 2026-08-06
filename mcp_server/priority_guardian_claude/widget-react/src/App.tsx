@@ -23,7 +23,15 @@ type DisplayMode = 'inline' | 'fullscreen'
  * literal inside the timer. Claude-B changed the predicate, not the budget — moving both
  * at once would make any on-host regression impossible to attribute.
  */
-const BRIDGE_TIMEOUT_MS = 3000
+const BRIDGE_SLOW_MS = 3000
+
+/**
+ * How long before the widget is willing to assert that the session is stale and tell the
+ * user to start a new conversation. Deliberately much longer than BRIDGE_SLOW_MS: that
+ * advice is directive and unrecoverable-sounding, so it should not be given on the
+ * evidence of a handshake that is merely slow.
+ */
+const BRIDGE_STALE_MS = 15000
 
 /**
  * Priority Guardian Dashboard - Claude Widget (CRUD-enabled)
@@ -61,7 +69,14 @@ function App() {
   // is attempted — so a connection that hung or failed left the object present, the
   // timer concluded the bridge was fine, and the widget rendered its loading skeleton
   // forever. `isBridgeStale` is now derived from a real connection outcome.
-  const [connectionFailure, setConnectionFailure] = useState<'timeout' | 'error' | null>(null)
+  //   'slow'  — not connected within BRIDGE_SLOW_MS. Says only that, and says it
+  //             non-directively, because at this point nothing is actually known to be
+  //             wrong: connect() is a postMessage handshake with the parent frame, and a
+  //             throttled background tab is enough to exceed a few seconds.
+  //   'stale' — still not connected after BRIDGE_STALE_MS. Now the directive
+  //             "start a new conversation" advice is earned.
+  //   'error' — the SDK reported an explicit connection/initialisation failure.
+  const [connectionFailure, setConnectionFailure] = useState<'slow' | 'stale' | 'error' | null>(null)
   const isBridgeStale = connectionFailure !== null
 
   // Safe area insets for mobile fullscreen (notch/home indicator, native header).
@@ -321,8 +336,17 @@ function App() {
       setConnectionFailure('error')
       return
     }
-    const timeout = setTimeout(() => setConnectionFailure('timeout'), BRIDGE_TIMEOUT_MS)
-    return () => clearTimeout(timeout)
+    // TWO thresholds, because the old single one made a confident claim on thin evidence.
+    // At 3s all that is known is "not connected yet" — the previous wording told the user
+    // their session had expired and to start a new conversation, which is directive,
+    // actionable and wrong for a handshake that is merely slow. The directive message now
+    // requires BRIDGE_STALE_MS of evidence.
+    const slowTimer = setTimeout(() => setConnectionFailure('slow'), BRIDGE_SLOW_MS)
+    const staleTimer = setTimeout(() => setConnectionFailure('stale'), BRIDGE_STALE_MS)
+    return () => {
+      clearTimeout(slowTimer)
+      clearTimeout(staleTimer)
+    }
   }, [isConnected, connectionError])
 
   // Sync locale on data changes
@@ -704,15 +728,22 @@ function App() {
         background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: '12px',
       }}>
-        {/* §5.3: a timeout and an explicit SDK error are different facts and must not
-            share one message. A stale widget from a previous conversation is normal and
-            the user simply needs a new one; a reported connection failure is not. */}
+        {/* §5.3: three different facts, three different statements. 'slow' asserts only
+            what is known — not connected yet — and gives no advice, because none is
+            warranted. The directive session-expired wording is reserved for 'stale',
+            which requires five times the evidence. */}
         <p style={{ marginBottom: '8px', fontWeight: 600 }}>
-          {connectionFailure === 'error' ? t('widgetConnectionFailed') : t('widgetSessionExpired')}
+          {connectionFailure === 'error'
+            ? t('widgetConnectionFailed')
+            : connectionFailure === 'slow'
+              ? t('connecting')
+              : t('widgetSessionExpired')}
         </p>
-        <p style={{ margin: 0 }}>
-          {connectionFailure === 'error' ? t('widgetConnectionFailedHint') : t('widgetSessionExpiredHint')}
-        </p>
+        {connectionFailure !== 'slow' && (
+          <p style={{ margin: 0 }}>
+            {connectionFailure === 'error' ? t('widgetConnectionFailedHint') : t('widgetSessionExpiredHint')}
+          </p>
+        )}
       </div>
     )
   }
@@ -808,6 +839,38 @@ function App() {
   // loadError correctly and then rendered nothing — the user kept looking at a chart with
   // no indication anything had failed. The fix is NOT to reorder: §5.5 requires the chart
   // to be RETAINED and the error shown alongside it. So the banner is rendered here.
+  // ============ Error with no data — TERMINAL ============
+  //
+  // Found by adversarial review; a regression THIS increment introduced. B3 correctly
+  // made failed results set loadError and isInitialized, but left `data` null — so the
+  // render fell through to the dashboard branch, where `dashboardData?.priorities ?? []`
+  // yields an empty list and EmptyState renders. An auth failure therefore displayed
+  // "Authentication required" directly above "No priorities yet. Ask the assistant to
+  // help you set up your top priorities."
+  //
+  // That does not merely fail to inform — it makes a FALSE claim about the user's data
+  // and invites them to recreate priorities that still exist. Before B3 this path showed
+  // a skeleton: uninformative but honest. Informative and wrong is worse.
+  //
+  // Handled as its own terminal branch rather than by suppressing EmptyState inside the
+  // dashboard branch. Conditional suppression would leave the whole dashboard shell
+  // rendering around an error and push the same reachability question one level down.
+  if (loadError && !data) {
+    return (
+      <div style={{
+        padding: '24px',
+        textAlign: 'center',
+        color: 'var(--color-text-secondary, #3D3D3A)',
+        fontSize: '13px',
+        lineHeight: '1.5',
+        background: 'var(--color-background-secondary, #F5F4ED)',
+        borderRadius: '12px',
+      }}>
+        <p style={{ margin: 0 }}>{loadError}</p>
+      </div>
+    )
+  }
+
   // B5: the `&& data.slices.length > 0` that used to be here WAS the defect. An empty
   // chart result is still chart data — isPieChartData tests `'slices' in data`, key
   // presence, independent of length — but the extra clause sent it past this branch into
@@ -817,9 +880,13 @@ function App() {
   //
   // PieChart already owns the correct state: it filters zero-hour slices and renders
   // t('noTimeData') when none remain (PieChart.tsx:61-79). That state has been
-  // unreachable since v1 — not missing, just never routed to. Removing the clause is the
-  // whole fix; nothing new is rendered.
-  if (isPieChartData(data)) {
+  // unreachable since v1 — not missing, just never routed to.
+  //
+  // Array.isArray IS load-bearing, not defensive noise: isPieChartData only tests
+  // `'slices' in data`, and PieChart calls slices.filter() during RENDER — outside the
+  // result handler's try/catch, so a malformed `slices` would throw past it. The type
+  // guard proves the key exists; it does not prove the component can use the value.
+  if (isPieChartData(data) && Array.isArray(data.slices)) {
     return (
       <main
         role="main"
