@@ -41,6 +41,13 @@ Adjacent issues found during implementation are reported, not fixed.
 
 - Increment A → **v4** · Increment B → **v5**
 
+⚠️ **This section states INTENT, not state.** "v4 is deployed" is what the increment requires before
+its on-host acceptance can run — it is **not** a claim that v4 is live at any moment you are reading
+this. §8 correspondingly requires the rollback record to be captured *before* deployment; the two are
+not in conflict, they are consecutive. **For actual state, read the deploy log on Render for
+`priority-guardian-claude-mcp` (`srv-d6vbrt9r0fns73c6n080`), never this file** — a briefing committed
+mid-increment describes a moving target. That service is `autoDeploy: "no"`; pushing does not deploy it.
+
 **v4 is deployed** to the Render service so it can be verified. There is no staging environment —
 `sources_raw/testing.raw.md`: *"There is no separate staging environment — you test in production using
 a custom connector."* A custom connector uses the same runtime as a directory connector. PG-Claude is

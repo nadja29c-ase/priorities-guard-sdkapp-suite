@@ -640,3 +640,78 @@ async def test_list_resources_returns_widget(set_dev_env):
     assert len(resources) == 1
     assert str(resources[0].uri) == WIDGET_URI
     assert resources[0].mimeType == "text/html+mcp"
+
+
+@pytest.mark.asyncio
+async def test_advertised_widget_uri_is_actually_servable(set_dev_env):
+    """The URI list_resources() advertises must be one handle_read_resource() serves.
+
+    THIS IS THE TEST THE OTHERS CANNOT BE. Comparing WIDGET_URI against WIDGET_URI
+    proves nothing — both sides read the same constant. So this test deliberately
+    does NOT pass WIDGET_URI to the read handler. It takes whatever list_resources()
+    actually advertises and feeds that back in, which is the only way to catch the
+    advertise/serve paths diverging.
+
+    Concretely: if handle_read_resource() were changed to match a stale literal like
+    "ui://pg-claude/dashboard-v3.html" while list_resources() still advertised v4,
+    every other test in this file would pass and Claude would get empty contents and
+    silently fall back to a cached bundle. That failure mode produces no error in
+    logs — see doc/OPERATIONS_PREDEPLOY.md.
+
+    Survives every version bump, because no version literal appears anywhere in it.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import (
+        WIDGET_FALLBACK_HTML,
+        handle_read_resource,
+        list_resources,
+    )
+
+    resources = await list_resources()
+    advertised_uri = str(resources[0].uri)
+
+    req = mcp_types.ReadResourceRequest(
+        method="resources/read",
+        params=mcp_types.ReadResourceRequestParams(uri=advertised_uri),
+    )
+    result = await handle_read_resource(req)
+
+    assert result.contents, (
+        f"list_resources() advertises {advertised_uri} but handle_read_resource() "
+        f"returned no contents for it — the advertise and serve paths have diverged. "
+        f"In production this is silent: Claude serves a cached bundle instead."
+    )
+    content = result.contents[0]
+    assert str(content.uri) == advertised_uri
+    assert content.mimeType == "text/html+mcp"
+
+    # Guard the silent-failure trap: _load_widget_html() swallows every error and
+    # returns WIDGET_FALLBACK_HTML, so the server starts fine and serves failure text.
+    assert content.text != WIDGET_FALLBACK_HTML, (
+        "handle_read_resource() served WIDGET_FALLBACK_HTML — the bundle is missing "
+        "from disk or unreadable. The server does not crash on this; it just ships "
+        "'Widget failed to load' to users."
+    )
+    assert "<title>Priority Guardian Dashboard</title>" in content.text, (
+        "Served content is not the real widget bundle."
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_resource_unknown_uri_returns_empty(set_dev_env):
+    """An unrecognised URI yields empty contents, without raising.
+
+    Not decoration. Without this, the test above would still pass if
+    handle_read_resource() returned the widget for ANY uri — which would make its
+    positive assertion meaningless. This pins the handler to actually discriminating.
+    """
+    from mcp import types as mcp_types
+    from mcp_server.priority_guardian_claude.handlers.resources_dupl import handle_read_resource
+
+    req = mcp_types.ReadResourceRequest(
+        method="resources/read",
+        params=mcp_types.ReadResourceRequestParams(uri="ui://pg-claude/does-not-exist.html"),
+    )
+    result = await handle_read_resource(req)
+
+    assert result.contents == []
