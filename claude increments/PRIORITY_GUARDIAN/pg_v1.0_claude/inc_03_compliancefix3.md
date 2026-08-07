@@ -461,7 +461,7 @@ and reconnect does not fetch new bundle bytes.
 
 ## 11. REPORT — static half, 2026-08-06
 
-⚠️ **THE SMOKE TEST HAS NOT BEEN RUN.** Nothing here rests on observation. Written at implementation
+⚠️ **SUPERSEDED — the smoke test HAS now been run; see §12.** When written this section was accurate: nothing in §11 rested on observation, and it was drafted at implementation time so the on-host pass would fill in a document rather than reconstruct a memory. §12 records what was observed. Nothing here rests on observation. Written at implementation
 time deliberately, so the on-host pass fills in a document rather than reconstructs a memory. Every
 *On host* item in §8 remains open.
 
@@ -729,6 +729,69 @@ No automated widget-runtime harness · A3's font listener not runtime-verified �
 logging absent — `configure_logging()` is not called in `server_dupl.py`, so the Claude server ships no
 logs, and B's failure-path testing runs without them.** **PG-Claude's overall production readiness is
 not established by this increment.**
+
+---
+
+## 12. ON-HOST PASS — run on v6 (`7f5a2b3`), 2026-08-06
+
+**The smoke test HAS been run.** This section replaces §11's "not run" statement. Recorded from
+observation, with observed / not produced / not verifiable kept separate. **Nothing here is inferred
+from the defect analysis** — a symptom list is not an observation.
+
+### Observed, passing
+
+| | Result |
+|---|---|
+| Normal load | ✅ **no false "Connecting…"** on a healthy connection — the two-threshold mechanism behaves |
+| Light/dark, inline **and** fullscreen | ✅ **A2 unregressed** — M1 stays closed |
+| **B2** connection failure | ✅ DevTools offline reload → message shown, **recovers when back online** |
+| **B3** result exits | ✅ |
+| **B4(b)** error after a rendered chart | ✅ chart **retained**, error shown alongside |
+| **B5** empty chart | ✅ weekly report over an empty period → **"no time data"**, not "No priorities yet" |
+| CRUD | ✅ add / edit / delete all work |
+| **M20** loading skeleton | ✅ unregressed |
+| **Expand-then-rotate** | ✅ **does not collapse — the risk is DISPROVED, not merely unobserved** |
+
+That last row matters: it was carried as a live concern with an on-host reproduction, and the
+reproduction was run and came back negative. **A disproved risk and an untested one are not the same
+thing**, and the record should not blur them.
+
+### Observed, PARTIAL — B1
+
+**B1 is reported PARTIAL, not passed.** Insets never apply on the path users actually take, because the
+host is never asked for fullscreen. Four symptoms, one root cause — see Increment C §2. The code fixed
+by B1 is correct; the requirement is not met.
+
+### Console — observed
+
+| Term | Result |
+|---|---|
+| `Ignoring message from unknown source` | **0 results.** On v2 these dominated the error list (31 errors / 141 messages); on v4, 48 / 1,042. **Recorded as an observed delta, not attributed to B** — conditions differed and no causal claim is made |
+| `oncalltool handler replaced` | ×1 — host-side, from Claude's `vendor-all` bundle, per Increment A's evidence |
+| `size-changed` | present, as pre-registered |
+| `[PG Diagnostic] Inline main scrollHeight: 704px (limit: 500px, EXCEEDS LIMIT)` | present — **and the "limit" it cites does not exist.** 704px is simply the real inline height. Removed in C5 |
+
+### NOT PRODUCED — named individually, not summarised
+
+- **Host-initiated fullscreen.** Established as **not user-invokable**: the host only reports fullscreen
+  after granting a request, and PG never requests one. **This is not a testing gap — it is a consequence
+  of the very defect C1 fixes.** The distinction matters, because "couldn't test it" and "it cannot
+  happen yet" have different remedies.
+- **The retry button.** Requires a first-load failure, which could not be induced without server-side
+  changes.
+- **CRUD-window error suppression.** No reliable way to produce it.
+
+### NOT VERIFIABLE
+
+Anything depending on the SDK's internal event ordering — see Increment C §4's C4 disposition.
+
+### What this closes, and what it does not
+
+**Closes:** B2, B3, B4(b), B5, and every cross-cutting item — theme switching, M20, CRUD.
+**Does not close:** B1, which is partial. **M3 therefore remains open**, and its status must not be
+rounded up on the strength of the eight rows that did pass.
+
+---
 
 ### Carried to v7 — deliberately NOT fixed before the on-host pass
 
