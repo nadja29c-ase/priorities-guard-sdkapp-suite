@@ -188,6 +188,43 @@ function App() {
   // returns first. It gates safe-area insets too — see the padding block below.
   const isMobileHostFullscreen = platform === 'mobile' && hostFullscreen
 
+  // HOISTED in Claude-C: the chart branch returns BEFORE the dashboard branch and needs
+  // the same safe-area padding. Computing this only in the dashboard section meant the
+  // chart rendered with a fixed 16px inset in host fullscreen — content under the notch
+  // whenever safeAreaTop > 16. Found by the fifth review.
+  // On desktop: fixed 16px padding
+  // Safe-area padding (Claude-B / §5.2). Existing padding is a FLOOR, never reduced:
+  // an inset smaller than the base padding must not shrink the layout, so each side takes
+  // the larger of the two.
+  //
+  // Before B, this gate was dead TWICE OVER and either cause alone was sufficient:
+  // `platform` was permanently undefined (its only writers ran before connect), AND
+  // `hostFullscreen` could never become true — nothing in the file ever set it true.
+  // (It is derived from displayMode as of Claude-C and can no longer be set at all.)
+  // So no inset was ever applied, and fixing only one of the two would have changed
+  // nothing observable — which is precisely how the second cause stayed hidden.
+  const BASE_PADDING = 16
+  const BASE_PADDING_BOTTOM = 32
+  const paddingTop = isMobileHostFullscreen
+    ? Math.max(safeAreaTop, BASE_PADDING)
+    : BASE_PADDING
+  // NOTE: bottom uses a DIFFERENT formula from the other three — inset + base, floored at
+  // 32, rather than max(inset, 16). This is deliberate: it preserves the pre-B behaviour
+  // (`safeAreaBottom + 16 : 32`) because the composer sits below the widget and needs
+  // clearance beyond the home indicator itself. Stated explicitly so the four sides are
+  // not mistaken for one uniform rule.
+  const paddingBottom = isMobileHostFullscreen
+    ? Math.max(safeAreaBottom + BASE_PADDING, BASE_PADDING_BOTTOM)
+    : BASE_PADDING
+  // .left/.right were read nowhere before B. They matter in landscape, where the notch
+  // intrudes horizontally and would otherwise clip controls.
+  const paddingLeft = isMobileHostFullscreen
+    ? Math.max(safeAreaLeft, BASE_PADDING)
+    : BASE_PADDING
+  const paddingRight = isMobileHostFullscreen
+    ? Math.max(safeAreaRight, BASE_PADDING)
+    : BASE_PADDING
+
   // ONE CONTRACT FOR DISPLAY MODE.
   //
   // Three call sites used to set this state independently and they disagreed twice:
@@ -1146,7 +1183,12 @@ function App() {
         aria-label="Time Allocation Pie Chart"
         style={{
           borderRadius: '16px',
-          padding: '16px',
+          // Safe-area padding, same as the dashboard fullscreen branch. This was a flat
+          // 16px: in host fullscreen on mobile, chart content sat under the notch.
+          paddingTop: `${paddingTop}px`,
+          paddingBottom: `${paddingBottom}px`,
+          paddingLeft: `${paddingLeft}px`,
+          paddingRight: `${paddingRight}px`,
           background: 'var(--color-background-secondary, #F5F4ED)',
           touchAction: 'pan-y',
           overscrollBehavior: 'contain',
@@ -1327,38 +1369,6 @@ function App() {
 
   // Fullscreen mode: full CRUD
   // On mobile in host fullscreen: use safeAreaInsets for precise padding (native header + home indicator)
-  // On desktop: fixed 16px padding
-  // Safe-area padding (Claude-B / §5.2). Existing padding is a FLOOR, never reduced:
-  // an inset smaller than the base padding must not shrink the layout, so each side takes
-  // the larger of the two.
-  //
-  // Before B, this gate was dead TWICE OVER and either cause alone was sufficient:
-  // `platform` was permanently undefined (its only writers ran before connect), AND
-  // `hostFullscreen` could never become true — nothing in the file ever set it true.
-  // (It is derived from displayMode as of Claude-C and can no longer be set at all.)
-  // So no inset was ever applied, and fixing only one of the two would have changed
-  // nothing observable — which is precisely how the second cause stayed hidden.
-  const BASE_PADDING = 16
-  const BASE_PADDING_BOTTOM = 32
-  const paddingTop = isMobileHostFullscreen
-    ? Math.max(safeAreaTop, BASE_PADDING)
-    : BASE_PADDING
-  // NOTE: bottom uses a DIFFERENT formula from the other three — inset + base, floored at
-  // 32, rather than max(inset, 16). This is deliberate: it preserves the pre-B behaviour
-  // (`safeAreaBottom + 16 : 32`) because the composer sits below the widget and needs
-  // clearance beyond the home indicator itself. Stated explicitly so the four sides are
-  // not mistaken for one uniform rule.
-  const paddingBottom = isMobileHostFullscreen
-    ? Math.max(safeAreaBottom + BASE_PADDING, BASE_PADDING_BOTTOM)
-    : BASE_PADDING
-  // .left/.right were read nowhere before B. They matter in landscape, where the notch
-  // intrudes horizontally and would otherwise clip controls.
-  const paddingLeft = isMobileHostFullscreen
-    ? Math.max(safeAreaLeft, BASE_PADDING)
-    : BASE_PADDING
-  const paddingRight = isMobileHostFullscreen
-    ? Math.max(safeAreaRight, BASE_PADDING)
-    : BASE_PADDING
   return (
     <main
       role="main"

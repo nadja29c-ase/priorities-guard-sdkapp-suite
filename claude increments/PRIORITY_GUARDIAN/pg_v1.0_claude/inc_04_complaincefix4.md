@@ -277,6 +277,12 @@ is called done**, because a report drafted in parallel describes the code at the
 | `COMPLIANCE_AUDIT_RECORD.md` | 96,452 → 97,785 (+1,333) | 1,586 → 1,586 |
 | `main.css` | 1,685 → 2,607 (+922) | 96 → 112 (+16) |
 | `resources_dupl.py` | 5,927 → 5,927 (**+0**) | 171 → 171 (**+0**) |
+| `inc_03_compliancefix3.md` | +126 / −4 lines | ⚠️ **omitted from the first version of this table** |
+
+⚠️ **The changed set was itself incomplete** — it listed five files and the commit touches six,
+omitting Increment B's briefing (which C amended when B's on-host pass was recorded). A changed-set
+claim that misses a file is the same defect as a count without its scope, in the table whose whole
+purpose is to be the changed set. Caught by the fifth adversarial review.
 
 `resources_dupl.py` at **zero byte and zero line delta for the fourth consecutive increment** — every
 version bump is a same-length substitution. Standing check 11's case, arriving on schedule.
@@ -297,16 +303,18 @@ Recorded here rather than left as unexplained work outside §1's list — M20 re
 ### Version identity
 
 `WIDGET_VERSION` 6 → **7**; `ui://pg-claude/dashboard-v7.html`. Single declaration at
-`resources_dupl.py:40`; `response_adapter_dupl.py` and `tools_list_dupl.py` import it; **0** stale v6
-literals. **3 `_meta.ui` blocks *in `resources_dupl.py`*** — scoped deliberately: `tools_list_dupl.py`
+`resources_dupl.py:40`; `response_adapter_dupl.py` and `tools_list_dupl.py` import it; **0** stale v6 literals **in the Python
+resource and version declarations** — the scope this was counted over. Unqualified it is false: the
+minified bundle contains many incidental `v6` substrings. Standing check 2, on a positive count, in
+the report that records the rule. **3 `_meta.ui` blocks *in `resources_dupl.py`*** — scoped deliberately: `tools_list_dupl.py`
 and `response_adapter_dupl.py` construct `_meta.ui` for tool results as well, and the previous
 unscoped phrasing was standing check 2 applied to a positive count.
 
 ### Build provenance
 
 Node v24.8.0 · npm 11.6.0 · `rm -rf dist node_modules/.vite && npm run build`, twice from clean.
-**Both builds `3807a3a6a1770f49870e4a27e87f5321e862890d367864880c5c050d62b5dee5` — reproducible.**
-Bundle **597,515 B**, +1,310 vs v6 (+0.220%) and +0.601% against the v4 baseline — inside B's ±2%.
+**Both builds `daa4c8556609782a563bee3e7e4aed7cb96b0d4ef296761e3b9989cc9adb12a0` — reproducible.**
+Bundle **597,574 B**, +1,369 vs v6 (+0.230%) and +0.601% against the v4 baseline — inside B's ±2%.
 No `window.openai`; 0 external `<script src=>`. **Bundle diff checked, not asserted, for test-only or
 state-forcing code:** no `TODO`/`FIXME`/`window.__`/`localStorage`/`forceState`/`mockData`/`debugger`.
 Python suite **8 failed / 25 passed — unchanged across the bump**, which is `64b0572`'s
@@ -437,6 +445,45 @@ finally producible and PG's Minimize bar will appear beside Claude's native clos
 close is clearly present and returns cleanly on BOTH platforms, delete `FullscreenHeader` and
 `handleMinimizeToInline` before submission** — two exit affordances on one surface is exactly what a
 reviewer notices in a screenshot.
+
+### ⚠️ CONDITIONAL FINDINGS — deliberately unfixed, resolved by ONE observation
+
+The fifth review found that **fullscreen chrome is dashboard-only**. There are six early returns and
+only the last renders the exit header. `displayMode === 'fullscreen'` now drives a body class, a lifted
+`#root` cap and safe-area state that **five of six branches ignore**:
+
+| Branch | In host fullscreen it renders | Has exit? |
+|---|---|---|
+| Dashboard fullscreen | full chrome, safe-area padding | ✅ |
+| **Pie chart** | M10 width ✅, **safe-area padding FIXED in this commit** | ❌ |
+| Loading skeleton | inline-shaped | ❌ |
+| Terminal load error | bare div, fixed padding | ❌ |
+| Malformed chart | bare div, fixed padding | ❌ |
+| Malformed dashboard | bare div, fixed padding | ❌ |
+
+Plus: **the Minimize button has no pending state**, so while `handleMinimizeToInline` awaits the host,
+a tap produces no visible change and further taps are ignored by the in-flight ref.
+
+**This is the un-deadening pattern again, and C1 caused it**: before C, none of these branches could
+ever be in host fullscreen, so none of them needed fullscreen chrome.
+
+**NOT FIXED, AND THAT IS THE DECISION.** Every one of these is severe *only if Claude's native close is
+absent or unobvious* — and **nobody has ever seen it**, because host fullscreen was unreachable until
+this build. One observation, newly producible, resolves all of them:
+
+- **Native close present and works** → nobody is ever trapped. `FullscreenHeader` is deleted per its own
+  expiry condition, `handleMinimizeToInline` goes with it, and the pending-state finding is moot.
+  **Five of six findings evaporate rather than get fixed.**
+- **Native close absent or unclear** → a shared fullscreen shell is necessary, and more besides.
+
+Building the shell now means building it for a scenario that may not exist, around a header that may be
+about to be deleted. **The marginal value of a sixth static pass is lower than the value of looking** —
+and static review cannot reach this fact at all.
+
+**The one exception, fixed in this commit:** the chart branch's safe-area padding. Deterministic, small,
+and independent of the native close — in host fullscreen on mobile, ask for a weekly report and chart
+content sits under the notch whenever `safeAreaTop > 16`. That is the exact defect C1 exists to
+eliminate, surviving on one branch.
 
 ### Four review passes, each finding what the previous missed
 
