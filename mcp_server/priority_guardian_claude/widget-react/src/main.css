@@ -35,6 +35,22 @@ body {
   margin: 0 auto;
 }
 
+/* M10 — mobile host fullscreen must use the FULL VIEWPORT WIDTH.
+   Until Claude-C this cap was inert: host fullscreen never happened, so the widget was
+   always inside a chat panel narrower than 600px and nothing ever reached the cap. C1
+   promotes the iframe for the first time, at which point a phone in true fullscreen would
+   render the dashboard capped at 600px with auto margins — against guidance that says use
+   the full viewport width.
+   Toggled from App.tsx on `hostFullscreen`, ANY platform. Scoping this to mobile was an
+   error: #root sits above the fullscreen <main>, so desktop fullscreen asking for 672px
+   could never reach it either. The override is unconditional for host fullscreen; the
+   WIDTH differs by platform — 100% on mobile, 672px centred on desktop, which is a
+   readable measure rather than a constraint. */
+body.pg-host-fullscreen #root {
+  max-width: none;
+  margin: 0;
+}
+
 /* Remove default button styles */
 button {
   font-family: inherit;
