@@ -322,9 +322,8 @@ function App() {
     // was an error: #root's 600px cap sits ABOVE the fullscreen <main>, so a desktop
     // fullscreen asking for a width above 600px could never reach it — the source
     // asserted a width the outer cap forbade. The OVERRIDE applies to any host fullscreen;
-    // the WIDTH is what differs by platform (100% on mobile, 480px on desktop — a
-    // line-length choice, NOT a match to inline; see the rationale at the fullscreen
-    // <main>).
+    // the WIDTH is what differs by platform (100% on mobile, 560px on desktop, the latter
+    // now matching inline under the density contract).
     if (hostFullscreen) {
       document.body.classList.add(CLASS)
     } else {
@@ -1022,16 +1021,10 @@ function App() {
         aria-busy="true"
         style={{
           width: '100%',
-          // Matches the FULLSCREEN cap, not inline's declaration. Inline's 560 never binds
-          // — the host panel is narrower (~378px observed) — so matching it was matching
-          // an inert value. Aligning with fullscreen's 480 removes an 80px snap when the
-          // widget loads while the host is ALREADY in fullscreen, which C1 made possible.
-          // That snap is the exact seam M20 exists to eliminate.
-          //
-          // Still platform-agnostic, per M20: a literal swap, not a new conditional. On a
-          // mobile viewport the cap never binds and auto margins compute to 0, so the
-          // ternary the inline branch uses does no work the cascade wouldn't.
-          maxWidth: '480px',
+          // Matches the inline branch's desktop cap without reading `platform`:
+          // on a mobile viewport the cap never binds and auto margins compute to 0,
+          // so the ternary the inline branch uses does no work the cascade wouldn't.
+          maxWidth: '560px',
           marginLeft: 'auto',
           marginRight: 'auto',
           background: 'var(--color-background-secondary, #F5F4ED)',
@@ -1216,11 +1209,10 @@ function App() {
             ? {}
             : isMobileHostFullscreen
               ? { maxWidth: '100%', marginLeft: '0', marginRight: '0' }
-              // Same 480px desktop cap as the dashboard branch — see the rationale at
-              // the fullscreen <main>. NOTE: this branch has NEVER carried an explicit
-              // inline width; in inline mode it inherits #root. If the chart looks wrong,
-              // that is why.
-              : { maxWidth: '480px', marginLeft: 'auto', marginRight: 'auto' }),
+              // DENSITY CONTRACT #3. NOTE: this branch has NEVER carried an explicit
+              // inline width — in inline mode it inherits #root. This is the first time it
+              // asserts one, so if the chart looks wrong after this change, this is why.
+              : { maxWidth: '560px', marginLeft: 'auto', marginRight: 'auto' }),
         }}
       >
         {loadError && (
@@ -1403,20 +1395,12 @@ function App() {
         paddingRight: `${paddingRight}px`,
         paddingBottom: `${paddingBottom}px`,
         // M10: full viewport width in mobile host fullscreen.
-        // Desktop fullscreen is capped at 480px, NOT the inline declaration's 560px.
-        // Inline never reaches its own cap — the host chat panel is narrower (~378px
-        // observed) — so inline width is host-determined and varies with the window.
-        // "Match inline" is therefore not a value PG can set; the previous 560 matched an
-        // inert number. 480 is chosen for two reasons: it narrows the perceived jump from
-        // inline, and at 14px body text it keeps line length nearer the comfortable 45-75
-        // characters (560px of content ran ~90-100). Mobile fullscreen is unaffected — it
-        // uses the full viewport per the design guidelines.
-        //
-        // History: this was 672px until Claude-C — INHERITED FROM THE CHATGPT WIDGET and
-        // unreachable, because #root's 600px cap sat above it. Nobody chose it for this
-        // layout and nobody had ever seen it render, which is why it survived four
-        // increments and two adversarial reviews unexamined.
-        maxWidth: isMobileHostFullscreen ? '100%' : '480px',
+        // DENSITY CONTRACT #1: 560px, matching the inline <main>. Was 672px — INHERITED
+        // FROM THE CHATGPT WIDGET and unreachable until Increment C, because #root's 600px
+        // cap sat above it. Nobody chose it for this layout and nobody had ever seen it
+        // render, which is why it survived four increments and two adversarial reviews
+        // unexamined.
+        maxWidth: isMobileHostFullscreen ? '100%' : '560px',
         marginLeft: isMobileHostFullscreen ? '0' : 'auto',
         marginRight: isMobileHostFullscreen ? '0' : 'auto',
         background: 'var(--color-background-secondary, #F5F4ED)',
