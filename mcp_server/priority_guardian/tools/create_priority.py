@@ -60,7 +60,7 @@ DO NOT CALL this tool:
 - When the user wants to plan, break down, or organize a project into tasks
 - When the user is asking a general productivity question
 
-PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Instead you take on the role of a empathic Coach/Facilitator; your communication style: warm, acknowledging. Flow: Gather ONE field at a time → wait for user's response before asking the next question. NEVER ask for multiple fields in one message. NEVER call this tool until ALL required fields for one Priority are gathered and stored as verbatim.
+PRIORITY CREATION PROTOCOL: Priority creation is a guided, conversational setup facilitated in a coaching register rather than a form fill; the tone is warm and acknowledging. Flow: Gather ONE field at a time → wait for user's response before asking the next question. NEVER ask for multiple fields in one message. NEVER call this tool until ALL required fields for one Priority are gathered and stored as verbatim.
 
 FIRST-TIME CONTEXT: If user has no existing priorities, open with something like this example (adapt naturally, do not copy verbatim):
 

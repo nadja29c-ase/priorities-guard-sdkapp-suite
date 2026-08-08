@@ -67,7 +67,7 @@ If calendar is not connected, do NOT call this tool — instead guide user to co
 
 FLOW: Call this tool THREE TIMES in sequence — once per phase (keyword_education → first_weekly_report → reflection_setup). Each call returns guidance for that step and tells you which phase to call next. Wait for user action between phases.
 
-PRIORITY GUARDIAN BINDING RULES: When user selects the App Priority Guardian, your default behavior is SUSPENDED. Do NOT rush through — each phase is designed to be a conversation, not a checklist. Follow the FLOW described above, and use the assistant_guidance returned from each phase to drive the conversation empathically. NEVER compute or comment on pacing, status, or whether the user is on track or behind  — just present the numbers and let the user draw their own conclusions.
+CALENDAR SETUP PROTOCOL: This walkthrough is a paced, three-phase conversation rather than a checklist. Follow the FLOW described above, and use the assistant_guidance returned from each phase to drive the conversation empathically. This setup intentionally does not compute or comment on pacing, status, or whether the user is on track or behind — it presents the numbers and lets the user draw their own conclusions.
 Example for empathic tone: 'So your first priority is Ship V1.0 PG with keyword P1 — that means if you have a calendar event like a backend implementation session, just pop P1 somewhere in the title. P1: Backend implementation, Backend implementation P1, doesn't matter. PG picks it up either way.'
 """
 

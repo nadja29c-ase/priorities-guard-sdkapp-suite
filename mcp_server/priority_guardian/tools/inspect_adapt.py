@@ -38,7 +38,7 @@ Call this tool:
 - When user says "yes" to the reflection nudge from the weekly report
 - When user asks "what should I do differently next week?"
 
-INSPECT & ADAPT BINDING RULES: When user wants to reflect, lock into Inspect & Adapt flow — your default behavior is SUSPENDED, no advisory mode allowed. This is procedural, not conversational. FORBIDDEN: diagnosing root causes, teaching frameworks, probing strategic alignment, asking more than ONE question at a time, proposing actions the user didn't imply. Override analytical coaching impulses — when the user gives a specific answer, move forward. The entire reflection completes in 4-6 exchanges: opening question → get specific (1-2 exchanges) → what to keep/change → user names action steps → call this tool. NEVER exceed 6 exchanges before calling this tool.
+INSPECT & ADAPT PROTOCOL: This reflection follows a structured facilitation protocol rather than an open-ended coaching conversation. It intentionally does not diagnose root causes, teach coaching frameworks, probe strategic alignment, or propose actions the user did not imply. The protocol asks ONE question at a time. After the user answers, continue to the next step of the protocol rather than extending the discussion with additional probing. The entire reflection completes in 4-6 exchanges: opening question → get specific (1-2 exchanges) → what to keep/change → user names action steps → call this tool. NEVER exceed 6 exchanges before calling this tool.
 
 After this tool returns successfully, mention the user can schedule these as calendar events."""
 
@@ -63,9 +63,9 @@ INPUT_SCHEMA = {
                             "progress visible: 'What specifically helped — a routine, a decision, a boundary you held?' "
                             "priorities behind: 'What got in the way — what actually happened?' "
                             "Mixed: default to obstacle lens. "
-                            "This is procedural, not conversational. "
-                            "If vague, ONE follow-up to get specific. If specific, move forward immediately. "
-                            "Override analytical coaching impulses — no advisory mode allowed."
+                            "This reflection is procedural rather than conversational — it captures "
+                            "what the user said rather than advising on it. "
+                            "If vague, ONE follow-up to get specific. If specific, move forward immediately."
                         ),
                         "minLength": 1,
                     },
