@@ -44,8 +44,8 @@ body {
    Toggled from App.tsx on `hostFullscreen`, ANY platform. Scoping this to mobile was an
    error: #root sits above the fullscreen <main>, so desktop fullscreen asking for 672px
    could never reach it either. The override is unconditional for host fullscreen; the
-   WIDTH differs by platform — 100% on mobile, 672px centred on desktop, which is a
-   readable measure rather than a constraint. */
+   WIDTH differs by platform — 100% on mobile, 560px centred on desktop, matching the
+   inline layout under Claude-C's density contract. */
 body.pg-host-fullscreen #root {
   max-width: none;
   margin: 0;

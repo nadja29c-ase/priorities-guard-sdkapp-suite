@@ -203,27 +203,38 @@ function App() {
   // (It is derived from displayMode as of Claude-C and can no longer be set at all.)
   // So no inset was ever applied, and fixing only one of the two would have changed
   // nothing observable — which is precisely how the second cause stayed hidden.
-  const BASE_PADDING = 16
+  // DENSITY CONTRACT (Claude-C): fullscreen preserves inline's base visual density.
+  // These are two DIFFERENT numbers that were previously one, and conflating them is what
+  // made desktop fullscreen looser than inline for no reason.
+  //
+  //   DENSITY_PADDING — what the dashboard uses when no safe area is involved. It matches
+  //     the inline <main>'s 12px exactly, because fullscreen adds viewport and expanded
+  //     information; it must not visually loosen the layout.
+  //   SAFE_AREA_FLOOR — the minimum inset on mobile host fullscreen. Stays 16px: this is
+  //     the one padding difference that is functionally justified (M3), and normalising it
+  //     to 12 would turn a density fix into an M3 regression.
+  const DENSITY_PADDING = 12
+  const SAFE_AREA_FLOOR = 16
   const BASE_PADDING_BOTTOM = 32
   const paddingTop = isMobileHostFullscreen
-    ? Math.max(safeAreaTop, BASE_PADDING)
-    : BASE_PADDING
+    ? Math.max(safeAreaTop, SAFE_AREA_FLOOR)
+    : DENSITY_PADDING
   // NOTE: bottom uses a DIFFERENT formula from the other three — inset + base, floored at
   // 32, rather than max(inset, 16). This is deliberate: it preserves the pre-B behaviour
   // (`safeAreaBottom + 16 : 32`) because the composer sits below the widget and needs
   // clearance beyond the home indicator itself. Stated explicitly so the four sides are
   // not mistaken for one uniform rule.
   const paddingBottom = isMobileHostFullscreen
-    ? Math.max(safeAreaBottom + BASE_PADDING, BASE_PADDING_BOTTOM)
-    : BASE_PADDING
+    ? Math.max(safeAreaBottom + SAFE_AREA_FLOOR, BASE_PADDING_BOTTOM)
+    : DENSITY_PADDING
   // .left/.right were read nowhere before B. They matter in landscape, where the notch
   // intrudes horizontally and would otherwise clip controls.
   const paddingLeft = isMobileHostFullscreen
-    ? Math.max(safeAreaLeft, BASE_PADDING)
-    : BASE_PADDING
+    ? Math.max(safeAreaLeft, SAFE_AREA_FLOOR)
+    : DENSITY_PADDING
   const paddingRight = isMobileHostFullscreen
-    ? Math.max(safeAreaRight, BASE_PADDING)
-    : BASE_PADDING
+    ? Math.max(safeAreaRight, SAFE_AREA_FLOOR)
+    : DENSITY_PADDING
 
   // ONE CONTRACT FOR DISPLAY MODE.
   //
@@ -309,9 +320,10 @@ function App() {
     const CLASS = 'pg-host-fullscreen'
     // Keyed on hostFullscreen, NOT isMobileHostFullscreen. Scoping the override to mobile
     // was an error: #root's 600px cap sits ABOVE the fullscreen <main>, so a desktop
-    // fullscreen asking for 672px could never reach it — the source asserted a width the
-    // outer cap forbade. The OVERRIDE applies to any host fullscreen; the WIDTH is what
-    // differs by platform (100% on mobile, 672px on desktop).
+    // fullscreen asking for a width above 600px could never reach it — the source
+    // asserted a width the outer cap forbade. The OVERRIDE applies to any host fullscreen;
+    // the WIDTH is what differs by platform (100% on mobile, 560px on desktop, the latter
+    // now matching inline under the density contract).
     if (hostFullscreen) {
       document.body.classList.add(CLASS)
     } else {
@@ -1197,7 +1209,10 @@ function App() {
             ? {}
             : isMobileHostFullscreen
               ? { maxWidth: '100%', marginLeft: '0', marginRight: '0' }
-              : { maxWidth: '672px', marginLeft: 'auto', marginRight: 'auto' }),
+              // DENSITY CONTRACT #3. NOTE: this branch has NEVER carried an explicit
+              // inline width — in inline mode it inherits #root. This is the first time it
+              // asserts one, so if the chart looks wrong after this change, this is why.
+              : { maxWidth: '560px', marginLeft: 'auto', marginRight: 'auto' }),
         }}
       >
         {loadError && (
@@ -1379,9 +1394,13 @@ function App() {
         paddingLeft: `${paddingLeft}px`,
         paddingRight: `${paddingRight}px`,
         paddingBottom: `${paddingBottom}px`,
-        // M10: full viewport width in mobile host fullscreen; the 672px measure is kept
-        // on desktop, where it is a readable line length rather than a constraint.
-        maxWidth: isMobileHostFullscreen ? '100%' : '672px',
+        // M10: full viewport width in mobile host fullscreen.
+        // DENSITY CONTRACT #1: 560px, matching the inline <main>. Was 672px — INHERITED
+        // FROM THE CHATGPT WIDGET and unreachable until Increment C, because #root's 600px
+        // cap sat above it. Nobody chose it for this layout and nobody had ever seen it
+        // render, which is why it survived four increments and two adversarial reviews
+        // unexamined.
+        maxWidth: isMobileHostFullscreen ? '100%' : '560px',
         marginLeft: isMobileHostFullscreen ? '0' : 'auto',
         marginRight: isMobileHostFullscreen ? '0' : 'auto',
         background: 'var(--color-background-secondary, #F5F4ED)',

@@ -302,7 +302,10 @@ Recorded here rather than left as unexplained work outside §1's list — M20 re
 
 ### Version identity
 
-`WIDGET_VERSION` 6 → **7**; `ui://pg-claude/dashboard-v7.html`. Single declaration at
+`WIDGET_VERSION` 6 → 7 → **8**; `ui://pg-claude/dashboard-v8.html`. **v7 (`e0f7bff`) went live at
+2026-08-07T18:36:55Z via autoDeploy**, so the density changes could not reuse it — this commit's
+message asserting "v7 IS RETAINED. It was never deployed" was true when written and false ninety
+seconds later. A commit message cannot be corrected in place; it is corrected here. Single declaration at
 `resources_dupl.py:40`; `response_adapter_dupl.py` and `tools_list_dupl.py` import it; **0** stale v6 literals **in the Python
 resource and version declarations** — the scope this was counted over. Unqualified it is false: the
 minified bundle contains many incidental `v6` substrings. Standing check 2, on a positive count, in
