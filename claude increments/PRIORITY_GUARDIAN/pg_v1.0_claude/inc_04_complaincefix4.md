@@ -488,6 +488,18 @@ and independent of the native close — in host fullscreen on mobile, ask for a 
 content sits under the notch whenever `safeAreaTop > 16`. That is the exact defect C1 exists to
 eliminate, surviving on one branch.
 
+### #6 — CLOSED AS A NON-FINDING
+
+The enumeration flagged inline's **8px hint-paragraph** margin against fullscreen's **16px
+Add-Priority and Connection-Status** margins. **These are different elements with no counterpart in the
+other mode** — the hint does not exist in fullscreen, and the CRUD sections do not exist inline. Not a
+density difference at all.
+
+**It was flagged because the comparison compared POSITIONS IN THE LAYOUT rather than THE SAME ELEMENT
+ACROSS MODES** — the same scope-of-comparison gap that hid the chart branch's inline padding, where two
+values were compared that were never the same thing. A comparison is only as good as the claim that the
+two things being compared correspond.
+
 ### Four review passes, each finding what the previous missed
 
 C was reviewed four times. Each pass found something its predecessors did not: the tautological URI

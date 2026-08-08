@@ -35,9 +35,9 @@ def _extract_origin(url: str) -> str:
 
 
 # Widget configuration
-WIDGET_VERSION = "8"
+WIDGET_VERSION = "9"
 WIDGET_MIME_TYPE = "text/html+mcp"  # MCP Apps standard
-WIDGET_URI = "ui://pg-claude/dashboard-v8.html"
+WIDGET_URI = "ui://pg-claude/dashboard-v9.html"
 WIDGET_PATH = Path(__file__).parent.parent.joinpath("widgets/pg-dashboard-claude.html")
 WIDGET_DOMAIN = _extract_origin(MCP_SERVER_URL)
 
