@@ -1,4 +1,11 @@
-# (duplicate) — exists only because it imports platform-specific config.
+# (duplicate) — exists because it imports platform-specific config.#
+# !! ITS CONTENTS ARE NOT A COPY. Verified 2026-08-09 by symbol-level sweep: this
+# file has diverged STRUCTURALLY from the source named below, and not every
+# divergence is documented. Do not assume a symbol here behaves as its namesake
+# does there — and note that a symbol may be ABSENT here entirely. That is exactly
+# how A22 happened: BearerAuthMiddleware dropped JWT validation, scope enforcement
+# and the 413 guard while this header claimed a config-only difference.
+# See doc/DUPL_DIVERGENCE_SWEEP_2026-08-09.md.
 # Logic mirrors mcp_server/priority_guardian/handlers/resources.py.
 # Post-OpenAI-approval refactor: move shared logic to mcp_server/shared/
 # with config injection and delete this file.
@@ -21,6 +28,87 @@ from mcp import types as mcp_types
 from mcp_server.priority_guardian_claude.config import MCP_RESOURCE_URL, MCP_SERVER_URL
 
 logger = structlog.get_logger(__name__)
+
+
+# ==========================================================================
+# URI Sanitization for Logging (inc_99)
+# ============================================================================
+
+# Maximum URI length to log — prevents pathological inputs from bloating logs
+_MAX_URI_LOG_LENGTH = 512
+
+
+# inc_101: Allowlist of schemes safe to log with path/components.
+# Everything else is redacted. Closes the class — no more whack-a-mole.
+_SAFE_SCHEMES = frozenset({"http", "https", "ui", "file"})
+
+
+def _sanitize_uri_for_logging(uri: str) -> str:
+    """
+    Sanitize URI for safe logging.
+
+    inc_99: Defensive hygiene against pathological URIs from authenticated clients.
+    inc_100: Strip query/fragment for all URIs, strip userinfo from netloc.
+    inc_101: Switched from blocklist to allowlist. Only http/https/ui/file pass
+             through with components; all other schemes (mailto:, blob:, data:,
+             javascript:, etc.) are redacted. Closes the class of PII leaks.
+
+    Args:
+        uri: Raw URI string from request
+
+    Returns:
+        Sanitized URI safe for production logs
+    """
+    if not uri:
+        return "[empty]"
+
+    try:
+        parsed = urlparse(uri)
+
+        # inc_101: Allowlist approach — only known-safe schemes pass through
+        # Everything else (mailto:, blob:, data:, javascript:, etc.) redacted
+        if parsed.scheme and parsed.scheme not in _SAFE_SCHEMES:
+            return f"{parsed.scheme}:[redacted]"
+
+        # Build sanitized netloc: hostname + port only (strips userinfo)
+        # parsed.netloc includes userinfo; parsed.hostname excludes it
+        if parsed.hostname:
+            sanitized_netloc = parsed.hostname
+            if parsed.port:
+                sanitized_netloc += f":{parsed.port}"
+        else:
+            sanitized_netloc = ""
+
+        # Always reconstruct from components — NEVER fall back to raw uri
+        # This ensures query/fragment are stripped even for non-netloc URIs
+        if sanitized_netloc:
+            clean_uri = f"{parsed.scheme}://{sanitized_netloc}{parsed.path}"
+        elif parsed.scheme:
+            # Scheme but no netloc (e.g., ui:widget/path or file:///path)
+            clean_uri = f"{parsed.scheme}:{parsed.path}"
+        elif parsed.path:
+            # No scheme, just path (e.g., /path?token=x)
+            clean_uri = parsed.path
+        else:
+            # Unparseable — return safe placeholder
+            clean_uri = "[unparseable]"
+
+    except Exception:
+        # If parsing fails completely, return safe placeholder (not raw uri!)
+        clean_uri = "[parse-error]"
+
+    # Cap length
+    if len(clean_uri) > _MAX_URI_LOG_LENGTH:
+        return clean_uri[:_MAX_URI_LOG_LENGTH] + "...[truncated]"
+    return clean_uri
+
+
+# Ported VERBATIM from mcp_server/priority_guardian/handlers/resources.py (F1,
+# 2026-08-09). It was absent here while this file's header claimed the file existed
+# 'only because it imports platform-specific config'. Four call sites logged or
+# reflected str(req.params.uri) raw — client-controlled input. Copied rather than
+# reimplemented: it was hardened across inc_99/100/101 and reimplementing risks
+# dropping a case someone already found. See DUPL_DIVERGENCE_SWEEP_2026-08-09.md F1.
 
 
 def _extract_origin(url: str) -> str:
@@ -130,14 +218,15 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     Called by Claude to load widget HTML for display.
     """
     uri_str = str(req.params.uri)
-    logger.info("resource.read.called", uri=uri_str)
+    safe_uri = _sanitize_uri_for_logging(uri_str)
+    logger.info("resource.read.called", uri=safe_uri)
 
-    logger.debug("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
+    logger.debug("resource.read.requested", uri=safe_uri, widget_version=WIDGET_VERSION)
 
     if uri_str == WIDGET_URI:
         logger.debug(
             "resource.read.serving_widget",
-            uri=uri_str,
+            uri=safe_uri,
             html_length=len(WIDGET_HTML),
             widget_version=WIDGET_VERSION,
         )
@@ -167,5 +256,8 @@ async def handle_read_resource(req: mcp_types.ReadResourceRequest) -> mcp_types.
     # Unknown resource
     return mcp_types.ReadResourceResult(
         contents=[],
-        _meta={"error": f"Unknown resource: {uri_str}"},
+        # safe_uri, not uri_str: this one is REFLECTED BACK TO THE CLIENT, not just
+        # logged. Raw client input echoed into a response body is a wider exposure
+        # than a log line, and the source sanitises it here too.
+        _meta={"error": f"Unknown resource: {safe_uri}"},
     )
