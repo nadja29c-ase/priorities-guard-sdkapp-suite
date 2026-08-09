@@ -19,6 +19,7 @@ Or (direct mode - for local development):
 
 import os
 import time
+import uuid
 from pathlib import Path
 
 # Minimal imports at module level for fast startup
@@ -245,7 +246,7 @@ class HeadMcpMiddleware:
 
 class BearerAuthMiddleware:
     """
-    ASGI middleware to enforce Bearer token presence on /mcp requests.
+    ASGI middleware to enforce Bearer token VALIDITY on /mcp requests.
 
     When Claude initiates connector creation, it probes /mcp without a token.
     FastMCP cannot handle unauthenticated MCP protocol requests gracefully —
@@ -264,8 +265,20 @@ class BearerAuthMiddleware:
     reads the WWW-Authenticate header, follows the resource_metadata pointer
     to /.well-known/oauth-protected-resource, discovers the AS, and initiates DCR.
 
+    A22: presence alone is not enough. An EXPIRED token carries a header, so a
+    presence-only gate let it through to tool dispatch, which answers with an HTTP
+    200 carrying isError=True. Claude does not honour a WWW-Authenticate header on
+    a 200, so no refresh was triggered. Every request that reaches /mcp with a
+    header now has its token validated here, and only here does a 401 remain
+    possible — once FastMCP has the message, the response is already destined
+    to be a 200.
+
+    Three outcomes:
+    - no header, bad format, or invalid/expired token -> 401 + WWW-Authenticate
+    - JWKS unreachable with no usable cache             -> 503, no challenge
+    - valid token                                        -> passes through unchanged
+
     Positioning: between HeadMcpMiddleware and MCPContentTypeAndAcceptFixMiddleware.
-    Requests with a valid Authorization header pass through unchanged.
     """
 
     def __init__(self, app, www_authenticate_value: str):
@@ -292,22 +305,101 @@ class BearerAuthMiddleware:
                 # - POST for messages
                 # - DELETE for session close
                 body = b'{"error": "unauthorized", "error_description": "Bearer token required"}'
+                await self._send_challenge(send, 401, body)
+                return
+
+            # ---- A22: VALIDATE the token, do not merely detect the header ----
+            #
+            # Presence alone was the defect. An EXPIRED token carries a header, passed
+            # this gate, reached tool dispatch, and came back as CallToolResult(
+            # isError=True) — an HTTP 200. Claude does not honour a WWW-Authenticate
+            # header on a 200, so no refresh was triggered and the user saw
+            # "Authentication required. Please connect your account." where a re-auth
+            # prompt belongs. Token expiry mid-session is routine, not an edge case.
+            #
+            # This check MUST live here rather than at dispatch. Per the lazy-auth
+            # source: "the check has to happen before the JSON-RPC message reaches the
+            # MCP SDK. Once a tool handler is running, its return value is already
+            # destined to be wrapped in a 200 response."
+            #
+            # Imported lazily: this module is imported during app construction and
+            # mcp_auth_dupl pulls in config; a module-level import here would couple
+            # middleware definition to auth-module import order.
+            import jwt
+
+            from mcp_server.priority_guardian_claude.mcp_auth_dupl import (
+                extract_bearer_token,
+                validate_jwt,
+            )
+
+            auth_header = next(
+                (value.decode("latin-1") for name, value in scope.get("headers", [])
+                 if name == b"authorization"),
+                None,
+            )
+            token = extract_bearer_token(auth_header)
+
+            if not token:
+                # Wrong scheme (Basic ...), or "Bearer" with nothing after it.
+                # A22-3 classes 1 and 2: a 401, never a 500.
+                body = b'{"error": "invalid_token", "error_description": "Invalid Authorization header format"}'
+                await self._send_challenge(send, 401, body)
+                return
+
+            try:
+                await validate_jwt(token, str(uuid.uuid4()))
+            except jwt.PyJWTError:
+                # EVERY PyJWT error is a TOKEN problem: expired, bad signature, wrong
+                # issuer or audience, missing/unknown kid. jwt.PyJWTError is the base of
+                # both ExpiredSignatureError and InvalidTokenError, which validate_jwt
+                # re-raises. 401 tells Claude to re-authenticate, which is the correct
+                # and achievable remedy.
+                body = b'{"error": "invalid_token", "error_description": "Token validation failed"}'
+                await self._send_challenge(send, 401, body)
+                return
+            except Exception:
+                # NOT an auth failure — the SERVER could not validate. The realistic
+                # cause is JWKS unavailable with no usable cache, which fetch_jwks
+                # raises as a bare Exception after its stale-cache fallback is exhausted.
+                #
+                # Deliberately 503, NOT 401. A 401 here would tell Claude to
+                # re-authenticate against a server that cannot validate anything —
+                # producing a re-auth loop rather than a recovery. It is also not a 500:
+                # this is a known, named, transient condition, and Starlette's default
+                # 500 for an unhandled exception is exactly what A22-3 exists to prevent.
+                #
+                # No WWW-Authenticate: there is nothing for the client to re-auth against.
+                body = b'{"error": "server_error", "error_description": "Unable to validate credentials"}'
                 await send({
                     "type": "http.response.start",
-                    "status": 401,
+                    "status": 503,
                     "headers": [
                         (b"content-type", b"application/json"),
-                        (b"www-authenticate", self.www_authenticate_value.encode()),
                         (b"cache-control", b"no-store"),
                     ],
                 })
-                await send({
-                    "type": "http.response.body",
-                    "body": body,
-                })
+                await send({"type": "http.response.body", "body": body})
                 return
 
         await self.app(scope, receive, send)
+
+    async def _send_challenge(self, send, status: int, body: bytes) -> None:
+        """Emit a 401 carrying the single, shared WWW-Authenticate challenge.
+
+        One construction, injected at build time and already correct — it carries
+        resource_metadata and scope="pg.access" from SCOPES_SUPPORTED. Two
+        constructions of one challenge is the divergence problem.
+        """
+        await send({
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"www-authenticate", self.www_authenticate_value.encode()),
+                (b"cache-control", b"no-store"),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
 
 
 class MCPContentTypeAndAcceptFixMiddleware:
