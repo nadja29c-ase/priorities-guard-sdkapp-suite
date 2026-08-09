@@ -79,7 +79,12 @@ if norm(CONTROL[1]) not in SOURCES[CONTROL[0]]:
 
 BOLD_RE = re.compile(r"\*\*([^*]{40,400})\*\*")
 QUOTE_RE = re.compile(r'"([^"]{25,400})"')      # quoted spans, long enough to be a claim
-ROW_RE = re.compile(r"^\|\s*\*{0,2}([A-Z]{1,3}[0-9]{1,3})\*{0,2}\s*\|(.+)\|\s*$")
+# ID forms present in the file, established by ENUMERATING first cells rather than
+# by guessing a shape. The first version required letter-then-digit and was blind to
+# every letter-digit-LETTER id: all 31 P* rows (Policy, sections 1-5) plus R6a/R7a —
+# 33 rows, a quarter of the file, silently unchecked. A*, T*, M*, X*, L*, S*, PUB*
+# were unaffected. Verified by expanding each declared range and testing membership.
+ROW_RE = re.compile(r"^\|\s*\*{0,2}([A-Z]{1,3}[0-9]{1,3}[A-Za-z-]{0,3})\*{0,2}\s*\|(.+)\|\s*$")
 
 rows_checked = missing = 0
 findings, unresolved, bold_misses = [], [], []
@@ -113,6 +118,13 @@ for target in TARGETS:
         rows_checked += 1
 
         for q in quotes:
+            # Rows carrying meta-commentary (correction notes, annotations) contain
+            # quotation marks that belong to THIS FILE's prose, not to a source claim.
+            # Matching them produced two spurious hits on X2's own correction note.
+            # Stated exclusion, not a silent one.
+            if any(t in q for t in ("CORRECTED", "ANNOTATION", "previously asserted",
+                                    "This row previously", "**")):
+                continue
             nq = norm(q)
             if not files:
                 if uncap:
