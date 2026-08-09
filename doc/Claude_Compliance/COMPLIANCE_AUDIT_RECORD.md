@@ -1221,7 +1221,7 @@ VERIFIED (38)
 | **A13** | ✅ verified indirectly — JSON to `/token` returns 422, confirming the split |
 | **A15** | ✅ verified — not implemented |
 | **A16** | ✅ verified — bearer header only |
-| **A22** | ✅ verified — PG returns a transport-level 401 |
+| **A22** | ⚠️ **partial — this live check covered the ABSENT-header case only.** A transport-level 401 on the unauthenticated connector-creation probe was observed and is real, but it says nothing about an *invalid* token, which was the actual defect. Fixed for invalid/expired tokens in `b6d4974`; the `403`/`insufficient_scope` limb remains open. See the A22 entry in the findings section. |
 | **A23** | ✅ verified — PG sends `scope="pg.access"` |
 | **M11** | ✅ verified — declared on all three `_meta.ui` blocks |
 | **M12** | ✅ verified — `['inline','fullscreen']` |
@@ -1411,6 +1411,40 @@ its own on-host verification (expired token → 401 → Claude prompts re-auth; 
 500; absent header unchanged), and the Claude server ships no logs, so it cannot be diagnosed from the
 widget afterwards.
 
+> **A22 — PARTIAL as of `b6d4974` (increment Claude-A22, 2026-08-09). Do not mark this row closed.**
+>
+> **The 401 limb is FIXED.** `BearerAuthMiddleware` now validates the token instead of detecting the
+> header: `jwt.PyJWTError` → 401 + the existing `WWW_AUTHENTICATE_VALUE` + `Cache-Control: no-store`.
+> Nine in-process ASGI tests pass
+> (`tests/unit/mcp_pg_claude/test_bearer_auth_middleware_validation.py`).
+>
+> **The 403 / `insufficient_scope` limb is NOT fixed and has no target date.** Scope sufficiency is
+> *tool-level* — it needs the tool name, which lives in the JSON-RPC body, and reading an ASGI body in
+> middleware consumes the stream. Without correct buffering and replay FastMCP receives an empty body
+> and **every** request fails, not only unauthenticated ones — fails closed for everybody, on a server
+> that ships no logs. That is strictly worse than the defect it would fix.
+>
+> **The framing in the paragraph above is superseded on one point.** The fix is *not* "catch
+> `UnauthorizedError` and emit the challenge" — `authenticate_request` is unreachable from middleware
+> (it reads `auth_header_var`, a ContextVar the middleware *below* it sets, and enforces tool scope).
+> The reachable function is `validate_jwt`, which is context-free: two strings, no request-scoped
+> reads. The relocation, not the exception handling, was the substance.
+>
+> **What the gate proves and does not.** It signs with a locally generated RSA key and injects the
+> public JWK, so it proves the middleware *calls* validation and *acts* on the result. It does **not**
+> prove production JWKS resolution — no network fetch, no key rotation. Issuer and audience are real
+> (`PG_ISSUER` / `PG_AUDIENCE`, not patched).
+>
+> **Scope of the behavioural change, which is wider than the row.** `authenticate_request` is called in
+> exactly one place, the tool-call handler. So `initialize`, `tools/list` and `resources/read` were
+> presence-checked and **never token-validated**; they are validated now. A token PG rejects will block
+> widget resource loading where it previously succeeded.
+>
+> **A third status exists now.** JWKS unreachable with no usable cache → **503**, no challenge.
+> Deliberately not 401: a 401 tells Claude to re-authenticate against a server that cannot validate
+> anything, which loops rather than recovers. Deliberately not 500: Starlette's default for an
+> unhandled exception is the failure A22-3 exists to prevent.
+
 **R6a — descriptions reframed as protocol.** Closed separately on 2026-08-08; the audit's third
 citation (`Do NOT refine…` in an `INPUT_SCHEMA` field description) was missed by a case-sensitive
 sweep and is now reframed. See the sweep-correction note below.
@@ -1474,7 +1508,15 @@ the requirements name a remedy before concluding none exists.**
 
 ### Carried forward from this round
 
-- **A22** — its own pass, its own on-host verification, before or after deploy is Nadja's call
+- **A22** — ~~its own pass~~ **done in `b6d4974`, but PARTIAL.** The `403`/`insufficient_scope` limb is
+  carried forward on its own, below. On-host A22-1b/A22-2/A22-4 outstanding until deployed.
+- **A22 scope step-up (`403` / `insufficient_scope`)** — **open, no target date.** Blocked on the ASGI
+  body-read hazard, not on effort. Named separately so it does not vanish inside a row marked done.
+- **Lazy authentication — DELIBERATE DIFFERENCE, not a gap.** The source describes lazy auth as
+  optional: a server may leave read-only tools unauthenticated and challenge only on first privileged
+  call. PG gates **every** `/mcp` request, including `initialize` and `tools/list`. Defensible because
+  PG exposes no unauthenticated tools — every one reads or writes user-owned priority data, so there is
+  nothing a lazy tier could serve. Recorded so a later reviewer does not read it as an unnoticed gap.
 - **M3** — mobile on-host observation required before the row moves
 - **M9** — tap-target measurement, on-host
 - **M5** — deliberate deviation, revisit only if a reviewer raises it
