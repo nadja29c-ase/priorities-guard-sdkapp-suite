@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-# (duplicate) — exists only because it imports platform-specific config.
+# (duplicate) — exists because it imports platform-specific config.#
+# !! ITS CONTENTS ARE NOT A COPY. Verified 2026-08-09 by symbol-level sweep: this
+# file has diverged STRUCTURALLY from the source named below, and not every
+# divergence is documented. Do not assume a symbol here behaves as its namesake
+# does there — and note that a symbol may be ABSENT here entirely. That is exactly
+# how A22 happened: BearerAuthMiddleware dropped JWT validation, scope enforcement
+# and the 413 guard while this header claimed a config-only difference.
+# See doc/DUPL_DIVERGENCE_SWEEP_2026-08-09.md.
 # Mirrors mcp_server/clarity/server.py. Maintain alongside; consolidate only on demonstrated churn.
 
 """

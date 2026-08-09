@@ -1,4 +1,7 @@
-# (duplicate) — exists only because tool responses embed ChatGPT-specific fields.
+# (duplicate) — exists because tool responses embed ChatGPT-specific fields.#
+# !! NOT COMPARED. This file names no single source file, so the 2026-08-09
+# divergence sweep could not compare it. Unswept is not the same as clean.
+# See doc/DUPL_DIVERGENCE_SWEEP_2026-08-09.md.
 # Tool handlers in mcp_server/clarity/tools/ are never modified.
 # Consolidate into shared/ ONLY if this file proves to churn — not preemptively.
 

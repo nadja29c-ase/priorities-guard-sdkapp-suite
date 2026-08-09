@@ -1,4 +1,7 @@
-# (duplicate) — exists only because shared list_tools() embeds ChatGPT-specific _meta.
+# (duplicate) — exists because shared list_tools() embeds ChatGPT-specific _meta.#
+# !! NOT COMPARED. This file names no single source file, so the 2026-08-09
+# divergence sweep could not compare it. Unswept is not the same as clean.
+# See doc/DUPL_DIVERGENCE_SWEEP_2026-08-09.md.
 # Reads from mcp_server/clarity/tools/ (source of truth — never modified here).
 # Consolidate into shared/ ONLY if this file proves to churn — not preemptively.
 

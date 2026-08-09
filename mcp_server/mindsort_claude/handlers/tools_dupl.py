@@ -1,4 +1,11 @@
-# (duplicate) — exists only because it imports platform-specific mcp_auth.
+# (duplicate) — exists because it imports platform-specific mcp_auth.#
+# !! ITS CONTENTS ARE NOT A COPY. Verified 2026-08-09 by symbol-level sweep: this
+# file has diverged STRUCTURALLY from the source named below, and not every
+# divergence is documented. Do not assume a symbol here behaves as its namesake
+# does there — and note that a symbol may be ABSENT here entirely. That is exactly
+# how A22 happened: BearerAuthMiddleware dropped JWT validation, scope enforcement
+# and the 413 guard while this header claimed a config-only difference.
+# See doc/DUPL_DIVERGENCE_SWEEP_2026-08-09.md.
 # Mirrors mcp_server/clarity/handlers/tools.py. Maintain alongside; consolidate only on demonstrated churn.
 """
 Tool call dispatcher for MindSort Claude MCP.
