@@ -1409,7 +1409,8 @@ the challenge it already builds — *reusing* that value, not constructing a sec
 the **auth path**: the other findings degrade gracefully if wrong, this one locks users out. It needs
 its own on-host verification (expired token → 401 → Claude prompts re-auth; malformed header → 401 not
 500; absent header unchanged), and the Claude server ships no logs, so it cannot be diagnosed from the
-widget afterwards.
+widget afterwards. **[CORRECTED 2026-08-09 — "ships no logs" is FALSE. See the logging correction in
+Carried forward. PG-Claude emits full structured logs; this clause overstated the risk.]**
 
 > **A22 — PARTIAL as of `b6d4974`, DEPLOYED and wire-verified in production `9741f28` /
 > `dep-d9scf7oae00c73ak7q10` (live 2026-08-09T18:33Z). Do not mark this row closed.**
@@ -1478,6 +1479,32 @@ widget afterwards.
 > rejection, not false acceptance, is this change's risk. The admit half is covered only by the
 > in-process test with an injected JWK. **Production JWKS resolution for a real token remains
 > unproven** and is exactly what A22-2 (delete and re-add the connector) exercises.
+>
+> ---
+>
+> #### A22-2 and A22-4 — PASSED on host, 2026-08-09 18:51Z. The admit half is now closed.
+>
+> Connector deleted and re-added, OAuth completed, `get_priorities` returned. Server logs for the
+> window are complete (`hasMore: false`), so absence of errors below is a real absence, not a sampling
+> artefact.
+>
+> - **A22-2.** `18:51:04` — `python-httpx` probe with **no** `Authorization` header → **401**, 421 bytes
+>   (`"Bearer token required"`). Discovery and DCR then completed normally. The path that makes
+>   connector creation work did not regress.
+> - **Admit half.** `18:51:32` — `auth.success tool=get_priorities`, then
+>   `tool.get_priorities.success priority_count=3 google_connected=True calendar_available=True`.
+>   **Production JWKS resolution for a real token is now proven**, closing the gap named above.
+> - **No `500`, no `503`, no `jwt.validation.expired` or `.invalid`** anywhere in the authenticated
+>   session. The 503 branch did not fire in normal operation.
+> - **A22-4 — no latency regression, measured.** `tool.timing auth_ms=0.6 tool_ms=877.9
+>   total_ms=878.6`. Auth is **0.6 ms of an 878 ms call**; the remainder is backend and Google Calendar.
+>   Every lookup logged `jwks.cache.hit`. The feared cold-start fetch never landed on the request path.
+> - **Double validation confirmed empirically**, having only been argued from code before. One request
+>   emitted **two** `jwt.validation.success` lines under different correlation ids — `b890ce7f…` (the
+>   middleware's `uuid4`) and `24e1413f…` (dispatch's) — both `jwks.cache.hit`, with
+>   `scope.enforcement.success required=['pg.access'] tool=get_priorities` between them. **This is the
+>   direct evidence that keeping dispatch-level validation preserved scope enforcement**, which was the
+>   stated reason for keeping it.
 
 > **A22 — PARTIAL as of `b6d4974` (increment Claude-A22, 2026-08-09). Do not mark this row closed.**
 >
@@ -1490,7 +1517,10 @@ widget afterwards.
 > *tool-level* — it needs the tool name, which lives in the JSON-RPC body, and reading an ASGI body in
 > middleware consumes the stream. Without correct buffering and replay FastMCP receives an empty body
 > and **every** request fails, not only unauthenticated ones — fails closed for everybody, on a server
-> that ships no logs. That is strictly worse than the defect it would fix.
+> that ships no logs. That is strictly worse than the defect it would fix. **[CORRECTED 2026-08-09 —
+> "ships no logs" is FALSE, and correct buffering/replay already exists in the OpenAI tree. Both legs
+> of this rationale have collapsed; see Carried forward. The hazard statement remains true in the
+> abstract, but it no longer supports the deferral on its own.]**
 >
 > **The framing in the paragraph above is superseded on one point.** The fix is *not* "catch
 > `UnauthorizedError` and emit the challenge" — `authenticate_request` is unreachable from middleware
@@ -1578,8 +1608,49 @@ the requirements name a remedy before concluding none exists.**
 
 - **A22** — ~~its own pass~~ **done in `b6d4974`, but PARTIAL.** The `403`/`insufficient_scope` limb is
   carried forward on its own, below. On-host A22-1b/A22-2/A22-4 outstanding until deployed.
-- **A22 scope step-up (`403` / `insufficient_scope`)** — **open, no target date.** Blocked on the ASGI
-  body-read hazard, not on effort. Named separately so it does not vanish inside a row marked done.
+- **A22 scope step-up (`403` / `insufficient_scope`)** — **open. BOTH STATED REASONS FOR DEFERRING IT
+  HAVE NOW COLLAPSED, so the deferral needs re-deciding on its merits rather than being carried.**
+  - *Reason 1, "the server ships no logs" — **FALSE**, see the logging correction below.*
+  - *Reason 2, "reading an ASGI body in middleware is dangerous" — **true as a hazard, misleading as a
+    rationale**. Correct buffering and replay **already exists in this repo**, in production, on the
+    OpenAI service: `mcp_server/priority_guardian/server.py::BearerAuthMiddleware`. It does a
+    pre-flight `Content-Length` check before reading any bytes, incremental size enforcement while
+    buffering (413 on exceed), disconnect handling mid-body, JSON-RPC parse, scope enforcement scoped
+    to `tools/call` only, unknown tools passed through rather than 403'd, and
+    `_create_replay_receive` which replays the body once then forwards to the original `receive` so
+    real disconnect events are not synthesised — its comment notes fake ones "could prematurely tear
+    down FastMCP streams."*
+  - **So the work is "port a tested implementation from the adjacent tree", not "design something
+    dangerous".** That is a materially different decision from the one recorded, and it is Nadja's to
+    make — as its own increment, not appended to A22.
+- **JWKS amplification on unknown `kid` — NEW, found in the A22 deploy timings. Moderate, not urgent.**
+  `validate_jwt` fetches JWKS, misses the `kid`, then refetches with `force=True`, bypassing the cache.
+  **Two upstream fetches per crafted request, from an unauthenticated caller, with no rate limit.**
+  Evidenced by timing: invalid-token probes **124–155 ms**, malformed-header probes that never reach
+  `validate_jwt` **2–3 ms**, cache-hit valid requests **<1 ms**.
+  **A22 widened its reachability** from `tools/call` only to *every* `POST /mcp` — `initialize`,
+  `tools/list`, `resources/read`. **Not new in kind, more reachable in degree**, and net security still
+  improved sharply: before A22 the same caller got the entire tool catalogue for free.
+  *Cheap mitigation if taken: a negative cache on unrecognised `kid`s — do not force-refetch the same
+  unknown `kid` within a window.*
+- **CORRECTION — "the Claude server ships no logs" is FALSE, and it was load-bearing.**
+  `configure_logging()` is genuinely never called in the Claude tree — re-verified, it is absent. But
+  the **inference** drawn from that true fact was wrong: structlog's out-of-the-box default is
+  `ConsoleRenderer` with a timestamper, and Render captures stdout, so PG-Claude has been emitting
+  `auth.success`, `jwt.validation.success`, `scope.enforcement.success`, `tool.timing`,
+  `backend.api.*` and per-request `http.request` with timings the entire time. Observed directly in the
+  A22 deploy logs.
+  **This premise justified real decisions:** it is cited in the A22 deferral of scope step-up, in the
+  increment's rollback framing, and it was repeated across several commit messages. **The deploy risk
+  was overstated and diagnosis was available throughout.**
+  **The shape of the error, which is the reusable part:** a conclusion drawn from an absent call
+  without checking what the library does by default. Same family as standing checks 19 and 20 — a true
+  observation, an unstated bound, a false conclusion. **First instance where the wrong conclusion made
+  us more cautious rather than less**, which is why it survived: it never caused a visible failure.
+- **DEBUG-level logging enabled in production — config fact, no exposure.** `jwks.cache.hit`,
+  `jwt.validation.success`, `tool.dispatch.received` all emit at `[debug]`. No new data exposure:
+  `user_id` and `jti` already appear at info in `auth.success`, and `tool.dispatch.received` logs
+  argument **keys**, not values. It is log volume and cost that nobody had recorded.
 - **Lazy authentication — DELIBERATE DIFFERENCE, not a gap.** The source describes lazy auth as
   optional: a server may leave read-only tools unauthenticated and challenge only on first privileged
   call. PG gates **every** `/mcp` request, including `initialize` and `tools/list`. Defensible because
