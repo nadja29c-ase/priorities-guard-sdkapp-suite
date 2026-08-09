@@ -1411,6 +1411,36 @@ its own on-host verification (expired token → 401 → Claude prompts re-auth; 
 500; absent header unchanged), and the Claude server ships no logs, so it cannot be diagnosed from the
 widget afterwards.
 
+> **A22 — PARTIAL as of `b6d4974`, DEPLOYED and wire-verified in production `9741f28` /
+> `dep-d9scf7oae00c73ak7q10` (live 2026-08-09T18:33Z). Do not mark this row closed.**
+>
+> **WIRE-LEVEL BEFORE/AFTER, captured against production, same request both times.**
+>
+> *Before* (`bac746b`, presence-only gate) — a syntactically well-formed but **cryptographically
+> garbage** bearer token returned **`HTTP/2 200` with the complete `tools/list` catalogue.** Not a tool
+> error: a **successful** result. **The row understated its own severity.** It described the defect as
+> "an expired token reaches dispatch and returns `CallToolResult(isError=True)`", which is true of tool
+> *calls* — but `tools/list` never reaches `authenticate_request` at all, so an invalid token
+> enumerated every tool, its full description text and its entire input schema. Unauthenticated tool
+> catalogue disclosure was the actual exposure, and no one had looked, because the finding was written
+> from reading the dispatch path rather than from probing the wire.
+>
+> *After* (`9741f28`) — the identical request returns **`HTTP/2 401`**, `Cache-Control: no-store`,
+> `WWW-Authenticate: Bearer resource_metadata="https://mcp.priority-guard.com/.well-known/oauth-protected-resource/mcp", scope="pg.access"`,
+> body `{"error": "invalid_token", ...}`.
+>
+> A22-3's three classes, each probed separately in production: wrong scheme (`Basic`) → 401 ·
+> `Bearer` with no token → 401 · non-JWT garbage → 401. **No 500 in any class.** A22-2's absent-header
+> connector probe → 401 with `"Bearer token required"`, byte-identical to its previous behaviour.
+> Discovery chain re-verified end to end: the `resource_metadata` pointer the challenge names resolves
+> **200**, and the AS metadata it names resolves **200**.
+>
+> **EVERY PRODUCTION CHECK ABOVE IS A REJECT CHECK, AND THAT IS THE ASYMMETRY THAT MATTERS.** They
+> prove PG refuses bad tokens. They say nothing about whether it still *accepts* good ones — and false
+> rejection, not false acceptance, is this change's risk. The admit half is covered only by the
+> in-process test with an injected JWK. **Production JWKS resolution for a real token remains
+> unproven** and is exactly what A22-2 (delete and re-add the connector) exercises.
+
 > **A22 — PARTIAL as of `b6d4974` (increment Claude-A22, 2026-08-09). Do not mark this row closed.**
 >
 > **The 401 limb is FIXED.** `BearerAuthMiddleware` now validates the token instead of detecting the
