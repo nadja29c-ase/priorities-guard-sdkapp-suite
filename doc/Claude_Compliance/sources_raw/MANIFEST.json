@@ -1,0 +1,90 @@
+{
+  "authentication.raw.md": {
+    "bytes": 17099,
+    "captured_commit": "cda27ec",
+    "captured_commit_date": "2026-08-04T12:36:28+02:00",
+    "provenance": "fetch, paste-corroborated x3 \u2014 CLOSED",
+    "sha256": "63693a28e5f0b3d383b4723cf2d6d46f611155da20f4be260b4053b76c8bd020",
+    "url": "https://claude.com/docs/connectors/building/authentication.md"
+  },
+  "cross-compatibility.raw.md": {
+    "bytes": 2149,
+    "captured_commit": "04b9280",
+    "captured_commit_date": "2026-08-04T13:19:05+02:00",
+    "provenance": "fetch only \u2014 page pasted, not compared",
+    "sha256": "c5765e1b9f1f8fc6b7c432a43f9ec90e27e0b91acf94e627502b7664e0cc4c28",
+    "url": "https://claude.com/docs/connectors/building/mcp-apps/cross-compatibility.md"
+  },
+  "design-guidelines.raw.md": {
+    "bytes": 25686,
+    "captured_commit": "cda27ec",
+    "captured_commit_date": "2026-08-04T12:36:28+02:00",
+    "provenance": "fetch only \u2014 page pasted twice, agreed",
+    "sha256": "c71822eee421ef6afe2b7f4b3ea3d05f09b085fc4f442e1a6bb33c2b3c1935c2",
+    "url": "https://claude.com/docs/connectors/building/mcp-apps/design-guidelines.md"
+  },
+  "instance-supersession.raw.md": {
+    "bytes": 14291,
+    "captured_commit": "391b118",
+    "captured_commit_date": "2026-08-04T12:48:15+02:00",
+    "provenance": "fetch only \u2014 page pasted, not compared",
+    "sha256": "3419450364b4a592c9e39aa295435e71300723d6d1e5b4ba6a26fb1c0f4c827b",
+    "url": "https://claude.com/docs/connectors/building/mcp-apps/instance-supersession.md"
+  },
+  "lazy-authentication.raw.md": {
+    "bytes": 15978,
+    "captured_commit": "3a0ac04",
+    "captured_commit_date": "2026-08-04T14:02:38+02:00",
+    "provenance": "fetch only \u2014 NOT cross-checked",
+    "sha256": "a97a4b415dd74badc3e2c6f46a4e3256c859eb2933ab2ae7a6ed30d08cebcf0f",
+    "url": "https://claude.com/docs/connectors/building/lazy-authentication.md"
+  },
+  "review-criteria.raw.md": {
+    "bytes": 5421,
+    "captured_commit": "14d3330",
+    "captured_commit_date": "2026-08-04T13:04:49+02:00",
+    "provenance": "FETCH ONLY \u2014 never pasted, impossible to corroborate",
+    "sha256": "9eb4a370c0bd9170480d115d5915c60e24d769c591b1010316a4cd55f3c5a2f6",
+    "url": "https://claude.com/docs/connectors/building/review-criteria.md"
+  },
+  "software-directory-policy.raw.md": {
+    "bytes": 7458,
+    "captured_commit": "0c7bb3e",
+    "captured_commit_date": "2026-08-04T13:34:58+02:00",
+    "provenance": "fetch, paste-corroborated \u2014 pub date 2026-04-15 from paste only",
+    "sha256": "031086f3df37d07b8348034cf3e6ff7f8d8c21a561339eaf8c51c9c562d72391",
+    "url": "https://support.claude.com/en/articles/13145358-anthropic-software-directory-policy.md"
+  },
+  "software-directory-terms.raw.md": {
+    "bytes": 4457,
+    "captured_commit": "0a96965",
+    "captured_commit_date": "2026-08-04T13:45:59+02:00",
+    "provenance": "fetch, content corroborated \u2014 pub date 2026-03-16 from paste only",
+    "sha256": "8729c84d840f8a86aa016f4e5558e37b5ee83383931189c247508caa2f8569c7",
+    "url": "https://support.claude.com/en/articles/13145338-anthropic-software-directory-terms.md"
+  },
+  "submission.raw.md": {
+    "bytes": 10999,
+    "captured_commit": "4a9e4db",
+    "captured_commit_date": "2026-08-04T13:50:34+02:00",
+    "provenance": "fetch, relay-corroborated \u2014 8 facts",
+    "sha256": "5cf22c42413641e791b03a5dbf66965e4a1dea4e7525de943a64f3522b223934",
+    "url": "https://claude.com/docs/connectors/building/submission.md"
+  },
+  "testing.raw.md": {
+    "bytes": 3689,
+    "captured_commit": "3a0ac04",
+    "captured_commit_date": "2026-08-04T14:02:38+02:00",
+    "provenance": "fetch only \u2014 NOT cross-checked",
+    "sha256": "f401556d1c0c8d013b3de04bb5be6f44975acccddda15773482ffa1f892c6d98",
+    "url": "https://claude.com/docs/connectors/building/testing.md"
+  },
+  "transparent-theming.raw.md": {
+    "bytes": 9736,
+    "captured_commit": "cda27ec",
+    "captured_commit_date": "2026-08-04T12:36:28+02:00",
+    "provenance": "fetch, paste-corroborated 60 lines",
+    "sha256": "5e8a4faed9aaaa5bba9143bed4134fdef180e9db1f600e321404ff4cb9b12146",
+    "url": "https://claude.com/docs/connectors/building/mcp-apps/transparent-theming.md"
+  }
+}
