@@ -92,9 +92,17 @@ misreading costs. **This is a documentation finding against all 15 files, not ag
 
 ## 3. Findings
 
-### F1 — `_sanitize_uri_for_logging` dropped; PG-Claude logs client-controlled URIs raw
+### F1 — `_sanitize_uri_for_logging` dropped; PG-Claude handled client-controlled URIs raw
 
-**Unjustified divergence. Privacy. Same family as P1D.**
+**Unjustified divergence. FIXED in `f0170f8`.**
+
+> **SCOPE CORRECTION, 2026-08-09.** This finding was first written — by me, and echoed in review — as
+> *"URI **logging**"*, and as **two** sites. Both were wrong. It is **URI handling**, at **four** sites:
+> three logs and **one reflection**. The reflection site puts raw caller input into a response `_meta`
+> that travels back into **Claude's context** — a mild **prompt-injection** surface, which is a
+> different exposure class from a PII or minimisation question. It is also the site nobody searching
+> for *log* sites would ever find. The mis-scoping mattered more than the miscount: a reviewer told
+> "URI logging" would not have looked for it.
 
 `priority_guardian/handlers/resources.py` defines `_sanitize_uri_for_logging` and logs only `safe_uri`. Its
 docstring records three increments of hardening:
@@ -104,13 +112,25 @@ docstring records three increments of hardening:
 > Only http/https/ui/file pass through with components; all other schemes (mailto:, blob:, data:,
 > javascript:, etc.) are redacted. **Closes the class of PII leaks.***
 
-`priority_guardian_claude/handlers/resources_dupl.py` **has no such function** and logs the raw value at two
-sites:
+`priority_guardian_claude/handlers/resources_dupl.py` **had no such function** and used the raw value at
+**four** sites — three logs and one reflection:
 
 ```python
-133:  logger.info("resource.read.called", uri=uri_str)
-135:  logger.debug("resource.read.requested", uri=uri_str, widget_version=WIDGET_VERSION)
+133:  logger.info("resource.read.called", uri=uri_str)                  # log
+135:  logger.debug("resource.read.requested", uri=uri_str, ...)         # log — DEBUG is ON in prod
+140:  logger.debug("resource.read.serving_widget", uri=uri_str, ...)    # log — multi-line
+170:  _meta={"error": f"Unknown resource: {uri_str}"}                   # REFLECTED to the client
 ```
+
+**How the fourth was nearly missed, and the method that found it.** The first search was
+`logger\..*uri` — a pattern that requires both tokens on the *same line*, encoding an assumption about
+**formatting** rather than about **behaviour**. Site 140 is a multi-line `logger.debug`, so it did not
+match; site 170 is not a logger call at all, so no logger-shaped pattern could ever have matched it.
+The fix was not a wider regex but a **different method**: enumerate every use of `uri_str`, not every
+line matching a guessed pattern. *Eleventh instance of an unstated scan bound in this project, and the
+second in one day.*
+
+Line 137's `if uri_str == WIDGET_URI` keeps the raw value deliberately — that is routing, not hygiene.
 
 `uri_str` is `str(req.params.uri)` — **client-controlled**. A `resources/read` carrying a `mailto:`, `data:`
 or credential-bearing URI is written verbatim to production logs.

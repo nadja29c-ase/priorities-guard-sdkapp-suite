@@ -1,4 +1,5 @@
-# (duplicate) — exists because it imports platform-specific config.#
+# (duplicate) — exists because it imports platform-specific config.
+#
 # OK DELEGATES rather than reimplements — it rebinds the source module's globals and
 # re-exports its symbols, so the logic IS the source's. Verified 2026-08-09: the only
 # _dupl in the repo whose contents genuinely match its source. See doc/DUPL_DIVERGENCE_SWEEP_2026-08-09.md.

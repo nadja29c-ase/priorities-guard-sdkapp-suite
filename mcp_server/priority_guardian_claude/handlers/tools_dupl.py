@@ -1,4 +1,5 @@
-# (duplicate) — exists because it imports platform-specific mcp_auth.#
+# (duplicate) — exists because it imports platform-specific mcp_auth.
+#
 # !! ITS CONTENTS ARE NOT A COPY. Verified 2026-08-09 by symbol-level sweep: this
 # file has diverged STRUCTURALLY from the source named below, and not every
 # divergence is documented. Do not assume a symbol here behaves as its namesake
