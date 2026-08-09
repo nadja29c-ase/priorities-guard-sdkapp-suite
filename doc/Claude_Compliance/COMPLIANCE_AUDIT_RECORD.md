@@ -1221,7 +1221,7 @@ VERIFIED (38)
 | **A13** | ✅ verified indirectly — JSON to `/token` returns 422, confirming the split |
 | **A15** | ✅ verified — not implemented |
 | **A16** | ✅ verified — bearer header only |
-| **A22** | ⚠️ **partial — this live check covered the ABSENT-header case only.** A transport-level 401 on the unauthenticated connector-creation probe was observed and is real, but it says nothing about an *invalid* token, which was the actual defect. Fixed for invalid/expired tokens in `b6d4974`; the `403`/`insufficient_scope` limb remains open. See the A22 entry in the findings section. |
+| **A22** | ⚠️ **EVIDENCE CORRECTED — this row overstated its own coverage.** What was actually probed: `/mcp` with **no `Authorization` header at all**, which returned a transport-level 401. That observation is real and still holds. What was **never** probed: a request carrying an *invalid* token, and specifically `tools/list`. Recording it as "PG returns a transport-level 401" stated a general property on the strength of the one case that already worked — and the unprobed case was the defect. A later wire probe showed that before `b6d4974`, an invalid token on `tools/list` returned **HTTP 200 with the full tool catalogue**. Now 401 (`9741f28`, verified in production). `403`/`insufficient_scope` limb still open. Full detail in the A22 findings entry. |
 | **A23** | ✅ verified — PG sends `scope="pg.access"` |
 | **M11** | ✅ verified — declared on all three `_meta.ui` blocks |
 | **M12** | ✅ verified — `['inline','fullscreen']` |
@@ -1414,7 +1414,30 @@ widget afterwards.
 > **A22 — PARTIAL as of `b6d4974`, DEPLOYED and wire-verified in production `9741f28` /
 > `dep-d9scf7oae00c73ak7q10` (live 2026-08-09T18:33Z). Do not mark this row closed.**
 >
-> **WIRE-LEVEL BEFORE/AFTER, captured against production, same request both times.**
+> **WIRE-LEVEL BEFORE/AFTER, captured against production. The request is BYTE-IDENTICAL in both
+> captures** — same endpoint, method, token, body and headers, in the same order. Nothing about the
+> probe changed; only the deployed build did. That is what makes this a controlled comparison rather
+> than two observations that happen to differ.
+>
+> **Exact probe conditions, so this can be reproduced or disputed:**
+>
+> ```
+> POST https://mcp.priority-guard.com/mcp
+> Authorization: Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6ImZha2UifQ.eyJzdWIiOiJ4In0.bm90YXNpZ25hdHVyZQ
+> Content-Type: application/json
+> Accept: application/json, text/event-stream
+> Origin: https://claude.ai
+>
+> {"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}
+> ```
+>
+> The header is **syntactically valid**; the token is a well-formed three-segment JWT whose signature is
+> **cryptographically invalid** (`kid: "fake"`, signature `notasignature`). It is not an expired token
+> and not a malformed header — it is the class the old gate could not distinguish from a good one.
+>
+> **This is measured behaviour, not inferred behaviour, and the distinction is the point.** The original
+> finding was derived by READING the dispatch path. Reading told us what happens to a request that
+> arrives at dispatch; it could not tell us which requests never arrive. Only the probe could.
 >
 > *Before* (`bac746b`, presence-only gate) — a syntactically well-formed but **cryptographically
 > garbage** bearer token returned **`HTTP/2 200` with the complete `tools/list` catalogue.** Not a tool
@@ -1427,7 +1450,22 @@ widget afterwards.
 >
 > *After* (`9741f28`) — the identical request returns **`HTTP/2 401`**, `Cache-Control: no-store`,
 > `WWW-Authenticate: Bearer resource_metadata="https://mcp.priority-guard.com/.well-known/oauth-protected-resource/mcp", scope="pg.access"`,
-> body `{"error": "invalid_token", ...}`.
+> body `{"error": "invalid_token", "error_description": "Token validation failed"}`.
+>
+> **Catalogue absence asserted explicitly rather than assumed.** The whole response is **511 bytes**.
+> Checked absent by literal match: `create_priority`, `get_priorities`, `render_weekly_report`,
+> `inspect_adapt`, `get_patterns`, `delete_my_priority_guardian_data`, `inputSchema`, `"tools"`,
+> `event: message`, `data:`. This assertion is recorded because the FIRST after-probe did not actually
+> establish it — its output was filtered to lines beginning `{`, and an SSE `data:` line carrying a
+> catalogue begins with `data:`, so the filter would have HIDDEN the very leak being tested for. The
+> filter was written to make the result readable and would have made a failure invisible. Re-probed
+> unfiltered. *(Fourth instance this project of an unstated scan bound producing a false negative —
+> see standing checks 19 and 20.)*
+>
+> **`Content-Type` flipped from `text/event-stream` to `application/json`,** which is independent
+> confirmation of *where* the rejection happens. FastMCP never opened the SSE stream, so the request was
+> terminated **before the JSON-RPC message reached the MCP SDK** — the placement the lazy-auth source
+> requires, evidenced rather than asserted.
 >
 > A22-3's three classes, each probed separately in production: wrong scheme (`Basic`) → 401 ·
 > `Bearer` with no token → 401 · non-JWT garbage → 401. **No 500 in any class.** A22-2's absent-header
