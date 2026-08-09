@@ -87,7 +87,8 @@ INPUT_SCHEMA = {
                         "description": (
                             "User's exact words for what they will do next week. Must be non-empty. "
                             "To gather: ask what to keep as habit or do differently. "
-                            "Accept the user's answer. Do NOT refine, expand, or probe further. "
+                            "The protocol accepts the user's answer as given rather than refining, "
+                            "expanding, or probing further. "
                             "Only rephrase into commitment if needed for clarity."
                         ),
                         "minLength": 1,

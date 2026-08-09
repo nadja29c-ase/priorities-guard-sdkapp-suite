@@ -18,6 +18,16 @@ import { CalendarConnectionMinimal } from './components/CalendarConnectionMinima
 type DisplayMode = 'inline' | 'fullscreen'
 
 /**
+ * A host-context update. Derived from the SDK's own signature rather than an imported
+ * name — McpUiHostContext is not re-exported from the /react entry point, and deriving it
+ * means the type cannot drift from the method it describes.
+ *
+ * Hoisted to module scope for X7: the listener is created in onAppCreated and the baseline
+ * is read in an effect, so both lifecycles need this type.
+ */
+type HostContextUpdate = Partial<NonNullable<ReturnType<McpApp['getHostContext']>>>
+
+/**
  * How long to wait for the MCP Apps bridge to connect before treating the widget as
  * unreachable. Preserved from the pre-Claude-B implementation, where it was an unnamed
  * literal inside the timer. Claude-B changed the predicate, not the budget — moving both
@@ -166,6 +176,20 @@ function App() {
   // render, and it is read and written within one tick.
   const displayModeRequestPendingRef = useRef(false)
 
+  // X7 — "Register the hostcontextchanged listener BEFORE you connect, so an early
+  // update is not missed" (design source: transparent-theming). PG registered it in the
+  // effect keyed on [app], which only exists AFTER connect() resolves — so any update
+  // arriving in between was lost to PG, and the SDK's own cache shallow-merges nested
+  // objects, destroying the sides a partial update omits.
+  //
+  // Three refs make early registration workable. Refs, not state: the listener is created
+  // in onAppCreated's [] closure and the baseline is read in an effect, so both
+  // lifecycles need to reach the same values without re-rendering.
+  const hostContextBufferRef = useRef<HostContextUpdate[]>([])
+  const hostContextBaselineReadRef = useRef(false)
+  const applyHostContextRef = useRef<((ctx: HostContextUpdate, isInitialRead: boolean) => void) | null>(null)
+  const onHostContextChangedRef = useRef<((ctx: HostContextUpdate) => void) | null>(null)
+
   // Has PG negotiated a display mode with the host yet? Guards the ONE-SHOT initial
   // context read from overwriting a mode we have already agreed. `requestDisplayMode`
   // does NOT update the SDK's cached _hostContext — only a hostcontextchanged
@@ -187,6 +211,18 @@ function App() {
   // and the dashboard branch need it for M10's width reconciliation, and the chart branch
   // returns first. It gates safe-area insets too — see the padding block below.
   const isMobileHostFullscreen = platform === 'mobile' && hostFullscreen
+
+  // M3: safe-area insets bind on MOBILE INLINE as well, not only in host fullscreen.
+  // Source (design-guidelines, "Safe areas"): "Read hostContext.safeAreaInsets.{top,
+  // right, bottom, left} and apply them as padding on your root container… Safe areas
+  // are NOT mobile-specific: on web and desktop the composer can overlay the bottom of
+  // an INLINE app, so avoid placing interactive controls flush against any edge."
+  //
+  // The "not mobile-specific" clause carries its own remedy — don't be flush — which PG
+  // already satisfies everywhere with 12-16px. The real gap was narrower: insets were
+  // gated on hostFullscreen, so MOBILE INLINE got none, and mobile inline is exactly
+  // where the composer overlays the bottom of the card.
+  const useSafeAreaInsets = platform === 'mobile'
 
   // HOISTED in Claude-C: the chart branch returns BEFORE the dashboard branch and needs
   // the same safe-area padding. Computing this only in the dashboard section meant the
@@ -216,7 +252,7 @@ function App() {
   const DENSITY_PADDING = 12
   const SAFE_AREA_FLOOR = 16
   const BASE_PADDING_BOTTOM = 32
-  const paddingTop = isMobileHostFullscreen
+  const paddingTop = useSafeAreaInsets
     ? Math.max(safeAreaTop, SAFE_AREA_FLOOR)
     : DENSITY_PADDING
   // NOTE: bottom uses a DIFFERENT formula from the other three — inset + base, floored at
@@ -224,15 +260,15 @@ function App() {
   // (`safeAreaBottom + 16 : 32`) because the composer sits below the widget and needs
   // clearance beyond the home indicator itself. Stated explicitly so the four sides are
   // not mistaken for one uniform rule.
-  const paddingBottom = isMobileHostFullscreen
+  const paddingBottom = useSafeAreaInsets
     ? Math.max(safeAreaBottom + SAFE_AREA_FLOOR, BASE_PADDING_BOTTOM)
     : DENSITY_PADDING
   // .left/.right were read nowhere before B. They matter in landscape, where the notch
   // intrudes horizontally and would otherwise clip controls.
-  const paddingLeft = isMobileHostFullscreen
+  const paddingLeft = useSafeAreaInsets
     ? Math.max(safeAreaLeft, SAFE_AREA_FLOOR)
     : DENSITY_PADDING
-  const paddingRight = isMobileHostFullscreen
+  const paddingRight = useSafeAreaInsets
     ? Math.max(safeAreaRight, SAFE_AREA_FLOOR)
     : DENSITY_PADDING
 
@@ -399,10 +435,24 @@ function App() {
         }
       }
 
-      // NOTE: the host-context subscription is NOT registered here. It lives in the
-      // lifecycle effect below, using the additive addEventListener API rather than the
-      // single-slot `on*` setter. On ext-apps 1.2.2 the setter was how PG's handler got
-      // destroyed — useHostStyles assigned the same slot twice after this ran.
+      // X7 — the host-context subscription IS registered here, BEFORE connect().
+      // Uses the additive addEventListener API, never the single-slot `on*` setter: on
+      // ext-apps 1.2.2 that setter was how PG's handler got destroyed, because
+      // useHostStyles assigned the same slot twice after this ran. hostcontextchanged is
+      // not a one-shot event, so registering it here produces no timing warning.
+      //
+      // A partial update arriving now has NOTHING TO MERGE INTO — the baseline only
+      // exists after connect() resolves — so it is buffered rather than applied. The
+      // effect below reads the baseline, then drains the buffer on top of it.
+      const onHostContextChanged = (ctx: HostContextUpdate) => {
+        if (!hostContextBaselineReadRef.current) {
+          hostContextBufferRef.current.push(ctx)
+          return
+        }
+        applyHostContextRef.current?.(ctx, false)
+      }
+      onHostContextChangedRef.current = onHostContextChanged
+      appInstance.addEventListener('hostcontextchanged', onHostContextChanged)
     }, []),
   })
 
@@ -427,11 +477,6 @@ function App() {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!app) return
-
-    // Derived from the SDK's own signature rather than an imported name —
-    // McpUiHostContext is not re-exported from the /react entry point, and deriving it
-    // means the type cannot drift from the method it describes.
-    type HostContextUpdate = Partial<NonNullable<ReturnType<McpApp['getHostContext']>>>
 
     const applyHostContext = (ctx: HostContextUpdate, isInitialRead: boolean) => {
       if (ctx.displayMode !== undefined) {
@@ -465,21 +510,40 @@ function App() {
       if (insets?.right !== undefined) setSafeAreaRight(insets.right)
     }
 
-    // 1. Subscribe (additive — does not displace the SDK's own style listeners)
-    // false: a notification is a live report, never a stale snapshot.
-    const onHostContextChanged = (ctx: HostContextUpdate) => applyHostContext(ctx, false)
-    app.addEventListener('hostcontextchanged', onHostContextChanged)
+    // 1. Publish the applier so the listener registered in onAppCreated can reach it.
+    applyHostContextRef.current = applyHostContext
 
-    // 2. Read the initial context, now that it exists
+    // 2. Read the baseline, now that connect() has resolved and it exists.
     const initial = app.getHostContext()
     if (initial) {
       // true: this is the one-shot snapshot, which may predate a negotiated mode.
       applyHostContext(initial, true)
     }
 
-    // 3. Remove on cleanup
+    // 3. ORDER IS LOAD-BEARING. Set the flag BEFORE draining, so an update arriving
+    //    mid-drain takes the live path instead of appending to a buffer nobody will read
+    //    again. Then take the buffer and reset it in the same step, so a concurrent push
+    //    cannot be dropped by a later reassignment or applied twice.
+    hostContextBaselineReadRef.current = true
+    const buffered = hostContextBufferRef.current
+    hostContextBufferRef.current = []
+
+    // 4. Apply what arrived before the baseline existed, in arrival order, ON TOP of it.
+    //    This is what closes the SDK's shallow-merge window: its cache may have lost the
+    //    sides a partial omitted, but PG holds the partial separately and merges it
+    //    per-field onto a baseline it read itself.
+    for (const ctx of buffered) {
+      applyHostContext(ctx, false)
+    }
+
+    // 5. Remove the listener registered in onAppCreated, and stop publishing the applier.
     return () => {
-      app.removeEventListener('hostcontextchanged', onHostContextChanged)
+      const handler = onHostContextChangedRef.current
+      if (handler) {
+        app.removeEventListener('hostcontextchanged', handler)
+        onHostContextChangedRef.current = null
+      }
+      applyHostContextRef.current = null
     }
   }, [app, applyDisplayMode])
 
@@ -1029,6 +1093,10 @@ function App() {
           marginRight: 'auto',
           background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '16px',
+          // Flat literal on purpose. M20 and Claude-B both require the LOADING branch to
+          // stay platform-agnostic — it renders before `platform` is known, so an
+          // inset-aware value here would read undefined-derived state. M3's inset work
+          // applies to the inline <main> below, which renders after connect.
           padding: '12px',
           touchAction: 'pan-y',
           overscrollBehavior: 'contain',
@@ -1305,7 +1373,14 @@ function App() {
           marginRight: platform === 'mobile' ? '0' : 'auto',
           background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: '16px',
-          padding: '12px',
+          // M3: was a flat 12px. On desktop these resolve to DENSITY_PADDING (12), so
+          // this is a no-op there; on mobile they carry the safe-area insets, which
+          // inline never received before — and mobile inline is where the composer
+          // overlays the bottom of the card.
+          paddingTop: `${paddingTop}px`,
+          paddingBottom: `${paddingBottom}px`,
+          paddingLeft: `${paddingLeft}px`,
+          paddingRight: `${paddingRight}px`,
           touchAction: 'pan-y',
           overscrollBehavior: 'contain',
         }}

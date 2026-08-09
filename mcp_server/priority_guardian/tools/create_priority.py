@@ -393,7 +393,10 @@ async def handle(user_id: str, correlation_id: str, arguments: dict) -> mcp_type
         "tool.create_priority.start",
         correlation_id=correlation_id,
         user_id=user_id,
-        priority_name=name,
+        # priority_name deliberately NOT logged. P1D forbids collecting extraneous
+        # data "even for logging purposes", and the name is user-authored free text.
+        # correlation_id + user_id identify the call; the success log proves
+        # priority_id + keyword are sufficient for diagnosis.
         priority_type=priority_type,
         calendar_keyword=calendar_keyword,
     )

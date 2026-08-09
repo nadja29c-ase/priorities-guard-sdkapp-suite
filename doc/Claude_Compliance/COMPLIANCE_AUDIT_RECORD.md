@@ -236,6 +236,25 @@ are APPENDED, never inserted, so references from briefings and increments stay v
     **Every audit row now carries a VERDICT SOURCE — `code` / `conduct — Nadja` / `conduct —
     published artefact`. A row not marked `code` is not the code session's to resolve.**
 
+19. **When a replacement target is not unique, ANCHOR IT OR DO NOT USE REPLACE.** *(New
+    2026-08-09.)* A scripted `replace(old, new, 1)` was aimed at the inline `<main>`'s style block
+    and silently hit the **loading skeleton** instead — the two blocks are byte-identical and the
+    skeleton comes first in the file. The edit would have broken the platform-agnostic loading
+    constraint that M20 and Claude-B both deliberately protect, **left the intended fix unapplied,
+    and looked applied**. This is a NEW SHAPE: not a wrong pattern, but a **correct pattern with an
+    ambiguous target**, which is why nothing about the result looked wrong. **The remedy is
+    mechanical, not attentional: `assert source.count(anchor) == 1` before every scripted
+    replacement.** A standing check tells you to be careful; an assert makes carelessness fail.
+
+20. **A REVERSAL NEEDS THE SAME SCOPE DISCIPLINE AS A FINDING.** *(New 2026-08-09.)* A finding that
+    `create_priority` logs the user-authored priority name was adjudicated as a false positive, on
+    the strength of an enumeration described as *"every logger call in create_priority.py"* — six
+    calls listed, from a ~230-line window of a ~620-line file. There are **16** logger calls, and
+    the one that logs the name sits above the window. **The finding was real; the reversal was the
+    error.** Standing check #2 has always applied to negative claims; it applies identically to
+    claims that a finding is unfounded. **State the window a reversal was proved over, or it is a
+    guess wearing a correction's clothes.**
+
 17. **An obligation-level taxonomy answers "who requires this", never "what breaks if you don't."**
     *(New 2026-08-05.)* Those diverge, and the divergence is where readers mis-prioritise. M3 is
     correctly `RECOMMENDED` — the source says *"should"* — while the same paragraph says *"the user
@@ -1228,7 +1247,7 @@ FINDINGS (17)
 | **T4** | ⚠️ PG connects to Google Calendar, so **Google's policy must be provided**, not merely disclosed around. Not verified. Compounded by the Art. 28 error |
 | **T9** | ⚠️ **Appears unimplemented.** Distinct from P3B, which is a *user support* channel — T9 names Anthropic and third parties and adds a **duty of care** |
 | **A18** | ⚠️ **Not satisfied.** None of the eight `oauth_consent_*.html` templates render it. **NOT A DIRECTORY GATE** — absent from `review-criteria` and from the binding policy. Open security item, post-submission |
-| **M3** | ⚠️ **PARTIAL after Claude-C (v7). Not closed.** Original finding: applied only under `platform === 'mobile' && hostFullscreen`, horizontal padding hardcoded 16px, `.left`/`.right` unused. **Fixed across B and C:** all four insets are now read and applied with a floor rule (`Math.max(inset, base)`, bottom deliberately `inset + base` floored at 32 for composer clearance); `platform` and the fullscreen flag are both populated for the first time; and **C1 made the path reachable at all** — insets are gated on host-granted fullscreen, which never happened before, because expand set local state without ever asking the host. **WHY IT REMAINS PARTIAL:** a path exists on which inset data can be lost. **After the SDK has received the full initial host context, but before PG has captured a full baseline**, a partial nested `safeAreaInsets` update shallow-replaces the cached object, so the omitted sides are gone before PG can read them. PG's own per-field merge is correct and cannot reach that far. **Not eliminable at app level** — PG has no hook between the initialize response and its first read. **The vulnerable ordering exists in the SDK. It was not observed during the available on-host tests, and its practical frequency is unknown.** Mechanism and source evidence: increment Claude-C §4/C4. **Do not round M3 up on the strength of insets working on the observed path** — that observation covers the path that was tested, not the path named here |
+| **M3** | ⚠️ **PARTIAL after Claude-C (v7). Not closed.** Original finding: applied only under `platform === 'mobile' && hostFullscreen`, horizontal padding hardcoded 16px, `.left`/`.right` unused. **Fixed across B and C:** all four insets are now read and applied with a floor rule (`Math.max(inset, base)`, bottom deliberately `inset + base` floored at 32 for composer clearance); `platform` and the fullscreen flag are both populated for the first time; and **C1 made the path reachable at all** — insets are gated on host-granted fullscreen, which never happened before, because expand set local state without ever asking the host. **WHY IT REMAINS PARTIAL:** a path exists on which inset data can be lost. **After the SDK has received the full initial host context, but before PG has captured a full baseline**, a partial nested `safeAreaInsets` update shallow-replaces the cached object, so the omitted sides are gone before PG can read them. PG's own per-field merge is correct and cannot reach that far. ⚠️ **SUPERSEDED 2026-08-09 — this path is now CLOSED.** The disposition above was reached without checking that the canonical file already named the remedy: **X7** — *"register the `hostcontextchanged` listener before you connect"* — in the same document. PG now registers in `onAppCreated` before connect and **buffers** any partial arriving before the baseline exists, applying it per-field on top of a baseline it reads itself. The SDK's cache still shallow-merges, but PG no longer depends on it for those updates. **M3 nevertheless remains PARTIAL for a different reason: it is IMPLEMENTED AND UNVERIFIED.** The insets now also apply on **mobile inline** (fixed 2026-08-09; they were gated on `hostFullscreen`, so inline — where the composer overlays — received none), but **no mobile on-host observation has been made**, and M9's tap-target measurement is outstanding on the same surface. **Implemented is not closed. Do not move this row to VERIFIED without a mobile on-host pass.** |
 | **M10** | ⚠️ **Four layered width caps**, outermost smallest: `#root` 600px (binds), inline `<main>` 560px (binds), fullscreen `<main>` 672px (**dead**), pie section 672px (**dead**). Compliant inline; **in fullscreen the cap binds and auto margins produce the artifact M10 names** |
 | **M14** | ⚠️ Set `false` on all three blocks → borderless on mobile too, while `safeAreaInsets.left`/`.right` go unapplied. **One decision with two consequences** |
 | **X6** | ⚠️ Granted on all three blocks but **hollow** — no `--font-*` variable is referenced anywhere in the widget, so the CSP is widened for a capability not exercised |
@@ -1319,6 +1338,129 @@ curl https://<CLAUDE_MCP_SERVER_URL>/.well-known/oauth-protected-resource   # fa
 ---
 
 # 5. 11. What Changed From Previous Version
+
+---
+
+## AUDIT ROUND — 2026-08-09: all 128 canonical rows verified against the codebase
+
+**Method.** Four adversarial passes, split by section so each got real verification rather than a
+sweep: §1–4 (P, 27 rows) · §5–7 (P5/T/A, 35) · §8–10 (M/X/L, 37) · §11–13 (S/PUB/R/DOC, 26). Every
+pass was given standing check #18 explicitly and a **NOT CODE-ANSWERABLE** verdict, and every
+negative claim was required to state the pattern *and* the paths it was proved over.
+
+**Result: zero manufactured failures.** §11–13 returned 14 NOT CODE-ANSWERABLE and no fabricated ❌.
+The failure mode that produced six false blockers on 2026-08-05 did not recur.
+
+| Batch | FULFILS | PARTLY | DOES NOT | NOT CODE-ANSWERABLE | N/A |
+|---|---|---|---|---|---|
+| §1–4 safety, descriptions, developer | 10 | 1 | 1 | 12 | 3 |
+| §5–7 server, terms, auth/OAuth | 18 | 10 | 1 | 11 | 5 |
+| §8–10 design, CSP, links | 16 | 9 | 2 | 7 | 3 |
+| §11–13 portal, post-publication, uncaptured | 2 | 0 | 0 | 14+ | 5 |
+| **Total** | **46** | **20** | **4** | **44+** | **16** |
+
+### ⚠️ BOTH DIRECTIONS OF ERROR OCCURRED IN ONE ROUND — this is the round's most useful output
+
+Of the contested rows adjudicated after the audit: **three were over-reads** by the auditor (M6, M9,
+A9), **one was a real defect the adjudication wrongly dismissed** (P1D), and **one was real for a
+different reason than the auditor gave** (M3). A single reviewer in either seat would have been wrong
+in one direction or the other. **That is the argument for the two-round discipline** — audit, then
+adjudicate against source — rather than for trusting either pass alone.
+
+### The four real findings
+
+**P1D — PARTLY FULFILS → FIXED. Record both sites; the adjudication history is the instructive part.**
+`create_priority.py` has TWO logging sites and they behave differently:
+- `tool.create_priority.start` (~line 392) passed **`priority_name=name`** — the user-authored title,
+  as a structured log field. **This is the violation.** P1D forbids collecting extraneous data
+  *"even for logging purposes."*
+- `tool.create_priority.success` (~line 543) does **not** log it — and `priority_name` is assigned on
+  the line immediately above it.
+**That adjacency is why the finding looked like a proximity misread**, and it is why an adjudication
+reversed it as a false positive from a ~230-line window described as the whole file. Both readings
+are explicable; only one was checked. See standing check #20.
+**Fixed:** `priority_name` removed from the start log, with the reason in place. `correlation_id` +
+`user_id` identify the call; the success log already proves `priority_id` + `keyword` suffice for
+diagnosis.
+
+**X7 — DOES NOT FULFIL → FIXED, and it corrects C4's disposition.** Source (transparent-theming):
+*"Register the `hostcontextchanged` listener before you connect, so an early update is not missed."*
+PG registered it in the effect keyed on `[app]`, which only exists after `connect()` resolves.
+`onAppCreated` runs before connect and already registered `ontoolresult` there, so earlier
+registration was demonstrably possible.
+**Fixed:** registration moved into `onAppCreated`. A partial arriving before the baseline exists has
+nothing to merge into, so it is **buffered** and applied on top of the baseline once the effect reads
+it. Ordering is load-bearing and written out at the site: flag set **before** the drain, buffer taken
+and reset in one step, so an update arriving mid-drain takes the live path rather than appending to a
+buffer nobody reads again.
+
+**A22 — DOES NOT FULFIL. REAL, DEFERRED to its own pass.** Source (authentication): *"Always return a
+`401` with a `WWW-Authenticate` header… the `401` status is required — Claude does not honor a
+`WWW-Authenticate` header on a `200` response."* The HTTP gate tests only whether an `authorization`
+header is **present**; `authenticate_request` raises `UnauthorizedError` for five causes and only
+*"Missing Authorization header"* is caught there. **Token expired mid-session — the most routine auth
+failure there is — reaches tool dispatch and returns `CallToolResult(isError=True)`, i.e. HTTP 200.**
+Worse, the `_meta` it attaches is `mcp/www_authenticate`, documented in its own docstring as *"per
+OpenAI MCP Authentication spec… for ChatGPT OAuth re-auth flow"* — **a channel Claude does not read.**
+So on Claude an expired token yields an error message where a re-auth prompt belongs.
+**Deferred deliberately.** The fix is to extend the middleware to catch `UnauthorizedError` and emit
+the challenge it already builds — *reusing* that value, not constructing a second. It is a change in
+the **auth path**: the other findings degrade gracefully if wrong, this one locks users out. It needs
+its own on-host verification (expired token → 401 → Claude prompts re-auth; malformed header → 401 not
+500; absent header unchanged), and the Claude server ships no logs, so it cannot be diagnosed from the
+widget afterwards.
+
+**R6a — descriptions reframed as protocol.** Closed separately on 2026-08-08; the audit's third
+citation (`Do NOT refine…` in an `INPUT_SCHEMA` field description) was missed by a case-sensitive
+sweep and is now reframed. See the sweep-correction note below.
+
+### Contested rows — both readings recorded
+
+| Row | Auditor's reading | Source says | Disposition |
+|---|---|---|---|
+| **M3** | insets applied only in mobile fullscreen, "requirement is not mobile-specific" | *"apply them as padding on your root container… Safe areas are not mobile-specific: on web and desktop the composer can overlay the bottom of an **inline** app, so avoid placing interactive controls flush against any edge."* | **Real, narrower.** The not-mobile-specific clause carries its own remedy — *don't be flush* — which PG satisfies everywhere at 12–16px. The actual gap: insets were gated on `hostFullscreen`, so **mobile INLINE got none**, and mobile inline is exactly where the composer overlays. **Fixed** |
+| **M5** | refresh at top, not bottom | *"Max actions: 2, placed at the bottom of the card"* | **PARTLY — deliberate deviation, not changed.** Two inline actions, within the limit. The refresh is placed with the section it acts on rather than the card's bottom, because it is a **section control** rather than a card action, and moving it would separate it from the data it refreshes. `TimeAllocationBar` is shared with fullscreen, so relocating it for inline alone would fork the component's contract. If a reviewer raises it, it is a one-line move at that point |
+| **M6** | inline shows more than 4–5 data points | *"Max data points: 4-5"*, inside the **Inline card** constraints block | **Over-read.** The constraint governs a compact card; PG's inline shows a time bar plus priority cards, and cards are not data points |
+| **M9** | not all buttons "explicitly guarantee" 44px | *"Minimum tap target: 44 x 44pt"*, under **Mobile guidelines** | **Re-verdicted NOT CODE-ANSWERABLE.** A rendered tap target is a measurement. "Does not explicitly guarantee" is a claim about the code, not the requirement. **Added to the on-host list** |
+| **M8** | fullscreen renders "an extra minimize affordance" | — | **Not a defect.** That control is kept deliberately with a stated expiry condition. **The auditor noticing it is evidence FOR the expiry**: a reviewer would see it the same way |
+| **A9** | DCR accepts loopback with arbitrary ports | *"your authorization server must accept both **with the port component ignored**"* | **Over-read.** The source asks for exactly what PG does |
+| **X2** | domain hash strips trailing slash | *"Hash the exact string entered in Settings > Connectors, including path and any trailing slash"* ⚠️SILENT | **Real but unactionable.** Directory connectors have their URL fixed by the listing; PG cannot match a string it never sees. Works today because the live URL has no trailing slash. **Known latent risk, recorded, no change** |
+
+### C4 CLOSES. M3 does NOT — it is implemented, pending observation
+
+**C4 — corrected from "exists, not eliminable at app level" to "exists, ELIMINATED."** The earlier
+disposition was reached against my own analysis **without checking whether the canonical file already
+named a remedy. It did — X7, in the same document.** The SDK's cache still shallow-merges nested
+objects and that remains unfixable from the app; but PG no longer depends on that cache for those
+updates, because it buffers the partial itself and merges it per-field onto a baseline it read
+directly.
+
+**M3 — IMPLEMENTED, PENDING OBSERVATION. Not closed.** The requirement is now met in code: all four
+insets, applied on mobile inline as well as mobile fullscreen, with the existing padding as a floor.
+**But mobile inline insets have never been observed working — only implemented** — and M9's tap-target
+measurement is outstanding on the same surface. **"Implemented and unverified" is not "closed", and
+M3's row must not be moved to VERIFIED until a mobile on-host pass confirms it.**
+
+### Sweep correction — the seventh unstated scan bound
+
+The `INPUT_SCHEMA` sweep run on 2026-08-08 to establish real scope after the brief's premise had
+already been wrong once reported **1 prohibition-frame match. Re-run case-insensitively: 7.** The
+pattern was case-sensitive and that was never stated. `\bDO NOT\b` matched one; `do not` matches five.
+Six of the seven are legitimate elicitation guidance (*"Do NOT ask user for YYYY-MM-DD format"*), one
+is a contraction false-positive, and one was the real miss. **The frame-level conclusion held — zero
+second-person, zero suspension/override — but the evidence behind it was wrong by 7×.** Seventh
+instance of an unstated scan bound in this project, in the sweep whose entire purpose was scope.
+
+### Carried forward from this round
+
+- **A22** — its own pass, its own on-host verification, before or after deploy is Nadja's call
+- **M3** — mobile on-host observation required before the row moves
+- **M9** — tap-target measurement, on-host
+- **M5** — deliberate deviation, revisit only if a reviewer raises it
+- **X2** — latent, silent, unactionable
+- **`var(--color-*, #hex)` fallback mismatches** — three instances found by accident, class unswept
+
+---
 
 ### 2026-08-05 (d) — Consolidation DONE: 15 files -> 5
 
