@@ -1191,12 +1191,14 @@ Coverage of the 121 rows: 35 verified · 17 findings · 45 not assessed ·
 the remainder n/a or recorded-as-accepted. NOT ASSESSED IS THE DEFAULT AND THE CORRECT ANSWER where
 the audit established nothing.
 
-VERIFIED (36)
+VERIFIED (38)
 
 | Req | Evidence |
 |---|---|
 | **P1F** | ✅ verified — **pattern and scope stated:** `grep -rniE "conversation_(history\|summary)\|chat_history\|claude_memory\|user_files\|conversation_summar"` over `mcp_server/**/*.py` and `backend/**/*.py`, excluding tests → **0 matches**. ⚠️ *Bounded by the pattern: this proves no identifier-level match, not that no such access exists under a name the pattern misses* |
 | **P3F** | ✅ verified — first-party backend; `mcp.priority-guard.com` matches the service |
+| **M3** | ✅ **VERIFIED ON HOST 2026-08-09.** Safe-area insets observed applying on **mobile inline** on the deployed v10 — the widget clears the composer at the bottom of the card. Moved from FINDINGS. **This row carried an explicit instruction not to promote it without a mobile on-host pass; that condition is now met.** History worth keeping: M3 was partial for TWO different reasons in sequence. First the SDK's shallow-merge window (C4), which was dispositioned "not eliminable at app level" — wrong, because the canonical file already named the remedy in **X7** ("register the `hostcontextchanged` listener before you connect"), which nobody had checked. Implementing X7 with a pre-baseline buffer closed it. Then a narrower gap the audit surfaced: insets were gated on `hostFullscreen`, so **mobile inline received none** — and mobile inline is exactly where the composer overlays. Both closed in v10, one by code, one by observation |
+| **M9** | ✅ **VERIFIED ON HOST 2026-08-09.** Tap targets confirmed at/above 44pt on device. Resolves the **NOT CODE-ANSWERABLE** verdict the 2026-08-09 audit round assigned it: the auditor's finding was that some buttons did not *"explicitly guarantee"* 44px, which is a claim about the code, not the requirement — a rendered tap target is a **measurement**. Measured, passes |
 | **M1** | ✅ **verified on host 2026-08-06** — light/dark toggled **mid-conversation in Claude.ai** against the deployed v4 bundle; colours, backgrounds, borders and text followed. Moved here from FINDINGS. **This is the only evidence that closes M1** — the fix was verifiable in SDK source but not provable without the host. Runtime theme switching had been dead: on ext-apps 1.2.2 `useHostStyles` is two hooks, each assigning `onhostcontextchanged`, a setter that *replaced* rather than added, so PG's handler (`App.tsx:144`) was overwritten by the variables hook and that by the fonts hook — **only font updates survived.** An SDK defect, fixed upstream in **1.4.0** (both hooks now use `addEventListener`/`removeEventListener`; the `on*` setter writes a separate slot). Increment Claude-A shipped **1.7.5**, deployed as `dep-d9q7seeq1p3s73f34g5g` (commit `785dd1d`, live 12:31). **Before/after both observed:** the same toggle was run on the live **v2** bundle first and the widget stayed light — the defect reproducing on the old SDK, so this is a genuine comparison rather than a single reading. Corroborated by A5: **zero** `setEventHandler` "handler replaced. Use addEventListener…" warnings, which is the exact console signal that would indicate PG's handler being clobbered |
 | **P4A** | ✅ verified — PG does none of this |
 | **P4B** | ✅ verified — PG generates no media |
@@ -1232,7 +1234,7 @@ VERIFIED (36)
 | **S3** | ✅ verified |
 | **S4** | ✅ verified — 8/8 public tools; nothing lands in the un-annotated group |
 
-FINDINGS (17)
+FINDINGS (16)
 
 | Req | Finding |
 |---|---|
@@ -1247,14 +1249,13 @@ FINDINGS (17)
 | **T4** | ⚠️ PG connects to Google Calendar, so **Google's policy must be provided**, not merely disclosed around. Not verified. Compounded by the Art. 28 error |
 | **T9** | ⚠️ **Appears unimplemented.** Distinct from P3B, which is a *user support* channel — T9 names Anthropic and third parties and adds a **duty of care** |
 | **A18** | ⚠️ **Not satisfied.** None of the eight `oauth_consent_*.html` templates render it. **NOT A DIRECTORY GATE** — absent from `review-criteria` and from the binding policy. Open security item, post-submission |
-| **M3** | ⚠️ **PARTIAL after Claude-C (v7). Not closed.** Original finding: applied only under `platform === 'mobile' && hostFullscreen`, horizontal padding hardcoded 16px, `.left`/`.right` unused. **Fixed across B and C:** all four insets are now read and applied with a floor rule (`Math.max(inset, base)`, bottom deliberately `inset + base` floored at 32 for composer clearance); `platform` and the fullscreen flag are both populated for the first time; and **C1 made the path reachable at all** — insets are gated on host-granted fullscreen, which never happened before, because expand set local state without ever asking the host. **WHY IT REMAINS PARTIAL:** a path exists on which inset data can be lost. **After the SDK has received the full initial host context, but before PG has captured a full baseline**, a partial nested `safeAreaInsets` update shallow-replaces the cached object, so the omitted sides are gone before PG can read them. PG's own per-field merge is correct and cannot reach that far. ⚠️ **SUPERSEDED 2026-08-09 — this path is now CLOSED.** The disposition above was reached without checking that the canonical file already named the remedy: **X7** — *"register the `hostcontextchanged` listener before you connect"* — in the same document. PG now registers in `onAppCreated` before connect and **buffers** any partial arriving before the baseline exists, applying it per-field on top of a baseline it reads itself. The SDK's cache still shallow-merges, but PG no longer depends on it for those updates. **M3 nevertheless remains PARTIAL for a different reason: it is IMPLEMENTED AND UNVERIFIED.** The insets now also apply on **mobile inline** (fixed 2026-08-09; they were gated on `hostFullscreen`, so inline — where the composer overlays — received none), but **no mobile on-host observation has been made**, and M9's tap-target measurement is outstanding on the same surface. **Implemented is not closed. Do not move this row to VERIFIED without a mobile on-host pass.** |
 | **M10** | ⚠️ **Four layered width caps**, outermost smallest: `#root` 600px (binds), inline `<main>` 560px (binds), fullscreen `<main>` 672px (**dead**), pie section 672px (**dead**). Compliant inline; **in fullscreen the cap binds and auto margins produce the artifact M10 names** |
 | **M14** | ⚠️ Set `false` on all three blocks → borderless on mobile too, while `safeAreaInsets.left`/`.right` go unapplied. **One decision with two consequences** |
 | **X6** | ⚠️ Granted on all three blocks but **hollow** — no `--font-*` variable is referenced anywhere in the widget, so the CSP is widened for a capability not exercised |
 | **S1** | ⚠️ **BLOCKS SUBMISSION.** Not an engineering task |
 | **S12** | ⚠️ **Cannot be ticked truthfully today** — 1 of 8 public tools exercised end to end. Ticking it is a **warranty defect**, not a process shortcut |
 
-NOT ASSESSED (44): P1A, P1B, P1C, P1E, P2A, P2C, P2D, P2E, P2F, P2G, P3B, P3D, P3E, P3G, P3H, P5A, P5B, P5F, R7a, T1, T2, T8, T10, A7, A14, A19, M2, M4, M5, M6, M7, M8, M9, M15, X7, L3, L7, S2, S5, S6, S7, S8, S9, PUB3
+NOT ASSESSED (43): P1A, P1B, P1C, P1E, P2A, P2C, P2D, P2E, P2F, P2G, P3B, P3D, P3E, P3G, P3H, P5A, P5B, P5F, R7a, T1, T2, T8, T10, A7, A14, A19, M2, M4, M5, M6, M7, M8, M15, X7, L3, L7, S2, S5, S6, S7, S8, S9, PUB3
 
 
 This section tracks Priority Guardian-specific gaps. Items already satisfied for OpenAI are not re-listed here — see compliance_master_1.3.26.md.
@@ -1450,6 +1451,26 @@ Six of the seven are legitimate elicitation guidance (*"Do NOT ask user for YYYY
 is a contraction false-positive, and one was the real miss. **The frame-level conclusion held — zero
 second-person, zero suspension/override — but the evidence behind it was wrong by 7×.** Seventh
 instance of an unstated scan bound in this project, in the sweep whose entire purpose was scope.
+
+### ⚠️ CLOSED ON HOST 2026-08-09 — M3 and M9
+
+Both verified on the deployed v10 and moved to VERIFIED. **Two rows that were partial for different
+reasons, resolved by one deploy** — and neither by the route first proposed.
+
+**M3** was partial twice over, in sequence. First the SDK's shallow-merge window (C4), dispositioned
+*"not eliminable at app level"* — **wrong, because the remedy was already written in the canonical
+file as X7** and nobody had looked. Implementing X7 with a pre-baseline buffer closed it. Then a
+narrower gap the audit surfaced: insets gated on `hostFullscreen`, so **mobile inline received none**,
+which is exactly where the composer overlays. Fixed in code, then **observed** — mobile inline clears
+the composer on v10.
+
+**M9** was re-verdicted NOT CODE-ANSWERABLE during the round because the auditor's finding — some
+buttons do not *"explicitly guarantee"* 44px — is a claim about the code, not the requirement. A
+rendered tap target is a measurement. Measured on device; passes.
+
+**The generalisable part:** X7 was sitting in the same document as the row it fixed. A disposition of
+*"not eliminable"* was reached by analysis when the answer was already written down. **Check whether
+the requirements name a remedy before concluding none exists.**
 
 ### Carried forward from this round
 
