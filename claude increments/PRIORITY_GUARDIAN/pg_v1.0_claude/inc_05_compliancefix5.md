@@ -143,7 +143,15 @@ PG returns a 200 tool error for `InsufficientScopeError` as well, so the same de
 - Scope sufficiency is **tool-level** — it needs the tool name, which is in the JSON-RPC body.
 - **Reading an ASGI request body in middleware consumes the stream.** Without correct buffering and replay, FastMCP downstream
   receives an empty body and **every request fails — not just unauthenticated ones.** It fails closed for everybody, on a
-  server that ships no logs, behind a widget that cannot diagnose it. **That is strictly worse than the defect being fixed.**
+  server that ships no logs, behind a widget that cannot diagnose it.
+
+  > **[ANNOTATION 2026-08-09, post-implementation — not a change to the brief's intent.]** *"ships no logs" is
+  > **FALSE**. `configure_logging()` is genuinely never called in the Claude tree, but structlog's default `ConsoleRenderer`
+  > plus Render's stdout capture means PG-Claude has always emitted `auth.success`, `jwt.validation.success`,
+  > `scope.enforcement.success`, `tool.timing` and per-request `http.request`. Observed directly in this increment's deploy
+  > logs. This was one of two legs supporting the deferral and it does not hold; the body-read leg is also weaker than stated,
+  > since PG-OpenAI already implements buffering, size guard and replay. See the audit record.*
+ **That is strictly worse than the defect being fixed.**
 - Scope insufficiency requires a valid token with wrong scopes — for PG, a token issued before a scope change. **Rare.**
   Expired tokens are **routine**.
 
@@ -232,7 +240,12 @@ host-side.
 
 ## 9. Rollback — read before deploying
 
-**This is the auth path. If it is wrong, nobody can connect, and the Claude server ships no logs to diagnose it.** That is a
+**This is the auth path. If it is wrong, nobody can connect, and the Claude server ships no logs to diagnose it.**
+
+> **[ANNOTATION 2026-08-09]** *The "no logs" half is **FALSE** — see the §6 annotation. The risk framing here was
+> overstated: diagnosis was available throughout, and the deploy produced full structured logs including `auth.success` and
+> `tool.timing auth_ms=0.6`. The rest of the sentence stands — it **is** the auth path.*
+ That is a
 different risk class from every widget increment in this sequence.
 
 **Before deploying, record and re-verify at that moment** — this record has gone stale three times: the deployed commit · the
