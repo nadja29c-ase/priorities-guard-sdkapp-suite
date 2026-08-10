@@ -272,6 +272,53 @@ function App() {
     ? Math.max(safeAreaRight, SAFE_AREA_FLOOR)
     : DENSITY_PADDING
 
+  // ── M3 DIAGNOSTIC (v11, temporary) ───────────────────────────────────────────
+  // Logged from where the insets are CONSUMED, not where they are read. B1
+  // established that reading and using are different points, and this bug lives in
+  // exactly that gap: on desktop the state holds whatever the host sent and the
+  // consumer discards it. Logging at the read site would print a healthy number and
+  // hide the defect, so raw insets and the COMPUTED paddings are printed together —
+  // the discard is only visible as the difference between the two.
+  //
+  // Fires on every platform/displayMode transition so ONE session yields both
+  // desktop inline and desktop fullscreen. The source clause names inline FIRST
+  // ("the composer can overlay the bottom of an inline app"), so inline carries the
+  // same exposure and is measured in the same build rather than in a second one.
+  //
+  // REMOVE with the M3 fix. This exists to answer one question: does the host report
+  // a non-zero safeAreaInsets.bottom on desktop? Non-zero -> drop the platform
+  // condition. Zero -> the overlay is not expressed as an inset and the fix is a
+  // composer-sized minimum instead. Guessing between them ships a change that looks
+  // right and does nothing.
+  useEffect(() => {
+    console.log('[PG M3 DIAGNOSTIC v11]', {
+      platform,
+      displayMode,
+      hostFullscreen,
+      useSafeAreaInsets,
+      rawInsets: {
+        top: safeAreaTop,
+        bottom: safeAreaBottom,
+        left: safeAreaLeft,
+        right: safeAreaRight,
+      },
+      computedPadding: {
+        top: paddingTop,
+        bottom: paddingBottom,
+        left: paddingLeft,
+        right: paddingRight,
+      },
+      // If rawInsets.bottom > 0 and computedPadding.bottom is 12, the value was
+      // reported by the host and thrown away — that is the whole bug in one line.
+      insetsDiscarded:
+        !useSafeAreaInsets &&
+        (safeAreaTop > 0 || safeAreaBottom > 0 || safeAreaLeft > 0 || safeAreaRight > 0),
+    })
+  }, [platform, displayMode, hostFullscreen, useSafeAreaInsets,
+      safeAreaTop, safeAreaBottom, safeAreaLeft, safeAreaRight,
+      paddingTop, paddingBottom, paddingLeft, paddingRight])
+  // ── end M3 DIAGNOSTIC ────────────────────────────────────────────────────────
+
   // ONE CONTRACT FOR DISPLAY MODE.
   //
   // Three call sites used to set this state independently and they disagreed twice:
