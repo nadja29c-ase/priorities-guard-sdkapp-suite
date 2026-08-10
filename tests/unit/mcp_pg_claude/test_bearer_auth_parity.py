@@ -639,3 +639,70 @@ async def test_one_correlation_id_per_request(jwks, monkeypatch):
         f"one request produced {len(ids)} correlation ids ({ids}) — the 413 and the "
         "token validation that preceded it cannot be joined in the logs"
     )
+
+
+# ================ correlation id SHARED across two records, not merely passed once
+#
+# The existing test asserts one id reaches validate_jwt and the 413 log. It does so
+# by spying, which proves the id was PASSED. The claim that matters is stronger:
+# that ONE request producing TWO log records emits the SAME id in both. Production
+# cannot show this — the middleware logs twice only on a 413 or a disconnect, and
+# neither occurs on a healthy request. Both are trivially producible here.
+#
+# This is P1's last unasserted claim. Until now it was correct by reading.
+
+def _ids_by_event(entries):
+    """{event_name: correlation_id} from captured structlog records."""
+    return {e.get("event"): e.get("correlation_id")
+            for e in entries if e.get("correlation_id")}
+
+
+@pytest.mark.asyncio
+async def test_correlation_id_shared_between_validation_and_413(jwks, monkeypatch):
+    """413 path: the rejection record and the validation before it share one id."""
+    import structlog
+    from mcp_server.priority_guardian_claude import config as claude_config
+
+    monkeypatch.setattr(claude_config, "MAX_MCP_BODY_SIZE_BYTES", 256)
+
+    cap = Captured()
+    mw = BearerAuthMiddleware(cap.inner_app, WWW_AUTH)
+
+    with structlog.testing.capture_logs() as entries:
+        # no Content-Length -> the STREAMING guard, not the pre-flight
+        await mw(_scope([_auth(_token(3600))]), _receive(b"z" * 2048, chunks=8), cap.send)
+
+    assert cap.status == 413, "expected the oversized path"
+    ids = _ids_by_event(entries)
+    assert "jwt.validation.success" in ids, f"no validation record captured: {list(ids)}"
+    assert "auth.middleware.rejected" in ids, f"no 413 record captured: {list(ids)}"
+    assert ids["jwt.validation.success"] == ids["auth.middleware.rejected"], (
+        f"one request emitted two ids — validation {ids['jwt.validation.success']} vs "
+        f"413 {ids['auth.middleware.rejected']}. The 413 and the token validation "
+        "that preceded it cannot be joined in the logs."
+    )
+
+
+@pytest.mark.asyncio
+async def test_correlation_id_shared_between_validation_and_disconnect(jwks):
+    """Disconnect path: the same assertion on the other two-record route."""
+    import structlog
+
+    async def disconnect_midbody():
+        return {"type": "http.disconnect"}
+
+    cap = Captured()
+    mw = BearerAuthMiddleware(cap.inner_app, WWW_AUTH)
+
+    with structlog.testing.capture_logs() as entries:
+        await mw(_scope([_auth(_token(3600))]), disconnect_midbody, cap.send)
+
+    assert not cap.inner_called
+    ids = _ids_by_event(entries)
+    assert "jwt.validation.success" in ids
+    assert "auth.middleware.client_disconnected" in ids, (
+        f"no disconnect record captured: {list(ids)}")
+    assert ids["jwt.validation.success"] == ids["auth.middleware.client_disconnected"], (
+        f"one request emitted two ids — validation {ids['jwt.validation.success']} vs "
+        f"disconnect {ids['auth.middleware.client_disconnected']}"
+    )

@@ -307,3 +307,42 @@ unit tests plus negative control B, with the ordering confirmed on the wire
 `Origin` rejection and `RequestLogging` logging without an id · the OpenAI back-port
 of the `bytearray` fix · the `dupl_sweep` module-level blind spot (middleware order
 and route registration are still not compared — A22a's own failure class).
+
+### P1 — last unasserted claim closed, and A22-2 split into its two halves (2026-08-10)
+
+**The correlation-id fix is now ASSERTED, not correct-by-reading.** The claim that
+matters is not "one id was passed" but "**one request emitting TWO records emits the
+SAME id in both**". Production cannot show it — the middleware logs twice only on a
+413 or a mid-body disconnect, neither of which occurs on a healthy request — but both
+are trivially producible in the ASGI harness. Two tests now capture structlog output
+across *both* modules and assert `jwt.validation.success` and
+`auth.middleware.rejected` / `auth.middleware.client_disconnected` carry an identical
+id. **Negative control I:** restoring the second `uuid4()` fails all three
+correlation-id tests.
+
+#### A22-2 — recorded as TWO HALVES, because only one of them is automatable
+
+Neither "verified" nor "not re-confirmed" is accurate on its own.
+
+**Wire half — re-run 2026-08-10 14:38Z, PASSES. Re-runnable any time, no client needed.**
+
+| Step | Result |
+|---|---|
+| unauthenticated `POST /mcp` | **401**, `Cache-Control: no-store`, body `"Bearer token required"` |
+| `WWW-Authenticate` | `Bearer resource_metadata="https://mcp.priority-guard.com/.well-known/oauth-protected-resource/mcp", scope="pg.access"` |
+| the pointer that challenge names | **200** → `authorization_servers: ["https://www.priority-guard.com"]`, `scopes_supported: ["pg.access"]` |
+| that AS's `oauth-authorization-server` | **200** |
+| that AS's `openid-configuration` | **200** |
+
+The chain a client must follow is intact end to end, from the challenge to the AS
+metadata, with every hop resolved rather than assumed.
+
+**Client half — NOT automatable, last produced 2026-08-09.** Claude receiving the
+401, following the pointer, performing DCR and completing consent requires Claude's
+own client. It is produced by **fully deleting and re-adding the connector**, which
+was done 2026-08-09. The 2026-08-10 reconnect did **not** re-run it, because the
+existing token was reused and no OAuth prompt appeared — correct behaviour, and
+precisely why "reconnected successfully" cannot stand in for it.
+
+**Re-run the client half at submission time**, since a fresh reviewer takes exactly
+that path with no cached token.
