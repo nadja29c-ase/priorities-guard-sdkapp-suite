@@ -1460,6 +1460,56 @@ Carried forward. PG-Claude emits full structured logs; this clause overstated th
 > **incomplete** though: no coverage of duplicate headers, unknown-`kid` refetch, path variants, or
 > oversized bodies.
 >
+> ### ⚠️ M3 — REOPENED BY OBSERVATION, 2026-08-10. Its closure was wrong, and the reasoning was ours.
+>
+> **Observed:** on **desktop fullscreen**, the bottom of the widget cannot be scrolled into
+> view — Claude's composer covers it. Reported by Nadja against the deployed v10.
+>
+> **Not a complication that mobile works — that is the confirming detail.** Mobile fullscreen
+> clears the composer because the gate is true there; desktop fails because the same
+> expression is false. One host, one code path, one condition. Mobile working and desktop not
+> is the exact signature of a platform gate on something that should not have one.
+>
+> **The gate, current code** (`App.tsx:225`): `const useSafeAreaInsets = platform === 'mobile'`.
+> Desktop therefore falls to the else-branch on all four sides. **Bottom is
+> `DENSITY_PADDING` — 12px** (`App.tsx:266`), against a composer that overlays roughly 100px.
+> The insets are *read* on desktop (B1 fixed that) and then **discarded at the point of use**.
+>
+> **THE CLOSURE RESTED ON A READING THE SOURCE CONTRADICTS.** Codex flagged M3 as PARTLY,
+> citing: *"Safe areas are not mobile-specific: on web and desktop the composer can overlay
+> the bottom of an inline app, so avoid placing interactive controls flush against any edge."*
+> That was dispositioned as an over-read, on the argument that the clause only required
+> "don't be flush" and PG's 12–16px satisfied it. **The source names web and desktop and names
+> the composer. The screenshot is that sentence happening.** The comment at `App.tsx:220-224`
+> still carries the mistaken reasoning and must be corrected, not deleted.
+>
+> **Correction to my own first instinct, checked against history rather than asserted:** I
+> expected the density contract to have cut this from 32px to 12px. It did not. `git log -L`
+> shows the else-branch was `BASE_PADDING` (16) at `e0f7bff` and became `DENSITY_PADDING` (12)
+> at `887994f`. **A 4px shave, not a 20px one.** The density work made it marginally worse and
+> **is not the cause** — desktop fullscreen never applied insets at all, from the beginning.
+>
+> **A stale comment found alongside it:** `App.tsx:259-261` says the bottom formula "preserves
+> the pre-B behaviour (`safeAreaBottom + 16 : 32`)". That is accurate for the mobile branch's
+> floor and **wrong for the else branch, which is 12**.
+>
+> **NOT FIXED — one measurement decides which fix is correct** (CLAUDE.md Rule 0a):
+> **does the host report a non-zero `safeAreaInsets.bottom` on desktop fullscreen?**
+> - **Non-zero** → remove the `platform === 'mobile'` condition; the existing
+>   `Math.max(inset, floor)` logic then works on every platform, and mobile proves the
+>   plumbing is correct when the value is non-zero.
+> - **Zero** → the composer overlay is not expressed as an inset on desktop, removing the
+>   condition **changes nothing**, and the fix is a minimum bottom padding sized for the
+>   composer instead.
+>
+> Guessing between those is how a change ships that looks right and does nothing. **PG logs no
+> inset values today** (`App.tsx` has one `console.warn`, unrelated), so reading it requires a
+> diagnostic build.
+>
+> **Also in scope when this is fixed:** the same clause names **inline** first — *"the composer
+> can overlay the bottom of an inline app"* — so desktop **inline** carries the same exposure
+> and must be checked in the same pass.
+>
 > **A22 — PARTIAL as of `b6d4974`, DEPLOYED and wire-verified in production `9741f28` /
 > `dep-d9scf7oae00c73ak7q10` (live 2026-08-09T18:33Z). Do not mark this row closed.**
 >
