@@ -94,8 +94,21 @@ class RequestLoggingMiddleware:
         method = scope.get("method", "UNKNOWN")
         path = scope.get("path", "/")
 
-        # Extract headers
-        headers = {name.decode("utf-8").lower(): value.decode("utf-8")
+        # Extract headers.
+        #
+        # errors="replace" IS LOAD-BEARING, NOT TIDINESS. Strict decoding here made
+        # ANY header carrying invalid UTF-8 — `User-Agent`, `Referer`, `Origin`,
+        # `Authorization` — raise UnicodeDecodeError in the OUTERMOST middleware and
+        # become a 500, from an unauthenticated client, before any auth code ran.
+        # LOGGING MUST NEVER BE ABLE TO FAIL A REQUEST.
+        #
+        # This also completes P1-a's encoding fix. That work replaced two Authorization
+        # decoders with one latin-1 selector, but BOTH sat BELOW this middleware, so
+        # b"Bearer caf\xe9" never reached either — it died here first. The selector was
+        # necessary and not sufficient; found by adversarial review, not by our tests,
+        # because no test drove the assembled stack.
+        headers = {name.decode("utf-8", errors="replace").lower():
+                   value.decode("utf-8", errors="replace")
                    for name, value in scope.get("headers", [])}
 
         # Get client IP (X-Forwarded-For first, then ASGI client)
@@ -227,7 +240,11 @@ class HeadMcpMiddleware:
             if self.allowed_origins:
                 for name, value in scope.get("headers", []):
                     if name == b"origin":
-                        request_origin = value.decode("utf-8")
+                        # errors="replace": a malformed Origin must be REJECTED as
+                        # a non-allowed origin, never crash the request. A replacement
+                        # char cannot match an entry in allowed_origins, which is the
+                        # correct outcome.
+                        request_origin = value.decode("utf-8", errors="replace")
                         if request_origin in self.allowed_origins:
                             origin_header = value
                         break

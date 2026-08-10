@@ -360,3 +360,97 @@ async def test_p1a_both_layers_select_identically():
 
         gate_choice = select_authorization_header([(b"authorization", raw)])
         assert seen["auth"] == gate_choice, f"layers disagree on {raw!r}"
+
+
+# ========================= P1-a (amended) — THE ASSEMBLED STACK, not one middleware
+#
+# WHY THIS EXISTS, and it is the most important comment in this file.
+#
+# P1-a was reported as closing the encoding split after replacing two Authorization
+# decoders with one latin-1 selector. That was necessary and NOT SUFFICIENT. A THIRD
+# decoder sat in RequestLoggingMiddleware — the OUTERMOST middleware — building a dict
+# of EVERY header with strict utf-8. b"Bearer caf\xe9" raised there and became a 500
+# before BearerAuthMiddleware ever ran, so neither of the earlier tests could observe
+# it: one drove the gate, one drove the layer below it, NEITHER drove the stack.
+#
+# Two vacuity bugs in the same assertion, found by two different means. The first by
+# running a negative control; the second by adversarial review. A negative control
+# proves a test can fail — it cannot prove the test is wired to the right code path.
+# Only the assembled stack does that.
+
+def _assemble(inner):
+    """The production middleware order, minus lifespan/FastMCP.
+
+    RequestLogging -> HeadMcp -> OriginValidation -> BearerAuth -> ContentTypeFix -> inner
+    """
+    from contextvars import ContextVar
+    from mcp_server.priority_guardian_claude.server_dupl import (
+        RequestLoggingMiddleware, HeadMcpMiddleware, OriginValidationMiddleware,
+        MCPContentTypeAndAcceptFixMiddleware,
+    )
+    var = ContextVar("auth_header_stack", default=None)
+    app = MCPContentTypeAndAcceptFixMiddleware(inner, var)
+    app = BearerAuthMiddleware(app, WWW_AUTH)
+    app = OriginValidationMiddleware(app, ["https://claude.ai"])
+    app = HeadMcpMiddleware(app)
+    app = RequestLoggingMiddleware(app, "pg-claude-test")
+    return app
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("header,value", [
+    (b"authorization", b"Bearer caf\xe9"),
+    (b"user-agent",    b"Mozilla/caf\xe9"),
+    (b"referer",       b"https://x.test/caf\xe9"),
+])
+async def test_invalid_utf8_header_never_500s_through_full_stack(jwks, header, value):
+    """ANY header with invalid UTF-8 must not crash the request.
+
+    Before the amendment every one of these raised UnicodeDecodeError in the
+    outermost middleware — an unauthenticated 500 trigger on a header nobody
+    authenticates.
+    """
+    cap = Captured()
+    app = _assemble(cap.inner_app)
+    scope = {"type": "http", "method": "POST", "path": "/mcp",
+             "headers": [(header, value), (b"origin", b"https://claude.ai")],
+             "client": ("1.2.3.4", 0)}
+
+    await app(scope, _receive(b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}'), cap.send)
+
+    assert cap.status is not None, "no response produced — the request crashed"
+    assert cap.status != 500, f"{header!r} with invalid utf-8 produced a 500"
+
+
+@pytest.mark.asyncio
+async def test_latin1_authorization_is_401_through_full_stack(jwks):
+    """The assertion P1-a always claimed, now made where it can actually fail."""
+    cap = Captured()
+    app = _assemble(cap.inner_app)
+    scope = {"type": "http", "method": "POST", "path": "/mcp",
+             "headers": [(b"authorization", b"Bearer caf\xe9"),
+                         (b"origin", b"https://claude.ai")],
+             "client": ("1.2.3.4", 0)}
+
+    await app(scope, _receive(b'{"jsonrpc":"2.0","id":1,"method":"tools/list"}'), cap.send)
+
+    assert cap.status == 401, f"expected 401, got {cap.status}"
+    assert cap.status != 500
+    assert not cap.inner_called
+
+
+@pytest.mark.asyncio
+async def test_valid_token_still_admitted_through_full_stack(jwks):
+    """The amendment must not break the admit path — checked through the real order."""
+    cap = Captured()
+    app = _assemble(cap.inner_app)
+    payload = b'{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+    scope = {"type": "http", "method": "POST", "path": "/mcp",
+             "headers": [_auth(_token(3600)), (b"origin", b"https://claude.ai"),
+                         (b"content-type", b"application/json")],
+             "client": ("1.2.3.4", 0)}
+
+    await app(scope, _receive(payload, chunks=3), cap.send)
+
+    assert cap.inner_called, "valid token blocked through the assembled stack"
+    assert cap.body_seen == payload, "replay through the full stack lost the body"
