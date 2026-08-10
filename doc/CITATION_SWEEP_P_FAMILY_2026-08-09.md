@@ -88,3 +88,39 @@ they contain an X2-class fabrication is correspondingly lower — not zero.
 separate judgement this pass did not make); or that non-bold, non-quoted prose is faithful. X2 was
 caught because it was bold **and** in a cited row. A fabrication in ordinary prose would still be
 invisible to everything built today.
+
+---
+
+## Third pass — §8–§13 read, and the submission cluster closed (2026-08-10)
+
+A reviewer read the header and §8 M2 → §13 by eye, applying the same criterion. **Zero fabrications.**
+Every source-register bold span traced to real text: M3 *"Safe areas are not mobile-specific"* · M10
+*"don't add side margins…"* · M18 *"Use host tokens for all structural elements"* · M19 · M20
+*"skeleton screens… avoid spinners"* · X1 · X7 · X8 · X9 · S13 · PUB2 — all verbatim or faithful.
+
+**That pass named its own gap: L1–L4, S5, S7, S8, S9 cite the submission page, which the reviewer had
+not read.** It was called "the largest unverified cluster". `submission.raw.md` **is** captured, so the
+cluster was checkable and is now checked:
+
+| Row | Claim | Source | |
+|---|---|---|---|
+| **S7** | 3–5 · PNG · ≥1000px · crop to app response · prompt must not appear · prompt text separately · aspect ratio any · video/GIF rejected · one batch all surfaces · Figma template | `submission:90–101` | **10 of 10 verbatim** |
+| L1 | field optional; if omitted users are shown a confirmation prompt each time | `submission:85–86` | verbatim |
+| L2 | every origin/scheme must be owned by you; entries you don't own removed in review | `submission:82` | verbatim |
+| L3 | scheme + hostname only; subdomains not implied, list each | `submission:79` | verbatim |
+| L4 | custom URI scheme, native app you own, only scheme matched | `submission:80` | verbatim |
+| S5 | name ≤100 · tagline ≤55 · description ≤2,000 · 1–5 categories | `submission:144` | **every number correct** |
+| S8 | seven acknowledgments, all required, and the seven names | `submission:168` | **7 of 7, in order** |
+| S9 | API own / proxied with permission / third party's; health data; sponsored content | `submission:160` | verbatim |
+
+**S7 was singled out as the row to check because it will be followed literally in a few days and a wrong
+detail costs a resubmission.** It is correct in every element, including the count.
+
+### Standing after three independent passes
+
+Mechanical (30 quoted rows, all families) · P\* manual (16 rows) · §8–§13 manual (this pass) + the
+submission cluster (8 rows). **X2 remains the only fabrication ever found.**
+
+**Remaining unverified:** non-quoted bold in §6 `T*` and §7 `A*`. Their *quoted* spans were covered
+mechanically; their bold spans were not read by eye. Not blocking, and the prior after three clean
+passes is low.
