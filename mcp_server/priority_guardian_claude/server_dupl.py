@@ -381,6 +381,24 @@ class BearerAuthMiddleware:
             and scope.get("method") in ("GET", "POST", "DELETE")
             and scope.get("path") == "/mcp"
         ):
+            # ONE correlation id for the whole request, generated before anything
+            # that logs. Previously the token validation minted one and the body
+            # guard minted another, so a 413 and the validation that preceded it
+            # could not be joined in the logs — and dispatch mints a third, which is
+            # visible in production as two jwt.validation.success lines under
+            # different ids for one request.
+            #
+            # This is the middleware where a defect fails closed for EVERY request,
+            # on a server that DOES ship structured logs. Unjoinable records here are
+            # the difference between diagnosing an outage and guessing at it.
+            #
+            # NOT SOLVED HERE: dispatch still generates its own id, so a middleware
+            # record and a tool record remain unjoinable. Threading one id across
+            # that boundary means carrying it in a ContextVar set above
+            # MCPContentTypeAndAcceptFixMiddleware, which is a change to the request
+            # context contract and belongs in its own increment.
+            correlation_id = str(uuid.uuid4())
+
             # P1-a: ONE selector, shared with the middleware below this one.
             try:
                 auth_header = select_authorization_header(scope.get("headers", []))
@@ -439,7 +457,7 @@ class BearerAuthMiddleware:
                 return
 
             try:
-                await validate_jwt(token, str(uuid.uuid4()))
+                await validate_jwt(token, correlation_id)
             except jwt.PyJWTError:
                 # EVERY PyJWT error is a TOKEN problem: expired, bad signature, wrong
                 # issuer or audience, missing/unknown kid. jwt.PyJWTError is the base of
@@ -502,7 +520,6 @@ class BearerAuthMiddleware:
                         content_length = None
                     break
 
-            correlation_id = str(uuid.uuid4())
             if content_length is not None and content_length > MAX_MCP_BODY_SIZE_BYTES:
                 await self._send_413(send, content_length, correlation_id)
                 return
@@ -528,6 +545,11 @@ class BearerAuthMiddleware:
                 if message["type"] == "http.request":
                     chunk = message.get("body", b"")
                     total_size += len(chunk)
+                    # `>` not `>=`: a body of EXACTLY MAX_MCP_BODY_SIZE_BYTES is
+                    # ADMITTED, one byte more is rejected. The limit is a maximum
+                    # permitted size, not the first forbidden size. Stated because it
+                    # is the kind of boundary a reviewer asks about, and it is
+                    # asserted in both directions by the at-limit test.
                     if total_size > MAX_MCP_BODY_SIZE_BYTES:
                         raise _BodyTooLargeError(total_size)
                     body_buf.extend(chunk)

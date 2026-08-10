@@ -597,3 +597,45 @@ async def test_duplicate_authorization_401_through_full_stack(jwks):
     assert cap.status == 401
     assert cap.headers.get("www-authenticate") == WWW_AUTH
     assert not cap.inner_called
+
+
+# ============================= one correlation id per request, not one per log call
+#
+# The middleware previously minted an id for token validation and a second for the
+# body guard, so a 413 and the validation that preceded it could not be joined. On a
+# server that DOES ship structured logs — established 2026-08-09 — unjoinable
+# records in the middleware that fails closed for everyone is the difference between
+# diagnosing an outage and guessing at it.
+
+@pytest.mark.asyncio
+async def test_one_correlation_id_per_request(jwks, monkeypatch):
+    """Validation and the 413 path must share an id."""
+    from mcp_server.priority_guardian_claude import mcp_auth_dupl, config as claude_config
+
+    seen = []
+    real = mcp_auth_dupl.validate_jwt
+
+    async def spy(token, correlation_id):
+        seen.append(("validate", correlation_id))
+        return await real(token, correlation_id)
+
+    monkeypatch.setattr(mcp_auth_dupl, "validate_jwt", spy)
+    monkeypatch.setattr(claude_config, "MAX_MCP_BODY_SIZE_BYTES", 128)
+
+    logged = []
+    import mcp_server.priority_guardian_claude.server_dupl as SD
+    monkeypatch.setattr(
+        SD.logger, "warning",
+        lambda event, **kw: logged.append((event, kw.get("correlation_id"))),
+    )
+
+    cap = Captured()
+    mw = BearerAuthMiddleware(cap.inner_app, WWW_AUTH)
+    await mw(_scope([_auth(_token(3600))]), _receive(b"z" * 512, chunks=4), cap.send)
+
+    assert cap.status == 413, "expected the oversized path"
+    ids = {cid for _, cid in seen} | {cid for _, cid in logged if cid}
+    assert len(ids) == 1, (
+        f"one request produced {len(ids)} correlation ids ({ids}) — the 413 and the "
+        "token validation that preceded it cannot be joined in the logs"
+    )
