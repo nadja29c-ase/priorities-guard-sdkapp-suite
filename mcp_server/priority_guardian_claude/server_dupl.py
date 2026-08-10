@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 # (duplicate) — exists because it imports platform-specific config.
 #
+# !! DELIBERATE DIVERGENCE, 2026-08-10 — the Claude copy is AHEAD of its source in
+# ONE respect, and this is the first divergence in this repo created ON PURPOSE
+# rather than by drift. BearerAuthMiddleware buffers the request body into a
+# `bytearray` where mcp_server/priority_guardian/server.py uses a LIST of bytes.
+# The list makes memory track CHUNK COUNT rather than BYTES: a 1 MiB body in 1-byte
+# chunks costs ~89 MiB, so six concurrent such requests exhaust a 512 MiB instance.
+# The OpenAI tree has the same flaw with NARROWER exposure — it buffers only on
+# tools/call, where this buffers every POST — and it is published and approved, so
+# it is REPORTED there, not changed. Do not "restore parity" by reverting this.
+#
 # !! ITS CONTENTS ARE NOT A COPY. Verified 2026-08-09 by symbol-level sweep: this
 # file has diverged STRUCTURALLY from the source named below, and not every
 # divergence is documented. Do not assume a symbol here behaves as its namesake
@@ -181,7 +191,13 @@ class OriginValidationMiddleware:
         ):
             origin = None
             for name, value in scope.get("headers", []):
-                if name == b"origin":
+                # .lower() — THE ENFORCEMENT SITE. This is the comparison that
+                # decides whether a cross-origin request is refused, and it was
+                # case-SENSITIVE while the auth selector P1-a built is
+                # case-INSENSITIVE. uvicorn lowercases header names per the ASGI
+                # spec so it is not exploitable as deployed, but the allowlist must
+                # not depend on a server's normalisation to be enforced at all.
+                if name.lower() == b"origin":
                     origin = value.decode("utf-8", errors="replace")
                     break
 
@@ -239,7 +255,11 @@ class HeadMcpMiddleware:
             origin_header = b"*"
             if self.allowed_origins:
                 for name, value in scope.get("headers", []):
-                    if name == b"origin":
+                    # .lower(): uvicorn lowercases header names per the ASGI spec, so
+                    # this is not exploitable as deployed — but a case-SENSITIVE
+                    # comparison sitting beside the case-INSENSITIVE selector P1-a
+                    # just built is how the next divergence starts.
+                    if name.lower() == b"origin":
                         # errors="replace": a malformed Origin must be REJECTED as
                         # a non-allowed origin, never crash the request. A replacement
                         # char cannot match an entry in allowed_origins, which is the
@@ -488,7 +508,18 @@ class BearerAuthMiddleware:
                 return
 
             # Layer 2 — the actual enforcement, counted as the body arrives.
-            body_chunks = []
+            #
+            # bytearray, NOT a list of bytes. The byte counter below was always
+            # correct; the CONTAINER was not. A 1 MiB body delivered as 1-byte
+            # chunks built 1,048,576 separate bytes objects — ~33 B of CPython
+            # object overhead each plus an 8 B list pointer — so ~41 MiB against a
+            # reported bound of 2.01 MiB. A 40x amplification reachable by any
+            # authenticated caller, and the reported figure was simply false.
+            #
+            # bytearray.extend() is amortised O(1) and stores no per-chunk object,
+            # so memory now tracks BYTES rather than CHUNK COUNT, which is what the
+            # limit is denominated in.
+            body_buf = bytearray()
             total_size = 0
 
             async def buffering_receive():
@@ -499,7 +530,7 @@ class BearerAuthMiddleware:
                     total_size += len(chunk)
                     if total_size > MAX_MCP_BODY_SIZE_BYTES:
                         raise _BodyTooLargeError(total_size)
-                    body_chunks.append(chunk)
+                    body_buf.extend(chunk)
                 return message
 
             try:
@@ -519,7 +550,15 @@ class BearerAuthMiddleware:
                 await self._send_413(send, e.size, correlation_id)
                 return
 
-            full_body = b"".join(body_chunks)
+            # bytes(), and the conversion IS deliberate. Starlette accepts a
+            # bytearray body (it normalises via b"".join internally) — measured, not
+            # assumed — but the ASGI spec types `body` as bytes, and this path fails
+            # closed for EVERY request if a downstream consumer is stricter than
+            # Starlette. One copy at 1 MiB is not worth a spec deviation here.
+            # `del` drops the bytearray immediately so the 2x overlap is momentary
+            # rather than held for the life of the request.
+            full_body = bytes(body_buf)
+            del body_buf
 
             # THE DANGEROUS PART. Reading an ASGI body CONSUMES the stream. Without
             # replay FastMCP receives an EMPTY body and EVERY request fails — not
@@ -618,11 +657,14 @@ class MCPContentTypeAndAcceptFixMiddleware:
                 auth_header = None
 
                 for name, value in scope["headers"]:
-                    if name == b"content-type" and b"application/octet-stream" in value:
+                    # .lower() throughout: not a security decision like Origin, but
+                    # the same class — a mixed-case Content-Type would silently skip
+                    # the FastMCP compatibility fix this middleware exists to apply.
+                    if name.lower() == b"content-type" and b"application/octet-stream" in value:
                         value = b"application/json"
                         modified = True
 
-                    if name == b"accept":
+                    if name.lower() == b"accept":
                         value = b"text/event-stream, application/json"
                         modified = True
 

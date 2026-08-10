@@ -454,3 +454,146 @@ async def test_valid_token_still_admitted_through_full_stack(jwks):
 
     assert cap.inner_called, "valid token blocked through the assembled stack"
     assert cap.body_seen == payload, "replay through the full stack lost the body"
+
+
+# ================== P1-b amendment — memory must track BYTES, not CHUNK COUNT
+#
+# The committed version counted bytes correctly and stored them in a LIST of bytes
+# objects. A body delivered in tiny chunks therefore cost one Python object per
+# chunk (~33 B overhead each, plus a list pointer) on top of the payload. Measured
+# on a 1 MiB limit: 89 MiB peak for a 1-byte-chunked body against a REPORTED bound
+# of 2.01 MiB. Six concurrent such requests exhaust a 512 MiB Starter instance.
+#
+# The reported figure was not merely optimistic, it was false, and no test made it
+# falsifiable. This one does.
+
+@pytest.mark.asyncio
+async def test_p1b_memory_tracks_bytes_not_chunk_count(jwks, monkeypatch):
+    """1-byte chunks must not cost more than the same payload in large chunks."""
+    import tracemalloc
+    from mcp_server.priority_guardian_claude import config as claude_config
+
+    # Small limit keeps the test fast; the defect is per-chunk overhead, which is
+    # scale-invariant. 64 KiB in 1-byte chunks is 65,536 objects under the old code.
+    small = 64 * 1024
+    monkeypatch.setattr(claude_config, "MAX_MCP_BODY_SIZE_BYTES", small)
+
+    payload = b"x" * small
+
+    # A GENERATOR, not a pre-built list. The first version of this test used the
+    # shared _receive() helper, which materialises every chunk up front — so it
+    # measured the HARNESS allocating 65,536 one-byte objects, not the middleware.
+    # It failed at ~10x and the overhead was entirely the test's own. Measure the
+    # thing under test, not the scaffolding around it.
+    one = b"x"
+    remaining = {"n": small}
+
+    async def drip_receive():
+        if remaining["n"] > 0:
+            remaining["n"] -= 1
+            return {"type": "http.request", "body": one,
+                    "more_body": remaining["n"] > 0}
+        return {"type": "http.disconnect"}
+
+    cap = Captured()
+    mw = BearerAuthMiddleware(cap.inner_app, WWW_AUTH)
+    scope = _scope([_auth(_token(3600))])
+
+    tracemalloc.start()
+    base = tracemalloc.get_traced_memory()[0]
+    await mw(scope, drip_receive, cap.send)
+    _, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    overhead = peak - base
+
+    assert cap.inner_called and cap.body_seen == payload, "body corrupted"
+    # Generous ceiling: 8x the payload. Old code hit ~85x here; new code ~2x.
+    assert overhead < small * 8, (
+        f"per-chunk overhead is back: {overhead/1024:.0f} KiB for a "
+        f"{small/1024:.0f} KiB body — memory is tracking CHUNK COUNT again"
+    )
+
+
+# =============== P1-b amendment — the lifecycle _create_replay_receive exists for
+#
+# FastMCP's POST path hands `receive` to the SSE response, whose disconnect watcher
+# calls receive() AFTER request.body() has consumed the replay. Every earlier test
+# stopped at the terminal more_body=False and never called again — so the exact
+# reason the forwarding exists had NO coverage, and if forwarding were wrong, tool
+# calls would hang. That is P1-b's stated worst case: fails closed for everyone.
+
+@pytest.mark.asyncio
+async def test_p1b_receive_after_replay_forwards_to_real_receive(jwks):
+    """A call past the replay must reach the ORIGINAL receive, not hang or repeat."""
+    payload = b'{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+    post_replay = []
+
+    async def original_receive():
+        """Yields the body once, then a disconnect — as a real server would."""
+        if not post_replay:
+            post_replay.append("body-consumed")
+            return {"type": "http.request", "body": payload, "more_body": False}
+        post_replay.append("forwarded")
+        return {"type": "http.disconnect"}
+
+    seen = []
+
+    async def sse_like_inner(scope, receive, send):
+        """Mimics EventSourceResponse: read the body, THEN watch for disconnect."""
+        msg = await receive()
+        seen.append(("body", msg["type"], msg.get("body")))
+        # the call the old harness never made
+        watcher = await receive()
+        seen.append(("watch", watcher["type"], None))
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}"})
+
+    cap = Captured()
+    mw = BearerAuthMiddleware(sse_like_inner, WWW_AUTH)
+    await mw(_scope([_auth(_token(3600))]), original_receive, cap.send)
+
+    assert seen[0] == ("body", "http.request", payload), "replay did not deliver the body"
+    assert seen[1][1] == "http.disconnect", (
+        f"post-replay receive() returned {seen[1][1]!r} instead of forwarding to the "
+        "real receive — a stale terminal message here is what hangs a tool call"
+    )
+    assert "forwarded" in post_replay, "the original receive was never reached"
+
+
+# ============================ full stack — mixed-case Origin and duplicate auth
+@pytest.mark.asyncio
+@pytest.mark.parametrize("origin_name", [b"origin", b"Origin", b"ORIGIN"])
+async def test_origin_allowlist_is_case_insensitive_through_full_stack(jwks, origin_name):
+    """A disallowed Origin must be refused whatever the header name's casing.
+
+    uvicorn lowercases names per the ASGI spec so this is not exploitable as
+    deployed — but the allowlist must not DEPEND on the server normalising for it
+    to be enforced at all.
+    """
+    cap = Captured()
+    app = _assemble(cap.inner_app)
+    scope = {"type": "http", "method": "POST", "path": "/mcp",
+             "headers": [(origin_name, b"https://evil.example"), _auth(_token(3600))],
+             "client": ("1.2.3.4", 0)}
+
+    await app(scope, _receive(b'{"jsonrpc":"2.0","id":1}'), cap.send)
+
+    assert cap.status == 403, f"{origin_name!r} bypassed the origin allowlist"
+    assert not cap.inner_called
+
+
+@pytest.mark.asyncio
+async def test_duplicate_authorization_401_through_full_stack(jwks):
+    """The duplicate case asserted through the assembled chain, not one middleware."""
+    cap = Captured()
+    app = _assemble(cap.inner_app)
+    scope = {"type": "http", "method": "POST", "path": "/mcp",
+             "headers": [_auth(_token(3600)), _auth(_token(-3600)),
+                         (b"origin", b"https://claude.ai")],
+             "client": ("1.2.3.4", 0)}
+
+    await app(scope, _receive(b'{"jsonrpc":"2.0","id":1}'), cap.send)
+
+    assert cap.status == 401
+    assert cap.headers.get("www-authenticate") == WWW_AUTH
+    assert not cap.inner_called
