@@ -218,11 +218,39 @@ function App() {
   // are NOT mobile-specific: on web and desktop the composer can overlay the bottom of
   // an INLINE app, so avoid placing interactive controls flush against any edge."
   //
-  // The "not mobile-specific" clause carries its own remedy — don't be flush — which PG
-  // already satisfies everywhere with 12-16px. The real gap was narrower: insets were
-  // gated on hostFullscreen, so MOBILE INLINE got none, and mobile inline is exactly
-  // where the composer overlays the bottom of the card.
-  const useSafeAreaInsets = platform === 'mobile'
+  // ⚠️ THE PARAGRAPH BELOW IS THE REASONING THAT CLOSED M3 WRONGLY. Kept and corrected
+  // rather than deleted, because a silently fixed misreading teaches nothing:
+  //   "The 'not mobile-specific' clause carries its own remedy — don't be flush — which
+  //    PG already satisfies everywhere with 12-16px. The real gap was narrower: insets
+  //    were gated on hostFullscreen, so MOBILE INLINE got none."
+  // That is FALSE, and the measurement says so: desktop fullscreen was flush-plus-12
+  // against a 136px overlay, which is not "satisfied by 12-16px" under any reading. The
+  // clause names web and desktop and names the composer. Treating a source's own worked
+  // example as an over-read is how this survived two reviews and a closure.
+  // M3 REOPENED AND FIXED (v12). MEASURED on desktop fullscreen: the host reports
+  // safeAreaInsets {top:16, bottom:136, left:16, right:16} and PG applied 12 on every
+  // side. 136px IS the composer overlay, and it was read and then DISCARDED here.
+  //
+  // The gate below was `platform === 'mobile'`, which is why mobile worked and desktop
+  // did not: same host data, same code path, one condition. The source says the quiet
+  // part directly — "Safe areas are NOT mobile-specific: on web and desktop the composer
+  // can overlay the bottom of an INLINE app" — and that clause was previously
+  // dispositioned as an over-read requiring only "don't be flush". The screenshot was
+  // that sentence happening.
+  //
+  // WHY `|| hasSafeAreaInsets` RATHER THAN DELETING THE PLATFORM TEST OUTRIGHT.
+  // Deleting it looks cleaner and breaks two things that were verified by observation:
+  //   - mobile fullscreen/inline report {0,0,0,0} for the sides and rely on the FLOORS
+  //     (16 / 32) below. A bare Math.max(inset, DENSITY_PADDING) drops mobile's bottom
+  //     by 16-20px and its sides by 4px — measured, not assumed — and mobile inline
+  //     clearing the composer is exactly what was observed to close M3 the first time.
+  //   - desktop INLINE reports {0,0,0,0}. Applying the mobile floors there would loosen
+  //     the inline card from 12 to 16/32, undoing the density contract.
+  // Keying on "the host actually reported something" satisfies both: platforms that
+  // report insets get them, platforms that report nothing keep their current density.
+  const hasSafeAreaInsets =
+    safeAreaTop > 0 || safeAreaBottom > 0 || safeAreaLeft > 0 || safeAreaRight > 0
+  const useSafeAreaInsets = platform === 'mobile' || hasSafeAreaInsets
 
   // HOISTED in Claude-C: the chart branch returns BEFORE the dashboard branch and needs
   // the same safe-area padding. Computing this only in the dashboard section meant the
@@ -256,10 +284,17 @@ function App() {
     ? Math.max(safeAreaTop, SAFE_AREA_FLOOR)
     : DENSITY_PADDING
   // NOTE: bottom uses a DIFFERENT formula from the other three — inset + base, floored at
-  // 32, rather than max(inset, 16). This is deliberate: it preserves the pre-B behaviour
-  // (`safeAreaBottom + 16 : 32`) because the composer sits below the widget and needs
-  // clearance beyond the home indicator itself. Stated explicitly so the four sides are
-  // not mistaken for one uniform rule.
+  // 32, rather than max(inset, 16). Deliberate: the composer sits below the widget and
+  // needs clearance beyond the home indicator itself, so the four sides are NOT one
+  // uniform rule.
+  // CORRECTED v12: this previously claimed to "preserve the pre-B behaviour
+  // (`safeAreaBottom + 16 : 32`)". True of the mobile branch's floor and FALSE of the
+  // else branch, which is DENSITY_PADDING (12), not 32. `git log -L` puts the else at
+  // BASE_PADDING (16) in e0f7bff and DENSITY_PADDING (12) from 887994f — a 4px shave.
+  // The density work made desktop marginally worse; it did not cause the defect.
+  // On desktop the reported 136 is the composer ITSELF, so bottom lands at 152 — 16px
+  // more than the host asks. Extra clearance, consistent with the rule, and preferred
+  // over special-casing the formula by platform, which is the shape being removed.
   const paddingBottom = useSafeAreaInsets
     ? Math.max(safeAreaBottom + SAFE_AREA_FLOOR, BASE_PADDING_BOTTOM)
     : DENSITY_PADDING
@@ -272,7 +307,7 @@ function App() {
     ? Math.max(safeAreaRight, SAFE_AREA_FLOOR)
     : DENSITY_PADDING
 
-  // ── M3 DIAGNOSTIC (v11, temporary) ───────────────────────────────────────────
+  // ── M3 DIAGNOSTIC (v12, temporary — KEPT ONE MORE BUILD ON PURPOSE) ───────────────────────────────────────────
   // Logged from where the insets are CONSUMED, not where they are read. B1
   // established that reading and using are different points, and this bug lives in
   // exactly that gap: on desktop the state holds whatever the host sent and the
@@ -285,13 +320,20 @@ function App() {
   // ("the composer can overlay the bottom of an inline app"), so inline carries the
   // same exposure and is measured in the same build rather than in a second one.
   //
-  // REMOVE with the M3 fix. This exists to answer one question: does the host report
+  // DELIBERATELY NOT REMOVED WITH THE FIX, which was the stated plan. The same
+  // instruction also required re-verifying MOBILE, and computation says the fix leaves
+  // mobile byte-identical — but that is an assertion, and this is the only numeric
+  // instrument for checking it. Removing the instrument in the same change that needs
+  // it would leave mobile verified by eyeball. It comes out once mobile reports
+  // unchanged numbers.
+  //
+  // Originally added to answer one question: does the host report
   // a non-zero safeAreaInsets.bottom on desktop? Non-zero -> drop the platform
   // condition. Zero -> the overlay is not expressed as an inset and the fix is a
   // composer-sized minimum instead. Guessing between them ships a change that looks
   // right and does nothing.
   useEffect(() => {
-    console.log('[PG M3 DIAGNOSTIC v11]', {
+    console.log('[PG M3 DIAGNOSTIC v12 — POST-FIX]', {
       platform,
       displayMode,
       hostFullscreen,
