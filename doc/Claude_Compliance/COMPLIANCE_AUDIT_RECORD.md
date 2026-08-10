@@ -1412,6 +1412,54 @@ its own on-host verification (expired token → 401 → Claude prompts re-auth; 
 widget afterwards. **[CORRECTED 2026-08-09 — "ships no logs" is FALSE. See the logging correction in
 Carried forward. PG-Claude emits full structured logs; this clause overstated the risk.]**
 
+> #### Codex adversarial review of the A22 IMPLEMENTATION — 2026-08-10. Three findings, none blocking.
+>
+> **CF-1 — unauthenticated JWKS amplification on unknown `kid`. CONFIRMS a finding already recorded**
+> from the deploy timings, reached independently and by a different route (code reading vs latency
+> measurement). Unchanged in substance: `fetch_jwks(force=True)` bypasses the cache fast path, so a
+> JWT-shaped token with a random `kid` costs one upstream fetch on a warm cache, two on cold.
+> Mitigation if taken: negative-cache unrecognised `kid`s.
+>
+> **CF-2 — duplicate `Authorization` headers desynchronise the gate from dispatch. NEW, REAL IN CODE,
+> NOT REACHABLE AS DEPLOYED.**
+>
+> Two parsers over one input, and they disagree twice:
+> - `BearerAuthMiddleware` (`server_dupl.py:343`) takes the **FIRST** header via `next(...)`;
+>   `MCPContentTypeAndAcceptFixMiddleware` (`server_dupl.py:446`) **overwrites in a loop**, so
+>   `auth_header_var` — and therefore dispatch — gets the **LAST**.
+> - A second divergence Codex did not report: the gate decodes **`latin-1`**, the other **`utf-8`**.
+>   `b"Bearer caf\xe9"` decodes cleanly at the gate and raises `UnicodeDecodeError` downstream.
+>
+> The damaging case is valid-then-expired: the gate admits on the first, dispatch rejects on the
+> second and returns the HTTP-200 `isError` path — **exactly the behaviour A22 exists to eliminate**.
+> Reverse order yields a false 401; two different valid tokens mean the boundary authorises user A
+> while dispatch runs as user B.
+>
+> **Reachability tested against production rather than argued.** Cloudflare returns **400** to any
+> request carrying two `Authorization` headers; it never reaches PG. Isolated by controls: a single
+> `Basic` header → 401, a single garbage `Bearer` → 401, duplicate **`X-Test`** → 401. So it is
+> duplicate-`Authorization` specifically that is refused, not duplicate headers generally.
+>
+> **Disposition: real defect, blocked by an edge PG does not own.** That is third-party
+> defence-in-depth, not a property of this code — it holds only while the edge behaves this way and
+> while PG sits behind it. Worth fixing (make both parsers agree, or reject multiple `Authorization`
+> headers outright), **not urgent, not blocking.** No fix applied — CLAUDE.md Rule 0a.
+>
+> **CF-3 — no request-body size guard on the Claude path.** The OpenAI middleware has
+> `MAX_MCP_BODY_SIZE_BYTES` with a pre-flight `Content-Length` check and streaming cap; the Claude
+> `_dupl` has neither. An authenticated caller can push an arbitrarily large POST into FastMCP.
+> **This is the same OpenAI-parity gap the `_dupl` sweep found as `_send_413` / `_BodyTooLargeError`
+> dropped, and it lands in the same place as the deferred scope-step-up limb** — both want body
+> handling in this middleware. Fold into that decision rather than patching separately.
+>
+> **Two negatives worth recording, because they were the highest-value hypotheses.** No path-variant
+> auth bypass was found: `/mcp` is compared exactly at four gates and FastMCP is mounted at
+> `streamable_http_path="/mcp"` — *verified by inspection only; Codex could not execute Starlette's
+> router.* And **the A22 tests are not vacuous** — the `_jwks_cache` patch does take effect despite the
+> middleware's lazy import, because `validate_jwt` resolves the module global at call time. They are
+> **incomplete** though: no coverage of duplicate headers, unknown-`kid` refetch, path variants, or
+> oversized bodies.
+>
 > **A22 — PARTIAL as of `b6d4974`, DEPLOYED and wire-verified in production `9741f28` /
 > `dep-d9scf7oae00c73ak7q10` (live 2026-08-09T18:33Z). Do not mark this row closed.**
 >
