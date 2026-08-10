@@ -252,6 +252,51 @@ class HeadMcpMiddleware:
         await self.app(scope, receive, send)
 
 
+class _BodyTooLargeError(Exception):
+    """Internal signal that the streamed body passed the size limit."""
+
+    def __init__(self, size: int):
+        self.size = size
+
+
+class _DuplicateAuthorizationError(Exception):
+    """More than one Authorization header was present.
+
+    NOT resolved to a winning header, deliberately. Two credentials on one request
+    is ambiguous, and ambiguity between auth layers is the condition behind
+    request smuggling. Harmonising first-vs-last would fix the divergence and
+    PRESERVE the ambiguity; rejecting removes it.
+    """
+
+
+def select_authorization_header(headers) -> "str | None":
+    """The ONE place an Authorization header is chosen from raw ASGI headers.
+
+    P1-a. This existed twice, and the two copies disagreed twice over:
+
+      - `BearerAuthMiddleware` took the FIRST via next(); the middleware below it
+        overwrote in a loop and handed dispatch the LAST. A valid-then-expired pair
+        was admitted by the gate and rejected at dispatch as an HTTP 200 isError —
+        exactly the behaviour A22a exists to eliminate.
+      - The gate decoded latin-1, the other utf-8. b"Bearer caf\xe9" passed the gate
+        and raised UnicodeDecodeError downstream: a 500 where A22-3 requires a 401.
+
+    So this is not "align the two", it is "there is one". Both layers call it.
+
+    Decoding is latin-1 because that is what RFC 9110 permits on the wire and what
+    ASGI hands over; it cannot raise, which is what removes the 500.
+
+    Raises:
+        _DuplicateAuthorizationError: if more than one header is present.
+    """
+    found = [v for name, v in headers if name.lower() == b"authorization"]
+    if len(found) > 1:
+        raise _DuplicateAuthorizationError()
+    if not found:
+        return None
+    return found[0].decode("latin-1")
+
+
 class BearerAuthMiddleware:
     """
     ASGI middleware to enforce Bearer token VALIDITY on /mcp requests.
@@ -299,13 +344,20 @@ class BearerAuthMiddleware:
             and scope.get("method") in ("GET", "POST", "DELETE")
             and scope.get("path") == "/mcp"
         ):
-            # Check for Authorization header
-            has_auth = any(
-                name == b"authorization"
-                for name, _ in scope.get("headers", [])
-            )
+            # P1-a: ONE selector, shared with the middleware below this one.
+            try:
+                auth_header = select_authorization_header(scope.get("headers", []))
+            except _DuplicateAuthorizationError:
+                # 401 + challenge, NOT 400. Two credentials is an authentication
+                # failure, not a malformed request, and only a 401 carrying the
+                # challenge makes Claude re-authenticate. A 400 here would be the
+                # single exception to A22-3's "every malformed-credential class
+                # returns 401" — the exact inconsistency this selector removes.
+                body = b'{"error": "invalid_token", "error_description": "Multiple Authorization headers"}'
+                await self._send_challenge(send, 401, body)
+                return
 
-            if not has_auth:
+            if auth_header is None:
                 # Return 401 with WWW-Authenticate challenge
                 # Claude reads this and initiates OAuth discovery + DCR
                 # Must intercept GET/POST/DELETE - FastMCP streamable HTTP uses:
@@ -340,11 +392,6 @@ class BearerAuthMiddleware:
                 validate_jwt,
             )
 
-            auth_header = next(
-                (value.decode("latin-1") for name, value in scope.get("headers", [])
-                 if name == b"authorization"),
-                None,
-            )
             token = extract_bearer_token(auth_header)
 
             if not token:
@@ -389,7 +436,126 @@ class BearerAuthMiddleware:
                 await send({"type": "http.response.body", "body": body})
                 return
 
+            # ---- P1-b: body size guard, enforced ON THE STREAM ----
+            #
+            # Reached only AFTER the token is validated, which is why an
+            # UNAUTHENTICATED oversized body is already cheap: A22a's 401 fires
+            # above, before a single body byte is read. The exposure this closes is
+            # an AUTHENTICATED oversized body on a small instance.
+            from mcp_server.priority_guardian_claude.config import (
+                MAX_MCP_BODY_SIZE_BYTES,
+            )
+
+            # GET/DELETE carry no body worth guarding.
+            if scope.get("method") in ("GET", "DELETE"):
+                await self.app(scope, receive, send)
+                return
+
+            # Layer 1 — Content-Length pre-flight. An OPTIMISATION ONLY: it avoids
+            # reading any bytes from an honest oversized request. It is NOT the
+            # enforcement, because Content-Length is client-controlled and absent
+            # entirely under chunked transfer-encoding. A limit enforced on a header
+            # the caller sets is not a limit.
+            content_length = None
+            for name, value in scope.get("headers", []):
+                if name.lower() == b"content-length":
+                    try:
+                        content_length = int(value.decode("latin-1"))
+                    except (ValueError, UnicodeDecodeError):
+                        content_length = None
+                    break
+
+            correlation_id = str(uuid.uuid4())
+            if content_length is not None and content_length > MAX_MCP_BODY_SIZE_BYTES:
+                await self._send_413(send, content_length, correlation_id)
+                return
+
+            # Layer 2 — the actual enforcement, counted as the body arrives.
+            body_chunks = []
+            total_size = 0
+
+            async def buffering_receive():
+                nonlocal total_size
+                message = await receive()
+                if message["type"] == "http.request":
+                    chunk = message.get("body", b"")
+                    total_size += len(chunk)
+                    if total_size > MAX_MCP_BODY_SIZE_BYTES:
+                        raise _BodyTooLargeError(total_size)
+                    body_chunks.append(chunk)
+                return message
+
+            try:
+                while True:
+                    msg = await buffering_receive()
+                    if msg["type"] == "http.request":
+                        if not msg.get("more_body", False):
+                            break
+                    elif msg["type"] == "http.disconnect":
+                        logger.info(
+                            "auth.middleware.client_disconnected",
+                            correlation_id=correlation_id,
+                            bytes_received=total_size,
+                        )
+                        return
+            except _BodyTooLargeError as e:
+                await self._send_413(send, e.size, correlation_id)
+                return
+
+            full_body = b"".join(body_chunks)
+
+            # THE DANGEROUS PART. Reading an ASGI body CONSUMES the stream. Without
+            # replay FastMCP receives an EMPTY body and EVERY request fails — not
+            # only oversized ones. It fails closed for everybody. This is why the
+            # increment is a port of a working implementation rather than a fresh
+            # one, and why the acceptance test asserts the inner app receives the
+            # EXACT payload rather than merely not erroring.
+            await self.app(scope, self._create_replay_receive(full_body, receive), send)
+            return
+
         await self.app(scope, receive, send)
+
+    @staticmethod
+    def _create_replay_receive(body: bytes, original_receive):
+        """Replay the buffered body once, then defer to the real receive.
+
+        After the body is consumed, calls forward to `original_receive` rather than
+        synthesising `http.disconnect`. A fake disconnect can tear down FastMCP's
+        streamable-HTTP session early — the response is an SSE stream that outlives
+        the request body, so the app still needs genuine disconnect events.
+        """
+        sent = False
+
+        async def replay_receive():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await original_receive()
+
+        return replay_receive
+
+    async def _send_413(self, send, size_bytes: int, correlation_id: str) -> None:
+        """Payload Too Large. No WWW-Authenticate: the credential was fine."""
+        logger.warning(
+            "auth.middleware.rejected",
+            method="POST",
+            path="/mcp",
+            status=413,
+            reason="body_too_large",
+            correlation_id=correlation_id,
+            size_bytes=size_bytes,
+        )
+        body = b'{"error": "payload_too_large", "error_description": "Request body exceeds maximum size"}'
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"cache-control", b"no-store"),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
 
     async def _send_challenge(self, send, status: int, body: bytes) -> None:
         """Emit a 401 carrying the single, shared WWW-Authenticate challenge.
@@ -443,14 +609,23 @@ class MCPContentTypeAndAcceptFixMiddleware:
                         value = b"text/event-stream, application/json"
                         modified = True
 
-                    if name == b"authorization":
-                        auth_header = value.decode("utf-8")
-
                     new_headers.append((name, value))
 
                 if modified:
                     scope = dict(scope)
                     scope["headers"] = new_headers
+
+                # P1-a: the SAME selector BearerAuthMiddleware used. Previously this
+                # loop assigned auth_header on every match, so it kept the LAST
+                # header while the gate above kept the FIRST, and it decoded utf-8
+                # where the gate decoded latin-1. One function now, so the two layers
+                # cannot disagree. Duplicates never reach here — the gate rejects them
+                # with a 401 — but this calls the selector rather than assuming that,
+                # because "cannot happen" is how the first divergence survived.
+                try:
+                    auth_header = select_authorization_header(scope.get("headers", []))
+                except _DuplicateAuthorizationError:
+                    auth_header = None
 
                 if auth_header:
                     token = self.auth_header_var.set(auth_header)
@@ -496,6 +671,20 @@ def create_app():
     _mcp_origin = f"{_urlparse(MCP_SERVER_URL).scheme}://{_urlparse(MCP_SERVER_URL).netloc}"
     # Per MCP spec: include scope in WWW-Authenticate to help Claude
     # understand required permissions during the discovery path
+    # ⚠️ P1-c — READ BEFORE MAKING ANY PART OF THIS VALUE PER-CALL OR CALLER-INFLUENCED.
+    #
+    # `_escape_error_description` from the OpenAI tree is deliberately NOT ported here.
+    # That function makes a string safe as an RFC 6749 quoted-string before it is
+    # interpolated into a WWW-Authenticate header, guarding header injection. PG-Claude
+    # has no interpolation site to guard: A22a established ONE shared constant, and all
+    # error detail lives in the JSON body, which is JSON-encoded and safe as-is. Porting
+    # an escaper with zero call sites would add exactly the dead code the _dupl sweep
+    # flagged elsewhere — a function with an authoritative-sounding docstring that
+    # nothing calls.
+    #
+    # TRIGGER: if any header is ever built with a per-call or caller-influenced value,
+    # port `_escape_error_description` (mcp_server/priority_guardian/server.py) WITH that
+    # change. The safety must arrive with the interpolation, not after it.
     _scopes = " ".join(SCOPES_SUPPORTED)
     WWW_AUTHENTICATE_VALUE = (
         f'Bearer resource_metadata="{_mcp_origin}/.well-known/oauth-protected-resource/mcp", '

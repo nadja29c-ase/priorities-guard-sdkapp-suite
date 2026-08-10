@@ -159,6 +159,27 @@ JWKS_FETCH_TIMEOUT_SECONDS = int(get_env(
 
 
 # ============================================================================
+# Request Size Limits
+# ============================================================================
+
+# Maximum request body size for the MCP endpoint (bytes).
+# Mirrors MAX_MCP_BODY_SIZE_BYTES in the OpenAI tree; 1 MB is generous for
+# JSON-RPC, whose largest realistic payload here is a tool call's arguments.
+#
+# NAME IS PG_CLAUDE_-PREFIXED, and that has a consequence worth knowing: the
+# OpenAI tree reads the UNPREFIXED `MAX_MCP_BODY_SIZE_BYTES`. If that variable is
+# set on this Render service it will NOT apply here — this constant will take the
+# 1 MB default until someone sets the prefixed name deliberately. Prefixed because
+# every other constant in this file is (PG_CLAUDE_JWKS_*, PG_CLAUDE_ISSUER, ...),
+# and a service-wide unprefixed name shared across four apps is how one app's
+# tuning silently becomes another's.
+MAX_MCP_BODY_SIZE_BYTES = int(get_env(
+    "PG_CLAUDE_MAX_MCP_BODY_SIZE_BYTES",
+    default=str(1024 * 1024)  # 1 MB
+))
+
+
+# ============================================================================
 # Backend Configuration
 # ============================================================================
 
