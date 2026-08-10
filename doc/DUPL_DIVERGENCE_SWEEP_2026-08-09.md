@@ -192,3 +192,62 @@ Correct divergences. Category 2 requires the reason to be *stated*; mostly it wa
 
 Module-level wiring — middleware **order**, route registration, import-time constants. **A22 was a symbol
 defect, but middleware order is the same failure class and this sweep would not see it.**
+
+---
+
+## F2 closed — increment P1, deployed `e82bbf5` (2026-08-10)
+
+The `_dupl` sweep listed six symbols dropped from `BearerAuthMiddleware`. A22a restored the 401 half;
+P1 restored the rest that applies. Deploy `dep-d9st063l550s73eit8g0`, live 13:21:28Z.
+
+- `_send_413` · `_BodyTooLargeError` · `_create_replay_receive` — **restored**, adapted: the body is
+  buffered for the size guard only, not for scope parsing.
+- `_send_401` — **already present** as `_send_challenge` from A22a.
+- `_send_403` — **NOT APPLICABLE**, not deferred. PG has one scope, `pg.access`, required by every
+  protected tool, so no valid-token-insufficient-scope state exists. Activation trigger recorded.
+- `_escape_error_description` — **deliberately not ported**; PG-Claude builds no header containing
+  caller-influenced text. Trigger recorded at `WWW_AUTHENTICATE_VALUE` itself.
+
+### Three defects the sweep did not find, all caught in review before deploy
+
+1. **A THIRD header decoder, outermost.** `RequestLoggingMiddleware` decoded every header with strict
+   utf-8, so `b"Bearer caf\xe9"` became a 500 **before any auth code ran** — from an unauthenticated
+   client, on any header. P1-a had replaced two `Authorization` decoders and both sat *below* it.
+   Now `errors="replace"`. **Verified on the wire post-deploy: 401, where it was a 500.**
+2. **Memory tracked chunk count, not bytes.** A 1 MiB body in 1-byte chunks cost **89 MiB**, not the
+   2.01 MiB reported — six concurrent such requests exhaust a 512 MiB Starter. `bytearray.extend`.
+3. **Origin comparison was case-sensitive** beside the case-insensitive selector P1-a had just built.
+
+### Memory figures — corrected again, and this is the honest full-stack number
+
+| | peak | retained |
+|---|---|---|
+| Before (list of bytes), 1-byte chunks | 89.06 MiB | 9.06 MiB |
+| After (`bytearray`), 1-byte chunks | 2.07 MiB | 1.00 MiB |
+| **After, FULL STACK incl. Starlette `request.body()`** | **~3 MiB** | **2.00 MiB** |
+
+**The 2.07 MiB figure was for this middleware alone and understated the real cost.** FastMCP reads the
+replayed body via Starlette's `request.body()` (`streamable_http.py:335`), which builds **a second
+copy** — measured, `b is replayed` → `False`. So an in-flight 1 MiB request holds ~2 MiB, not 1 MiB.
+
+*Codex raised this and named `RequestBodyLimitMiddleware` as the cause. **That class does not exist in
+the installed `mcp==1.12.4`** — zero matches for `RequestBodyLimit`, `received_body`, `body_limit`. The
+caveat was right in direction and wrong in mechanism; checking it turned up the real one. A correct
+conclusion from a wrong premise still needs its own verification.*
+
+### Codex re-review verdict
+
+Three prior findings **verified fixed, not moved**. No new exploitable request-path defect. The replay
+design was **validated against upstream source** rather than my SSE-shaped test: `sse-starlette`'s
+disconnect watcher loops on `receive()` until `http.disconnect` (`sse/sse.py:198`, confirmed locally),
+which is exactly why `_create_replay_receive` must forward after replay. That was the increment's
+largest unverified risk.
+
+**Carried forward, both observability rather than correctness:** `Origin` rejection and
+`RequestLogging` log without a correlation id (they run *before* `BearerAuth`, which mints it), and
+dispatch still mints its own — so middleware and tool records remain unjoinable. Threading one id
+across that boundary is a change to the request-context contract and needs its own increment.
+
+**Still unproven:** the admit half. Every production probe so far is a *reject* probe. Buffering,
+replay and the 413 path all require a valid token, so only a real tool call through the widget
+exercises them end to end.
