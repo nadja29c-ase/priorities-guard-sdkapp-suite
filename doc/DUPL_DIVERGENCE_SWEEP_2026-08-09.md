@@ -251,3 +251,59 @@ across that boundary is a change to the request-context contract and needs its o
 **Still unproven:** the admit half. Every production probe so far is a *reject* probe. Buffering,
 replay and the 413 path all require a valid token, so only a real tool call through the widget
 exercises them end to end.
+
+### P1 on-host acceptance — 2026-08-10 14:32Z. COMPLETE.
+
+Connector disconnected and reconnected, one MCP tool call on production against
+`e82bbf5` / `dep-d9st063l550s73eit8g0`.
+
+**THE REPLAY PATH IS PROVEN, and it was the increment's one genuinely open risk.**
+
+`14:32:28.873` — `tool.dispatch.received argument_keys=[] tool_name=get_priorities`,
+then `CallToolRequest` processed and `tool.get_priorities.success priority_count=3
+google_connected=True calendar_available=True total_hours=38.75`.
+
+For that line to exist the JSON-RPC body had to survive **`bytearray` buffer →
+`bytes()` → `_create_replay_receive` → Starlette `request.body()` → FastMCP parse**.
+A tool name and arguments came out the far end. Broken replay fails closed for
+*every* request; this disproves it against a **real FastMCP session**, not the
+SSE-shaped unit test and not Codex's reading of upstream source. Both of those were
+worth having and neither was this.
+
+- **No 401 from `Claude-User`. No 413, 500 or 503 anywhere in the window.**
+- `auth_ms=1.4` against `total_ms=1056.8` — auth is **0.1%** of the call. Request-level
+  `1073.04 ms` vs tool `1056.8 ms` leaves **~16 ms for the entire middleware stack
+  including buffering**. No latency finding.
+- Every JWKS lookup a `jwks.cache.hit`; no fetch on the request path.
+- `scope.enforcement.success required=['pg.access']` — dispatch-level scope
+  enforcement still running, so keeping double validation still buys what it was
+  kept for.
+
+#### Two things these logs do NOT show, recorded because the distinction is the shape of the bug that started this
+
+1. **The correlation-ID fix is NOT demonstrated.** The middleware logs more than once
+   only on a 413 or a disconnect, and neither occurred. What is visible is the
+   *documented limitation* behaving as documented: middleware validation under
+   `cca1b3f3…`, then `correlation.generated_fallback` minting `4c110b12…` for
+   dispatch. **A single `jwt.validation.success` proves the id was PASSED, not that
+   it is SHARED.** That is the same shape as the original finding — a log line that
+   proves one thing being read as proving a related one.
+2. **A22-2's discovery path was NOT re-exercised.** OAuth did not appear because
+   reconnect reused the existing token — correct behaviour, but it means no
+   unauthenticated probe → 401 → DCR sequence ran. That was verified 2026-08-09 with
+   a full delete-and-re-add; today does not re-confirm it, and "reconnected
+   successfully" must not stand in for it.
+
+#### P1 status: COMPLETE
+
+Both halves verified in production — reject probes at 13:23Z, admit path at 14:32Z.
+
+**Not verified in production, correctly bounded:** the **413 path itself**, because a
+>1 MiB body requires a valid token that cannot be minted from here. Covered by three
+unit tests plus negative control B, with the ordering confirmed on the wire
+(unauthenticated 3 MB → **401, not 413**, so auth runs before the body is read).
+
+**Carried forward:** the correlation-id boundary above and below this middleware ·
+`Origin` rejection and `RequestLogging` logging without an id · the OpenAI back-port
+of the `bytearray` fix · the `dupl_sweep` module-level blind spot (middleware order
+and route registration are still not compared — A22a's own failure class).
