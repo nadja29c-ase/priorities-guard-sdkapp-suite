@@ -166,23 +166,69 @@ async def test_list_tools_returns_public_tools_only(set_dev_env):
 
 @pytest.mark.asyncio
 async def test_list_tools_annotations_match_registry(set_dev_env):
-    """Tool annotations match ToolDefinition fields."""
+    """Tool annotations match ToolDefinition fields, except where Claude overrides them.
+
+    Was known-red (doc/testing_baseline_2026-07-04.md line 60): it asserted equality with
+    the registry for every tool, which create_priority's destructiveHint override already
+    broke, and it expected _meta on get_priorities alone when three widget tools carry it.
+    Both premises corrected here.
+    """
     from mcp_server.priority_guardian.tools import TOOL_REGISTRY
-    from mcp_server.priority_guardian_claude.tools_list_dupl import list_tools_for_claude
+    from mcp_server.priority_guardian_claude.tools_list_dupl import (
+        list_tools_for_claude,
+        _CLAUDE_READ_ONLY_HINT_OVERRIDES,
+        _CLAUDE_DESTRUCTIVE_HINT_OVERRIDES,
+        _WIDGET_TOOL_NAMES,
+    )
 
     tools = await list_tools_for_claude()
     for tool in tools:
+        registry_def = TOOL_REGISTRY[tool.name]
         assert tool.annotations is not None
         assert tool.annotations.title is not None
         assert len(tool.annotations.title) > 0
-        assert tool.annotations.readOnlyHint == TOOL_REGISTRY[tool.name].read_only_hint
-        assert tool.annotations.destructiveHint == TOOL_REGISTRY[tool.name].destructive_hint
-        assert tool.annotations.openWorldHint == TOOL_REGISTRY[tool.name].open_world_hint
-        # get_priorities has _meta for widget prefetch; others have None
-        if tool.name == "get_priorities":
+        assert tool.annotations.readOnlyHint == _CLAUDE_READ_ONLY_HINT_OVERRIDES.get(
+            tool.name, registry_def.read_only_hint
+        )
+        assert tool.annotations.destructiveHint == _CLAUDE_DESTRUCTIVE_HINT_OVERRIDES.get(
+            tool.name, registry_def.destructive_hint
+        )
+        # openWorldHint is never overridden — it is accurate on both surfaces
+        assert tool.annotations.openWorldHint == registry_def.open_world_hint
+        # Widget-producing tools carry _meta for host-side prefetch; others have None
+        if tool.name in _WIDGET_TOOL_NAMES:
             assert tool.meta is not None
         else:
             assert tool.meta is None
+
+
+@pytest.mark.asyncio
+async def test_get_priorities_is_not_advertised_read_only_to_claude(set_dev_env):
+    """get_priorities must reach Claude as a write tool.
+
+    It modifies persistent state on every connected call: /calendar/time-allocation sets
+    connection.last_used_at (calendar_service.py:460, :498), committed by get_db() at
+    request teardown (backend/core/database.py:50). /snapshots/ensure additionally inserts
+    snapshot rows and updates aggregates when weeks are missing. MCP defines readOnlyHint
+    as "the tool does not modify its environment", so True would be inaccurate — and the
+    Claude directory groups tools by this annotation, so an inaccurate value is published.
+
+    The shared ToolDefinition still says True for ChatGPT; this asserts the Claude surface
+    diverges deliberately rather than by drift.
+    """
+    from mcp_server.priority_guardian.tools import TOOL_REGISTRY
+    from mcp_server.priority_guardian_claude.tools_list_dupl import list_tools_for_claude
+
+    tools = {t.name: t for t in await list_tools_for_claude()}
+    annotations = tools["get_priorities"].annotations
+
+    assert annotations.readOnlyHint is False
+    assert annotations.destructiveHint is True
+    assert annotations.openWorldHint is True
+    assert annotations.title == "Get Priorities"
+
+    # The divergence is real: the shared definition still reads True for ChatGPT.
+    assert TOOL_REGISTRY["get_priorities"].read_only_hint is True
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ Unit tests for get_priorities MCP handler snapshot integration (Increment 08).
 Tests:
 - Snapshot endpoint called in parallel
 - Snapshot failures don't break dashboard
-- read_only_hint is True (invisible bookkeeping, not user-visible state)
+- read_only_hint is True on the SHARED/ChatGPT definition (Claude overrides it to False)
 """
 
 import pytest
@@ -169,7 +169,13 @@ class TestToolAnnotations:
     """Tests for tool annotation changes."""
 
     def test_read_only_hint_is_true(self):
-        """get_priorities has read_only_hint=True (snapshot writes are invisible bookkeeping)."""
+        """Shared/ChatGPT value only — the Claude surface overrides this to False.
+
+        "Invisible bookkeeping" was the original rationale and is superseded: the snapshot
+        write it referred to is conditional, but connection.last_used_at is written on
+        every connected call (calendar_service.py:460, :498) and committed by get_db().
+        See _CLAUDE_READ_ONLY_HINT_OVERRIDES in priority_guardian_claude/tools_list_dupl.py.
+        """
         from mcp_server.priority_guardian.tools.get_priorities import GET_PRIORITIES
 
         assert GET_PRIORITIES.read_only_hint is True

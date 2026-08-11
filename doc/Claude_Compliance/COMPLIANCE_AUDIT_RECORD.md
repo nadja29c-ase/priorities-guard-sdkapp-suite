@@ -1205,7 +1205,7 @@ VERIFIED (38)
 | **P4C** | ✅ verified — PG carries none. **Absent from `review-criteria`; binding only via the policy** |
 | **P5C** | ✅ verified — 8/8 public tools; longest served is `delete_my_priority_guardian_data` at **32** |
 | **P5D** | ✅ verified — OAuth 2.0 + PKCE S256, TLS on both hosts |
-| **P5E** | ✅ verified on the **Claude serving surface** — all 8 public tools carry a title and at least one hint. `title` is structurally guaranteed (required positional field on `ToolDefinition`). ⚠️ `create_priority` is `destructive_hint=False` in the **shared registry** and overridden to `True` for Claude in `tools_list_dupl.py` — **audit the serving path, not the registry** |
+| **P5E** | ✅ verified on the **Claude serving surface** — all 8 public tools carry a title and at least one hint. `title` is structurally guaranteed (required positional field on `ToolDefinition`). ⚠️ `create_priority` is `destructive_hint=False` in the **shared registry** and overridden to `True` for Claude in `tools_list_dupl.py` — **audit the serving path, not the registry**. ⚠️ **AMENDED 2026-08-11 — presence was verified, accuracy was not.** The earlier pass checked that hints existed, which is only half of §5E ("all *applicable* annotations" means applicable **and** correct). Tracing the serving path found `get_priorities` advertising `readOnlyHint: true` while writing persistent state on every connected call: `/calendar/time-allocation` sets `connection.last_used_at` (`calendar_service.py:460`, `:498`) and `get_db()` commits it at request teardown (`backend/core/database.py:50`); `/snapshots/ensure` additionally inserts `pg_weekly_snapshots` rows and updates aggregates when weeks are missing (`snapshot_service.py:393`, conditional — it returns early at `:151-158`). Now overridden Claude-side to `readOnlyHint=false` / `destructiveHint=true` via `_CLAUDE_READ_ONLY_HINT_OVERRIDES`; the shared/ChatGPT descriptor is deliberately unchanged. **The superseded rationale — "snapshot write is invisible bookkeeping" — addressed only the conditional write and never the unconditional one; do not restore it.** Verified by `test_get_priorities_is_not_advertised_read_only_to_claude`. Portal-side confirmation that Get Priorities leaves the "Read-only tools" group is **still outstanding** and is a pre-submission gate |
 | **R1** | ✅ verified — purpose-built tools, no catch-all with a `method` parameter; writes already split by action type |
 | **A1** | ✅ verified |
 | **A2** | ✅ verified — live AS metadata |
@@ -1293,6 +1293,12 @@ filters to visibility == "public" (tools_list_dupl.py:37). All 8 carry a title a
 hint. ⚠️ create_priority carries destructive_hint=False in the SHARED registry to preserve ChatGPT
 UX and is overridden to True for Claude in tools_list_dupl.py per Policy §5E. AUDIT THE CLAUDE
 SERVING PATH, NOT THE SHARED REGISTRY — a check against tools/ answers a ChatGPT question.
+⚠️ AMENDED 2026-08-11 — get_priorities is the SECOND such override: read_only_hint=True in the
+shared registry, readOnlyHint=false + destructiveHint=true on Claude, because it writes
+connection.last_used_at on every connected call. Two overrides now exist, in two separate maps
+(_CLAUDE_READ_ONLY_HINT_OVERRIDES, _CLAUDE_DESTRUCTIVE_HINT_OVERRIDES). "All 8 carry a hint" was
+never the whole of §5E — the hints must also be TRUE OF THE TOOL. Presence is cheap to verify and
+was; accuracy needs a trace to the backend route and, for these two tools, it did not hold.
 
 _meta.ui.domain — KEPT, and the reason is now recorded rather than inherited. PG's widget runs its
 own OAuth flow (ConnectionStatus.tsx calls connect_google_calendar, extracts connect_url, then

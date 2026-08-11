@@ -523,7 +523,16 @@ class TestToolDefinition:
         assert GET_PRIORITIES.widget_uri == "ui://widget/pg-dashboard-v12.html"
 
     def test_read_only_hint_is_true(self):
-        """Test read_only_hint is True (snapshot writes are invisible bookkeeping)."""
+        """Shared/ChatGPT value only — the Claude surface overrides this to False.
+
+        The old rationale here read "snapshot writes are invisible bookkeeping". That is
+        superseded: the tool also sets connection.last_used_at on every connected call
+        (calendar_service.py:460, :498), committed by get_db() at request teardown, so it
+        is not read-only under the MCP definition. True is retained for ChatGPT only, to
+        avoid changing a published descriptor. See _CLAUDE_READ_ONLY_HINT_OVERRIDES in
+        priority_guardian_claude/tools_list_dupl.py and the Claude-surface assertion in
+        tests/unit/mcp_pg_claude/test_scaffold.py.
+        """
         assert GET_PRIORITIES.read_only_hint is True
 
     def test_destructive_hint_is_false(self):

@@ -327,7 +327,16 @@ GET_PRIORITIES = ToolDefinition(
     required_scopes=REQUIRED_SCOPES,
     widget_uri=WIDGET_URI,  # Points to the widget this tool produces
     handle=handle,
-    read_only_hint=True,    # openWorldHint=True covers Google Calendar API call; snapshot write is invisible bookkeeping
+    # ⚠️ True here is the CHATGPT value only, and it is known to be inaccurate.
+    # This tool writes on every connected call: /calendar/time-allocation sets
+    # connection.last_used_at (calendar_service.py:460, :498) and get_db() commits it
+    # (backend/core/database.py:50). /snapshots/ensure additionally inserts snapshot rows
+    # when weeks are missing. The Claude surface declares readOnlyHint=False via
+    # _CLAUDE_READ_ONLY_HINT_OVERRIDES in priority_guardian_claude/tools_list_dupl.py;
+    # this value is left True so the published ChatGPT descriptor does not change.
+    # (Superseded comment, do not restore: "snapshot write is invisible bookkeeping" —
+    # that argued only the conditional snapshot write and missed the unconditional one.)
+    read_only_hint=True,
     destructive_hint=False,
     open_world_hint=True,   # Calls Google Calendar API via backend
     widget_accessible=True, # Widget can call this tool
