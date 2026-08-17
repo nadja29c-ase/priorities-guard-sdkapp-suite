@@ -14,7 +14,9 @@ import App from '../App'
 
 // Type for the mock app instance
 interface MockApp {
-  getHostContext: () => { displayMode: string }
+  // Returns undefined before connect() resolves, per the SDK: "Returns undefined if called
+  // before connection is established."
+  getHostContext: () => { displayMode: string } | undefined
   ontoolresult: ((result: unknown) => void) | null
   // Host-initiated display-mode changes arrive here. Since inc_host_negotiated_fullscreen
   // this is the ONLY way back to inline — the app owns no exit control.
@@ -35,10 +37,36 @@ interface UseAppConfig {
 const mockUseApp = vi.fn((_config?: any) => ({ app: null as MockApp | null }))
 const mockUseHostStyles = vi.fn()
 
+// The app instance the test handed to onAppCreated. Reset before every test.
+let createdApp: MockApp | null = null
+
 vi.mock('@modelcontextprotocol/ext-apps/react', () => ({
-  useApp: (config: UseAppConfig) => mockUseApp(config),
+  // Models the REAL useApp lifecycle, which the previous mock did not:
+  //
+  //   new App(...) -> onAppCreated(app)  ->  await app.connect()  ->  setApp(app)
+  //
+  // onAppCreated fires BEFORE connect, and `app` is exposed only AFTER connect resolves.
+  // The old mock returned `{ app: null }` forever, so any code keyed on `app` never ran and
+  // every test passed on a baseline read that production cannot produce — which is exactly
+  // how the pre-connect getHostContext() defect survived a full test suite.
+  useApp: (config: UseAppConfig) => {
+    const result = mockUseApp({
+      ...config,
+      onAppCreated: (appInstance: MockApp) => {
+        createdApp = appInstance
+        config.onAppCreated?.(appInstance)
+      },
+    })
+    // Once the test has "created" the app, later renders expose it — standing in for
+    // connect() having resolved. Before that, `app` is null, as it is pre-connect.
+    return result?.app ? result : { app: createdApp }
+  },
   useHostStyles: (...args: unknown[]) => mockUseHostStyles(...args),
 }))
+
+beforeEach(() => {
+  createdApp = null
+})
 
 describe('App Component', () => {
   beforeEach(() => {
@@ -3202,5 +3230,85 @@ describe('Host-negotiated fullscreen (inc_host_negotiated_fullscreen)', () => {
         expect(Number(minHeight[1])).toBeGreaterThanOrEqual(44)
       }
     }
+  })
+})
+
+// ==========================================================================
+// Test 10 for inc_host_negotiated_fullscreen — host-context baseline lifecycle
+// ==========================================================================
+// Added after an adversarial review found the increment shipped with a pre-connect
+// getHostContext() read. Kept in its own block because it is the only test that models the
+// SDK's real connect ordering, and that ordering is the thing under test.
+
+describe('Host-context baseline is read after connect (inc_host_negotiated_fullscreen)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  // Test 10 — Catches: reading the host-context baseline in onAppCreated, which runs BEFORE
+  // connect(). getHostContext() returns undefined there, so availableDisplayModes stays []
+  // and the strict gate hides "Open full board" forever on any host that does not follow up
+  // with a hostcontextchanged carrying availableDisplayModes — which the protocol does not
+  // require. Fails against 6b465df; passes once the read moves to an effect keyed on `app`.
+  it('shows the fullscreen affordance when the host context is only readable after connect', async () => {
+    const { act } = await import('@testing-library/react')
+
+    // Flips when connect() resolves. Before that, the SDK has no host context to return.
+    let connected = false
+    const HOST_CONTEXT = {
+      displayMode: 'inline',
+      availableDisplayModes: ['inline', 'fullscreen'],
+      safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      platform: 'desktop',
+    }
+
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    let capturedOnHostContextChanged: ((ctx: Record<string, unknown>) => void) | null = null
+    const mockApp: MockApp = {
+      // undefined until connect resolves — the behaviour the old mock never modelled
+      getHostContext: () => (connected ? HOST_CONTEXT : undefined),
+      callServerTool: vi.fn().mockResolvedValue({}),
+      requestDisplayMode: vi.fn().mockResolvedValue({ mode: 'fullscreen' }),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+      get onhostcontextchanged() {
+        return capturedOnHostContextChanged
+      },
+      set onhostcontextchanged(handler: ((ctx: Record<string, unknown>) => void) | null) {
+        capturedOnHostContextChanged = handler
+      },
+    }
+
+    await act(async () => {
+      // Pre-connect: handlers register, and any baseline read here sees undefined.
+      capturedOnAppCreated!(mockApp)
+      // connect() resolves: the host context exists and useApp exposes `app`.
+      connected = true
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [{ cluster_name: 'Test cluster', sum_thought_items: 2 }],
+        },
+      })
+    })
+
+    // The host advertised fullscreen in the INITIALIZE response only. No notification was
+    // sent, and none is required — the affordance must still be there.
+    expect(capturedOnHostContextChanged).not.toBeNull()
+    expect(screen.getByRole('button', { name: /open full board/i })).toBeInTheDocument()
   })
 })

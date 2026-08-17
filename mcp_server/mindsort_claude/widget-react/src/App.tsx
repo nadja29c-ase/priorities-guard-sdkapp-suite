@@ -289,6 +289,12 @@ function App() {
   // failed request disable fullscreen permanently until remount.
   const displayModeRequestPendingRef = useRef(false)
 
+  // Set once a mode has been negotiated with the host. Guards the one-shot baseline read
+  // below: `requestDisplayMode` does NOT update the SDK's cached _hostContext (only a
+  // hostcontextchanged notification does), so a late baseline read still carries the
+  // 'inline' it was constructed with and would undo a fullscreen the host just granted.
+  const displayModeNegotiatedRef = useRef(false)
+
   // Helper to check if fullscreen is available from host
   const isFullscreenAvailable = hostContext.availableDisplayModes.includes('fullscreen')
 
@@ -302,18 +308,22 @@ function App() {
     onAppCreated: useCallback((appInstance: McpApp) => {
       appRef.current = appInstance
 
-      // Read initial host context for display mode sync
-      const ctx = appInstance.getHostContext?.()
-      if (ctx) {
-        const initialMode: DisplayMode = ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline'
-        setDisplayMode(initialMode)
-        setHostContext({
-          displayMode: initialMode,
-          availableDisplayModes: (ctx.availableDisplayModes as DisplayMode[]) ?? [],
-          safeAreaInsets: ctx.safeAreaInsets ?? { top: 0, bottom: 0, left: 0, right: 0 },
-          platform: ctx.platform ?? null,
-        })
-      }
+      // THIS BLOCK REGISTERS HANDLERS, AND NOTHING ELSE.
+      //
+      // It previously also read the host-context baseline here — getHostContext() for
+      // displayMode, availableDisplayModes, safeAreaInsets and platform. That was DEAD
+      // CODE. useApp calls onAppCreated BEFORE `await connect()`, and `_hostContext` is
+      // assigned inside connect() from the ui/initialize response; getHostContext() is
+      // documented "Returns undefined if called before connection is established." So the
+      // read always saw undefined, `availableDisplayModes` stayed [], the strict gate kept
+      // "Open full board" hidden, and fullscreen was reachable only if the host happened to
+      // send a later hostcontextchanged that carried availableDisplayModes — which the
+      // protocol does not require. PG-Claude had the identical bug and fixed it the same
+      // way (priority_guardian_claude/.../App.tsx:481-487).
+      //
+      // The baseline read now lives in the effect below, keyed on `app`, which useApp sets
+      // only after connect() resolves. Handler registration MUST stay here: the host may
+      // deliver a one-shot notification as soon as the handshake completes.
 
       // Register handler for host context changes (mode transitions, safe area, etc.)
       // Host context is authoritative; local state reconciles toward it.
@@ -376,6 +386,44 @@ function App() {
       }
     }, []),
   })
+
+  // ---------------------------------------------------------------------------
+  // Host-context baseline read.
+  //
+  // Keyed on `app`, which useApp sets ONLY after `await connect()` resolves — so by the
+  // time this runs the ui/initialize handshake is complete and getHostContext() has real
+  // data. This is the whole point: the previous read ran in onAppCreated, before connect,
+  // and always saw undefined, which left availableDisplayModes empty and the fullscreen
+  // affordance permanently hidden on a host that never sent a follow-up notification.
+  //
+  // Ongoing updates stay with onhostcontextchanged, which writes per-field into the same
+  // state. Anything that arrives before this effect runs is not lost: the handler is
+  // registered pre-connect and writes to React state directly, and the SDK also merges the
+  // notification into _hostContext, so the baseline read below reflects it either way.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!app) return
+
+    const initial = app.getHostContext?.()
+    if (!initial) return
+
+    const initialMode: DisplayMode = initial.displayMode === 'fullscreen' ? 'fullscreen' : 'inline'
+
+    // A negotiated mode outranks this snapshot — see displayModeNegotiatedRef.
+    if (!displayModeNegotiatedRef.current) {
+      setDisplayMode(initialMode)
+    }
+
+    // Seed per-field, falling back to what we already hold, so a host context that omits a
+    // field cannot erase it.
+    setHostContext((prev) => ({
+      displayMode: displayModeNegotiatedRef.current ? prev.displayMode : initialMode,
+      availableDisplayModes:
+        (initial.availableDisplayModes as DisplayMode[] | undefined) ?? prev.availableDisplayModes,
+      safeAreaInsets: initial.safeAreaInsets ?? prev.safeAreaInsets,
+      platform: initial.platform ?? prev.platform,
+    }))
+  }, [app])
 
   // Inject host theme CSS variables (must pass hostContext for dark mode)
   useHostStyles(app, app?.getHostContext())
@@ -655,9 +703,11 @@ function App() {
       // THE RETURNED MODE DECIDES — not the fact that the promise resolved. A resolved
       // request may legitimately return 'inline'; treating resolution as success would
       // reproduce local-only fullscreen by a different route.
+      displayModeNegotiatedRef.current = true
       setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
     } catch {
       // Declined or failed: remain inline, cleanly.
+      displayModeNegotiatedRef.current = true
       setDisplayMode('inline')
     } finally {
       displayModeRequestPendingRef.current = false
