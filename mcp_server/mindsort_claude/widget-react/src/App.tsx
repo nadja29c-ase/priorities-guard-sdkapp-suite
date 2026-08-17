@@ -262,7 +262,11 @@ function App() {
   // ==========================================================================
   // Host context is authoritative; local state only reconciles toward it.
   const [displayMode, setDisplayMode] = useState<DisplayMode>('inline')
-  const [hostFullscreen, setHostFullscreen] = useState(false)
+  // `hostFullscreen` was a SECOND state variable tracked alongside displayMode, and it
+  // could drift: setHostFullscreen(true) fired only from the initial getHostContext() read
+  // at mount, so a host-granted fullscreen arriving later left displayMode='fullscreen'
+  // with hostFullscreen=false. It is not tracked any more — after host negotiation the two
+  // are the same fact, so it is derived where needed rather than stored.
   const [hostContext, setHostContext] = useState<HostContextState>({
     displayMode: 'inline',
     availableDisplayModes: [],
@@ -278,6 +282,12 @@ function App() {
 
   // Ref for focus restoration on fullscreen exit
   const fullscreenOpenerRef = useRef<HTMLButtonElement | null>(null)
+
+  // In-flight guard for requestDisplayMode. A ref, not state: it must not trigger a
+  // render, and it is read and written in the same tick. Cleared in `finally` so a
+  // REJECTED request also releases it — clearing only on the success path would let one
+  // failed request disable fullscreen permanently until remount.
+  const displayModeRequestPendingRef = useRef(false)
 
   // Helper to check if fullscreen is available from host
   const isFullscreenAvailable = hostContext.availableDisplayModes.includes('fullscreen')
@@ -297,9 +307,6 @@ function App() {
       if (ctx) {
         const initialMode: DisplayMode = ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline'
         setDisplayMode(initialMode)
-        if (initialMode === 'fullscreen') {
-          setHostFullscreen(true)
-        }
         setHostContext({
           displayMode: initialMode,
           availableDisplayModes: (ctx.availableDisplayModes as DisplayMode[]) ?? [],
@@ -313,11 +320,12 @@ function App() {
       appInstance.onhostcontextchanged = (ctx) => {
         if (ctx.displayMode !== undefined) {
           const newMode: DisplayMode = ctx.displayMode === 'fullscreen' ? 'fullscreen' : 'inline'
+          // RECONCILE ONLY — observe what the host already did and update local state.
+          // Never call requestDisplayMode() from here: the host has ALREADY switched, so
+          // requesting the mode it just reported asks it to redo its own work.
           setDisplayMode(newMode)
-          if (newMode === 'inline') {
-            setHostFullscreen(false)
-            // Focus restoration handled by useEffect on displayMode change
-          }
+          // Focus restoration is handled by a useEffect on the displayMode transition and
+          // is deliberately independent of display-mode REQUESTS.
         }
         if (ctx.availableDisplayModes !== undefined) {
           setHostContext((prev) => ({
@@ -618,42 +626,59 @@ function App() {
   // ==========================================================================
   // DISPLAY MODE HANDLERS
   // ==========================================================================
-  // Entry: LOCAL STATE only (setDisplayMode) - per PG-Claude pattern
-  // Exit: requestDisplayMode({ mode: 'inline' }) with try/catch
+  // Entry and exit are both HOST-NEGOTIATED: requestDisplayMode() asks, and the mode the
+  // host RETURNS is authoritative. Local React state can select a fullscreen *layout*; it
+  // cannot promote the app into host fullscreen. Only the host can do that, which is why
+  // entry must ask rather than assume.
+  //
+  // (Superseded comment, do not restore: "Entry: LOCAL STATE only (setDisplayMode) - per
+  // PG-Claude pattern ... verified 2026-07-22". That was wrong on both counts — it was
+  // local-only, and PG-Claude does NOT do this: PG calls requestDisplayMode and applies
+  // the returned mode. The stale claim is why entry never reached real host fullscreen.)
 
-  // Expand to fullscreen - LOCAL STATE only (no requestDisplayMode call on entry)
-  // This is the pattern used by PG-Claude (verified 2026-07-22)
-  const handleExpandToFullscreen = useCallback(() => {
+  // Expand to fullscreen - asks the host, applies the host's answer.
+  const handleExpandToFullscreen = useCallback(async () => {
+    // STRICT capability gate, deliberately NOT PG's permissive-when-absent variant: if the
+    // host has not advertised fullscreen, stay inline and send nothing.
     if (isBridgeStale || !isFullscreenAvailable) return
-    setDisplayMode('fullscreen')
+
+    const app = appRef.current
+    // No request method: remain inline. Never fake a local fullscreen — a fullscreen
+    // layout inside an inline iframe is the divergence this increment removes.
+    if (!app?.requestDisplayMode) return
+
+    if (displayModeRequestPendingRef.current) return
+    displayModeRequestPendingRef.current = true
+
+    try {
+      const result = await app.requestDisplayMode({ mode: 'fullscreen' })
+      // THE RETURNED MODE DECIDES — not the fact that the promise resolved. A resolved
+      // request may legitimately return 'inline'; treating resolution as success would
+      // reproduce local-only fullscreen by a different route.
+      setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
+    } catch {
+      // Declined or failed: remain inline, cleanly.
+      setDisplayMode('inline')
+    } finally {
+      displayModeRequestPendingRef.current = false
+    }
   }, [isBridgeStale, isFullscreenAvailable])
 
-  // Minimize to inline - calls requestDisplayMode with try/catch
-  // Host context is authoritative; local state only reconciles toward it.
-  // On rejection, do NOT force inline - let onhostcontextchanged reconcile.
-  const handleMinimizeToInline = useCallback(async () => {
-    setHostFullscreen(false)
-    if (appRef.current?.requestDisplayMode) {
-      try {
-        const result = await appRef.current.requestDisplayMode({ mode: 'inline' })
-        // Only update from successful result
-        setDisplayMode(result.mode === 'fullscreen' ? 'fullscreen' : 'inline')
-      } catch {
-        // On rejection, do NOT force inline - host context is authoritative.
-        // If host rejected and stays fullscreen, let onhostcontextchanged reconcile.
-        // This prevents divergence between widget state and actual host mode.
-      }
-    } else {
-      // No requestDisplayMode available - fall back to inline
-      setDisplayMode('inline')
-    }
-  }, [])
+  // There is deliberately NO exit handler. Returning to inline is the HOST's to initiate,
+  // via the native close it renders in its own header in fullscreen — observed present,
+  // and returning cleanly to the inline board, on both mobile and desktop (2026-08-17).
+  // onhostcontextchanged then reports the change and reconciliation observes it.
+  //
+  // The former handleMinimizeToInline drove an app-owned Minimize button. Both are gone:
+  // two exit affordances on one surface is duplicate chrome, and the app-owned one was the
+  // 36px tap target as well. Do not reintroduce a requestDisplayMode({mode:'inline'}) call
+  // from reconciliation — that asks the host to redo a switch it has already made.
 
   // Handle "Open full board" button click - enters fullscreen mode.
   // Button is only rendered when isFullscreenAvailable (capability-gated),
   // so this handler always has fullscreen available.
   const handleOpenFullBoard = useCallback(() => {
-    handleExpandToFullscreen()
+    void handleExpandToFullscreen()
   }, [handleExpandToFullscreen])
 
   // Handle "View remaining cluster content" overflow action
@@ -729,9 +754,7 @@ function App() {
     return (
       <FullscreenBoardView
         clusters={sortedClusters}
-        hostFullscreen={hostFullscreen}
         safeAreaInsets={hostContext.safeAreaInsets}
-        onMinimize={handleMinimizeToInline}
       />
     )
   }
@@ -1337,9 +1360,7 @@ function OverflowActionRow({
 
 interface FullscreenBoardViewProps {
   clusters: Cluster[]
-  hostFullscreen: boolean
   safeAreaInsets: { top: number; bottom: number; left: number; right: number }
-  onMinimize: () => void
 }
 
 /**
@@ -1350,7 +1371,11 @@ interface FullscreenBoardViewProps {
  * - All thought items (priority-sorted)
  * - Subclusters as nested cards with their thoughts
  * - Tag PILLS (deferred from inline to here)
- * - Native fullscreen close not duplicated (gated on hostFullscreen)
+ * - NO app-owned exit control: the host renders a native close in its own header in
+ *   fullscreen (observed on mobile and desktop 2026-08-17, returning cleanly to inline).
+ *   This view is only reached when the host GRANTED fullscreen, so there is no state in
+ *   which an app-owned fallback exit would be needed — a `!hostFullscreen` gate here was
+ *   unreachable, which is why the prop and the header are gone rather than gated.
  * - Responsive grid layout (240px min, matches OpenAI)
  * - Header: title + subtitle, NO count (OpenAI parity)
  * - Auto-save footer at the end
@@ -1358,9 +1383,7 @@ interface FullscreenBoardViewProps {
  */
 function FullscreenBoardView({
   clusters,
-  hostFullscreen,
   safeAreaInsets,
-  onMinimize,
 }: FullscreenBoardViewProps) {
   // Counts needed for virtualization check, NOT displayed in header (OpenAI parity)
   // INTENTIONAL ASYMMETRY: Inline card shows count; fullscreen header does not.
@@ -1448,17 +1471,19 @@ function FullscreenBoardView({
         boxSizing: 'border-box',
       }}
     >
-      {/* Fullscreen header with minimize button - only when NOT host-provided fullscreen */}
-      {!hostFullscreen && (
-        <FullscreenHeader onMinimize={onMinimize} />
-      )}
+      {/* No app-owned minimize header: the host's native close is the only exit.
+          This was `{!hostFullscreen && <FullscreenHeader …>}`, which became unreachable
+          once the app stopped faking fullscreen locally — this view renders only when the
+          host granted fullscreen, so !hostFullscreen was false in every reachable state. */}
 
       {/* Board header: title + subtitle, NO count (OpenAI parity)
           INTENTIONAL ASYMMETRY: Inline card keeps count; fullscreen header has none. */}
       <div
         style={{
           marginBottom: '16px', // inc 6 §3: board header bottom margin 24→16
-          paddingTop: !hostFullscreen ? '8px' : '0',
+          // Was `!hostFullscreen ? '8px' : '0'` — the 8px only ever spaced the board header
+          // below the removed minimize bar, so it resolves to the host-fullscreen value.
+          paddingTop: '0',
         }}
       >
         <h1
@@ -1574,79 +1599,6 @@ function FullscreenBoardView({
       >
         Changes are saved automatically
       </p>
-    </div>
-  )
-}
-
-// =============================================================================
-// FULLSCREEN HEADER
-// =============================================================================
-
-interface FullscreenHeaderProps {
-  onMinimize: () => void
-}
-
-/**
- * Fullscreen header with minimize button.
- * Only rendered when !hostFullscreen (host does NOT provide native close).
- * Keyboard accessible: Enter/Space activate.
- */
-function FullscreenHeader({ onMinimize }: FullscreenHeaderProps) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'flex-end',
-        marginBottom: '8px',
-      }}
-    >
-      <button
-        type="button"
-        onClick={onMinimize}
-        aria-label="Minimize to inline view"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '8px 12px',
-          fontSize: 'var(--font-text-sm-size, 14px)', // inc 6 §2: was off-scale 13px (test 3)
-          lineHeight: 'var(--font-text-sm-line-height, 1.4)',
-          fontWeight: 500,
-          color: 'var(--color-text-secondary, #3D3D3A)',
-          background: 'var(--color-background-secondary, #F5F4ED)',
-          border: 'none',
-          borderRadius: 'var(--border-radius-md, 8px)',
-          cursor: 'pointer',
-          // NOTE (inc 6): pre-existing minHeight 36px is BELOW the 44pt tap-target
-          // guideline. NOT modified here (outside §2/§3 tables; RULE 0a — reporting,
-          // not fixing). Flagged for manual F / Nadja's decision. Only shown when
-          // !hostFullscreen (host provides native close on real host).
-          minHeight: '36px',
-          outline: 'none',
-        }}
-        onFocus={(e) => {
-          e.currentTarget.style.boxShadow = '0 0 0 2px var(--color-ring-primary, #141413)'
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.boxShadow = 'none'
-        }}
-      >
-        {/* Minimize icon - SVG chevron down */}
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        Minimize
-      </button>
     </div>
   )
 }

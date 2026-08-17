@@ -16,6 +16,9 @@ import App from '../App'
 interface MockApp {
   getHostContext: () => { displayMode: string }
   ontoolresult: ((result: unknown) => void) | null
+  // Host-initiated display-mode changes arrive here. Since inc_host_negotiated_fullscreen
+  // this is the ONLY way back to inline — the app owns no exit control.
+  onhostcontextchanged?: ((ctx: Record<string, unknown>) => void) | null
   callServerTool?: ReturnType<typeof vi.fn>
   requestDisplayMode?: ReturnType<typeof vi.fn>
 }
@@ -1368,9 +1371,14 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     expect(config.capabilities.availableDisplayModes).toContain('fullscreen')
   })
 
-  // Test 2: Entry via local state (NOT requestDisplayMode on entry)
-  // This matches PG-Claude pattern verified 2026-07-22
-  it('fullscreen entry uses local state, NOT requestDisplayMode', async () => {
+  // Test 2 (REWRITTEN by inc_host_negotiated_fullscreen): entry is HOST-NEGOTIATED.
+  //
+  // Sanctioned change. This test previously asserted the inverse — that entry uses local
+  // state and requestDisplayMode is NOT called — on the stated grounds that it "matches
+  // PG-Claude pattern verified 2026-07-22". That premise was false: PG-Claude calls
+  // requestDisplayMode and applies the returned mode. The old assertion pinned the defect
+  // in place, so it inverts here rather than being deleted.
+  it('fullscreen entry calls requestDisplayMode (host-negotiated, not local-only)', async () => {
     const { fireEvent } = await import('@testing-library/react')
 
     let capturedOnAppCreated: ((app: MockApp) => void) | null = null
@@ -1409,65 +1417,33 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
 
     // Click "Open full board" when fullscreen is available
     const openButton = screen.getByRole('button', { name: /open full board/i })
+    mockRequestDisplayMode.mockResolvedValue({ mode: 'fullscreen' })
     fireEvent.click(openButton)
 
-    // requestDisplayMode should NOT be called on entry (per PG pattern)
-    expect(mockRequestDisplayMode).not.toHaveBeenCalled()
+    // Entry must ASK the host. Local state cannot promote the app into host fullscreen.
+    expect(mockRequestDisplayMode).toHaveBeenCalledWith({ mode: 'fullscreen' })
   })
 
-  // Test 3: Minimize rejection does NOT force inline (host context authoritative)
-  // On requestDisplayMode rejection, the widget must NOT unilaterally set inline.
-  // If host rejected and stays fullscreen, onhostcontextchanged will reconcile.
-  it('minimize rejection does NOT force inline - lets host context reconcile', async () => {
-    const { act, fireEvent, waitFor } = await import('@testing-library/react')
-
-    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockUseApp.mockImplementation((config: any) => {
-      capturedOnAppCreated = config.onAppCreated
-      return { app: null }
-    })
-
-    render(<App />)
-
-    let capturedOntoolresult: ((result: unknown) => void) | null = null
-    const mockRequestDisplayMode = vi.fn().mockRejectedValue(new Error('Host rejected'))
-    const mockApp: MockApp = {
-      getHostContext: () => ({
-        displayMode: 'fullscreen', // Start in host-initiated fullscreen
-        availableDisplayModes: ['inline', 'fullscreen'],
-      }),
-      requestDisplayMode: mockRequestDisplayMode,
-      get ontoolresult() {
-        return capturedOntoolresult
-      },
-      set ontoolresult(handler: ((result: unknown) => void) | null) {
-        capturedOntoolresult = handler
-      },
-    }
-
-    await act(async () => {
-      capturedOnAppCreated!(mockApp)
-      capturedOntoolresult!({
-        structuredContent: {
-          clusters: [{ cluster_name: 'Test', sum_thought_items: 1 }],
-        },
-      })
-    })
-
-    // Should be in fullscreen (host-initiated, so no minimize button - host provides chrome)
-    // We can't click minimize since hostFullscreen=true hides it
-    // This test verifies the handler logic via the mock behavior
-    expect(mockRequestDisplayMode).not.toHaveBeenCalled()
-
-    // The key assertion: on rejection, mode should NOT be forced to inline
-    // This is implicitly tested by the handler code structure:
-    // catch block no longer calls setDisplayMode('inline')
-  })
+  // RETIRED by inc_host_negotiated_fullscreen:
+  //   'minimize rejection does NOT force inline - lets host context reconcile'
+  //
+  // It exercised handleMinimizeToInline's rejection path. That handler is deleted — the
+  // host's native close is the only exit — so the path no longer exists to test.
+  //
+  // No coverage is lost, and there was less here than the name suggested: its own comments
+  // conceded "we can't click minimize since hostFullscreen=true hides it" and "this is
+  // implicitly tested by the handler code structure". Its one executable assertion was that
+  // no request is sent on mount, which 'reconciles to inline from host context WITHOUT
+  // calling requestDisplayMode again' now asserts directly and for the right reason.
 
   // Test 3b: Focus restoration on exit from fullscreen
   // When displayMode transitions from fullscreen to inline, focus must return
   // to the opener button (a11y requirement per WCAG AA).
+  //
+  // REWRITTEN, NOT RETIRED (inc_host_negotiated_fullscreen): the assertion is unchanged and
+  // still real coverage — only the EXIT MECHANISM moved. It used to click the app's own
+  // Minimize; that control is gone (the host's native close is the sole exit), so the exit
+  // is now driven through onhostcontextchanged, which is how it happens in production.
   it('focus returns to opener button when exiting fullscreen', async () => {
     const { act, fireEvent, waitFor } = await import('@testing-library/react')
 
@@ -1481,7 +1457,8 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     render(<App />)
 
     let capturedOntoolresult: ((result: unknown) => void) | null = null
-    const mockRequestDisplayMode = vi.fn().mockResolvedValue({ mode: 'inline' })
+    let capturedOnHostContextChanged: ((ctx: Record<string, unknown>) => void) | null = null
+    const mockRequestDisplayMode = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
     const mockApp: MockApp = {
       getHostContext: () => ({
         displayMode: 'inline',
@@ -1495,6 +1472,12 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
       set ontoolresult(handler: ((result: unknown) => void) | null) {
         capturedOntoolresult = handler
       },
+      get onhostcontextchanged() {
+        return capturedOnHostContextChanged
+      },
+      set onhostcontextchanged(handler: ((ctx: Record<string, unknown>) => void) | null) {
+        capturedOnHostContextChanged = handler
+      },
     }
 
     await act(async () => {
@@ -1506,7 +1489,7 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
       })
     })
 
-    // Enter fullscreen (widget-initiated)
+    // Enter fullscreen — the host grants it
     const openButton = screen.getByRole('button', { name: /open full board/i })
     await act(async () => {
       fireEvent.click(openButton)
@@ -1517,10 +1500,10 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
       expect(screen.getByRole('main', { name: /full board/i })).toBeInTheDocument()
     })
 
-    // Click minimize to return to inline
-    const minimizeButton = screen.getByRole('button', { name: /minimize/i })
+    // Exit the way production exits: the user hits the HOST's native close, and the host
+    // reports the resulting mode. There is no app-owned control to click.
     await act(async () => {
-      fireEvent.click(minimizeButton)
+      capturedOnHostContextChanged!({ displayMode: 'inline' })
     })
 
     // Should be back in inline
@@ -1818,69 +1801,21 @@ describe('Fullscreen Display Mode (inc_fullscreen_full_board_readonly)', () => {
     expect(screen.queryByRole('button', { name: /minimize/i })).not.toBeInTheDocument()
   })
 
-  // Test: widget-initiated fullscreen shows minimize button
-  it('widget-initiated fullscreen shows minimize button (hostFullscreen=false)', async () => {
-    const { act, fireEvent, waitFor } = await import('@testing-library/react')
-
-    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockUseApp.mockImplementation((config: any) => {
-      capturedOnAppCreated = config.onAppCreated
-      return { app: null }
-    })
-
-    render(<App />)
-
-    let capturedOntoolresult: ((result: unknown) => void) | null = null
-    const mockRequestDisplayMode = vi.fn().mockResolvedValue({ mode: 'inline' })
-    const mockApp: MockApp = {
-      getHostContext: () => ({
-        displayMode: 'inline', // Start inline
-        availableDisplayModes: ['inline', 'fullscreen'],
-      }),
-      requestDisplayMode: mockRequestDisplayMode,
-      callServerTool: vi.fn().mockResolvedValue({}),
-      get ontoolresult() {
-        return capturedOntoolresult
-      },
-      set ontoolresult(handler: ((result: unknown) => void) | null) {
-        capturedOntoolresult = handler
-      },
-    }
-
-    await act(async () => {
-      capturedOnAppCreated!(mockApp)
-      capturedOntoolresult!({
-        structuredContent: {
-          clusters: [{ cluster_name: 'Test', sum_thought_items: 1 }],
-        },
-      })
-    })
-
-    // Should be in inline mode
-    expect(screen.getByRole('main', { name: /board overview/i })).toBeInTheDocument()
-
-    // Click "Open full board" to enter fullscreen (widget-initiated)
-    const openButton = screen.getByRole('button', { name: /open full board/i })
-    await act(async () => {
-      fireEvent.click(openButton)
-    })
-
-    // Now should be in fullscreen mode
-    await waitFor(() => {
-      expect(screen.getByRole('main', { name: /full board/i })).toBeInTheDocument()
-    })
-
-    // Widget-initiated fullscreen = hostFullscreen=false = minimize button visible
-    const minimizeButton = screen.getByRole('button', { name: /minimize/i })
-    expect(minimizeButton).toBeInTheDocument()
-
-    // Clicking minimize calls requestDisplayMode
-    await act(async () => {
-      fireEvent.click(minimizeButton)
-    })
-    expect(mockRequestDisplayMode).toHaveBeenCalledWith({ mode: 'inline' })
-  })
+  // RETIRED by inc_host_negotiated_fullscreen:
+  //   'widget-initiated fullscreen shows minimize button (hostFullscreen=false)'
+  //
+  // It asserted that entering fullscreen from the widget produced fullscreen layout with
+  // hostFullscreen=false and therefore a visible app-owned Minimize. That is the "fullscreen
+  // layout without host fullscreen" third state, which the increment removes by design:
+  // entry now applies the host-returned mode, so fullscreen layout implies a host grant.
+  // The state cannot occur, so the test asserts an impossibility rather than a behavior.
+  //
+  // No coverage is lost. Its two real assertions survive elsewhere:
+  //   - "no app-owned Minimize in fullscreen" is asserted unconditionally by the test
+  //     directly above and by 'no app-owned exit control in fullscreen, in any state'
+  //     in the inc_host_negotiated_fullscreen block.
+  //   - "requestDisplayMode is called" survives, inverted onto ENTRY where it now belongs,
+  //     in 'fullscreen entry calls requestDisplayMode (host-negotiated, not local-only)'.
 })
 
 // ==========================================================================
@@ -3016,5 +2951,256 @@ describe('Fullscreen width + density (inc_fullscreen_width_and_density)', () => 
     // Module imports resolve without an OpenAI SDK dependency.
     const AppModule = await import('../App')
     expect(AppModule.default).toBeDefined()
+  })
+})
+
+// ==========================================================================
+// Tests for inc_host_negotiated_fullscreen (Tests 1-9)
+// ==========================================================================
+// Fullscreen is HOST-NEGOTIATED: the app asks via requestDisplayMode and the mode the host
+// RETURNS is authoritative. There are exactly two end states — host-granted fullscreen
+// (host's native close is the only exit) or inline. No third "fullscreen layout without
+// host fullscreen" state exists, and no app-owned exit control exists.
+//
+// Each test names the bug it would catch.
+
+describe('Host-negotiated fullscreen (inc_host_negotiated_fullscreen)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  /** Mount the widget with a host of the given shape, and return the handles a test needs. */
+  async function mountWithHost({
+    availableDisplayModes = ['inline', 'fullscreen'],
+    displayMode = 'inline',
+    requestDisplayMode,
+  }: {
+    availableDisplayModes?: string[]
+    displayMode?: string
+    requestDisplayMode?: ReturnType<typeof vi.fn>
+  }) {
+    const { act } = await import('@testing-library/react')
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+
+    const rendered = render(<App />)
+
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    let capturedOnHostContextChanged: ((ctx: Record<string, unknown>) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode,
+        availableDisplayModes,
+        safeAreaInsets: { top: 0, bottom: 0, left: 0, right: 0 },
+      }),
+      requestDisplayMode,
+      callServerTool: vi.fn().mockResolvedValue({}),
+      get ontoolresult() {
+        return capturedOntoolresult
+      },
+      set ontoolresult(handler: ((result: unknown) => void) | null) {
+        capturedOntoolresult = handler
+      },
+      get onhostcontextchanged() {
+        return capturedOnHostContextChanged
+      },
+      set onhostcontextchanged(handler: ((ctx: Record<string, unknown>) => void) | null) {
+        capturedOnHostContextChanged = handler
+      },
+    }
+
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({
+        structuredContent: {
+          clusters: [{ cluster_name: 'Test cluster', sum_thought_items: 2 }],
+        },
+      })
+    })
+
+    return {
+      ...rendered,
+      hostContextChanged: (ctx: Record<string, unknown>) => capturedOnHostContextChanged!(ctx),
+    }
+  }
+
+  async function clickOpenFullBoard() {
+    const { act, fireEvent } = await import('@testing-library/react')
+    const openButton = screen.getByRole('button', { name: /open full board/i })
+    await act(async () => {
+      fireEvent.click(openButton)
+    })
+  }
+
+  const inFullscreen = () => screen.queryByRole('main', { name: /full board/i })
+  const inInline = () => screen.queryByRole('main', { name: /board overview/i })
+
+  // Test 1 — Catches: regression to local-only entry (setDisplayMode without asking the
+  // host), which cannot promote the app into real host fullscreen.
+  it('expand calls requestDisplayMode({mode:"fullscreen"}) when fullscreen is advertised', async () => {
+    const requestDisplayMode = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
+    await mountWithHost({ requestDisplayMode })
+
+    await clickOpenFullBoard()
+
+    expect(requestDisplayMode).toHaveBeenCalledTimes(1)
+    expect(requestDisplayMode).toHaveBeenCalledWith({ mode: 'fullscreen' })
+  })
+
+  // Test 2 — Catches: treating a RESOLVED request as a granted request. A resolved call may
+  // legitimately return 'inline'; assuming success reproduces local-only fullscreen.
+  it('applies the HOST-RETURNED mode, not the requested one', async () => {
+    const refused = vi.fn().mockResolvedValue({ mode: 'inline' })
+    const { unmount } = await mountWithHost({ requestDisplayMode: refused })
+
+    await clickOpenFullBoard()
+
+    expect(refused).toHaveBeenCalledWith({ mode: 'fullscreen' })
+    expect(inFullscreen()).not.toBeInTheDocument()
+    expect(inInline()).toBeInTheDocument()
+
+    unmount()
+
+    const granted = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
+    await mountWithHost({ requestDisplayMode: granted })
+
+    await clickOpenFullBoard()
+
+    expect(inFullscreen()).toBeInTheDocument()
+  })
+
+  // Test 3 — Catches: an accidental permissive-when-absent gate (PG has one; MindSort must
+  // not), and a dead button rendered for a capability the host never offered.
+  it('does not render the affordance or send a request when fullscreen is NOT advertised', async () => {
+    const requestDisplayMode = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
+    await mountWithHost({ availableDisplayModes: ['inline'], requestDisplayMode })
+
+    expect(screen.queryByRole('button', { name: /open full board/i })).not.toBeInTheDocument()
+    expect(requestDisplayMode).not.toHaveBeenCalled()
+    expect(inInline()).toBeInTheDocument()
+  })
+
+  // Test 4 — Catches: an unhandled rejection, AND the in-flight guard being cleared only on
+  // the success path, which would leave fullscreen permanently dead after one failure.
+  it('rejection leaves the app inline and clears the in-flight guard', async () => {
+    const requestDisplayMode = vi.fn().mockRejectedValue(new Error('host declined'))
+    await mountWithHost({ requestDisplayMode })
+
+    await clickOpenFullBoard()
+
+    expect(requestDisplayMode).toHaveBeenCalledTimes(1)
+    expect(inInline()).toBeInTheDocument()
+    expect(inFullscreen()).not.toBeInTheDocument()
+
+    // The guard must have been released in `finally` — a SECOND attempt still issues a
+    // request. If it were cleared only on success, this would stay at 1 forever.
+    await clickOpenFullBoard()
+    expect(requestDisplayMode).toHaveBeenCalledTimes(2)
+  })
+
+  // Test 5 — Catches: reintroduction of an app-owned exit control (duplicate chrome beside
+  // the host's native close), including the removed 36px sub-44pt Minimize.
+  it('renders no app-owned exit control in fullscreen, in any state', async () => {
+    const requestDisplayMode = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
+    const { container, hostContextChanged } = await mountWithHost({ requestDisplayMode })
+
+    await clickOpenFullBoard()
+    expect(inFullscreen()).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /minimize/i })).not.toBeInTheDocument()
+
+    // Also absent after a host-initiated context update that keeps us in fullscreen.
+    const { act } = await import('@testing-library/react')
+    await act(async () => {
+      hostContextChanged({ displayMode: 'fullscreen' })
+    })
+    expect(screen.queryByRole('button', { name: /minimize/i })).not.toBeInTheDocument()
+    expect(container.innerHTML).not.toContain('Minimize')
+  })
+
+  // Test 6 — Catches: reconciliation re-requesting a mode the host has ALREADY switched to,
+  // i.e. asking the host to redo its own work.
+  it('reconciles to inline from host context WITHOUT calling requestDisplayMode again', async () => {
+    const requestDisplayMode = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
+    const { hostContextChanged } = await mountWithHost({ requestDisplayMode })
+
+    await clickOpenFullBoard()
+    expect(inFullscreen()).toBeInTheDocument()
+    expect(requestDisplayMode).toHaveBeenCalledTimes(1)
+
+    const { act } = await import('@testing-library/react')
+    await act(async () => {
+      hostContextChanged({ displayMode: 'inline' })
+    })
+
+    expect(inInline()).toBeInTheDocument()
+    // Still ONE call — the entry request. Reconciliation observes; it does not request.
+    expect(requestDisplayMode).toHaveBeenCalledTimes(1)
+  })
+
+  // Test 7 — Catches: the prerequisite silently regressing. The host only reports the modes
+  // it supports after the app declares the modes IT supports.
+  it('declares appCapabilities.availableDisplayModes with both inline and fullscreen', () => {
+    render(<App />)
+
+    const config = mockUseApp.mock.calls[0][0]
+    expect(config.capabilities.availableDisplayModes).toContain('inline')
+    expect(config.capabilities.availableDisplayModes).toContain('fullscreen')
+  })
+
+  // Test 8 — Catches: device-identity gating. Gating is by host CAPABILITY, never by
+  // platform, so a mobile host advertising fullscreen must get fullscreen.
+  it('has no platform gate: every platform advertising fullscreen is granted fullscreen', async () => {
+    const { act } = await import('@testing-library/react')
+
+    // 'mobile' is the platform the superseded July premise wanted to force inline-only.
+    for (const platform of ['mobile', 'desktop', 'web']) {
+      const requestDisplayMode = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
+      const { hostContextChanged, unmount } = await mountWithHost({ requestDisplayMode })
+
+      await act(async () => {
+        hostContextChanged({ platform })
+      })
+
+      await clickOpenFullBoard()
+
+      expect(requestDisplayMode, `platform ${platform} must still request`).toHaveBeenCalledWith({
+        mode: 'fullscreen',
+      })
+      expect(inFullscreen(), `platform ${platform} must reach fullscreen`).toBeInTheDocument()
+
+      unmount()
+    }
+  })
+
+  // Test 9 — Catches: recurring compliance regressions (Unicode glyphs, off-scale font
+  // weights) and any interactive control below the 44pt tap-target floor.
+  it('fullscreen carries no glyphs, only 400/500 weights, and no sub-44pt controls', async () => {
+    const requestDisplayMode = vi.fn().mockResolvedValue({ mode: 'fullscreen' })
+    const { container } = await mountWithHost({ requestDisplayMode })
+
+    await clickOpenFullBoard()
+    expect(inFullscreen()).toBeInTheDocument()
+
+    const html = container.innerHTML
+    for (const glyph of ['▲', '▼', '·', '→', '›', '•', '✕', '×']) {
+      expect(html).not.toContain(glyph)
+    }
+    for (const el of Array.from(container.querySelectorAll('[style]'))) {
+      expect(el.getAttribute('style')).not.toMatch(/font-weight:\s*(600|700)/)
+    }
+    // Any interactive control still rendered must meet the 44pt floor.
+    for (const button of Array.from(container.querySelectorAll('button'))) {
+      const style = button.getAttribute('style') ?? ''
+      const minHeight = /min-height:\s*(\d+)px/.exec(style)
+      if (minHeight) {
+        expect(Number(minHeight[1])).toBeGreaterThanOrEqual(44)
+      }
+    }
   })
 })
