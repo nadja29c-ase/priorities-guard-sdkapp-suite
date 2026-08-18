@@ -59,11 +59,17 @@ export function rankToNumber(rank: Rank | null | undefined): number {
 // Effective rank = min(own rank, best subcluster effective rank, best thought-item rank).
 // This determines cluster/subcluster display order in BOTH inline and fullscreen.
 //
-// DESIGN DECISION: Effective rank affects ORDER only. Badges and accents show OWN rank.
-// A cluster is only labeled P1 if explicitly prioritized; inherited priority surfaces
-// the item via ordering but doesn't assert something the user never set.
-// Matches OpenAI (ClusterCard uses cluster.priority?.rank for display, getEffectiveRank
-// for sort). Documented here; tested in App.test.tsx "sorts first but shows no badge".
+// DESIGN DECISION: BADGES show OWN rank only. A cluster is only labeled P1 if
+// explicitly prioritized — an inherited priority must not assert something the user
+// never set. Matches OpenAI (ClusterCard uses cluster.priority?.rank for the badge,
+// getEffectiveRank for sort). Tested in App.test.tsx "sorts first but shows no badge".
+//
+// Effective rank drives ORDER, and — since the condensed-row accent increment — also
+// the LEFT-EDGE ACCENT on the condensed inline cluster row (App.tsx ClusterRowToggle),
+// so a priority nested inside a collapsed cluster is visible at the top level. That
+// accent is colour-only, so the inherited case also renders an sr-only text
+// alternative. Accents elsewhere (subcluster rows, fullscreen cards) still read OWN
+// rank. Do NOT "restore" the condensed row accent to own-rank — that reverts the fix.
 
 /**
  * Get the best (highest priority / lowest number) rank among thought items.

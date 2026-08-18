@@ -31,6 +31,7 @@ import {
   truncateClusters,
   sortThoughtsByPriority,
   sortSubclustersByPriority,
+  getEffectiveRank,
   RANK_COLORS,
 } from './utils'
 
@@ -1022,6 +1023,17 @@ function ClusterRowToggle({
   // Use shared RANK_COLORS from utils.ts
   const colors = rank ? RANK_COLORS[rank] : null
 
+  // Accent line reads EFFECTIVE rank (own, or highest anywhere in the subtree) so a
+  // priority living on a collapsed cluster's subcluster/item is visible at the top
+  // level. Badge still reads OWN rank only — see the badge block below.
+  const effectiveRank = getEffectiveRank(cluster)
+  const borderColors = effectiveRank ? RANK_COLORS[effectiveRank] : null
+
+  // The accent is colour-only, so the inherited case needs a text alternative
+  // (compliance M2). Only for genuinely-inherited priority: an own-rank cluster
+  // already announces its rank via the badge text and must not double-announce.
+  const inheritedRank = effectiveRank && !hasPriority ? effectiveRank : null
+
   return (
     <button
       type="button"
@@ -1037,8 +1049,8 @@ function ClusterRowToggle({
         borderRadius: 'var(--border-radius-md, 8px)',
         padding: '10px 12px',
         border: `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, #E0DFDB)`,
-        borderLeft: hasPriority && colors
-          ? `3px solid ${colors.border}`
+        borderLeft: effectiveRank && borderColors
+          ? `3px solid ${borderColors.border}`
           : `var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, #E0DFDB)`,
         minHeight: `${LAYOUT.collapsedRowH}px`,
         cursor: 'pointer',
@@ -1099,6 +1111,16 @@ function ClusterRowToggle({
           // Screen reader: badge text "P1"/"P2"/"P3" conveys priority without color
         >
           {rank}
+        </span>
+      )}
+
+      {/* Text alternative for the accent line (compliance M2: text alternatives for
+          visual content). The accent is the ONLY signal for inherited priority and
+          colour alone is not accessible, so announce it. Rendered ONLY when the rank
+          is inherited — an own-rank cluster already has the badge text above. */}
+      {inheritedRank && (
+        <span className="sr-only" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0, lineHeight: 'var(--font-text-xs-line-height, 1.4)' }}>
+          contains {inheritedRank} priority
         </span>
       )}
 

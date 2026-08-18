@@ -3312,3 +3312,177 @@ describe('Host-context baseline is read after connect (inc_host_negotiated_fulls
     expect(screen.getByRole('button', { name: /open full board/i })).toBeInTheDocument()
   })
 })
+
+// ==========================================================================
+// Condensed cluster row: subtree-priority accent line
+// (inc_condensed_cluster_row_effective_rank_accent)
+// ==========================================================================
+// The collapsed cluster row's left accent now reads EFFECTIVE rank (highest
+// anywhere in the subtree) instead of own rank, so a priority nested inside a
+// collapsed cluster is visible at the top level. The BADGE still reads own rank
+// only. Because the accent is colour-only, the inherited case also renders an
+// sr-only text alternative (compliance M2).
+
+describe('Condensed cluster row accent reflects effective rank', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  function setupInline(clusters: unknown[]) {
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+    const result = render(<App />)
+    let capturedOntoolresult: ((result: unknown) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({ displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] }),
+      callServerTool: vi.fn().mockResolvedValue({}),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(handler: ((result: unknown) => void) | null) { capturedOntoolresult = handler },
+    }
+    capturedOnAppCreated!(mockApp)
+    capturedOntoolresult!({ structuredContent: { clusters } })
+    result.rerender(<App />)
+    return result
+  }
+
+  /** The collapsed cluster row button, by its accessible name. */
+  function clusterRow(name: RegExp): HTMLElement {
+    return screen.getByRole('button', { name })
+  }
+
+  // Test 1: nested priority surfaces an accent, and does NOT promote the badge.
+  // Catches (half 1): the accent-missing regression — the row reading own rank only.
+  // Catches (half 2): the badge-promotion regression — surfacing the rank as a badge.
+  // Would still pass a own-rank-only implementation IF the seed had an own rank —
+  // so the seed deliberately has NO own rank; the P1 lives on a nested thought.
+  it('collapsed row with a nested P1 shows the P1 accent but no P1 badge', () => {
+    setupInline([
+      {
+        cluster_name: 'Nested only',
+        sum_thought_items: 3,
+        thought_items: [{ text: 'urgent thing', priority: { rank: 'P1' } }],
+      },
+    ])
+
+    const row = clusterRow(/Nested only/i)
+    const style = row.getAttribute('style') ?? ''
+    expect(style).toMatch(/border-left:\s*3px/)
+    expect(style).toContain('--color-border-danger')
+
+    // Badge must stay at its true level — no P1 badge text on the header row.
+    expect(screen.queryByText('P1')).not.toBeInTheDocument()
+  })
+
+  // Test 2: mixed nested ranks surface the HIGHEST.
+  // Would still pass if the accent read "any nested rank" and picked the first found,
+  // so P3 is seeded FIRST and P1 second — a first-match bug would show the P3 token.
+  it('mixed nested ranks show the highest (P1 over P3)', () => {
+    setupInline([
+      {
+        cluster_name: 'Mixed ranks',
+        sum_thought_items: 4,
+        thought_items: [
+          { text: 'later thing', priority: { rank: 'P3' } },
+          { text: 'urgent thing', priority: { rank: 'P1' } },
+        ],
+      },
+    ])
+
+    const style = clusterRow(/Mixed ranks/i).getAttribute('style') ?? ''
+    expect(style).toMatch(/border-left:\s*3px/)
+    expect(style).toContain('--color-border-danger') // P1
+    expect(style).not.toContain('--color-border-info') // not P3
+  })
+
+  // Test 3: nested priority inside a SUBCLUSTER (not just a direct thought item).
+  // Would still pass an implementation that only checked direct thought_items, so the
+  // priority here lives one level deeper — on a subcluster's item.
+  it('collapsed row shows the accent when the priority is inside a subcluster', () => {
+    setupInline([
+      {
+        cluster_name: 'Sub nested',
+        sum_thought_items: 2,
+        subclusters: [
+          { subcluster_name: 'Inner', thought_items: [{ text: 'deep', priority: { rank: 'P2' } }] },
+        ],
+      },
+    ])
+
+    const style = clusterRow(/Sub nested/i).getAttribute('style') ?? ''
+    expect(style).toMatch(/border-left:\s*3px/)
+    expect(style).toContain('--color-border-warning') // P2
+  })
+
+  // Test 4: own-priority cluster unchanged — accent AND badge.
+  // Would still pass a broken effective-rank read that fell back to own rank, which is
+  // exactly what makes this the no-regression guard rather than a feature test.
+  it('own-priority cluster keeps its accent and its badge', () => {
+    setupInline([{ cluster_name: 'Own P2', sum_thought_items: 5, priority: { rank: 'P2' } }])
+
+    const style = clusterRow(/Own P2/i).getAttribute('style') ?? ''
+    expect(style).toMatch(/border-left:\s*3px/)
+    expect(style).toContain('--color-border-warning')
+    expect(screen.getByText('P2')).toBeInTheDocument() // badge still rendered
+  })
+
+  // Test 5: no priority anywhere → grey default, not a coloured accent.
+  // Would still pass an always-on accent if it only checked the width, so this asserts
+  // the grey token is present AND no rank colour token leaked in.
+  it('cluster with no priority anywhere keeps the grey default border', () => {
+    setupInline([{ cluster_name: 'Plain', sum_thought_items: 6 }])
+
+    const style = clusterRow(/Plain/i).getAttribute('style') ?? ''
+    expect(style).not.toMatch(/border-left:\s*3px/)
+    expect(style).toContain('--color-border-tertiary')
+    expect(style).not.toContain('--color-border-danger')
+    expect(style).not.toContain('--color-border-warning')
+    expect(style).not.toContain('--color-border-info')
+  })
+
+  // Test 6: sr-only text alternative for the inherited case (compliance M2).
+  // The accent is colour-only; without this span a screen-reader user gets nothing.
+  // The second half catches the double-announce bug: an own-rank cluster already has
+  // the badge text, so it must NOT also get "contains P2 priority".
+  it('announces inherited priority to screen readers, and does not double-announce own rank', () => {
+    setupInline([
+      {
+        cluster_name: 'Nested only',
+        sum_thought_items: 3,
+        thought_items: [{ text: 'urgent thing', priority: { rank: 'P1' } }],
+      },
+      { cluster_name: 'Own P2', sum_thought_items: 5, priority: { rank: 'P2' } },
+    ])
+
+    // Inherited → announced.
+    const announcement = screen.getByText(/contains P1 priority/i)
+    expect(announcement).toBeInTheDocument()
+    expect(announcement).toHaveStyle({ position: 'absolute' }) // visually hidden
+    expect(clusterRow(/Nested only/i)).toContainElement(announcement)
+
+    // Own rank → badge text only, no sr-only duplicate.
+    expect(screen.queryByText(/contains P2 priority/i)).not.toBeInTheDocument()
+  })
+
+  // Test 7: the announcement does not leak into the visible badge assertion that the
+  // inc-5 must-pass test relies on. queryByText('P1') is an exact match, so "contains
+  // P1 priority" must not satisfy it — this pins that the sr-only wording stays
+  // non-colliding, which is what keeps the inc-5 test honest rather than accidentally green.
+  it('sr-only wording does not register as a P1 badge', () => {
+    setupInline([
+      {
+        cluster_name: 'Nested only',
+        sum_thought_items: 3,
+        thought_items: [{ text: 'urgent thing', priority: { rank: 'P1' } }],
+      },
+    ])
+
+    expect(screen.queryByText('P1')).not.toBeInTheDocument()
+    expect(screen.getByText(/contains P1 priority/i)).toBeInTheDocument()
+  })
+})
