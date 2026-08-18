@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from mcp_server.clarity.tools.start_prioritization_flow import (
     handle,
+    ALLOWED_TOP_LEVEL_KEYS,
+    INPUT_SCHEMA,
     _find_all_names,
     _validate_priorities,
     ERROR_TOO_MANY_PRIORITIES,
@@ -1571,3 +1573,301 @@ class TestPriorityPreservationHandler:
             assert work["priority"] is None
             # Health gets P1
             assert health["priority"]["rank"] == "P1"
+
+
+# ============================================================================
+# Malformed-Input Guards (A -> B -> C)
+# ============================================================================
+
+
+BOARD_WITH_P1 = {
+    "cluster_data": {
+        "clusters": [
+            {"cluster_name": "Work", "thought_items": ["task"], "subclusters": [],
+             "priority": {"rank": "P1", "reason": "blocker"}},
+            {"cluster_name": "Home", "thought_items": ["chore"], "subclusters": []},
+        ]
+    },
+}
+
+
+class TestMalformedInputGuards:
+    """
+    Malformed input must FAIL CLOSED before any fetch/mutate/persist.
+
+    Pre-fix, each of these silently resolved `priorities` to [], took the
+    clear-all branch, and PERSISTED the erasure.
+    """
+
+    @staticmethod
+    def _patched():
+        """Patch the three side-effecting calls so non-invocation is assertable."""
+        return (
+            patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster",
+                  new_callable=AsyncMock),
+            patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster",
+                  new_callable=AsyncMock),
+            patch("mcp_server.clarity.tools.start_prioritization_flow._apply_priorities"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_missing_priorities_key_fails_closed(self):
+        """Guard B: `priorities` absent -> structured error, nothing touched."""
+        get_p, persist_p, apply_p = self._patched()
+        with get_p as mock_get, persist_p as mock_persist, apply_p as mock_apply:
+            mock_get.return_value = BOARD_WITH_P1
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Work is my P1",
+                },
+            )
+
+            assert result.isError is True
+            sc = result.structuredContent
+            assert sc["success"] is False
+            assert sc["error"] == "missing_priorities"
+            assert sc["state_modified"] is False
+            assert sc["invalid_fields"] == ["priorities"]
+            assert sc["assistant_guidance"]["action"] == "retry_with_canonical_priorities"
+            assert result.content[0].text == "Malformed input: missing_priorities"
+
+            mock_get.assert_not_called()
+            mock_apply.assert_not_called()
+            mock_persist.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unknown_top_level_key_with_valid_priorities_fails_closed(self):
+        """
+        Guard A in isolation: an unknown key cannot be silently ignored even when
+        `priorities` is present and valid.
+        """
+        get_p, persist_p, apply_p = self._patched()
+        with get_p as mock_get, persist_p as mock_persist, apply_p as mock_apply:
+            mock_get.return_value = BOARD_WITH_P1
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Home is my P2",
+                    "priorities": [{"name": "Home", "rank": "P2", "reason": "relief"}],
+                    "priority_2": "Home",
+                },
+            )
+
+            assert result.isError is True
+            sc = result.structuredContent
+            assert sc["error"] == "unknown_top_level_fields"
+            assert sc["state_modified"] is False
+            assert sc["invalid_fields"] == ["priority_2"]
+            assert result.content[0].text == "Malformed input: unknown_top_level_fields"
+
+            mock_get.assert_not_called()
+            mock_apply.assert_not_called()
+            mock_persist.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_production_multi_fault_shape_guard_a_wins(self):
+        """
+        The EXACT production shape trips both A and B. Asserts the A->B
+        precedence: it must report the unknown fields, not the missing key.
+        """
+        get_p, persist_p, apply_p = self._patched()
+        with get_p as mock_get, persist_p as mock_persist, apply_p as mock_apply:
+            mock_get.return_value = BOARD_WITH_P1
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Home is my P1",
+                    "priority_1": "Home",
+                    "priority_1_parent_cluster": "Work",
+                },
+            )
+
+            assert result.isError is True
+            sc = result.structuredContent
+            assert sc["error"] == "unknown_top_level_fields"
+            assert sc["state_modified"] is False
+            assert sc["invalid_fields"] == ["priority_1", "priority_1_parent_cluster"]
+
+            mock_get.assert_not_called()
+            mock_apply.assert_not_called()
+            mock_persist.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_value", ["Work Projects", {"name": "Work", "rank": "P1"}])
+    async def test_non_list_priorities_fails_closed(self, bad_value):
+        """
+        Guard C: `priorities` present but not a list. Pre-fix this was coerced to
+        [] and cleared the board — the third path to the same destructive bug.
+        """
+        get_p, persist_p, apply_p = self._patched()
+        with get_p as mock_get, persist_p as mock_persist, apply_p as mock_apply:
+            mock_get.return_value = BOARD_WITH_P1
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Work is my P1",
+                    "priorities": bad_value,
+                },
+            )
+
+            assert result.isError is True
+            sc = result.structuredContent
+            assert sc["error"] == "invalid_priorities_type"
+            assert sc["state_modified"] is False
+            assert sc["invalid_fields"] == ["priorities"]
+            assert result.content[0].text == "Malformed input: invalid_priorities_type"
+
+            mock_get.assert_not_called()
+            mock_apply.assert_not_called()
+            mock_persist.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_guidance_instruction_states_cumulative_replacement(self):
+        """
+        The corrective instruction must say the array REPLACES (so the model
+        resends the full cumulative set) and that nothing was modified —
+        otherwise a fixed destructive-clear becomes a destructive-overwrite.
+        """
+        get_p, persist_p, _ = self._patched()
+        with get_p, persist_p:
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Work is my P1",
+                },
+            )
+        instruction = result.structuredContent["assistant_guidance"]["instruction"]
+        assert "CUMULATIVE" in instruction
+        assert "REPLACES" in instruction
+        assert "NO existing priorities were modified" in instruction
+
+    @pytest.mark.asyncio
+    async def test_provenance_gates_still_win_over_malformed_guards(self):
+        """
+        Ordering: a call missing BOTH a verbatim field and `priorities` must get
+        the EXISTING provenance instruction, unchanged by this increment.
+        """
+        get_p, persist_p, _ = self._patched()
+        with get_p, persist_p:
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "",
+                    "priority_1": "Work",
+                },
+            )
+        assert result.isError is True
+        assert result.structuredContent["error"] == "empty_priorities_verbatim"
+        assert result.structuredContent["assistant_guidance"]["action"] == "ASK_CLARIFYING"
+
+    @pytest.mark.asyncio
+    async def test_allowed_keys_derived_from_schema(self):
+        """The allow-list must track the published schema, not a hand-written copy."""
+        assert ALLOWED_TOP_LEVEL_KEYS == set(INPUT_SCHEMA["properties"])
+        assert ALLOWED_TOP_LEVEL_KEYS == {
+            "user_prioritization_criterion_verbatim",
+            "user_priorities_verbatim",
+            "priorities",
+        }
+
+    @pytest.mark.asyncio
+    async def test_explicit_empty_list_passes_all_three_guards(self):
+        """
+        Over-reach guard: `[]` is present AND is a list, so A/B/C must NOT fire.
+        It reaches the existing clear-all path and persists, exactly as today.
+        """
+        with patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster", new_callable=AsyncMock) as mock_get, \
+             patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster", new_callable=AsyncMock) as mock_persist:
+            mock_get.return_value = BOARD_WITH_P1
+            mock_persist.return_value = "cluster-123"
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "clear them all",
+                    "priorities": [],
+                },
+            )
+
+            assert result.isError is None or result.isError is False
+            assert "error" not in (result.structuredContent or {})
+            clusters = result.structuredContent["clusters"]
+            assert clusters[0]["priority"] is None
+            mock_get.assert_called_once()
+            mock_persist.assert_called_once()
+
+
+class TestMalformedGuardsDoNotBlockValidCalls:
+    """The guards must be invisible to every well-formed invocation."""
+
+    @pytest.mark.asyncio
+    async def test_single_priority_still_applies_and_persists(self):
+        with patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster", new_callable=AsyncMock) as mock_get, \
+             patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster", new_callable=AsyncMock) as mock_persist:
+            mock_get.return_value = {
+                "cluster_data": {
+                    "clusters": [
+                        {"cluster_name": "Work", "thought_items": ["task"], "subclusters": []},
+                        {"cluster_name": "Home", "thought_items": ["chore"], "subclusters": []},
+                    ]
+                },
+            }
+            mock_persist.return_value = "cluster-123"
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Work is my P1",
+                    "priorities": [{"name": "Work", "rank": "P1", "reason": "relief"}],
+                },
+            )
+            assert result.isError is None or result.isError is False
+            clusters = result.structuredContent["clusters"]
+            assert clusters[0]["priority"]["rank"] == "P1"
+            mock_persist.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cumulative_two_priorities_still_applies_and_persists(self):
+        with patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster", new_callable=AsyncMock) as mock_get, \
+             patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster", new_callable=AsyncMock) as mock_persist:
+            mock_get.return_value = {
+                "cluster_data": {
+                    "clusters": [
+                        {"cluster_name": "Work", "thought_items": ["task"], "subclusters": []},
+                        {"cluster_name": "Home", "thought_items": ["chore"], "subclusters": []},
+                    ]
+                },
+            }
+            mock_persist.return_value = "cluster-123"
+            result = await handle(
+                user_id="test-user",
+                correlation_id="test-corr",
+                arguments={
+                    "user_prioritization_criterion_verbatim": "relief",
+                    "user_priorities_verbatim": "Work P1, Home P2",
+                    "priorities": [
+                        {"name": "Work", "rank": "P1", "reason": "relief"},
+                        {"name": "Home", "rank": "P2", "reason": "relief"},
+                    ],
+                },
+            )
+            assert result.isError is None or result.isError is False
+            clusters = result.structuredContent["clusters"]
+            assert clusters[0]["priority"]["rank"] == "P1"
+            assert clusters[1]["priority"]["rank"] == "P2"
+            mock_persist.assert_called_once()

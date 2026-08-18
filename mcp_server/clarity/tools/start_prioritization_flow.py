@@ -317,6 +317,64 @@ def _build_provenance_error(error_code: str, instruction: str) -> mcp_types.Call
 
 
 # ============================================================================
+# Malformed-Input Guards (fail-closed, self-correcting)
+# ============================================================================
+# A malformed invocation used to resolve `priorities` to [] (missing key, unknown
+# keys, or a non-list value), and apply_priorities([]) takes the CLEAR-ALL branch
+# which is then persisted — so a call meant to SET a priority silently ERASED the
+# board's priorities. These guards fail closed BEFORE any fetch/mutate/persist.
+
+# Derived from the published schema, never hand-written, so it cannot drift.
+ALLOWED_TOP_LEVEL_KEYS = set(INPUT_SCHEMA["properties"])
+
+# Shared tail for all three guards: states that nothing changed, then exactly how
+# to retry. The CUMULATIVE reminder is required — without it the model may retry
+# with only the new priority and overwrite the others, turning a destructive-clear
+# bug into a destructive-overwrite bug.
+_RETRY_INSTRUCTION = (
+    "NO existing priorities were modified — the board is unchanged. "
+    "Reissue this call with the canonical `priorities` array. Each entry is either "
+    '{"name": "<cluster or subcluster name>", "rank": "P1"|"P2"|"P3", "reason": "<the user\'s criterion>"} '
+    "for a cluster or subcluster, or "
+    '{"item_index": <0-based integer>, "parent_name": "<containing cluster or subcluster name>", '
+    '"rank": "P1"|"P2"|"P3", "reason": "<the user\'s criterion>"} '
+    "for a thought item. The array must contain the FULL CUMULATIVE set of priorities — every "
+    "already-set P1/P2/P3 PLUS the new one — because the array REPLACES the board's priorities, it "
+    "does not append to them. Do not tell the user their board changed."
+)
+
+
+def _build_malformed_input_error(
+    error_code: str,
+    invalid_fields: List[str],
+    problem: str,
+) -> mcp_types.CallToolResult:
+    """
+    Build a structured error response for a malformed-input guard.
+
+    Extends the provenance-error shape with `state_modified` and `invalid_fields`
+    so the model knows the board was NOT touched and which fields to fix.
+    """
+    return mcp_types.CallToolResult(
+        content=[mcp_types.TextContent(
+            type="text",
+            text=f"Malformed input: {error_code}"
+        )],
+        structuredContent={
+            "success": False,
+            "error": error_code,
+            "state_modified": False,
+            "invalid_fields": invalid_fields,
+            "assistant_guidance": {
+                "action": "retry_with_canonical_priorities",
+                "instruction": f"{problem} {_RETRY_INSTRUCTION}",
+            },
+        },
+        isError=True,
+    )
+
+
+# ============================================================================
 # Tool Handler
 # ============================================================================
 
@@ -370,6 +428,53 @@ async def handle(
         )
 
     # ============================================================
+    # MALFORMED-INPUT GUARDS (fail-closed) — order is fixed: A -> B -> C.
+    # These run AFTER the provenance gates (so an existing provenance failure
+    # still gets its existing instruction) and BEFORE any fetch/mutate/persist.
+    # ============================================================
+
+    # Guard A — unknown top-level argument key.
+    unknown_keys = sorted(set(arguments) - ALLOWED_TOP_LEVEL_KEYS)
+    if unknown_keys:
+        logger.info("start_prioritization_flow.malformed_input",
+                    user_id=user_id,
+                    error="unknown_top_level_fields",
+                    invalid_fields=unknown_keys)
+        return _build_malformed_input_error(
+            "unknown_top_level_fields",
+            unknown_keys,
+            f"Unknown top-level field(s) were sent: {', '.join(unknown_keys)}. "
+            "They are not part of this tool's schema, so the call was rejected.",
+        )
+
+    # Guard B — `priorities` key absent. Presence, NOT truthiness: an explicit
+    # `priorities: []` is present and must reach the existing clear-all path.
+    if "priorities" not in arguments:
+        logger.info("start_prioritization_flow.malformed_input",
+                    user_id=user_id,
+                    error="missing_priorities",
+                    invalid_fields=["priorities"])
+        return _build_malformed_input_error(
+            "missing_priorities",
+            ["priorities"],
+            "The required `priorities` field was missing from the call, so the call was rejected.",
+        )
+
+    # Guard C — `priorities` present but not a list. `[]` IS a list and passes
+    # through untouched; wrong-type is not the same as empty-list.
+    if not isinstance(arguments["priorities"], list):
+        logger.info("start_prioritization_flow.malformed_input",
+                    user_id=user_id,
+                    error="invalid_priorities_type",
+                    invalid_fields=["priorities"])
+        return _build_malformed_input_error(
+            "invalid_priorities_type",
+            ["priorities"],
+            "`priorities` must be an array, but a "
+            f"{type(arguments['priorities']).__name__} was sent, so the call was rejected.",
+        )
+
+    # ============================================================
     # FETCH BOARD FROM DB
     # ============================================================
     cluster_record = await get_cluster(user_id=user_id, correlation_id=correlation_id)
@@ -389,6 +494,10 @@ async def handle(
         )
 
     # Parse priorities from arguments
+    # NOTE: Guards B and C above already returned for an absent or non-list
+    # `priorities`, so the default and the isinstance coercion below are no longer
+    # reachable for those cases. Retained deliberately as defence in depth — do not
+    # "clean up" as dead code.
     raw_priorities = arguments.get("priorities", [])
     if not isinstance(raw_priorities, list):
         raw_priorities = []
