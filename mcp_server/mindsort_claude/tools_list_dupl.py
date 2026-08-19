@@ -61,12 +61,45 @@ _WIDGET_PRODUCING_TOOLS = {
 }
 
 
+# ============================================================================
+# Advertisement allowlist — what MindSort-Claude tells Claude exists
+# ============================================================================
+# THE CONTRACT THIS FILE PREVIOUSLY LACKED. Advertisement used to be derived
+# implicitly from "whatever is in the shared TOOL_REGISTRY", so a tool added to
+# shared code for EITHER platform was silently advertised on the OTHER. That is
+# how `_diagnostic_tiny_widget` — an OpenAI-only diagnostic (inc_91, 1bbd16c) —
+# came to be advertised to Claude while being absent from Claude's TOOL_SCOPES,
+# i.e. advertised but guaranteed to 403 at scope enforcement.
+#
+# ALLOWLIST, NOT AN EXCLUSION SET OR A registry∩TOOL_SCOPES INTERSECTION.
+# Failure asymmetry is the reason: a mistake here fails as OMISSION (an intended
+# tool doesn't appear — loud, caught in the first test conversation), never as
+# OVER-EXPOSURE (a tool appears that shouldn't — the failure that actually
+# happened, and stayed invisible for six weeks until a compliance audit).
+#
+# Advertisement and authorization are DISTINCT concerns and are deliberately not
+# conflated: TOOL_SCOPES answers "may this caller invoke it?"; this set answers
+# "should Claude know it exists?". Adding a Claude tool therefore needs BOTH.
+#
+# Do NOT replace this with a naming convention (e.g. skipping "_"-prefixed
+# names) — that is brittle and semantic by accident.
+CLAUDE_ADVERTISED_TOOLS = {
+    "organize_thoughts",
+    "load_saved_board",
+    "read_board_before_editing",
+    "start_prioritization_flow",
+    "edit_board",
+    "delete_my_data",
+}
+
+
 async def list_tools_for_claude() -> list[mcp_types.Tool]:
     """
     Build MCP Tool list from registry for Claude.
 
     Rules:
-    - No visibility filter (MindSort has no visibility field)
+    - Advertises ONLY tools named in CLAUDE_ADVERTISED_TOOLS — deliberately a
+      subset of the shared registry, which also carries OpenAI-only tools
     - Derives title from tool name
     - Applies destructiveHint overrides for Claude
     - Widget-producing tools get _meta.ui.resourceUri; others get _meta=None
@@ -76,6 +109,11 @@ async def list_tools_for_claude() -> list[mcp_types.Tool]:
 
     # Sort by name for deterministic output
     for tool_def in sorted(TOOL_REGISTRY.values(), key=lambda t: t.name):
+        # Advertisement allowlist — see CLAUDE_ADVERTISED_TOOLS above.
+        # Anything in the shared registry that Claude does not claim is skipped.
+        if tool_def.name not in CLAUDE_ADVERTISED_TOOLS:
+            continue
+
         # Build annotations (camelCase kwargs, snake_case sources)
         annotations = mcp_types.ToolAnnotations(
             title=_derive_title(tool_def.name),

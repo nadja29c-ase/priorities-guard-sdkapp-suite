@@ -213,15 +213,108 @@ async def test_config_isolation(set_dev_env, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_list_tools_returns_all_registered(set_dev_env):
-    """list_tools_for_claude returns all tools in TOOL_REGISTRY (no visibility filter)."""
+async def test_list_tools_returns_exactly_the_advertised_allowlist(set_dev_env):
+    """
+    list_tools_for_claude advertises EXACTLY CLAUDE_ADVERTISED_TOOLS — deliberately
+    a SUBSET of the shared TOOL_REGISTRY, which also carries OpenAI-only tools.
+
+    This test previously asserted `== set(TOOL_REGISTRY.keys())` with the docstring
+    "no visibility filter". That encoded the defect as intended behaviour: it made
+    "advertise everything in shared code" a pinned contract, which is how the
+    OpenAI-only `_diagnostic_tiny_widget` came to be advertised to Claude while
+    being unauthorized there (absent from Claude's TOOL_SCOPES -> 403 on every call).
+
+    Equality is deliberate and is STRONGER than the subset invariants below: only
+    equality catches the allowlist's own failure mode — a real tool silently
+    DROPPED from advertisement. Do not loosen this to a subset check.
+    """
+    from mcp_server.mindsort_claude.tools_list_dupl import (
+        list_tools_for_claude,
+        CLAUDE_ADVERTISED_TOOLS,
+    )
+
+    tools = await list_tools_for_claude()
+    tool_names = {t.name for t in tools}
+
+    assert tool_names == CLAUDE_ADVERTISED_TOOLS
+
+
+@pytest.mark.asyncio
+async def test_openai_only_diagnostic_is_not_advertised_to_claude(set_dev_env):
+    """
+    DISCRIMINATING TEST for the advertisement allowlist.
+
+    Fails against pre-fix code (the tool leaks into Claude's list) and passes after.
+
+    `_diagnostic_tiny_widget` is an OpenAI-only diagnostic (inc_91, commit 1bbd16c)
+    that self-registers into the SHARED registry at import time. It must remain in
+    the registry — OpenAI uses it — but must never be advertised to Claude, where
+    it is unauthorized and cannot succeed.
+    """
     from mcp_server.clarity.tools import TOOL_REGISTRY
     from mcp_server.mindsort_claude.tools_list_dupl import list_tools_for_claude
 
     tools = await list_tools_for_claude()
     tool_names = {t.name for t in tools}
 
-    assert tool_names == set(TOOL_REGISTRY.keys())
+    assert "_diagnostic_tiny_widget" not in tool_names
+    # ...and we did NOT achieve that by deleting it from the shared registry,
+    # which would break the OpenAI surface.
+    assert "_diagnostic_tiny_widget" in TOOL_REGISTRY
+
+
+def test_advertised_allowlist_membership_is_exact():
+    """The allowlist names exactly the 6 real MindSort tools — membership, not count."""
+    from mcp_server.mindsort_claude.tools_list_dupl import CLAUDE_ADVERTISED_TOOLS
+
+    assert CLAUDE_ADVERTISED_TOOLS == {
+        "organize_thoughts",
+        "load_saved_board",
+        "read_board_before_editing",
+        "start_prioritization_flow",
+        "edit_board",
+        "delete_my_data",
+    }
+
+
+def test_advertised_tools_all_exist_in_registry(set_dev_env):
+    """
+    INVARIANT 1: CLAUDE_ADVERTISED_TOOLS is a SUBSET of TOOL_REGISTRY.
+
+    Nothing is advertised that does not exist.
+
+    ONE-DIRECTIONAL BY DESIGN — do NOT "fix" this into an equality or a reverse
+    subset assert. OpenAI-only tools legitimately sit in the shared registry
+    unadvertised on Claude; that asymmetry is exactly the state being encoded.
+    """
+    from mcp_server.clarity.tools import TOOL_REGISTRY
+    from mcp_server.mindsort_claude.tools_list_dupl import CLAUDE_ADVERTISED_TOOLS
+
+    missing = CLAUDE_ADVERTISED_TOOLS - set(TOOL_REGISTRY.keys())
+    assert not missing, f"advertised but not registered: {sorted(missing)}"
+
+
+def test_advertised_tools_are_all_authorized(set_dev_env):
+    """
+    INVARIANT 2: CLAUDE_ADVERTISED_TOOLS is a SUBSET of Claude's TOOL_SCOPES.
+
+    Nothing is advertised that is not authorized — i.e. no repeat of the
+    advertised-but-403 defect for any other tool.
+
+    ONE-DIRECTIONAL BY DESIGN, same reason as invariant 1. TOOL_SCOPES may also
+    carry keys that are not advertised (e.g. the obsolete `save_board` tombstone);
+    that is inert and out of scope here.
+
+    This is a CI invariant, NOT a startup assert: scope-map/registry drift is
+    harmless at runtime (the dispatcher rejects unknown tools before scope
+    enforcement is reached), so failing the boot on it would manufacture an
+    outage from metadata drift.
+    """
+    from mcp_server.mindsort_claude.config import TOOL_SCOPES
+    from mcp_server.mindsort_claude.tools_list_dupl import CLAUDE_ADVERTISED_TOOLS
+
+    unauthorized = CLAUDE_ADVERTISED_TOOLS - set(TOOL_SCOPES.keys())
+    assert not unauthorized, f"advertised but not authorized: {sorted(unauthorized)}"
 
 
 @pytest.mark.asyncio
