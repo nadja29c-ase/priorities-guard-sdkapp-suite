@@ -3486,3 +3486,133 @@ describe('Condensed cluster row accent reflects effective rank', () => {
     expect(screen.getByText(/contains P1 priority/i)).toBeInTheDocument()
   })
 })
+
+// ==========================================================================
+// M3: inline card honours host safe-area insets (inc_inline_safe_area_insets)
+// ==========================================================================
+// The inline root previously used a fixed `padding: 16px` and ignored
+// hostContext.safeAreaInsets entirely, while FullscreenBoardView applied them.
+// Anthropic's guidance is explicit that this is NOT mobile-only: "on web and
+// desktop the composer can overlay the bottom of an inline app, so avoid placing
+// interactive controls flush against any edge" — and the inline card's only
+// footer action sat flush against the bottom edge. prefersBorder:false compounds
+// it: there is no host card padding to absorb the overlap.
+
+describe('Inline card safe-area insets (M3)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  /** Render inline with a given set of insets; returns the mock app for later updates. */
+  async function setupInlineWithInsets(
+    insets: { top: number; right: number; bottom: number; left: number },
+    clusters: unknown[] = [{ cluster_name: 'Work', sum_thought_items: 3 }],
+  ) {
+    const { act } = await import('@testing-library/react')
+    let capturedOnAppCreated: ((app: MockApp) => void) | null = null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockUseApp.mockImplementation((config: any) => {
+      capturedOnAppCreated = config.onAppCreated
+      return { app: null }
+    })
+    const result = render(<App />)
+    let capturedOntoolresult: ((r: unknown) => void) | null = null
+    let capturedOnHostContextChanged: ((c: Record<string, unknown>) => void) | null = null
+    const mockApp: MockApp = {
+      getHostContext: () => ({
+        displayMode: 'inline',
+        availableDisplayModes: ['inline', 'fullscreen'],
+        safeAreaInsets: insets,
+      }),
+      get ontoolresult() { return capturedOntoolresult },
+      set ontoolresult(h: ((r: unknown) => void) | null) { capturedOntoolresult = h },
+      get onhostcontextchanged() { return capturedOnHostContextChanged },
+      set onhostcontextchanged(h: ((c: Record<string, unknown>) => void) | null) {
+        capturedOnHostContextChanged = h
+      },
+    }
+    await act(async () => {
+      capturedOnAppCreated!(mockApp)
+      capturedOntoolresult!({ structuredContent: { clusters } })
+    })
+    return {
+      ...result,
+      pushHostContext: async (ctx: Record<string, unknown>) => {
+        await act(async () => { capturedOnHostContextChanged!(ctx) })
+      },
+    }
+  }
+
+  function inlineRoot(): HTMLElement {
+    return screen.getByRole('main', { name: /MindSort AI Board Overview/i })
+  }
+
+  /** Per-side padding. The shorthand collapses equal values, so read longhand. */
+  function paddingOf(el: HTMLElement) {
+    return {
+      top: el.style.paddingTop,
+      right: el.style.paddingRight,
+      bottom: el.style.paddingBottom,
+      left: el.style.paddingLeft,
+    }
+  }
+
+  // DISCRIMINATING TEST — fails against pre-fix code (fixed `padding: 16px`), passes after.
+  it('adds each host inset to the base 16px padding, on all four sides', async () => {
+    await setupInlineWithInsets({ top: 10, right: 20, bottom: 30, left: 40 })
+
+    // Assert per-side longhand: the CSS shorthand collapses equal values
+    // (16px 16px 16px 16px -> "16px"), which makes string matching brittle.
+    expect(paddingOf(inlineRoot())).toEqual({ top: '26px', right: '36px', bottom: '46px', left: '56px' })
+  })
+
+  // Guards the bottom edge specifically: this is the side the composer overlays, and
+  // the side the inline card's only action button sits against.
+  it('applies the bottom inset even when the other three are zero', async () => {
+    await setupInlineWithInsets({ top: 0, right: 0, bottom: 34, left: 0 })
+
+    expect(paddingOf(inlineRoot())).toEqual({ top: '16px', right: '16px', bottom: '50px', left: '16px' })
+  })
+
+  // No-regression: the default (no insets reported) must look exactly as before.
+  it('renders the plain 16px padding when all insets are zero', async () => {
+    await setupInlineWithInsets({ top: 0, right: 0, bottom: 0, left: 0 })
+
+    expect(paddingOf(inlineRoot())).toEqual({ top: '16px', right: '16px', bottom: '16px', left: '16px' })
+  })
+
+  // Proves padding is read from state at render, not snapshotted once at mount.
+  it('re-applies padding when the host sends new insets after first render', async () => {
+    const { pushHostContext } = await setupInlineWithInsets({ top: 0, right: 0, bottom: 0, left: 0 })
+
+    expect(paddingOf(inlineRoot())).toEqual({ top: '16px', right: '16px', bottom: '16px', left: '16px' })
+
+    await pushHostContext({ safeAreaInsets: { top: 5, right: 6, bottom: 7, left: 8 } })
+
+    expect(paddingOf(inlineRoot())).toEqual({ top: '21px', right: '22px', bottom: '23px', left: '24px' })
+  })
+
+  // Insets must not become an excuse for an internal scroll container: the inline card
+  // still has to fit its content and let the conversation own vertical scrolling.
+  it('introduces no internal vertical scroll or fixed height on the inline root', async () => {
+    await setupInlineWithInsets({ top: 10, right: 20, bottom: 30, left: 40 })
+
+    const style = inlineRoot().getAttribute('style') ?? ''
+    expect(style).not.toMatch(/overflow-y:\s*(auto|scroll)/)
+    expect(style).not.toMatch(/overflow:\s*(auto|scroll)/)
+    expect(style).not.toMatch(/(^|;)\s*height:/)
+    expect(style).not.toMatch(/max-height:/)
+  })
+
+  // §4 invariant: the footer action stays a 44x44 target regardless of insets.
+  it('keeps the footer action at a 44x44 minimum touch target', async () => {
+    await setupInlineWithInsets({ top: 10, right: 20, bottom: 30, left: 40 })
+
+    const btn = screen.getByRole('button', { name: /open full board/i })
+    const style = btn.getAttribute('style') ?? ''
+    expect(style).toMatch(/min-height:\s*44px/)
+    expect(style).toMatch(/min-width:\s*44px/)
+  })
+})

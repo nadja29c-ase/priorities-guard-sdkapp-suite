@@ -6,7 +6,12 @@
  * introduce navigation, breadcrumbs, nested views, or internal scrolling.
  *
  * DISPLAY MODES:
- * - Inline: Accordion expansion within 500px height limit (increment 1)
+ * - Inline: Accordion expansion within a SELF-IMPOSED ~500px height budget (increment 1).
+ *   NB: Anthropic's published design guidelines set NO numeric inline height limit — they
+ *   require "fit content, no internal vertical scroll; request fullscreen if you need a
+ *   scroll viewport", and the host caps/clips height itself. The 500px figure here is an
+ *   internal engineering budget, NOT a compliance requirement. Under INLINE_SHOW_ALL_ITEMS
+ *   the card auto-fits and the budget is dormant (see that flag's note).
  * - Fullscreen: Full board view with all content expanded (increment 2)
  *
  * Host context is authoritative — local displayMode state only ever reconciles
@@ -78,9 +83,12 @@ export const LAYOUT = {
   boardOverflowRowH: 20,
   /** Footer: "Open full board" button area */
   actionFooterHeight: 56,
-  /** Safety margin: target ≤480px to give host variance headroom */
+  /** Safety margin under the self-imposed budget below (target ≤480px). Headroom for
+   *  host variance — not a guideline figure; see maxHeight. */
   safetyMargin: 20,
-  /** Maximum height limit per guidelines */
+  /** Self-imposed engineering budget (NOT an Anthropic guideline — the published
+   *  guidance sets no numeric inline height limit; the host caps/clips height itself).
+   *  Used only by the DORMANT capacity model + the diagnostic log below. */
   maxHeight: 500,
   /** Target threshold (maxHeight - safetyMargin) */
   targetThreshold: 480,
@@ -278,7 +286,9 @@ function App() {
   // App reference for bridge connection
   const appRef = useRef<McpApp | null>(null)
 
-  // Ref for height guard diagnostic (500px limit verification)
+  // Ref for the inline height diagnostic. Measures actual rendered height against the
+  // SELF-IMPOSED ~500px budget — there is no Anthropic inline height limit to verify
+  // against (the host caps/clips, and publishes no number). Telemetry, not a guard.
   const inlineMainRef = useRef<HTMLElement | null>(null)
 
   // Ref for focus restoration on fullscreen exit
@@ -616,10 +626,22 @@ function App() {
 
         const height = inlineMainRef.current.scrollHeight
 
-        // Always log for diagnostic visibility
+        // Always log for diagnostic visibility.
+        // WORDING IS DELIBERATE: this reports against a SELF-IMPOSED budget, never a
+        // "limit". PG-Claude's equivalent printed "704px (limit: 500px, EXCEEDS LIMIT)"
+        // for a perfectly valid height and was deleted outright for asserting a limit
+        // that does not exist; the 500px sits in that app's standing list of things
+        // "documented, none true". Anthropic publishes NO inline height number — the
+        // host caps and clips, undocumented. Do not reintroduce the word "limit" here.
+        //
+        // Wording corrected in the safe-area increment (batched into that rebuild, since
+        // a string literal survives minification and would otherwise force its own bump).
+        // The telemetry is unchanged — height is still logged on every observation, and
+        // both thresholds still annotate it; only the false "EXCEEDS ... LIMIT" framing
+        // is gone. This is a message change, not a logic change.
         console.log(
           `[MindSort Diagnostic] Inline main scrollHeight: ${height}px` +
-            (height > LAYOUT.maxHeight ? ` — EXCEEDS ${LAYOUT.maxHeight}px LIMIT` : '') +
+            (height > LAYOUT.maxHeight ? ` — over self-imposed ${LAYOUT.maxHeight}px budget (not an Anthropic limit)` : '') +
             (height > target ? ` — above ${target}px target` : '')
         )
 
@@ -826,7 +848,16 @@ function App() {
         width: '100%',
         background: 'var(--color-background-secondary, #F5F4ED)',
         borderRadius: 'var(--border-radius-xl, 12px)',
-        padding: '16px',
+        // M3: base visual padding PLUS the host-supplied safe-area inset per side.
+        // Read from hostContext at render (never snapshot) so a hostcontextchanged
+        // notification re-applies it. All four sides use the host's values — the host
+        // knows where the card sits and sends 0 for sides that need nothing; inventing
+        // an inline heuristic ("bottom only") would second-guess that contract.
+        // NOT mobile-only: on web and desktop the composer can overlay an inline app,
+        // and prefersBorder:false means there is no host card padding to absorb it.
+        // Runtime padding only — do NOT fold these into the LAYOUT constants, which the
+        // dormant capacity model reads (see LAYOUT.outerPadding).
+        padding: `${16 + hostContext.safeAreaInsets.top}px ${16 + hostContext.safeAreaInsets.right}px ${16 + hostContext.safeAreaInsets.bottom}px ${16 + hostContext.safeAreaInsets.left}px`,
         touchAction: 'pan-y',
         overscrollBehavior: 'contain',
       }}
