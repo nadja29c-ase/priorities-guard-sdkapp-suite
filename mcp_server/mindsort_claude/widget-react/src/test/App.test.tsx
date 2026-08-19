@@ -81,9 +81,22 @@ describe('App Component', () => {
   })
 
   // Test 9: Mount + bridge - loading state
-  it('shows loading state when not initialized', () => {
+  // SUBJECT UNCHANGED: "what does the pre-init render produce?". Only the expected
+  // output moved, because the pre-init render is exactly what M20 changes. This
+  // previously asserted the literal `Loading...` text block, which encoded the defect
+  // (a centred text block does not "match the layout structure of the final content").
+  // DISCRIMINATING: fails against pre-fix code, which renders `Loading...`.
+  it('shows a layout-matching skeleton when not initialized, not a text block', () => {
     render(<App />)
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+
+    // The skeleton root is the loading surface.
+    const root = screen.getByRole('main', { name: /MindSort AI Board Overview/i })
+    expect(root).toHaveAttribute('aria-busy', 'true')
+
+    // Placeholder bars exist...
+    expect(root.querySelectorAll('.ms-skeleton-bar').length).toBeGreaterThan(0)
+    // ...and the old text block is gone.
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
   })
 
   // Test 12: Display mode capabilities - declares support for both inline and fullscreen
@@ -141,7 +154,10 @@ describe('App Component', () => {
     render(<App />)
 
     // Initially shows loading (bridge hasn't timed out yet)
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+    // HANDLE ONLY: the loading branch is now a skeleton, so "loading is showing" is
+    // probed via the skeleton root instead of the removed `Loading...` text. The
+    // ordering assertions below are unchanged — this test's subject is guard ordering.
+    expect(screen.getByRole('main', { name: /MindSort AI Board Overview/i })).toHaveAttribute('aria-busy', 'true')
     expect(screen.queryByText('Session expired')).not.toBeInTheDocument()
 
     // Advance past the 3s stale timeout
@@ -152,7 +168,7 @@ describe('App Component', () => {
     // NOW should show stale overlay, NOT loading
     // This is the critical test: stale guard must come BEFORE loading guard
     expect(screen.getByText('Session expired')).toBeInTheDocument()
-    expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
+    expect(screen.queryByRole('main', { name: /MindSort AI Board Overview/i })).not.toBeInTheDocument()
 
     vi.useRealTimers()
   })
@@ -3614,5 +3630,92 @@ describe('Inline card safe-area insets (M3)', () => {
     const style = btn.getAttribute('style') ?? ''
     expect(style).toMatch(/min-height:\s*44px/)
     expect(style).toMatch(/min-width:\s*44px/)
+  })
+})
+
+// ==========================================================================
+// M20: inline loading skeleton (inc_inline_loading_skeleton)
+// ==========================================================================
+// The pre-init branch was a centred `Loading...` text block — correctly not a
+// spinner, but M20 also requires the skeleton to "match the layout structure of
+// the final content so the transition feels seamless". It now mirrors the inline
+// card: header row, 3 cluster-row placeholders, footer action.
+
+describe('Inline loading skeleton (M20)', () => {
+  beforeEach(() => {
+    mockUseApp.mockReset()
+    mockUseHostStyles.mockReset()
+    mockUseApp.mockReturnValue({ app: null })
+  })
+
+  /** Pre-init render: no tool result is ever delivered, so isInitialized stays false. */
+  function renderSkeleton() {
+    render(<App />)
+    return screen.getByRole('main', { name: /MindSort AI Board Overview/i })
+  }
+
+  it('marks the skeleton root aria-busy', () => {
+    expect(renderSkeleton()).toHaveAttribute('aria-busy', 'true')
+  })
+
+  it('puts the loading message in a role="status" live region', () => {
+    const root = renderSkeleton()
+    const status = root.querySelector('[role="status"]')
+
+    expect(status).not.toBeNull()
+    expect(status!.textContent).toMatch(/loading/i)
+    // The message is visually hidden but present for AT.
+    expect(status!.querySelector('.sr-only')).not.toBeNull()
+  })
+
+  it('hides the visual placeholder tree from assistive technology', () => {
+    const root = renderSkeleton()
+    const hidden = root.querySelector('[aria-hidden="true"]')
+
+    expect(hidden).not.toBeNull()
+    // Every placeholder bar lives inside the aria-hidden subtree.
+    expect(root.querySelectorAll('.ms-skeleton-bar').length)
+      .toBe(hidden!.querySelectorAll('.ms-skeleton-bar').length)
+  })
+
+  // Catches a regression that renders 0 rows (empty-looking card) or an unbounded
+  // count (implying a board size we cannot know before load).
+  it('renders exactly 3 cluster-row placeholders', () => {
+    const root = renderSkeleton()
+    const rows = root.querySelectorAll(`[style*="min-height: ${LAYOUT.collapsedRowH}px"]`)
+
+    expect(rows.length).toBe(3)
+  })
+
+  // BEHAVIOURAL token binding, not a regex for "#". The point is that the fill is
+  // host-token-driven so it adapts to dark mode; asserting hex-absence would pass a
+  // WRONG token and fail a correct reformat.
+  it('fills placeholder bars from a host colour token so they adapt to theme', () => {
+    const root = renderSkeleton()
+    const bars = Array.from(root.querySelectorAll('.ms-skeleton-bar')) as HTMLElement[]
+
+    expect(bars.length).toBeGreaterThan(0)
+    for (const b of bars) {
+      expect(b.style.background).toContain('--color-border-tertiary')
+    }
+  })
+
+  // §4.1: this branch renders BEFORE connect(), so host context is unknown. Reading
+  // safeAreaInsets here would consume undefined-derived state. The padding must be flat.
+  it('uses flat padding and does not vary with host insets', () => {
+    const root = renderSkeleton()
+
+    expect(root.style.paddingTop).toBe('16px')
+    expect(root.style.paddingRight).toBe('16px')
+    expect(root.style.paddingBottom).toBe('16px')
+    expect(root.style.paddingLeft).toBe('16px')
+  })
+
+  // The pulse belongs on the bars; a pulsing shell reads as a rendering fault.
+  it('applies the pulse class to bars only, never the container', () => {
+    const root = renderSkeleton()
+
+    expect(root.classList.contains('ms-skeleton-bar')).toBe(false)
+    expect(root.querySelectorAll('.ms-skeleton-bar').length).toBeGreaterThan(0)
   })
 })

@@ -81,3 +81,21 @@ h1, h2, h3, h4, h5, h6 {
   white-space: nowrap;
   border: 0;
 }
+
+/* Loading skeleton (M20) — pulse applied to the placeholder BARS, never to the
+   container. A pulsing shell reads as a rendering fault rather than a loading
+   affordance. Mirrors PG-Claude's proven .pg-skeleton-bar; named ms- for this widget. */
+@keyframes ms-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.ms-skeleton-bar {
+  animation: ms-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-skeleton-bar {
+    animation: none;
+  }
+}

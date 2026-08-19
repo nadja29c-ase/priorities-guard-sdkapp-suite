@@ -804,19 +804,106 @@ function App() {
 
   // Loading state
   if (!isInitialized) {
+    // M20: a SKELETON that mirrors the inline card's real layout — header row, cluster
+    // rows, footer — not a centred "Loading..." text block. The source requires "skeleton
+    // screens, not spinners… Match the layout structure of the final content so the
+    // transition feels seamless"; a text block satisfies "not a spinner" but not the match.
+    const bar = (width: string, height: string, radius = '4px') => ({
+      width,
+      height,
+      borderRadius: radius,
+      // Host token, so the skeleton adapts to dark mode automatically (M1/M18).
+      background: 'var(--color-border-tertiary, rgba(31,30,29,0.15))',
+    })
     return (
-      <div
+      <main
+        role="main"
+        aria-label="MindSort AI Board Overview"
+        aria-busy="true"
         style={{
-          padding: '24px',
-          textAlign: 'center',
-          fontSize: '14px',
-          color: 'var(--color-text-secondary, #3D3D3A)',
+          width: '100%',
           background: 'var(--color-background-secondary, #F5F4ED)',
           borderRadius: 'var(--border-radius-xl, 12px)',
+          // FLAT 16px ON PURPOSE — mirrors the real card's base padding. This branch
+          // renders BEFORE connect() resolves, so hostContext is not yet known; reading
+          // safeAreaInsets or platform here would consume undefined-derived state. The M3
+          // inset work (77eb332) applies to the inline <main> below, which renders after.
+          padding: '16px',
+          touchAction: 'pan-y',
+          overscrollBehavior: 'contain',
         }}
       >
-        Loading...
-      </div>
+        {/* role="status" is a polite live region. It is load-bearing for the RE-ENTRY
+            case (handleViewRemainingContent sets loading again while already mounted — a
+            real content change a live region announces). At FIRST mount it is not
+            guaranteed to announce: the region appears with its text already present and
+            never changes before unmounting, which NVDA/JAWS/VoiceOver commonly skip.
+            Kept because it costs nothing and strictly beats a bare sr-only node. */}
+        <div role="status">
+          <span className="sr-only">Loading your MindSort board</span>
+        </div>
+
+        {/* Visual placeholders only — hidden from AT so the bars are not traversed.
+            COMMON SUBSET, forgiving direction: no badge or tag placeholders, because both
+            are OPTIONAL on a real row. A real row GAINS a badge/tag on load (content
+            settles outward) rather than a skeleton showing one that then vanishes. */}
+        <div aria-hidden="true">
+          {/* Header: title left, count summary right — mirrors the real header's
+              space-between layout and 12px bottom margin. */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              marginBottom: '12px',
+            }}
+          >
+            <div className="ms-skeleton-bar" style={bar('45%', '16px')} />
+            <div className="ms-skeleton-bar" style={bar('22%', '12px')} />
+          </div>
+
+          {/* Cluster rows: 3 placeholders. Real inline caps at MAX_INLINE_ROWS (5); 3 is a
+              middle ground that avoids implying a specific board size. Each mirrors the
+              minimal ClusterRowToggle — bordered/rounded shell at collapsedRowH with a
+              left accent stripe, one name bar and one short count bar. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: `${LAYOUT.collapsedRowGap}px` }}>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  minHeight: `${LAYOUT.collapsedRowH}px`,
+                  padding: '10px 12px',
+                  background: 'var(--color-background-primary, #FFFFFF)',
+                  borderRadius: 'var(--border-radius-md, 8px)',
+                  border: 'var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, #E0DFDB)',
+                  borderLeft: 'var(--border-width-regular, 0.5px) solid var(--color-border-tertiary, #E0DFDB)',
+                }}
+              >
+                <div className="ms-skeleton-bar" style={{ ...bar('55%', '13px'), flex: 1 }} />
+                <div className="ms-skeleton-bar" style={bar('28px', '12px')} />
+              </div>
+            ))}
+          </div>
+
+          {/* Footer: ONE bar where "Open full board" sits. Common-subset choice — the
+              left slot (the "+N more clusters" indicator) is CONDITIONAL on
+              boardOverflow > 0, so skeletoning it would show something frequently absent.
+              Skeleton the always-present element; let the optional one appear on load. */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              marginTop: '12px',
+            }}
+          >
+            <div className="ms-skeleton-bar" style={bar('38%', '28px', 'var(--border-radius-md, 8px)')} />
+          </div>
+        </div>
+      </main>
     )
   }
 
