@@ -43,7 +43,9 @@ code-fixed ≠ verified-live and this document does not award green on a commit:
 | Row | Fixed in | Status now |
 |---|---|---|
 | **R7a** — diagnostic tool advertised but always 403 | `5c48d05`, **deployed** (`dep-da2qpjugekts73e1nih0`, live 2026-08-19) | **Fixed, pending live confirmation.** Unit + integration green and the OpenAI surface verified untouched. Outstanding: in-client `tools/list` shows exactly six tools and `_diagnostic_tiny_widget` is absent |
-| **M3** — inline card ignored safe-area insets | `77eb332`, **not yet deployed** at time of writing | **Fixed, pending live acceptance.** 6 tests incl. a dynamic host-context update; 3 of them fail against pre-fix code. Outstanding: on-device check on **both** mobile and web/desktop with the composer focused |
+| **M3** — inline card ignored safe-area insets | `77eb332`, live since v11 | **Implemented, UNEXERCISED.** 6 tests incl. a dynamic host-context update; 3 fail against pre-fix code. The host reported **zero insets** on the surfaces tested, so the fix is a no-op there and rendered padding is identical to pre-fix — nothing to observe. Not marked Fulfilled: that would claim verification of a path that never ran. Exercising it needs **mobile** (keyboard up), where the test is a tap, not a look |
+| **M20** — loading skeleton | `efa1ad6` v12 + `d38601f` v13, live | **Implemented; runtime behaviour measured, not merely asserted.** Visible and correct on slow loads (~1620ms); imperceptible on fast loads (~18ms, zero paints) because the widget fetches nothing at mount. No timer added. Structural compliance unchanged — the `role="status"` announcement claim remains weaker than first recorded |
+| **M1** — light/dark | — | **Dark mode confirmed on-device 2026-08-20.** Supports M1; does *not* discharge M2's contrast measurement |
 
 `P3A` (privacy policy) and `A24` (DCR over CIMD) are unchanged. When the two live checks are done,
 move those rows to Fulfilled and update the counts — **not before**.
@@ -110,7 +112,15 @@ Not attempted — out of scope for an audit.
 it. It is `read_only_hint=True` and side-effect-free, so the exposure is low, but it is an unscoped tool.
 
 ## ❌→✅ M3 — `RECOMMENDED` **⚠️SILENT** — production-breaking · **mindsort-only**
-> **FIXED in `77eb332`.** Inline root padding is now `16px + hostContext.safeAreaInsets` per side, read at render. On-device acceptance (mobile *and* web/desktop) still outstanding. Original finding preserved below.
+> **FIXED in `77eb332`** (live since v11). Inline root padding is now `16px + hostContext.safeAreaInsets` per side, read at render.
+> **DISPOSITION — implemented per the documented contract; UNEXERCISED rather than verified.** The fix is a no-op whenever the
+> host reports zero insets: rendered padding is then byte-identical to the pre-fix `16px`, so there is no visual before/after to
+> observe. On the surfaces tested (desktop web) the host reported zero insets, so the code path that the fix exists to serve was
+> never exercised. The meaningful surface is **mobile** — keyboard up, nav bar present — where the test is a *tap*, not a look:
+> is the card's bottom-edge "Open full board" button still reachable with the composer focused?
+> **Deliberately NOT marked Fulfilled.** Marking it green off a desktop glance would claim verification of a path that did not
+> run. To exercise it: inspect the inline `<main>`'s computed padding — `16px` on all sides means zero insets reported;
+> anything larger means the host is sending them and the fix is doing its job. Original finding preserved below.
 
 > *"The interactive portion SHOULD be rendered inside `safeAreaInsets`… The user won't be able to interact with anything rendered outside the safe area."* **Explicitly not mobile-specific.**
 
@@ -162,7 +172,7 @@ fresh connection. Explicitly soft; listed so it is not mistaken for satisfied.
 | ID | Level | Finding | Evidence |
 |---|---|---|---|
 | **P2B** | `POLICY` | Six tools describe real functionality accurately; the 7th (`_diagnostic_tiny_widget`) is advertised and non-functional | see R7a |
-| **M20** | `DOC-CONSTRAINT` | *"Skeleton screens, not spinners… match the layout structure of the final content."* Loading state is a centred **`Loading...` text block** — correctly **not** a spinner, but not a skeleton and does not match final layout | `App.tsx:784-798` |
+| **M20** | `DOC-CONSTRAINT` | *"Skeleton screens, not spinners… match the layout structure of the final content."* **Original finding:** a centred `Loading...` text block — not a spinner, but not a skeleton either. **Now implemented** (`efa1ad6` v12, footer defect fixed `d38601f` v13): mirrors the loaded card's header + 3 cluster rows. **Runtime behaviour MEASURED** (temporary instrumentation `e356da2`, removed `56d6ce0`): on a *slow* load the skeleton commits at 49ms, paints through two rAFs and stays visible to ~1620ms — it works and is seen. On a *fast* load it commits at 41ms, the tool result lands at 58.8ms and it unmounts at 61.3ms — **~18ms, zero paints**. Cause: the widget performs **no fetch at mount** (its only server round-trip is `handleViewRemainingContent`); board data arrives inside the tool result that caused the host to render it, so on a fast path there is nothing to wait for. **No minimum-display timer was added** — it would inflate an 18ms path to 300ms to display a loading state for a load with nothing to load. **Structural compliance is separate and unchanged**; see the `role="status"` caveat under M2 | `App.tsx` `!isInitialized` branch |
 | **P5B** | `POLICY` | *"Frugal with tokens."* Tool descriptions total **~12.7 KB** and ship on every conversation: `organize_thoughts` 3,788 chars, `edit_board` 3,145, `start_prioritization_flow` 2,069, `read_board_before_editing` 1,974. Much is behavioural framing rather than "what it does / when to call it" | measured from `TOOL_REGISTRY` |
 | **P3G** | `POLICY` | *"Maintain the Software and address issues within reasonable timeframes."* MCP SDK pinned **1.12.4**; the `ClosedResourceError` message-router race (upstream #1363) is fixed in **1.23.2**, and production shows **10 tracebacks / 10 fast-fail 400s** in one capture | `poetry.lock:1229`; `attachment.md` |
 | **M5** | `DOC-CONSTRAINT` | *"Maximum 2 actions, at the bottom of the card."* Footer has 1 action (**Open full board**, `App.tsx:951`); an **overflow action row** (`App.tsx:1376`) renders *inside* an expanded cluster, not at the bottom. Count is within 2; **placement** deviates | `App.tsx:951, 1376` |
@@ -228,7 +238,7 @@ fresh connection. Explicitly soft; listed so it is not mistaken for satisfied.
 ## §8/§9 MCP Apps — display, widget domain, CSP, theming
 | ID | Verdict | Evidence |
 |---|---|---|
-| M1 | ✅ | Zero raw hex colours outside `var(--token, #fallback)` form; swept all `background/color/border/fill/stroke` literals in `App.tsx` |
+| M1 | ✅ | Zero raw hex colours outside `var(--token, #fallback)` form; swept all `background/color/border/fill/stroke` literals in `App.tsx`. **Confirmed on-device 2026-08-20: dark mode renders correctly.** Note this supports M1 only — it is *not* a WCAG AA contrast measurement, which M2 still requires and which remains unmeasured |
 | M4 | ✅ | **No nested vertical scroll anywhere** — zero `overflow-y: auto/scroll` in `App.tsx` or `main.css`; `main.css:79` uses `overflow: hidden`. Content auto-fits via truncation + an overflow affordance |
 | M7 | ✅ | Accordion expand/collapse in place; no drill-ins, breadcrumbs, menus or popovers |
 | M9 | ✅ | 44 px touch targets explicit (`LAYOUT.boardHeaderHeight/collapsedRowH/overflowActionRowH = 44`; `minHeight/minWidth: '44px'` at `App.tsx:964`) |
@@ -280,7 +290,7 @@ warranty over every portal field) · `P4A`–`P4C` partially rest on listing cla
 | **M8** | Fullscreen: no floating panels; native close button present *(gated by your standing `mindsort-fullscreen-native-close-unverified` note — still unverified)* |
 | **M13** | N/A unless carousels are added |
 | **M15** | Mobile fullscreen render |
-| **M20** | Whether the `Loading...` block reads as acceptable in-client |
+| **M20** | ~~Whether the loading block reads as acceptable in-client~~ — **ANSWERED by measurement, 2026-08-20.** See the M20 row above: correct on slow loads, imperceptible on fast loads because there is no wait to cover. No further in-client check needed |
 
 ## Legal / contractual — not a code property (9)
 `T1` (rights to provide) · `T2` (lawful, policy-compliant) · `T4` (privacy policy provided **and adhered
