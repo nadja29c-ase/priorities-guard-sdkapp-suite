@@ -24,14 +24,15 @@ would be fabrication. Where a row needs human observation, the exact check is st
 
 ## Verdict summary
 
-**As first audited (2026-08-19, at `99113d1`):**
+**As first audited (2026-08-19, at `99113d1`)**, with one row re-classified 2026-08-20: **M2** moved IDK → Partly once contrast was
+actually computed (8→9 Partly, 41→40 IDK). Total unchanged at 129.
 
 | Verdict | Count |
 |---|---|
 | **Fulfilled** | 62 |
-| **Partly fulfilled** | 8 |
+| **Partly fulfilled** | 9 |
 | **Not fulfilled** | 4 |
-| **IDK — not determinable from codebase** | 41 |
+| **IDK — not determinable from codebase** | 40 |
 | **N/A — conditional precondition does not hold** | 14 |
 | **Total** | **129** |
 
@@ -178,6 +179,7 @@ fresh connection. Explicitly soft; listed so it is not mistaken for satisfied.
 | **M5** | `DOC-CONSTRAINT` | *"Maximum 2 actions, at the bottom of the card."* Footer has 1 action (**Open full board**, `App.tsx:951`); an **overflow action row** (`App.tsx:1376`) renders *inside* an expanded cluster, not at the bottom. Count is within 2; **placement** deviates | `App.tsx:951, 1376` |
 | **M6** | `DOC-CONSTRAINT` | *"Maximum 4–5 data points."* Inline shows a truncated cluster list bounded by a **self-imposed** ~500px budget (`LAYOUT.maxHeight`), not by a data-point count; visible rows vary with content. ⚠️ The 500px is **the app's own engineering budget, not an Anthropic requirement** — see the M4 note | `App.tsx:84, 500-526` |
 | **A7** | `DOC-CONSTRAINT` | AS must be reachable from `160.79.104.0/21`. MCP host demonstrably reachable (production logs show `Claude-User` from `160.79.106.x` succeeding), but the **AS is a different host** (`www.priority-guard.com`, Cloudflare-fronted) and was not tested from that range | Render request logs |
+| **M2** | `DOC-CONSTRAINT` | **WCAG AA contrast: 4 failures, all light mode, all on Anthropic's OWN host-token pairings.** `--color-text-tertiary` (#73726C) on `--color-background-secondary` (#F5F4ED) = **4.38:1** at three **12px** sites — header count summary, footer "+N more clusters", empty-state "No clusters yet". `--color-text-info` (#3266AD) on `--color-background-info` (#D6E4F6) = **4.48:1** (P3 badge). 12px is normal text (large = ≥24px, or ≥18.66px bold), so **4.5:1 applies** and the 3:1 allowance does not reach them. **Dark mode: 11/11 pass.** Skeleton bars **1.35–1.49:1** vs the 3:1 graphical threshold — arguably exempt (decorative, `aria-hidden`, transient). **M2/M18 TENSION, sourced:** M18 (`raw 220`) mandates host tokens for all structural elements; M2 (`raw 278`) mandates WCAG AA. These pairings are the published palette used as instructed — the failure is in the tokens, not our choices. ⚠️ **MEASUREMENT CAVEAT — testing outside Claude misleads:** `RANK_COLORS` fallbacks (`utils.ts:242-243`, #1E40AF on #DBEAFE = **7.15:1**) are MORE accessible than the resolved host tokens (**4.48:1**). `useHostStyles` resolves the `var()` in Claude so the fallback never paints — always measure against resolved host values, never the fallbacks. **Disposition:** the three tertiary sites are fixable to `--color-text-secondary` (**9.88:1**, still a host token, zero M18 tension) — batch into the next widget rebuild. The P3 badge is **logged, not fixed**: `RANK_COLORS` is shared with the OpenAI surface, so it carries cross-surface blast radius, and 4.48 is marginal. Not submission-gating (`DOC-CONSTRAINT`, not `PORTAL`) | computed from `design-guidelines.raw.md:284-305` token table |
 | **P3F** | `POLICY` | Ownership of `mindsort-mcp.priority-guard.com` and `www.priority-guard.com` is evidenced by control; the widget renders **only bundled** assets (0 external `<script src>`), CSP `resourceDomains` lists only `https://assets.claude.ai` (Anthropic's own). **Verification of domain ownership is a portal/registrar matter I cannot see** | `resources_dupl.py:120`; built bundle |
 
 ---
@@ -238,7 +240,7 @@ fresh connection. Explicitly soft; listed so it is not mistaken for satisfied.
 ## §8/§9 MCP Apps — display, widget domain, CSP, theming
 | ID | Verdict | Evidence |
 |---|---|---|
-| M1 | ✅ | Zero raw hex colours outside `var(--token, #fallback)` form; swept all `background/color/border/fill/stroke` literals in `App.tsx`. **Confirmed on-device 2026-08-20: dark mode renders correctly.** Note this supports M1 only — it is *not* a WCAG AA contrast measurement, which M2 still requires and which remains unmeasured |
+| M1 | ✅ | Zero raw hex colours outside `var(--token, #fallback)` form; swept all `background/color/border/fill/stroke` literals in `App.tsx`. **Confirmed on-device 2026-08-20: dark mode renders correctly.** Note this supports M1 only — it is *not* a WCAG AA contrast measurement, which M2 requires and which is now measured — see the M2 finding |
 | M4 | ✅ | **No nested vertical scroll anywhere** — zero `overflow-y: auto/scroll` in `App.tsx` or `main.css`; `main.css:79` uses `overflow: hidden`. Content auto-fits via truncation + an overflow affordance |
 | M7 | ✅ | Accordion expand/collapse in place; no drill-ins, breadcrumbs, menus or popovers |
 | M9 | ✅ | 44 px touch targets explicit (`LAYOUT.boardHeaderHeight/collapsedRowH/overflowActionRowH = 44`; `minHeight/minWidth: '44px'` at `App.tsx:964`) |
@@ -284,7 +286,7 @@ warranty over every portal field) · `P4A`–`P4C` partially rest on listing cla
 ## Needs human observation in the Claude client (7)
 | ID | The exact check to run |
 |---|---|
-| **M2** | WCAG AA **contrast measurement** on rendered widget in light *and* dark; keyboard-only traversal; screen-reader pass. *(The new `sr-only` inherited-priority announcement is code-verified present but its spoken output is unverified.)* |
+| **M2** | ~~WCAG AA contrast measurement~~ — **MEASURED 2026-08-20, see the M2 finding above.** Still outstanding for M2: **keyboard-only traversal** and a **screen-reader pass** *(the `sr-only` inherited-priority announcement is code-verified present but its spoken output is unverified; and the skeleton's `role="status"` announces in no case — the branch is never re-entered)* |
 | **M3** | Inline card on web/desktop with the composer focused — is **"Open full board"** still tappable? |
 | **M4** | Confirm the host does not clip the inline card in practice. ⚠️ **There is no published pixel limit** — verified against the live guidelines 2026-08-19, which say only *"Height: auto-fits to content (no nested scrolling)"* and *"the host caps inline height and clips content that exceeds it"*, with the cap undocumented. The app's `LAYOUT.maxHeight = 500` is a **self-imposed budget**, not a requirement; do not audit against it. The requirement is behavioural — fit content, no internal vertical scroll, and *"request fullscreen presentation with `ui/request-display-mode`"* if a scroll viewport is genuinely needed (M17) |
 | **M8** | Fullscreen: no floating panels; native close button present *(gated by your standing `mindsort-fullscreen-native-close-unverified` note — still unverified)* |
@@ -350,7 +352,7 @@ slashes remains unknown and untestable from here.
 - **Anything in the submission portal or the published listing** — 25 rows.
 - **Anything requiring the widget rendered in Claude** — 7 rows, including both remaining `⚠️SILENT`
   behavioural rows (`M3` impact, `M4` clipping).
-- **Contrast ratios** (`M2`) — never measured, for MindSort or PG.
+- **Contrast ratios** (`M2`) — now **computed** for MindSort against Anthropic's *published* token values (see the M2 finding). **Not** sampled from rendered pixels: the host may supply values differing from the published table, so a devtools eyedropper would be a stronger check. Still never measured for **PG**.
 - **AS reachability from `160.79.104.0/21`** (`A7`) — inferred from the MCP host, not tested for the AS.
 - **The 11 obligations §13 records as never read**, including the Trademark Guidelines that `T10` binds.
 - **Screen-reader output** of the new inherited-priority announcement — presence verified, speech not.
