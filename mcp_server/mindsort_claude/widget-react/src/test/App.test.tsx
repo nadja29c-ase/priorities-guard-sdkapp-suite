@@ -3680,11 +3680,34 @@ describe('Inline loading skeleton (M20)', () => {
 
   // Catches a regression that renders 0 rows (empty-looking card) or an unbounded
   // count (implying a board size we cannot know before load).
+  // SUBJECT UNCHANGED (row count is still 3); only the HANDLE moved, from the inline
+  // min-height value — which would match any element sharing it — to a dedicated
+  // structural marker.
   it('renders exactly 3 cluster-row placeholders', () => {
     const root = renderSkeleton()
-    const rows = root.querySelectorAll(`[style*="min-height: ${LAYOUT.collapsedRowH}px"]`)
 
-    expect(rows.length).toBe(3)
+    expect(root.querySelectorAll('[data-testid="skeleton-row"]').length).toBe(3)
+  })
+
+  // DISCRIMINATING (fails against v12/efa1ad6, passes after): the footer placeholder is
+  // gone. v12 skeletoned a bar where "Open full board" sits, but that button is gated on
+  // isFullscreenAvailable — so on a host that never advertises fullscreen the bar had no
+  // counterpart, vanished on load, and collapsed the card upward.
+  //
+  // Asserted TWO ways on purpose. The exact count pins the removal; the structural
+  // assertion survives unrelated change — if a header bar were ever added, a bare count
+  // would fail for a reason that has nothing to do with the footer.
+  it('renders no footer placeholder', () => {
+    const root = renderSkeleton()
+
+    // 2 header + (3 rows x 2) = 8. Was 9 in v12, which included the footer bar.
+    expect(root.querySelectorAll('.ms-skeleton-bar').length).toBe(8)
+
+    // Footer-specific: nothing right-aligned, and no bar outside the header or a row.
+    expect(root.querySelectorAll('[style*="flex-end"]').length).toBe(0)
+    const inRows = Array.from(root.querySelectorAll('[data-testid="skeleton-row"]'))
+      .reduce((n, r) => n + r.querySelectorAll('.ms-skeleton-bar').length, 0)
+    expect(inRows).toBe(6)
   })
 
   // BEHAVIOURAL token binding, not a regex for "#". The point is that the fill is

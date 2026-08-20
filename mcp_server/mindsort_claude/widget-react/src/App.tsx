@@ -870,6 +870,9 @@ function App() {
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
+                // Structural marker for the row-count test. Counting by the inline
+                // min-height value matched anything that happened to share it.
+                data-testid="skeleton-row"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -888,20 +891,27 @@ function App() {
             ))}
           </div>
 
-          {/* Footer: ONE bar where "Open full board" sits. Common-subset choice — the
-              left slot (the "+N more clusters" indicator) is CONDITIONAL on
-              boardOverflow > 0, so skeletoning it would show something frequently absent.
-              Skeleton the always-present element; let the optional one appear on load. */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              alignItems: 'center',
-              marginTop: '12px',
-            }}
-          >
-            <div className="ms-skeleton-bar" style={bar('38%', '28px', 'var(--border-radius-md, 8px)')} />
-          </div>
+          {/* NO FOOTER PLACEHOLDER — deliberate, do not add one back.
+              An earlier version skeletoned a bar where "Open full board" sits, on the
+              premise that the button is "always present". That is FALSE against source:
+              the button is gated on `isFullscreenAvailable` (see the inline render's
+              `{isFullscreenAvailable && (<button …)}`), which derives from
+              `hostContext.availableDisplayModes` — initialised to []. The overflow
+              indicator beside it is gated on `boardOverflow > 0`. So on a host that never
+              advertises fullscreen the loaded footer row is EMPTY, and a placeholder there
+              vanishes on load and collapses the card upward — the exact seam M20 exists
+              to remove.
+
+              THE RULE (two formulations that agree, so neither can be reduced away):
+              (1) Skeleton what is absent only for TRANSIENT DATA reasons (an empty board —
+                  rare, self-resolving). Never skeleton what is absent for HOST-CAPABILITY
+                  reasons — that is a property of the surface, fixed for the session, so
+                  the placeholder is wrong on EVERY load on that host, forever.
+              (2) Predict the MOST-LIKELY LOADED LAYOUT, and never skeleton anything whose
+                  presence depends on a capability the skeleton cannot yet observe.
+              Both give the same answers: rows YES (a typical board has clusters), footer
+              button NO (host-capability, unobservable here), overflow indicator NO
+              (atypical data state). */}
         </div>
       </main>
     )
