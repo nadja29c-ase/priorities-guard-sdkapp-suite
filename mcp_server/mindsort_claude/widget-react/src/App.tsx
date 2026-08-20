@@ -122,55 +122,6 @@ const MAX_INLINE_ROWS_EXPANDED = 3
 const INLINE_SHOW_ALL_ITEMS = true
 
 // =============================================================================
-// TEMPORARY M20 PAINT DIAGNOSTIC — REMOVE AFTER MEASUREMENT
-// =============================================================================
-// Purpose: determine whether the loading skeleton ever reaches a VISIBLE browser
-// paint before isInitialized flips true. The SDK read proved the first render can
-// occur with app=null/isInitialized=false and that the host may deliver the tool
-// result during the ui/initialize window — but NOT whether a paint frame occurs in
-// between. This measures the paint boundary directly.
-//
-// Gated behind a flag so it is trivially removable. Logs performance.now() only —
-// NO payloads, NO user data. This block and its two <PaintProbe> usages must be
-// deleted once the measurement is captured; do not let it become permanent telemetry.
-const M20_PAINT_DIAG = true
-
-function diagLog(label: string) {
-  if (!M20_PAINT_DIAG) return
-  // eslint-disable-next-line no-console
-  console.log(`[M20 Paint] ${label}: ${performance.now().toFixed(1)}ms`)
-}
-
-/**
- * PaintProbe: logs a COMMIT timestamp from a layout effect (fires after the labelled
- * subtree is committed to the DOM, not when React evaluates the branch), then schedules
- * two requestAnimationFrames to timestamp the first and second post-commit paints.
- * Rendered INSIDE the skeleton branch and the board branch so each measures its own
- * commit. Returns null — renders nothing.
- */
-function PaintProbe({ label }: { label: string }) {
-  useLayoutEffect(() => {
-    if (!M20_PAINT_DIAG) return
-    diagLog(`${label} commit`)
-    let raf2 = 0
-    const raf1 = requestAnimationFrame(() => {
-      diagLog(`${label} rAF#1 (first post-commit paint)`)
-      raf2 = requestAnimationFrame(() => diagLog(`${label} rAF#2 (second post-commit paint)`))
-    })
-    return () => {
-      // Log unmount so a skeleton that unmounts BEFORE its first frame produces a
-      // positive sequence (commit → unmounted N ms later) rather than a missing rAF
-      // line. The gap between `${label} commit` and this is the survival duration —
-      // if it precedes skeleton rAF#1, the skeleton never reached a visible frame.
-      diagLog(`${label} unmounted`)
-      cancelAnimationFrame(raf1)
-      if (raf2) cancelAnimationFrame(raf2)
-    }
-  }, [label])
-  return null
-}
-
-// =============================================================================
 // LAYOUT MODEL HELPERS (exported for unit testing)
 // =============================================================================
 
@@ -434,7 +385,6 @@ function App() {
                 typeof (c as Record<string, unknown>).sum_thought_items === 'number'
             )
             setClusters(validClusters)
-            diagLog('ontoolresult received — about to setIsInitialized(true)')
             setIsInitialized(true)
             // Reset accordion state on new data
             setExpandedClusterId(null)
@@ -883,8 +833,6 @@ function App() {
           overscrollBehavior: 'contain',
         }}
       >
-        {/* TEMPORARY M20 paint diagnostic — remove after measurement */}
-        <PaintProbe label="skeleton" />
         {/* role="status" is a polite live region. It is load-bearing for the RE-ENTRY
             case (handleViewRemainingContent sets loading again while already mounted — a
             real content change a live region announces). At FIRST mount it is not
@@ -1011,8 +959,6 @@ function App() {
         overscrollBehavior: 'contain',
       }}
     >
-      {/* TEMPORARY M20 paint diagnostic — remove after measurement */}
-      <PaintProbe label="board" />
       {/* Header: Title + Count Summary */}
       <div
         style={{
