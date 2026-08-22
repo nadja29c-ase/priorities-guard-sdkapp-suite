@@ -25,6 +25,7 @@ Or (direct mode - for local development):
 
 import os
 import time
+import uuid
 
 # Minimal imports at module level for fast startup
 # Heavy imports are deferred to create_app() for faster port binding
@@ -224,9 +225,40 @@ class HeadMcpMiddleware:
         await self.app(scope, receive, send)
 
 
+class _DuplicateAuthorizationError(Exception):
+    """More than one Authorization header was present.
+
+    NOT resolved to a winning header, deliberately. Two credentials on one request
+    is ambiguous, and ambiguity between auth layers is the condition behind
+    request smuggling. Harmonising first-vs-last would fix the divergence and
+    PRESERVE the ambiguity; rejecting removes it.
+    """
+
+
+def select_authorization_header(headers) -> "str | None":
+    """The ONE place an Authorization header is chosen from raw ASGI headers.
+
+    Ported from PG-Claude, where two copies of this logic disagreed over
+    first-vs-last header and latin-1-vs-utf-8 decoding — the latter turning a
+    malformed credential into a 500 where a 401 is required.
+
+    Decoding is latin-1 because that is what RFC 9110 permits on the wire and what
+    ASGI hands over; it cannot raise, which is what removes the 500.
+
+    Raises:
+        _DuplicateAuthorizationError: if more than one header is present.
+    """
+    found = [v for name, v in headers if name.lower() == b"authorization"]
+    if len(found) > 1:
+        raise _DuplicateAuthorizationError()
+    if not found:
+        return None
+    return found[0].decode("latin-1")
+
+
 class BearerAuthMiddleware:
     """
-    ASGI middleware to enforce Bearer token presence on /mcp requests.
+    ASGI middleware to enforce Bearer token VALIDITY on /mcp requests.
 
     When Claude initiates connector creation, it probes /mcp without a token.
     FastMCP cannot handle unauthenticated MCP protocol requests gracefully —
@@ -234,14 +266,42 @@ class BearerAuthMiddleware:
     instead of a clean HTTP 401. Claude interprets the broken connection
     as a DCR failure.
 
-    This middleware intercepts GET/POST/DELETE /mcp requests with no
-    Authorization header and returns a standards-compliant HTTP 401 with
-    WWW-Authenticate challenge BEFORE FastMCP sees the request. Claude
-    reads the WWW-Authenticate header, follows the resource_metadata pointer
-    to /.well-known/oauth-protected-resource, discovers the AS, and initiates DCR.
+    A22 (this increment): PRESENCE ALONE WAS NOT ENOUGH. An EXPIRED token carries a
+    header, so the previous presence-only gate let it through to tool dispatch, which
+    answers with CallToolResult(isError=True) — an HTTP 200. Claude does not honour a
+    WWW-Authenticate header on a 200, so no re-auth was triggered and the user saw
+    "Authentication required. Please connect your account." as model text with no
+    Connect button. Token expiry mid-session is routine, not an edge case.
 
-    Positioning: between OriginValidationMiddleware and MCPContentTypeAndAcceptFixMiddleware.
-    Requests with a valid Authorization header pass through unchanged.
+    It also left tools/list unauthenticated: `_list_tools` never calls
+    authenticate_request, so before this change ANY non-empty bearer returned the
+    full tool catalogue at 200 (verified live against production).
+
+    The check MUST live here, not at dispatch: once FastMCP has the message, the
+    response is already destined to be a 200.
+
+    Three outcomes:
+    - no header, bad format, duplicate header, or invalid/expired token -> 401 + WWW-Authenticate
+    - JWKS unreachable with no usable cache                             -> 503, no challenge
+    - valid token                                                       -> passes through unchanged
+
+    PORTED FROM PG-CLAUDE, WITH ONE DELIBERATE DIFFERENCE. The middleware STRUCTURE is
+    PG's (verified in its production A22a work). The VALIDATOR is shared
+    clarity.mcp_auth.validate_jwt, NOT PG's local copy, because MindSort's dispatch path
+    already uses the shared one — one validator per app, one set of semantics. The two
+    have drifted: PG-local validates `azp`, shared does not (per remove_azp.md, DCR
+    assigns a different client_id per user so static azp validation is impossible).
+    Shared's posture is the intended DCR one and is what this app already enforces at
+    dispatch, so the middleware now applies the same rule the dispatcher does.
+
+    NOT PORTED: PG's P1-b body-size guard (MAX_MCP_BODY_SIZE_BYTES, _BodyTooLargeError,
+    the buffering receive-replay). MindSort defines no such limit. PG interleaves that
+    machinery with its valid-token pass-through, so the pass-through below is
+    RECONSTRUCTED as a plain call rather than copied. A body-size limit for MindSort is
+    a separate increment — logged, not bundled.
+
+    Positioning: unchanged — between OriginValidationMiddleware and
+    MCPContentTypeAndAcceptFixMiddleware.
     """
 
     def __init__(self, app, www_authenticate_value: str):
@@ -254,32 +314,92 @@ class BearerAuthMiddleware:
             and scope.get("method") in ("GET", "POST", "DELETE")
             and scope.get("path") == "/mcp"
         ):
-            # Check for Authorization header
-            has_auth = any(
-                name == b"authorization"
-                for name, _ in scope.get("headers", [])
+            # ONE correlation id for the whole request, minted before anything logs.
+            correlation_id = str(uuid.uuid4())
+
+            try:
+                auth_header = select_authorization_header(scope.get("headers", []))
+            except _DuplicateAuthorizationError:
+                # 401 + challenge, NOT 400. Two credentials is an authentication
+                # failure, not a malformed request, and only a 401 carrying the
+                # challenge makes Claude re-authenticate.
+                body = b'{"error": "invalid_token", "error_description": "Multiple Authorization headers"}'
+                await self._send_challenge(send, 401, body)
+                return
+
+            if auth_header is None:
+                body = b'{"error": "unauthorized", "error_description": "Bearer token required"}'
+                await self._send_challenge(send, 401, body)
+                return
+
+            # ---- A22: VALIDATE the token, do not merely detect the header ----
+            # Imported lazily: this module is imported during app construction and
+            # mcp_auth_dupl pulls in config; a module-level import here would couple
+            # middleware definition to auth-module import order.
+            import jwt
+
+            from mcp_server.mindsort_claude.mcp_auth_dupl import (
+                extract_bearer_token,
+                validate_jwt,
             )
 
-            if not has_auth:
-                # Return 401 with WWW-Authenticate challenge
-                # Claude reads this and initiates OAuth discovery + DCR
-                body = b'{"error": "unauthorized", "error_description": "Bearer token required"}'
+            token = extract_bearer_token(auth_header)
+
+            if not token:
+                # Wrong scheme (Basic ...), or "Bearer" with nothing after it.
+                # A 401, never a 500.
+                body = b'{"error": "invalid_token", "error_description": "Invalid Authorization header format"}'
+                await self._send_challenge(send, 401, body)
+                return
+
+            try:
+                await validate_jwt(token, correlation_id)
+            except jwt.PyJWTError:
+                # EVERY PyJWT error is a TOKEN problem: expired, bad signature, wrong
+                # issuer or audience, missing/unknown kid. 401 tells Claude to
+                # re-authenticate, which is the correct and achievable remedy.
+                body = b'{"error": "invalid_token", "error_description": "Token validation failed"}'
+                await self._send_challenge(send, 401, body)
+                return
+            except Exception:
+                # NOT an auth failure — the SERVER could not validate. The realistic
+                # cause is JWKS unavailable with no usable cache. Deliberately 503, not
+                # 401: a 401 would tell Claude to re-authenticate against a server that
+                # cannot validate anything, producing a re-auth loop rather than a
+                # recovery. No WWW-Authenticate — there is nothing to re-auth against.
+                body = b'{"error": "server_error", "error_description": "Unable to validate credentials"}'
                 await send({
                     "type": "http.response.start",
-                    "status": 401,
+                    "status": 503,
                     "headers": [
                         (b"content-type", b"application/json"),
-                        (b"www-authenticate", self.www_authenticate_value.encode()),
                         (b"cache-control", b"no-store"),
                     ],
                 })
-                await send({
-                    "type": "http.response.body",
-                    "body": body,
-                })
+                await send({"type": "http.response.body", "body": body})
                 return
 
+        # Valid token, or a request outside the guarded surface. RECONSTRUCTED, not
+        # copied from PG — PG's tail is entangled with its body-size guard.
         await self.app(scope, receive, send)
+
+    async def _send_challenge(self, send, status: int, body: bytes) -> None:
+        """Emit a 401 carrying the single, shared WWW-Authenticate challenge.
+
+        One construction, injected at build time and already correct — it carries
+        resource_metadata and scope="clarity.write" from SCOPES_SUPPORTED. Two
+        constructions of one challenge is the divergence problem.
+        """
+        await send({
+            "type": "http.response.start",
+            "status": status,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"www-authenticate", self.www_authenticate_value.encode()),
+                (b"cache-control", b"no-store"),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
 
 
 class MCPContentTypeAndAcceptFixMiddleware:

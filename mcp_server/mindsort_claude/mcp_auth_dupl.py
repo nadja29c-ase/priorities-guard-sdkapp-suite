@@ -110,4 +110,15 @@ from mcp_server.clarity.mcp_auth import (  # noqa: E402, F401
     UnauthorizedError,
     InsufficientScopeError,
     JWKSCache,
+    # A22: re-exported for BearerAuthMiddleware, which validates at the HTTP boundary
+    # so an expired token gets a 401 instead of reaching dispatch and returning a
+    # 200 + isError (which Claude ignores, leaving the user with no Connect button).
+    # These are the SHARED implementations, deliberately — the same validator this
+    # module already routes authenticate_request through, so the middleware and the
+    # dispatcher enforce one set of semantics. PG-Claude keeps LOCAL copies that have
+    # drifted (PG-local validates `azp`; shared does not, per remove_azp.md, because
+    # DCR assigns a different client_id per user). Do NOT swap these for PG's copies.
+    # NOT in REBOUND_GLOBALS — that tuple is config VALUES, not functions.
+    extract_bearer_token,
+    validate_jwt,
 )
