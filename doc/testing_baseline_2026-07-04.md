@@ -75,11 +75,53 @@ bound was lifted first.
 
 ---
 
+## ⚠️ THERE ARE TWO TEST ROOTS. `pytest tests/` DOES NOT RUN THEM ALL.
+
+Added 2026-08-22 after a review concluded, wrongly, that an increment had shipped with no
+behaviour tests — because `git grep -- tests/` found none. They were in the other root.
+
+`pytest.ini` declares:
+
+```ini
+testpaths = tests mcp_server
+```
+
+So a **bare `pytest`** (no path argument) collects both. Naming `tests/` explicitly — as
+the command below used to — silently drops everything under `mcp_server/**/tests/`.
+Measured 2026-08-22:
+
+| Command | Collected |
+|---|---|
+| `pytest tests/` | 3670 |
+| `pytest` (both roots) | **3743** |
+
+**73 tests, five files, invisible** to the narrower command:
+
+```
+mcp_server/clarity/tests/test_container_name_matching.py
+mcp_server/clarity/tests/test_edit_board_text_targeting.py
+mcp_server/clarity/tests/test_security_schemes.py
+mcp_server/clarity/tests/test_tool_ordering.py
+mcp_server/clarity/tests/test_www_authenticate.py
+```
+
+Two consequences, both of which have already bitten:
+
+1. **Searching.** `git grep -- tests/` returns nothing for symbols that exist, and reads
+   as proof of absent coverage. Search unscoped, or search both roots.
+2. **Counting.** Any baseline figure produced with `pytest tests/` under-counts by those
+   73 and cannot be compared against a figure produced with a bare `pytest`. Reconcile
+   the command before reconciling the numbers.
+
+Tests live next to the code they cover in `mcp_server/**/tests/`; that is the convention
+there, not an accident, and it is why the second root exists.
+
 ## How to run full baseline
 
 ```bash
-# Full suite (excludes mcp_focused, excludes live-marked tests)
-poetry run pytest tests/ -v --tb=short 2>&1 | tee baseline_run.log
+# Full suite — BARE pytest, so BOTH testpaths are collected.
+# Do NOT narrow this to `tests/`; see the two-roots warning above.
+poetry run pytest -v --tb=short 2>&1 | tee baseline_run.log
 
 # Count by outcome
 grep -c "PASSED" baseline_run.log

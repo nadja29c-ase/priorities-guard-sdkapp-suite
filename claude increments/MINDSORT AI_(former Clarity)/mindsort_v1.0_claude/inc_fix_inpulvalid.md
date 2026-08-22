@@ -116,3 +116,56 @@ previously set P1 on BOTH.
 
 Fires on: case variants ("X"/"x") AND exact duplicates ("Tasks"/"Tasks"). Both are "more than one
 eligible match after normalization" — the normalized key maps to two stored entries either way.
+
+---
+
+# KNOWN LIMITATION — Unicode normalization. Recorded decision, 2026-08-22. NOT a defect.
+
+Container matching uses `strip().lower()`, mirroring the semantics thought-item matching
+has always used. `casefold()` / NFKC were deliberately excluded — see Fixed Requirement 1.
+This section records the CONSEQUENCES of that choice, measured, so the decision is a
+decision rather than a silence.
+
+## Measured behaviour (adversarial review, executed not reasoned)
+
+| Input pair | Collide under `strip().lower()`? |
+|---|---|
+| `"foo"` with NBSP padding vs `"foo"` | **YES** — NBSP is stripped |
+| zero-width-space padded vs bare | **NO** — ZWSP is not whitespace to `strip()` |
+| Turkish `İ` vs `i̇` | **YES** |
+| Turkish `I` vs dotless `ı` | **NO** |
+| Greek `Σ` vs `σ` | **YES** |
+| Greek `Σ` vs final sigma `ς` | **NO** |
+| composed `é` vs decomposed `e´` | **NO** |
+
+## Why this matters MORE after this increment than before it
+
+The asymmetries predate this work, but their blast radius changed. Before, a
+normalization near-miss just meant "not found" — annoying, retry. Now, under the >1 rule:
+
+- Two names a user considers DISTINCT that collide under lowercasing produce a **hard
+  error** (`ERROR_DUPLICATE_NAME`) on their board until they rename one.
+- Two names a user considers IDENTICAL that do not collide (composed vs decomposed
+  "café", pasted from different sources) stay **two separate containers**, invisibly.
+
+Neither is silent-wrong-write, which is the class the increment exists to remove. Both
+are visible-and-confusing, which is a lesser failure — but on shared code shipping to two
+live products, a lesser failure is still worth naming.
+
+## Deliberately NOT fixed here, and why
+
+Switching to NFKC/casefold is a SECOND semantic change beyond the demonstrated fix, and
+it would change matching for **thought items too**, since they share `normalize_name()`.
+That is a uniform-normalization increment with its own tests and its own live-product
+risk — not something to smuggle into a fix for a case-sensitivity bug. This is the third
+adjacent "while I'm here, do it properly" temptation in this work (the others: casefold
+at the outset, and the shared-validator JWKS hardening); the discipline each time has
+been to fix the demonstrated thing and record the adjacent thing.
+
+## Trigger to revisit
+
+A real user report — a Turkish user whose `İstanbul` will not match, or a
+decomposed-form paste that stays stubbornly distinct. At that point it is a scoped
+increment applying NFKC uniformly to `normalize_name()` AND the thought-item path. The
+seven rows in the table above are the test cases that increment would need; they were
+measured, not guessed, so they can be lifted directly.

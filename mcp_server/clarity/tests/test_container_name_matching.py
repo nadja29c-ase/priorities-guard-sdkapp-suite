@@ -673,3 +673,52 @@ def test_find_container_by_name_enforces_the_rule_itself():
     )
     assert container is None and container_type == ""
     assert error is not None and "More than one" in error
+
+
+def _duplicate_cluster_parent_board():
+    """Two CLUSTERS sharing a normalized name, each holding a direct thought item."""
+    return [
+        {"cluster_name": "Foo", "thought_items": ["first"], "subclusters": []},
+        {"cluster_name": "foo", "thought_items": ["second"], "subclusters": []},
+    ]
+
+
+@pytest.mark.parametrize("parent_reference", ["Foo", "FOO", "  foo  "])
+def test_item_target_duplicate_CLUSTER_parent_is_ambiguous(parent_reference):
+    """
+    The duplicate-CLUSTER item-parent case, distinct from the duplicate-subcluster one
+    above: the resolver checks cluster_matches and subcluster_matches separately, so
+    each branch needs its own guard. One resolver serving both is exactly the situation
+    where "the code handles it" reads as sufficient and isn't.
+
+    Reproduced by adversarial review against the pre-fix implementation: a single
+    PriorityInput drove isError=False, persist called once, and the priority written to
+    the direct thought items of BOTH clusters.
+    """
+    board = _duplicate_cluster_parent_board()
+    before = copy.deepcopy(board)
+    priorities = [PriorityInput(item_index=0, parent_name=parent_reference, rank="P1", reason="r")]
+
+    error = _spf_validate(board, priorities)
+
+    assert error is not None and "More than one" in error
+    assert board == before, "zero mutation"
+
+
+def test_item_target_unique_CLUSTER_parent_still_resolves():
+    """Control: the cluster branch must keep resolving unambiguous case-variant parents."""
+    board = [
+        {"cluster_name": "Foo", "thought_items": ["first"], "subclusters": []},
+        {"cluster_name": "Bar", "thought_items": ["second"], "subclusters": []},
+    ]
+    priorities = [PriorityInput(item_index=0, parent_name="FOO", rank="P1", reason="r")]
+
+    assert _spf_validate(board, priorities) is None
+    assert priorities[0].parent_name == "Foo"
+
+    applied = apply_priorities(board, priorities)
+    affected = sum(
+        1 for c in applied for i in c.get("thought_items", [])
+        if isinstance(i, dict) and i.get("priority")
+    )
+    assert affected == 1, "fan-out across duplicate cluster parents"
