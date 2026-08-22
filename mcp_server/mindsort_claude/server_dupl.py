@@ -429,7 +429,29 @@ class MCPContentTypeAndAcceptFixMiddleware:
             if scope.get("path") == "/mcp":
                 new_headers = []
                 modified = False
-                auth_header = None
+                # ONE SELECTOR, BOTH LAYERS. This capture previously did its own
+                # inline `name == b"authorization"` + value.decode("utf-8"), which
+                # diverged from the gate above on TWO axes: the gate matches
+                # case-insensitively and decodes latin-1.
+                #
+                # Neither divergence is reachable today, and both are masked rather
+                # than absent — which is precisely why they are being removed:
+                #   - utf-8 vs latin-1: a non-UTF-8 byte would raise UnicodeDecodeError
+                #     here (a 500 where A22 requires a 401). Unreachable only because
+                #     such a header cannot carry a valid base64url JWT, so the gate
+                #     401s it first. Verified by driving the assembled stack.
+                #   - case sensitivity: an `Authorization` header the gate accepted
+                #     would be MISSED here, leaving auth_header_var unset, so dispatch
+                #     would raise UnauthorizedError and answer 200+isError — the exact
+                #     A22 failure, for a user with a VALID token. Unreachable only
+                #     because ASGI servers lowercase header names.
+                #
+                # PG-Claude's A22a comment is explicit that "cannot happen" is how the
+                # first divergence survived, so both layers call the one selector.
+                # Duplicate headers cannot arrive here (the gate 401s them), and
+                # select_authorization_header would raise if they did — which is the
+                # correct outcome, not a regression.
+                auth_header = select_authorization_header(scope["headers"])
 
                 for name, value in scope["headers"]:
                     if name == b"content-type" and b"application/octet-stream" in value:
@@ -439,9 +461,6 @@ class MCPContentTypeAndAcceptFixMiddleware:
                     if name == b"accept":
                         value = b"text/event-stream, application/json"
                         modified = True
-
-                    if name == b"authorization":
-                        auth_header = value.decode("utf-8")
 
                     new_headers.append((name, value))
 

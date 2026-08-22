@@ -396,3 +396,106 @@ def test_oauth_flow_grants_exactly_the_scope_the_tools_require():
         f"SCOPES_SUPPORTED is {SCOPES_SUPPORTED} — differentiated scopes make "
         "insufficient-scope reachable; revisit A22's authorization limb."
     )
+
+
+# =============================================================================
+# ASSEMBLED-STACK tests — the gap that let a divergence through 21 green tests
+# =============================================================================
+# Every test above drives BearerAuthMiddleware ALONE. That is why none of them
+# caught that the downstream MCPContentTypeAndAcceptFixMiddleware captured the
+# Authorization header with its own inline `name == b"authorization"` +
+# value.decode("utf-8") — diverging from the gate's select_authorization_header
+# (case-insensitive, latin-1) on two axes.
+#
+# PG-Claude's A22a comment records this exact divergence as the reason one selector
+# must serve both layers: "The gate decoded latin-1, the other utf-8 ... a 500 where
+# a 401 is required." These tests drive the REAL stack in its real order
+# (BearerAuth wraps ContentType wraps app) so the layers are exercised together.
+
+from mcp_server.mindsort_claude.server_dupl import MCPContentTypeAndAcceptFixMiddleware
+from mcp_server.clarity.request_context import auth_header_var
+
+
+async def _run_stack(headers, method="POST"):
+    """Real order: BearerAuthMiddleware(MCPContentTypeAndAcceptFixMiddleware(app))."""
+    cap = Captured()
+    inner = MCPContentTypeAndAcceptFixMiddleware(cap.inner_app, auth_header_var)
+    mw = BearerAuthMiddleware(inner, WWW_AUTH)
+    await mw(_scope(headers, method=method), _receive_jsonrpc(), cap.send)
+    return cap
+
+
+@pytest.mark.asyncio
+async def test_non_utf8_authorization_header_is_401_not_500_through_full_stack():
+    """A non-UTF-8 byte must never produce a 500. The gate latin-1 decodes it, then
+    validation rejects it (a byte >= 0x80 cannot appear in a base64url JWT), so it
+    401s before the capture layer — and the capture layer no longer has a utf-8
+    decode that could raise even if it were reached."""
+    cap = await _run_stack([(b"authorization", b"Bearer caf\xe9")])
+
+    assert cap.status == 401
+    assert cap.inner_called is False
+
+
+@pytest.mark.asyncio
+async def test_capture_layer_sees_the_same_header_the_gate_admitted(trusted_jwks):
+    """The divergence with a REAL consequence: if the capture missed a header the
+    gate admitted, auth_header_var would be unset and dispatch would answer
+    200+isError for a user with a VALID token — the exact A22 failure.
+
+    Observed from INSIDE the request. The capture sets the ContextVar and resets it
+    in a `finally`, so reading it after the response has completed correctly yields
+    None — asserting on it there would test the teardown, not the capture."""
+    token = _make_token()
+    seen = {}
+
+    async def observing_app(scope, receive, send):
+        seen["auth_header"] = auth_header_var.get()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}"})
+
+    cap = Captured()
+    inner = MCPContentTypeAndAcceptFixMiddleware(observing_app, auth_header_var)
+    mw = BearerAuthMiddleware(inner, WWW_AUTH)
+    await mw(_scope(_bearer(token)), _receive_jsonrpc(), cap.send)
+
+    assert cap.status == 200, "valid token must reach the app"
+    assert seen["auth_header"] == f"Bearer {token}", (
+        "the capture layer lost, or altered, a header the gate admitted"
+    )
+
+
+@pytest.mark.asyncio
+async def test_capture_is_case_insensitive_like_the_gate(trusted_jwks):
+    """DISCRIMINATING for the case axis — fails against the pre-fix inline capture.
+
+    The gate matches `name.lower() == b"authorization"`; the old capture matched
+    `name == b"authorization"` exactly. A capitalised `Authorization` header would
+    therefore be ADMITTED by the gate and MISSED by the capture, leaving
+    auth_header_var unset — so dispatch would raise UnauthorizedError and answer
+    200+isError for a user with a perfectly VALID token. That is the exact A22
+    failure this increment exists to remove, arriving one layer further down.
+
+    ASGI servers lowercase header names, so this is not reachable through uvicorn
+    today. It is tested anyway because "cannot happen" is precisely how PG's first
+    selector divergence survived — and a masked defect is not an absent one.
+    """
+    token = _make_token()
+    seen = {}
+
+    async def observing_app(scope, receive, send):
+        seen["auth_header"] = auth_header_var.get()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"{}"})
+
+    cap = Captured()
+    inner = MCPContentTypeAndAcceptFixMiddleware(observing_app, auth_header_var)
+    mw = BearerAuthMiddleware(inner, WWW_AUTH)
+    # Capital 'A' — what the old inline `name == b"authorization"` would miss.
+    headers = [(b"Authorization", f"Bearer {token}".encode())]
+    await mw(_scope(headers), _receive_jsonrpc(), cap.send)
+
+    assert cap.status == 200, "gate must admit a valid token regardless of header case"
+    assert seen["auth_header"] == f"Bearer {token}", (
+        "capture missed a header the gate admitted — the layers disagree on case"
+    )
