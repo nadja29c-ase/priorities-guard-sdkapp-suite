@@ -590,3 +590,86 @@ async def test_handler_screenshot_case_sets_and_persists_via_edit_board():
     assert not result.isError, f"tool returned an error: {result.content}"
     assert _subcluster_priority(result.structuredContent["clusters"]) is not None
     assert mock_persist.await_count == 1, "priority computed but never written"
+
+
+# ============================================================================
+# ITEM-TARGET PARENT RESOLUTION — the >1 rule applies here too
+# ============================================================================
+#
+# Found by adversarial review, not by the tests above, and the tests above could not
+# have found it: every one of them targets a CONTAINER. The item-target path resolves
+# its parent through a different function, and that function normalized without
+# applying the >1 rule — so the fix reintroduced first-match-wins one level down.
+
+
+def _duplicate_parent_board():
+    """Same subcluster name under two different parents — no case variance needed."""
+    return [
+        {"cluster_name": "A", "subclusters": [{"subcluster_name": "Tasks", "thought_items": ["a0"]}]},
+        {"cluster_name": "B", "subclusters": [{"subcluster_name": "Tasks", "thought_items": ["b0"]}]},
+    ]
+
+
+def _prioritized_item_count(board):
+    return sum(
+        1
+        for c in board
+        for s in c.get("subclusters", [])
+        for i in s.get("thought_items", [])
+        if isinstance(i, dict) and i.get("priority")
+    )
+
+
+@pytest.mark.parametrize("parent_reference", ["Tasks", "TASKS", "  tasks  "])
+def test_item_target_duplicate_parent_is_ambiguous_not_first_match(parent_reference):
+    """
+    Bug this catches — REPRODUCED before the fix: one item priority landing on items in
+    TWO containers.
+
+    apply_priorities keys items (parent_name, index) and matches board-wide, so once a
+    duplicated parent name resolves at all, the write fans out. The container-target
+    path was protected by the >1 rule; this path was not.
+
+    The case-variant reference is the worse half: before normalization "TASKS" errored
+    with "Parent not found", so the fix turned a hard error into a silent double write.
+    """
+    board = _duplicate_parent_board()
+    before = copy.deepcopy(board)
+    priorities = [PriorityInput(item_index=0, parent_name=parent_reference, rank="P1", reason="r")]
+
+    error = _spf_validate(board, priorities)
+
+    assert error is not None and "More than one" in error
+    assert board == before, "zero mutation"
+
+
+def test_item_target_unique_parent_still_resolves_case_insensitively():
+    """
+    Control for the test above: the >1 rule must not break the feature it guards.
+    A case-variant parent that is UNAMBIGUOUS still resolves, canonicalizes, and
+    applies to exactly ONE container.
+    """
+    board = [
+        {"cluster_name": "A", "subclusters": [{"subcluster_name": "Tasks", "thought_items": ["a0"]}]},
+        {"cluster_name": "B", "subclusters": [{"subcluster_name": "Other", "thought_items": ["b0"]}]},
+    ]
+    priorities = [PriorityInput(item_index=0, parent_name="TASKS", rank="P1", reason="r")]
+
+    assert _spf_validate(board, priorities) is None
+    assert priorities[0].parent_name == "Tasks", "canonicalized to the stored name"
+
+    applied = apply_priorities(board, priorities)
+    assert _prioritized_item_count(applied) == 1, "fan-out: priority hit more than one container"
+
+
+def test_find_container_by_name_enforces_the_rule_itself():
+    """
+    The >1 rule lives in the resolver, not the caller, so a future second caller
+    inherits it. Pins that placement — a refactor moving the check up into
+    _validate_priorities would leave this passing only by accident.
+    """
+    container, container_type, error = spf._find_container_by_name(
+        _duplicate_parent_board(), "tasks"
+    )
+    assert container is None and container_type == ""
+    assert error is not None and "More than one" in error

@@ -235,36 +235,64 @@ def _get_thought_item_count(container: dict) -> int:
     return len(container.get("thought_items", []))
 
 
-def _find_container_by_name(clusters: List[dict], name: str) -> tuple[Optional[dict], str]:
+def _find_container_by_name(clusters: List[dict], name: str) -> tuple:
     """
-    Find a container (cluster or subcluster) by NORMALIZED name.
+    Find a container (cluster or subcluster) by NORMALIZED name, applying the >1 rule.
 
-    Returns:
-        - container: The cluster or subcluster dict, or None if not found
-        - container_type: "cluster", "subcluster", or "" if not found
+    Returns (container, container_type, error):
+        zero matches -> (None, "", None)                caller picks its not-found error
+        one  match   -> (container, "cluster"/"subcluster", None)
+        many matches -> (None, "", ERROR_DUPLICATE_NAME) fail closed
 
-    SCOPE NOTE, because this function is easy to over-attribute: it has ONE caller —
-    the item-target branch of _validate_priorities, resolving a thought item's parent.
-    It is NOT on the container-target path, and normalizing it does NOT fix the
-    "Cluster or subcluster not found" error users hit; that is raised from the
-    container-target branch against the name indexes. Verified by measurement, after an
-    earlier revision of the fix assumed this function was the fix site and changed
-    nothing observable.
+    THE >1 RULE LIVES HERE, NOT IN THE CALLER, and that is the point. An earlier
+    revision of this fix normalized this function but returned the FIRST match, which
+    silently reintroduced exactly the bug the increment exists to remove — one level
+    down, on the item-target path. Two failures were reproducible:
+
+      - exact-duplicate parents ("Tasks" under two clusters): the item priority fanned
+        out to BOTH, because apply_priorities keys items (parent_name, index) and
+        matches board-wide;
+      - case-variant parents ("TASKS"): BEFORE normalization this errored with
+        "Parent not found"; after normalization it silently first-matched and then
+        fanned out — a hard error turned into a silent double write, which is strictly
+        worse than the bug being fixed.
+
+    Enforcing the rule inside the resolver means a future second caller inherits it
+    rather than having to remember it. Do not "simplify" this back to returning the
+    first match.
+
+    SCOPE NOTE, because this function is easy to over-attribute: it is NOT on the
+    container-target path. Normalizing it does not fix the "Cluster or subcluster not
+    found" error users hit — that is raised from the container-target branch against
+    the name indexes. Verified by measurement.
     """
     normalized = normalize_name(name)
 
-    # Check clusters first
-    for cluster in clusters:
-        if normalize_name(cluster.get("cluster_name")) == normalized:
-            return cluster, "cluster"
+    cluster_matches = [
+        c for c in clusters
+        if normalize_name(c.get("cluster_name")) == normalized
+    ]
+    subcluster_matches = [
+        sc
+        for c in clusters
+        for sc in c.get("subclusters", [])
+        if normalize_name(sc.get("subcluster_name")) == normalized
+    ]
 
-    # Check subclusters
-    for cluster in clusters:
-        for subcluster in cluster.get("subclusters", []):
-            if normalize_name(subcluster.get("subcluster_name")) == normalized:
-                return subcluster, "subcluster"
+    # Clusters take precedence, as before — but only once it is established that the
+    # name is unambiguous WITHIN that type. Cross-type ambiguity is a separate check
+    # the caller has already made against ambiguous_keys.
+    if len(cluster_matches) > 1:
+        return None, "", ERROR_DUPLICATE_NAME.format(name=name)
+    if cluster_matches:
+        return cluster_matches[0], "cluster", None
 
-    return None, ""
+    if len(subcluster_matches) > 1:
+        return None, "", ERROR_DUPLICATE_NAME.format(name=name)
+    if subcluster_matches:
+        return subcluster_matches[0], "subcluster", None
+
+    return None, "", None
 
 
 def _validate_priorities(
@@ -335,7 +363,11 @@ def _validate_priorities(
             if normalize_name(p.parent_name) in ambiguous_keys:
                 return ERROR_AMBIGUOUS_NAME.format(name=p.parent_name)
 
-            container, container_type = _find_container_by_name(clusters_data, p.parent_name)
+            container, container_type, dup_error = _find_container_by_name(
+                clusters_data, p.parent_name
+            )
+            if dup_error:
+                return dup_error
             if container is None:
                 return ERROR_INVALID_PARENT.format(parent=p.parent_name)
 
