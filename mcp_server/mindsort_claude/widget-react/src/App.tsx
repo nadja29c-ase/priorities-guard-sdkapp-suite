@@ -2073,7 +2073,21 @@ function TagPill({ tag }: TagPillProps) {
         fontWeight: 500,
         padding: '2px 6px', // inc 6 §3: tag pill padding 3px 8px → 2px 6px
         borderRadius: 'var(--border-radius-full, 9999px)', // inc 6 §3: was 12px literal
-        // Soft variant: filled tint, NO border (OpenAI Badge variant="soft")
+        // Soft filled tint RETAINED — but the pill now needs an explicit boundary.
+        // Measured on the live Claude host (Computed tab, resolved values): the fill
+        // --color-background-tertiary resolves to #FAF9F5, and the cards behind it are
+        // #FFFFFF (cluster) / #F5F4ED (subcluster) — ~1.03:1. In light mode the pill
+        // shape was invisible, so "decide" read as floating text indistinguishable from
+        // the thought items rather than as a distinct action tag. The TEXT was never the
+        // problem (#3D3D3A on #FAF9F5 = ~10:1); the missing boundary was.
+        //
+        // currentColor, not a --color-border-* token, on purpose: it inherits the already
+        // resolved `color` below, so the stroke follows the host's per-theme foreground
+        // automatically and cannot drift from the text. The neutral border tokens are
+        // alpha-over-surface and top out at 2.58:1, which did not achieve the goal.
+        // (Was: "Soft variant: filled tint, NO border (OpenAI Badge variant='soft')" —
+        // that is no longer true. Do not "restore" the borderless soft variant.)
+        border: '1px solid currentColor',
         background: 'var(--color-background-tertiary, #EDECEA)',
         color: 'var(--color-text-secondary, #3D3D3A)',
         whiteSpace: 'nowrap',

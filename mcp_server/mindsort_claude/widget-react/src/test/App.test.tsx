@@ -2474,9 +2474,23 @@ describe('Fullscreen Shell & Primitives Alignment (inc_fullscreen_shell_primitiv
     }
   })
 
-  // Test 11: Tag pill has NO border (soft variant)
-  // Catches: reverting to bordered tag pills
-  it('tag pill has no border (soft variant)', async () => {
+  // Test 11: Tag pill HAS a visible boundary
+  // Catches: reverting to the invisible borderless pill.
+  //
+  // SUBJECT UNCHANGED — this test has always asked "what boundary treatment does the
+  // tag pill have?". Only the expectation moved, because the design intent it guarded
+  // was deliberately reversed. It previously required NO border ("soft variant"), which
+  // was measured on the live host as the defect: the fill (--color-background-tertiary,
+  // resolved #FAF9F5) sits at ~1.03:1 against the cards behind it (#FFFFFF cluster /
+  // #F5F4ED subcluster), so the pill shape was invisible in light mode and "decide" read
+  // as floating text rather than a distinct action tag.
+  //
+  // ASSERTS PRESENCE ONLY, NEVER THE COLOUR — deliberately. The production value is
+  // `1px solid currentColor`, but jsdom's CSS parser drops `currentColor` from the
+  // shorthand and serialises it as "border: 1px solid;". A test that claimed to verify
+  // the colour could not actually do so. The colour is verified ON-DEVICE, in both
+  // themes, and nowhere else.
+  it('tag pill has a visible border (not the invisible soft variant)', async () => {
     await setupFullscreen([
       { cluster_name: 'Test', sum_thought_items: 1, tags: ['decide'] },
     ])
@@ -2484,10 +2498,7 @@ describe('Fullscreen Shell & Primitives Alignment (inc_fullscreen_shell_primitiv
     const tagPill = screen.getByText('decide')
     const styleAttr = tagPill.getAttribute('style') || ''
 
-    // Should NOT have border property
-    // Soft variant = filled tint, no outline
-    expect(styleAttr).not.toContain('border:')
-    expect(styleAttr).not.toContain('border-color')
+    expect(styleAttr).toContain('border:')
   })
 })
 
