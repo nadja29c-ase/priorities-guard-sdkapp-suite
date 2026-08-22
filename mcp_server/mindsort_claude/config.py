@@ -137,12 +137,29 @@ CLARITY_ISSUER = get_env(
 # that follow are retained as history, in supersession order, newest first. Reading
 # them as current will send you to "fix" a MindSort env var that is already correct.
 #
-# §11 SCOPE, as far as this file can establish it: PG-Claude only, and UNVERIFIED
-# there. PG has NO equivalent _validate_audience_config boot guard, and PG_AUDIENCE
-# still defaults to the issuer (priority_guardian_claude/config.py:125-128) — so the
-# defect could be live on PG with nothing preventing it. That needs its own check
-# against PG's deployed value; it is not established here, and "both servers" is now
-# known to be wrong for at least one of the two.
+# §11 IS CLOSED ON BOTH CLAUDE SERVERS (completed 2026-08-22). The paragraph that
+# stood here said PG was "§11's remaining scope, UNVERIFIED." PG's deployed value has
+# since been read directly off Render:
+#
+#   PG_CLAUDE_AUDIENCE = https://mcp.priority-guard.com/mcp    <-- RESOURCE, byte-exact
+#                                                                  with PG's resource URL
+#
+# So neither Claude resource server accepts issuer-audience tokens in production. The
+# audience layer is live and correct on both. §11 needs no env change, no increment.
+#
+# THE READ HAD TO BE DIRECT, and that is the durable point. MindSort's deployed value
+# is provable by LIVENESS — _validate_audience_config() below refuses to boot on a
+# wrong value, so the service running at all IS the proof. PG has NO such guard, so
+# PG running proves NOTHING about PG_AUDIENCE: it boots happily on any value, its
+# issuer-shaped default included. Never infer PG's audience from PG being up.
+#
+# RESIDUAL, and it is real: PG's correct value is UNPROTECTED. PG_AUDIENCE still
+# defaults to the issuer (priority_guardian_claude/config.py:125-128) with no boot
+# guard, so if PG_CLAUDE_AUDIENCE were ever unset or edited back to issuer-shape, PG
+# would start normally and silently re-open §11. MindSort cannot regress this way; PG
+# can. Tracked as a hardening ticket — port _validate_audience_config to PG. Not
+# urgent, since the deployed value is correct today, but it is the edit that turns
+# "currently right" into "cannot be wrong."
 #
 # ---------------------------------------------------------------------------
 # SUPERSEDED 2026-08-22 — was accurate when written; the env has since been fixed.
@@ -181,8 +198,9 @@ CLARITY_ISSUER = get_env(
 # env var to the resource URL, gated on confirming no outstanding issuer-audience tokens
 # would break (§5 step 9 SQL, scoped to MindSort clients). Tracked as §11.
 # [SUPERSEDED 2026-08-22: the env var HAS been set to the resource URL on MindSort, so
-#  this instruction is already carried out here. §11's remaining scope is PG-Claude,
-#  unverified — see the CURRENT STATE block at the top.]
+#  this instruction is already carried out here. And on PG — PG_CLAUDE_AUDIENCE was
+#  read off Render the same day and is resource-shaped too. §11 has no remaining
+#  scope on either server; see the CURRENT STATE block at the top.]
 #
 # ---------------------------------------------------------------------------
 # HISTORICAL — the paragraph below is retained for deployment history and is NO
@@ -200,8 +218,10 @@ CLARITY_ISSUER = get_env(
 #      immediately above confirms it is exactly what production does today.
 #   2. It is Focused-era. Focused is deprecated and its Render service suspended.
 #   3. Accepting a shared audience is the §11 defect. [SUPERSEDED 2026-08-22: the
-#      "confirmed live on BOTH Claude servers" claim here is stale — MindSort's
-#      deployed audience is resource-shaped and boot-guarded. PG unverified.]
+#      "confirmed live on BOTH Claude servers" claim here is stale in the direction
+#      of ALARM, not exposure. Both deployed audiences are resource-shaped —
+#      MindSort's boot-guarded, PG's verified by direct Render read. §11 is live on
+#      neither server.]
 # ---------------------------------------------------------------------------
 CLARITY_AUDIENCE = get_env(
     "CLARITY_CLAUDE_AUDIENCE",

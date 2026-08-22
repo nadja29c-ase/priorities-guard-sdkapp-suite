@@ -79,3 +79,66 @@ All subprocess tests assert on stderr substring, not just returncode.
 - [ ] Explicit statement of where IS_DEV is consumed and what changed.
 - [ ] Explicit list of what was NOT verified.
 - [ ] Deployer checklist above acknowledged; post-deploy live suite green.
+
+---
+
+# ADDENDUM 2026-08-22 — TICKET, NOT A BRIEFING. Gap #7: no audience boot guard.
+
+**Status: captured, not scheduled, not drafted as an increment.** This is a newly
+found instance of exactly what this document is for — hardening that MindSort-Claude
+has and PG-Claude does not. It was NOT in the original gaps #1–#6 and was not part of
+what landed. Nothing here is approved work; it is recorded so it is not re-derived.
+
+## The gap
+
+`mindsort_claude/config.py` has `_validate_audience_config()`: in a production-like
+`ENV` it refuses to boot unless `CLARITY_CLAUDE_AUDIENCE` is explicitly set AND
+byte-exactly equals the derived resource URL.
+
+`priority_guardian_claude/config.py` has **no equivalent**. Verified 2026-08-22 by
+reading the whole file: PG has fail-fast guards for `OAUTH_ISSUER_BASE` shape,
+same-origin, localhost and `INTERNAL_API_SECRET`, but nothing at all on
+`PG_AUDIENCE`. Meanwhile `PG_AUDIENCE` still defaults to the **issuer**
+(`config.py:125-128`).
+
+## Why this is a ticket and not an incident
+
+The deployed value is CORRECT. `PG_CLAUDE_AUDIENCE` was read off Render on
+2026-08-22 and is `https://mcp.priority-guard.com/mcp` — resource-shaped, byte-exact
+with PG's resource URL. §11 is closed in production on both Claude servers. So there
+is nothing live to fix.
+
+What is missing is *enforcement*. Two concrete consequences, both real today:
+
+1. **PG's audience cannot be proven by liveness.** MindSort running IS proof its
+   audience is right, because the guard refuses to start otherwise. PG boots on any
+   value, so PG running proves nothing. Anyone who needs to know PG's audience must
+   read the Render env — and the absence of the guard is exactly why the read was
+   required in the first place. That asymmetry is a standing tax on every future
+   audit.
+2. **PG can silently regress.** Unset `PG_CLAUDE_AUDIENCE`, or edit it back to the
+   issuer, and PG starts normally with the audience layer quietly disabled — the §11
+   defect re-opened with no signal. MindSort cannot regress this way.
+
+## Shape of the work, if it is ever approved
+
+Copy-and-Adjust from `mindsort_claude/config.py`, roles as in the parent briefing:
+copy `_validate_audience_config` verbatim, adjust only `CLARITY_CLAUDE_*` →
+`PG_CLAUDE_*` in names and messages. Behaviour-neutral for the correctly-configured
+deployed service — it only adds a failure mode for misconfiguration, which is this
+document's stated behaviour contract.
+
+**Deployer precondition, same class as the parent's:** the guard turns any deviation
+into a startup failure, so confirm `PG_CLAUDE_AUDIENCE` on Render is still exactly
+`https://mcp.priority-guard.com/mcp` immediately before deploying, rather than
+discovering a mismatch at boot.
+
+**Knock-on:** `tests/unit/mcp_claude_mindsort/test_audience_isolation_validator.py::test_pg_rejects_issuer_audience`
+is `xfail(strict=True)` against PG's *code default*. Its reason string was corrected
+2026-08-22 and now names this ticket as its removal condition: the marker comes off
+when the default can no longer be booted on, not when §11 "lands" (§11 has already
+landed and the test still xfails, correctly).
+
+**Do NOT** address this by changing the code default to the resource URL. The default
+is the local-dev value, and a production-shaped default is precisely what let a wrong
+deployed value go unnoticed before.

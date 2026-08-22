@@ -346,3 +346,105 @@ precisely why "reconnected successfully" cannot stand in for it.
 
 **Re-run the client half at submission time**, since a fresh reviewer takes exactly
 that path with no cached token.
+
+---
+
+## `azp` — reported as a validator divergence, STRUCK 2026-08-22. Not a divergence.
+
+**azp handling re-verified 2026-08-22: PG and shared validators both extract/log
+only; neither validates `azp`; no divergence.**
+
+That sentence is the finding. It is dated because it is a point-in-time read, and
+bounded to `azp` on purpose — it says exactly what was checked and claims nothing
+about the rest of the two validators.
+
+### What was checked
+
+`validate_jwt` Step 5 in both:
+
+| | `mcp_server/clarity/mcp_auth.py` (shared) | `mcp_server/priority_guardian_claude/mcp_auth_dupl.py` (PG-local) |
+|---|---|---|
+| reads `azp` | `payload.get("azp")` | `payload.get("azp")` |
+| validates it | no | no |
+| logs it | yes | yes |
+| cites `remove_azp.md` | yes | yes |
+
+Behaviourally identical for `azp`: extract, log, do not validate — same DCR
+rationale in both (DCR assigns a different `client_id` per user, so `azp` is not a
+stable identity to bind against).
+
+### Scope of the claim, stated precisely
+
+The two files were **not** diffed line-for-line, and their surrounding comment prose
+is **not** identical — shared's audience comment carries the long §11 correction,
+PG's is shorter and says "legacy fallback." So the defensible statement is
+"behaviourally identical for `azp` handling," **not** "byte-identical." An earlier
+draft of this entry said byte-identical; that was an unverified claim and is
+withdrawn.
+
+### Why the phantom appeared, recorded so it does not regenerate
+
+The divergence was inferred from the two **docstrings**, not the two bodies. PG's
+docstring mentions extracting `azp`; shared's describes it as not-validated. Read
+side by side those sound like different behaviour. They are not — they are two
+descriptions of the same code, written at different times, emphasising different
+halves of "extract but don't validate."
+
+Any future validator-diff will hit the same trap and re-report the same
+non-divergence. This entry exists so the next reader can strike it in seconds
+instead of re-deriving it. **No increment. No code change. Closed.**
+
+---
+
+## TICKET 2026-08-22 — the shim meta-tests are disarmed. Diagnosis is sharper than "vacuous."
+
+**Captured, not scheduled.** Repair before the next shim/auth change, because these
+are the guards that would catch a `REBOUND_GLOBALS` drift and they currently cannot.
+
+Three tests in `tests/unit/mcp_claude_mindsort/test_scaffold.py` guard the
+`mcp_auth_dupl` shim. Measured 2026-08-22, and **all three were already in this state
+at `ccf3596`** — confirmed by running them in a detached worktree at that commit, so
+they are baseline-red, not fallout from the A22 work:
+
+| Test | State | Mechanism |
+|---|---|---|
+| `test_fixture_rebound_list_matches_shim` | FAIL | `ast.literal_eval(result.stdout)` → `SyntaxError` |
+| `test_shim_assignments_match_rebound_globals` | FAIL | same |
+| `test_fixture_restores_to_true_originals` | FAIL in full run, SKIP in isolation | its own non-vacuity guard (`test_scaffold.py:1447`) |
+
+### The actual cause, which was NOT what the earlier "vacuous `ast.parse`" note said
+
+The first two shell out to a fresh interpreter and `ast.literal_eval()` its stdout.
+That stdout is **no longer only the repr** — config import now emits a structlog line
+first:
+
+```
+2026-08-22 ... [info     ] clarity.config.oauth_resolved  env=dev jwks_url=... mcp_resource_url=...
+```
+
+`literal_eval` parses that as source and dies on `2026-08-22` — *"leading zeros in
+decimal integer literals are not permitted"*. So the guard is not weak, it is
+**inoperative**: it fails identically whether the shim is correct or corrupt, which
+means it can never report the drift it exists to detect. A test that fails
+unconditionally is as blind as one that passes unconditionally.
+
+The third is a different failure mode and the earlier note conflated them: it has a
+deliberate non-vacuity guard that skips when `mcp_auth_dupl` was never imported. That
+guard is working as designed — it is honest about proving nothing. It only *fails*
+in the full-module run, which is a separate question from the stdout pollution and
+should be diagnosed on its own rather than assumed to share a cause.
+
+### Repair shape (not approved, not drafted)
+
+Stop parsing stdout. Either have the subprocess write the repr to a file the parent
+reads, or emit it on a dedicated delimiter and slice to it, or silence logging in the
+child (`ENV`/log-level) — whichever the repo's existing subprocess-test convention
+already uses; `test_discovery.py` `TestConfigGuards` is the established pattern and
+asserts on *stderr substrings* rather than parsing stdout as a literal, which is
+plausibly the technique these three should have used.
+
+**Before the next shim or auth change**, because until then any `REBOUND_GLOBALS`
+drift ships unguarded. The A22 work added `extract_bearer_token` and `validate_jwt`
+to the shim's re-export block (correctly NOT to `REBOUND_GLOBALS`, which is config
+values only) — exactly the class of edit these guards exist to police, and they were
+blind to it.

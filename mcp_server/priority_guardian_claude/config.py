@@ -13,7 +13,9 @@ Required Render env vars for production:
 - PG_CLAUDE_INTERNAL_API_SECRET (shared secret with backend)
 - PG_CLAUDE_JWKS_URL (e.g., https://www.priority-guard.com/oauth/pg/jwks)
 - PG_CLAUDE_ISSUER (e.g., https://www.priority-guard.com)
-- PG_CLAUDE_AUDIENCE (e.g., https://www.priority-guard.com)
+- PG_CLAUDE_AUDIENCE (RESOURCE-shaped: https://mcp.priority-guard.com/mcp — NOT the
+  issuer. Verified deployed 2026-08-22. See the PG_AUDIENCE block below; there is no
+  boot guard enforcing this, so it must be set correctly by hand.)
 - PG_CLAUDE_CORS_ALLOWED_ORIGINS (e.g., https://claude.ai)
 
 Optional Render env vars (have sensible defaults):
@@ -121,7 +123,37 @@ PG_ISSUER = get_env(
 )
 
 # Expected JWT audience (aud claim)
-# Must match backend's settings.OAUTH_ISSUER (provider uses aud=iss)
+#
+# ⚠️ THE OLD ONE-LINER HERE WAS STALE. It read "Must match backend's
+# settings.OAUTH_ISSUER (provider uses aud=iss)" — issuer-shaped. That is NOT what
+# production does. Verified 2026-08-22 by reading the deployed Render value:
+#
+#   PG_CLAUDE_AUDIENCE = https://mcp.priority-guard.com/mcp   <-- RESOURCE-shaped,
+#   PG_CLAUDE_MCP_RESOURCE_URL = https://mcp.priority-guard.com/mcp   byte-exact
+#
+# So PG-Claude does NOT accept issuer-audience tokens in production. §11
+# (resource-audience isolation) is CLOSED here, as it is on MindSort-Claude. The
+# default below is left issuer-shaped deliberately — see DO NOT "FIX" below.
+#
+# ⚠️ THIS CORRECT STATE IS UNPROTECTED — the one real residual. MindSort-Claude has
+# _validate_audience_config() (mindsort_claude/config.py), a boot guard that refuses
+# to start in a production ENV unless the audience is explicitly set and byte-exactly
+# equals the resource URL. PG has NO equivalent. Two consequences:
+#
+#   1. PG's deployed audience CANNOT be proven by liveness. MindSort running is proof
+#      its audience is right; PG running proves nothing, because PG boots on any
+#      value. If you need to know PG's audience, read the Render env — do not infer.
+#   2. PG can silently regress. Unset PG_CLAUDE_AUDIENCE, or set it back to the
+#      issuer, and PG starts normally with the audience layer quietly disabled.
+#
+# Tracked as a hardening ticket: port _validate_audience_config to PG. Not urgent —
+# the deployed value is correct today — but it makes the correct state enforced
+# rather than merely current.
+#
+# DO NOT "fix" this by changing the code default to the resource URL. The default is
+# the local-dev value; production is env-driven, and a code default that silently
+# supplies a production-shaped audience is exactly what let the wrong value go
+# unnoticed before. The guard above is the fix; the default is not.
 PG_AUDIENCE = get_env(
     "PG_CLAUDE_AUDIENCE",
     default="https://www.priority-guard.com"
