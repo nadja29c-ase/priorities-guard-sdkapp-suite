@@ -96,9 +96,13 @@ class TestFindAllNames:
             make_cluster("Work", items=["task1"]),
             make_cluster("Home", items=["chore"]),
         ]
-        cluster_names, subcluster_names, _ = _find_all_names(clusters)
-        assert cluster_names == {"Work", "Home"}
-        assert subcluster_names == set()
+        cluster_index, subcluster_index, _ = _find_all_names(clusters)
+        # CONTRACT CHANGED (case-insensitive container matching): this returns
+        # normalized -> [stored names] maps, not raw name sets. The list value is
+        # load-bearing — several stored names under one normalized key IS the
+        # ambiguity condition, and a scalar would silently collapse it to last-wins.
+        assert cluster_index == {"work": ["Work"], "home": ["Home"]}
+        assert subcluster_index == {}
 
     def test_extracts_subcluster_names(self):
         """Extracts subcluster_name from all subclusters."""
@@ -108,9 +112,9 @@ class TestFindAllNames:
                 make_subcluster("Later"),
             ]),
         ]
-        cluster_names, subcluster_names, _ = _find_all_names(clusters)
-        assert cluster_names == {"Work"}
-        assert subcluster_names == {"Urgent", "Later"}
+        cluster_index, subcluster_index, _ = _find_all_names(clusters)
+        assert cluster_index == {"work": ["Work"]}
+        assert subcluster_index == {"urgent": ["Urgent"], "later": ["Later"]}
 
     def test_builds_subcluster_to_parent_map(self):
         """Maps subcluster names to their parent cluster names."""
@@ -127,9 +131,9 @@ class TestFindAllNames:
 
     def test_handles_empty_clusters(self):
         """Handles empty clusters list."""
-        cluster_names, subcluster_names, subcluster_to_parent = _find_all_names([])
-        assert cluster_names == set()
-        assert subcluster_names == set()
+        cluster_index, subcluster_index, subcluster_to_parent = _find_all_names([])
+        assert cluster_index == {}
+        assert subcluster_index == {}
         assert subcluster_to_parent == {}
 
 
@@ -140,13 +144,10 @@ class TestValidatePriorities:
         """Single valid priority passes validation."""
         clusters = [make_cluster("Work"), make_cluster("Home")]
         priorities = [make_priority(name="Work", rank="P1")]
-        cluster_names = {"Work", "Home"}
-        subcluster_names = set()
-        subcluster_to_parent = {}
-
-        error = _validate_priorities(
-            priorities, clusters, cluster_names, subcluster_names, subcluster_to_parent
-        )
+        # Indexes derived from the board rather than hand-rolled, matching both the
+        # production caller and the thought-item tests below. Hand-constructing them
+        # duplicated the index structure in the test and pinned its old shape.
+        error = _validate_priorities(priorities, clusters, *_find_all_names(clusters))
         assert error is None
 
     def test_valid_three_priorities(self):
@@ -157,13 +158,7 @@ class TestValidatePriorities:
             make_priority(name="Home", rank="P2"),
             make_priority(name="Health", rank="P3"),
         ]
-        cluster_names = {"Work", "Home", "Health"}
-        subcluster_names = set()
-        subcluster_to_parent = {}
-
-        error = _validate_priorities(
-            priorities, clusters, cluster_names, subcluster_names, subcluster_to_parent
-        )
+        error = _validate_priorities(priorities, clusters, *_find_all_names(clusters))
         assert error is None
 
     def test_rejects_too_many_priorities(self):
@@ -175,9 +170,7 @@ class TestValidatePriorities:
             make_priority(name="C", rank="P3"),
             make_priority(name="D", rank="P1"),  # 4th
         ]
-        cluster_names = {"A", "B", "C", "D"}
-
-        error = _validate_priorities(priorities, clusters, cluster_names, set(), {})
+        error = _validate_priorities(priorities, clusters, *_find_all_names(clusters))
         assert error == ERROR_TOO_MANY_PRIORITIES
 
     def test_rejects_duplicate_ranks(self):
@@ -187,31 +180,23 @@ class TestValidatePriorities:
             make_priority(name="Work", rank="P1"),
             make_priority(name="Home", rank="P1"),  # Duplicate P1
         ]
-        cluster_names = {"Work", "Home"}
-
-        error = _validate_priorities(priorities, clusters, cluster_names, set(), {})
+        error = _validate_priorities(priorities, clusters, *_find_all_names(clusters))
         assert error == ERROR_DUPLICATE_RANK
 
     def test_rejects_invalid_cluster_name(self):
         """Invalid cluster name is rejected."""
         clusters = [make_cluster("Work"), make_cluster("Home")]
         priorities = [make_priority(name="NonExistent", rank="P1")]
-        cluster_names = {"Work", "Home"}
 
-        error = _validate_priorities(priorities, clusters, cluster_names, set(), {})
+        error = _validate_priorities(priorities, clusters, *_find_all_names(clusters))
         assert error == ERROR_INVALID_CLUSTER
 
     def test_accepts_subcluster_name(self):
         """Valid subcluster name is accepted."""
         clusters = [make_cluster("Work", subclusters=[make_subcluster("Urgent")])]
         priorities = [make_priority(name="Urgent", rank="P1")]
-        cluster_names = {"Work"}
-        subcluster_names = {"Urgent"}
-        subcluster_to_parent = {"Urgent": "Work"}
 
-        error = _validate_priorities(
-            priorities, clusters, cluster_names, subcluster_names, subcluster_to_parent
-        )
+        error = _validate_priorities(priorities, clusters, *_find_all_names(clusters))
         assert error is None
 
     def test_rejects_parent_and_child_conflict(self):
@@ -221,19 +206,13 @@ class TestValidatePriorities:
             make_priority(name="Work", rank="P1"),
             make_priority(name="Urgent", rank="P2"),  # Urgent is a subcluster of Work
         ]
-        cluster_names = {"Work"}
-        subcluster_names = {"Urgent"}
-        subcluster_to_parent = {"Urgent": "Work"}
-
-        error = _validate_priorities(
-            priorities, clusters, cluster_names, subcluster_names, subcluster_to_parent
-        )
+        error = _validate_priorities(priorities, clusters, *_find_all_names(clusters))
         assert error == ERROR_PARENT_AND_CHILD
 
     def test_accepts_empty_priorities(self):
         """Empty priorities array is valid (clears priorities)."""
         clusters = [make_cluster("Work")]
-        error = _validate_priorities([], clusters, {"Work"}, set(), {})
+        error = _validate_priorities([], clusters, *_find_all_names(clusters))
         assert error is None
 
 
