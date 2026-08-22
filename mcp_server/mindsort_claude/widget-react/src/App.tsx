@@ -979,6 +979,18 @@ function App() {
           Your MindSort AI Board
         </h2>
         <span
+          // Verified on-device: without this label VoiceOver walked the bare span's
+          // adjacent text nodes one at a time — "four" / "cluster" / "s" / "slash" /
+          // "twenty" / "item" / "s". JSX emits the literal `cluster` and the conditional
+          // `'s'` as SEPARATE text nodes, and `/` is spoken as "slash". The label gives
+          // one clean phrase while the visible text keeps the "/" separator.
+          // Comma, not "out of": these are two independent counts (N clusters AND M
+          // items), not a subset — "4 out of 20" would be factually wrong.
+          // ONLY THIS SITE NEEDS IT. The cluster row's count is inside a <button>, so it
+          // is name-computed into a single string; the detail row's is covered by an
+          // ancestor aria-label; the footer is one template literal. Do not add labels
+          // there — they are structurally protected already.
+          aria-label={`${clusterCount} cluster${clusterCount !== 1 ? 's' : ''}, ${thoughtCount} item${thoughtCount !== 1 ? 's' : ''}`}
           style={{
             fontSize: '12px',
             color: 'var(--color-text-tertiary, #73726C)',
