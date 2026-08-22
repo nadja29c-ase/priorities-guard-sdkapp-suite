@@ -120,6 +120,32 @@ CLARITY_ISSUER = get_env(
 # RATIONALE: The audience identifies the intended recipient of the token.
 # This MUST match what the OAuth provider (/oauth/pg/token) issues in the 'aud' claim.
 #
+# ✅ CURRENT STATE (verified 2026-08-22): MindSort-Claude's audience config is
+# CORRECT in production. §11 is CLOSED for this server.
+#
+#   CLARITY_CLAUDE_AUDIENCE = https://mindsort-mcp.priority-guard.com/mcp   <-- RESOURCE
+#   MCP_RESOURCE_URL        = https://mindsort-mcp.priority-guard.com/mcp   (derived)
+#
+# Byte-equal. Verified TWO independent ways: the deployed Render value was read
+# directly, AND _validate_audience_config() below refuses to boot in a production ENV
+# unless the audience is explicitly set and byte-exactly equals the resource URL — so
+# the service running at all is proof the values match. That guard is also why this
+# cannot silently regress: an issuer-shaped value now fails boot rather than quietly
+# disabling the audience layer.
+#
+# ⚠️ THE "BOTH CLAUDE SERVERS" CLAIM BELOW IS STALE — do not act on it. The blocks
+# that follow are retained as history, in supersession order, newest first. Reading
+# them as current will send you to "fix" a MindSort env var that is already correct.
+#
+# §11 SCOPE, as far as this file can establish it: PG-Claude only, and UNVERIFIED
+# there. PG has NO equivalent _validate_audience_config boot guard, and PG_AUDIENCE
+# still defaults to the issuer (priority_guardian_claude/config.py:125-128) — so the
+# defect could be live on PG with nothing preventing it. That needs its own check
+# against PG's deployed value; it is not established here, and "both servers" is now
+# known to be wrong for at least one of the two.
+#
+# ---------------------------------------------------------------------------
+# SUPERSEDED 2026-08-22 — was accurate when written; the env has since been fixed.
 # ⚠️ FALSE CLAIM CORRECTED 2026-07-31. This block previously read:
 #
 #   "PRODUCTION SHAPE (verified 2026-07-04): In production, CLARITY_CLAUDE_AUDIENCE is
@@ -138,6 +164,12 @@ CLARITY_ISSUER = get_env(
 # believed: it shaped an entire increment, framing MindSort's exposure as a latent hazard
 # and PG-Claude's as the real one. Both Claude resource servers have it, live.
 #
+# [SUPERSEDED 2026-08-22: no longer true for MindSort. The env was corrected and the
+#  boot guard added; the deployed value is now resource-shaped and byte-exact. The
+#  lesson this block records — that a comment asserting a verification it never did
+#  gets believed and shapes work — applies equally to this correction, which was
+#  itself left stale for three weeks after the env was fixed.]
+#
 # SEVERITY, so this is not over-read: there is no live exploit. valid_audiences is
 # [MCP_RESOURCE_URL, MCP_SERVER_URL, CLARITY_AUDIENCE] — the issuer is an EXTRA accepted
 # audience, not the one real tokens carry. Production logs show every claude.ai flow
@@ -147,8 +179,10 @@ CLARITY_ISSUER = get_env(
 #
 # DO NOT "fix" this by changing the code default. The correct fix is to set the Render
 # env var to the resource URL, gated on confirming no outstanding issuer-audience tokens
-# would break (§5 step 9 SQL, scoped to MindSort clients). Tracked as §11, whose scope is
-# now BOTH Claude servers rather than PG-Claude alone.
+# would break (§5 step 9 SQL, scoped to MindSort clients). Tracked as §11.
+# [SUPERSEDED 2026-08-22: the env var HAS been set to the resource URL on MindSort, so
+#  this instruction is already carried out here. §11's remaining scope is PG-Claude,
+#  unverified — see the CURRENT STATE block at the top.]
 #
 # ---------------------------------------------------------------------------
 # HISTORICAL — the paragraph below is retained for deployment history and is NO
@@ -165,8 +199,9 @@ CLARITY_ISSUER = get_env(
 #      thing being closed, not as the target state — and the correction block
 #      immediately above confirms it is exactly what production does today.
 #   2. It is Focused-era. Focused is deprecated and its Render service suspended.
-#   3. Accepting a shared audience is the §11 defect, now confirmed live on BOTH
-#      Claude servers rather than PG-Claude alone.
+#   3. Accepting a shared audience is the §11 defect. [SUPERSEDED 2026-08-22: the
+#      "confirmed live on BOTH Claude servers" claim here is stale — MindSort's
+#      deployed audience is resource-shaped and boot-guarded. PG unverified.]
 # ---------------------------------------------------------------------------
 CLARITY_AUDIENCE = get_env(
     "CLARITY_CLAUDE_AUDIENCE",
