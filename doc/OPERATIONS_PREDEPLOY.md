@@ -385,10 +385,22 @@ false deprecation was carried by `doc/testing_baseline_2026-07-04.md`, where it 
 leaving a red test file unexamined across three increments. One wrong belief, two authoritative
 documents; correcting only one is the failure this correction exists to prevent.
 
-**Note also: this service does NOT auto-deploy.** `autoDeploy: "no"`, `autoDeployTrigger: "off"` — a
-push ships nothing until Manual Deploy is triggered. `priorities-guard-mindsort-claude-mcp`
-(`srv-d90din3sq97s7399nbl0`) is the opposite: `autoDeploy: "yes"` on commit. Two Claude MCP services in
-one repo with opposite settings is how a smoke test ends up run against stale bytes.
+**⚠️ CORRECTED 2026-08-22 — this paragraph is stale in its turn, and it is the second time
+this exact block has been wrong.** It read: *"this service does NOT auto-deploy.
+`autoDeploy: "no"`, `autoDeployTrigger: "off"` — a push ships nothing until Manual Deploy is
+triggered. `priorities-guard-mindsort-claude-mcp` is the opposite... Two Claude MCP services in
+one repo with opposite settings is how a smoke test ends up run against stale bytes."*
+
+**They are no longer opposite. BOTH auto-deploy.** Read from the Render API 2026-08-22:
+`srv-d6vbrt9r0fns73c6n080` (PG-Claude) is `autoDeploy: "yes"`, `autoDeployTrigger: "commit"`,
+branch `main` — matching the table at the top of this file, which recorded the 2026-08-06 12:31
+change that this paragraph never picked up. A push to `main` now ships **both** Claude services.
+
+The old hazard (opposite settings → smoke test against stale bytes) has been replaced by a
+different one: **a push intended for one Claude service redeploys the other too.** Note the
+correction above the one it corrects — the block immediately preceding this one exists because
+a "deprecated" claim was carried by two authoritative documents and only one was fixed. This
+is the same failure mode in the same block, one field over.
 
 The four steps below remain **outstanding** — the server still ships no logs to Better Stack, which is
 its own audit, not this increment's:
@@ -475,17 +487,47 @@ This service was dormant before the Poetry migration, so the Poetry build rule a
 | `CLARITY_CLAUDE_INTERNAL_API_SECRET` | matches backend `INTERNAL_API_SECRET` | empty string = dev-mode skip; MUST be set in prod |
 | `CLARITY_CLAUDE_JWKS_URL` | `https://www.priority-guard.com/oauth/pg/jwks` | |
 | `CLARITY_CLAUDE_ISSUER` | `https://www.priority-guard.com` | JWT `iss` claim |
-| `CLARITY_CLAUDE_AUDIENCE` | `https://www.priority-guard.com` | JWT `aud` claim |
+| `CLARITY_CLAUDE_AUDIENCE` | `https://mindsort-mcp.priority-guard.com/mcp` | JWT `aud` claim. **RESOURCE-shaped — NOT the issuer.** ⚠️ CORRECTED 2026-08-22: this cell read `https://www.priority-guard.com` (the issuer), which is now a hard provisioning trap. `_validate_audience_config()` refuses to boot in production unless this is set explicitly and byte-exactly equals the derived resource URL, so anyone standing the service up from the old value gets a service that will not start. Must match `CLARITY_CLAUDE_MCP_SERVER_URL` + `/mcp` exactly. Verified against the deployed value 2026-08-22. |
 | `CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS` | `https://claude.ai` | **HARD-FAILS startup if unset in prod/staging** |
 
 Optional but recommended (Better Stack log separation): `BETTER_STACK_SOURCE_TOKEN` and `SERVICE_NAME=mindsort-claude-mcp`. Note: `server_dupl.py` does not yet call `configure_logging()` — wiring Better Stack requires adding that call (same pattern as PG OpenAI MCP). Until then logs go to stdout only.
 
 ### Deploy sequence
+
+> ⚠️ **CORRECTED 2026-08-22 — THIS SERVICE AUTO-DEPLOYS. PUSH *IS* DEPLOY.**
+> Step 5 used to read "Manual Deploy → Deploy latest commit (Render does not auto-deploy
+> this repo)", and steps 3–5 were ordered push → verify env → deploy. Verified against
+> the Render API 2026-08-22: `srv-d90din3sq97s7399nbl0` is `autoDeploy: "yes"`,
+> `autoDeployTrigger: "commit"`, branch `main`. There is **no staging gap** — the build
+> starts within seconds of the push and serves within about a minute.
+>
+> Two consequences, and they invert the old order:
+>
+> 1. **"Pre-deploy" means "pre-PUSH".** Every check below must be finished *before* the
+>    push, because there is no post-push/pre-deploy window to do them in. The old step 4
+>    (confirm env vars) sat *after* the push and was therefore already too late.
+> 2. **Be present when you push.** Post-deploy gates fire against live production within
+>    a minute whether or not anyone is watching. Push only when you are at the keyboard
+>    to run them and to roll back.
+>
+> **BLAST RADIUS — a push to `main` deploys BOTH Claude services, not just this one.**
+> Verified 2026-08-22 across all four services in this repo:
+>
+> | Service | autoDeploy | On push to `main` |
+> |---|---|---|
+> | `srv-d6vbrt9r0fns73c6n080` PG-Claude | `yes` / commit | **deploys** |
+> | `srv-d90din3sq97s7399nbl0` MindSort-Claude | `yes` / commit | **deploys** |
+> | `srv-d64ea0khg0os73d588t0` PG-OpenAI | `no` / off | unaffected |
+> | `srv-d4vg1c24d50c73814mi0` MindSort-OpenAI | `no` / off | unaffected |
+>
+> So a MindSort-only change still restarts PG-Claude — the connector currently under
+> Anthropic review. Check what else is riding in the same push before you send it.
+
 1. Run all pre-commit checks above; confirm bundle committed (#6).
 2. `git status` clean; if `pyproject.toml` changed at any point, `poetry lock` and commit both (a stale lock fails EVERY service's build, not just this one).
-3. Push to the branch Render builds from.
-4. Confirm the Render service Build/Start commands + env vars above (especially `POETRY_VERSION`, `ENV=production`, `CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS`).
-5. Render Dashboard → MindSort Claude MCP service → **Manual Deploy → Deploy latest commit** (Render does not auto-deploy this repo).
+3. Confirm the Render service Build/Start commands + env vars above (especially `POETRY_VERSION`, `ENV=production`, `CLARITY_CLAUDE_CORS_ALLOWED_ORIGINS`, and the resource-shaped `CLARITY_CLAUDE_AUDIENCE`). **Before the push** — see the box above.
+4. Know your rollback target: the currently-live deploy ID, from the service's deploy list. Read it now, not after something breaks.
+5. Push to `main`. Render builds and serves automatically; watch the deploy list for the new SHA going `live`, then run the post-deploy verification below immediately.
 
 ### Post-deploy verification
 ```bash
