@@ -29,6 +29,7 @@ from .board_utils import (
     PriorityInput,
     apply_priorities as _apply_priorities,
     compute_content_hash,
+    normalize_name,
 )
 from ..persistence import get_cluster, persist_cluster
 
@@ -47,6 +48,14 @@ ERROR_INVALID_RANK = "Invalid rank. Must be P1, P2, or P3."
 ERROR_AMBIGUOUS_NAME = "'{name}' exists as both a cluster and subcluster. Please rename one to make it unique."
 ERROR_INVALID_PARENT = "Parent '{parent}' not found. Please reference a valid cluster or subcluster name."
 ERROR_ITEM_INDEX_OUT_OF_BOUNDS = "Item index {index} is out of bounds for '{parent}' (has {count} items)."
+# >1 SAME-TYPE match after normalization. Covers case variants ("Foo"/"foo") and exact
+# duplicates ("Tasks"/"Tasks" under different parents) — one normalized key, several
+# stored entries. Distinct from ERROR_AMBIGUOUS_NAME, which is the CROSS-type case.
+ERROR_DUPLICATE_NAME = (
+    "More than one cluster or subcluster on your board matches '{name}'. Names that "
+    "differ only by capitalisation or surrounding spaces are treated as the same name. "
+    "Rename one so they are distinct, then try again."
+)
 ERROR_RANK_ALREADY_ASSIGNED = "{rank} is already assigned to {entity}. Clear it first or choose a different rank."
 
 # ============================================================================
@@ -155,31 +164,70 @@ REQUIRED_SCOPES = ["clarity.write"]
 # ============================================================================
 
 
-def _find_all_names(clusters: List[dict]) -> tuple[set, set, dict]:
+def _find_all_names(clusters: List[dict]) -> tuple[dict, dict, dict]:
     """
-    Extract all cluster names and subcluster names from board.
+    Build the normalized -> stored[] name indexes for this board.
+
+    ========================================================================
+    THIS IS THE ROOT OF THE FIX FOR THIS HANDLER. Read before changing it.
+    ========================================================================
+    It used to return raw name SETS, and every check downstream inherited exact,
+    case-sensitive matching from them — including the one that raises the reported
+    "Cluster or subcluster not found" error. Normalizing _find_container_by_name alone
+    does NOT fix that error: that function is only on the item-target parent path, not
+    the container-target path where the error is raised. Measured.
+
+    The value is a LIST, not a scalar, and that is load-bearing. One normalized key
+    mapping to several stored names IS the ambiguity condition, and it covers two cases
+    that a scalar map would silently collapse into "last one wins":
+      - case variants        "Foo" / "foo"
+      - exact duplicates     "Tasks" / "Tasks"   (different parents)
+    After normalization these are the same condition, so they get the same handling.
+    Ambiguity detection and canonicalization are therefore one operation over one
+    structure, rather than two checks that can drift apart.
 
     Returns:
-        - cluster_names: Set of all cluster names
-        - subcluster_names: Set of all subcluster names
-        - subcluster_to_parent: Map of subcluster_name -> parent cluster_name
+        - cluster_index:        normalized name -> [stored cluster names]
+        - subcluster_index:     normalized name -> [stored subcluster names]
+        - subcluster_to_parent: stored subcluster name -> stored parent cluster name
     """
-    cluster_names = set()
-    subcluster_names = set()
-    subcluster_to_parent = {}
+    cluster_index: dict = {}
+    subcluster_index: dict = {}
+    subcluster_to_parent: dict = {}
 
     for cluster in clusters:
         name = cluster.get("cluster_name", "")
         if name:
-            cluster_names.add(name)
+            cluster_index.setdefault(normalize_name(name), []).append(name)
 
         for subcluster in cluster.get("subclusters", []):
             sub_name = subcluster.get("subcluster_name", "")
             if sub_name:
-                subcluster_names.add(sub_name)
+                subcluster_index.setdefault(normalize_name(sub_name), []).append(sub_name)
+                # Last-wins on duplicate stored names. Harmless now: the >1 rule rejects
+                # any board where a targeted name is duplicated, so no resolution ever
+                # reaches this map through an ambiguous key. Before the >1 rule this
+                # silently mis-keyed the parent+child guard below.
                 subcluster_to_parent[sub_name] = name
 
-    return cluster_names, subcluster_names, subcluster_to_parent
+    return cluster_index, subcluster_index, subcluster_to_parent
+
+
+def _resolve_stored_name(index: dict, name: str) -> tuple:
+    """
+    Apply the 0 / 1 / >1 rule against a normalized -> stored[] index.
+
+    Returns (stored_name, error):
+        zero -> (None, None)                 caller decides which not-found error fits
+        one  -> (stored_name, None)          the canonical handle for Requirement 3
+        many -> (None, ERROR_DUPLICATE_NAME) fail closed, never first-match-wins
+    """
+    stored = index.get(normalize_name(name))
+    if not stored:
+        return None, None
+    if len(stored) > 1:
+        return None, ERROR_DUPLICATE_NAME.format(name=name)
+    return stored[0], None
 
 
 def _get_thought_item_count(container: dict) -> int:
@@ -189,21 +237,31 @@ def _get_thought_item_count(container: dict) -> int:
 
 def _find_container_by_name(clusters: List[dict], name: str) -> tuple[Optional[dict], str]:
     """
-    Find a container (cluster or subcluster) by name.
+    Find a container (cluster or subcluster) by NORMALIZED name.
 
     Returns:
         - container: The cluster or subcluster dict, or None if not found
         - container_type: "cluster", "subcluster", or "" if not found
+
+    SCOPE NOTE, because this function is easy to over-attribute: it has ONE caller —
+    the item-target branch of _validate_priorities, resolving a thought item's parent.
+    It is NOT on the container-target path, and normalizing it does NOT fix the
+    "Cluster or subcluster not found" error users hit; that is raised from the
+    container-target branch against the name indexes. Verified by measurement, after an
+    earlier revision of the fix assumed this function was the fix site and changed
+    nothing observable.
     """
+    normalized = normalize_name(name)
+
     # Check clusters first
     for cluster in clusters:
-        if cluster.get("cluster_name") == name:
+        if normalize_name(cluster.get("cluster_name")) == normalized:
             return cluster, "cluster"
 
     # Check subclusters
     for cluster in clusters:
         for subcluster in cluster.get("subclusters", []):
-            if subcluster.get("subcluster_name") == name:
+            if normalize_name(subcluster.get("subcluster_name")) == normalized:
                 return subcluster, "subcluster"
 
     return None, ""
@@ -212,14 +270,32 @@ def _find_container_by_name(clusters: List[dict], name: str) -> tuple[Optional[d
 def _validate_priorities(
     priorities: List[PriorityInput],
     clusters_data: List[dict],
-    cluster_names: set,
-    subcluster_names: set,
+    cluster_index: dict,
+    subcluster_index: dict,
     subcluster_to_parent: dict
 ) -> Optional[str]:
     """
     Validate priority assignments across all entity types.
 
     Returns error message if invalid, None if valid.
+
+    ====================================================================
+    THIS FUNCTION MUTATES `priorities` — that is Requirement 3, shape (i).
+    ====================================================================
+    On success it REWRITES each PriorityInput's `name` / `parent_name` to the
+    container's STORED name. That is not a side effect to be tidied away; it is the
+    canonicalization boundary for this handler, and _apply_priorities immediately
+    downstream depends on it.
+
+    _apply_priorities is an exact matcher (see board_utils.apply_priorities). Validate
+    with normalization but leave the caller's string on the model, and the result is
+    error=None with the priority silently NOT applied — measured, and worse than the
+    not-found error this replaces, because it reports success.
+
+    Canonicalization and ambiguity detection are the SAME operation here: resolving a
+    normalized key against the stored[] index yields either one stored name (canonical)
+    or several (ambiguous). Do not split them into two passes — a second traversal is a
+    second place to drift out of agreement with the first.
     """
     # Check max priorities
     if len(priorities) > MAX_PRIORITIES:
@@ -232,13 +308,20 @@ def _validate_priorities(
             return ERROR_DUPLICATE_RANK
         ranks_used.add(p.rank)
 
-    # Check for ambiguous names (exists as both cluster and subcluster)
-    ambiguous_names = cluster_names & subcluster_names
+    # CROSS-TYPE ambiguity, computed over NORMALIZED keys so a cluster "X" and a
+    # subcluster "x" collide exactly as "X"/"X" would. Left as a raw-name intersection,
+    # this check would silently stop firing the moment the rest of the handler started
+    # matching case-insensitively — the sets simply would not intersect.
+    ambiguous_keys = set(cluster_index) & set(subcluster_index)
     for p in priorities:
-        if p.is_container_target() and p.name in ambiguous_names:
+        if p.is_container_target() and normalize_name(p.name) in ambiguous_keys:
             return ERROR_AMBIGUOUS_NAME.format(name=p.name)
 
-    # Validate each priority target
+    # Validate each priority target.
+    # These two sets accumulate CANONICAL stored names, never the caller's strings —
+    # the parent+child guard at the bottom compares them against subcluster_to_parent,
+    # which is keyed by stored names. Mixing raw and stored here is what would silently
+    # disable that guard.
     prioritized_clusters = set()
     prioritized_subclusters = set()
 
@@ -249,10 +332,10 @@ def _validate_priorities(
                 return ERROR_INVALID_PARENT.format(parent="(empty)")
 
             # Check for ambiguous parent name
-            if p.parent_name in ambiguous_names:
+            if normalize_name(p.parent_name) in ambiguous_keys:
                 return ERROR_AMBIGUOUS_NAME.format(name=p.parent_name)
 
-            container, _ = _find_container_by_name(clusters_data, p.parent_name)
+            container, container_type = _find_container_by_name(clusters_data, p.parent_name)
             if container is None:
                 return ERROR_INVALID_PARENT.format(parent=p.parent_name)
 
@@ -264,19 +347,52 @@ def _validate_priorities(
                     count=item_count
                 )
 
+            # Requirement 3 — canonical parent forward. _apply_priorities keys items
+            # (parent_name, index); a raw string here misses and silently sets nothing.
+            p.parent_name = (
+                container.get("subcluster_name") if container_type == "subcluster"
+                else container.get("cluster_name")
+            )
+
         elif p.is_container_target():
-            # Targeting a cluster or subcluster
-            if p.name in cluster_names:
-                prioritized_clusters.add(p.name)
-            elif p.name in subcluster_names:
-                prioritized_subclusters.add(p.name)
+            # Targeting a cluster or subcluster.
+            # THIS IS THE PATH THAT RAISES THE REPORTED ERROR (ERROR_INVALID_CLUSTER
+            # below) — not _find_container_by_name, which this branch never calls.
+            stored, dup_error = _resolve_stored_name(cluster_index, p.name)
+            if dup_error:
+                return dup_error
+            if stored is not None:
+                p.name = stored                    # Requirement 3 — canonical forward
+                prioritized_clusters.add(stored)
             else:
-                return ERROR_INVALID_CLUSTER
+                stored, dup_error = _resolve_stored_name(subcluster_index, p.name)
+                if dup_error:
+                    return dup_error
+                if stored is not None:
+                    p.name = stored                # Requirement 3 — canonical forward
+                    prioritized_subclusters.add(stored)
+                else:
+                    return ERROR_INVALID_CLUSTER
         else:
             # Neither name nor item_index provided
             return "Priority must have either 'name' (for cluster/subcluster) or 'item_index' + 'parent_name' (for thought item)."
 
-    # Check for parent + child conflict (cluster and its subcluster both prioritized)
+    # ========================================================================
+    # Q5 — parent + child conflict guard. THIS ONE FAILS OPEN IF GOT WRONG.
+    # ========================================================================
+    # Forbids prioritizing a cluster and its own subcluster together. Unlike every other
+    # failure mode in this handler — which fail CLOSED, returning an error and mutating
+    # nothing — a break here fails OPEN: no error, and the board accepts a state this
+    # guard exists to forbid. That is silent and strictly worse than the bug this
+    # increment fixes, so it gets called out rather than buried in the site list.
+    #
+    # It is correct only because all three inputs are STORED names:
+    #   prioritized_subclusters  canonical, set above
+    #   subcluster_to_parent     keyed and valued by stored names
+    #   prioritized_clusters     canonical, set above
+    # Reintroduce a raw caller string into any one of them and a case-variant input
+    # stops matching here — the conflict goes undetected and the write proceeds.
+    # Whatever else changes, these three must stay in the same namespace.
     for sub_name in prioritized_subclusters:
         parent_name = subcluster_to_parent.get(sub_name)
         if parent_name and parent_name in prioritized_clusters:
@@ -516,14 +632,14 @@ async def handle(
         )
 
     # Find all valid names
-    cluster_names, subcluster_names, subcluster_to_parent = _find_all_names(clusters_data)
+    cluster_index, subcluster_index, subcluster_to_parent = _find_all_names(clusters_data)
 
     # Validate priorities
     error = _validate_priorities(
         priorities,
         clusters_data,
-        cluster_names,
-        subcluster_names,
+        cluster_index,
+        subcluster_index,
         subcluster_to_parent
     )
     if error:

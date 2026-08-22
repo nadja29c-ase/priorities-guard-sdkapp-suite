@@ -98,6 +98,43 @@ def normalize_thought_item(item: Union[str, dict]) -> dict:
     return item
 
 
+# ============================================================================
+# Container-name matching — THE ONE NORMALIZER
+# ============================================================================
+#
+# Every container (cluster/subcluster) name comparison in edit_board.py and
+# start_prioritization_flow.py routes through normalize_name(). Do not inline
+# .strip().lower() anywhere else; two normalizers drift and the drift is silent.
+#
+# These semantics are NOT new — they are the ones _find_thought_item_by_text has
+# always used for thought items. This aligns containers with established
+# behaviour. Deliberately NOT casefold() or NFKC: making containers match more
+# aggressively than items would create a fresh inconsistency in the other
+# direction. If stronger Unicode folding is ever wanted, it is one increment
+# applied uniformly to both.
+
+
+def normalize_name(name: Optional[str]) -> str:
+    """Normalize a container name for matching: strip surrounding whitespace, lowercase."""
+    return (name or "").strip().lower()
+
+
+def match_all_by_name(candidates: List[dict], name_field: str, target: str) -> List[dict]:
+    """
+    Return EVERY candidate whose `name_field` normalizes equal to `target`.
+
+    Returns all matches rather than the first, because callers must apply the
+    0 / 1 / >1 rule: zero -> not found, one -> resolve, more than one -> ambiguity
+    error. First-match-wins is exactly the silent mispick this normalization would
+    otherwise introduce, so this helper structurally cannot provide it.
+    """
+    normalized_target = normalize_name(target)
+    return [
+        c for c in candidates
+        if normalize_name(c.get(name_field)) == normalized_target
+    ]
+
+
 def clear_all_thought_item_priorities(items: List[Union[str, dict]]) -> List[Union[str, dict]]:
     """Clear priorities from all thought items, preserving object structure."""
     result = []
@@ -141,6 +178,33 @@ def clear_all_priorities(clusters: List[dict]) -> List[dict]:
 def apply_priorities(clusters: List[dict], priorities: List[PriorityInput]) -> List[dict]:
     """
     Apply priority metadata to clusters, subclusters, and thought items.
+
+    ========================================================================
+    THIS IS AN EXACT MATCHER, AND THAT IS DELIBERATE. DO NOT NORMALIZE HERE.
+    ========================================================================
+    It matches BOARD-WIDE and FANS OUT TO EVERY MATCH: every cluster whose name
+    is in the map (below), every subcluster likewise, and items keyed
+    (parent_name, index). One PriorityInput naming a duplicated container sets
+    the priority on ALL of them.
+
+    Callers MUST hand it the resolved container's STORED name, never a raw user
+    string. Its correctness depends on an invariant maintained upstream:
+
+      canonical-name-forward  <->  the 0/1/>1 ambiguity rule
+
+    The stored name is a UNIQUE handle only because the resolvers reject >1
+    eligible match. These two move together and neither is safe alone:
+
+      - Relax >1 to first-match-wins, and canonical names silently resume
+        fanning out here — one stated priority landing on several containers.
+      - Pass a raw user string instead of the resolved stored name, and the
+        lookups below miss entirely: no error, no priority set, a silent no-op.
+
+    Before this was normalized, correctness was accidental: the resolvers were
+    byte-exact, so any name that resolved at all was already canonical. That
+    hidden coupling is what made adding case-insensitivity dangerous, and it is
+    written down here so it cannot hide again.
+    See the case-insensitive container-matching increment briefing.
 
     Returns deep copy of clusters with priority fields added.
     Converts string thought items to objects when prioritized.

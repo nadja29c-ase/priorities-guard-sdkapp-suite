@@ -27,6 +27,8 @@ from .board_utils import (
     apply_priorities,
     clear_all_priorities,
     compute_content_hash,
+    normalize_name,
+    match_all_by_name,
 )
 from ..persistence import get_cluster, persist_cluster
 
@@ -69,6 +71,15 @@ ERROR_INVALID_TAG = f"Invalid tag. Must be one of: {', '.join(sorted(ALLOWED_TAG
 ERROR_TAG_LIMIT = "'{name}' already has 3 tags (maximum). Remove a tag first."
 ERROR_TAG_NOT_FOUND = "Tag '{tag}' not found on '{name}'."
 ERROR_AMBIGUOUS_NAME = "'{name}' exists as both a cluster and subcluster. Please rename one to make it unique."
+# Raised when >1 container of the SAME type matches after normalization. Covers both
+# case variants ("Foo"/"foo") and exact duplicates ("Tasks"/"Tasks" under different
+# parents) — after normalization those are the same condition: one key, several
+# stored entries. Distinct from ERROR_AMBIGUOUS_NAME, which is the CROSS-type case.
+ERROR_DUPLICATE_NAME = (
+    "More than one {kind} on your board matches '{name}'. Names that differ only by "
+    "capitalisation or surrounding spaces are treated as the same name. Rename one so "
+    "they are distinct, then try again."
+)
 ERROR_NAME_COLLISION = "A cluster named '{name}' already exists. Choose a different name."
 ERROR_SUBCLUSTER_NAME_COLLISION = "A subcluster named '{name}' already exists in '{parent}'. Choose a different name."
 ERROR_TEXT_TOO_LONG = f"Text exceeds maximum length of {MAX_ITEM_LENGTH} characters."
@@ -261,27 +272,87 @@ class EditBoardRequest(BaseModel):
 # ============================================================================
 
 
+class _AmbiguousContainerName(Exception):
+    """
+    Raised by a resolver when MORE THAN ONE container of the requested type matches
+    after normalization. Carries a ready-formatted user-facing message.
+
+    WHY AN EXCEPTION AND NOT AN (result, error) TUPLE — this is a deliberate design
+    choice, not laziness. The resolvers have ~14 call sites. Returning an extra error
+    slot would mean 14 places that must remember to check it, and any one that forgot
+    would silently fall back to first-match-wins — reintroducing precisely the silent
+    mispick this increment exists to remove. An exception cannot be forgotten: an
+    unhandled one is a loud failure, never a quiet wrong answer. Caught once, at the
+    dispatch boundary (_dispatch_operation).
+    """
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+def _resolve_one(matches: List[dict], name: str, kind: str) -> Optional[dict]:
+    """
+    Apply the 0 / 1 / >1 rule to a candidate set.
+
+    zero -> None (caller raises its own domain-appropriate not-found error)
+    one  -> that container
+    many -> _AmbiguousContainerName (fail closed; NEVER first-match-wins)
+
+    The >1 branch is load-bearing well beyond error quality: apply_priorities matches
+    board-wide and fans out to every match, so "exactly one eligible container" is what
+    makes a resolved stored name a unique handle. See the invariant block in
+    board_utils.apply_priorities.
+    """
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise _AmbiguousContainerName(ERROR_DUPLICATE_NAME.format(kind=kind, name=name))
+    return matches[0]
+
+
+def _stored_name_of(container: dict, container_type: Optional[str]) -> Optional[str]:
+    """
+    The container's OWN stored name — the canonical handle for Requirement 3.
+
+    Read off the resolved object, so it is by construction the string apply_priorities
+    will compare against. Deriving it any other way (re-searching, title-casing, echoing
+    the caller) reintroduces the mismatch this exists to prevent.
+    """
+    if container_type == "subcluster":
+        return container.get("subcluster_name")
+    return container.get("cluster_name")
+
+
 def _find_cluster(clusters: List[dict], name: str) -> Optional[dict]:
-    """Find a cluster by name."""
-    for c in clusters:
-        if c.get("cluster_name") == name:
-            return c
-    return None
+    """Find a cluster by normalized name. Raises _AmbiguousContainerName if >1 matches."""
+    return _resolve_one(match_all_by_name(clusters, "cluster_name", name), name, "cluster")
 
 
 def _find_subcluster(clusters: List[dict], name: str, parent_name: Optional[str] = None) -> tuple:
     """
-    Find a subcluster by name.
+    Find a subcluster by normalized name, optionally scoped to a normalized parent.
 
     Returns: (subcluster, parent_cluster) or (None, None) if not found.
+    Raises _AmbiguousContainerName if >1 subcluster matches within the searched scope.
+
+    Scope note: when parent_name is given the search is confined to that parent, so a
+    same-named subcluster under a DIFFERENT parent neither resolves nor triggers
+    ambiguity — that is the candidate-domain rule. Without parent_name the whole board
+    is the domain, so duplicates across parents DO trigger ambiguity.
     """
+    matches = []
     for cluster in clusters:
-        if parent_name and cluster.get("cluster_name") != parent_name:
+        if parent_name and normalize_name(cluster.get("cluster_name")) != normalize_name(parent_name):
             continue
-        for sc in cluster.get("subclusters", []):
-            if sc.get("subcluster_name") == name:
-                return sc, cluster
-    return None, None
+        for sc in match_all_by_name(cluster.get("subclusters", []), "subcluster_name", name):
+            matches.append((sc, cluster))
+
+    if not matches:
+        return None, None
+    if len(matches) > 1:
+        raise _AmbiguousContainerName(ERROR_DUPLICATE_NAME.format(kind="subcluster", name=name))
+    return matches[0]
 
 
 def _find_container(clusters: List[dict], name: str) -> tuple:
@@ -306,17 +377,32 @@ def _find_container(clusters: List[dict], name: str) -> tuple:
 
 def _check_ambiguous_name(clusters: List[dict], name: str) -> Optional[str]:
     """
-    Check if name exists as both a cluster and subcluster.
+    CROSS-TYPE ambiguity: does this name exist as BOTH a cluster and a subcluster?
 
     Returns error message if ambiguous, None if OK.
-    """
-    cluster_names = {c.get("cluster_name") for c in clusters}
-    subcluster_names = set()
-    for c in clusters:
-        for s in c.get("subclusters", []):
-            subcluster_names.add(s.get("subcluster_name"))
 
-    if name in cluster_names and name in subcluster_names:
+    This is the "both types" limb of the candidate-domain rule and applies ONLY to
+    operations that genuinely accept either type (tag ops, and set/clear_priority by
+    target_name). Typed operations — delete_cluster, rename_subcluster and friends —
+    must NOT call this: a same-named subcluster does not make a cluster ambiguous when
+    the operation can only mean a cluster.
+
+    SAME-TYPE duplication ("Foo"/"foo", or two subclusters both "Tasks") is a different
+    condition, caught by _resolve_one / _find_subcluster raising _AmbiguousContainerName.
+
+    Comparison is normalized, so a cluster "X" and a subcluster "x" collide here exactly
+    as "X"/"X" would. Left un-normalized, this check would silently stop firing the
+    moment the resolvers started matching case-insensitively.
+    """
+    normalized = normalize_name(name)
+    cluster_names = {normalize_name(c.get("cluster_name")) for c in clusters}
+    subcluster_names = {
+        normalize_name(s.get("subcluster_name"))
+        for c in clusters
+        for s in c.get("subclusters", [])
+    }
+
+    if normalized in cluster_names and normalized in subcluster_names:
         return ERROR_AMBIGUOUS_NAME.format(name=name)
     return None
 
@@ -341,28 +427,36 @@ def _find_thought_item_by_text(
       On success: (int, str, None)
       On failure: (None, None, str)
     """
-    def normalize(s: str) -> str:
-        return s.strip().lower()
-
-    normalized_text = normalize(text)
+    # Uses the SAME shared normalizer as container matching. The local strip().lower()
+    # this replaces was the original — and, until this increment, the only — normalized
+    # matcher in the file; container names have now been aligned to it rather than the
+    # other way round.
+    normalized_text = normalize_name(text)
 
     def search_container(container: dict, container_name: str) -> Optional[tuple]:
         for i, item in enumerate(container.get("thought_items", [])):
             item_text = item if isinstance(item, str) else item.get("text", "")
-            if normalize(item_text) == normalized_text:
+            if normalize_name(item_text) == normalized_text:
                 return (i, container_name)
         return None
 
-    # If parent_name provided — search that container first
+    # If parent_name provided — search that container first.
+    # The parent match is normalized, and the name reported back is the container's
+    # STORED name, never `parent_name`. Callers feed this return value straight into
+    # PriorityInput.parent_name, so echoing the caller's string here would smuggle a raw
+    # name into apply_priorities and silently no-op the priority (Requirement 3).
     if parent_name:
+        normalized_parent = normalize_name(parent_name)
         for cluster in clusters:
-            if cluster.get("cluster_name") == parent_name:
-                match = search_container(cluster, parent_name)
+            stored_cluster = cluster.get("cluster_name", "")
+            if normalize_name(stored_cluster) == normalized_parent:
+                match = search_container(cluster, stored_cluster)
                 if match:
                     return match[0], match[1], None
             for sub in cluster.get("subclusters", []):
-                if sub.get("subcluster_name") == parent_name:
-                    match = search_container(sub, parent_name)
+                stored_sub = sub.get("subcluster_name", "")
+                if normalize_name(stored_sub) == normalized_parent:
+                    match = search_container(sub, stored_sub)
                     if match:
                         return match[0], match[1], None
         # parent_name provided but item not found in it — fall through to board-wide
@@ -425,14 +519,25 @@ def _op_set_priority(clusters: List[dict], target_name: Optional[str],
         item_index = resolved_index
         parent_name = resolved_parent
 
-    # Build a PriorityInput for the target
+    # ========================================================================
+    # REQUIREMENT 3 — CANONICAL NAME FORWARD. Read before touching either branch.
+    # ========================================================================
+    # apply_priorities is an EXACT matcher (see its docstring). Every name handed to
+    # it below MUST be the resolved container's STORED name, captured at resolution —
+    # never `target_name`/`parent_name`, which are whatever the caller typed.
+    #
+    # Before normalization this was accidentally safe: the resolvers were byte-exact,
+    # so any name that resolved was already identical to the stored one. Normalizing
+    # the resolvers destroys that guarantee. Passing the raw string now produces
+    # error=None with the priority silently NOT set — measured, and strictly worse
+    # than the not-found error this increment replaces.
     if item_index is not None:
         # Targeting a thought item
         if not parent_name:
             return None, ERROR_MISSING_TARGET
 
         # Verify parent exists
-        container, _, _ = _find_container(clusters, parent_name)
+        container, container_type, _ = _find_container(clusters, parent_name)
         if not container:
             return None, ERROR_PARENT_NOT_FOUND.format(parent=parent_name)
 
@@ -441,14 +546,23 @@ def _op_set_priority(clusters: List[dict], target_name: Optional[str],
         if item_index < 0 or item_index >= len(items):
             return None, ERROR_ITEM_NOT_FOUND.format(index=item_index, parent=parent_name)
 
-        priority = PriorityInput(item_index=item_index, parent_name=parent_name, rank=rank)
+        # Canonical parent name — apply_priorities keys items (parent_name, index).
+        canonical_parent = _stored_name_of(container, container_type)
+        priority = PriorityInput(item_index=item_index, parent_name=canonical_parent, rank=rank)
     elif target_name:
-        # Targeting a cluster or subcluster
-        container, _, _ = _find_container(clusters, target_name)
+        # Targeting a cluster or subcluster — a BOTH-TYPES operation, so cross-type
+        # ambiguity applies (Q3: this check is new here; previously a name that was both
+        # a cluster and a subcluster silently resolved to the cluster).
+        error = _check_ambiguous_name(clusters, target_name)
+        if error:
+            return None, error
+
+        container, container_type, _ = _find_container(clusters, target_name)
         if not container:
             return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
 
-        priority = PriorityInput(name=target_name, rank=rank)
+        # Canonical container name, not the caller's string.
+        priority = PriorityInput(name=_stored_name_of(container, container_type), rank=rank)
     else:
         return None, ERROR_MISSING_TARGET
 
@@ -496,7 +610,19 @@ def _op_clear_priority(clusters: List[dict], target_name: Optional[str],
         # String items don't have priority, nothing to clear
 
     elif target_name:
-        # Targeting a cluster or subcluster
+        # Targeting a cluster or subcluster — BOTH-TYPES, so cross-type ambiguity applies.
+        # Q3: new here, and deliberately SYMMETRIC with _op_set_priority. Leaving clear
+        # un-checked while set errors would mean "set priority on ambiguous X" fails but
+        # "clear priority on ambiguous X" silently picks the cluster — an inconsistency
+        # that would itself become a bug report.
+        #
+        # No canonicalization needed on this path: it mutates the resolved container
+        # object directly and never reaches apply_priorities, so Requirement 3 does not
+        # apply. Check the two are still different before "fixing" the asymmetry.
+        error = _check_ambiguous_name(result, target_name)
+        if error:
+            return None, error
+
         container, container_type, _ = _find_container(result, target_name)
         if not container:
             return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
@@ -521,9 +647,21 @@ def _op_rename_cluster(clusters: List[dict], target_name: Optional[str],
     if not cluster:
         return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
 
-    # Check for name collision (another cluster with the new name)
+    # Destination collision. _find_cluster is normalized now, so renaming "Bar" -> "FOO"
+    # when a cluster "foo" exists is correctly a collision.
+    #
+    # THE `is not cluster` IDENTITY GUARD IS WHAT MAKES CASING-ONLY RENAMES WORK, and it
+    # only works because it compares OBJECT IDENTITY, not names. Renaming "foo" -> "FOO"
+    # resolves `existing` to the very object being renamed, so this is not a collision
+    # and the rename proceeds — which is the whole point of allowing a user to fix their
+    # own capitalisation. Replace this with a name comparison and that legitimate rename
+    # starts failing against itself.
+    #
+    # _find_cluster may raise _AmbiguousContainerName here (destination matching several
+    # clusters), which is correct: renaming INTO an already-duplicated name must not be
+    # resolved by guessing.
     existing = _find_cluster(result, new_name)
-    if existing and existing is not cluster:
+    if existing is not None and existing is not cluster:
         return None, ERROR_NAME_COLLISION.format(name=new_name)
 
     cluster["cluster_name"] = new_name
@@ -546,10 +684,13 @@ def _op_rename_subcluster(clusters: List[dict], target_name: Optional[str],
             return None, ERROR_SUBCLUSTER_NOT_FOUND.format(name=target_name, parent=parent_name)
         return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
 
-    # Check for name collision within same parent's subclusters
+    # Destination collision, scoped to the same parent's subclusters. Normalized, with
+    # the same object-identity guard as _op_rename_cluster — `sc is not subcluster` is
+    # what lets a subcluster fix its own capitalisation ("tasks" -> "Tasks") without
+    # colliding with itself. See the longer note there.
     parent_cluster_name = parent.get("cluster_name", "unknown")
-    for sc in parent.get("subclusters", []):
-        if sc.get("subcluster_name") == new_name and sc is not subcluster:
+    for sc in match_all_by_name(parent.get("subclusters", []), "subcluster_name", new_name):
+        if sc is not subcluster:
             return None, ERROR_SUBCLUSTER_NAME_COLLISION.format(name=new_name, parent=parent_cluster_name)
 
     subcluster["subcluster_name"] = new_name
@@ -563,13 +704,17 @@ def _op_delete_cluster(clusters: List[dict], target_name: Optional[str]) -> tupl
 
     result = copy.deepcopy(clusters)
 
-    # Find and remove the cluster
-    for i, c in enumerate(result):
-        if c.get("cluster_name") == target_name:
-            result.pop(i)
-            return result, None
+    # Routed through the one resolver rather than an inline loop. The inline loop was
+    # first-match-wins by construction; on a board with "Foo" and "foo" it would delete
+    # whichever came first. Deletion is unrecoverable, so this is the site where fail-
+    # closed matters most: >1 match raises rather than guesses.
+    # CLUSTERS-ONLY domain — a same-named subcluster is irrelevant here.
+    cluster = _find_cluster(result, target_name)
+    if cluster is None:
+        return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
 
-    return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
+    result.remove(cluster)
+    return result, None
 
 
 def _op_delete_subcluster(clusters: List[dict], target_name: Optional[str],
@@ -580,19 +725,17 @@ def _op_delete_subcluster(clusters: List[dict], target_name: Optional[str],
 
     result = copy.deepcopy(clusters)
 
-    for cluster in result:
-        if parent_name and cluster.get("cluster_name") != parent_name:
-            continue
+    # Routed through the one resolver (was an inline first-match-wins loop, same
+    # unrecoverable-deletion hazard as _op_delete_cluster). SUBCLUSTERS-ONLY domain,
+    # scoped to the normalized parent when one is given.
+    subcluster, parent = _find_subcluster(result, target_name, parent_name)
+    if subcluster is None:
+        if parent_name:
+            return None, ERROR_SUBCLUSTER_NOT_FOUND.format(name=target_name, parent=parent_name)
+        return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
 
-        subclusters = cluster.get("subclusters", [])
-        for i, sc in enumerate(subclusters):
-            if sc.get("subcluster_name") == target_name:
-                subclusters.pop(i)
-                return result, None
-
-    if parent_name:
-        return None, ERROR_SUBCLUSTER_NOT_FOUND.format(name=target_name, parent=parent_name)
-    return None, ERROR_CLUSTER_NOT_FOUND.format(name=target_name)
+    parent.get("subclusters", []).remove(subcluster)
+    return result, None
 
 
 def _op_delete_thought_item(clusters: List[dict], parent_name: Optional[str],
@@ -729,6 +872,22 @@ def _op_remove_tag(clusters: List[dict], target_name: Optional[str],
 
 
 def _dispatch_operation(clusters: List[dict], op: SingleOperation) -> tuple:
+    """
+    Route operation to handler. Returns (updated_clusters, error).
+
+    THE SINGLE CATCH POINT for _AmbiguousContainerName. Resolvers raise rather than
+    return an error slot so that no call site can forget to check and silently fall
+    back to first-match-wins; this is where that becomes an ordinary (None, error)
+    result again. Converting to None guarantees zero mutation: callers persist only a
+    non-None board, so an ambiguous target cannot partially apply.
+    """
+    try:
+        return _dispatch_operation_inner(clusters, op)
+    except _AmbiguousContainerName as exc:
+        return None, exc.message
+
+
+def _dispatch_operation_inner(clusters: List[dict], op: SingleOperation) -> tuple:
     """Route operation to handler. Returns (updated_clusters, error)."""
     if op.operation == "set_priority":
         return _op_set_priority(clusters, op.target_name, op.parent_name, op.item_index, op.rank, op.text)
