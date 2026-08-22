@@ -469,3 +469,124 @@ def test_resolver_raises_when_called_outside_the_dispatch_boundary():
     """Complements the test above: the raise is real, not decorative."""
     with pytest.raises(eb._AmbiguousContainerName):
         eb._find_cluster(case_variant_cluster_board(), "FOO")
+
+
+# ============================================================================
+# HANDLER-LEVEL end-to-end — the screenshot's actual path
+# ============================================================================
+#
+# Everything above drives resolvers and _op_* functions directly. That is where the
+# logic lives, but it is NOT the level at which the reported bug reached a user: they
+# called the TOOL, and the tool returned "Cluster or subcluster not found".
+#
+# These two tests close that gap. They drive the public `handle` with a case-variant
+# name and assert BOTH halves of the outcome that matters:
+#   - the priority is present in the returned board  (it resolved)
+#   - persist_cluster was actually awaited            (it was written, not just computed)
+#
+# Asserting the returned board alone would pass even if persistence were skipped, and a
+# priority that is never persisted is invisible the moment the board reloads — the same
+# "looks fine, changed nothing" class as the canonical-name no-op.
+
+
+@pytest.mark.asyncio
+async def test_handler_screenshot_case_sets_and_persists_via_start_prioritization_flow():
+    """
+    THE reported bug at the level it was reported: the tool call itself.
+
+    Bug this catches: any regression anywhere along handle -> _find_all_names ->
+    _validate_priorities (canonicalization) -> _apply_priorities -> persist. The unit
+    tests above pin each link; this pins the chain, which is what the user experiences.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    board = screenshot_board()
+
+    with patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster",
+               new_callable=AsyncMock) as mock_get, \
+         patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster",
+               new_callable=AsyncMock) as mock_persist:
+        mock_get.return_value = {"cluster_data": {"clusters": board}}
+        mock_persist.return_value = "cluster-id-1"
+
+        result = await spf.handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "user_prioritization_criterion_verbatim": "relief",
+                "user_priorities_verbatim": "LinkedIn Content is my P1",
+                # Capital C — the board stores "LinkedIn content".
+                "priorities": [{"name": "LinkedIn Content", "rank": "P1", "reason": "relief"}],
+            },
+        )
+
+    assert not result.isError, f"tool returned an error: {result.content}"
+
+    persisted = result.structuredContent["clusters"]
+    assert _subcluster_priority(persisted) == {"rank": "P1", "reason": "relief"}, (
+        "resolved but the priority never landed — a silent no-op"
+    )
+    assert mock_persist.await_count == 1, "priority computed but never written"
+
+
+@pytest.mark.asyncio
+async def test_handler_ambiguous_name_returns_error_and_does_not_persist():
+    """
+    Fail-closed at the handler level: an ambiguous target must produce a tool error and
+    write NOTHING.
+
+    Bug this catches: an ambiguity that is detected but still reaches persist — the
+    board would be written in a state the >1 rule exists to refuse. Asserting the error
+    string alone would not catch that; only await_count == 0 does.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    board = duplicate_subcluster_board()
+
+    with patch("mcp_server.clarity.tools.start_prioritization_flow.get_cluster",
+               new_callable=AsyncMock) as mock_get, \
+         patch("mcp_server.clarity.tools.start_prioritization_flow.persist_cluster",
+               new_callable=AsyncMock) as mock_persist:
+        mock_get.return_value = {"cluster_data": {"clusters": board}}
+
+        result = await spf.handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "user_prioritization_criterion_verbatim": "relief",
+                "user_priorities_verbatim": "Tasks is my P1",
+                "priorities": [{"name": "Tasks", "rank": "P1", "reason": "relief"}],
+            },
+        )
+
+    assert result.isError
+    assert mock_persist.await_count == 0, "ambiguous target was persisted anyway"
+
+
+@pytest.mark.asyncio
+async def test_handler_screenshot_case_sets_and_persists_via_edit_board():
+    """Same end-to-end assertion through edit_board's public handler."""
+    from unittest.mock import AsyncMock, patch
+
+    board = screenshot_board()
+
+    with patch("mcp_server.clarity.tools.edit_board.get_cluster",
+               new_callable=AsyncMock) as mock_get, \
+         patch("mcp_server.clarity.tools.edit_board.persist_cluster",
+               new_callable=AsyncMock) as mock_persist:
+        mock_get.return_value = {"cluster_data": {"clusters": board}}
+        mock_persist.return_value = "cluster-id-1"
+
+        result = await eb.handle(
+            user_id="test-user",
+            correlation_id="test-corr",
+            arguments={
+                "operation": "set_priority",
+                "target_name": "LinkedIn Content",   # capital C
+                "rank": "P1",
+            },
+        )
+
+    assert not result.isError, f"tool returned an error: {result.content}"
+    assert _subcluster_priority(result.structuredContent["clusters"]) is not None
+    assert mock_persist.await_count == 1, "priority computed but never written"
