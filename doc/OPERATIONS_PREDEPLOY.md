@@ -9,22 +9,37 @@ were never deployed.
 
 | Service ID | Render name | App it actually runs | Verified `resource` | autoDeploy |
 |---|---|---|---|---|
-| `srv-d6vbrt9r0fns73c6n080` | `priority-guardian-claude-mcp` | **PG · Claude** — `priority_guardian_claude.server_dupl` | `https://mcp.priority-guard.com/mcp` · `pg.access` | **YES** *(changed 2026-08-06 12:31; was NO)* |
+| `srv-d6vbrt9r0fns73c6n080` | `priority-guardian-claude-mcp` | **PG · Claude** — `priority_guardian_claude.server_dupl` | `https://mcp.priority-guard.com/mcp` · `pg.access` | **NO — manual deploy only** *(changed 2026-08-22 09:31; was YES since 2026-08-06 12:31; was NO before that)* ⚠️ see trap 3 |
 | `srv-d90din3sq97s7399nbl0` | `priorities-guard-mindsort-claude-mcp` | **MindSort · Claude** — `mindsort_claude.server_dupl` | `https://mindsort-mcp.priority-guard.com/mcp` · `clarity.write` | **YES**, on commit |
 | `srv-d64ea0khg0os73d588t0` | `priority-guard-pg-mcp` | **PG · OpenAI** — `priority_guardian.server` | `https://pg.priority-guard.com/mcp` · `pg.access` | NO |
 | `srv-d4vg1c24d50c73814mi0` | `prioritiy-guard-mindsort-mcp` | **MindSort · OpenAI** — `clarity.server` | `https://mindsort.priority-guard.com/mcp` · `clarity.write` | NO |
 
-**The two traps, in order of how much they cost:**
+**The three traps, in order of how much they cost:**
 
 1. **`pg.priority-guard.com` is PG-OpenAI, NOT PG-Claude.** PG-Claude is `mcp.priority-guard.com`.
    The subdomain that reads like "PG" belongs to the other platform.
 2. **Deploy settings differ per service AND change over time — read them, never remember them.**
-   PG-Claude was `autoDeploy: "no"` until 2026-08-06 12:31 and is now `"yes"`. During the window when
-   it was off and MindSort-Claude's was on, pushing to `main` deployed MindSort within a minute and
-   did *nothing* to PG-Claude — so watching a commit go live was evidence that **MindSort** deployed,
-   not PG. That cost several rounds of reasoning about the wrong service's state. **The table above is
-   a snapshot; the deploy log is the truth.** Check `autoDeploy` at the moment you care, and confirm
-   the deploy landed by reading the service's own deploy list — never infer it from a push.
+   PG-Claude's `autoDeploy` has now flipped THREE times: `no` → `yes` (2026-08-06 12:31) → `no`
+   (2026-08-22 09:31). This document has been wrong about it after two of those three flips, which is
+   the point: it is not a fact you can hold in your head or trust a doc for. During the first
+   off-window, pushing to `main` deployed MindSort within a minute and did *nothing* to PG-Claude — so
+   watching a commit go live was evidence that **MindSort** deployed, not PG. That cost several rounds
+   of reasoning about the wrong service's state. **The table above is a snapshot; the API and the
+   deploy log are the truth.** Check `autoDeploy` at the moment you care (`get_service`, or the
+   dashboard), and confirm a deploy landed by reading the service's own deploy list — never infer it
+   from a push.
+3. ⚠️ **PG-CLAUDE IS MANUAL-DEPLOY WHILE UNDER ANTHROPIC REVIEW — and that is a review hazard, not
+   just an inconvenience.** As of 2026-08-22 09:31 PG-Claude is `autoDeploy: "no"`,
+   `autoDeployTrigger: "off"`. It was turned off deliberately, to keep a MindSort-only push from
+   restarting the connector under review. The cost is that **every PG-Claude deploy is now a step you
+   must remember**, and forgetting it fails in the direction that matters most right now:
+   - Push a PG-Claude fix, believe it shipped, and it silently did not — reviewers keep seeing the
+     old build. Nothing errors; the push succeeds and the service simply does not change.
+   - Worse, if a reviewer asks for a fix and you push it, you may report it as live when it is not.
+   **So: after ANY push touching `mcp_server/priority_guardian_claude/`, go to the PG-Claude service
+   and Manual Deploy → Deploy latest commit, then confirm the new SHA is `live` in its deploy list.**
+   Turn `autoDeploy` back on once the MindSort deploy work settles, and correct this block when you do
+   — do not leave it describing a state that has since flipped again.
 
 ### How to identify a service without trusting its name
 
@@ -391,16 +406,32 @@ this exact block has been wrong.** It read: *"this service does NOT auto-deploy.
 triggered. `priorities-guard-mindsort-claude-mcp` is the opposite... Two Claude MCP services in
 one repo with opposite settings is how a smoke test ends up run against stale bytes."*
 
-**They are no longer opposite. BOTH auto-deploy.** Read from the Render API 2026-08-22:
-`srv-d6vbrt9r0fns73c6n080` (PG-Claude) is `autoDeploy: "yes"`, `autoDeployTrigger: "commit"`,
-branch `main` — matching the table at the top of this file, which recorded the 2026-08-06 12:31
-change that this paragraph never picked up. A push to `main` now ships **both** Claude services.
+**Read that quote carefully: it is COINCIDENTALLY value-correct again today, and that is a trap,
+not a vindication.** PG-Claude is once more `"no"`/`"off"`, so the old sentence happens to match
+reality — but it was WRONG for the two weeks it stood (PG was `"yes"` the whole time), and it
+matches now only because a deliberate toggle happened to land back on its value. A statement that
+is right by accident is not evidence the statement was reliable. This is why the rule below is
+"read the API", not "read the doc and check it looks plausible".
 
-The old hazard (opposite settings → smoke test against stale bytes) has been replaced by a
-different one: **a push intended for one Claude service redeploys the other too.** Note the
-correction above the one it corrects — the block immediately preceding this one exists because
-a "deprecated" claim was carried by two authoritative documents and only one was fixed. This
-is the same failure mode in the same block, one field over.
+**CURRENT STATE (2026-08-22 09:31): they are OPPOSITE again — MindSort auto, PG manual.**
+`srv-d6vbrt9r0fns73c6n080` (PG-Claude) is `autoDeploy: "no"`, `autoDeployTrigger: "off"`;
+`srv-d90din3sq97s7399nbl0` (MindSort-Claude) is `"yes"` / `"commit"`. So a push to `main` ships
+MindSort-Claude only. See trap 3 at the top of this file for why PG being manual is a *review*
+hazard and not merely an inconvenience.
+
+**THIS BLOCK HAS NOW BEEN WRONG TWICE IN ONE DAY, AND THAT IS THE LESSON — read this before
+trusting any deploy-trigger claim in this repo.** The original text said PG-Claude does not
+auto-deploy, which went stale at the 2026-08-06 12:31 flip and sat wrong for over two weeks. It
+was corrected 2026-08-22 to "they are no longer opposite, BOTH auto-deploy" — and that correction
+was falsified within the same session by a deliberate toggle a few hours later. A doc cannot track
+a dashboard setting. **Read `autoDeploy` from the API at the moment you care; treat every sentence
+in this file about deploy triggers as a snapshot with a timestamp on it, including this one.**
+
+Historical, for the shape of the hazard rather than the current values: when the two Claude
+services had OPPOSITE settings, the trap was a smoke test run against stale bytes (you watch a
+push go live and conclude the wrong service deployed). When they briefly matched, the trap
+inverted — a push intended for one Claude service redeployed the other. Both traps are live
+depending on the day; neither is a property of the code.
 
 The four steps below remain **outstanding** — the server still ships no logs to Better Stack, which is
 its own audit, not this increment's:
@@ -510,18 +541,23 @@ Optional but recommended (Better Stack log separation): `BETTER_STACK_SOURCE_TOK
 >    a minute whether or not anyone is watching. Push only when you are at the keyboard
 >    to run them and to roll back.
 >
-> **BLAST RADIUS — a push to `main` deploys BOTH Claude services, not just this one.**
-> Verified 2026-08-22 across all four services in this repo:
+> **BLAST RADIUS — verified from the Render API 2026-08-22 09:31. This table is a
+> snapshot of a dashboard setting; re-read it, do not trust it.**
 >
 > | Service | autoDeploy | On push to `main` |
 > |---|---|---|
-> | `srv-d6vbrt9r0fns73c6n080` PG-Claude | `yes` / commit | **deploys** |
 > | `srv-d90din3sq97s7399nbl0` MindSort-Claude | `yes` / commit | **deploys** |
+> | `srv-d6vbrt9r0fns73c6n080` PG-Claude | `no` / off | unaffected — **manual deploy required**, see trap 3 |
 > | `srv-d64ea0khg0os73d588t0` PG-OpenAI | `no` / off | unaffected |
 > | `srv-d4vg1c24d50c73814mi0` MindSort-OpenAI | `no` / off | unaffected |
 >
-> So a MindSort-only change still restarts PG-Claude — the connector currently under
-> Anthropic review. Check what else is riding in the same push before you send it.
+> A push to `main` therefore deploys **MindSort-Claude only**. PG-Claude was switched to
+> manual on 2026-08-22 09:31 specifically so a MindSort deploy could not restart the
+> connector under Anthropic review — which shrinks this service's deploys to one variable,
+> at the cost of PG-Claude deploys now being a step somebody has to remember.
+>
+> Earlier the same day this table read "BOTH deploy". That was true when written and false
+> a few hours later. Check before you push.
 
 1. Run all pre-commit checks above; confirm bundle committed (#6).
 2. `git status` clean; if `pyproject.toml` changed at any point, `poetry lock` and commit both (a stale lock fails EVERY service's build, not just this one).
