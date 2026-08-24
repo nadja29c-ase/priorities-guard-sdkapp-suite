@@ -24,14 +24,17 @@ logger = structlog.get_logger(__name__)
 
 NAME = "get_priorities"
 
-DESCRIPTION = "Get user's saved and guarded goals/priorities and their progress." \
-"Call this tool: " \
-"- When the user asks to see their guarded/saved priorities or dashboard " \
-"- When the user wants to check their progress or time tracking" \
-"Do NOT call this tool: " \
-"- When the user is asking for advice on how to prioritize or what to work on " \
-"- When the user wants to plan, break down, or organize tasks or projects"
-"- When the user is asking a general or specific productivity question"
+DESCRIPTION = (
+    "Get user's saved and guarded goals/priorities and their progress. "
+    "This call also updates the calendar connection's last-used record and may create a weekly tracking snapshot.\n\n"
+    "Call this tool:\n"
+    "- When the user asks to see their guarded/saved priorities or dashboard\n"
+    "- When the user wants to check their progress or time tracking\n\n"
+    "Do NOT call this tool:\n"
+    "- When the user is asking for advice on how to prioritize or what to work on\n"
+    "- When the user wants to plan, break down, or organize tasks or projects\n"
+    "- When the user is asking a general or specific productivity question"
+)
 
 INPUT_SCHEMA = {
     "type": "object",

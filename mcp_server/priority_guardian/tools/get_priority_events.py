@@ -43,8 +43,8 @@ INPUT_SCHEMA = {
             "type": "string",
             "enum": ["P1", "P2", "P3"],
             "description": (
-                "Priority keyword to fetch events for. Returns that priority's "
-                "calendar events so you can group them into subcategories. After reading the events, "
+                "Priority keyword to fetch events for. Returns priorityEvents from which "
+                "semantic_groupings are derived. After reading the events, "
                 "IMMEDIATELY call render_weekly_report with semantic_groupings and "
                 "semantic_target to render the breakdown chart. No user confirmation needed."
             ),

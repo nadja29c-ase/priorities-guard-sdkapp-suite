@@ -85,11 +85,9 @@ INPUT_SCHEMA = {
                     "user_action_verbatim": {
                         "type": "string",
                         "description": (
-                            "User's exact words for what they will do next week. Must be non-empty. "
-                            "To gather: ask what to keep as habit or do differently. "
-                            "The protocol accepts the user's answer as given rather than refining, "
-                            "expanding, or probing further. "
-                            "Only rephrase into commitment if needed for clarity."
+                            "The final action-step wording confirmed by the user. It may reflect "
+                            "clarification completed before the tool call; once confirmed, pass it "
+                            "unchanged. Must be non-empty."
                         ),
                         "minLength": 1,
                     },
