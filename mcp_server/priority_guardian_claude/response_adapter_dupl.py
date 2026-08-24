@@ -98,7 +98,7 @@ def adapt_widget_tool_meta(result: mcp_types.CallToolResult) -> mcp_types.CallTo
     the host to fetch and display the corresponding widget resource.
     Claude uses this pattern to show interactive UI after tool calls.
 
-    Applies to: get_priorities, render_weekly_report
+    Applies to: get_priorities, render_weekly_report, create_priority
 
     Only adds metadata if the result is not an error.
 
@@ -117,8 +117,11 @@ def adapt_widget_tool_meta(result: mcp_types.CallToolResult) -> mcp_types.CallTo
             _meta=result.meta,
         )
 
-    # Build new _meta with ui.resourceUri and ui.domain — defensive merge preserves existing ui keys
-    existing_meta = dict(result.meta) if result.meta else {}
+    # Build new _meta with ui.resourceUri and ui.domain — defensive merge preserves existing ui keys.
+    # Strip openai/outputTemplate: it's an OpenAI Apps SDK vendor key set by the shared tool
+    # handler for the ChatGPT surface; Claude uses ui.resourceUri/ui.domain instead, so leaving
+    # it in would leak an OpenAI-specific field into the Claude-facing _meta.
+    existing_meta = {k: v for k, v in (result.meta or {}).items() if k != "openai/outputTemplate"}
     existing_ui = dict(existing_meta.get("ui", {}))
     existing_ui.update({"resourceUri": WIDGET_URI, "domain": WIDGET_APP_DOMAIN})
     new_meta = {**existing_meta, "ui": existing_ui}
