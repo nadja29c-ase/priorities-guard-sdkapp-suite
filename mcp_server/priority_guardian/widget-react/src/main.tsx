@@ -11,6 +11,16 @@ import { reportWidgetError } from './widgetErrorReporter'
   document.documentElement.lang = rawLocale
 })()
 
+// Non-functional production cache-bust marker. WIDGET_URI stays stable across
+// content-only deploys (see OPERATIONS_PREDEPLOY.md — the server reloads the
+// bundle fresh from disk on every restart under the same URI); bumping the URI
+// is reserved for a deliberate, reviewed app version change, not routine CSS/
+// content deploys. To confirm which build ChatGPT actually loaded post-deploy
+// — cached copy vs. the one just shipped — without touching the approved
+// resource URI, inspect either of these in the widget iframe's DevTools:
+console.info('PG_WIDGET_BUILD', __WIDGET_BUILD_TIME__)
+document.body.setAttribute('data-pg-build', __WIDGET_BUILD_TIME__)
+
 /**
  * Error Boundary to catch React rendering errors
  * Prevents entire widget from crashing on component errors
