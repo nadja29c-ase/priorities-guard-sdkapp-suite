@@ -16,6 +16,10 @@ body {
   line-height: 1.5;
 }
 
+/* Outer safety cap only — not a deliberate widget width. The actual content
+   width is owned explicitly by each <main> in App.tsx (inline and fullscreen
+   both declare their own max-width; see CARD_MAX_WIDTH_CLASS). This value
+   must not be treated as, or relied on as, the widget's design width. */
 #root {
   width: 100%;
   max-width: 900px;

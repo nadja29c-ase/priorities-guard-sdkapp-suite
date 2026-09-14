@@ -11,5 +11,17 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // e2e/ holds Playwright specs (real-browser regression layer, run via
+    // `npm run test:e2e`) — they use @playwright/test's own runner/globals,
+    // not vitest's, and must not be collected here. Vitest's own defaults
+    // are repeated explicitly since setting `exclude` replaces them.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/cypress/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
+      'e2e/**',
+    ],
   },
 })

@@ -18,6 +18,19 @@ import { reportWidgetDiagnostic } from './widgetErrorReporter'
 // Inc 89: temporary diagnostic flag. Set to false before next non-diagnostic deploy.
 const PG_DIAG_FULLSCREEN = true
 
+// Card width fix: explicit width for both display modes, applied unconditionally
+// so neither mode ever derives its width from #root by accident (main.css previously
+// gave inline no width rule of its own, so it silently inherited #root's 900px cap).
+// - Inline and fullscreen share one value: switching between them is a pure displayMode
+//   state flip with no remount (see handleExpandToFullscreen/handleMinimizeToInline below),
+//   so a differing width would reflow the same card in place on every toggle for no
+//   content-density reason.
+// - The 672px value itself (Tailwind's max-w-2xl) is carried over from this file's
+//   pre-existing fullscreen rule, not independently measured against this card's content
+//   (badge/name row, HourRing/stat row, deliverable list) — subject to revision at the
+//   Verification Layer 1 gate (real ChatGPT session, representative widths).
+const CARD_MAX_WIDTH_CLASS = 'max-w-2xl mx-auto'
+
 type DisplayMode = 'inline' | 'fullscreen'
 
 function App() {
@@ -840,7 +853,7 @@ function App() {
       <main
         role="main"
         aria-label="Time Allocation Pie Chart"
-        className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+        className={`bg-surface-secondary rounded-2xl p-4 pb-2 ${CARD_MAX_WIDTH_CLASS}`}
         style={!isInline ? { paddingBottom: `calc(2rem + ${hostBottomInset}px)` } : undefined}
       >
         <PieChart
@@ -878,7 +891,7 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className={`bg-surface-secondary rounded-2xl p-4 pb-2${!isInline ? ' max-w-2xl mx-auto' : ''}`}
+      className={`bg-surface-secondary rounded-2xl p-4 pb-2 ${CARD_MAX_WIDTH_CLASS}`}
       style={!isInline ? { paddingBottom: `calc(2rem + ${hostBottomInset}px)` } : undefined}
     >
       {/* Fullscreen header - only in fullscreen mode */}
