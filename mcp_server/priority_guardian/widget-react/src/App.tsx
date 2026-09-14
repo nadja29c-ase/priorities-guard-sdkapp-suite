@@ -22,9 +22,14 @@ const PG_DIAG_FULLSCREEN = true
 // so neither mode ever derives its width from #root by accident (main.css previously
 // gave inline no width rule of its own, so it silently inherited #root's 900px cap).
 // - Inline and fullscreen share one value: switching between them is a pure displayMode
-//   state flip with no remount (see handleExpandToFullscreen/handleMinimizeToInline below),
-//   so a differing width would reflow the same card in place on every toggle for no
-//   content-density reason.
+//   state flip (see handleExpandToFullscreen/handleMinimizeToInline below), and the
+//   <main> container itself is not remounted — both branches return the same JSX
+//   element, so keeping it at one width avoids a layout jump on the container. NOTE:
+//   this does NOT mean nothing below it remounts — sortedPriorities.map's key includes
+//   displayMode (see `${priority.id}-${displayMode}` a few hundred lines down), so every
+//   priority card already unmounts/remounts on toggle for a separate, pre-existing
+//   reason unrelated to width. The "avoid a reflow" argument here applies to the <main>
+//   box, not to everything it contains.
 // - The 672px value itself (Tailwind's max-w-2xl) is carried over from this file's
 //   pre-existing fullscreen rule, not independently measured against this card's content
 //   (badge/name row, HourRing/stat row, deliverable list) — subject to revision at the
