@@ -11,6 +11,7 @@ import { AddPriorityForm, AddPriorityButton } from './components/AddPriorityForm
 import { TimeAllocationBar } from './components/TimeAllocationBar'
 import { PieChart } from './components/PieChart'
 import { FullscreenHeader } from './components/FullscreenHeader'
+import { InlinePriorityRow } from './components/InlinePriorityRow'
 import { ExpandButton } from './components/ExpandButton'
 import { CalendarConnectionMinimal } from './components/CalendarConnectionMinimal'
 import { reportWidgetDiagnostic } from './widgetErrorReporter'
@@ -922,38 +923,49 @@ function App() {
       )}
 
       {/* Priority Cards (primary content) */}
+      {/* inc_card_size_fix2.md: inline gets its own compact renderer
+          (InlinePriorityRow) — DeadlineCard/FlexibleCard never mount in
+          inline mode at all. Fullscreen's branch is unchanged. */}
       {sortedPriorities.length > 0 ? (
-        <div className="flex flex-col gap-5">
-          {sortedPriorities.map((priority) => (
-            <PriorityCardWrapper
-              key={`${priority.id}-${displayMode}`}
-              priority={priority}
-              priorities={activePriorities}
-              isEditing={editingPriorityId === priority.id}
-              canStartEdit={canEdit}
-              defaultSectionsExpanded={!isInline}
-              onStartEdit={() => {
-                if (isMobile && displayMode !== 'fullscreen') {
-                  enteredFullscreenForEditRef.current = true
-                  handleExpandToFullscreen()
-                }
-                setEditingPriorityId(priority.id)
-              }}
-              onCancelEdit={() => setEditingPriorityId(null)}
-              onSavePriority={handleUpdatePriority}
-              onDeletePriority={handleDeletePriority}
-              onKeywordChange={handleKeywordChange}
-              onToggleDeliverable={handleToggleDeliverable}
-              onRenameDeliverable={handleRenameDeliverable}
-              onDeleteDeliverable={handleDeleteDeliverable}
-              onAddDeliverable={handleAddDeliverable}
-              onAddGoal={handleAddGoal}
-              onToggleGoal={handleToggleGoal}
-              onRenameGoal={handleRenameGoal}
-              onDeleteGoal={handleDeleteGoal}
-            />
-          ))}
-        </div>
+        isInline ? (
+          <div className="flex flex-col gap-2">
+            {sortedPriorities.map((priority) => (
+              <InlinePriorityRow key={priority.id} priority={priority} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-5">
+            {sortedPriorities.map((priority) => (
+              <PriorityCardWrapper
+                key={`${priority.id}-${displayMode}`}
+                priority={priority}
+                priorities={activePriorities}
+                isEditing={editingPriorityId === priority.id}
+                canStartEdit={canEdit}
+                defaultSectionsExpanded={!isInline}
+                onStartEdit={() => {
+                  if (isMobile && displayMode !== 'fullscreen') {
+                    enteredFullscreenForEditRef.current = true
+                    handleExpandToFullscreen()
+                  }
+                  setEditingPriorityId(priority.id)
+                }}
+                onCancelEdit={() => setEditingPriorityId(null)}
+                onSavePriority={handleUpdatePriority}
+                onDeletePriority={handleDeletePriority}
+                onKeywordChange={handleKeywordChange}
+                onToggleDeliverable={handleToggleDeliverable}
+                onRenameDeliverable={handleRenameDeliverable}
+                onDeleteDeliverable={handleDeleteDeliverable}
+                onAddDeliverable={handleAddDeliverable}
+                onAddGoal={handleAddGoal}
+                onToggleGoal={handleToggleGoal}
+                onRenameGoal={handleRenameGoal}
+                onDeleteGoal={handleDeleteGoal}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <EmptyState />
       )}
