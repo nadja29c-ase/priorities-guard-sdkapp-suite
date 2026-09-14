@@ -1,8 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // Regression layer for inc_card_size_fix.md — resolved CSS at representative
-// viewport widths, against the COMMITTED bundle (../widgets/pg-dashboard.html),
-// not the dev server. Run `npm run build` first (see package.json "test:e2e").
+// viewport widths, against the built bundle on disk (../widgets/pg-dashboard.html),
+// not the dev server. `npm run test:e2e` rebuilds automatically before running
+// (see package.json), so it always exercises the current working tree — that is
+// only "the committed bundle" if the tree is clean at that path when you run it.
+// Running `playwright test` directly instead uses whatever is on disk already,
+// stale or not.
 //
 // This serves the standalone widget document directly in a Chromium tab, not
 // inside a ChatGPT host iframe. It is a real-browser regression check on the

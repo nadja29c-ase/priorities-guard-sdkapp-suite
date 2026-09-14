@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { render, act } from '@testing-library/react'
+import { render, act, screen } from '@testing-library/react'
 import App from '../App'
 import { setMockPriorities, mockOpenai } from '../test/setup'
 import type { Priority } from '../types'
@@ -89,21 +89,33 @@ describe('Card width — explicit, non-accidental max-width', () => {
 })
 
 describe('Card width — host-driven displayMode transitions (regression on handleSetGlobals)', () => {
-  it('keeps its explicit width class across inline -> fullscreen -> inline via openai:set_globals', () => {
+  it('keeps its explicit width class, and genuinely switches mode UI, across inline -> fullscreen -> inline via openai:set_globals', () => {
+    // Inline and fullscreen intentionally share the same width class (see
+    // CARD_MAX_WIDTH_CLASS), so a width-only assertion here would pass even
+    // if handleSetGlobals silently stopped switching modes — the width
+    // never changes either way. Pairing it with a mode-exclusive UI marker
+    // (ExpandButton is inline-only, FullscreenHeader's minimize button is
+    // fullscreen-only) proves the mode transition itself actually happened.
     const { container } = renderInMode('inline')
     const getMainClass = () => container.querySelector('main[role="main"]')?.className ?? ''
 
     expect(getMainClass()).toMatch(/max-w-2xl/)
+    expect(screen.queryByRole('button', { name: /open full dashboard/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /minimize dashboard/i })).not.toBeInTheDocument()
 
     // Host syncs to fullscreen
     mockOpenai.displayMode = 'fullscreen'
     act(() => { window.dispatchEvent(new Event('openai:set_globals')) })
     expect(getMainClass()).toMatch(/max-w-2xl/)
+    expect(screen.queryByRole('button', { name: /minimize dashboard/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /open full dashboard/i })).not.toBeInTheDocument()
 
     // Host syncs back to inline
     mockOpenai.displayMode = 'inline'
     act(() => { window.dispatchEvent(new Event('openai:set_globals')) })
     expect(getMainClass()).toMatch(/max-w-2xl/)
+    expect(screen.queryByRole('button', { name: /open full dashboard/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /minimize dashboard/i })).not.toBeInTheDocument()
   })
 })
 
