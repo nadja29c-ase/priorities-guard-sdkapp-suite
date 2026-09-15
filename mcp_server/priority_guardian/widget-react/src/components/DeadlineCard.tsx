@@ -351,7 +351,7 @@ export function DeadlineCard({
           <button
             type="button"
             onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}
-            className="flex items-center gap-1.5 w-full mb-2 hover:opacity-80 transition-opacity bg-transparent p-0"
+            className={`flex items-center gap-1.5 w-full ${isInline ? (deliverablesExpanded ? 'mb-1' : '') : 'mb-2'} hover:opacity-80 transition-opacity bg-transparent p-0`}
             aria-expanded={deliverablesExpanded}
           >
             <span className="text-xs font-medium uppercase tracking-wide text-tertiary">

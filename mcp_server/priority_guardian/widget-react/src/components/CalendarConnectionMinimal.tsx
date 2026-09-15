@@ -11,7 +11,7 @@ export function CalendarConnectionMinimal({ connected }: CalendarConnectionMinim
   }
 
   return (
-    <div className="mt-4 flex items-center gap-2 px-1">
+    <div className="mt-2 flex items-center gap-2 px-1">
       <span
         className="w-1.5 h-1.5 rounded-full bg-success-solid"
         aria-hidden="true"

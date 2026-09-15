@@ -9,7 +9,7 @@ export function ExpandButton({ onClick }: ExpandButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      className="w-full mt-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors hover:opacity-80 text-inverse bg-primary-solid"
+      className="w-full mt-2 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors hover:opacity-80 text-inverse bg-primary-solid"
       aria-label={t('openFullDashboard')}
     >
       {t('openFullDashboard')}

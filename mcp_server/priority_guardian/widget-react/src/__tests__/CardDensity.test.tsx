@@ -17,6 +17,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import App from '../App'
 import { setMockPriorities, mockOpenai } from '../test/setup'
 import type { Priority } from '../types'
@@ -85,10 +86,10 @@ describe('Card density — isInline=true renders tightened spacing/sizing classe
     expect(main).toHaveClass('pg-inline')
   })
 
-  it('card container uses gap-3, not gap-5', () => {
+  it('card container uses gap-2, not gap-5', () => {
     const { container } = renderInMode('inline', [deadlinePriority, flexiblePriority])
     const cardContainer = container.querySelector('main[role="main"] > div.flex.flex-col')
-    expect(cardContainer).toHaveClass('gap-3')
+    expect(cardContainer).toHaveClass('gap-2')
     expect(cardContainer).not.toHaveClass('gap-5')
   })
 
@@ -163,11 +164,11 @@ describe('Card density — isInline=false (fullscreen) renders exactly today\'s 
     expect(main).not.toHaveClass('pg-inline')
   })
 
-  it('card container uses gap-5, not gap-3', () => {
+  it('card container uses gap-5, not gap-2', () => {
     const { container } = renderInMode('fullscreen', [deadlinePriority, flexiblePriority])
     const cardContainer = container.querySelector('main[role="main"] > div.flex.flex-col')
     expect(cardContainer).toHaveClass('gap-5')
-    expect(cardContainer).not.toHaveClass('gap-3')
+    expect(cardContainer).not.toHaveClass('gap-2')
   })
 
   it('DeadlineCard: banner py-2.5, content p-5, header mb-3, lead-metric mb-4, footer pt-3 — unchanged', () => {
@@ -244,5 +245,100 @@ describe('Card density — no font-size class changed in either mode', () => {
 
     renderInMode('fullscreen', [deadlinePriority])
     expect(screen.getByText('Launch Feature X')).toHaveClass('text-sm')
+  })
+})
+
+describe('Card density — second pass: gap-2, mt-2 margins, collapsed-state dead space removed', () => {
+  it('inline card container uses gap-2 (not the first pass\'s gap-3)', () => {
+    const { container } = renderInMode('inline', [deadlinePriority, flexiblePriority])
+    const cardContainer = container.querySelector('main[role="main"] > div.flex.flex-col')
+    expect(cardContainer).toHaveClass('gap-2')
+    expect(cardContainer).not.toHaveClass('gap-3')
+    expect(cardContainer).not.toHaveClass('gap-5')
+  })
+
+  it('CalendarConnectionMinimal uses mt-2 (not mt-4)', () => {
+    renderInMode('inline', [deadlinePriority])
+    const indicator = screen.getByText('Google Calendar connected').closest('div')
+    expect(indicator).toHaveClass('mt-2')
+    expect(indicator).not.toHaveClass('mt-4')
+  })
+
+  it('ExpandButton uses mt-2 (not mt-4) but keeps py-2.5 unchanged — button padding was explicitly declined, not touched', () => {
+    renderInMode('inline', [deadlinePriority])
+    const button = screen.getByRole('button', { name: /open full dashboard/i })
+    expect(button).toHaveClass('mt-2')
+    expect(button).not.toHaveClass('mt-4')
+    expect(button).toHaveClass('py-2.5')
+    expect(button).not.toHaveClass('py-2')
+  })
+
+  it('DeadlineCard toggle button: no margin class when collapsed (default inline state), mb-1 once expanded', async () => {
+    renderInMode('inline', [deadlinePriority])
+    const toggle = screen.getByRole('button', { name: /e2e deliverables/i })
+    // Collapsed by default in inline mode (defaultDeliverablesExpanded={!isInline}).
+    expect(toggle).not.toHaveClass('mb-1')
+    expect(toggle).not.toHaveClass('mb-2')
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveClass('mb-1')
+    expect(toggle).not.toHaveClass('mb-2')
+  })
+
+  it('GoalSection toggle button: no margin class when collapsed (default inline state), mb-1 once expanded', async () => {
+    renderInMode('inline', [flexiblePriority])
+    const toggle = screen.getByRole('button', { name: /1-month goal/i })
+    expect(toggle).not.toHaveClass('mb-1')
+    expect(toggle).not.toHaveClass('mb-2')
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveClass('mb-1')
+    expect(toggle).not.toHaveClass('mb-2')
+  })
+
+  it('fullscreen DeadlineCard toggle button keeps mb-2 unconditionally, regardless of expanded state', async () => {
+    // Real regression this test guards against: the first draft of this fix
+    // gated the margin on `expanded` only, with no isInline check — since
+    // fullscreen's sections start expanded by default, that silently shrank
+    // fullscreen's toggle margin too (mb-2 -> mb-1), breaking the "fullscreen
+    // never changes" invariant this pass and the whole prior increment were
+    // built around. Caught by e2e/card-density.spec.ts's fullscreen-height
+    // assertion (1194.5px -> 1182.5px), fixed by keeping fullscreen's branch
+    // a flat, unconditional 'mb-2' — not state-dependent at all, matching
+    // its original pre-this-pass behavior exactly in both states.
+    renderInMode('fullscreen', [deadlinePriority])
+    const toggle = screen.getByRole('button', { name: /e2e deliverables/i })
+    // Fullscreen defaults to expanded.
+    expect(toggle).toHaveClass('mb-2')
+    expect(toggle).not.toHaveClass('mb-1')
+
+    await userEvent.click(toggle)
+    // Still mb-2 after collapsing — fullscreen's value never depends on state.
+    expect(toggle).toHaveClass('mb-2')
+    expect(toggle).not.toHaveClass('mb-1')
+  })
+
+  it('fullscreen GoalSection toggle button keeps mb-2 unconditionally, regardless of expanded state', async () => {
+    // GoalSection's toggle only responds to clicks when isCollapsible
+    // (goals.length > 1 || !expanded) — flexiblePriority's single goal
+    // wouldn't actually let this test collapse it from its expanded default
+    // (1 goal + already expanded = not collapsible), so the click would be
+    // a no-op and the test wouldn't really exercise the collapsed state.
+    // Two goals keeps it collapsible either way.
+    const twoGoalsPriority: Priority = {
+      ...flexiblePriority,
+      goals: [
+        { id: 'g1', text: 'Finish book', achieved: false },
+        { id: 'g2', text: 'Run a 5k', achieved: false },
+      ],
+    }
+    renderInMode('fullscreen', [twoGoalsPriority])
+    const toggle = screen.getByRole('button', { name: /1-month goals/i })
+    expect(toggle).toHaveClass('mb-2')
+    expect(toggle).not.toHaveClass('mb-1')
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveClass('mb-2')
+    expect(toggle).not.toHaveClass('mb-1')
   })
 })

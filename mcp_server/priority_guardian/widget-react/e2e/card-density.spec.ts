@@ -115,7 +115,7 @@ test('fullscreen height at standardDesktop is unchanged by the density pass', as
   // match: confirm the actual fullscreen-only spacing classes are present.
   const cardContainer = page.locator('main[role="main"] > div.flex.flex-col')
   await expect(cardContainer).toHaveClass(/gap-5/)
-  await expect(cardContainer).not.toHaveClass(/gap-3/)
+  await expect(cardContainer).not.toHaveClass(/gap-2/)
   const banner = page.getByTestId('deadline-banner')
   await expect(banner).toHaveClass(/py-2\.5/)
   await expect(banner).not.toHaveClass(/py-1\.5/)
