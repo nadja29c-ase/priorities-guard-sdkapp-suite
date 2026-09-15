@@ -43,19 +43,6 @@ function App() {
   // Theme is handled automatically by SDK CSS via data-theme attribute
   // (same approach as Clarity widget — applyDocumentTheme not needed)
 
-  // Cold-start guard (inc_card_size_fix2.md follow-up): if we're resuming with
-  // the Add Priority form already open (persisted via widgetState across a
-  // widget remount) while the host reports inline, the 402-line multi-step
-  // AddPriorityForm must never get an inline frame to render into — its
-  // render block has no isInline gate (by design; gating it would unmount and
-  // drop live-typed field state on any displayMode change, see 0c7b1ae).
-  // Computed as a plain const, read directly by both initializers below, so
-  // the correct state lands on the very first render — no mount-time effect,
-  // no one-frame flash of the wrong displayMode (the exact failure class this
-  // file's Inc 59/71/89 comments already warn about elsewhere).
-  const widgetState = window.openai?.widgetState as WidgetState | undefined
-  const needsFullscreenForAdd = widgetState?.addFormOpen ?? false
-
   const [data, setData] = useState<ToolOutputData | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -87,7 +74,7 @@ function App() {
   // Display mode state (inline = collapsed sections, fullscreen = expanded)
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => {
     const mode = (window.openai as { displayMode?: string } | undefined)?.displayMode
-    return mode === 'fullscreen' || needsFullscreenForAdd ? 'fullscreen' : 'inline'
+    return mode === 'fullscreen' ? 'fullscreen' : 'inline'
   })
 
   // Bottom safe area inset from host (iOS input bar clearance, Inc 69)
@@ -128,10 +115,7 @@ function App() {
   // Host displayMode stays 'inline' during desktop local-fullscreen sessions.
   // When true, ignore host set_globals(hostMode: 'inline') syncs that would revert
   // local fullscreen. Cleared by handleMinimizeToInline. Mobile is unaffected.
-  // Initialized true when needsFullscreenForAdd forced displayMode to 'fullscreen'
-  // above — without this, the next set_globals (hostMode still 'inline') would
-  // immediately revert the forced fullscreen right back to inline on desktop.
-  const desktopLocalFullscreenIntentRef = useRef(needsFullscreenForAdd)
+  const desktopLocalFullscreenIntentRef = useRef(false)
 
   // Guard against double backfillTimeAllocation calls (race between mount and set_globals)
   const backfillCalledRef = useRef(false)
