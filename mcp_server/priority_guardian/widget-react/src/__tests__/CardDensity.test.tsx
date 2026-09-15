@@ -93,15 +93,32 @@ describe('Card density — isInline=true renders tightened spacing/sizing classe
   })
 
   it('DeadlineCard: banner py-1.5, content p-4, header mb-2, lead-metric mb-3, footer pt-2', () => {
-    renderInMode('inline', [deadlinePriority])
+    const { container } = renderInMode('inline', [deadlinePriority])
     const banner = screen.getByTestId('deadline-banner')
     expect(banner).toHaveClass('py-1.5')
     expect(banner).not.toHaveClass('py-2.5')
+
+    // Content padding wrapper — the div immediately after the banner.
+    const contentArea = banner.nextElementSibling
+    expect(contentArea).toHaveClass('p-4')
+    expect(contentArea).not.toHaveClass('p-5')
+
+    // Header row — badge + name + edit/delete buttons; structural, not
+    // text-based (screen.getByText('P1') is ambiguous — P1 also appears in
+    // the calendar-keyword-reminder paragraph elsewhere in the card).
+    const headerRow = contentArea?.firstElementChild
+    expect(headerRow).toHaveClass('mb-2')
+    expect(headerRow).not.toHaveClass('mb-3')
 
     const doneCount = screen.getByText('1', { selector: 'span' })
     const leadMetricRow = doneCount.closest('div')
     expect(leadMetricRow).toHaveClass('mb-3')
     expect(leadMetricRow).not.toHaveClass('mb-4')
+
+    // Footer — the collapsible E2E Deliverables section wrapper.
+    const footer = container.querySelector('.border-t.border-subtle')
+    expect(footer).toHaveClass('pt-2')
+    expect(footer).not.toHaveClass('pt-3')
   })
 
   it('FlexibleCard: card padding p-4, header mb-2, stat-row mb-3', () => {
@@ -109,6 +126,13 @@ describe('Card density — isInline=true renders tightened spacing/sizing classe
     const card = screen.getByRole('article', { name: flexiblePriority.name })
     expect(card).toHaveClass('p-4')
     expect(card).not.toHaveClass('p-5')
+
+    // Structural, not text-based — 'P2' is ambiguous (also appears in the
+    // calendar-keyword-reminder paragraph elsewhere in the card). Header
+    // row is the article's first child.
+    const headerRow = card.firstElementChild
+    expect(headerRow).toHaveClass('mb-2')
+    expect(headerRow).not.toHaveClass('mb-3')
 
     const statRow = container.querySelector('.flex.items-center.gap-4')
     expect(statRow).toHaveClass('mb-3')
@@ -146,18 +170,43 @@ describe('Card density — isInline=false (fullscreen) renders exactly today\'s 
     expect(cardContainer).not.toHaveClass('gap-3')
   })
 
-  it('DeadlineCard: banner py-2.5, content p-5, lead-metric mb-4, footer pt-3 — unchanged', () => {
-    renderInMode('fullscreen', [deadlinePriority])
+  it('DeadlineCard: banner py-2.5, content p-5, header mb-3, lead-metric mb-4, footer pt-3 — unchanged', () => {
+    const { container } = renderInMode('fullscreen', [deadlinePriority])
     const banner = screen.getByTestId('deadline-banner')
     expect(banner).toHaveClass('py-2.5')
     expect(banner).not.toHaveClass('py-1.5')
+
+    const contentArea = banner.nextElementSibling
+    expect(contentArea).toHaveClass('p-5')
+    expect(contentArea).not.toHaveClass('p-4')
+
+    const headerRow = contentArea?.firstElementChild
+    expect(headerRow).toHaveClass('mb-3')
+    expect(headerRow).not.toHaveClass('mb-2')
+
+    const doneCount = screen.getByText('1', { selector: 'span' })
+    const leadMetricRow = doneCount.closest('div')
+    expect(leadMetricRow).toHaveClass('mb-4')
+    expect(leadMetricRow).not.toHaveClass('mb-3')
+
+    const footer = container.querySelector('.border-t.border-subtle')
+    expect(footer).toHaveClass('pt-3')
+    expect(footer).not.toHaveClass('pt-2')
   })
 
-  it('FlexibleCard: card padding p-5, stat-row mb-4 — unchanged', () => {
-    renderInMode('fullscreen', [flexiblePriority])
+  it('FlexibleCard: card padding p-5, header mb-3, stat-row mb-4 — unchanged', () => {
+    const { container } = renderInMode('fullscreen', [flexiblePriority])
     const card = screen.getByRole('article', { name: flexiblePriority.name })
     expect(card).toHaveClass('p-5')
     expect(card).not.toHaveClass('p-4')
+
+    const headerRow = card.firstElementChild
+    expect(headerRow).toHaveClass('mb-3')
+    expect(headerRow).not.toHaveClass('mb-2')
+
+    const statRow = container.querySelector('.flex.items-center.gap-4')
+    expect(statRow).toHaveClass('mb-4')
+    expect(statRow).not.toHaveClass('mb-3')
   })
 
   it('GoalSection footer: pt-3, unchanged', () => {
