@@ -13,7 +13,6 @@ interface FlexibleCardProps {
   priorities: Priority[]  // All priorities for keyword picker
   isEditing: boolean
   defaultGoalsExpanded?: boolean
-  isInline: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onSave: (priorityId: string, data: {
@@ -35,7 +34,6 @@ export function FlexibleCard({
   priorities,
   isEditing,
   defaultGoalsExpanded = true,
-  isInline,
   onStartEdit,
   onCancelEdit,
   onSave,
@@ -215,11 +213,11 @@ export function FlexibleCard({
   return (
     <article
       ref={cardRef}
-      className={`rounded-xl ${isInline ? 'p-4' : 'p-5'} bg-surface border border-default ${borderColorClass}`}
+      className={`rounded-xl p-4 bg-surface border border-default ${borderColorClass}`}
       aria-label={priority.name}
     >
       {/* V7 Header: Badge + Name + Streak pill (read mode) or Badge + Edit/Trash (edit mode) */}
-      <div className={`flex items-center gap-2 ${isInline ? 'mb-2' : 'mb-3'}`}>
+      <div className="flex items-center gap-2 mb-2">
         <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} text-2xs`}>
           {kw}
         </span>
@@ -291,12 +289,11 @@ export function FlexibleCard({
 
       {/* V7: HourRing on left + Avg stats on right (not in edit mode) */}
       {!isEditing && priority.weeklyHourTarget != null && (
-        <div className={`flex items-center gap-4 ${isInline ? 'mb-3' : 'mb-4'}`}>
+        <div className="flex items-center gap-4 mb-3">
           <HourRing
             actual={priority.weeklyHourActual ?? 0}
             target={priority.weeklyHourTarget}
             keyword={kw}
-            isInline={isInline}
           />
           <div className="flex-1">
             {hasAvg ? (
@@ -382,7 +379,6 @@ export function FlexibleCard({
         goals={priority.goals ?? []}
         checkpointDate={priority.checkpointDate}
         defaultExpanded={defaultGoalsExpanded || isEditing}
-        isInline={isInline}
         onToggleGoal={onToggleGoal}
         onRenameGoal={onRenameGoal}
         onDeleteGoal={onDeleteGoal}

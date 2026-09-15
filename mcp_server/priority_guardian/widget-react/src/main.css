@@ -26,19 +26,14 @@ body {
   margin: 0 auto;
 }
 
-/* Main container padding - uses selector specificity to override SDK styles */
+/* Main container padding - uses selector specificity to override SDK styles.
+   Density pass (inc_fullscreen_size_fix.md, "Increment 4"): both modes now
+   use the tighter value inline alone used before this — the .pg-inline
+   modifier class from inc_cardsize_fix_3.md is retired, its only value is
+   now the only value, for both modes. Horizontal (1.75rem) was never
+   conditional across any prior increment and stays unchanged. */
 main[role="main"] {
-  padding: 2rem 1.75rem;  /* 32px top/bottom, 28px sides */
-}
-
-/* Density pass (inc_cardsize_fix_3.md): inline gets tighter vertical padding
-   than fullscreen — horizontal (1.75rem) is unchanged, only vertical shrinks.
-   A modifier class, not an inline style, because this toggles between two
-   static, known values rather than a genuinely dynamic per-instance one —
-   per widget_design_token_fix.md's discipline on when inline styles are
-   warranted. Applied conditionally on <main> in App.tsx. */
-main[role="main"].pg-inline {
-  padding: 1.25rem 1.75rem;  /* 20px top/bottom, 28px sides unchanged */
+  padding: 1.25rem 1.75rem;  /* 20px top/bottom, 28px sides */
 }
 
 /* Screen reader only */

@@ -72,12 +72,12 @@ describe('Card width — explicit, non-accidental max-width', () => {
     expect(fullscreenMain?.className).toContain('max-w-2xl')
     // Same width value is a documented choice (see CARD_MAX_WIDTH_CLASS
     // comment in App.tsx), not a requirement — this test locks in *today's*
-    // width decision, not a requirement that the two modes' full class
-    // lists must always match. They no longer do: inc_cardsize_fix_3.md
-    // (density pass) added an inline-only 'pg-inline' class for vertical
-    // padding, unrelated to width — inline's classes are exactly
-    // fullscreen's plus that one class.
-    expect(inlineMain?.className).toBe(`${fullscreenMain?.className} pg-inline`)
+    // width decision. Full class-list equality is back (not just width):
+    // inc_cardsize_fix_3.md's inline-only 'pg-inline' padding class existed
+    // for one density pass, but inc_fullscreen_size_fix.md ("Increment 4")
+    // retired it — both modes use the same unconditional main.css padding
+    // rule now, so there's no longer anything inline-specific on <main>.
+    expect(inlineMain?.className).toBe(fullscreenMain?.className)
   })
 
   it('the width class is not conditional on display mode (no accidental #root dependency)', () => {

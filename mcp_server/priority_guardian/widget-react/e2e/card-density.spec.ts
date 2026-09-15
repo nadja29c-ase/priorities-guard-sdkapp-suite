@@ -1,19 +1,30 @@
 import { test, expect, type Page } from '@playwright/test'
 
 /**
- * Regression layer for inc_cardsize_fix_3.md (density pass — "Increment 3").
+ * Regression layer for inc_cardsize_fix_3.md (density pass — "Increment 3")
+ * and inc_fullscreen_size_fix.md (fullscreen unification — "Increment 4").
  *
- * Written fresh, not adapted from the old (deleted) inline-density.spec.ts —
- * that file asserted InlinePriorityRow-specific structure from the reverted
- * Increment 2 (compact-row redesign), which no longer exists. This increment
- * keeps DeadlineCard/FlexibleCard structurally identical in both modes and
- * only tightens spacing/sizing values via isInline — a completely different
- * shape of change, so a completely different spec.
+ * Written fresh at Increment 3, not adapted from the old (deleted)
+ * inline-density.spec.ts — that file asserted InlinePriorityRow-specific
+ * structure from the reverted Increment 2 (compact-row redesign), which no
+ * longer exists.
+ *
+ * Increment 4 deliberately retired the standing "fullscreen height must
+ * match PRE_INCREMENT_FULLSCREEN_HEIGHT_PX" invariant this file used to
+ * assert — on explicit confirmation, not by accident, because fullscreen
+ * adopting inline's tightened values was the whole point of that increment.
+ * The old tight-tolerance test is removed outright (not replaced with a
+ * mode-equality check — Increment 4's own instruction: once the ternaries
+ * collapse, inline and fullscreen execute the identical line of code, so an
+ * equality check would just compare a value to itself and catch nothing).
+ * What remains for fullscreen height is measure-and-report only.
  *
  * What this layer is NOT: a substitute for manual verification in a real
  * ChatGPT session. Loading the widget standalone in a Chromium tab cannot
  * reproduce ChatGPT's actual host iframe/container behavior — that gate is
- * still required and separate from this file, same as every prior increment.
+ * still required and separate from this file, same as every prior increment,
+ * and matters especially here since fullscreen's rendering surface is
+ * host-controlled in ways this CSS can't affect.
  */
 
 const PRE_INCREMENT_INLINE_HEIGHT_PX = 896 // measured against the pre-increment committed bundle, same 3-priority fixture below
@@ -93,32 +104,42 @@ for (const [label, viewport] of Object.entries(VIEWPORTS)) {
   })
 }
 
-const PRE_INCREMENT_FULLSCREEN_HEIGHT_PX = 1194.5 // measured against the pre-increment committed bundle, same 3-priority fixture, standardDesktop
+// Increment 4 (inc_fullscreen_size_fix.md): fullscreen now adopts the same
+// collapsed values inline uses — measured and reported here (a number to
+// track, not a pass/fail threshold, per the briefing's explicit
+// instruction), plus independent structural confirmation of the actual
+// applied classes (both modes now execute the identical line of code, so
+// this doubles as one of the "assert the concrete value independently in
+// each mode" checks — see e.g. CardDensity.test.tsx's inline counterpart
+// for the same properties).
+for (const [label, viewport] of Object.entries(VIEWPORTS)) {
+  test(`fullscreen height at ${label} (${viewport.width}px) — measured and reported, no threshold`, async ({ page }) => {
+    await page.setViewportSize(viewport)
+    await mockOpenAiAndGoto(page, 'fullscreen')
 
-test('fullscreen height at standardDesktop is unchanged by the density pass', async ({ page }) => {
+    const box = await page.locator('main[role="main"]').boundingBox()
+    expect(box).not.toBeNull()
+    // Fullscreen's sections default to expanded, so a meaningful part of
+    // its bulk is genuinely more content on screen at once, not padding —
+    // tightening spacing helps real density but won't compress fullscreen
+    // the way it compressed inline, because inline mostly wasn't showing
+    // that content by default. No target height, just the actual number.
+    console.log(`[card-density] fullscreen ${label}: height = ${box!.height}px (expanded-content caveat: not directly comparable to inline's ${PRE_INCREMENT_INLINE_HEIGHT_PX}px baseline — different content volume, not just different spacing)`)
+    // Sanity floor only — catches total render breakage, not a density target.
+    expect(box!.height).toBeGreaterThan(0)
+  })
+}
+
+test('fullscreen renders the same collapsed spacing classes inline uses (structural confirmation, not a mode-equality check)', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.standardDesktop)
   await mockOpenAiAndGoto(page, 'fullscreen')
 
-  const box = await page.locator('main[role="main"]').boundingBox()
-  expect(box).not.toBeNull()
-  console.log(`[card-density] fullscreen height = ${box!.height}px (pre-increment baseline: ${PRE_INCREMENT_FULLSCREEN_HEIGHT_PX}px)`)
-
-  // Tight tolerance, not a loose sanity floor — a >1000px-style ceiling
-  // would still pass even if fullscreen picked up the ~124px-shorter inline
-  // spacing by mistake (1194.5 - 124 = ~1070, still > 1000). This must
-  // match the pre-increment height almost exactly; ±2px only for
-  // sub-pixel/font-rendering variance across environments.
-  expect(box!.height).toBeGreaterThan(PRE_INCREMENT_FULLSCREEN_HEIGHT_PX - 2)
-  expect(box!.height).toBeLessThan(PRE_INCREMENT_FULLSCREEN_HEIGHT_PX + 2)
-
-  // Structural corroboration, not just a height sum that could coincidentally
-  // match: confirm the actual fullscreen-only spacing classes are present.
   const cardContainer = page.locator('main[role="main"] > div.flex.flex-col')
-  await expect(cardContainer).toHaveClass(/gap-5/)
-  await expect(cardContainer).not.toHaveClass(/gap-2/)
+  await expect(cardContainer).toHaveClass(/gap-2/)
+  await expect(cardContainer).not.toHaveClass(/gap-5/)
   const banner = page.getByTestId('deadline-banner')
-  await expect(banner).toHaveClass(/py-2\.5/)
-  await expect(banner).not.toHaveClass(/py-1\.5/)
+  await expect(banner).toHaveClass(/py-1\.5/)
+  await expect(banner).not.toHaveClass(/py-2\.5/)
 })
 
 // Pre-existing, out-of-scope finding (flagged in the delivery report, not
@@ -167,6 +188,55 @@ for (const [label, viewport] of Object.entries(VIEWPORTS)) {
     // Non-overlap: side-by-side (stat's left >= ring's right) or stacked
     // (no vertical intersection) — either is an acceptable layout outcome;
     // visual overlap is not.
+    const sideBySide = statBox!.x >= ringBox!.x + ringBox!.width - 1
+    const stacked = statBox!.y + statBox!.height <= ringBox!.y || ringBox!.y + ringBox!.height <= statBox!.y
+    expect(sideBySide || stacked).toBe(true)
+  })
+}
+
+// New for Increment 4 — fullscreen hasn't been checked at this density
+// before (it only just adopted the tightened values). Same WCAG 1.4.4-style
+// approach as inline's check above.
+//
+// Found on first run: fullscreen has the SAME class of pre-existing overflow
+// as inline at narrowMobile+200% (scrollWidth 402px vs clientWidth 343px) —
+// same root cause (real content width at 2x font size exceeding available
+// space; both modes share identical horizontal main.css padding, so this
+// isn't a spacing regression from this increment). Unlike inline's version
+// of this finding, there is no prior measurement to compare against —
+// fullscreen has never been checked at 200% before this increment, so 402px
+// IS the newly-established baseline here, not a "did it get worse" check
+// against an older number. Reported, not fixed, same as inline's — flagging
+// an adjacent pre-existing-class issue, not this increment's to resolve.
+const FULLSCREEN_NARROW_MOBILE_200PCT_BASELINE_PX = 402 // first-ever measurement, this increment
+
+for (const [label, viewport] of Object.entries(VIEWPORTS)) {
+  test(`200% text-resize on fullscreen at ${label}: no overlap, no new horizontal overflow`, async ({ page }) => {
+    await page.setViewportSize(viewport)
+    await mockOpenAiAndGoto(page, 'fullscreen')
+
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' })
+
+    const main = page.locator('main[role="main"]')
+    const { scrollWidth, clientWidth, overflowsX } = await main.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+      overflowsX: el.scrollWidth > el.clientWidth + 1,
+    }))
+    console.log(`[card-density] fullscreen ${label} 200%: scrollWidth=${scrollWidth}px clientWidth=${clientWidth}px overflows=${overflowsX}`)
+
+    if (label === 'narrowMobile') {
+      expect(scrollWidth).toBeLessThanOrEqual(FULLSCREEN_NARROW_MOBILE_200PCT_BASELINE_PX)
+    } else {
+      expect(overflowsX).toBe(false)
+    }
+
+    const ring = page.locator('svg[role="img"]').first()
+    const ringBox = await ring.boundingBox()
+    const statText = page.getByText('~84%')
+    const statBox = await statText.boundingBox()
+    expect(ringBox).not.toBeNull()
+    expect(statBox).not.toBeNull()
     const sideBySide = statBox!.x >= ringBox!.x + ringBox!.width - 1
     const stacked = statBox!.y + statBox!.height <= ringBox!.y || ringBox!.y + ringBox!.height <= statBox!.y
     expect(sideBySide || stacked).toBe(true)

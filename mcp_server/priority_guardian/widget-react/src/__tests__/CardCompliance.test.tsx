@@ -71,7 +71,6 @@ describe('DeadlineCard UI Compliance', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -92,7 +91,6 @@ describe('DeadlineCard UI Compliance', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -112,7 +110,6 @@ describe('DeadlineCard UI Compliance', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -134,7 +131,6 @@ describe('DeadlineCard UI Compliance', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -157,7 +153,6 @@ describe('DeadlineCard UI Compliance', () => {
         priority={p2Priority}
         priorities={[p2Priority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -174,7 +169,6 @@ describe('DeadlineCard UI Compliance', () => {
         priority={p3Priority}
         priorities={[p3Priority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -189,7 +183,6 @@ describe('DeadlineCard UI Compliance', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -209,7 +202,6 @@ describe('FlexibleCard UI Compliance', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -232,7 +224,6 @@ describe('FlexibleCard UI Compliance', () => {
         priority={p1Priority}
         priorities={[p1Priority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -249,7 +240,6 @@ describe('FlexibleCard UI Compliance', () => {
         priority={p3Priority}
         priorities={[p3Priority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -267,7 +257,6 @@ describe('FlexibleCard UI Compliance', () => {
         priority={noAvgPriority}
         priorities={[noAvgPriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -287,7 +276,6 @@ describe('FlexibleCard UI Compliance', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -308,7 +296,6 @@ describe('FlexibleCard UI Compliance', () => {
         priority={streakPriority}
         priorities={[streakPriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -327,7 +314,6 @@ describe('FlexibleCard UI Compliance', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -349,7 +335,6 @@ describe('DeadlineCard Keyboard Accessibility', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -366,7 +351,6 @@ describe('DeadlineCard Keyboard Accessibility', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -382,7 +366,6 @@ describe('DeadlineCard Keyboard Accessibility', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -398,7 +381,6 @@ describe('DeadlineCard Keyboard Accessibility', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -414,7 +396,6 @@ describe('DeadlineCard Keyboard Accessibility', () => {
         priority={deadlinePriority}
         priorities={[deadlinePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -425,14 +406,14 @@ describe('DeadlineCard Keyboard Accessibility', () => {
   })
 
   it('edit pencil button aria-label contains priority name in English', () => {
-    render(<DeadlineCard priority={deadlinePriority} priorities={[deadlinePriority]} isEditing={false} isInline={false} {...mockHandlers} />)
+    render(<DeadlineCard priority={deadlinePriority} priorities={[deadlinePriority]} isEditing={false} {...mockHandlers} />)
     const editBtn = screen.getByRole('button', { name: new RegExp(t('editPriority').replace('{name}', deadlinePriority.name), 'i') })
     expect(editBtn).toBeInTheDocument()
   })
 
   it('edit pencil button aria-label renders in German', () => {
     setMockLocale('de-DE')
-    render(<DeadlineCard priority={deadlinePriority} priorities={[deadlinePriority]} isEditing={false} isInline={false} {...mockHandlers} />)
+    render(<DeadlineCard priority={deadlinePriority} priorities={[deadlinePriority]} isEditing={false} {...mockHandlers} />)
     const editBtn = screen.getByRole('button', { name: new RegExp(`Priorität bearbeiten: ${deadlinePriority.name}`, 'i') })
     expect(editBtn).toBeInTheDocument()
   })
@@ -445,7 +426,6 @@ describe('FlexibleCard Keyboard Accessibility', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -461,7 +441,6 @@ describe('FlexibleCard Keyboard Accessibility', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -477,7 +456,6 @@ describe('FlexibleCard Keyboard Accessibility', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -493,7 +471,6 @@ describe('FlexibleCard Keyboard Accessibility', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -509,7 +486,6 @@ describe('FlexibleCard Keyboard Accessibility', () => {
         priority={flexiblePriority}
         priorities={[flexiblePriority]}
         isEditing={false}
-        isInline={false}
         {...mockHandlers}
       />
     )
@@ -520,14 +496,14 @@ describe('FlexibleCard Keyboard Accessibility', () => {
   })
 
   it('edit pencil button aria-label contains priority name in English', () => {
-    render(<FlexibleCard priority={flexiblePriority} priorities={[flexiblePriority]} isEditing={false} isInline={false} {...mockHandlers} />)
+    render(<FlexibleCard priority={flexiblePriority} priorities={[flexiblePriority]} isEditing={false} {...mockHandlers} />)
     const editBtn = screen.getByRole('button', { name: new RegExp(t('editPriority').replace('{name}', flexiblePriority.name), 'i') })
     expect(editBtn).toBeInTheDocument()
   })
 
   it('edit pencil button aria-label renders in German', () => {
     setMockLocale('de-DE')
-    render(<FlexibleCard priority={flexiblePriority} priorities={[flexiblePriority]} isEditing={false} isInline={false} {...mockHandlers} />)
+    render(<FlexibleCard priority={flexiblePriority} priorities={[flexiblePriority]} isEditing={false} {...mockHandlers} />)
     const editBtn = screen.getByRole('button', { name: new RegExp(`Priorität bearbeiten: ${flexiblePriority.name}`, 'i') })
     expect(editBtn).toBeInTheDocument()
   })

@@ -9,7 +9,6 @@ interface GoalSectionProps {
   goals: Goal[]
   checkpointDate?: string
   defaultExpanded?: boolean
-  isInline: boolean
   onToggleGoal: (goalId: string, achieved: boolean) => Promise<void>
   onRenameGoal: (goalId: string, text: string) => Promise<void>
   onDeleteGoal: (goalId: string) => Promise<void>
@@ -21,7 +20,6 @@ export function GoalSection({
   goals,
   checkpointDate,
   defaultExpanded = false,
-  isInline,
   onToggleGoal,
   onRenameGoal,
   onDeleteGoal,
@@ -92,11 +90,11 @@ export function GoalSection({
   const achievedCount = goals.filter(g => g.achieved).length
 
   return (
-    <div className={`border-t border-subtle ${isInline ? 'pt-2' : 'pt-3'}`}>
+    <div className="border-t border-subtle pt-2">
       {/* Header */}
       <button
         type="button"
-        className={`flex items-center gap-2 ${isInline ? (expanded ? 'mb-1' : '') : 'mb-2'} w-full text-left ${isCollapsible ? 'cursor-pointer' : ''}`}
+        className={`flex items-center gap-2 ${expanded ? 'mb-1' : ''} w-full text-left ${isCollapsible ? 'cursor-pointer' : ''}`}
         onClick={() => isCollapsible && setExpanded(!expanded)}
         aria-expanded={expanded}
         aria-label={goals.length === 1 ? t('oneMonthGoal') : t('oneMonthGoals')}

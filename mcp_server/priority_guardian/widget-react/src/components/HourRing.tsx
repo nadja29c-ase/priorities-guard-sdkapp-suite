@@ -7,7 +7,6 @@ interface HourRingProps {
   actual: number        // weeklyHourActual (0 if null/undefined)
   target: number        // weeklyHourTarget
   keyword: CalendarKeyword  // P1, P2, P3 — determines ring color
-  isInline: boolean
 }
 
 // Ring geometry constants
@@ -21,14 +20,18 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS  // ~163.36
  * Compact SVG circular progress ring showing actual vs target hours.
  * Used in FlexibleCard to visualize weekly hour progress.
  *
- * Inline size (inc_cardsize_fix_3.md): 56px (w-14), not the 44px (w-11)
- * originally proposed — visually verified at 44px/48px/56px against
- * realistic (8h/10h) and long (12.5h/100h) values; the center text overlay
- * is HTML, not part of the scalable SVG viewBox, so it doesn't shrink with
- * the ring and visibly crowded the track at 44/48px even in the realistic
- * case. 56px was the first size where both cases stayed clear.
+ * Size (inc_cardsize_fix_3.md, then unconditionally in inc_fullscreen_size_fix.md):
+ * 56px (w-14), not the 44px (w-11) originally proposed — visually verified at
+ * 44px/48px/56px against realistic (8h/10h) and long (12.5h/100h) values; the
+ * center text overlay is HTML, not part of the scalable SVG viewBox, so it
+ * doesn't shrink with the ring and visibly crowded the track at 44/48px even
+ * in the realistic case. 56px was the first size where both cases stayed
+ * clear. Originally inline-only (fullscreen kept 64px); re-checked directly
+ * in fullscreen's actual rendered context (real component, long-value case)
+ * before this increment made it unconditional — no disproportion found, no
+ * new checkpoint was needed.
  */
-export function HourRing({ actual, target, keyword, isInline }: HourRingProps) {
+export function HourRing({ actual, target, keyword }: HourRingProps) {
   // Calculate progress percentage (capped at 100%)
   const percentage = Math.min((actual / target) * 100, 100)
 
@@ -46,7 +49,7 @@ export function HourRing({ actual, target, keyword, isInline }: HourRingProps) {
     .replace('{target}', formatHoursA11y(target))
 
   return (
-    <div className={`relative flex-shrink-0 ${isInline ? 'w-14 h-14' : 'w-16 h-16'}`}>
+    <div className="relative flex-shrink-0 w-14 h-14">
       {/* SVG Ring */}
       <svg
         viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
