@@ -52,14 +52,14 @@ describe('SVG Accessibility', () => {
   describe('Data Visualization SVGs (role="img" + aria-label)', () => {
     describe('HourRing', () => {
       it('has role="img"', () => {
-        render(<HourRing actual={2} target={5} keyword="P1" />)
+        render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
 
         const svg = screen.getByRole('img')
         expect(svg).toHaveAttribute('role', 'img')
       })
 
       it('has descriptive aria-label', () => {
-        render(<HourRing actual={2} target={5} keyword="P1" />)
+        render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
 
         const svg = screen.getByRole('img')
         const ariaLabel = svg.getAttribute('aria-label')
@@ -70,7 +70,7 @@ describe('SVG Accessibility', () => {
       })
 
       it('aria-label reflects actual values', () => {
-        render(<HourRing actual={3.5} target={10} keyword="P2" />)
+        render(<HourRing actual={3.5} target={10} keyword="P2" isInline={false} />)
 
         const svg = screen.getByRole('img')
         const ariaLabel = svg.getAttribute('aria-label')
@@ -81,7 +81,7 @@ describe('SVG Accessibility', () => {
       })
 
       it('does NOT have aria-hidden', () => {
-        render(<HourRing actual={2} target={5} keyword="P1" />)
+        render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
 
         const svg = screen.getByRole('img')
         expect(svg).not.toHaveAttribute('aria-hidden')

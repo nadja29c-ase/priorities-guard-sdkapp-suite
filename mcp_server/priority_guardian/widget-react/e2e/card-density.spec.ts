@@ -93,19 +93,32 @@ for (const [label, viewport] of Object.entries(VIEWPORTS)) {
   })
 }
 
+const PRE_INCREMENT_FULLSCREEN_HEIGHT_PX = 1194.5 // measured against the pre-increment committed bundle, same 3-priority fixture, standardDesktop
+
 test('fullscreen height at standardDesktop is unchanged by the density pass', async ({ page }) => {
   await page.setViewportSize(VIEWPORTS.standardDesktop)
   await mockOpenAiAndGoto(page, 'fullscreen')
 
   const box = await page.locator('main[role="main"]').boundingBox()
   expect(box).not.toBeNull()
-  console.log(`[card-density] fullscreen height = ${box!.height}px (measured before/after this increment: 1194.5px both times)`)
+  console.log(`[card-density] fullscreen height = ${box!.height}px (pre-increment baseline: ${PRE_INCREMENT_FULLSCREEN_HEIGHT_PX}px)`)
 
-  // Fullscreen must show zero visual change — verified in the delivery
-  // report against the actual pre-increment bundle (1194.5px both before
-  // and after, byte-identical measurement). This is a live sanity ceiling,
-  // not the primary evidence for that claim.
-  expect(box!.height).toBeGreaterThan(1000)
+  // Tight tolerance, not a loose sanity floor — a >1000px-style ceiling
+  // would still pass even if fullscreen picked up the ~124px-shorter inline
+  // spacing by mistake (1194.5 - 124 = ~1070, still > 1000). This must
+  // match the pre-increment height almost exactly; ±2px only for
+  // sub-pixel/font-rendering variance across environments.
+  expect(box!.height).toBeGreaterThan(PRE_INCREMENT_FULLSCREEN_HEIGHT_PX - 2)
+  expect(box!.height).toBeLessThan(PRE_INCREMENT_FULLSCREEN_HEIGHT_PX + 2)
+
+  // Structural corroboration, not just a height sum that could coincidentally
+  // match: confirm the actual fullscreen-only spacing classes are present.
+  const cardContainer = page.locator('main[role="main"] > div.flex.flex-col')
+  await expect(cardContainer).toHaveClass(/gap-5/)
+  await expect(cardContainer).not.toHaveClass(/gap-3/)
+  const banner = page.getByTestId('deadline-banner')
+  await expect(banner).toHaveClass(/py-2\.5/)
+  await expect(banner).not.toHaveClass(/py-1\.5/)
 })
 
 // Pre-existing, out-of-scope finding (flagged in the delivery report, not
