@@ -858,7 +858,7 @@ function App() {
       <main
         role="main"
         aria-label="Time Allocation Pie Chart"
-        className={`bg-surface-secondary rounded-2xl p-4 pb-2 ${CARD_MAX_WIDTH_CLASS}`}
+        className={`bg-surface-secondary rounded-2xl p-4 pb-2 ${CARD_MAX_WIDTH_CLASS}${isInline ? ' pg-inline' : ''}`}
         style={!isInline ? { paddingBottom: `calc(2rem + ${hostBottomInset}px)` } : undefined}
       >
         <PieChart
@@ -896,7 +896,7 @@ function App() {
     <main
       role="main"
       aria-label="Priority Guardian Dashboard"
-      className={`bg-surface-secondary rounded-2xl p-4 pb-2 ${CARD_MAX_WIDTH_CLASS}`}
+      className={`bg-surface-secondary rounded-2xl p-4 pb-2 ${CARD_MAX_WIDTH_CLASS}${isInline ? ' pg-inline' : ''}`}
       style={!isInline ? { paddingBottom: `calc(2rem + ${hostBottomInset}px)` } : undefined}
     >
       {/* Fullscreen header - only in fullscreen mode */}
@@ -923,7 +923,7 @@ function App() {
 
       {/* Priority Cards (primary content) */}
       {sortedPriorities.length > 0 ? (
-        <div className="flex flex-col gap-5">
+        <div className={`flex flex-col ${isInline ? 'gap-3' : 'gap-5'}`}>
           {sortedPriorities.map((priority) => (
             <PriorityCardWrapper
               key={`${priority.id}-${displayMode}`}
@@ -932,6 +932,7 @@ function App() {
               isEditing={editingPriorityId === priority.id}
               canStartEdit={canEdit}
               defaultSectionsExpanded={!isInline}
+              isInline={isInline}
               onStartEdit={() => {
                 if (isMobile && displayMode !== 'fullscreen') {
                   enteredFullscreenForEditRef.current = true
@@ -1005,6 +1006,7 @@ interface PriorityCardWrapperProps {
   isEditing: boolean
   canStartEdit: boolean
   defaultSectionsExpanded: boolean
+  isInline: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onSavePriority: (priorityId: string, data: {
@@ -1032,6 +1034,7 @@ function PriorityCardWrapper({
   isEditing,
   canStartEdit,
   defaultSectionsExpanded,
+  isInline,
   onStartEdit,
   onCancelEdit,
   onSavePriority,
@@ -1053,6 +1056,7 @@ function PriorityCardWrapper({
         priorities={priorities}
         isEditing={isEditing}
         defaultDeliverablesExpanded={defaultSectionsExpanded}
+        isInline={isInline}
         onStartEdit={canStartEdit ? onStartEdit : () => {}}
         onCancelEdit={onCancelEdit}
         onSave={onSavePriority}
@@ -1072,6 +1076,7 @@ function PriorityCardWrapper({
       priorities={priorities}
       isEditing={isEditing}
       defaultGoalsExpanded={defaultSectionsExpanded}
+      isInline={isInline}
       onStartEdit={canStartEdit ? onStartEdit : () => {}}
       onCancelEdit={onCancelEdit}
       onSave={onSavePriority}

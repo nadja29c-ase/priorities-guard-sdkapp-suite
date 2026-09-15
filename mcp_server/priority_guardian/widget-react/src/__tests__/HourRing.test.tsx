@@ -30,7 +30,7 @@ describe('HourRing', () => {
 
   describe('Rendering', () => {
     it('renders SVG with track and progress circles', () => {
-      render(<HourRing actual={2.5} target={5} keyword="P1" />)
+      render(<HourRing actual={2.5} target={5} keyword="P1" isInline={false} />)
 
       const svg = document.querySelector('svg')
       expect(svg).toBeInTheDocument()
@@ -41,23 +41,23 @@ describe('HourRing', () => {
     })
 
     it('shows formatted actual hours in center', () => {
-      render(<HourRing actual={2} target={5} keyword="P1" />)
+      render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
       expect(screen.getByText('2h')).toBeInTheDocument()
     })
 
     it('shows formatted target hours', () => {
-      render(<HourRing actual={2} target={5} keyword="P1" />)
+      render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
       expect(screen.getByText(/\/ 5h/)).toBeInTheDocument()
     })
 
     it('formats hours without unnecessary decimals', () => {
-      render(<HourRing actual={3.0} target={10.0} keyword="P1" />)
+      render(<HourRing actual={3.0} target={10.0} keyword="P1" isInline={false} />)
       expect(screen.getByText('3h')).toBeInTheDocument()
       expect(screen.getByText(/\/ 10h/)).toBeInTheDocument()
     })
 
     it('formats hours with one decimal when needed', () => {
-      render(<HourRing actual={3.25} target={5} keyword="P1" />)
+      render(<HourRing actual={3.25} target={5} keyword="P1" isInline={false} />)
       // 3.25 rounds to 3.3
       expect(screen.getByText('3.3h')).toBeInTheDocument()
     })
@@ -65,7 +65,7 @@ describe('HourRing', () => {
 
   describe('Stroke Colors', () => {
     it('uses info blue for P1', () => {
-      render(<HourRing actual={2} target={5} keyword="P1" />)
+      render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
 
       const progressCircle = document.querySelectorAll('circle')[1]
       expect(progressCircle).toHaveAttribute(
@@ -75,7 +75,7 @@ describe('HourRing', () => {
     })
 
     it('uses discovery purple for P2', () => {
-      render(<HourRing actual={2} target={5} keyword="P2" />)
+      render(<HourRing actual={2} target={5} keyword="P2" isInline={false} />)
 
       const progressCircle = document.querySelectorAll('circle')[1]
       expect(progressCircle).toHaveAttribute(
@@ -85,7 +85,7 @@ describe('HourRing', () => {
     })
 
     it('uses caution amber for P3', () => {
-      render(<HourRing actual={2} target={5} keyword="P3" />)
+      render(<HourRing actual={2} target={5} keyword="P3" isInline={false} />)
 
       const progressCircle = document.querySelectorAll('circle')[1]
       expect(progressCircle).toHaveAttribute(
@@ -95,7 +95,7 @@ describe('HourRing', () => {
     })
 
     it('track uses border-subtle color', () => {
-      render(<HourRing actual={2} target={5} keyword="P1" />)
+      render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
 
       const trackCircle = document.querySelectorAll('circle')[0]
       expect(trackCircle).toHaveAttribute(
@@ -107,7 +107,7 @@ describe('HourRing', () => {
 
   describe('Progress Calculation', () => {
     it('renders 0% when actual is 0', () => {
-      render(<HourRing actual={0} target={5} keyword="P1" />)
+      render(<HourRing actual={0} target={5} keyword="P1" isInline={false} />)
 
       // With 0%, there should be no progress circle (only track)
       const circles = document.querySelectorAll('circle')
@@ -115,7 +115,7 @@ describe('HourRing', () => {
     })
 
     it('renders 50% progress arc', () => {
-      render(<HourRing actual={2.5} target={5} keyword="P1" />)
+      render(<HourRing actual={2.5} target={5} keyword="P1" isInline={false} />)
 
       const progressCircle = document.querySelectorAll('circle')[1]
       const dashoffset = progressCircle.getAttribute('stroke-dashoffset')
@@ -126,7 +126,7 @@ describe('HourRing', () => {
     })
 
     it('renders 100% progress arc', () => {
-      render(<HourRing actual={5} target={5} keyword="P1" />)
+      render(<HourRing actual={5} target={5} keyword="P1" isInline={false} />)
 
       const progressCircle = document.querySelectorAll('circle')[1]
       const dashoffset = progressCircle.getAttribute('stroke-dashoffset')
@@ -136,7 +136,7 @@ describe('HourRing', () => {
     })
 
     it('caps at 100% when actual exceeds target', () => {
-      render(<HourRing actual={7} target={5} keyword="P1" />)
+      render(<HourRing actual={7} target={5} keyword="P1" isInline={false} />)
 
       const progressCircle = document.querySelectorAll('circle')[1]
       const dashoffset = progressCircle.getAttribute('stroke-dashoffset')
@@ -146,7 +146,7 @@ describe('HourRing', () => {
     })
 
     it('shows actual hours even when over target', () => {
-      render(<HourRing actual={7} target={5} keyword="P1" />)
+      render(<HourRing actual={7} target={5} keyword="P1" isInline={false} />)
 
       // Should display "7h" not "5h"
       expect(screen.getByText('7h')).toBeInTheDocument()
@@ -156,7 +156,7 @@ describe('HourRing', () => {
 
   describe('Edge Cases', () => {
     it('renders with 0 actual (empty track only)', () => {
-      render(<HourRing actual={0} target={5} keyword="P1" />)
+      render(<HourRing actual={0} target={5} keyword="P1" isInline={false} />)
 
       expect(screen.getByText('0h')).toBeInTheDocument()
       expect(screen.getByText(/\/ 5h/)).toBeInTheDocument()
@@ -167,7 +167,7 @@ describe('HourRing', () => {
     })
 
     it('handles very small actual values', () => {
-      render(<HourRing actual={0.1} target={10} keyword="P1" />)
+      render(<HourRing actual={0.1} target={10} keyword="P1" isInline={false} />)
 
       // 0.1 rounds to 0.1
       expect(screen.getByText('0.1h')).toBeInTheDocument()
@@ -178,7 +178,7 @@ describe('HourRing', () => {
     })
 
     it('handles small target values', () => {
-      render(<HourRing actual={0.25} target={0.5} keyword="P1" />)
+      render(<HourRing actual={0.25} target={0.5} keyword="P1" isInline={false} />)
 
       // 0.25 rounds to 0.3, 0.5 stays as 0.5
       expect(screen.getByText('0.3h')).toBeInTheDocument()
@@ -186,7 +186,7 @@ describe('HourRing', () => {
     })
 
     it('handles large values', () => {
-      render(<HourRing actual={45} target={40} keyword="P1" />)
+      render(<HourRing actual={45} target={40} keyword="P1" isInline={false} />)
 
       expect(screen.getByText('45h')).toBeInTheDocument()
       expect(screen.getByText(/\/ 40h/)).toBeInTheDocument()
@@ -195,14 +195,14 @@ describe('HourRing', () => {
 
   describe('Accessibility', () => {
     it('has role="img" on SVG', () => {
-      render(<HourRing actual={2} target={5} keyword="P1" />)
+      render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
 
       const svg = document.querySelector('svg')
       expect(svg).toHaveAttribute('role', 'img')
     })
 
     it('has descriptive aria-label', () => {
-      render(<HourRing actual={2} target={5} keyword="P1" />)
+      render(<HourRing actual={2} target={5} keyword="P1" isInline={false} />)
 
       const svg = document.querySelector('svg')
       const ariaLabel = svg?.getAttribute('aria-label')
@@ -214,7 +214,7 @@ describe('HourRing', () => {
     })
 
     it('aria-label reflects actual values', () => {
-      render(<HourRing actual={3.5} target={10} keyword="P2" />)
+      render(<HourRing actual={3.5} target={10} keyword="P2" isInline={false} />)
 
       const svg = document.querySelector('svg')
       const ariaLabel = svg?.getAttribute('aria-label')
@@ -266,6 +266,7 @@ describe('FlexibleCard + HourRing Integration', () => {
       <FlexibleCard
         priority={priority}
         isEditing={false}
+        isInline={false}
         {...mockHandlers}
       />
     )
@@ -288,6 +289,7 @@ describe('FlexibleCard + HourRing Integration', () => {
       <FlexibleCard
         priority={priority}
         isEditing={false}
+        isInline={false}
         {...mockHandlers}
       />
     )
@@ -308,6 +310,7 @@ describe('FlexibleCard + HourRing Integration', () => {
       <FlexibleCard
         priority={priority}
         isEditing={false}
+        isInline={false}
         {...mockHandlers}
       />
     )
@@ -328,6 +331,7 @@ describe('FlexibleCard + HourRing Integration', () => {
       <FlexibleCard
         priority={priority}
         isEditing={false}
+        isInline={false}
         {...mockHandlers}
       />
     )
@@ -347,6 +351,7 @@ describe('FlexibleCard + HourRing Integration', () => {
       <FlexibleCard
         priority={priority}
         isEditing={false}
+        isInline={false}
         {...mockHandlers}
       />
     )
@@ -371,6 +376,7 @@ describe('FlexibleCard + HourRing Integration', () => {
       <FlexibleCard
         priority={priority}
         isEditing={true}  // Edit mode
+        isInline={false}
         {...mockHandlers}
       />
     )

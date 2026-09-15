@@ -23,6 +23,7 @@ interface DeadlineCardProps {
   priorities: Priority[]  // All priorities for keyword picker
   isEditing: boolean
   defaultDeliverablesExpanded?: boolean
+  isInline: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onSave: (priorityId: string, data: { name?: string; deadline?: string }) => Promise<void>
@@ -39,6 +40,7 @@ export function DeadlineCard({
   priorities,
   isEditing,
   defaultDeliverablesExpanded = true,
+  isInline,
   onStartEdit,
   onCancelEdit,
   onSave,
@@ -206,7 +208,7 @@ export function DeadlineCard({
       aria-label={priority.name}
     >
       {/* Deadline banner - uses neutral background per UI guideline #41 */}
-      <div data-testid="deadline-banner" className="px-5 py-2.5 flex items-center justify-between bg-surface-secondary">
+      <div data-testid="deadline-banner" className={`px-5 ${isInline ? 'py-1.5' : 'py-2.5'} flex items-center justify-between bg-surface-secondary`}>
         <div className="flex items-center gap-2">
           {/* Calendar icon - uses SDK CSS variable for stroke per #74 */}
           <svg
@@ -236,9 +238,9 @@ export function DeadlineCard({
       </div>
 
       {/* Main content area */}
-      <div className="p-5">
+      <div className={isInline ? 'p-4' : 'p-5'}>
         {/* Header row: Badge + Name (read mode) or Badge + Edit/Trash (edit mode) */}
-        <div className="flex items-center gap-2 mb-3">
+        <div className={`flex items-center gap-2 ${isInline ? 'mb-2' : 'mb-3'}`}>
           <span className={`${BADGE_CIRCLE_CLASS} ${badgeColorClass} text-2xs`}>
             {kw}
           </span>
@@ -303,7 +305,7 @@ export function DeadlineCard({
         )}
 
         {/* V7: Lead measure - inline done/total + label */}
-        <div className="flex items-center gap-2 mb-4">
+        <div className={`flex items-center gap-2 ${isInline ? 'mb-3' : 'mb-4'}`}>
           <span className="text-2xl font-bold tabular-nums leading-none text-default">
             {doneCount}
             <span className="text-lg font-normal text-tertiary">
@@ -345,7 +347,7 @@ export function DeadlineCard({
         )}
 
         {/* E2E Deliverables - Collapsible */}
-        <div className="pt-3 border-t border-subtle">
+        <div className={`${isInline ? 'pt-2' : 'pt-3'} border-t border-subtle`}>
           <button
             type="button"
             onClick={() => setDeliverablesExpanded(!deliverablesExpanded)}

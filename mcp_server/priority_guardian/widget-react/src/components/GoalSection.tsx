@@ -9,6 +9,7 @@ interface GoalSectionProps {
   goals: Goal[]
   checkpointDate?: string
   defaultExpanded?: boolean
+  isInline: boolean
   onToggleGoal: (goalId: string, achieved: boolean) => Promise<void>
   onRenameGoal: (goalId: string, text: string) => Promise<void>
   onDeleteGoal: (goalId: string) => Promise<void>
@@ -20,6 +21,7 @@ export function GoalSection({
   goals,
   checkpointDate,
   defaultExpanded = false,
+  isInline,
   onToggleGoal,
   onRenameGoal,
   onDeleteGoal,
@@ -90,7 +92,7 @@ export function GoalSection({
   const achievedCount = goals.filter(g => g.achieved).length
 
   return (
-    <div className="border-t border-subtle pt-3">
+    <div className={`border-t border-subtle ${isInline ? 'pt-2' : 'pt-3'}`}>
       {/* Header */}
       <button
         type="button"
