@@ -99,7 +99,6 @@ const messages = {
     // Flexible card
     trackingInProgress: 'Tracking in progress — your average builds after this week.',
     ofWeeklyTargetOnAvg: 'of weekly target on avg',
-    notEnoughDataYet: 'Not enough data yet',
 
     // Time allocation
     timeAllocationHeading: 'Time allocation this week',
@@ -256,7 +255,6 @@ const messages = {
     // Flexible card
     trackingInProgress: 'Tracking läuft — wird ab nächster Woche berechnet',
     ofWeeklyTargetOnAvg: 'vom Wochenziel im Durchschnitt',
-    notEnoughDataYet: 'Noch nicht genug Daten',
 
     // Time allocation
     timeAllocationHeading: 'Zeitaufteilung diese Woche',
