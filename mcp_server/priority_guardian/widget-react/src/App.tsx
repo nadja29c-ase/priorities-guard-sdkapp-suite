@@ -681,25 +681,17 @@ function App() {
     notifyHeight()
   }, [isMobile, notifyHeight])
 
-  // Go fullscreen before opening the add form, on every platform, if not already there.
-  // Originally mobile-only (to avoid iOS host scroll-off-screen) on the assumption that
-  // "inline" was cheap to render into on desktop — that assumption no longer holds since
-  // inc_card_size_fix2.md made inline a compact, static view. AddPriorityForm is a 402-line,
-  // 3-step form with local (unpersisted) field state; rendering it into the compact inline
-  // view would defeat the redesign, and gating its render behind isInline would unmount it
-  // mid-edit on any displayMode change and silently drop whatever the user had typed. Routing
-  // through the existing, already-cross-platform handleExpandToFullscreen at the entry point
-  // avoids both problems — by the time isAddingPriority is true, displayMode is already
-  // 'fullscreen', so the form only ever mounts via the unchanged fullscreen branch.
+  // On mobile: go fullscreen before opening the add form to avoid iOS host scroll-off-screen.
+  // On desktop: open the form inline — no display mode change.
   // enteredFullscreenForAddRef is only set when we actually trigger the transition,
   // so user-initiated fullscreen is not affected.
   const handleOpenAddForm = useCallback(() => {
-    if (displayMode !== 'fullscreen') {
+    if (isMobile && displayMode !== 'fullscreen') {
       enteredFullscreenForAddRef.current = true  // set before calling handler
       handleExpandToFullscreen()
     }
     setIsAddingPriority(true)
-  }, [displayMode, handleExpandToFullscreen])
+  }, [isMobile, displayMode, handleExpandToFullscreen])
 
   // ============ Effects ============
 

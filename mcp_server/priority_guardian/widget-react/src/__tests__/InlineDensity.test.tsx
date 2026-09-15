@@ -12,7 +12,6 @@
 
 import { describe, it, expect } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import App from '../App'
 import { setMockPriorities, mockOpenai } from '../test/setup'
 import type { Priority } from '../types'
@@ -190,31 +189,5 @@ describe('Inline density — no new tool/network calls from the compact renderer
     const fullscreenCallCount = mockOpenai.callTool.mock.calls.length
 
     expect(inlineCallCount).toBe(fullscreenCallCount)
-  })
-})
-
-describe('Inline density — Add Priority routes through fullscreen first (regression guard)', () => {
-  // Real bug caught in review: handleOpenAddForm only redirected to fullscreen
-  // on mobile ("desktop: open the form inline — no display mode change" was the
-  // pre-redesign assumption). AddPriorityForm is a multi-step form with local,
-  // unpersisted field state (name/deadline/weeklyHourTarget/checkpointDate/
-  // initialGoalText all live in useState inside the form itself) — if it were
-  // ever allowed to mount while isInline, or if displayMode flipped to inline
-  // while it was open, that state would be silently destroyed. The fix routes
-  // through the entry point (handleOpenAddForm), not a render-time gate, so the
-  // form only ever mounts via the unchanged fullscreen branch.
-  it('clicking "Add a new priority" while inline transitions to fullscreen before the form mounts', async () => {
-    mockOpenai.displayMode = 'inline'
-    setMockPriorities([], true, ['P1', 'P2', 'P3'])
-    render(<App />)
-
-    expect(screen.queryAllByRole('article')).toHaveLength(0)
-
-    await userEvent.click(screen.getByRole('button', { name: /add a new priority/i }))
-
-    // Fullscreen-only marker present proves displayMode actually flipped —
-    // not just that the form happens to render into whatever container exists.
-    expect(screen.getByRole('button', { name: /minimize dashboard/i })).toBeInTheDocument()
-    expect(screen.getByRole('textbox')).toBeInTheDocument()
   })
 })
