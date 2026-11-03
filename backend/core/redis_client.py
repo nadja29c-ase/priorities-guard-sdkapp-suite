@@ -201,6 +201,41 @@ class RedisClient:
             logger.error(f"Redis incr() failed for key {key}: {e}")
             return None
 
+    async def incr_with_expiry(self, key: str, window: int) -> Optional[int]:
+        """
+        Atomically increment a counter and ensure it has an expiry (for rate limiting).
+
+        INCR and EXPIRE ... NX run in one MULTI/EXEC transaction on the prefixed key:
+        - new key: count is 1 and the expiry is set to `window`
+        - key that already has an expiry: the expiry is left alone (fixed window)
+        - key without an expiry (e.g. written by an older build): the expiry is set,
+          so the key recovers within one window instead of counting forever
+
+        EXPIRE NX requires Redis >= 7.0 (production reports 7.2.4).
+
+        Args:
+            key: Counter key (will be automatically prefixed with environment)
+            window: Expiry in seconds
+
+        Returns:
+            New counter value or None on error
+        """
+        if not self.is_connected():
+            logger.warning("Redis not connected, incr_with_expiry() returning None")
+            return None
+
+        try:
+            prefixed_key = self._prefix_key(key)
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.incr(prefixed_key)
+                pipe.expire(prefixed_key, window, nx=True)
+                count, _ = await pipe.execute()
+            return count
+        except Exception as e:
+            # Key not logged: rate-limit keys contain client IPs
+            logger.error(f"Redis incr_with_expiry() failed: {e}")
+            return None
+
     async def exists(self, key: str) -> int:
         """
         Check if key exists in Redis.

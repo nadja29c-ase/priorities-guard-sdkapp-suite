@@ -227,7 +227,9 @@ class FakeRedisClient:
         self._storage: dict = {}
         self._ttls: dict = {}
         self._env_prefix = env_prefix
-        self._client = self  # For compatibility with rate_limit.py accessing _client.expire
+        # NOTE: unlike the real raw client, this fake's expire() prefixes the key.
+        # That divergence hid the rate-limit expiry bug; rate_limit.py no longer uses _client.
+        self._client = self
 
     def _prefix_key(self, key: str) -> str:
         return f"{self._env_prefix}{key}"
@@ -270,6 +272,14 @@ class FakeRedisClient:
     async def incrby(self, key: str, amount: int = 1):
         """Alias for incr (compatibility with redis.asyncio)."""
         return await self.incr(key, amount)
+
+    async def incr_with_expiry(self, key: str, window: int):
+        """INCR + EXPIRE NX on the prefixed key: sets the TTL only if the key has none."""
+        new_value = await self.incr(key)
+        prefixed = self._prefix_key(key)
+        if prefixed not in self._ttls:
+            self._ttls[prefixed] = window
+        return new_value
 
     async def expire(self, key: str, seconds: int) -> bool:
         """Set TTL on key (for rate limiting compatibility)."""

@@ -36,9 +36,9 @@ async def check_rate_limit(
     """
     Check rate limit using Redis counter with structured logging.
 
-    Implements a sliding window rate limiter:
-    - Increments counter for the key
-    - Sets TTL on first request
+    Implements a fixed window rate limiter:
+    - Increments counter for the key and ensures it expires after `window`
+      (one atomic Redis transaction; also repairs a counter that has no expiry)
     - Raises RateLimitExceeded if limit exceeded
     - Logs violations with correlation ID
 
@@ -65,12 +65,13 @@ async def check_rate_limit(
         return
 
     try:
-        # Increment counter
-        count = await redis_client.incr(key)
+        # Increment counter and ensure it expires (atomic, env-prefixed key)
+        count = await redis_client.incr_with_expiry(key, window)
 
-        # Set TTL on first request
-        if count == 1:
-            await redis_client._client.expire(key, window)
+        # None = Redis error inside the wrapper (already logged there): fail open (ADR 004)
+        if count is None:
+            request_logger.error("rate_limit.error", error="incr_with_expiry returned None")
+            return
 
         # Check if limit exceeded
         if count > limit:

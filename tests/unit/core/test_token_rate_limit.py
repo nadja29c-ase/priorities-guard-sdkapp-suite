@@ -13,7 +13,7 @@ Each test documents "what bug would still pass this test?"
 
 import logging
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from fastapi import Request
 
@@ -37,7 +37,7 @@ class TestTokenRateLimitValue:
         # Track incr calls to simulate Redis counter
         call_count = 0
 
-        async def mock_incr(key):
+        async def mock_incr(key, window):
             nonlocal call_count
             call_count += 1
             return call_count
@@ -50,9 +50,7 @@ class TestTokenRateLimitValue:
 
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = mock_incr
-        mock_redis._client = MagicMock()
-        mock_redis._client.expire = AsyncMock()
+        mock_redis.incr_with_expiry = mock_incr
 
         with patch("backend.core.rate_limit.redis_client", mock_redis):
             # First 30 requests should succeed
@@ -77,7 +75,7 @@ class TestTokenRateLimitValue:
         # Separate counters per key
         counters: dict[str, int] = {}
 
-        async def mock_incr(key):
+        async def mock_incr(key, window):
             counters[key] = counters.get(key, 0) + 1
             return counters[key]
 
@@ -89,9 +87,7 @@ class TestTokenRateLimitValue:
 
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = mock_incr
-        mock_redis._client = MagicMock()
-        mock_redis._client.expire = AsyncMock()
+        mock_redis.incr_with_expiry = mock_incr
 
         with patch("backend.core.rate_limit.redis_client", mock_redis):
             # Exhaust client A's bucket (30 requests)
@@ -124,7 +120,7 @@ class TestTokenRateLimitLogging:
         bucket-split decision would be blind to which grant_type is being 429'd).
         """
         # Simulate already at limit (counter returns 31)
-        async def mock_incr(key):
+        async def mock_incr(key, window):
             return 31
 
         mock_request = MagicMock(spec=Request)
@@ -135,9 +131,7 @@ class TestTokenRateLimitLogging:
 
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = mock_incr
-        mock_redis._client = MagicMock()
-        mock_redis._client.expire = AsyncMock()
+        mock_redis.incr_with_expiry = mock_incr
 
         with patch("backend.core.rate_limit.redis_client", mock_redis):
             with pytest.raises(RateLimitExceeded):
@@ -163,7 +157,7 @@ class TestTokenRateLimitLogging:
         telemetry that bucket-split decision relies on).
         """
         # Simulate under limit (counter returns 1)
-        async def mock_incr(key):
+        async def mock_incr(key, window):
             return 1
 
         mock_request = MagicMock(spec=Request)
@@ -174,9 +168,7 @@ class TestTokenRateLimitLogging:
 
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = mock_incr
-        mock_redis._client = MagicMock()
-        mock_redis._client.expire = AsyncMock()
+        mock_redis.incr_with_expiry = mock_incr
 
         with patch("backend.core.rate_limit.redis_client", mock_redis):
             # Should succeed without raising
@@ -199,7 +191,7 @@ class TestTokenRateLimitLogging:
         poisoning from malicious client.
         """
         # Simulate at limit
-        async def mock_incr(key):
+        async def mock_incr(key, window):
             return 31
 
         mock_request = MagicMock(spec=Request)
@@ -210,9 +202,7 @@ class TestTokenRateLimitLogging:
 
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = mock_incr
-        mock_redis._client = MagicMock()
-        mock_redis._client.expire = AsyncMock()
+        mock_redis.incr_with_expiry = mock_incr
 
         with patch("backend.core.rate_limit.redis_client", mock_redis):
             # Try with garbage grant_type
@@ -237,7 +227,7 @@ class TestTokenRateLimitLogging:
 
         Bug that would still pass: crash on None grant_type.
         """
-        async def mock_incr(key):
+        async def mock_incr(key, window):
             return 31
 
         mock_request = MagicMock(spec=Request)
@@ -248,9 +238,7 @@ class TestTokenRateLimitLogging:
 
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = mock_incr
-        mock_redis._client = MagicMock()
-        mock_redis._client.expire = AsyncMock()
+        mock_redis.incr_with_expiry = mock_incr
 
         with patch("backend.core.rate_limit.redis_client", mock_redis):
             # Try with None grant_type
@@ -277,7 +265,7 @@ class TestTokenRateLimitKeyShape:
         """
         captured_keys: list[str] = []
 
-        async def mock_incr(key):
+        async def mock_incr(key, window):
             captured_keys.append(key)
             return 1
 
@@ -289,9 +277,7 @@ class TestTokenRateLimitKeyShape:
 
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = mock_incr
-        mock_redis._client = MagicMock()
-        mock_redis._client.expire = AsyncMock()
+        mock_redis.incr_with_expiry = mock_incr
 
         with patch("backend.core.rate_limit.redis_client", mock_redis):
             await rate_limit_token(

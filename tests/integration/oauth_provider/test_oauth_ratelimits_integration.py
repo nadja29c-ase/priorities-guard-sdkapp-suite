@@ -417,10 +417,10 @@ class TestRateLimitGracefulDegradation:
         """
         from unittest.mock import MagicMock, AsyncMock
 
-        # Create a mock that raises ConnectionError on incr
+        # Create a mock that raises ConnectionError on the rate-limit counter call
         mock_redis = MagicMock()
         mock_redis.is_connected.return_value = True
-        mock_redis.incr = AsyncMock(side_effect=ConnectionError("Redis connection failed"))
+        mock_redis.incr_with_expiry = AsyncMock(side_effect=ConnectionError("Redis connection failed"))
 
         code_verifier, _ = generate_pkce_pair("redis-error")
 
