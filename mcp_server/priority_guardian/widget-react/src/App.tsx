@@ -15,8 +15,10 @@ import { ExpandButton } from './components/ExpandButton'
 import { CalendarConnectionMinimal } from './components/CalendarConnectionMinimal'
 import { reportWidgetDiagnostic } from './widgetErrorReporter'
 
-// Inc 89: temporary diagnostic flag. Set to false before next non-diagnostic deploy.
-const PG_DIAG_FULLSCREEN = true
+// Inc 89: temporary diagnostic flag. Off since the Inc 89 cleanup (2026-11-03): the
+// flash-revert bug was diagnosed and fixed (Inc 89.10, c1fddf1), and production showed the
+// intent guard firing. While on, every host set_globals sent 2 record_widget_diagnostic calls.
+const PG_DIAG_FULLSCREEN = false
 
 // Card width fix: explicit width for both display modes, applied unconditionally
 // so neither mode ever derives its width from #root by accident (main.css previously
