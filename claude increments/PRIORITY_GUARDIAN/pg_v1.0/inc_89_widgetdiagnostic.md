@@ -2,7 +2,7 @@
 
 **Type:** Instrumentation only — NO behavior changes.
 **Goal:** Capture a real production repro so we can identify what reverts `displayMode` after the user clicks "Open full dashboard".
-**Status:** Investigation. No fix yet — see "Implementation Approach" below.
+**Status:** CLOSED 2026-11-03. Diagnosed (H2, host set_globals overwrote local fullscreen) and fixed in Inc 89.10 (`c1fddf1`); diagnostics turned off in `0f42fc6`. See the closure note at the end of `inc_89.10.md`. (Original status: Investigation. No fix yet.)
 
 ---
 

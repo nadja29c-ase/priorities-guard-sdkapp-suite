@@ -242,3 +242,23 @@ Total: ~15 minutes
 
 
 Push it. Refresh dev mode. Reproduce. Send me the diagnostic events showing the sync-ignored pattern. Once confirmed, this gets bundled into v15 with the URI bump.
+
+---
+
+## Closure (2026-11-03) — Increment 89 closed
+
+The condition above ("cleanup happens AFTER ... the fix is verified by production diagnostic events") is met:
+
+- **Production evidence:** 2026-11-03 13:09 UTC, PG MCP Better Stack source, user `e974b9ad`: a
+  `displayMode.change` with caller `handleExpandToFullscreen`, followed by 16 `displayMode.change`
+  events with caller `handleSetGlobals.intentGuard` (`sync-ignored`), i.e. stale host inline syncs
+  ignored while the widget-owned desktop fullscreen stayed open.
+- **Cleanup commit:** `0f42fc6` sets `PG_DIAG_FULLSCREEN = false`. All three diagnostic emitters were
+  gated on it, so the widget no longer calls `record_widget_diagnostic`. The tool itself stays registered
+  (no tools/list change), and `WIDGET_URI` stays at v12 (frozen; see `tools/widget_tools/constants.py`).
+- **Why now:** with the flag on, every host `set_globals` sent 2 diagnostic tool calls (~66–70 extra MCP
+  request cycles per render) — see `doc/pg_doc/INVESTIGATION_PG_OPENAI_MCP_400_2026-11-03.md`.
+- **Not done here:** the "v15 with the URI bump" packaging step above did not happen and must not — the
+  widget URI is frozen at v12 by the approved app's tool schema. The diagnostic code (reporter,
+  `logDisplayModeChange`, `record_widget_diagnostic` tool) remains in source, inert; removing it is a
+  separate decision.
