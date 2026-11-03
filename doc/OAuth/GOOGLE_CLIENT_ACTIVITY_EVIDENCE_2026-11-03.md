@@ -24,6 +24,7 @@ a definition of activity we don't know). Do not assert that Google made a mistak
 | F5 | The only writer of `core_connections.encrypted_refresh_token` is the reconnect upsert, and it always sets `updated_at`. The refresh path writes access token, `token_expires_at`, `updated_at` only. No migration, script or ops file writes the column; no re-encryption/key-rotation code exists | Code audit at `195b680`: `backend/core/repositories/google_connection_repo.py:41-63`, `backend/core/google_token_management.py:203-205`. **Applies to production for the whole window:** production ran `eb3373c7` from 2026-08-03 to 2026-11-03 12:52 UTC (covering the Aug 6 – Sep 24 span entirely), and the audited files (`google_connection_repo.py`, `google_token_management.py`, `oauth/google_oauth_service.py`, `google_oauth.py`, `google_calendar.py`, `models.py`, `backend/alembic/`, `scripts/`, `ops/`) are byte-identical between `eb3373c7` and `195b680` (`git diff --stat` empty). The only backend changes in between are comment-only (`81702b2`, `84c648d`; executable code identical by AST comparison) plus the rate-limit hotfix `4822aef`, which touches no Google code |
 | F6 | No manual SQL edits to `core_connections` | Nadja (2026-11-03) |
 | F7 | A Google refresh token is only usable with the client that issued it | OAuth 2.0 / Google token endpoint behaviour |
+| F8 | Publishing status: **In production**, user type **External**. This rules out the 7-day refresh-token expiry that applies to apps in Testing status — consistent with `e974b9ad`'s refresh token (written on or before 2026-09-24) refreshing successfully on 2026-11-03 (§4) | Google Auth Platform → Audience, console screenshot by Nadja, 2026-11-03 15:56 local (screenshot not reproduced in this repo) |
 
 ## 2. Production database snapshot (before today's test)
 
@@ -114,7 +115,7 @@ Absence check: over 2026-10-31 12:54 → 2026-11-03 12:54 UTC, the only Google e
    2026-11-03, and refreshes on 2026-10-14, 10-19 and 2026-11-03 (§3), with no failed exchanges.
 
 **Residual assumptions:** only F6 (no manual SQL edits to `core_connections`) rests on Nadja's
-confirmation alone; F2 was verified at runtime. §2 is not a complete history. The runtime outputs in F2
+confirmation alone; F2 was verified at runtime. F8 rests on a console screenshot by Nadja (not stored here). §2 is not a complete history. The runtime outputs in F2
 (a)–(c) were observed by Nadja on 2026-11-03 and are not reproduced in this repo.
 
 ## 6. Follow-up
