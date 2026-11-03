@@ -17,11 +17,11 @@ a definition of activity we don't know). Do not assert that Google made a mistak
 
 | # | Fact | Source |
 |---|---|---|
-| F1 | Project `priority-guardian` contains exactly one OAuth client, `907396021268-…` | Google Cloud Console (Nadja, 2026-11-03) |
-| F2 | Production `GOOGLE_CLIENT_ID` on the shared backend is that client | Render env vs. console, compared by Nadja (2026-11-03) |
+| F1 | Project `priority-guardian` contains exactly one OAuth client: `907396021268-94liph08ls3lcor8n049mo461ihbdctm.apps.googleusercontent.com` ("Priority Guardian Backend") | Google Cloud Console (Nadja, 2026-11-03) |
+| F2 | Production `GOOGLE_CLIENT_ID` on the shared backend is that client — **verified at runtime**, three independent ways | (a) production backend shell, 2026-11-03: `settings.GOOGLE_CLIENT_ID` printed the full ID from F1; (b) same shell: `ls -la .env` shows no `.env` on the server, so settings come only from Render's environment; (c) the live Google consent URL of the 13:23:50 UTC connect flow (§4) carried the same `client_id`. Earlier: Render env vs. console compared visually (Nadja) |
 | F3 | The backend has exactly one Google client setting, used for authorize, code exchange and refresh | `backend/core/google_oauth.py:240,292`, `backend/core/google_calendar.py:43` (at `4822aef`) |
 | F4 | Only one backend web service exists (no staging); local `.env` has no Better Stack token and a different Google client | Render service list; local `.env` check (2026-11-03) |
-| F5 | The only writer of `core_connections.encrypted_refresh_token` is the reconnect upsert, and it always sets `updated_at`. The refresh path writes access token, `token_expires_at`, `updated_at` only. No migration, script or ops file writes the column; no re-encryption/key-rotation code exists | Code audit at `195b680`: `backend/core/repositories/google_connection_repo.py:41-63`, `backend/core/google_token_management.py:203-205` |
+| F5 | The only writer of `core_connections.encrypted_refresh_token` is the reconnect upsert, and it always sets `updated_at`. The refresh path writes access token, `token_expires_at`, `updated_at` only. No migration, script or ops file writes the column; no re-encryption/key-rotation code exists | Code audit at `195b680`: `backend/core/repositories/google_connection_repo.py:41-63`, `backend/core/google_token_management.py:203-205`. **Applies to production for the whole window:** production ran `eb3373c7` from 2026-08-03 to 2026-11-03 12:52 UTC (covering the Aug 6 – Sep 24 span entirely), and the audited files (`google_connection_repo.py`, `google_token_management.py`, `oauth/google_oauth_service.py`, `google_oauth.py`, `google_calendar.py`, `models.py`, `backend/alembic/`, `scripts/`, `ops/`) are byte-identical between `eb3373c7` and `195b680` (`git diff --stat` empty). The only backend changes in between are comment-only (`81702b2`, `84c648d`; executable code identical by AST comparison) plus the rate-limit hotfix `4822aef`, which touches no Google code |
 | F6 | No manual SQL edits to `core_connections` | Nadja (2026-11-03) |
 | F7 | A Google refresh token is only usable with the client that issued it | OAuth 2.0 / Google token endpoint behaviour |
 
@@ -106,14 +106,16 @@ Absence check: over 2026-10-31 12:54 → 2026-11-03 12:54 UTC, the only Google e
 1. `e974b9ad`'s stored refresh token was last written on or before 2026-09-24 (§2 + F5 + F6), and was not
    rewritten before 2026-11-03 12:53 (§3, §4 absence check).
 2. That token was successfully exchanged at Google's token endpoint on 2026-11-03 12:53:43 UTC by the
-   production backend, whose only Google client is `907396021268-…` (F1–F3).
-3. By F7, the token belongs to `907396021268-…`; therefore the 2026-09-24 14:50 refresh of the same stored
-   token was also a refresh-token exchange on `907396021268-…` — inside the 5-month window.
+   production backend, whose only Google client is `907396021268-94liph08ls3lcor8n049mo461ihbdctm`
+   (F1–F3, F2 verified at runtime).
+3. By F7, the token belongs to that client; therefore the 2026-09-24 14:50 refresh of the same stored
+   token was also a refresh-token exchange on that client — inside the 5-month window.
 4. Independently, the production backend completed code exchanges on 2026-10-08, 10-16, 10-19 and
    2026-11-03, and refreshes on 2026-10-14, 10-19 and 2026-11-03 (§3), with no failed exchanges.
 
-**Residual assumptions:** F2 (env var compared visually, not via API) and F6 (no manual SQL) rest on
-Nadja's confirmation. §2 is not a complete history.
+**Residual assumptions:** only F6 (no manual SQL edits to `core_connections`) rests on Nadja's
+confirmation alone; F2 was verified at runtime. §2 is not a complete history. The runtime outputs in F2
+(a)–(c) were observed by Nadja on 2026-11-03 and are not reproduced in this repo.
 
 ## 6. Follow-up
 
